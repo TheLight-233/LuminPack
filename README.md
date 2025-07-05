@@ -1,12 +1,22 @@
 # **LuminPack**
 
+
+
 C#平台最快性能的二进制序列化器！
+
+
 
 LuminPack是迄今为止C#平台性能最快的二进制序列化库，对于嵌套类，LuminPack比Memorypack，Messagepack快50%，200%。对于泛型类，LuminPack比Memorypack，Messagepack快400%。对于一些特殊集合，LuminPack甚至快上100倍。
 
+
+
 LuminPack最初是专门为Unity开发的，为Unity在存档，网络等高性能场景下提供接近手搓特定类解析器的性能，LuminPack性能如何快的原因也是如此。对于LuminPack的基础类型，LuminPack会直接解析写入解析器，与此同时，LuminPack大量学习并借鉴了MemoryPack对于特定于C#的内存操纵，并通过指针反射，内存映射实现更高性能。
 
+
+
 除了性能，LuminPack包含MemoryPack绝大部分特性，对于仅包含LuminPack基础类型的数据，二者甚至可以互相序列化。
+
+
 
 LuminPack包含以下特性：
 
@@ -21,7 +31,13 @@ LuminPack包含以下特性：
 *   基于PipeWriter/Reader的流序列化
 *   通过增量源代码生成器支持Unity
 
+
+
 ## Installation 安装
+
+
+
+
 
 ## 后续更新计划：
 
@@ -61,6 +77,8 @@ LuminPack包含以下特性：
 
 
 
+
+
 ## LuminPack基础类型
 
 默认情况下，LuminPack基础类型将实现最高性能
@@ -82,6 +100,10 @@ LuminPack包含以下特性：
     List,
     Array,
 
+
+
+
+
 ## 内置支持的类型
 
 默认情况下，这些类型可以被序列化：
@@ -100,6 +122,8 @@ LuminPack包含以下特性：
 *   `IDictionary<,>`, `IReadOnlyDictionary<,>`, `ILookup<,>`, `IGrouping<,>`,
 *   `ConcurrentBag<>`, `ConcurrentQueue<>`, `ConcurrentStack<>`, `ConcurrentDictionary<,>`, `BlockingCollection<>`
 *   Immutable collections (`ImmutableList<>`, etc.) and interfaces (`IImmutableList<>`, etc.)
+
+
 
 
 
@@ -169,6 +193,8 @@ LuminPack默认支持**`0 ~ 249`**个成员字段
 
 
 
+
+
 ## &#x20;`[LuminPackableObject]`
 
 \[LuminPackableObject]可以作用于任何字段以及属性，这将告诉LuminPackCodeGenerator不要直接解析该字段并写入Myclass的解析器，而是通过注册在LuminPack的Myclass2的解析器去解析。通常情况下，这会损失大概30%的性能，因此如果您遇到源代码生成器生成错误代码等情况，可以尝试用\[LuminPackableObject]标记字段或属性。
@@ -191,11 +217,15 @@ LuminPack默认支持**`0 ~ 249`**个成员字段
 
 
 
+
+
 ### 序列化回调
 
 
 
 还没写，别急。
+
+
 
 
 
@@ -247,6 +277,8 @@ LuminPack支持序列化接口和抽象类对象，实现多态序列化。与Me
 
 
 对于`LuminPackUnion`的Tag，支持 `0`  \~  `65535`， 对与`250`以下的性能更佳。因此推荐使用`250`以下的值作为Tag
+
+
 
 
 
@@ -343,6 +375,8 @@ public class VersionTolerantObject2
 
 
 
+
+
 ## 循环引用
 
 
@@ -362,6 +396,8 @@ public class VersionTolerantObject2
 `GenerateType.CircularReference` 具有与版本容忍相同的特性。
 
 对象引用跟踪只对标记为 `GenerateType.CircularReference` 的对象进行。如果要跟踪任何其他对象，请对其进行包装。
+
+
 
 
 
@@ -399,6 +435,8 @@ LuminPack内置了高性能`ObjectPool`
 
 
 
+
+
 ## Unity
 
 
@@ -414,6 +452,8 @@ LuminPack对于Unity有特殊优化，以达到.Net8版本相同的性能。
 *   对于`List<>，Stack<>，Queue<>，Collection<>，ReadonlyCollection<>，ObserveableCollection<>，ReadonlyObserveableCollection<>，ReadOnlyCollectionBuilder<>` 的非托管泛型，LuminPack比MemoryPack快22倍 （1024数据量）
 *   运行时0GC （除必要的序列化byte\[]开销和反序列化Value的开销）
 *   Serialize API和Deserialize API的类型检查优化，提高处理特殊数据的性能。
+
+
 
 
 
@@ -515,6 +555,8 @@ LuminPack对于Unity有特殊优化，以达到.Net8版本相同的性能。
 
 
 元组是固定大小的非空值集合。 `KeyValuePair<TKey, TValue>` 和 `ValueTuple<T,...>` 被序列化为Tuple。
+
+
 
 
 
