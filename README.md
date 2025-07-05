@@ -203,8 +203,6 @@ LuminPack默认支持**`0 ~ 249`**个成员字段
 
 LuminPack支持序列化接口和抽象类对象，实现多态序列化。与MemoryPack的Union相同。只有接口和抽象类允许使用 `[LuminPackUnion]` 属性进行注释。需要唯一的联合标记。
 
-```
-
     // Annotate [LuminPackable] and inheritance types with [LuminPackUnion]
     // Union also supports interface class
     [LuminPackable]
