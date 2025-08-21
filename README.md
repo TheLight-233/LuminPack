@@ -161,7 +161,7 @@ LuminPack包含以下特性：
 
 
 
-LuminPack有27条诊断规则（ `LuminPack001` 到`LuminPack035` ）
+LuminPack有27条诊断规则（ `LuminPack001` 到`LuminPack027` ）
 
 
 
