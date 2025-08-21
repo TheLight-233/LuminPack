@@ -1,0 +1,5 @@
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\netstandard2.0\LuminPack.csproj.AssemblyReference.cache
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\netstandard2.0\LuminPack.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\netstandard2.0\LuminPack.AssemblyInfoInputs.cache
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\netstandard2.0\LuminPack.AssemblyInfo.cs
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\netstandard2.0\LuminPack.csproj.CoreCompileInputs.cache

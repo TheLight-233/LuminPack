@@ -1,0 +1,17 @@
+{
+  "version": 2,
+  "dgSpecHash": "Vwa5nhoA/gg=",
+  "success": true,
+  "projectFilePath": "C:\\Users\\28027\\Desktop\\C#\\LuminPack\\LuminPack\\LuminPack.csproj",
+  "expectedPackageFiles": [
+    "C:\\Users\\28027\\.nuget\\packages\\system.buffers\\4.5.1\\system.buffers.4.5.1.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\system.collections.immutable\\9.0.8\\system.collections.immutable.9.0.8.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\system.memory\\4.5.5\\system.memory.4.5.5.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\system.numerics.vectors\\4.4.0\\system.numerics.vectors.4.4.0.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\system.runtime.compilerservices.unsafe\\6.1.2\\system.runtime.compilerservices.unsafe.6.1.2.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\microsoft.netcore.app.ref\\8.0.11\\microsoft.netcore.app.ref.8.0.11.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\8.0.11\\microsoft.windowsdesktop.app.ref.8.0.11.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\8.0.11\\microsoft.aspnetcore.app.ref.8.0.11.nupkg.sha512"
+  ],
+  "logs": []
+}

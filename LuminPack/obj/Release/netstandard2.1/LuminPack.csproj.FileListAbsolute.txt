@@ -1,0 +1,10 @@
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\bin\Release\netstandard2.1\LuminPack.deps.json
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\bin\Release\netstandard2.1\LuminPack.dll
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\bin\Release\netstandard2.1\LuminPack.pdb
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\netstandard2.1\LuminPack.csproj.AssemblyReference.cache
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\netstandard2.1\LuminPack.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\netstandard2.1\LuminPack.AssemblyInfoInputs.cache
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\netstandard2.1\LuminPack.AssemblyInfo.cs
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\netstandard2.1\LuminPack.csproj.CoreCompileInputs.cache
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\netstandard2.1\LuminPack.dll
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\netstandard2.1\LuminPack.pdb

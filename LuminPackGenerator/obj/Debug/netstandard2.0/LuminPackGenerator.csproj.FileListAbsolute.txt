@@ -1,0 +1,10 @@
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackGenerator\bin\Debug\netstandard2.0\LuminPackGenerator.deps.json
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackGenerator\bin\Debug\netstandard2.0\LuminPackGenerator.dll
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackGenerator\bin\Debug\netstandard2.0\LuminPackGenerator.pdb
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackGenerator\obj\Debug\netstandard2.0\LuminPackGenerator.csproj.AssemblyReference.cache
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackGenerator\obj\Debug\netstandard2.0\LuminPackGenerator.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackGenerator\obj\Debug\netstandard2.0\LuminPackGenerator.AssemblyInfoInputs.cache
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackGenerator\obj\Debug\netstandard2.0\LuminPackGenerator.AssemblyInfo.cs
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackGenerator\obj\Debug\netstandard2.0\LuminPackGenerator.csproj.CoreCompileInputs.cache
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackGenerator\obj\Debug\netstandard2.0\LuminPackGenerator.dll
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackGenerator\obj\Debug\netstandard2.0\LuminPackGenerator.pdb

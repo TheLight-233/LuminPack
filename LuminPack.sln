@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPack", "LuminPack\LuminPack.csproj", "{FB5812F4-157A-4AFB-B2EC-44A4E043BAE0}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPackGenerator", "LuminPackGenerator\LuminPackGenerator.csproj", "{EC99069B-FE47-4F4C-AB94-1E32FE161561}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{FB5812F4-157A-4AFB-B2EC-44A4E043BAE0}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{FB5812F4-157A-4AFB-B2EC-44A4E043BAE0}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{FB5812F4-157A-4AFB-B2EC-44A4E043BAE0}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{FB5812F4-157A-4AFB-B2EC-44A4E043BAE0}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EC99069B-FE47-4F4C-AB94-1E32FE161561}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EC99069B-FE47-4F4C-AB94-1E32FE161561}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EC99069B-FE47-4F4C-AB94-1E32FE161561}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EC99069B-FE47-4F4C-AB94-1E32FE161561}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

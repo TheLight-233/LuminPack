@@ -1,0 +1,11 @@
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\bin\Release\net8.0\LuminPack.deps.json
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\bin\Release\net8.0\LuminPack.dll
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\bin\Release\net8.0\LuminPack.pdb
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\net8.0\LuminPack.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\net8.0\LuminPack.AssemblyInfoInputs.cache
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\net8.0\LuminPack.AssemblyInfo.cs
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\net8.0\LuminPack.csproj.CoreCompileInputs.cache
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\net8.0\LuminPack.dll
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\net8.0\refint\LuminPack.dll
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\net8.0\LuminPack.pdb
+C:\Users\28027\Desktop\C#\LuminPack\LuminPack\obj\Release\net8.0\ref\LuminPack.dll
