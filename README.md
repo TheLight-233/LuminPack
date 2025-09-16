@@ -2,13 +2,10 @@
 
 
 
-C#平台最快性能的二进制序列化器！
+C#平台最屎的二进制序列化器！
 
-![alt text](泛型.png)
 
-![alt text](特殊集合.png)
-
-LuminPack是迄今为止C#平台性能最快的二进制序列化库，对于嵌套类，LuminPack比Memorypack，Messagepack快50%，200%。对于泛型类，LuminPack比Memorypack，Messagepack快400%。对于一些特殊集合，LuminPack甚至快上100倍。
+LuminPack是迄今为止C#平台性能最屎的二进制序列化库。
 
 
 
