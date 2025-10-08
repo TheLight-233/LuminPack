@@ -11,7 +11,7 @@ namespace LuminPack.Parsers;
 public sealed class StringBuilderParser : LuminPackParser<StringBuilder>
 {
     [Preserve]
-    public override void Serialize(ref LuminPackWriter writer, scoped ref StringBuilder? value)
+    public override unsafe void Serialize(ref LuminPackWriter writer, scoped ref StringBuilder? value)
     {
         ref var index = ref writer.GetCurrentSpanOffset();
         
@@ -34,13 +34,13 @@ public sealed class StringBuilderParser : LuminPackParser<StringBuilder>
 
         foreach (var chunk in value.GetChunks())
         {
-            ref var p = ref writer.GetSpanReference(checked(chunk.Length * 2));
+            int index1 = checked(chunk.Length * 2);
+            ref var p = ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart.ToPointer()), (nint)index1);
             ref var src = ref LuminPackMarshal.As<char, byte>(ref MemoryMarshal.GetReference(chunk.Span));
             Unsafe.CopyBlockUnaligned(ref p, ref src, (uint)chunk.Length * 2);
 
             writer.Advance(chunk.Length * 2);
         }
-        return;
         
 
 #else

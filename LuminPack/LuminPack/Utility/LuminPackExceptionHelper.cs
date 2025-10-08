@@ -116,6 +116,12 @@ namespace LuminPack.Code
         }
         
         [DoesNotReturn]
+        public static void ThrowBufferWriterNull()
+        {
+            throw new LuminPackException("ReusableLinkedArrayBufferWriter is no Null.");
+        }
+        
+        [DoesNotReturn]
         public static void ThrowNotFoundInUnionType(Type actualType, Type baseType)
         {
             throw new LuminPackException($"Type {actualType.FullName} is not annotated in {baseType.FullName} LuminPackUnion.");
@@ -124,7 +130,7 @@ namespace LuminPack.Code
         [DoesNotReturn]
         public static void ThrowInvalidTag(ushort tag, Type baseType)
         {
-            throw new LuminPackException($"Data read tag: {tag} but not found in {baseType.FullName} MemoryPackUnion annotations.");
+            throw new LuminPackException($"Data read tag: {tag} but not found in {baseType.FullName} LuminPackUnion annotations.");
         }
         
         [DoesNotReturn]

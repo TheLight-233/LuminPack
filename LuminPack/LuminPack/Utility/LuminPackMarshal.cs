@@ -878,6 +878,150 @@ public static class LuminPackMarshal
         
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static unsafe MethodTable* GetMethodTable(object obj)
+    {
+        return (MethodTable*) Unsafe.Add(ref Unsafe.As<byte, IntPtr>(ref Unsafe.As<RawData>(obj).Data), -1);
+    }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static unsafe MethodTable* GetMethodTable<T>(T obj) where T : class
+    {
+        return (MethodTable*) Unsafe.Add(ref Unsafe.As<byte, IntPtr>(ref Unsafe.As<RawData>(obj).Data), -1);
+    }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static unsafe MethodTable* GetMethodTable(Type type)
+    {
+        return (MethodTable*)type.TypeHandle.Value.ToPointer();
+    }
+    
+    private sealed class RawData
+    {
+        public byte Data;
+    }
+    
+    [StructLayout(LayoutKind.Explicit)]
+    public struct MethodTable
+    {
+        [FieldOffset(0)]
+        public ushort ComponentSize;
+        [FieldOffset(0)]
+        public uint Flags;
+        [FieldOffset(4)]
+        public uint BaseSize;
+        [FieldOffset(14)]
+        public ushort InterfaceCount;
+        [FieldOffset(16 /*0x10*/)]
+        public unsafe MethodTable* ParentMethodTable;
+        [FieldOffset(32 /*0x20*/)]
+        public unsafe IntPtr* AuxiliaryData;
+        [FieldOffset(48 /*0x30*/)]
+        public unsafe void* ElementType;
+        [FieldOffset(56)]
+        public unsafe MethodTable** InterfaceMap;
+
+        public bool HasComponentSize => (this.Flags & 2147483648U /*0x80000000*/) > 0U;
+
+        public bool ContainsGCPointers => (this.Flags & 16777216U /*0x01000000*/) > 0U;
+
+        public bool NonTrivialInterfaceCast => (this.Flags & 1347158016U /*0x504C0000*/) > 0U;
+
+        public bool HasTypeEquivalence => (this.Flags & 33554432U /*0x02000000*/) > 0U;
+
+        public bool HasFinalizer => (this.Flags & 1048576U /*0x100000*/) > 0U;
+
+        internal static unsafe bool AreSameType(MethodTable* mt1, MethodTable* mt2) => mt1 == mt2;
+
+        public bool HasDefaultConstructor
+        {
+            get => ((int) this.Flags & -2147483136 /*0x80000200*/) == 512 /*0x0200*/;
+        }
+
+        public bool IsMultiDimensionalArray
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)] get => this.BaseSize > (uint) (3 * 8);
+        }
+
+        public int MultiDimensionalArrayRank
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)] get
+            {
+                return (int) ((this.BaseSize - (uint) (3 * 8)) / 8U);
+            }
+        }
+
+        public bool IsInterface => ((int) this.Flags & 983040 /*0x0F0000*/) == 786432 /*0x0C0000*/;
+
+        public bool IsValueType => ((int) this.Flags & 786432 /*0x0C0000*/) == 262144 /*0x040000*/;
+
+        public bool IsNullable => ((int) this.Flags & 983040 /*0x0F0000*/) == 327680 /*0x050000*/;
+
+        public bool IsByRefLike => ((int) this.Flags & -2147479552 /*0x80001000*/) == 4096 /*0x1000*/;
+
+        public bool IsPrimitive
+        {
+            get
+            {
+                bool isPrimitive;
+                switch (this.Flags & 983040U /*0x0F0000*/)
+                {
+                    case 393216 /*0x060000*/:
+                    case 458752 /*0x070000*/:
+                        isPrimitive = true;
+                        break;
+                    default:
+                        isPrimitive = false;
+                        break;
+                }
+                return isPrimitive;
+            }
+        }
+
+        public bool IsTruePrimitive => ((int) this.Flags & 983040 /*0x0F0000*/) == 458752 /*0x070000*/;
+
+        public bool HasInstantiation
+        {
+            get => ((int) this.Flags & int.MinValue) == 0 && (this.Flags & 48U /*0x30*/) > 0U;
+        }
+
+        public bool IsGenericTypeDefinition
+        {
+            get => ((int) this.Flags & -2147483600 /*0x80000030*/) == 48 /*0x30*/;
+        }
+
+        public bool IsConstructedGenericType
+        {
+            get
+            {
+                uint num = this.Flags & 2147483696U /*0x80000030*/;
+                return num == 16U /*0x10*/ || num == 32U /*0x20*/;
+            }
+        }
+
+        public bool ContainsGenericVariables => (this.Flags & 536870912U /*0x20000000*/) > 0U;
+  
+        [DllImport("QCall", EntryPoint = "MethodTable_AreTypesEquivalent")]
+        public static extern unsafe int __PInvoke(MethodTable* __pMTa_native, MethodTable* __pMTb_native);
+  
+        [MethodImpl(MethodImplOptions.InternalCall)]
+        public extern uint GetNumInstanceFieldBytes();
+  
+    }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static uint RoundUpToPowerOf2(uint value)
+    {
+        if (value == 0) return 1;
+        value--;
+        value |= value >> 1;
+        value |= value >> 2;
+        value |= value >> 4;
+        value |= value >> 8;
+        value |= value >> 16;
+        return value + 1;
+    }
+    
     [Preserve]
     internal sealed class ListView<T>
     {

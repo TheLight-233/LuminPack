@@ -62,6 +62,10 @@ public sealed class LuminPackUnionAttribute : System.Attribute
 
     public Type Type { get; }
 
+    public LuminPackUnionAttribute()
+    {
+    }
+    
     public LuminPackUnionAttribute(ushort tag, Type type)
     {
         this.Tag = tag;

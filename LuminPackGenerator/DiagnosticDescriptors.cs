@@ -234,4 +234,24 @@ internal static class DiagnosticDescriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+    
+    public static readonly DiagnosticDescriptor UnionMemberAutoDiscovered = new (
+        id: "LuminPack029",
+        title: "Union member automatically discovered",
+        messageFormat: "Type '{0}' was automatically registered as union member of '{1}' with tag {2}",
+        category: "LuminPack.Union",
+        DiagnosticSeverity.Info,
+        isEnabledByDefault: true,
+        description: "This type was automatically discovered and assigned a deterministic tag for polymorphic serialization."
+    );
+
+    public static readonly DiagnosticDescriptor TooManyUnionMembers = new (
+        id: "LuminPack030",
+        title: "Too many union members",
+        messageFormat: "Union type '{0}' has {1} derived types, which exceeds the maximum of 256",
+        category: "LuminPack.Union",
+        DiagnosticSeverity.Error,
+        isEnabledByDefault: true,
+        description: "Union types can have at most 256 derived types (tags 0-255)."
+    );
 }

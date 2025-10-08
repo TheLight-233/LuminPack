@@ -399,7 +399,7 @@ namespace LuminPack.Code.Core
                     GenerateSerializeCode(sb, data.fields[i], $"{access}." + data.fields[i].Name, "span", "offset", 3, 0);
                     
                     
-                    if (data.fields[i].Type is not LuminFiledType.Struct) 
+                    if (data.fields[i].Type is not LuminFiledType.Struct and not LuminFiledType.Other) 
                         //sb.AppendLine($"            offset += {GetFieldLength(data.fields[i], 0, pattern: "writer")};");
                         sb.AppendLine($"            writer.Advance({GetFieldLength(data.fields[i], 0, pattern: "writer")});");
                     
@@ -463,7 +463,7 @@ namespace LuminPack.Code.Core
             }
             
             //if (!_dataInfo.isValueType) 
-                //sb.AppendLine($"            if (value is null) value = new {data.classFullName}();");
+            //sb.AppendLine($"            if (value is null) value = new {data.classFullName}();");
             sb.AppendLine();
             sb.AppendLine("            ref int offset = ref reader.GetCurrentSpanOffset();");
             //sb.AppendLine("            var span = reader.GetSpan();");
@@ -566,8 +566,8 @@ namespace LuminPack.Code.Core
                     
                     if (data.fields[i].Type is LuminFiledType.String or LuminFiledType.Struct) continue;
                     
-                    
-                    sb.AppendLine($"            offset += {GetFieldLength(data.fields[i], 0, pattern: "reader")};");
+                    if (data.fields[i].Type is not LuminFiledType.Other) 
+                        sb.AppendLine($"            offset += {GetFieldLength(data.fields[i], 0, pattern: "reader")};");
                 }
                 
             }
@@ -715,27 +715,28 @@ namespace LuminPack.Code.Core
             sb.AppendLine("        }");
 
             sb.AppendLine();
-            switch (data.structLayout)
-            {
-                case StructLayout.Explicit : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Explicit)]"); break;
-                case StructLayout.Auto : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Auto)]"); break;
-                case StructLayout.Sequential : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Sequential)]"); break;
-                case StructLayout.Default : break;
-            }
-            sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-            sb.AppendLine(_dataInfo.isValueType 
-                ? $"        private struct Local{_dataInfo.classFullName}" 
-                : $"        private sealed class Local{_dataInfo.classFullName}");
-            sb.AppendLine("        {");
-            foreach (var field in _dataInfo.localFields)
-            {
-                if (data.structLayout is StructLayout.Explicit)
-                    sb.AppendLine($"            [global::System.Runtime.InteropServices.FieldOffset({field.filedOffset})]");
-                var nullable = IsUnmanagedFiledType(field.TypeName) || field.IsValue ? string.Empty : "?";
-                sb.AppendLine($"            internal {field.TypeName}{nullable} {field.Name};");
-            }
-            
-            sb.AppendLine("        }");
+            GenerateLocalClassStructure(sb, data);
+            // switch (data.structLayout)
+            // {
+            //     case StructLayout.Explicit : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Explicit)]"); break;
+            //     case StructLayout.Auto : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Auto)]"); break;
+            //     case StructLayout.Sequential : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Sequential)]"); break;
+            //     case StructLayout.Default : break;
+            // }
+            // sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+            // sb.AppendLine(_dataInfo.isValueType 
+            //     ? $"        private struct Local{_dataInfo.classFullName}" 
+            //     : $"        private sealed class Local{_dataInfo.classFullName}");
+            // sb.AppendLine("        {");
+            // foreach (var field in _dataInfo.localFields)
+            // {
+            //     if (data.structLayout is StructLayout.Explicit)
+            //         sb.AppendLine($"            [global::System.Runtime.InteropServices.FieldOffset({field.filedOffset})]");
+            //     var nullable = IsUnmanagedFiledType(field.TypeName) || field.IsValue ? string.Empty : "?";
+            //     sb.AppendLine($"            internal {field.TypeName}{nullable} {field.Name};");
+            // }
+            //
+            // sb.AppendLine("        }");
             
             sb.AppendLine();
 
@@ -1201,7 +1202,6 @@ namespace LuminPack.Code.Core
                     //sb.AppendLine($"{indentStr}{span}[{offset} + {field.Name}Length] = 0; // 终止符");
                     break;
                 case LuminFiledType.List:
-                    
                     if (!IsReferenceGenericType(field.GenericType.FirstOrDefault()))
                     {
                         sb.AppendLine($"{indentStr}var {field.Name}ListTempValue{depthSuffix} = {fieldPath};");
@@ -1241,7 +1241,7 @@ namespace LuminPack.Code.Core
                         sb.AppendLine($"{indentStr}if (!writer.IsReferenceOrContainsReferences<{field.ClassName}>() && {field.Name}Count{depthSuffix} is not 0)");
                         sb.AppendLine($"{indentStr}{{");
                         sb.AppendLine($"{indentStr}    var {field.Name}ListTempValue{depthSuffix} = {fieldPath};");
-                        sb.AppendLine($"{indentStr}    writer.WriteUnmanagedList(ref {offset}, ref {field.Name}ListTempValue{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                        sb.AppendLine($"{indentStr}    writer.WriteUnmanagedSpanWithOutHeader(ref {offset}, {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
                         sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
                         sb.AppendLine($"{indentStr}}}");
                         sb.AppendLine($"{indentStr}else");
@@ -1250,9 +1250,7 @@ namespace LuminPack.Code.Core
                     //sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.Name}Count{depthSuffix}; i{depthSuffix}++)");
                     sb.AppendLine($"{indentStr}foreach (var v{depthSuffix} in {field.Name}TempSpan{depthSuffix})");
                     sb.AppendLine($"{indentStr}{{");
-    
                     
-    
                     // 特殊处理字符串元素
                     if (elementField.Type is LuminFiledType.String)
                     {
@@ -1850,7 +1848,7 @@ namespace LuminPack.Code.Core
                     break;
                 case LuminFiledType.String:
                     //sb.AppendLine($"{indentStr}int {field.Name}{depthSuffix}Length = 0;");
-                   // sb.AppendLine($"{indentStr}while ({span}[{offset} + {field.Name}{depthSuffix}Length] != 0)");
+                    // sb.AppendLine($"{indentStr}while ({span}[{offset} + {field.Name}{depthSuffix}Length] != 0)");
                     //sb.AppendLine($"{indentStr}{{");
                     //sb.AppendLine($"{indentStr}    {field.Name}{depthSuffix}Length++;");
                     //sb.AppendLine($"{indentStr}}}");
@@ -2829,6 +2827,140 @@ namespace LuminPack.Code.Core
                 }
             }
         }
+        
+        private static void GenerateLocalClassStructure(StringBuilder sb, LuminDataInfo dataInfo)
+        {
+            var allClassInfos = new List<LuminDataInfo>();
+            var current = dataInfo.Parent;
+    
+            while (current != null)
+            {
+                allClassInfos.Add(current);
+                current = current.Parent;
+            }
+            
+            GenerateSingleLocalClass(sb, dataInfo);
+
+            // 为每个父类生成 Local
+            foreach (var classInfo in allClassInfos)
+            {
+                GenerateParentClass(sb, classInfo, dataInfo.localFields);
+            }
+        }
+
+        private static void GenerateParentClass(StringBuilder sb, LuminDataInfo classInfo, List<LuminLocalFieldData> allClassInfos)
+        {
+            // 确定继承关系
+            string inheritance = "";
+            if (classInfo.Parent != null)
+            {
+                inheritance = $" : Local{classInfo.Parent.classFullName}";
+            }
+
+            switch (classInfo.structLayout)
+            {
+                case StructLayout.Explicit: 
+                    sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Explicit)]"); 
+                    break;
+                case StructLayout.Auto: 
+                    sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Auto)]"); 
+                    break;
+                case StructLayout.Sequential: 
+                    sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Sequential)]"); 
+                    break;
+                case StructLayout.Default: 
+                    break;
+            }
+    
+            sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+            sb.AppendLine(classInfo.isValueType 
+                ? $"        private struct Local{classInfo.classFullName}{inheritance}" 
+                : $"        private class Local{classInfo.classFullName}{inheritance}");
+            sb.AppendLine("        {");
+            
+            foreach (var field in classInfo.fields)
+            {
+                var localField = allClassInfos.FirstOrDefault(f => f.Name == field.Name);
+                
+                if (localField == null)
+                    continue;
+                
+                if (classInfo.structLayout is StructLayout.Explicit)
+                    sb.AppendLine($"            [global::System.Runtime.InteropServices.FieldOffset({localField.filedOffset})]");
+        
+                var nullable = IsUnmanagedFiledType(localField.TypeName) || localField.IsValue ? string.Empty : "?";
+                sb.AppendLine($"            internal {localField.TypeName}{nullable} {localField.Name};");
+            }
+    
+            sb.AppendLine("        }");
+            sb.AppendLine();
+        }
+        
+        private static void GenerateSingleLocalClass(StringBuilder sb, LuminDataInfo classInfo)
+        {
+            string inheritance = "";
+            if (classInfo.Parent != null)
+            {
+                inheritance = $" : Local{classInfo.Parent.classFullName}";
+            }
+
+            switch (classInfo.structLayout)
+            {
+                case StructLayout.Explicit: 
+                    sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Explicit)]"); 
+                    break;
+                case StructLayout.Auto: 
+                    sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Auto)]"); 
+                    break;
+                case StructLayout.Sequential: 
+                    sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Sequential)]"); 
+                    break;
+                case StructLayout.Default: 
+                    break;
+            }
+    
+            sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+            sb.AppendLine(classInfo.isValueType 
+                ? $"        private struct Local{classInfo.classFullName}{inheritance}" 
+                : $"        private sealed class Local{classInfo.classFullName}{inheritance}");
+            sb.AppendLine("        {");
+            
+            foreach (var field in GetMyLocalFiled(classInfo))
+            {
+                if (classInfo.structLayout is StructLayout.Explicit)
+                    sb.AppendLine($"            [global::System.Runtime.InteropServices.FieldOffset({field.filedOffset})]");
+        
+                var nullable = IsUnmanagedFiledType(field.TypeName) || field.IsValue ? string.Empty : "?";
+                sb.AppendLine($"            internal {field.TypeName}{nullable} {field.Name};");
+            }
+    
+            sb.AppendLine("        }");
+            sb.AppendLine();
+        }
+
+        private static List<LuminLocalFieldData> GetMyLocalFiled(LuminDataInfo dataInfo)
+        {
+            var allClassInfos = new List<LuminDataInfo>();
+            var current = dataInfo.Parent;
+    
+            while (current != null)
+            {
+                allClassInfos.Add(current);
+                current = current.Parent;
+            }
+            
+            var localFields = new List<LuminLocalFieldData>(dataInfo.localFields);
+            foreach (var parent in allClassInfos)
+            {
+                foreach (var field in parent.fields)
+                {
+                    localFields.Remove(localFields.FirstOrDefault(x => x.Name == field.Name));
+                }
+            }
+            
+            return localFields;
+        }
+        
     }
     
 }

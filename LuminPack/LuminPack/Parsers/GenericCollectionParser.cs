@@ -50,7 +50,7 @@ public sealed class GenericCollectionFormatter<TCollection, TElement> : LuminPac
         
         reader.Advance(4);
 
-        var parser = reader.GetParser<TElement?>();
+        var parser = LuminPackParseProvider.Cache<TElement?>.Parser!;
 
         var collection = new TCollection();
         for (int i = 0; i < length; i++)
@@ -134,7 +134,7 @@ public abstract class GenericSetParserBase<TSet, TElement> : LuminPackParser<TSe
         
         reader.Advance(4);
 
-        var parser = reader.GetParser<TElement?>();
+        var parser = LuminPackParseProvider.Cache<TElement?>.Parser!;
 
         var collection = CreateSet();
         for (int i = 0; i < length; i++)
@@ -227,8 +227,8 @@ public abstract class GenericDictionaryParserBase<TDictionary, TKey, TValue> : L
             return;
         }
 
-        var keyParser = reader.GetParser<TKey>();
-        var valueParser = reader.GetParser<TValue>();
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
 
         var dict = CreateDictionary();
         for (int i = 0; i < length; i++)

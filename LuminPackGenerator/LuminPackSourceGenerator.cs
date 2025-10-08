@@ -28,7 +28,7 @@ namespace LuminPack.SourceGenerator
         {
             try
             {
-                 var metaInfo = context.ParseOptionsProvider.Select((parseOptions, _) =>
+                var metaInfo = context.ParseOptionsProvider.Select((parseOptions, _) =>
                 {
                     var csOptions = (CSharpParseOptions)parseOptions;
                     var langVersion = csOptions.LanguageVersion;
@@ -48,7 +48,7 @@ namespace LuminPack.SourceGenerator
                     static (context, _) =>
                     {
                         ProcessedTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-                        return CreateLuminDataInfo(context.TargetSymbol);
+                        return CreateLuminDataInfo(context.TargetSymbol, context.SemanticModel.Compilation);
                     }).WithTrackingName("LuminPack.LuminPackable.1_ForAttributeLuminPackableAttribute");
 
                 var provider = typeDeclarations
@@ -85,7 +85,7 @@ namespace LuminPack.SourceGenerator
             
         }
 
-        private static LuminDataInfo CreateLuminDataInfo(ISymbol symbol)
+        private static LuminDataInfo CreateLuminDataInfo(ISymbol symbol, Compilation compilation)
         {
             _mainSymbol = symbol;
             var typeSymbol = (INamedTypeSymbol)symbol;
@@ -104,6 +104,15 @@ namespace LuminPack.SourceGenerator
                 generatorType = TypeMetaChecker.CheckGeneratorType(typeSymbol)
             };
 
+            foreach (var iface in typeSymbol.AllInterfaces)
+            {
+                var fullName = iface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                if (!dataInfo.interfaces.Contains(fullName))
+                {
+                    dataInfo.interfaces.Add(fullName);
+                }
+            }
+            
             #region Diagnostics
 
             //Check Layout
@@ -111,19 +120,19 @@ namespace LuminPack.SourceGenerator
             
             if (symbol.IsAbstract)
             {
-                if (!TypeMetaChecker.TryCheckUnionAttribute(typeSymbol))
-                {
-                    TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                        DiagnosticDescriptors.AbstractMustUnion,
-                        _location,
-                        symbol.Name
-                    ));
-                }
+                // if (!TypeMetaChecker.TryCheckUnionAttribute(typeSymbol))
+                // {
+                //     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                //         DiagnosticDescriptors.AbstractMustUnion,
+                //         _location,
+                //         symbol.Name
+                //     ));
+                // }
                 
                 dataInfo.isUnion = true;
             }
             
-            if (TypeMetaChecker.TryCheckUnionAttribute(typeSymbol))
+            if (TypeMetaChecker.TryCheckUnionAttribute(typeSymbol) || symbol.IsAbstract)
             {
                 if (symbol.IsSealed)
                 {
@@ -263,8 +272,9 @@ namespace LuminPack.SourceGenerator
                         }
                     }
                     
-                    
                 }
+                
+                DiscoverAndRegisterDerivedTypes(typeSymbol, dataInfo, compilation);
             }
 
             if (dataInfo.generatorType is GeneratorType.CircleReference or GeneratorType.VersionTolerant)
@@ -296,7 +306,7 @@ namespace LuminPack.SourceGenerator
             {
                 dataInfo.GenericParameters
                     .AddRange(typeSymbol.TypeParameters
-                    .Select(t => t.Name));
+                        .Select(t => t.Name));
                 
                 foreach (var typeParam in typeSymbol.TypeParameters)
                 {
@@ -358,16 +368,82 @@ namespace LuminPack.SourceGenerator
             
             static void ProcessBaseClassMembers(INamedTypeSymbol baseClassSymbol, LuminDataInfo dataInfo)
             {
-                if (baseClassSymbol == null || baseClassSymbol.SpecialType == SpecialType.System_Object) return;
+                if (baseClassSymbol == null || 
+                    baseClassSymbol.SpecialType == SpecialType.System_Object ||
+                    baseClassSymbol.SpecialType == SpecialType.System_ValueType) return;
 
+                #region 父类初始化
+
+                var currentParent = dataInfo;
+                while (currentParent.Parent != null)
+                {
+                    currentParent = currentParent.Parent;
+                }
+                
+                // 现在 currentParent.Parent == null
+                currentParent.Parent = new LuminDataInfo()
+                {
+                    className = baseClassSymbol.Name,
+                    classFullName = baseClassSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    classNameSpace = baseClassSymbol.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
+                    isGeneric = baseClassSymbol.IsGenericType,
+                    isValueType = baseClassSymbol.TypeKind == TypeKind.Struct,
+                    enableBurst = false,
+                    generatorType = TypeMetaChecker.CheckGeneratorType(baseClassSymbol)
+                };
+                
+                foreach (var iface in baseClassSymbol.AllInterfaces)
+                {
+                    var fullName = iface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+                    if (!currentParent.Parent.interfaces.Contains(fullName))
+                    {
+                        currentParent.Parent.interfaces.Add(fullName);
+                    }
+                }
+                
+                TypeMetaChecker.TryCheckStructLayout(baseClassSymbol, currentParent.Parent);
+                
+                if (currentParent.Parent.isGeneric)
+                {
+                    currentParent.Parent.GenericParameters.AddRange(
+                        baseClassSymbol.TypeParameters.Select(t => t.Name)
+                    );
+
+                    foreach (var typeParam in baseClassSymbol.TypeParameters)
+                    {
+                        var constraint = new GenericParameterConstraint
+                        {
+                            ParameterName = typeParam.Name,
+                            IsUnmanaged = typeParam.HasUnmanagedTypeConstraint,
+                            IsClass = typeParam.HasReferenceTypeConstraint,
+                            IsStruct = typeParam.HasValueTypeConstraint && !typeParam.HasUnmanagedTypeConstraint,
+                            IsNotNull = typeParam.HasNotNullConstraint,
+                            HasDefault = false,
+                            HasNewConstructor = typeParam.HasConstructorConstraint
+                        };
+
+                        foreach (var constraintType in typeParam.ConstraintTypes)
+                        {
+                            constraint.Constraints.Add(
+                                constraintType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                            );
+                        }
+
+                        currentParent.Parent.GenericConstraints.Add(constraint);
+                    }
+                }
+            
+
+                #endregion
+                
                 // 先处理更上层的基类
                 ProcessBaseClassMembers(baseClassSymbol.BaseType, dataInfo);
 
                 // 处理当前基类的成员
-                ProcessMember(baseClassSymbol, dataInfo);
+                ProcessMember(baseClassSymbol, dataInfo, currentParent.Parent);
             }
             
-            static void ProcessMember(INamedTypeSymbol symbol, LuminDataInfo dataInfo)
+            static void ProcessMember(INamedTypeSymbol symbol, LuminDataInfo dataInfo, LuminDataInfo parent = null)
             {
                 if (symbol == null) return;
                 
@@ -417,6 +493,8 @@ namespace LuminPack.SourceGenerator
                     
                         dataInfo.fields.Add(field);
 
+                        parent?.fields.Add(field);
+                        
                         continue;
                     }
                 
@@ -424,6 +502,8 @@ namespace LuminPack.SourceGenerator
                 
                 
                     dataInfo.fields.Add(field);
+                    
+                    parent?.fields.Add(field);
                     
                     ProcessedTypes.Clear();
                 }
@@ -476,12 +556,16 @@ namespace LuminPack.SourceGenerator
                     
                         dataInfo.fields.Add(field);
 
+                        parent?.fields.Add(field);
+                        
                         continue;
                     }
                 
                     ProcessFieldType(member.Type, field, dataInfo.GenericParameters);
                     
                     dataInfo.fields.Add(field);
+                    
+                    parent?.fields.Add(field);
                     
                     ProcessedTypes.Clear();
                 }
@@ -644,9 +728,9 @@ namespace LuminPack.SourceGenerator
                                     }
                                     
                                     if (member.DeclaredAccessibility is 
-                                            Accessibility.Private or 
-                                            Accessibility.ProtectedAndInternal or 
-                                            Accessibility.Protected) continue;
+                                        Accessibility.Private or 
+                                        Accessibility.ProtectedAndInternal or 
+                                        Accessibility.Protected) continue;
                                     
                                     Set:
                                     if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(member))
@@ -802,9 +886,9 @@ namespace LuminPack.SourceGenerator
                                     }
                                     
                                     if (member.DeclaredAccessibility is 
-                                            Accessibility.Private or 
-                                            Accessibility.ProtectedAndInternal or 
-                                            Accessibility.Protected) continue;
+                                        Accessibility.Private or 
+                                        Accessibility.ProtectedAndInternal or 
+                                        Accessibility.Protected) continue;
                                     
                                     Set:
                                     if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(member))
@@ -1109,9 +1193,9 @@ namespace LuminPack.SourceGenerator
                     }
                     
                     if (member.DeclaredAccessibility is 
-                            Accessibility.Private or 
-                            Accessibility.ProtectedAndInternal or 
-                            Accessibility.Protected) continue; // 忽略静态属性
+                        Accessibility.Private or 
+                        Accessibility.ProtectedAndInternal or 
+                        Accessibility.Protected) continue; // 忽略静态属性
                     
                     Set:
                     if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(member))
@@ -1539,6 +1623,14 @@ namespace LuminPack.SourceGenerator
             
             field.ConstructParameterCount = constructors;
         }
+
+        /// <summary>
+        /// 自动发现当前程序集内所有继承自指定基类的派生类，并分配确定性 Tag
+        /// </summary>
+        private static void DiscoverAndRegisterDerivedTypes(
+            INamedTypeSymbol baseTypeSymbol,
+            LuminDataInfo dataInfo,
+            Compilation compilation) => LuminPackDiscovery.Run(baseTypeSymbol, dataInfo, compilation);
         
     }
 }

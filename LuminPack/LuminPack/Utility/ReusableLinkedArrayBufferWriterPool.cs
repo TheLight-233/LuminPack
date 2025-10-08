@@ -102,6 +102,7 @@ public sealed class ReusableLinkedArrayBufferWriter :
         throw new NotSupportedException();
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<byte> GetSpan(int index = 0)
     {
         if (_buffer.IsNull)
@@ -159,7 +160,7 @@ public sealed class ReusableLinkedArrayBufferWriter :
         if (_currentIndex is null || *_currentIndex == 0) return;
         
         
-        Unsafe.CopyBlockUnaligned(ref writer.GetSpanReference(writer.CurrentIndex), ref _buffer.WrittenBuffer.Slice(0, CurrentIndex).GetPinnableReference(), (uint)CurrentIndex);
+        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart.ToPointer()), (nint)writer.CurrentIndex), ref _buffer.WrittenBuffer.Slice(0, CurrentIndex).GetPinnableReference(), (uint)CurrentIndex);
 
         writer.Advance(CurrentIndex);
         
@@ -251,7 +252,7 @@ internal unsafe struct BufferSegment : IDisposable
     public BufferSegment(int size)
     {
 #if NET8_0_OR_GREATER
-        _buffer = new IntPtr(NativeMemory.Alloc((nuint)size));
+        _buffer = new IntPtr(NativeMemory.AllocZeroed((nuint)size));
 #else
         _buffer = Marshal.AllocHGlobal(size);
 #endif

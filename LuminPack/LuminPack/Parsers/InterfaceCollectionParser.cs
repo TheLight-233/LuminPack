@@ -84,7 +84,7 @@ file static class InterfaceCollectionParserUtils
 
         ref var index = ref writer.GetCurrentSpanOffset();
             
-        var parser = writer.GetParser<TElement>();
+        var parser = LuminPackParseProvider.Cache<TElement>.Parser!;
             
         writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -120,7 +120,7 @@ file static class InterfaceCollectionParserUtils
 
         ref var index = ref writer.GetCurrentSpanOffset();
             
-        var parser = writer.GetParser<TElement>();
+        var parser = LuminPackParseProvider.Cache<TElement>.Parser!;
             
         writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -151,7 +151,7 @@ file static class InterfaceCollectionParserUtils
 
     public static List<T?>? ReadList<T>(ref LuminPackReader reader)
     {
-        var parser = reader.GetParser<List<T?>>();
+        var parser = LuminPackParseProvider.Cache<List<T?>>.Parser!;
         List<T?>? v = default;
         parser.Deserialize(ref reader, ref v);
         return v;
@@ -170,7 +170,7 @@ public sealed class InterfaceEnumerableParser<T> : LuminPackParser<IEnumerable<T
         
         if (value.TryGetNonEnumeratedCountEx(out var count))
         {
-            var parser = writer.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             writer.WriteCollectionHeader(ref index, count);
             
@@ -192,7 +192,7 @@ public sealed class InterfaceEnumerableParser<T> : LuminPackParser<IEnumerable<T
                 tempWriter.SetWriteBuffer(tempBuffer);
 
                 count = 0;
-                var parser = writer.GetParser<T?>();
+                var parser = LuminPackParseProvider.Cache<T?>.Parser!;
                 foreach (var item in value)
                 {
                     count++;
@@ -394,8 +394,8 @@ public sealed class InterfaceDictionaryParser<TKey, TValue> : LuminPackParser<ID
             return;
         }
 
-        var keyParser = writer.GetParser<TKey>();
-        var valueParser = writer.GetParser<TValue>();
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
 
         writer.WriteCollectionHeader(ref index, value.Count);
         
@@ -425,8 +425,8 @@ public sealed class InterfaceDictionaryParser<TKey, TValue> : LuminPackParser<ID
 
         var dict = new Dictionary<TKey, TValue?>(equalityComparer);
 
-        var keyParser = reader.GetParser<TKey>();
-        var valueParser = reader.GetParser<TValue>();
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
         
         for (int i = 0; i < length; i++)
         {
@@ -491,8 +491,8 @@ public sealed class InterfaceReadOnlyDictionaryParser<TKey, TValue> : LuminPackP
             return;
         }
 
-        var keyParser = writer.GetParser<TKey>();
-        var valueParser = writer.GetParser<TValue>();
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
 
         writer.WriteCollectionHeader(ref index, value.Count);
         
@@ -522,8 +522,8 @@ public sealed class InterfaceReadOnlyDictionaryParser<TKey, TValue> : LuminPackP
 
         var dict = new Dictionary<TKey, TValue?>(equalityComparer);
 
-        var keyParser = reader.GetParser<TKey>();
-        var valueParser = reader.GetParser<TValue>();
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
         
         for (int i = 0; i < length; i++)
         {
@@ -598,7 +598,7 @@ public sealed class InterfaceLookupParser<TKey, TElement> : LuminPackParser<ILoo
             return;
         }
 
-        var parser = writer.GetParser<IGrouping<TKey, TElement>>();
+        var parser = LuminPackParseProvider.Cache<IGrouping<TKey, TElement>>.Parser!;
             
         writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -629,7 +629,7 @@ public sealed class InterfaceLookupParser<TKey, TElement> : LuminPackParser<ILoo
             
         var dict = new Dictionary<TKey, IGrouping<TKey, TElement>>(equalityComparer);
 
-        var parser = reader.GetParser<IGrouping<TKey, TElement>>();
+        var parser = LuminPackParseProvider.Cache<IGrouping<TKey, TElement>>.Parser!;
         for (int i = 0; i < length; i++)
         {
             IGrouping<TKey, TElement>? item = default;
@@ -774,7 +774,7 @@ public sealed class InterfaceSetParser<T> : LuminPackParser<ISet<T?>>
             return;
         }
 
-        var parser = writer.GetParser<T>();
+        var parser = LuminPackParseProvider.Cache<T>.Parser!;
         
         writer.WriteCollectionHeader(ref index, value.Count);
         
@@ -805,7 +805,7 @@ public sealed class InterfaceSetParser<T> : LuminPackParser<ISet<T?>>
         
         var set = new HashSet<T?>(length, equalityComparer);
 
-        var parser = reader.GetParser<T>();
+        var parser = LuminPackParseProvider.Cache<T>.Parser!;
         for (int i = 0; i < length; i++)
         {
             T? item = default;

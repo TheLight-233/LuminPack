@@ -338,8 +338,8 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var keyFormatter = writer.GetParser<TKey>();
-            var valueFormatter = writer.GetParser<TValue>();
+            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
 
             writer.WriteCollectionHeader(ref index, value.Count);
             writer.Advance(4);
@@ -373,8 +373,8 @@ namespace LuminPack.Parsers
             }
 
             reader.Advance(4);
-            var keyFormatter = reader.GetParser<TKey>();
-            var valueFormatter = reader.GetParser<TValue>();
+            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
             for (int i = 0; i < length; i++)
             {
                 KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);
@@ -437,8 +437,8 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var keyFormatter = writer.GetParser<TKey>();
-            var valueFormatter = writer.GetParser<TValue>();
+            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
 
             writer.WriteCollectionHeader(ref index, value.Count);
             writer.Advance(4);
@@ -480,8 +480,8 @@ namespace LuminPack.Parsers
             
             reader.Advance(4);
             
-            var keyFormatter = reader.GetParser<TKey>();
-            var valueFormatter = reader.GetParser<TValue>();
+            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
             for (int i = 0; i < length; i++)
             {
                 KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);
@@ -552,8 +552,8 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var keyFormatter = writer.GetParser<TKey>();
-            var valueFormatter = writer.GetParser<TValue>();
+            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
 
             writer.WriteCollectionHeader(ref index, value.Count);
             writer.Advance(4);
@@ -588,8 +588,8 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
 
-            var keyFormatter = reader.GetParser<TKey>();
-            var valueFormatter = reader.GetParser<TValue>();
+            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
             for (var i = 0; i < length; i++)
             {
                 KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);
@@ -693,7 +693,7 @@ namespace LuminPack.Parsers
     public sealed class QueueParser<T> : LuminPackParser<Queue<T?>>
     {
         [Preserve]
-        public override void Serialize(ref LuminPackWriter writer, scoped ref Queue<T?>? value)
+        public override unsafe void Serialize(ref LuminPackWriter writer, scoped ref Queue<T?>? value)
         {
             ref var index = ref writer.GetCurrentSpanOffset();
             
@@ -739,7 +739,7 @@ namespace LuminPack.Parsers
             
                 var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
-                ref var dest = ref writer.GetSpanReference(index);
+                ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart.ToPointer()), (nint)index);
                 ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference()!);
             
                 Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)srcLength);
@@ -758,7 +758,7 @@ namespace LuminPack.Parsers
                 return;
             }
             
-            var parser = writer.GetParser<T>();
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
             
             writer.WriteCollectionHeader(ref index, span.Length);
@@ -855,7 +855,7 @@ namespace LuminPack.Parsers
             
             
 
-            var parser = reader.GetParser<T>();
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
 
             for (int i = 0; i < length; i++)
@@ -902,7 +902,7 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var parser = writer.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
                 
             writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -940,7 +940,7 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
 
-            var parser = reader.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             for (int i = 0; i < length; i++)
             {
                 T? v = default;
@@ -1000,7 +1000,7 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var parser = writer.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -1038,7 +1038,7 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
 
-            var parser = reader.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             for (int i = 0; i < length; i++)
             {
@@ -1100,7 +1100,7 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var parser = writer.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -1138,7 +1138,7 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
 
-            var parser = reader.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             for (int i = 0; i < length; i++)
             {
                 T? v = default;
@@ -1297,7 +1297,7 @@ namespace LuminPack.Parsers
                 
                 writer.Advance(4);
                 
-                var parser = writer.GetParser<T?>();
+                var parser = LuminPackParseProvider.Cache<T?>.Parser!;
                 
                 foreach (var item in value)
                 {
@@ -1406,7 +1406,7 @@ namespace LuminPack.Parsers
                 
                 writer.Advance(4);
                 
-                var parser = writer.GetParser<T?>();
+                var parser = LuminPackParseProvider.Cache<T?>.Parser!;
                 
                 foreach (var item in value)
                 {
@@ -1506,7 +1506,7 @@ namespace LuminPack.Parsers
             }
             
 
-            var parser = writer.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             var count = value.Count;
             
@@ -1550,7 +1550,7 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
 
-            var parser = reader.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             for (int i = 0; i < length; i++)
             {
@@ -1617,7 +1617,7 @@ namespace LuminPack.Parsers
                 }
                 if (i != count) LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();
 
-                var formatter = writer.GetParser<T?>();
+                var formatter = LuminPackParseProvider.Cache<T?>.Parser!;
                 
                 writer.WriteCollectionHeader(ref index, count);
                 
@@ -1659,7 +1659,7 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
 
-            var parser = reader.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             for (int i = 0; i < length; i++)
             {
@@ -1714,7 +1714,7 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var parser = writer.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             var count = value.Count;
             
@@ -1759,7 +1759,7 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
 
-            var parser = reader.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             for (int i = 0; i < length; i++)
             {
                 T? v = default;
@@ -1827,8 +1827,8 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var keyFormatter = writer.GetParser<TKey>();
-            var valueFormatter = writer.GetParser<TValue>();
+            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
 
             writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -1865,8 +1865,8 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
 
-            var keyFormatter = reader.GetParser<TKey>();
-            var valueFormatter = reader.GetParser<TValue>();
+            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
             for (int i = 0; i < length; i++)
             {
                 KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);
@@ -1928,7 +1928,7 @@ namespace LuminPack.Parsers
                 
                 writer.Advance(4);
                 
-                var parser = writer.GetParser<T?>();
+                var parser = LuminPackParseProvider.Cache<T?>.Parser!;
                 
                 foreach (var item in value)
                 {
@@ -2020,7 +2020,7 @@ namespace LuminPack.Parsers
                 
                 writer.Advance(4);
                 
-                var parser = writer.GetParser<T?>();
+                var parser = LuminPackParseProvider.Cache<T?>.Parser!;
                 
                 foreach (var item in value)
                 {
@@ -2098,7 +2098,7 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var parser = writer.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -2129,7 +2129,7 @@ namespace LuminPack.Parsers
             
             value = new BlockingCollection<T?>();
 
-            var parser = reader.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             for (int i = 0; i < length; i++)
             {
                 T? v = default;

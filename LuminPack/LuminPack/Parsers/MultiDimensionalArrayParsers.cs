@@ -104,7 +104,7 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
         }
         else
         {
-            var parser = reader.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
             var i = 0;
             var j = -1;
@@ -252,7 +252,7 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
         }
         else
         {
-            var parser = reader.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
             var i = 0;
             var j = 0;
@@ -405,7 +405,7 @@ public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
         }
         else
         {
-            var parser = reader.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
             var i = 0;
             var j = 0;
@@ -560,7 +560,7 @@ public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
         }
         else
         {
-            var parser = reader.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
             var i = 0;
             var j = 0;
@@ -727,7 +727,7 @@ public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
         }
         else
         {
-            var parser = reader.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
             var i = 0;
             var j = 0;
@@ -904,7 +904,7 @@ public sealed class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,,]>
         }
         else
         {
-            var parser = reader.GetParser<T?>();
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
             var i = 0;
             var j = 0;

@@ -13,7 +13,17 @@ internal static class ParserMap
         "System.Type",
         "System.Collections.BitArray",
         "System.Globalization.CultureInfo",
-
+        "System.BigInteger",
+        "System.Guid",
+        "System.Numerics.Complex",
+        "System.Numerics.Matrix3x2",
+        "System.Numerics.Matrix4x4",
+        "System.Numerics.Plane",
+        "System.Numerics.Quaternion",
+        "System.Numerics.Vector2",
+        "System.Numerics.Vector3",
+        "System.Numerics.Vector4",
+        
         // 内存/数组相关
         "System.Memory`1",
         "System.ReadOnlyMemory`1",

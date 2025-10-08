@@ -11,6 +11,7 @@ using LuminPack.Interface;
 using LuminPack.Option;
 using LuminPack.Code;
 using LuminPack.Internal;
+using LuminPack.Parsers;
 using LuminPack.Utility;
 using static LuminPack.Code.LuminPackMarshal;
 
@@ -18,10 +19,11 @@ using static LuminPack.Code.LuminPackMarshal;
 namespace LuminPack.Core
 {
     [StructLayout(LayoutKind.Auto)]
-    public ref struct LuminPackReader
+    public unsafe ref struct LuminPackReader
     {
         
         private Span<byte> _bufferReference;
+        internal IntPtr _bufferStart;
         private int _currentIndex;
 
         private readonly LuminPackReaderOptionalState _optionState;
@@ -47,6 +49,7 @@ namespace LuminPack.Core
         {
             _optionState = option ?? LuminPackReaderOptionalState.NullOption;
             _bufferReference = bufferReference;
+            _bufferStart = new IntPtr(Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference)));
             _currentIndex = 0;
 
             SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
@@ -57,6 +60,7 @@ namespace LuminPack.Core
         {
             _optionState = option ?? LuminPackReaderOptionalState.NullOption;
             _bufferReference = LuminPackMarshal.CreateSpan(ref GetNonNullPinnableReference(bufferReference), bufferReference.Length);
+            _bufferStart = new IntPtr(Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference)));
             _currentIndex = 0;
 
             SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
@@ -68,23 +72,23 @@ namespace LuminPack.Core
             _optionState = option ?? LuminPackReaderOptionalState.NullOption;
             var span = bufferReference.FirstSpan;
             _bufferReference = LuminPackMarshal.CreateSpan(ref GetNonNullPinnableReference(span), span.Length);
+            _bufferStart = new IntPtr(Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference)));
             _currentIndex = 0;
 
             SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
             SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
         }
 
+        
         /// <summary>
         /// 获取Span数组指针
         /// </summary>
         /// <param name="index"></param>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref byte GetSpanReference(int index)
-        {
-            return ref _bufferReference[index];
-        }
-
+        public ref byte GetSpanReference(int index) =>
+            ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+        
         /// <summary>
         /// 移动指针
         /// </summary>
@@ -92,9 +96,11 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance(int count)
         {
+#if DEBUG
             if (_bufferReference.Length < count)
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
-
+#endif
+            
             _currentIndex += count;
             
         }
@@ -107,6 +113,7 @@ namespace LuminPack.Core
         public void SetSpan(ref Span<byte> span)
         {
             _bufferReference = span;
+            _bufferStart = new IntPtr(Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference)));
         }
 
         /// <summary>
@@ -116,13 +123,14 @@ namespace LuminPack.Core
         public void Flush()
         {
             _bufferReference = null;
+            _bufferStart = IntPtr.Zero;
             _currentIndex = 0;
         }
-
+        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ILuminPackableParser<T> GetParser<T>()
+        public LuminPackParser<T> GetParser<T>()
         {
-            return LuminPackParseProvider.GetParser<T>();
+            return LuminPackParseProvider.Cache<T>.Parser!;
         }
 
         /// <summary>
@@ -130,10 +138,8 @@ namespace LuminPack.Core
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref byte GetCurrentSpanReference()
-        {
-            return ref _bufferReference[_currentIndex];
-        }
+        public ref byte GetCurrentSpanReference() =>
+            ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)_currentIndex);
 
         /// <summary>
         /// 获取Reader持有的Span
@@ -198,7 +204,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadCollectionHead(ref int index, out int length)
         {
-            length = Unsafe.ReadUnaligned<int>(ref GetSpanReference(index));
+            length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index));
 
             return length is not LuminPackCode.NullCollection;
         }
@@ -206,27 +212,27 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool PeekIsNullObject(ref int index)
         {
-            return GetSpanReference(index) == LuminPackCode.NullObject;
+            return Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index) == LuminPackCode.NullObject;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool PeekIsNullCollection(ref int index)
         {
-            return Unsafe.ReadUnaligned<int>(ref GetSpanReference(index)) == LuminPackCode.NullCollection;
+            return Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index)) == LuminPackCode.NullCollection;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool PeekIsNullString(ref int index)
         {
             return SerializeStringRecordAsToken 
-                ? GetSpanReference(index) == 0 
-                : Unsafe.ReadUnaligned<int>(ref GetSpanReference(index)) == LuminPackCode.NullCollection;
+                ? Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index) == 0 
+                : Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index)) == LuminPackCode.NullCollection;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadObjectHead(ref int index)
         {
-            var code = GetSpanReference(index);
+            var code = Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
 
             return code is not LuminPackCode.NullObject;
         }
@@ -234,7 +240,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadObjectHead(ref int index, out byte code)
         {
-            code = GetSpanReference(index);
+            code = Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
 
             return code is not LuminPackCode.NullObject;
         }
@@ -251,7 +257,7 @@ namespace LuminPack.Core
             if (SerializeStringRecordAsToken)
                 LuminPackExceptionHelper.ThrowFailedParseStringWithLength();
 
-            length = Unsafe.ReadUnaligned<int>(ref GetSpanReference(index));
+            length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index));
 
             if (length > _bufferReference.Length)
                 LuminPackExceptionHelper.ThrowInSufficientBuffer(length);
@@ -381,7 +387,8 @@ namespace LuminPack.Core
         {
             if (length is 0) return null;
 
-            ref var spanRef = ref GetSpanReference(index + 4);
+            int index1 = index + 4;
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index1);
             
             var utf16Length = Unsafe.ReadUnaligned<int>(ref spanRef);
             
@@ -429,7 +436,8 @@ namespace LuminPack.Core
         {
             if (length is 0) return null;
 
-            ref var spanRef = ref GetSpanReference(index + 4);
+            int index1 = index + 4;
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index1);
             
             var utf16Length = length / 2;
             
@@ -462,14 +470,14 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadValue<T>(scoped ref T? value)
         {
-            GetParser<T>().Deserialize(ref this, ref value);
+            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref value);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T? ReadValue<T>()
         {
             T? value = default;
-            GetParser<T>().Deserialize(ref this, ref value);
+            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref value);
             return value;
         }
         
@@ -499,7 +507,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPeekUnionHeader(ref int index, out ushort tag)
         {
-            var firstTag = GetSpanReference(index);
+            ref var firstTag = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             if (firstTag < LuminPackCode.WideTag)
             {
                 tag = firstTag;
@@ -565,7 +573,7 @@ namespace LuminPack.Core
                 array = AllocateUninitializedArray<T>(length);
             }
 
-            var parser = GetParser<T>();
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
             var span = array.AsSpan();
             for (int i = 0; i < length; i++)
@@ -610,7 +618,7 @@ namespace LuminPack.Core
                 array = AllocateUninitializedArray<T>(length);
             }
 
-            var parser = GetParser<T>();
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
             var span = array.AsSpan();
             for (int i = 0; i < length; i++)
@@ -657,7 +665,7 @@ namespace LuminPack.Core
                 span = AllocateUninitializedArray<T>(length);
             }
 
-            var parser = GetParser<T>();
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
 
             for (int i = 0; i < length; i++)
@@ -703,7 +711,7 @@ namespace LuminPack.Core
                 span = AllocateUninitializedArray<T>(length);
             }
 
-            var parser = GetParser<T>();
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
 
             for (int i = 0; i < length; i++)
@@ -737,7 +745,7 @@ namespace LuminPack.Core
                 array = AllocateUninitializedArray<T>(length);
             }
 
-            var parser = GetParser<T>();
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
             var span = array.AsSpan();
             for (int i = 0; i < length; i++)
@@ -771,7 +779,7 @@ namespace LuminPack.Core
                 span = AllocateUninitializedArray<T>(length);
             }
 
-            var parser = GetParser<T>();
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
 
             for (int i = 0; i < length; i++)
@@ -873,7 +881,7 @@ namespace LuminPack.Core
 
             ref var dest = ref LuminPackMarshal.GetArrayDataReference(array);
 
-            Unsafe.CopyBlockUnaligned(ref dest, ref GetSpanReference(offset), (uint)(length * Unsafe.SizeOf<T>()));
+            Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)offset), (uint)(length * Unsafe.SizeOf<T>()));
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -902,7 +910,7 @@ namespace LuminPack.Core
 
             ref var dest = ref LuminPackMarshal.GetReference(ref span.GetPinnableReference());
 
-            Unsafe.CopyBlockUnaligned(ref dest, ref GetSpanReference(offset), (uint)(length * Unsafe.SizeOf<T>()));
+            Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)offset), (uint)(length * Unsafe.SizeOf<T>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -930,7 +938,7 @@ namespace LuminPack.Core
 
             ref var dest = ref LuminPackMarshal.GetArrayDataReference(array);
 
-            Unsafe.CopyBlockUnaligned(ref dest, ref GetSpanReference(offset), (uint)(length * Unsafe.SizeOf<T>()));
+            Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)offset), (uint)(length * Unsafe.SizeOf<T>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -958,7 +966,7 @@ namespace LuminPack.Core
 
             ref var dest = ref LuminPackMarshal.GetReference(ref span.GetPinnableReference());
 
-            Unsafe.CopyBlockUnaligned(ref dest, ref GetSpanReference(offset), (uint)(length * Unsafe.SizeOf<T>()));
+            Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)offset), (uint)(length * Unsafe.SizeOf<T>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -990,7 +998,7 @@ namespace LuminPack.Core
 
             var srcLength = length * Unsafe.SizeOf<T>();
             
-            Unsafe.CopyBlockUnaligned(ref dest, ref GetSpanReference(offset), (uint)srcLength);
+            Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)offset), (uint)srcLength);
 
             spanOffset = srcLength + 4;
         }
@@ -1024,7 +1032,7 @@ namespace LuminPack.Core
             
             var srcLength = length * Unsafe.SizeOf<T>();
 
-            Unsafe.CopyBlockUnaligned(ref dest, ref GetSpanReference(offset), (uint)srcLength);
+            Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)offset), (uint)srcLength);
 
             spanOffset = srcLength + 4;
         }
@@ -1053,7 +1061,7 @@ namespace LuminPack.Core
 
             var offset = length * Unsafe.SizeOf<T>();
             
-            Unsafe.CopyBlockUnaligned(ref dest, ref GetSpanReference(index), (uint)offset);
+            Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index), (uint)offset);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1081,7 +1089,7 @@ namespace LuminPack.Core
             
             ref var dest = ref LuminPackMarshal.GetReference(ref span.GetPinnableReference());
 
-            Unsafe.CopyBlockUnaligned(ref dest, ref GetSpanReference(index), (uint)offset);
+            Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index), (uint)offset);
 
         }
 
@@ -1111,7 +1119,7 @@ namespace LuminPack.Core
             
             var offset = length * Unsafe.SizeOf<T>();
 
-            Unsafe.CopyBlockUnaligned(ref dest, ref GetSpanReference(index), (uint)offset);
+            Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index), (uint)offset);
 
             spanOffset = offset;
         }
@@ -1143,7 +1151,7 @@ namespace LuminPack.Core
 
             var offset = length * Unsafe.SizeOf<T>();
             
-            Unsafe.CopyBlockUnaligned(ref buffer, ref GetSpanReference(index), (uint)offset);
+            Unsafe.CopyBlockUnaligned(ref buffer, ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index), (uint)offset);
 
             spanOffset = offset;
         }
@@ -1159,7 +1167,7 @@ namespace LuminPack.Core
         {
             var index = _currentIndex;
 
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
 
             return Unsafe.SizeOf<T1>();
@@ -1170,7 +1178,7 @@ namespace LuminPack.Core
             where T1 : unmanaged
         {
             var size = Unsafe.SizeOf<T1>();
-            ref var spanRef = ref GetSpanReference(_currentIndex);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)_currentIndex);
             var value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             Advance(size);
             return value1;
@@ -1186,7 +1194,7 @@ namespace LuminPack.Core
         public int ReadUnmanaged<T1>(ref int index, out T1 value1)
             where T1 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
     
             return Unsafe.SizeOf<T1>();
@@ -1197,7 +1205,7 @@ namespace LuminPack.Core
             where T1 : unmanaged
             where T2 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1213,7 +1221,7 @@ namespace LuminPack.Core
             where T2 : unmanaged
             where T3 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1232,7 +1240,7 @@ namespace LuminPack.Core
             where T3 : unmanaged
             where T4 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1254,7 +1262,7 @@ namespace LuminPack.Core
             where T4 : unmanaged
             where T5 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1279,7 +1287,7 @@ namespace LuminPack.Core
             where T5 : unmanaged
             where T6 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1307,7 +1315,7 @@ namespace LuminPack.Core
             where T6 : unmanaged
             where T7 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1338,7 +1346,7 @@ namespace LuminPack.Core
             where T7 : unmanaged
             where T8 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1372,7 +1380,7 @@ namespace LuminPack.Core
             where T8 : unmanaged
             where T9 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1409,7 +1417,7 @@ namespace LuminPack.Core
             where T9 : unmanaged
             where T10 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1449,7 +1457,7 @@ namespace LuminPack.Core
             where T10 : unmanaged
             where T11 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1492,7 +1500,7 @@ namespace LuminPack.Core
             where T11 : unmanaged
             where T12 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1538,7 +1546,7 @@ namespace LuminPack.Core
             where T12 : unmanaged
             where T13 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1587,7 +1595,7 @@ namespace LuminPack.Core
             where T13 : unmanaged
             where T14 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1639,7 +1647,7 @@ namespace LuminPack.Core
             where T14 : unmanaged
             where T15 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1679,7 +1687,7 @@ namespace LuminPack.Core
         public void ReadUnmanagedWithoutSizeReturn<T1>(ref int index, out T1 value1)
             where T1 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             
         }
@@ -1689,7 +1697,7 @@ namespace LuminPack.Core
             where T1 : unmanaged
             where T2 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1703,7 +1711,7 @@ namespace LuminPack.Core
             where T2 : unmanaged
             where T3 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1720,7 +1728,7 @@ namespace LuminPack.Core
             where T3 : unmanaged
             where T4 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1739,7 +1747,7 @@ namespace LuminPack.Core
             where T4 : unmanaged
             where T5 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1762,7 +1770,7 @@ namespace LuminPack.Core
             where T5 : unmanaged
             where T6 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1788,7 +1796,7 @@ namespace LuminPack.Core
             where T6 : unmanaged
             where T7 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1817,7 +1825,7 @@ namespace LuminPack.Core
             where T7 : unmanaged
             where T8 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1849,7 +1857,7 @@ namespace LuminPack.Core
             where T8 : unmanaged
             where T9 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1884,7 +1892,7 @@ namespace LuminPack.Core
             where T9 : unmanaged
             where T10 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1922,7 +1930,7 @@ namespace LuminPack.Core
             where T10 : unmanaged
             where T11 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -1963,7 +1971,7 @@ namespace LuminPack.Core
             where T11 : unmanaged
             where T12 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2007,7 +2015,7 @@ namespace LuminPack.Core
             where T12 : unmanaged
             where T13 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2054,7 +2062,7 @@ namespace LuminPack.Core
             where T13 : unmanaged
             where T14 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2104,7 +2112,7 @@ namespace LuminPack.Core
             where T14 : unmanaged
             where T15 : unmanaged
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2148,7 +2156,7 @@ namespace LuminPack.Core
         {
             var index = _currentIndex;
 
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
 
             return Unsafe.SizeOf<T1>();
@@ -2163,7 +2171,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1>(ref int index, out T1 value1)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
     
             return Unsafe.SizeOf<T1>();
@@ -2172,7 +2180,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2>(ref int index, out T1 value1, out T2 value2)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2185,7 +2193,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3>(ref int index, out T1 value1, out T2 value2, out T3 value3)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2200,7 +2208,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2217,7 +2225,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2236,7 +2244,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2257,7 +2265,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2280,7 +2288,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2305,7 +2313,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2332,7 +2340,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2361,7 +2369,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2392,7 +2400,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2425,7 +2433,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2460,7 +2468,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2497,7 +2505,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14, out T15 value15)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2536,7 +2544,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1>(ref int index, out T1 value1)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
         }
@@ -2544,7 +2552,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2>(ref int index, out T1 value1, out T2 value2)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2555,7 +2563,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3>(ref int index, out T1 value1, out T2 value2, out T3 value3)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2568,7 +2576,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2583,7 +2591,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2600,7 +2608,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2619,7 +2627,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2640,7 +2648,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2663,7 +2671,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2688,7 +2696,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2715,7 +2723,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2744,7 +2752,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2774,7 +2782,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2807,7 +2815,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();
@@ -2842,7 +2850,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14, out T15 value15)
         {
-            ref var spanRef = ref GetSpanReference(index);
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             offset += Unsafe.SizeOf<T1>();

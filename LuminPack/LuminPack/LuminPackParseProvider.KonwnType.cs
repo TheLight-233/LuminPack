@@ -93,7 +93,7 @@ public static partial class LuminPackParseProvider
         RegisterParsers(new UnmanagedParsers<Vector4>());
         RegisterParsers(new UnmanagedArrayParser<Vector4>());
         RegisterParsers(new NullableParser<Vector4>());
-#if NET7_0_OR_GREATER
+#if NET8_0_OR_GREATER
         RegisterParsers(new UnmanagedParsers<Rune>());
         RegisterParsers(new UnmanagedArrayParser<Rune>());
         RegisterParsers(new NullableParser<Rune>());

@@ -51,7 +51,7 @@ namespace LuminPack
             Check<T>.Registered = true;
             Check<T>.ParserType = ParserType.Data;
 
-            Cache<T>.parser = luminData;
+            Cache<T>.Parser = luminData;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -62,7 +62,7 @@ namespace LuminPack
             Check<T>.Registered = true;
             Check<T>.ParserType = ParserType.Parsers;
 
-            Cache<T>.parser = parser;
+            Cache<T>.Parser = parser;
         }
 
 
@@ -90,10 +90,10 @@ namespace LuminPack
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IDataParser<T>? GetDataParser<T>()
         {
-            if (Cache<T>.parser is null)
+            if (Cache<T>.Parser is null)
                 LuminPackExceptionHelper.ThrowNoParserRegistered(typeof(T));
 
-            return Cache<T>.parser as IDataParser<T>;
+            return Cache<T>.Parser as IDataParser<T>;
         }
 
         /// <summary>
@@ -104,10 +104,10 @@ namespace LuminPack
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static IDataParserAsync<T>? GetDataParserAsync<T>()
         {
-            if (Cache<T>.parser is null)
+            if (Cache<T>.Parser is null)
                 LuminPackExceptionHelper.ThrowNoParserRegistered(typeof(T));
 
-            return Cache<T>.parser as IDataParserAsync<T>;
+            return Cache<T>.Parser as IDataParserAsync<T>;
         }
 
         /// <summary>
@@ -118,10 +118,11 @@ namespace LuminPack
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ILuminPackableParser<T> GetParser<T>()
         {
+#if DEBUG
             if (Cache<T>.parser is null)
                 LuminPackExceptionHelper.ThrowNoParserRegistered(typeof(T));
-
-            return Cache<T>.parser;
+#endif
+            return Cache<T>.Parser;
         }
 
         /// <summary>
@@ -131,10 +132,10 @@ namespace LuminPack
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static ILuminPackEvaluator<T> GetParserEvaluator<T>()
         {
-            if (Cache<T>.parser is null)
+            if (Cache<T>.Parser is null)
                 LuminPackExceptionHelper.ThrowNoParserRegistered(typeof(T));
 
-            return Cache<T>.parser;
+            return Cache<T>.Parser;
         }
 
         public static bool TryRegisterParser<T>()
@@ -271,9 +272,9 @@ namespace LuminPack
             
         }
 
-        static class Cache<T>
+        internal static class Cache<T>
         {
-            internal static LuminPackParser<T>? parser;
+            internal static LuminPackParser<T>? Parser;
 
             static Cache()
             { 
@@ -291,11 +292,11 @@ namespace LuminPack
                     var typeIsReferenceOrContainsReferences = RuntimeHelpers.IsReferenceOrContainsReferences<T>();
                     var f = CreateGenericParser(type, typeIsReferenceOrContainsReferences) as LuminPackParser<T>;
 
-                    parser = f ?? new ErrorLuminPackParser<T>();
+                    Parser = f ?? new ErrorLuminPackParser<T>();
                 }
                 catch (Exception ex)
                 {
-                    parser = new ErrorLuminPackParser<T>(typeof(T), ex.Message);
+                    Parser = new ErrorLuminPackParser<T>(typeof(T), ex.Message);
                 }
                 
                 Check<T>.ParserType = ParserType.Parsers;
