@@ -6,7 +6,7 @@ using LuminPack.Code;
 namespace LuminPack.Parsers;
 
 [Preserve]
-public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
+public sealed unsafe class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
 {
     // {i-length, j-length, [total-length, values]}
 
@@ -104,7 +104,6 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
         }
         else
         {
-            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
             var i = 0;
             var j = -1;
@@ -121,7 +120,12 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
                     i++;
                 }
                 
-                parser.Deserialize(ref reader, ref value[i, j]);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T?>.Parser!.Deserialize(LuminPackParseProvider.Cache<T?>.Parser.Instance, ref reader, ref value[i, j]);
+#else
+                LuminPackParseProvider.Cache<T?>.Parser!.Deserialize(ref reader, ref value[i, j]);
+#endif
+               
             }
         }
     }
@@ -154,7 +158,7 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
 }
 
 [Preserve]
-public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
+public sealed unsafe class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
 {
     // {i-length, j-length, k-length, [total-length, values]}
 
@@ -276,7 +280,11 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
                     i++;
                 }
 
-                parser.Deserialize(ref reader, ref value[i, j, k]);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T?>.Parser!.Deserialize(LuminPackParseProvider.Cache<T?>.Parser.Instance, ref reader, ref value[i, j, k]);
+#else
+                LuminPackParseProvider.Cache<T?>.Parser!.Deserialize(ref reader, ref value[i, j, k]);
+#endif
             }
         }
     }
@@ -309,7 +317,7 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
 }
 
 [Preserve]
-public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
+public sealed unsafe class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
 {
     // {i-length, j-length, k-length, l-length, [total-length, values]}
 
@@ -437,7 +445,11 @@ public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
                     i++;
                 }
 
-                parser.Deserialize(ref reader, ref value[i, j, k, l]);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T?>.Parser!.Deserialize(LuminPackParseProvider.Cache<T?>.Parser.Instance, ref reader, ref value[i, j, k, l]);
+#else
+                LuminPackParseProvider.Cache<T?>.Parser!.Deserialize(ref reader, ref value[i, j, k, l]);
+#endif
             }
         }
     }
@@ -470,7 +482,7 @@ public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
 }
 
 [Preserve]
-public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
+public sealed unsafe class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
 {
     // {i-length, j-length, k-length, l-length, m-length, [total-length, values]}
 
@@ -601,7 +613,11 @@ public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
                     i++;
                 }
 
-                parser.Deserialize(ref reader, ref value[i, j, k, l, m]);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T?>.Parser!.Deserialize(LuminPackParseProvider.Cache<T?>.Parser.Instance, ref reader, ref value[i, j, k, l, m]);
+#else
+                LuminPackParseProvider.Cache<T?>.Parser!.Deserialize(ref reader, ref value[i, j, k, l, m]);
+#endif
             }
         }
     }
@@ -633,7 +649,7 @@ public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
 }
 
 [Preserve]
-public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
+public sealed unsafe class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
 {
     // {i-length, j-length, k-length, l-length, m-length, n-length, [total-length, values]}
 
@@ -778,7 +794,11 @@ public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
                     i++;
                 }
 
-                parser.Deserialize(ref reader, ref value[i, j, k, l, m, n]);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T?>.Parser!.Deserialize(LuminPackParseProvider.Cache<T?>.Parser.Instance, ref reader, ref value[i, j, k, l, m, n]);
+#else
+                LuminPackParseProvider.Cache<T?>.Parser!.Deserialize(ref reader, ref value[i, j, k, l, m, n]);
+#endif
             }
         }
     }
@@ -810,7 +830,7 @@ public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
 }
 
 [Preserve]
-public sealed class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,,]>
+public sealed unsafe class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,,]>
 {
     // {i-length, j-length, k-length, l-length, m-length, n-length, o-length, [total-length, values]}
 
@@ -966,7 +986,11 @@ public sealed class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,,]>
                     i++;
                 }
 
-                parser.Deserialize(ref reader, ref value[i, j, k, l, m, n, o]);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T?>.Parser!.Deserialize(LuminPackParseProvider.Cache<T?>.Parser.Instance, ref reader, ref value[i, j, k, l, m, n, o]);
+#else
+                LuminPackParseProvider.Cache<T?>.Parser!.Deserialize(ref reader, ref value[i, j, k, l, m, n, o]);
+#endif
             }
         }
     }
