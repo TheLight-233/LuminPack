@@ -14,7 +14,7 @@ public sealed class FrozenDictionaryParser<TKey, TValue> : LuminPackParser<Froze
 {
     readonly IEqualityComparer<TKey>? equalityComparer;
 
-    public FrozenDictionaryParser() : this(null)
+    public FrozenDictionaryParser() : this(EqualityComparer<TKey>.Default)
     {
 
     }
@@ -38,8 +38,8 @@ public sealed class FrozenDictionaryParser<TKey, TValue> : LuminPackParser<Froze
             return;
         }
 
-        var keyFormatter = writer.GetParser<TKey>();
-        var valueFormatter = writer.GetParser<TValue>();
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
 
         writer.WriteCollectionHeader(ref index, value.Count);
         writer.Advance(4);
@@ -49,7 +49,7 @@ public sealed class FrozenDictionaryParser<TKey, TValue> : LuminPackParser<Froze
         foreach (var item in value)
         {
             i++;
-            KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item!);
+            KeyValuePairParser.Serialize(keyParser, valueParser, ref writer, item!);
         }
             
         if (i != count) 
@@ -74,8 +74,9 @@ public sealed class FrozenDictionaryParser<TKey, TValue> : LuminPackParser<Froze
 
         var dict = new Dictionary<TKey, TValue?>(length, equalityComparer);
 
-        var keyParser = reader.GetParser<TKey>();
-        var valueParser = reader.GetParser<TValue>();
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
+        
         for (var i = 0; i < length; i++)
         {
             KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);
@@ -120,7 +121,7 @@ public sealed class FrozenSetParser<T> : LuminPackParser<FrozenSet<T?>>
 {
     readonly IEqualityComparer<T?>? equalityComparer;
 
-    public FrozenSetParser() : this(null)
+    public FrozenSetParser() : this(EqualityComparer<T?>.Default)
     {
     }
 
