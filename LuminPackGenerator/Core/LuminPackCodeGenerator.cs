@@ -467,7 +467,8 @@ namespace LuminPack.Code.Core
             sb.AppendLine();
             sb.AppendLine("            ref int offset = ref reader.GetCurrentSpanOffset();");
             //sb.AppendLine("            var span = reader.GetSpan();");
-            sb.AppendLine($"            var local = new Local{data.classFullName}();");
+            sb.AppendLine($"            value = ({classGlobalName}) System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof({classGlobalName}));");
+            sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
             if (_dataInfo.fields.Count(x => x.IsPrivate) > 0)
             {
                 //sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{data.classFullName}, Local{data.classFullName}>(ref value);");
@@ -571,7 +572,7 @@ namespace LuminPack.Code.Core
                 }
                 
             }
-            sb.AppendLine($"            value = LuminPackMarshal.As<Local{data.classFullName}, {classGlobalName}>(ref local);");
+            //sb.AppendLine($"            value = LuminPackMarshal.As<Local{data.classFullName}, {classGlobalName}>(ref local);");
             //sb.AppendLine("            reader.FlushCurrentIndex(offset);");
             
             sb.AppendLine();
