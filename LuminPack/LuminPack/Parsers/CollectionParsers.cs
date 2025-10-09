@@ -305,7 +305,7 @@ namespace LuminPack.Parsers
             new DictionaryParser<TKey, TValue>();
         
         [Preserve]
-        private readonly IEqualityComparer<TKey>? _equalityComparer;
+        private static IEqualityComparer<TKey>? _equalityComparer = EqualityComparer<TKey>.Default;
 
         static DictionaryParser()
         {
@@ -313,7 +313,7 @@ namespace LuminPack.Parsers
         }
         
         public DictionaryParser()
-            : this(null)
+            : this(EqualityComparer<TKey>.Default)
         {
 
         }
@@ -338,14 +338,20 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
+#if NET8_0_OR_GREATER
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
+#else
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+#endif
+            
 
             writer.WriteCollectionHeader(ref index, value.Count);
             writer.Advance(4);
             foreach (var item in value)
             {
-                KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item!);
+                KeyValuePairParser.Serialize(keyParser, valueParser, ref writer, item!);
             }
         }
 
@@ -373,11 +379,16 @@ namespace LuminPack.Parsers
             }
 
             reader.Advance(4);
-            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
+#if NET8_0_OR_GREATER
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
+#else
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+#endif
             for (int i = 0; i < length; i++)
             {
-                KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);
+                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);
                 value.Add(k!, v);
             }
         }
@@ -437,8 +448,13 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
+#if NET8_0_OR_GREATER
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
+#else
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+#endif
 
             writer.WriteCollectionHeader(ref index, value.Count);
             writer.Advance(4);
@@ -448,7 +464,7 @@ namespace LuminPack.Parsers
             foreach (var item in value)
             {
                 i++;
-                KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item!);
+                KeyValuePairParser.Serialize(keyParser, valueParser, ref writer, item!);
             }
             
             if (i != count) 
@@ -480,11 +496,16 @@ namespace LuminPack.Parsers
             
             reader.Advance(4);
             
-            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
+#if NET8_0_OR_GREATER
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
+#else
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+#endif
             for (int i = 0; i < length; i++)
             {
-                KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);
+                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);
                 value.TryAdd(k!, v);
             }
         }
@@ -552,14 +573,19 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
+#if NET8_0_OR_GREATER
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
+#else
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+#endif
 
             writer.WriteCollectionHeader(ref index, value.Count);
             writer.Advance(4);
             foreach (var item in value)
             {
-                KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item!);
+                KeyValuePairParser.Serialize(keyParser, valueParser, ref writer, item!);
             }
         }
 
@@ -588,11 +614,16 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
 
-            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
+#if NET8_0_OR_GREATER
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
+#else
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+#endif
             for (var i = 0; i < length; i++)
             {
-                KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);
+                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);
                 value.Add(k!, v);
             }
 
@@ -690,10 +721,10 @@ namespace LuminPack.Parsers
     }
 
     [Preserve]
-    public sealed class QueueParser<T> : LuminPackParser<Queue<T?>>
+    public sealed unsafe class QueueParser<T> : LuminPackParser<Queue<T?>>
     {
         [Preserve]
-        public override unsafe void Serialize(ref LuminPackWriter writer, scoped ref Queue<T?>? value)
+        public override void Serialize(ref LuminPackWriter writer, scoped ref Queue<T?>? value)
         {
             ref var index = ref writer.GetCurrentSpanOffset();
             
@@ -758,9 +789,6 @@ namespace LuminPack.Parsers
                 return;
             }
             
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            
             writer.WriteCollectionHeader(ref index, span.Length);
             
             writer.Advance(4);
@@ -780,7 +808,11 @@ namespace LuminPack.Parsers
             foreach (var item in span)
             {
                 var v = item;
-                parser.Serialize(ref writer, ref v);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref v);
+#endif
             }
 
         }
@@ -853,14 +885,14 @@ namespace LuminPack.Parsers
                 return;
             }
             
-            
-
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
 
             for (int i = 0; i < length; i++)
             {
-                parser.Deserialize(ref reader, ref span[i]);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref span[i]);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref span[i]);
+#endif
             }
             
             
@@ -886,7 +918,7 @@ namespace LuminPack.Parsers
     }
 
     [Preserve]
-    public sealed class LinkedListParser<T> : LuminPackParser<LinkedList<T?>>
+    public sealed unsafe class LinkedListParser<T> : LuminPackParser<LinkedList<T?>>
     {
         [Preserve]
         public override void Serialize(ref LuminPackWriter writer, scoped ref LinkedList<T?>? value)
@@ -901,8 +933,6 @@ namespace LuminPack.Parsers
                 
                 return;
             }
-
-            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
                 
             writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -911,7 +941,11 @@ namespace LuminPack.Parsers
             foreach (var item in value)
             {
                 var v = item;
-                parser.Serialize(ref writer, ref v);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref v);
+#endif
             }
         }
 
@@ -939,12 +973,15 @@ namespace LuminPack.Parsers
             {
                 value.Clear();
             }
-
-            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
+            
             for (int i = 0; i < length; i++)
             {
                 T? v = default;
-                parser.Deserialize(ref reader, ref v);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref v);
+#endif
                 value.AddLast(v);
             }
         }
@@ -972,7 +1009,7 @@ namespace LuminPack.Parsers
     }
 
     [Preserve]
-    public sealed class HashSetParser<T> : LuminPackParser<HashSet<T?>>
+    public sealed unsafe class HashSetParser<T> : LuminPackParser<HashSet<T?>>
     {
         readonly IEqualityComparer<T?>? equalityComparer;
 
@@ -999,8 +1036,6 @@ namespace LuminPack.Parsers
                 
                 return;
             }
-
-            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -1009,7 +1044,11 @@ namespace LuminPack.Parsers
             foreach (var item in value)
             {
                 var v = item;
-                parser.Serialize(ref writer, ref v);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref v);
+#endif
             }
         }
 
@@ -1037,13 +1076,15 @@ namespace LuminPack.Parsers
             {
                 value.Clear();
             }
-
-            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             for (int i = 0; i < length; i++)
             {
                 T? v = default;
-                parser.Deserialize(ref reader, ref v);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref v);
+#endif
                 value.Add(v);
             }
         }
@@ -1071,7 +1112,7 @@ namespace LuminPack.Parsers
     }
 
     [Preserve]
-    public sealed class SortedSetParser<T> : LuminPackParser<SortedSet<T?>>
+    public sealed unsafe class SortedSetParser<T> : LuminPackParser<SortedSet<T?>>
     {
         
         readonly IComparer<T?>? comparer;
@@ -1099,8 +1140,6 @@ namespace LuminPack.Parsers
                 
                 return;
             }
-
-            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -1109,7 +1148,11 @@ namespace LuminPack.Parsers
             foreach (var item in value)
             {
                 var v = item;
-                parser.Serialize(ref writer, ref v);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref v);
+#endif
             }
         }
 
@@ -1137,12 +1180,15 @@ namespace LuminPack.Parsers
             {
                 value.Clear();
             }
-
-            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
+            
             for (int i = 0; i < length; i++)
             {
                 T? v = default;
-                parser.Deserialize(ref reader, ref v);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref v);
+#endif
                 value.Add(v);
             }
         }
@@ -1266,7 +1312,7 @@ namespace LuminPack.Parsers
 #endif
     
     [Preserve]
-    public sealed class CollectionParser<T> : LuminPackParser<Collection<T?>>
+    public sealed unsafe class CollectionParser<T> : LuminPackParser<Collection<T?>>
     {
         [Preserve]
         public override void Serialize(ref LuminPackWriter writer, scoped ref Collection<T?>? value)
@@ -1297,12 +1343,14 @@ namespace LuminPack.Parsers
                 
                 writer.Advance(4);
                 
-                var parser = LuminPackParseProvider.Cache<T?>.Parser!;
-                
                 foreach (var item in value)
                 {
-                    var temp = item;
-                    parser.Serialize(ref writer, ref temp);
+                    var v = item;
+#if NET8_0_OR_GREATER
+                    LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref v);
+#else
+                    LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref v);
+#endif
                 }
             }
         }
@@ -1376,7 +1424,7 @@ namespace LuminPack.Parsers
     }
 
     [Preserve]
-    public sealed class ObservableCollectionParser<T> : LuminPackParser<ObservableCollection<T?>>
+    public sealed unsafe class ObservableCollectionParser<T> : LuminPackParser<ObservableCollection<T?>>
     {
         [Preserve]
         public override void Serialize(ref LuminPackWriter writer, scoped ref ObservableCollection<T?>? value)
@@ -1406,12 +1454,14 @@ namespace LuminPack.Parsers
                 
                 writer.Advance(4);
                 
-                var parser = LuminPackParseProvider.Cache<T?>.Parser!;
-                
                 foreach (var item in value)
                 {
-                    var temp = item;
-                    parser.Serialize(ref writer, ref temp);
+                    var v = item;
+#if NET8_0_OR_GREATER
+                    LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref v);
+#else
+                    LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref v);
+#endif
                 }
             }
         }
@@ -1489,7 +1539,7 @@ namespace LuminPack.Parsers
     }
 
     [Preserve]
-    public sealed class ConcurrentQueueParser<T> : LuminPackParser<ConcurrentQueue<T?>>
+    public sealed unsafe class ConcurrentQueueParser<T> : LuminPackParser<ConcurrentQueue<T?>>
     {
         [Preserve]
         public override void Serialize(ref LuminPackWriter writer, scoped ref ConcurrentQueue<T?>? value)
@@ -1505,9 +1555,6 @@ namespace LuminPack.Parsers
                 return;
             }
             
-
-            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
-            
             var count = value.Count;
             
             writer.WriteCollectionHeader(ref index, count);
@@ -1519,7 +1566,11 @@ namespace LuminPack.Parsers
             {
                 i++;
                 var v = item;
-                parser.Serialize(ref writer, ref v);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref v);
+#endif
             }
 
             if (i != count) LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();
@@ -1555,7 +1606,11 @@ namespace LuminPack.Parsers
             for (int i = 0; i < length; i++)
             {
                 T? v = default;
-                parser.Deserialize(ref reader, ref v);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref v);
+#endif
                 value.Enqueue(v);
             }
         }
@@ -1589,7 +1644,7 @@ namespace LuminPack.Parsers
     }
 
     [Preserve]
-    public sealed class ConcurrentStackParser<T> : LuminPackParser<ConcurrentStack<T?>>
+    public sealed unsafe class ConcurrentStackParser<T> : LuminPackParser<ConcurrentStack<T?>>
     {
         [Preserve]
         public override void Serialize(ref LuminPackWriter writer, scoped ref ConcurrentStack<T?>? value)
@@ -1616,8 +1671,6 @@ namespace LuminPack.Parsers
                     rentArray[i++] = item;
                 }
                 if (i != count) LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();
-
-                var formatter = LuminPackParseProvider.Cache<T?>.Parser!;
                 
                 writer.WriteCollectionHeader(ref index, count);
                 
@@ -1625,7 +1678,11 @@ namespace LuminPack.Parsers
                 
                 for (i = i - 1; i >= 0; i--)
                 {
-                    formatter.Serialize(ref writer, ref rentArray[i]);
+#if NET8_0_OR_GREATER
+                    LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref rentArray[i]);
+#else
+                    LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref rentArray[i]);
+#endif
                 }
             }
             finally
@@ -1658,13 +1715,15 @@ namespace LuminPack.Parsers
             {
                 value.Clear();
             }
-
-            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             for (int i = 0; i < length; i++)
             {
                 T? v = default;
-                parser.Deserialize(ref reader, ref v);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref v);
+#endif
                 value.Push(v);
             }
         }
@@ -1698,7 +1757,7 @@ namespace LuminPack.Parsers
     }
 
     [Preserve]
-    public sealed class ConcurrentBagParser<T> : LuminPackParser<ConcurrentBag<T?>>
+    public sealed unsafe class ConcurrentBagParser<T> : LuminPackParser<ConcurrentBag<T?>>
     {
         [Preserve]
         public override void Serialize(ref LuminPackWriter writer, scoped ref ConcurrentBag<T?>? value)
@@ -1727,7 +1786,11 @@ namespace LuminPack.Parsers
             {
                 i++;
                 var v = item;
-                parser.Serialize(ref writer, ref v);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref v);
+#endif
             }
 
             if (i != count) 
@@ -1763,7 +1826,12 @@ namespace LuminPack.Parsers
             for (int i = 0; i < length; i++)
             {
                 T? v = default;
-                parser.Deserialize(ref reader, ref v);
+                
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref v);
+#endif
                 value.Add(v);
             }
         }
@@ -1827,8 +1895,13 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
+#if NET8_0_OR_GREATER
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
+#else
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+#endif
 
             writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -1836,7 +1909,7 @@ namespace LuminPack.Parsers
             
             foreach (var item in value)
             {
-                KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item!);
+                KeyValuePairParser.Serialize(keyParser, valueParser, ref writer, item!);
             }
         }
 
@@ -1865,11 +1938,16 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
 
-            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
+#if NET8_0_OR_GREATER
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
+#else
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+#endif
             for (int i = 0; i < length; i++)
             {
-                KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);
+                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);
                 value.Add(k!, v);
             }
         }
@@ -1898,7 +1976,7 @@ namespace LuminPack.Parsers
     }
 
     [Preserve]
-    public sealed class ReadOnlyCollectionParser<T> : LuminPackParser<ReadOnlyCollection<T?>>
+    public sealed unsafe class ReadOnlyCollectionParser<T> : LuminPackParser<ReadOnlyCollection<T?>>
     {
         [Preserve]
         public override void Serialize(ref LuminPackWriter writer, scoped ref ReadOnlyCollection<T?>? value)
@@ -1928,12 +2006,14 @@ namespace LuminPack.Parsers
                 
                 writer.Advance(4);
                 
-                var parser = LuminPackParseProvider.Cache<T?>.Parser!;
-                
                 foreach (var item in value)
                 {
-                    var temp = item;
-                    parser.Serialize(ref writer, ref temp);
+                    var v = item;
+#if NET8_0_OR_GREATER
+                    LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref v);
+#else
+                    LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref v);
+#endif
                 }
             }
         }
@@ -1990,7 +2070,7 @@ namespace LuminPack.Parsers
     }
 
     [Preserve]
-    public sealed class ReadOnlyObservableCollectionParser<T> : LuminPackParser<ReadOnlyObservableCollection<T?>>
+    public sealed unsafe class ReadOnlyObservableCollectionParser<T> : LuminPackParser<ReadOnlyObservableCollection<T?>>
     {
         [Preserve]
         public override void Serialize(ref LuminPackWriter writer, scoped ref ReadOnlyObservableCollection<T?>? value)
@@ -2024,8 +2104,12 @@ namespace LuminPack.Parsers
                 
                 foreach (var item in value)
                 {
-                    var temp = item;
-                    parser.Serialize(ref writer, ref temp);
+                    var v = item;
+#if NET8_0_OR_GREATER
+                    LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref v);
+#else
+                    LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref v);
+#endif
                 }
             }
         }
@@ -2082,7 +2166,7 @@ namespace LuminPack.Parsers
     }
 
     [Preserve]
-    public sealed class BlockingCollectionParser<T> : LuminPackParser<BlockingCollection<T?>>
+    public sealed unsafe class BlockingCollectionParser<T> : LuminPackParser<BlockingCollection<T?>>
     {
         [Preserve]
         public override void Serialize(ref LuminPackWriter writer, scoped ref BlockingCollection<T?>? value)
@@ -2097,8 +2181,6 @@ namespace LuminPack.Parsers
                 
                 return;
             }
-
-            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -2107,7 +2189,11 @@ namespace LuminPack.Parsers
             foreach (var item in value)
             {
                 var v = item;
-                parser.Serialize(ref writer, ref v);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref v);
+#endif
             }
         }
 
@@ -2128,12 +2214,16 @@ namespace LuminPack.Parsers
             reader.Advance(4);
             
             value = new BlockingCollection<T?>();
-
-            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
+            
             for (int i = 0; i < length; i++)
             {
                 T? v = default;
-                parser.Deserialize(ref reader, ref v);
+                
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref v);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref v);
+#endif
                 value.Add(v);
             }
         }
