@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -130,7 +130,12 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public LuminPackParser<T> GetParser<T>()
         {
+#if NET8_0_OR_GREATER
+            return LuminPackParseProvider.Cache<T>.Parser.Instance!;
+#else
             return LuminPackParseProvider.Cache<T>.Parser!;
+#endif
+            
         }
 
         /// <summary>
@@ -470,14 +475,22 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadValue<T>(scoped ref T? value)
         {
+#if NET8_0_OR_GREATER
+            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref value);
+#else
             LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref value);
+#endif
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T? ReadValue<T>()
         {
             T? value = default;
+#if NET8_0_OR_GREATER
+            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref value);
+#else
             LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref value);
+#endif
             return value;
         }
         
@@ -572,13 +585,15 @@ namespace LuminPack.Core
             {
                 array = AllocateUninitializedArray<T>(length);
             }
-
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
             var span = array.AsSpan();
             for (int i = 0; i < length; i++)
             {
-                parser.Deserialize(ref this, ref span[i]!);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref span[i]!);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref span[i]!);
+#endif
             }
 
         }
@@ -617,13 +632,15 @@ namespace LuminPack.Core
             {
                 array = AllocateUninitializedArray<T>(length);
             }
-
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
             var span = array.AsSpan();
             for (int i = 0; i < length; i++)
             {
-                parser.Deserialize(ref this, ref span[i]!);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref span[i]!);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref span[i]!);
+#endif
             }
 
         }
@@ -664,13 +681,15 @@ namespace LuminPack.Core
             {
                 span = AllocateUninitializedArray<T>(length);
             }
-
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
 
             for (int i = 0; i < length; i++)
             {
-                parser.Deserialize(ref this, ref span[i]);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref span[i]!);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref span[i]!);
+#endif
             }
 
         }
@@ -710,13 +729,14 @@ namespace LuminPack.Core
             {
                 span = AllocateUninitializedArray<T>(length);
             }
-
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
-
             for (int i = 0; i < length; i++)
             {
-                parser.Deserialize(ref this, ref span[i]);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref span[i]!);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref span[i]!);
+#endif
             }
 
         }
@@ -744,13 +764,15 @@ namespace LuminPack.Core
             {
                 array = AllocateUninitializedArray<T>(length);
             }
-
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
             var span = array.AsSpan();
             for (int i = 0; i < length; i++)
             {
-                parser.Deserialize(ref this, ref span[i]!);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref span[i]!);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref span[i]!);
+#endif
             }
 
         }
@@ -778,13 +800,14 @@ namespace LuminPack.Core
             {
                 span = AllocateUninitializedArray<T>(length);
             }
-
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
-
             for (int i = 0; i < length; i++)
             {
-                parser.Deserialize(ref this, ref span[i]);
+#if NET8_0_OR_GREATER
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref span[i]!);
+#else
+                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref span[i]!);
+#endif
             }
 
         }
