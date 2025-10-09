@@ -205,8 +205,8 @@ public abstract class GenericDictionaryParserBase<TDictionary, TKey, TValue> : L
             return;
         }
 
-        var keyParser = writer.GetParser<TKey>();
-        var valueParser = writer.GetParser<TValue>();
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
 
         writer.WriteCollectionHeader(ref index, value.Count);
         
@@ -231,14 +231,9 @@ public abstract class GenericDictionaryParserBase<TDictionary, TKey, TValue> : L
             
             return;
         }
-
-#if NET8_0_OR_GREATER
-        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
-        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
-#else
-        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
-        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
-#endif
+        
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
 
         var dict = CreateDictionary();
         for (int i = 0; i < length; i++)
