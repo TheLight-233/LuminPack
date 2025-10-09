@@ -337,15 +337,9 @@ namespace LuminPack.Parsers
                 
                 return;
             }
-
-#if NET8_0_OR_GREATER
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
-#else
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
-#endif
             
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
 
             writer.WriteCollectionHeader(ref index, value.Count);
             writer.Advance(4);
@@ -379,13 +373,10 @@ namespace LuminPack.Parsers
             }
 
             reader.Advance(4);
-#if NET8_0_OR_GREATER
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
-#else
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
-#endif
+
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
+
             for (int i = 0; i < length; i++)
             {
                 KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);
@@ -424,7 +415,7 @@ namespace LuminPack.Parsers
         readonly IEqualityComparer<TKey>? _equalityComparer;
 
         public ConcurrentDictionaryParser()
-            : this(null)
+            : this(EqualityComparer<TKey>.Default)
         {
 
         }
@@ -448,13 +439,8 @@ namespace LuminPack.Parsers
                 return;
             }
 
-#if NET8_0_OR_GREATER
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
-#else
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
-#endif
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
 
             writer.WriteCollectionHeader(ref index, value.Count);
             writer.Advance(4);
@@ -496,13 +482,10 @@ namespace LuminPack.Parsers
             
             reader.Advance(4);
             
-#if NET8_0_OR_GREATER
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
-#else
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
-#endif
+
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
+            
             for (int i = 0; i < length; i++)
             {
                 KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);
@@ -549,7 +532,7 @@ namespace LuminPack.Parsers
         readonly IComparer<TKey>? comparer;
 
         public SortedDictionaryParser()
-            : this(null)
+            : this(Comparer<TKey>.Default)
         {
 
         }
@@ -572,14 +555,9 @@ namespace LuminPack.Parsers
                 
                 return;
             }
-
-#if NET8_0_OR_GREATER
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
-#else
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
-#endif
+            
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
 
             writer.WriteCollectionHeader(ref index, value.Count);
             writer.Advance(4);
@@ -613,14 +591,10 @@ namespace LuminPack.Parsers
             {
                 value.Clear();
             }
+            
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
 
-#if NET8_0_OR_GREATER
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
-#else
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
-#endif
             for (var i = 0; i < length; i++)
             {
                 KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);
@@ -1011,16 +985,16 @@ namespace LuminPack.Parsers
     [Preserve]
     public sealed unsafe class HashSetParser<T> : LuminPackParser<HashSet<T?>>
     {
-        readonly IEqualityComparer<T?>? equalityComparer;
+        readonly IEqualityComparer<T?>? _equalityComparer;
 
         public HashSetParser()
-            : this(null)
+            : this(EqualityComparer<T?>.Default)
         {
         }
 
         public HashSetParser(IEqualityComparer<T?>? equalityComparer)
         {
-            this.equalityComparer = equalityComparer;
+            this._equalityComparer = equalityComparer;
         }
         
         [Preserve]
@@ -1070,7 +1044,7 @@ namespace LuminPack.Parsers
 
             if (value is null)
             {
-                value = new HashSet<T?>(length, equalityComparer);
+                value = new HashSet<T?>(length, _equalityComparer);
             }
             else
             {
@@ -1118,7 +1092,7 @@ namespace LuminPack.Parsers
         readonly IComparer<T?>? comparer;
 
         public SortedSetParser()
-            : this(null)
+            : this(Comparer<T?>.Default)
         {
         }
 
@@ -1894,14 +1868,9 @@ namespace LuminPack.Parsers
                 
                 return;
             }
-
-#if NET8_0_OR_GREATER
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
-#else
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
-#endif
+            
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
 
             writer.WriteCollectionHeader(ref index, value.Count);
             
@@ -1937,14 +1906,10 @@ namespace LuminPack.Parsers
             {
                 value.Clear();
             }
+            
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
 
-#if NET8_0_OR_GREATER
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser.Instance;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser.Instance;
-#else
-            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
-            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
-#endif
             for (int i = 0; i < length; i++)
             {
                 KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);
