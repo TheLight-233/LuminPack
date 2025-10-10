@@ -325,7 +325,7 @@ namespace LuminPack.Parsers
         
 
         [Preserve]
-        public override void Serialize(scoped ref LuminPackWriter writer, scoped ref Dictionary<TKey, TValue?>? value)
+        public override unsafe void Serialize(scoped ref LuminPackWriter writer, scoped ref Dictionary<TKey, TValue?>? value)
         {
             var index = writer.CurrentIndex;
             
@@ -343,9 +343,26 @@ namespace LuminPack.Parsers
 
             writer.WriteCollectionHeader(ref index, value.Count);
             writer.Advance(4);
-            foreach (var item in value)
+            
+            nuint dictIndex = 0;
+            var dictView = LuminPackMarshal.GetDictionaryView(ref value);
+            ref var arrayRef =
+                ref LuminPackMarshal.GetArrayReference(dictView._entries); 
+            
+            while ((uint) dictIndex < (uint) dictView._count)
             {
-                KeyValuePairParser.Serialize(keyParser, valueParser, ref writer, item!);
+                ref LuminPackMarshal.DictionaryView<TKey, TValue?>.Entry local = ref Unsafe.Add(ref arrayRef, dictIndex++);
+                if (local.Next >= -1)
+                {
+#if NET5_0_OR_GREATER
+                    keyParser.Serialize(keyParser.Instance, ref writer, ref local.Key);
+                    valueParser.Serialize(valueParser.Instance, ref writer, ref local.Value);
+#else 
+                    keyParser!.Serialize(ref writer, ref local.Key!);
+                    valueParser!.Serialize(ref writer, ref local.Value);
+#endif
+                    
+                }
             }
         }
 
@@ -1010,20 +1027,28 @@ namespace LuminPack.Parsers
                 
                 return;
             }
-            
+
             writer.WriteCollectionHeader(ref index, value.Count);
-            
             writer.Advance(4);
             
-            foreach (var item in value)
+            nuint setIndex = 0;
+            var setView = LuminPackMarshal.GetHashSetView(ref value);
+            ref var arrayRef =
+                ref LuminPackMarshal.GetArrayReference(setView._entries); 
+            
+            while ((uint) setIndex < (uint) setView._count)
             {
-                var v = item;
+                ref LuminPackMarshal.HashSetView<T?>.Entry local = ref Unsafe.Add(ref arrayRef, setIndex++);
+                if (local.Next >= -1)
+                {
 #if NET8_0_OR_GREATER
-                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref v);
+                    LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref writer, ref local.Value);
 #else
-                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref v);
-#endif
+                    LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref local.Value);
+#endif        
+                }
             }
+            
         }
 
         [Preserve]
