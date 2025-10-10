@@ -169,6 +169,18 @@ public static class LuminPackMarshal
         local._size = size;
         
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static DictionaryView<TKey, TValue?> GetDictionaryView<TKey, TValue>(scoped ref Dictionary<TKey, TValue?>? dict) where TKey : notnull
+    {
+        return Unsafe.As<Dictionary<TKey, TValue?>, DictionaryView<TKey, TValue?>>(ref dict!);
+    }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static HashSetView<T?> GetHashSetView<T>(scoped ref HashSet<T?>? set)
+    {
+        return Unsafe.As<HashSet<T?>, HashSetView<T?>>(ref set!);
+    }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static unsafe ref T GetNonNullPinnableReference<T>(Span<T> span)
@@ -433,9 +445,7 @@ public static class LuminPackMarshal
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ref T GetArrayReference<T>(T[] array)
     {
-        ref var src = ref array.AsSpan().GetPinnableReference();
-        
-        return ref src;
+        return ref array.AsSpan().GetPinnableReference();
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -443,8 +453,7 @@ public static class LuminPackMarshal
     {
         if (array == null)
             throw new ArgumentNullException(nameof(array));
-
-        // 使用指针操作确保类型安全
+        
         return ref Unsafe.AsRef<byte>(GetArrayDataPointer(array));
     }
 
@@ -1052,8 +1061,51 @@ public static class LuminPackMarshal
         public int _tail;
         public int _size;
         public int _version;
-
         
+    }
+    
+    [Preserve]
+    internal sealed class DictionaryView<TKey, TValue>
+    {
+        public int[] _buckets;
+        public Entry[] _entries;
+        private ulong _fastModMultiplier;
+        public int _count;
+        public int _version;
+        public int _freeList;
+        public int _freeCount;
+        public IEqualityComparer<TKey> _comparer;
+        public Dictionary<TKey, TValue>.KeyCollection _keys;
+        public Dictionary<TKey, TValue>.ValueCollection _values;
+        
+        public struct Entry
+        {
+            public int HashCode;
+            public int Next;
+            public TKey Key;
+            public TValue Value;
+        }
+    }
+    
+    [Preserve]
+    internal sealed class HashSetView<T>
+    {
+        public int[] _buckets;
+        public Entry[] _entries;
+        private ulong _fastModMultiplier;
+        public int _count;
+        public int _version;
+        public int _freeList;
+        public int _freeCount;
+        public IEqualityComparer<T> _comparer;
+        
+        
+        public struct Entry
+        {
+            public int HashCode;
+            public int Next;
+            public T Value;
+        }
     }
     
 }
