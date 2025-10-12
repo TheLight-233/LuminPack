@@ -70,7 +70,7 @@ public sealed class ImmutableArrayParser<T> : LuminPackParser<ImmutableArray<T?>
 }
 
 [Preserve]
-public sealed unsafe class ImmutableListParser<T> : LuminPackParser<ImmutableList<T?>>
+public sealed class ImmutableListParser<T> : LuminPackParser<ImmutableList<T?>>
 {
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref ImmutableList<T?>? value)
@@ -128,15 +128,13 @@ public sealed unsafe class ImmutableListParser<T> : LuminPackParser<ImmutableLis
             return;
         }
 
+        var parser = LuminPackParseProvider.Cache<T?>.Parser!;
+
         var builder = ImmutableList.CreateBuilder<T?>();
         for (int i = 0; i < length; i++)
         {
             T? item = default;
-#if NET8_0_OR_GREATER
-            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref item);
-#else
-            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref item);
-#endif
+            parser.Deserialize(ref reader, ref item);
             builder.Add(item);
         }
 
@@ -164,7 +162,7 @@ public sealed unsafe class ImmutableListParser<T> : LuminPackParser<ImmutableLis
 }
 
 [Preserve]
-public sealed unsafe class ImmutableQueueParser<T> : LuminPackParser<ImmutableQueue<T?>>
+public sealed class ImmutableQueueParser<T> : LuminPackParser<ImmutableQueue<T?>>
 {
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref ImmutableQueue<T?>? value)
@@ -244,13 +242,10 @@ public sealed unsafe class ImmutableQueueParser<T> : LuminPackParser<ImmutableQu
         var rentArray = ArrayPool<T?>.Shared.Rent(length);
         try
         {
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             for (int i = 0; i < length; i++)
             {
-#if NET8_0_OR_GREATER
-                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref rentArray[i]);
-#else
-                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref rentArray[i]);
-#endif
+                parser.Deserialize(ref reader, ref rentArray[i]);
             }
 
             if (rentArray.Length == length)
@@ -293,7 +288,7 @@ public sealed unsafe class ImmutableQueueParser<T> : LuminPackParser<ImmutableQu
 }
 
 [Preserve]
-public sealed unsafe class ImmutableStackParser<T> : LuminPackParser<ImmutableStack<T?>>
+public sealed class ImmutableStackParser<T> : LuminPackParser<ImmutableStack<T?>>
 {
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref ImmutableStack<T?>? value)
@@ -369,13 +364,10 @@ public sealed unsafe class ImmutableStackParser<T> : LuminPackParser<ImmutableSt
         var rentArray = ArrayPool<T?>.Shared.Rent(length);
         try
         {
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             for (int i = 0; i < length; i++)
             {
-#if NET8_0_OR_GREATER
-                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref rentArray[i]);
-#else
-                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref rentArray[i]);
-#endif
+                parser.Deserialize(ref reader, ref rentArray[i]);
             }
 
             if (rentArray.Length == length)
@@ -425,7 +417,7 @@ public sealed class ImmutableDictionaryParser<TKey, TValue> : LuminPackParser<Im
     readonly IEqualityComparer<TValue?>? valueEqualityComparer;
 
     public ImmutableDictionaryParser()
-        : this(EqualityComparer<TKey>.Default, EqualityComparer<TValue?>.Default)
+        : this(null, null)
     {
 
     }
@@ -450,14 +442,14 @@ public sealed class ImmutableDictionaryParser<TKey, TValue> : LuminPackParser<Im
             return;
         }
 
-        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
-        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
+        var keyFormatter = writer.GetParser<TKey>();
+        var valueFormatter = writer.GetParser<TValue>();
 
         writer.WriteCollectionHeader(ref index, value.Count);
         writer.Advance(4);
         foreach (var item in value)
         {
-            KeyValuePairParser.Serialize(keyParser, valueParser, ref writer, item!);
+            KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item!);
         }
     }
 
@@ -486,7 +478,7 @@ public sealed class ImmutableDictionaryParser<TKey, TValue> : LuminPackParser<Im
             }
             return;
         }
-        
+
         var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
         var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
 
@@ -524,13 +516,13 @@ public sealed class ImmutableDictionaryParser<TKey, TValue> : LuminPackParser<Im
 }
 
 [Preserve]
-public sealed unsafe class ImmutableHashSetParser<T> : LuminPackParser<ImmutableHashSet<T?>>
+public sealed class ImmutableHashSetParser<T> : LuminPackParser<ImmutableHashSet<T?>>
 {
     
     readonly IEqualityComparer<T?>? equalityComparer;
 
     public ImmutableHashSetParser()
-        : this(EqualityComparer<T?>.Default)
+        : this(null)
     {
 
     }
@@ -600,17 +592,14 @@ public sealed unsafe class ImmutableHashSetParser<T> : LuminPackParser<Immutable
             return;
         }
 
+        var parser = LuminPackParseProvider.Cache<T?>.Parser!;
+
         var builder = ImmutableHashSet.CreateBuilder(equalityComparer);
         for (int i = 0; i < length; i++)
         {
-            T? v = default;
-            
-#if NET8_0_OR_GREATER
-            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref v);
-#else
-            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref v);
-#endif
-            builder.Add(v);
+            T? item = default;
+            parser.Deserialize(ref reader, ref item);
+            builder.Add(item);
         }
 
         value = builder.ToImmutable();
@@ -644,7 +633,7 @@ public sealed class ImmutableSortedDictionaryParser<TKey, TValue> : LuminPackPar
     readonly IEqualityComparer<TValue?>? valueEqualityComparer;
 
     public ImmutableSortedDictionaryParser()
-        : this(Comparer<TKey>.Default, EqualityComparer<TValue?>.Default)
+        : this(null, null)
     {
 
     }
@@ -669,14 +658,14 @@ public sealed class ImmutableSortedDictionaryParser<TKey, TValue> : LuminPackPar
             return;
         }
 
-        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
-        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
+        var keyFormatter = writer.GetParser<TKey>();
+        var valueFormatter = writer.GetParser<TValue>();
 
         writer.WriteCollectionHeader(ref index, value.Count);
         writer.Advance(4);
         foreach (var item in value)
         {
-            KeyValuePairParser.Serialize(keyParser, valueParser, ref writer, item!);
+            KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item!);
         }
     }
 
@@ -705,7 +694,7 @@ public sealed class ImmutableSortedDictionaryParser<TKey, TValue> : LuminPackPar
             }
             return;
         }
-        
+
         var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
         var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
 
@@ -744,13 +733,13 @@ public sealed class ImmutableSortedDictionaryParser<TKey, TValue> : LuminPackPar
 }
 
 [Preserve]
-public sealed unsafe class ImmutableSortedSetParser<T> : LuminPackParser<ImmutableSortedSet<T?>?>
+public sealed class ImmutableSortedSetParser<T> : LuminPackParser<ImmutableSortedSet<T?>?>
 {
     
     readonly IComparer<T?>? keyComparer;
 
     public ImmutableSortedSetParser()
-        : this(Comparer<T?>.Default)
+        : this(null)
     {
 
     }
@@ -820,17 +809,14 @@ public sealed unsafe class ImmutableSortedSetParser<T> : LuminPackParser<Immutab
             return;
         }
 
+        var parser = LuminPackParseProvider.Cache<T?>.Parser!;
+
         var builder = ImmutableSortedSet.CreateBuilder(keyComparer);
         for (int i = 0; i < length; i++)
         {
-            T? v = default;
-            
-#if NET8_0_OR_GREATER
-            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref v);
-#else
-            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref v);
-#endif
-            builder.Add(v);
+            T? item = default;
+            parser.Deserialize(ref reader, ref item);
+            builder.Add(item);
         }
 
         value = builder.ToImmutable();
@@ -857,7 +843,7 @@ public sealed unsafe class ImmutableSortedSetParser<T> : LuminPackParser<Immutab
 }
 
 [Preserve]
-public sealed unsafe class InterfaceImmutableListParser<T> : LuminPackParser<IImmutableList<T?>>
+public sealed class InterfaceImmutableListParser<T> : LuminPackParser<IImmutableList<T?>>
 {
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref IImmutableList<T?>? value)
@@ -915,17 +901,14 @@ public sealed unsafe class InterfaceImmutableListParser<T> : LuminPackParser<IIm
             return;
         }
 
+        var parser = LuminPackParseProvider.Cache<T?>.Parser!;
+
         var builder = ImmutableList.CreateBuilder<T?>();
         for (int i = 0; i < length; i++)
         {
-            T? v = default;
-            
-#if NET8_0_OR_GREATER
-            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref v);
-#else
-            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref v);
-#endif
-            builder.Add(v);
+            T? item = default;
+            parser.Deserialize(ref reader, ref item);
+            builder.Add(item);
         }
 
         value = builder.ToImmutable();
@@ -952,7 +935,7 @@ public sealed unsafe class InterfaceImmutableListParser<T> : LuminPackParser<IIm
 }
 
 [Preserve]
-public sealed unsafe class InterfaceImmutableQueueParser<T> : LuminPackParser<IImmutableQueue<T?>>
+public sealed class InterfaceImmutableQueueParser<T> : LuminPackParser<IImmutableQueue<T?>>
 {
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref IImmutableQueue<T?>? value)
@@ -1032,14 +1015,10 @@ public sealed unsafe class InterfaceImmutableQueueParser<T> : LuminPackParser<II
         var rentArray = ArrayPool<T?>.Shared.Rent(length);
         try
         {
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             for (int i = 0; i < length; i++)
             {
-                
-#if NET8_0_OR_GREATER
-                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref rentArray[i]);
-#else
-                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref rentArray[i]);
-#endif
+                parser.Deserialize(ref reader, ref rentArray[i]);
             }
 
             if (rentArray.Length == length)
@@ -1082,7 +1061,7 @@ public sealed unsafe class InterfaceImmutableQueueParser<T> : LuminPackParser<II
 }
 
 [Preserve]
-public sealed unsafe class InterfaceImmutableStackParser<T> : LuminPackParser<IImmutableStack<T?>>
+public sealed class InterfaceImmutableStackParser<T> : LuminPackParser<IImmutableStack<T?>>
 {
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref IImmutableStack<T?>? value)
@@ -1158,13 +1137,10 @@ public sealed unsafe class InterfaceImmutableStackParser<T> : LuminPackParser<II
         var rentArray = ArrayPool<T?>.Shared.Rent(length);
         try
         {
+            var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             for (int i = 0; i < length; i++)
             {
-#if NET8_0_OR_GREATER
-                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref rentArray[i]);
-#else
-                LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref rentArray[i]);
-#endif
+                parser.Deserialize(ref reader, ref rentArray[i]);
             }
 
             if (rentArray.Length == length)
@@ -1214,7 +1190,7 @@ public sealed class InterfaceImmutableDictionaryParser<TKey, TValue> : LuminPack
     readonly IEqualityComparer<TValue?>? valueEqualityComparer;
 
     public InterfaceImmutableDictionaryParser()
-        : this(EqualityComparer<TKey>.Default, EqualityComparer<TValue?>.Default)
+        : this(null, null)
     {
 
     }
@@ -1239,8 +1215,8 @@ public sealed class InterfaceImmutableDictionaryParser<TKey, TValue> : LuminPack
             return;
         }
 
-        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
-        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
+        var keyParser = writer.GetParser<TKey>();
+        var valueParser = writer.GetParser<TValue>();
 
         writer.WriteCollectionHeader(ref index, value.Count);
         
@@ -1280,9 +1256,9 @@ public sealed class InterfaceImmutableDictionaryParser<TKey, TValue> : LuminPack
             }
             return;
         }
-        
-        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
-        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
+
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
 
         var builder = ImmutableDictionary.CreateBuilder(keyEqualityComparer, valueEqualityComparer);
         for (int i = 0; i < length; i++)
@@ -1318,12 +1294,12 @@ public sealed class InterfaceImmutableDictionaryParser<TKey, TValue> : LuminPack
 }
 
 [Preserve]
-public sealed unsafe class InterfaceImmutableSetParser<T> : LuminPackParser<IImmutableSet<T?>>
+public sealed class InterfaceImmutableSetParser<T> : LuminPackParser<IImmutableSet<T?>>
 {
     readonly IEqualityComparer<T?>? equalityComparer;
 
     public InterfaceImmutableSetParser()
-        : this(EqualityComparer<T?>.Default)
+        : this(null)
     {
 
     }
@@ -1396,16 +1372,14 @@ public sealed unsafe class InterfaceImmutableSetParser<T> : LuminPackParser<IImm
             return;
         }
 
+        var parser = LuminPackParseProvider.Cache<T?>.Parser!;
+
         var builder = ImmutableHashSet.CreateBuilder(equalityComparer);
         for (int i = 0; i < length; i++)
         {
-            T? v = default;
-#if NET8_0_OR_GREATER
-            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref reader, ref v);
-#else
-            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref v);
-#endif
-            builder.Add(v);
+            T? item = default;
+            parser.Deserialize(ref reader, ref item);
+            builder.Add(item);
         }
 
         value = builder.ToImmutable();

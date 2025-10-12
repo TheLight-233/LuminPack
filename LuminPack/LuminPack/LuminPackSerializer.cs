@@ -36,26 +36,29 @@ namespace LuminPack
         /// <summary>
         /// 序列化主方法
         /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static byte[] Serialize<T>(in T? value, LuminPackSerializerOption? option = null)
         {
-            if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+            var writerBuffer = ReusableLinkedArrayBufferWriterPool.Rent();
+            
+            var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();
+            state.Init(option);
+            
+            try
             {
-                return SerializeUnmanaged(value);
-            }
-            
-            // if (LuminPackParseProvider.GetParserType<T>() is LuminPackParseProvider.ParserType.Data)
-            // {
-            //     return LoadData(value)!.Serialize();
-            // }
-            
-            var typeKind = TypeHelpers.TryGetUnmanagedSzArrayElementSizeOrLuminPackableFixedSize<T>(out var elementSize);
+                var writer = new LuminPackWriter(writerBuffer, state);
 
-            return typeKind switch
+                writer.WriteValue(value);
+                
+                var buffer = AllocateUninitializedArray<byte>(writer.CurrentIndex);
+                writer.GetSpan().CopyTo(buffer.AsSpan());
+                return buffer;
+            }
+            finally
             {
-                TypeKind.FixedSizeLuminPackable => SerializeFixedSize(value, elementSize),
-                TypeKind.UnmanagedSzArray      => SerializeUnmanagedArray(value, elementSize),
-                _                              => SerializeComplexType(value, option)
-            };
+                ReusableLinkedArrayBufferWriterPool.Return(writerBuffer);
+                state.Reset();
+            }
         }
 
         /// <summary>
@@ -102,10 +105,6 @@ namespace LuminPack
             ReadOnlySpan<byte> buffer, ref T? value, 
             LuminPackSerializerOption? options = null)
         {
-            if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
-            {
-                return DeserializeUnmanaged(buffer, ref value);
-            }
             
             //if (LuminPackParseProvider.GetParserType<T>() is LuminPackParseProvider.ParserType.Data) goto Read;
             

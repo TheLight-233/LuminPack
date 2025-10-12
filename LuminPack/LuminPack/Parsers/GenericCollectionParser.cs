@@ -4,7 +4,7 @@ using LuminPack.Core;
 namespace LuminPack.Parsers;
 
 [Preserve]
-public sealed unsafe class GenericCollectionParser<TCollection, TElement> : LuminPackParser<TCollection?>
+public sealed class GenericCollectionFormatter<TCollection, TElement> : LuminPackParser<TCollection?>
     where TCollection : ICollection<TElement?>, new()
 {
     [Preserve]
@@ -50,16 +50,13 @@ public sealed unsafe class GenericCollectionParser<TCollection, TElement> : Lumi
         
         reader.Advance(4);
 
+        var parser = LuminPackParseProvider.Cache<TElement?>.Parser!;
+
         var collection = new TCollection();
         for (int i = 0; i < length; i++)
         {
             TElement? v = default;
-            
-#if NET8_0_OR_GREATER
-            LuminPackParseProvider.Cache<TElement?>.Parser!.Deserialize(LuminPackParseProvider.Cache<TElement?>.Parser.Instance, ref reader, ref v);
-#else
-            LuminPackParseProvider.Cache<TElement?>.Parser!.Deserialize(ref reader, ref v);
-#endif
+            parser.Deserialize(ref reader, ref v);
             collection.Add(v);
         }
 
@@ -87,7 +84,7 @@ public sealed unsafe class GenericCollectionParser<TCollection, TElement> : Lumi
 }
 
 [Preserve]
-public abstract unsafe class GenericSetParserBase<TSet, TElement> : LuminPackParser<TSet?>
+public abstract class GenericSetParserBase<TSet, TElement> : LuminPackParser<TSet?>
     where TSet : ISet<TElement?>
 {
     [Preserve]
@@ -137,15 +134,13 @@ public abstract unsafe class GenericSetParserBase<TSet, TElement> : LuminPackPar
         
         reader.Advance(4);
 
+        var parser = LuminPackParseProvider.Cache<TElement?>.Parser!;
+
         var collection = CreateSet();
         for (int i = 0; i < length; i++)
         {
             TElement? v = default;
-#if NET8_0_OR_GREATER
-            LuminPackParseProvider.Cache<TElement?>.Parser!.Deserialize(LuminPackParseProvider.Cache<TElement?>.Parser.Instance, ref reader, ref v);
-#else
-            LuminPackParseProvider.Cache<TElement?>.Parser!.Deserialize(ref reader, ref v);
-#endif
+            parser.Deserialize(ref reader, ref v);
             collection.Add(v);
         }
 
@@ -205,8 +200,8 @@ public abstract class GenericDictionaryParserBase<TDictionary, TKey, TValue> : L
             return;
         }
 
-        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
-        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
+        var keyParser = writer.GetParser<TKey>();
+        var valueParser = writer.GetParser<TValue>();
 
         writer.WriteCollectionHeader(ref index, value.Count);
         
@@ -231,9 +226,9 @@ public abstract class GenericDictionaryParserBase<TDictionary, TKey, TValue> : L
             
             return;
         }
-        
-        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;
-        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;
+
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
 
         var dict = CreateDictionary();
         for (int i = 0; i < length; i++)

@@ -468,6 +468,7 @@ namespace LuminPack.Code.Core
             sb.AppendLine("            ref int offset = ref reader.GetCurrentSpanOffset();");
             //sb.AppendLine("            var span = reader.GetSpan();");
             sb.AppendLine($"            value = ({classGlobalName}) System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof({classGlobalName}));");
+            //sb.AppendLine($"            value = new {classGlobalName}();");
             sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
             if (_dataInfo.fields.Count(x => x.IsPrivate) > 0)
             {

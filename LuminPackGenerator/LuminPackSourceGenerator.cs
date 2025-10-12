@@ -36,7 +36,6 @@ namespace LuminPack.SourceGenerator
                     _metadata = new MetaInfo(csOptions, langVersion, net8);
                     return _metadata;
                 }).WithTrackingName("LuminPack.LuminPackable.0_ParseOptionsProvider");
-                 
                 
                 var typeDeclarations = context.SyntaxProvider.ForAttributeWithMetadataName(
                     LUMIN_PACKABLE_ATTRIBUTE,
@@ -65,16 +64,17 @@ namespace LuminPack.SourceGenerator
                     }
 
                     var dataInfo = source.Left.Item1;
+                    var compilation = source.Left.Item2;
                     var metaInfo = source.Right;
                     
                     var code = LuminPackCodeGenerator.CodeGenerator(dataInfo, metaInfo);
-                    
+                    var extension = LuminPackExtensionGenerator.CodeGenerator(dataInfo, metaInfo, compilation);
                     if (string.IsNullOrEmpty(code)) return;
                     
                     var name = dataInfo.classFullName.Replace("<", "_").Replace(">", "_").Replace(",", "_");
                     
                     context.AddSource($"{name}Parser.g.cs", code);
-                    
+                    context.AddSource($"{name}Parser.Extension.g.cs", extension);
                 });
             }
             catch (Exception ex)

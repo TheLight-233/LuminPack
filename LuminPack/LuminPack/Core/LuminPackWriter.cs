@@ -1,4 +1,4 @@
-using System.Buffers;
+﻿using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -159,11 +159,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public LuminPackParser<T> GetParser<T>()
         {
-#if NET8_0_OR_GREATER
-            return LuminPackParseProvider.Cache<T>.Parser.Instance!;
-#else
             return LuminPackParseProvider.Cache<T>.Parser!;
-#endif
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -775,11 +771,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteValue<T>(scoped in T? value)
         {
-#if NET8_0_OR_GREATER
-            LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref Unsafe.AsRef(in value));
-#else
             LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref this, ref Unsafe.AsRef(in value));
-#endif
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -816,6 +808,9 @@ namespace LuminPack.Core
                 return;
             }
             
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            
             WriteCollectionHeader(ref _currentIndex, array.Length);
             
             Advance(4);
@@ -823,11 +818,7 @@ namespace LuminPack.Core
             foreach (var value in array.AsSpan())
             {
                 var v = value;
-#if NET8_0_OR_GREATER
-                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref v);
-#else
-                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref this, ref v);
-#endif
+                parser.Serialize(ref this, ref v);
             }
         }
         
@@ -858,17 +849,16 @@ namespace LuminPack.Core
                 return;
             }
             
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            
             WriteCollectionHeader(ref index, array.Length);
             Advance(4);
             
             foreach (var value in array.AsSpan())
             {
                 var v = value;
-#if NET8_0_OR_GREATER
-                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref v);
-#else
-                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref this, ref v);
-#endif
+                parser.Serialize(ref this, ref v);
             }
         }
         
@@ -899,17 +889,15 @@ namespace LuminPack.Core
                 return;
             }
             
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
             WriteCollectionHeader(ref _currentIndex, span.Length);
             Advance(4);
             
             foreach (var value in span)
             {
                 var v = value;
-#if NET8_0_OR_GREATER
-                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref v);
-#else
-                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref this, ref v);
-#endif
+                parser.Serialize(ref this, ref v);
             }
         }
         
@@ -936,6 +924,8 @@ namespace LuminPack.Core
                 return;
             }
             
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
             
             WriteCollectionHeader(ref index, span.Length);
             Advance(4);
@@ -943,11 +933,7 @@ namespace LuminPack.Core
             foreach (var value in span)
             {
                 var v = value;
-#if NET8_0_OR_GREATER
-                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref v);
-#else
-                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref this, ref v);
-#endif
+                parser.Serialize(ref this, ref v);
             }
         }
         
@@ -984,14 +970,12 @@ namespace LuminPack.Core
                 return;
             }
             
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
             foreach (var value in span)
             {
                 var v = value;
-#if NET8_0_OR_GREATER
-                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref v);
-#else
-                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref this, ref v);
-#endif
+                parser.Serialize(ref this, ref v);
             }
         }
         
@@ -1028,14 +1012,12 @@ namespace LuminPack.Core
                 return;
             }
             
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
             foreach (var value in span)
             {
                 var v = value;
-#if NET8_0_OR_GREATER
-                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref v);
-#else
-                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref this, ref v);
-#endif
+                parser.Serialize(ref this, ref v);
             }
         }
         
@@ -1066,16 +1048,15 @@ namespace LuminPack.Core
                 return;
             }
             
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            
             WriteCollectionHeader(ref index, span.Length);
             Advance(4);
             foreach (var value in span)
             {
                 var v = value;
-#if NET8_0_OR_GREATER
-                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref v);
-#else
-                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref this, ref v);
-#endif
+                parser.Serialize(ref this, ref v);
             }
         }
         
@@ -1100,16 +1081,15 @@ namespace LuminPack.Core
                 return;
             }
             
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            
             WriteCollectionHeader(ref index, span.Length);
             Advance(4);
             foreach (var value in span)
             {
                 var v = value;
-#if NET8_0_OR_GREATER
-                LuminPackParseProvider.Cache<T>.Parser.Serialize(LuminPackParseProvider.Cache<T>.Parser.Instance, ref this, ref v);
-#else
-                LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref this, ref v);
-#endif
+                parser.Serialize(ref this, ref v);
             }
         }
         

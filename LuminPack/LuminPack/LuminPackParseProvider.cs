@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Diagnostics.CodeAnalysis;
 using System.Reflection;
@@ -13,7 +13,7 @@ using LuminPack.Parsers;
 
 namespace LuminPack
 {
-    public static unsafe partial class LuminPackParseProvider
+    public static partial class LuminPackParseProvider
     {
 
         // 同步工厂
@@ -50,13 +50,8 @@ namespace LuminPack
 
             Check<T>.Registered = true;
             Check<T>.ParserType = ParserType.Data;
-#if NET8_0_OR_GREATER
-            Cache<T>.Parser.Instance = luminData;
-            Cache<T>.Parser.Serialize = (delegate*<object?, ref LuminPackWriter, ref T?, void>)TryGetSerializeMethodFunctionPointer<T>(luminData);
-            Cache<T>.Parser.Deserialize = (delegate*<object?, ref LuminPackReader, ref T?, void>)TryGetDeserializeMethodFunctionPointer<T>(luminData);
-#else
+
             Cache<T>.Parser = luminData;
-#endif
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -67,13 +62,7 @@ namespace LuminPack
             Check<T>.Registered = true;
             Check<T>.ParserType = ParserType.Parsers;
 
-#if NET8_0_OR_GREATER
-            Cache<T>.Parser.Instance = parser;
-            Cache<T>.Parser.Serialize = (delegate*<object?, ref LuminPackWriter, ref T?, void>)TryGetSerializeMethodFunctionPointer<T>(parser);
-            Cache<T>.Parser.Deserialize = (delegate*<object?, ref LuminPackReader, ref T?, void>)TryGetDeserializeMethodFunctionPointer<T>(parser);
-#else
             Cache<T>.Parser = parser;
-#endif
         }
 
 
@@ -133,12 +122,7 @@ namespace LuminPack
             if (Cache<T>.parser is null)
                 LuminPackExceptionHelper.ThrowNoParserRegistered(typeof(T));
 #endif
-            
-#if NET8_0_OR_GREATER
-            return Cache<T>.Parser.Instance;
-#else
             return Cache<T>.Parser;
-#endif
         }
 
         /// <summary>
@@ -151,11 +135,7 @@ namespace LuminPack
             if (Cache<T>.Parser is null)
                 LuminPackExceptionHelper.ThrowNoParserRegistered(typeof(T));
 
-#if NET8_0_OR_GREATER
-            return Cache<T>.Parser.Instance;
-#else
             return Cache<T>.Parser;
-#endif
         }
 
         public static bool TryRegisterParser<T>()
@@ -206,44 +186,6 @@ namespace LuminPack
             return true;
         }
 
-        internal static IntPtr TryGetSerializeMethodFunctionPointer<T>(object? instance)
-        {
-            if (instance == null)
-                return IntPtr.Zero;
-            
-            var methodInfo =  instance.GetType().GetMethod(
-                "Serialize", 
-                BindingFlags.Instance | BindingFlags.Public,
-                null,
-                new Type[] { 
-                    typeof(LuminPackWriter).MakeByRefType(), 
-                    typeof(T).MakeByRefType() 
-                },
-                null
-            );
-            
-            return methodInfo == null ? IntPtr.Zero : methodInfo.MethodHandle.GetFunctionPointer();
-        }
-
-        internal static IntPtr TryGetDeserializeMethodFunctionPointer<T>(object? instance)
-        {
-            if (instance == null) 
-                return IntPtr.Zero;
-            
-            var methodInfo =  instance.GetType().GetMethod(
-                "Deserialize", 
-                BindingFlags.Instance | BindingFlags.Public,
-                null,
-                new Type[] { 
-                    typeof(LuminPackReader).MakeByRefType(), 
-                    typeof(T).MakeByRefType() 
-                },
-                null
-            );
-            
-            return methodInfo == null ? IntPtr.Zero : methodInfo.MethodHandle.GetFunctionPointer();
-        }
-        
         internal static object? CreateGenericParser(Type type, bool typeIsReferenceOrContainsReferences)
         {
             Type? parserType = null;
@@ -330,21 +272,9 @@ namespace LuminPack
             
         }
 
-        internal static class Cache<T>
+        public static class Cache<T>
         {
-#if NETSTANDARD2_1
-            internal static LuminPackParser<T>? Parser;
-#else
-
-            internal static readonly LocalParser Parser = new();
-            
-            internal sealed class LocalParser
-            {
-                public LuminPackParser<T>? Instance;
-                public delegate*<LuminPackParser<T>?, ref LuminPackWriter, ref T?, void> Serialize;
-                public delegate*<LuminPackParser<T>?, ref LuminPackReader, ref T?, void> Deserialize;
-            }
-#endif
+            public static LuminPackParser<T>? Parser;
             
             static Cache()
             { 
@@ -361,24 +291,12 @@ namespace LuminPack
                     
                     var typeIsReferenceOrContainsReferences = RuntimeHelpers.IsReferenceOrContainsReferences<T>();
                     var f = CreateGenericParser(type, typeIsReferenceOrContainsReferences) as LuminPackParser<T>;
-#if NET8_0_OR_GREATER
-                    Parser.Instance = f ?? new ErrorLuminPackParser<T>();
-                    Parser.Serialize = (delegate*<LuminPackParser<T>?, ref LuminPackWriter, ref T?, void>)TryGetSerializeMethodFunctionPointer<T>(Parser.Instance);
-                    Parser.Deserialize = (delegate*<LuminPackParser<T>?, ref LuminPackReader, ref T?, void>)TryGetDeserializeMethodFunctionPointer<T>(Parser.Instance);
-#else
+
                     Parser = f ?? new ErrorLuminPackParser<T>();
-#endif
                 }
                 catch (Exception ex)
                 {
-#if NET8_0_OR_GREATER
-                    Parser.Instance = new ErrorLuminPackParser<T>(typeof(T), ex.Message);
-                    Parser.Serialize = (delegate*<LuminPackParser<T>?, ref LuminPackWriter, ref T?, void>)TryGetSerializeMethodFunctionPointer<T>(Parser.Instance);
-                    Parser.Deserialize = (delegate*<LuminPackParser<T>?, ref LuminPackReader, ref T?, void>)TryGetDeserializeMethodFunctionPointer<T>(Parser.Instance);
-#else 
                     Parser = new ErrorLuminPackParser<T>(typeof(T), ex.Message);
-#endif
-                    
                 }
                 
                 Check<T>.ParserType = ParserType.Parsers;
