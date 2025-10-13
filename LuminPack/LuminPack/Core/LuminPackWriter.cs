@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -768,11 +768,11 @@ namespace LuminPack.Core
         }
 
         
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteValue<T>(scoped in T? value)
-        {
-            LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref this, ref Unsafe.AsRef(in value));
-        }
+        // [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        // public void WriteValue<T>(scoped in T? value)
+        // {
+        //     LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref this, ref Unsafe.AsRef(in value));
+        // }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteValueWithParser<TParser, T>(TParser parser, scoped in T? value)
