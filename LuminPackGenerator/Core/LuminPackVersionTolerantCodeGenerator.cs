@@ -48,6 +48,110 @@ public static class LuminPackVersionTolerantCodeGenerator
             : $"        public override void Serialize(ref LuminPackWriter writer, ref {classGlobalName}{paraNullable} value)");
         sb.AppendLine("        {");
         
+        GenerateSerializeCode(data, sb);
+        
+        sb.AppendLine("        }");
+        
+        // Deserialize实现
+        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine(metaInfo.IsNet8 
+            ? $"        public override void Deserialize(ref LuminPackReader reader, scoped ref {data.classFullName}{paraNullable} value)"
+            : $"        public override void Deserialize(ref LuminPackReader reader, ref {data.classFullName}{paraNullable} value)");
+        sb.AppendLine("        {");
+        
+        GenerateDeserializeCode(data, sb);
+        
+        sb.AppendLine("        }");
+        
+        sb.AppendLine();
+        
+        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine(metaInfo.IsNet8 
+            ? $"        public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref {classGlobalName}{paraNullable} value)"
+            : $"        public override void CalculateOffset(ref LuminPackEvaluator evaluator, ref {classGlobalName}{paraNullable} value)");
+        sb.AppendLine("        {");
+        if (!data.isValueType)
+        {
+            sb.AppendLine("            if (value is null)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                evaluator += 1;");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+        }
+        sb.AppendLine();
+        sb.AppendLine("            int size = 1;");
+        sb.AppendLine();
+        sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
+        foreach (var field in data.fields)
+        {
+            if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
+            {
+                sb.AppendLine($"            size += Unsafe.SizeOf<{field.TypeName}>() + LuminPackEvaluator.CalculateVarInt(Unsafe.SizeOf<{field.TypeName}>());");
+            }
+            else
+            {
+                sb.AppendLine($"            var {field.Name}TempLength = evaluator.Value;");
+                sb.AppendLine($"            evaluator.CalculateValue(local.@{field.Name});");
+                sb.AppendLine($"            size += LuminPackEvaluator.CalculateVarInt(evaluator.Value - {field.Name}TempLength);");
+            }
+            
+        }
+        sb.AppendLine();
+        sb.AppendLine("            evaluator += size;");
+        sb.AppendLine("        }");
+        
+        sb.AppendLine();
+        switch (data.structLayout)
+        {
+            case StructLayout.Explicit : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Explicit)]"); break;
+            case StructLayout.Auto : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Auto)]"); break;
+            case StructLayout.Sequential : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Sequential)]"); break;
+            case StructLayout.Default : break;
+        }
+        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine(data.isValueType 
+            ? $"        private struct Local{data.classFullName}" 
+            : $"        private sealed class Local{data.classFullName}");
+        sb.AppendLine("        {");
+        foreach (var field in data.localFields)
+        {
+            if (data.structLayout is StructLayout.Explicit)
+                sb.AppendLine($"            [global::System.Runtime.InteropServices.FieldOffset({field.filedOffset})]");
+            var nullable = LuminPackCodeGenerator.IsUnmanagedFiledType(field.TypeName) || field.IsValue ? string.Empty : "?";
+            sb.AppendLine($"            internal {field.TypeName}{nullable} {field.Name};");
+        }
+            
+        sb.AppendLine("        }");
+            
+        sb.AppendLine();
+        sb.AppendLine("    }");
+        sb.AppendLine("}");
+    }
+    
+    public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb)
+    {
+        string paraNullable = data.isValueType ? string.Empty : "?";
+        string classFullName = data.className + "Parser";
+        string classGlobalName = data.classFullName;
+        string parserName = data.className + "Parser";
+        bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
+        uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
+        
+        if (data.isGeneric)
+        {
+            classFullName += $"<{data.GenericParameters.FirstOrDefault()}";
+            for(var i = 1; i < data.GenericParameters.Count; i++)
+            {
+                classFullName += "," + data.GenericParameters[i];
+            }
+            classFullName += ">";
+        }
+        
+        if (!classGlobalName.Contains(".") && data.classNameSpace != "<global namespace>")
+        {
+            classGlobalName = "global::" + data.classNameSpace + "." + data.classFullName;
+        }
+        
         sb.AppendLine();
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerializing))
         {
@@ -195,15 +299,31 @@ public static class LuminPackVersionTolerantCodeGenerator
                 : $"            value?.{item.Item1}();");
         }
         sb.AppendLine();
+    }
+
+    public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb)
+    {
+        string paraNullable = data.isValueType ? string.Empty : "?";
+        string classFullName = data.className + "Parser";
+        string classGlobalName = data.classFullName;
+        string parserName = data.className + "Parser";
+        bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
+        uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
         
-        sb.AppendLine("        }");
+        if (data.isGeneric)
+        {
+            classFullName += $"<{data.GenericParameters.FirstOrDefault()}";
+            for(var i = 1; i < data.GenericParameters.Count; i++)
+            {
+                classFullName += "," + data.GenericParameters[i];
+            }
+            classFullName += ">";
+        }
         
-        // Deserialize实现
-        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-        sb.AppendLine(metaInfo.IsNet8 
-            ? $"        public override void Deserialize(ref LuminPackReader reader, scoped ref {data.classFullName}{paraNullable} value)"
-            : $"        public override void Deserialize(ref LuminPackReader reader, ref {data.classFullName}{paraNullable} value)");
-        sb.AppendLine("        {");
+        if (!classGlobalName.Contains(".") && data.classNameSpace != "<global namespace>")
+        {
+            classGlobalName = "global::" + data.classNameSpace + "." + data.classFullName;
+        }
         
         sb.AppendLine();
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserializing))
@@ -271,73 +391,5 @@ public static class LuminPackVersionTolerantCodeGenerator
                 : $"            value?.{item.Item1}();");
         }
         sb.AppendLine();
-        
-        sb.AppendLine("        }");
-        
-        sb.AppendLine();
-        
-        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-        sb.AppendLine(metaInfo.IsNet8 
-            ? $"        public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref {classGlobalName}{paraNullable} value)"
-            : $"        public override void CalculateOffset(ref LuminPackEvaluator evaluator, ref {classGlobalName}{paraNullable} value)");
-        sb.AppendLine("        {");
-        if (!data.isValueType)
-        {
-            sb.AppendLine("            if (value is null)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                evaluator += 1;");
-            sb.AppendLine("                return;");
-            sb.AppendLine("            }");
-        }
-        sb.AppendLine();
-        sb.AppendLine("            int size = 1;");
-        sb.AppendLine();
-        sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
-        foreach (var field in data.fields)
-        {
-            if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
-            {
-                sb.AppendLine($"            size += Unsafe.SizeOf<{field.TypeName}>() + LuminPackEvaluator.CalculateVarInt(Unsafe.SizeOf<{field.TypeName}>());");
-            }
-            else
-            {
-                sb.AppendLine($"            var {field.Name}TempLength = evaluator.Value;");
-                sb.AppendLine($"            evaluator.CalculateValue(local.@{field.Name});");
-                sb.AppendLine($"            size += LuminPackEvaluator.CalculateVarInt(evaluator.Value - {field.Name}TempLength);");
-            }
-            
-        }
-        sb.AppendLine();
-        sb.AppendLine("            evaluator += size;");
-        sb.AppendLine("        }");
-        
-        sb.AppendLine();
-        switch (data.structLayout)
-        {
-            case StructLayout.Explicit : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Explicit)]"); break;
-            case StructLayout.Auto : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Auto)]"); break;
-            case StructLayout.Sequential : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Sequential)]"); break;
-            case StructLayout.Default : break;
-        }
-        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-        sb.AppendLine(data.isValueType 
-            ? $"        private struct Local{data.classFullName}" 
-            : $"        private sealed class Local{data.classFullName}");
-        sb.AppendLine("        {");
-        foreach (var field in data.localFields)
-        {
-            if (data.structLayout is StructLayout.Explicit)
-                sb.AppendLine($"            [global::System.Runtime.InteropServices.FieldOffset({field.filedOffset})]");
-            var nullable = LuminPackCodeGenerator.IsUnmanagedFiledType(field.TypeName) || field.IsValue ? string.Empty : "?";
-            sb.AppendLine($"            internal {field.TypeName}{nullable} {field.Name};");
-        }
-            
-        sb.AppendLine("        }");
-            
-        sb.AppendLine();
-        sb.AppendLine("    }");
-        sb.AppendLine("}");
     }
-    
-    
 }
