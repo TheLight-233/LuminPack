@@ -85,6 +85,11 @@ public static class LuminPackExtensionGenerator
             if (data.generatorType is GeneratorType.Object)
             {
                 LuminPackCodeGenerator.GenerateLocalClassStructure(sb, data, analyzedTypes);
+                
+                foreach (var filed in data.fields.Where(x => x.ClassFields.Count > 0))
+                {
+                    LuminPackCodeGenerator.GeneratorUnsafeAccessorMethod(sb, filed, filed.ClassFields);
+                }
             }
         }
 
