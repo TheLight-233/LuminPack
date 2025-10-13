@@ -288,132 +288,8 @@ namespace LuminPack.Code.Core
                 : $"        public override void Serialize(ref LuminPackWriter writer, ref {classGlobalName}{paraNullable} value)");
             sb.AppendLine("        {");
             
-            foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerializing))
-            {
-                sb.AppendLine(item.Item3
-                    ? $"            {classGlobalName}.{item.Item1}();"
-                    : $"            value?.{item.Item1}();");
-            }
-            sb.AppendLine();
+            GenerateSerializeCode(data, sb);
             
-            if (!_dataInfo.isValueType)
-            {
-                sb.AppendLine("            if (value is null)");
-                sb.AppendLine("            {");
-                sb.AppendLine("                writer.WriteNullObjectHeader();");
-                sb.AppendLine("                writer.Advance(1);");
-                sb.AppendLine("                return;");
-                sb.AppendLine("            }");
-            }
-            
-            sb.AppendLine();
-            if (_dataInfo.fields.Count(x => x.IsPrivate) > 0)
-            {
-                sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
-            }
-            sb.AppendLine("            ref int offset = ref writer.GetCurrentSpanOffset();");
-            sb.AppendLine($"            writer.WriteObjectHeader(ref offset, {data.fields.Count});");
-            sb.AppendLine($"            writer.Advance(1);");
-            //sb.AppendLine("            var span = writer.GetSpan();");
-            sb.AppendLine();
-
-            for (var i = 0; i < data.fields.Count; i++)
-            {
-                var access = data.fields[i].IsPrivate ? "local" : "value";
-                
-                if (data.fields[i].FieldType is LuminDataType.Reference && data.fields[i].Type is not LuminFiledType.Other)
-                {
-                    sb.AppendLine($"            if ({access}.{data.fields[i].Name} != null)");
-                    sb.AppendLine("            {");
-                    GenerateSerializeCode(sb, data.fields[i], $"{access}." + data.fields[i].Name, "span", "offset", 4, 0);
-                    if (data.fields[i].Type is not LuminFiledType.Class)
-                    {
-                        if (data.fields[i].Type is LuminFiledType.Array or LuminFiledType.List)
-                            //sb.AppendLine($"                offset = {GetFieldLength(data.fields[i], 0, pattern: "writer")};");
-                            sb.AppendLine($"                writer.FlushCurrentIndex({GetFieldLength(data.fields[i], 0, pattern: "writer")});");
-                        else 
-                            //sb.AppendLine($"                offset += {GetFieldLength(data.fields[i], 0, pattern: "writer")};");
-                            sb.AppendLine($"                writer.Advance({GetFieldLength(data.fields[i], 0, pattern: "writer")});");
-                    }
-                        
-                    sb.AppendLine("            }");
-
-                    switch (data.fields[i].Type)
-                    {
-                        case LuminFiledType.Array or LuminFiledType.List:
-                            sb.AppendLine("            else");
-                            sb.AppendLine("            {");
-                            sb.AppendLine("                writer.WriteNullCollectionHeader(ref offset);");
-                            
-                            sb.AppendLine("                offset += 4;");
-                            sb.AppendLine("            }"); break;
-                        case LuminFiledType.String:
-                            sb.AppendLine("            else");
-                            sb.AppendLine("            {");
-                            sb.AppendLine("                writer.WriteNullStringHeader(ref offset);");
-                            
-                            sb.AppendLine("                offset += writer.StringRecordLength();");
-                            sb.AppendLine("            }"); break;
-                        default:
-                            sb.AppendLine("            else");
-                            sb.AppendLine("            {");
-                            sb.AppendLine("                writer.WriteNullObjectHeader(ref offset);");
-                            
-                            sb.AppendLine("                offset += 1;");
-                            sb.AppendLine("            }"); break;
-                    }
-                    
-                }
-                else
-                {
-                    #region 连续值类型字段优化
-
-                    if (IsUnmanagedFiledType(data.fields[i].Type))
-                    {
-                        var num = FindNextUnmanagedType(data, i);
-
-                        if (num != i)
-                        {
-                            if (num - i >= 14)
-                            {
-                                num = i + 14;
-                            }
-                            
-                            sb.Append("            writer.Advance(writer.WriteUnmanaged(ref offset");
-                            for (var j = i; j <= num; j++)
-                            {
-                                
-                                sb.Append($", {access}.{data.fields[j].Name}");
-                            }
-                            sb.Append("));");
-                            sb.AppendLine();
-                            i = num;
-                            continue;
-                            
-                        }
-                    }
-                    
-                    #endregion
-                    
-                    
-                    GenerateSerializeCode(sb, data.fields[i], $"{access}." + data.fields[i].Name, "span", "offset", 3, 0);
-                    
-                    
-                    if (data.fields[i].Type is not LuminFiledType.Struct and not LuminFiledType.Other) 
-                        //sb.AppendLine($"            offset += {GetFieldLength(data.fields[i], 0, pattern: "writer")};");
-                        sb.AppendLine($"            writer.Advance({GetFieldLength(data.fields[i], 0, pattern: "writer")});");
-                    
-                }
-                    
-            }
-            
-            foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerialized))
-            {
-                sb.AppendLine(item.Item3
-                    ? $"            {classGlobalName}.{item.Item1}();"
-                    : $"            value?.{item.Item1}();");
-            }
-            sb.AppendLine();
             sb.AppendLine("        }");
 
             sb.AppendLine();
@@ -454,136 +330,7 @@ namespace LuminPack.Code.Core
                 : $"        public override void Deserialize(ref LuminPackReader reader, ref {classGlobalName}{paraNullable} value)");
             sb.AppendLine("        {");
             
-            sb.AppendLine();
-            foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserializing))
-            {
-                sb.AppendLine(item.Item3
-                    ? $"            {classGlobalName}.{item.Item1}();"
-                    : $"            value?.{item.Item1}();");
-            }
-            
-            //if (!_dataInfo.isValueType) 
-            //sb.AppendLine($"            if (value is null) value = new {data.classFullName}();");
-            sb.AppendLine();
-            sb.AppendLine("            ref int offset = ref reader.GetCurrentSpanOffset();");
-            //sb.AppendLine("            var span = reader.GetSpan();");
-            sb.AppendLine($"            value = ({classGlobalName}) System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof({classGlobalName}));");
-            //sb.AppendLine($"            value = new {classGlobalName}();");
-            sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
-            if (_dataInfo.fields.Count(x => x.IsPrivate) > 0)
-            {
-                //sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{data.classFullName}, Local{data.classFullName}>(ref value);");
-            }
-
-            sb.AppendLine();
-            sb.AppendLine($"            if (reader.PeekIsNullObject(ref offset))");
-            sb.AppendLine($"            {{");
-            sb.AppendLine($"                offset += 1;");
-            sb.AppendLine($"                return;");
-            sb.AppendLine($"            }}");
-            sb.AppendLine($"            offset += 1;");
-            sb.AppendLine();
-            for (var i = 0; i < data.fields.Count; i++)
-            {
-                var access = "local";
-                
-                if (data.fields[i].FieldType is LuminDataType.Reference && data.fields[i].Type is not LuminFiledType.Other)
-                {
-                    switch (data.fields[i].Type)
-                    {
-                        case LuminFiledType.Array or LuminFiledType.List:
-                            sb.AppendLine("            if (reader.PeekIsNullCollection(ref offset))");
-                            sb.AppendLine("            {");
-                            sb.AppendLine("                offset += 4;");
-                            sb.AppendLine("            }");
-                            sb.AppendLine("            else");
-                            sb.AppendLine("            {");
-                            GenerateDeserializeCode(sb, data.fields[i], access, "span", "offset", 4, 0);
-                    
-                            if(data.fields[i].Type is not LuminFiledType.String)  
-                                sb.AppendLine($"                offset = {GetFieldLength(data.fields[i], 0, pattern: "reader")};");
-                            sb.AppendLine("            }");
-                            break;
-                        case LuminFiledType.String:
-                            sb.AppendLine("            if (reader.PeekIsNullString(ref offset))");
-                            sb.AppendLine("            {");
-                            sb.AppendLine("                offset += reader.StringRecordLength();");
-                            sb.AppendLine("            }");
-                            sb.AppendLine("            else");
-                            sb.AppendLine("            {");
-                            GenerateDeserializeCode(sb, data.fields[i], access, "span", "offset", 4, 0);
-                    
-                            if(data.fields[i].Type is not LuminFiledType.String) 
-                                sb.AppendLine($"                offset += {GetFieldLength(data.fields[i], 0, pattern: "reader")};");
-                            sb.AppendLine("            }");
-                            break;
-                        default:
-                            sb.AppendLine("            if (reader.PeekIsNullObject(ref offset))");
-                            sb.AppendLine("            {");
-                            sb.AppendLine("                offset += 1;");
-                            sb.AppendLine("            }");
-                            sb.AppendLine("            else");
-                            sb.AppendLine("            {");
-                            GenerateDeserializeCode(sb, data.fields[i], access, "span", "offset", 4, 0);
-                            
-                            if(data.fields[i].Type is not LuminFiledType.String and not LuminFiledType.Class) 
-                                sb.AppendLine($"                offset += {GetFieldLength(data.fields[i], 0, pattern: "reader")};");
-                            sb.AppendLine("            }");
-                            break;
-                    }
-                }
-                else
-                {
-                    
-                    #region 连续值类型字段优化
-
-                    if (IsUnmanagedFiledType(data.fields[i].Type))
-                    {
-                        var num = FindNextUnmanagedType(data, i);
-
-                        if (num != i)
-                        {
-                            if (num - i >= 14)
-                            {
-                                num = i + 14;
-                            }
-                            
-                            sb.Append("            offset += reader.ReadUnmanaged(ref offset");
-                            for (var j = i; j <= num; j++)
-                            {
-                                
-                                sb.Append($", out {access}.{data.fields[j].Name}");
-                            }
-                            sb.Append(");");
-                            sb.AppendLine();
-                            i = num;
-                            continue;
-                            
-                        }
-                    }
-                    
-                    #endregion
-                    
-                    GenerateDeserializeCode(sb, data.fields[i], access, "span", "offset", 3, 0);
-                    
-                    if (data.fields[i].Type is LuminFiledType.String or LuminFiledType.Struct) continue;
-                    
-                    if (data.fields[i].Type is not LuminFiledType.Other) 
-                        sb.AppendLine($"            offset += {GetFieldLength(data.fields[i], 0, pattern: "reader")};");
-                }
-                
-            }
-            //sb.AppendLine($"            value = LuminPackMarshal.As<Local{data.classFullName}, {classGlobalName}>(ref local);");
-            //sb.AppendLine("            reader.FlushCurrentIndex(offset);");
-            
-            sb.AppendLine();
-            foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserialized))
-            {
-                sb.AppendLine(item.Item3
-                    ? $"            {classGlobalName}.{item.Item1}();"
-                    : $"            value?.{item.Item1}();");
-            }
-            sb.AppendLine();
+            GenerateDeserializeCode(data, sb);
             
             sb.AppendLine("        }");
             
@@ -2830,7 +2577,7 @@ namespace LuminPack.Code.Core
             }
         }
         
-        private static void GenerateLocalClassStructure(StringBuilder sb, LuminDataInfo dataInfo)
+        public static void GenerateLocalClassStructure(StringBuilder sb, LuminDataInfo dataInfo)
         {
             var allClassInfos = new List<LuminDataInfo>();
             var current = dataInfo.Parent;
@@ -2847,6 +2594,28 @@ namespace LuminPack.Code.Core
             foreach (var classInfo in allClassInfos)
             {
                 GenerateParentClass(sb, classInfo, dataInfo.localFields);
+            }
+        }
+        
+        public static void GenerateLocalClassStructure(StringBuilder sb, LuminDataInfo dataInfo, HashSet<string> set)
+        {
+            var allClassInfos = new List<LuminDataInfo>();
+            var current = dataInfo.Parent;
+    
+            while (current != null)
+            {
+                allClassInfos.Add(current);
+                current = current.Parent;
+            }
+            
+            if (set.Add($"global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.Local{dataInfo.classFullName}")) 
+                GenerateSingleLocalClass(sb, dataInfo);
+
+            // 为每个父类生成 Local
+            foreach (var classInfo in allClassInfos)
+            {
+                if (set.Add($"global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.Local{classInfo.classFullName}")) 
+                    GenerateParentClass(sb, classInfo, dataInfo.localFields);
             }
         }
 
@@ -2924,7 +2693,7 @@ namespace LuminPack.Code.Core
             sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
             sb.AppendLine(classInfo.isValueType 
                 ? $"        private struct Local{classInfo.classFullName}{inheritance}" 
-                : $"        private sealed class Local{classInfo.classFullName}{inheritance}");
+                : $"        private class Local{classInfo.classFullName}{inheritance}");
             sb.AppendLine("        {");
             
             foreach (var field in GetMyLocalFiled(classInfo))
@@ -2961,6 +2730,307 @@ namespace LuminPack.Code.Core
             }
             
             return localFields;
+        }
+
+        public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb)
+        {
+            string classFullName = data.className + "Parser";
+            string classGlobalName = data.classFullName;
+            string parserName = data.className + "Parser";
+            if (data.isGeneric)
+            {
+                classFullName += $"<{_dataInfo.GenericParameters.FirstOrDefault()}";
+                for(var i = 1; i < data.GenericParameters.Count; i++)
+                {
+                    classFullName += "," + data.GenericParameters[i];
+                }
+                classFullName += ">";
+            }
+
+            if (!classGlobalName.Contains(".") && data.classNameSpace != "<global namespace>")
+            {
+                classGlobalName = "global::" + data.classNameSpace + "." + data.classFullName;
+            }
+            
+            foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerializing))
+            {
+                sb.AppendLine(item.Item3
+                    ? $"            {classGlobalName}.{item.Item1}();"
+                    : $"            value?.{item.Item1}();");
+            }
+            sb.AppendLine();
+            
+            if (!_dataInfo.isValueType)
+            {
+                sb.AppendLine("            if (value is null)");
+                sb.AppendLine("            {");
+                sb.AppendLine("                writer.WriteNullObjectHeader();");
+                sb.AppendLine("                writer.Advance(1);");
+                sb.AppendLine("                return;");
+                sb.AppendLine("            }");
+            }
+            
+            sb.AppendLine();
+            if (_dataInfo.fields.Count(x => x.IsPrivate) > 0)
+            {
+                sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
+            }
+            sb.AppendLine("            ref int offset = ref writer.GetCurrentSpanOffset();");
+            sb.AppendLine($"            writer.WriteObjectHeader(ref offset, {data.fields.Count});");
+            sb.AppendLine($"            writer.Advance(1);");
+            //sb.AppendLine("            var span = writer.GetSpan();");
+            sb.AppendLine();
+
+            for (var i = 0; i < data.fields.Count; i++)
+            {
+                var access = data.fields[i].IsPrivate ? "local" : "value";
+                
+                if (data.fields[i].FieldType is LuminDataType.Reference && data.fields[i].Type is not LuminFiledType.Other)
+                {
+                    sb.AppendLine($"            if ({access}.{data.fields[i].Name} != null)");
+                    sb.AppendLine("            {");
+                    GenerateSerializeCode(sb, data.fields[i], $"{access}." + data.fields[i].Name, "span", "offset", 4, 0);
+                    if (data.fields[i].Type is not LuminFiledType.Class)
+                    {
+                        if (data.fields[i].Type is LuminFiledType.Array or LuminFiledType.List)
+                            //sb.AppendLine($"                offset = {GetFieldLength(data.fields[i], 0, pattern: "writer")};");
+                            sb.AppendLine($"                writer.FlushCurrentIndex({GetFieldLength(data.fields[i], 0, pattern: "writer")});");
+                        else 
+                            //sb.AppendLine($"                offset += {GetFieldLength(data.fields[i], 0, pattern: "writer")};");
+                            sb.AppendLine($"                writer.Advance({GetFieldLength(data.fields[i], 0, pattern: "writer")});");
+                    }
+                        
+                    sb.AppendLine("            }");
+
+                    switch (data.fields[i].Type)
+                    {
+                        case LuminFiledType.Array or LuminFiledType.List:
+                            sb.AppendLine("            else");
+                            sb.AppendLine("            {");
+                            sb.AppendLine("                writer.WriteNullCollectionHeader(ref offset);");
+                            
+                            sb.AppendLine("                offset += 4;");
+                            sb.AppendLine("            }"); break;
+                        case LuminFiledType.String:
+                            sb.AppendLine("            else");
+                            sb.AppendLine("            {");
+                            sb.AppendLine("                writer.WriteNullStringHeader(ref offset);");
+                            
+                            sb.AppendLine("                offset += writer.StringRecordLength();");
+                            sb.AppendLine("            }"); break;
+                        default:
+                            sb.AppendLine("            else");
+                            sb.AppendLine("            {");
+                            sb.AppendLine("                writer.WriteNullObjectHeader(ref offset);");
+                            
+                            sb.AppendLine("                offset += 1;");
+                            sb.AppendLine("            }"); break;
+                    }
+                    
+                }
+                else
+                {
+                    #region 连续值类型字段优化
+
+                    if (IsUnmanagedFiledType(data.fields[i].Type))
+                    {
+                        var num = FindNextUnmanagedType(data, i);
+
+                        if (num != i)
+                        {
+                            if (num - i >= 14)
+                            {
+                                num = i + 14;
+                            }
+                            
+                            sb.Append("            writer.Advance(writer.WriteUnmanaged(ref offset");
+                            for (var j = i; j <= num; j++)
+                            {
+                                
+                                sb.Append($", {access}.{data.fields[j].Name}");
+                            }
+                            sb.Append("));");
+                            sb.AppendLine();
+                            i = num;
+                            continue;
+                            
+                        }
+                    }
+                    
+                    #endregion
+                    
+                    
+                    GenerateSerializeCode(sb, data.fields[i], $"{access}." + data.fields[i].Name, "span", "offset", 3, 0);
+                    
+                    
+                    if (data.fields[i].Type is not LuminFiledType.Struct and not LuminFiledType.Other) 
+                        //sb.AppendLine($"            offset += {GetFieldLength(data.fields[i], 0, pattern: "writer")};");
+                        sb.AppendLine($"            writer.Advance({GetFieldLength(data.fields[i], 0, pattern: "writer")});");
+                    
+                }
+                    
+            }
+            
+            foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerialized))
+            {
+                sb.AppendLine(item.Item3
+                    ? $"            {classGlobalName}.{item.Item1}();"
+                    : $"            value?.{item.Item1}();");
+            }
+            sb.AppendLine();
+        }
+
+        public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb)
+        {
+            
+            string classFullName = data.className + "Parser";
+            string classGlobalName = data.classFullName;
+            string parserName = data.className + "Parser";
+            if (data.isGeneric)
+            {
+                classFullName += $"<{_dataInfo.GenericParameters.FirstOrDefault()}";
+                for(var i = 1; i < data.GenericParameters.Count; i++)
+                {
+                    classFullName += "," + data.GenericParameters[i];
+                }
+                classFullName += ">";
+            }
+
+            if (!classGlobalName.Contains(".") && data.classNameSpace != "<global namespace>")
+            {
+                classGlobalName = "global::" + data.classNameSpace + "." + data.classFullName;
+            }
+            
+            sb.AppendLine();
+            foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserializing))
+            {
+                sb.AppendLine(item.Item3
+                    ? $"            {classGlobalName}.{item.Item1}();"
+                    : $"            value?.{item.Item1}();");
+            }
+            
+            //if (!_dataInfo.isValueType) 
+            //sb.AppendLine($"            if (value is null) value = new {data.classFullName}();");
+            sb.AppendLine();
+            sb.AppendLine("            ref int offset = ref reader.GetCurrentSpanOffset();");
+            //sb.AppendLine("            var span = reader.GetSpan();");
+            sb.AppendLine($"            value = ({classGlobalName}) System.Runtime.CompilerServices.RuntimeHelpers.GetUninitializedObject(typeof({classGlobalName}));");
+            //sb.AppendLine($"            value = new {classGlobalName}();");
+            sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
+            if (_dataInfo.fields.Count(x => x.IsPrivate) > 0)
+            {
+                //sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{data.classFullName}, Local{data.classFullName}>(ref value);");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine($"            if (reader.PeekIsNullObject(ref offset))");
+            sb.AppendLine($"            {{");
+            sb.AppendLine($"                offset += 1;");
+            sb.AppendLine($"                return;");
+            sb.AppendLine($"            }}");
+            sb.AppendLine($"            offset += 1;");
+            sb.AppendLine();
+            for (var i = 0; i < data.fields.Count; i++)
+            {
+                var access = "local";
+                
+                if (data.fields[i].FieldType is LuminDataType.Reference && data.fields[i].Type is not LuminFiledType.Other)
+                {
+                    switch (data.fields[i].Type)
+                    {
+                        case LuminFiledType.Array or LuminFiledType.List:
+                            sb.AppendLine("            if (reader.PeekIsNullCollection(ref offset))");
+                            sb.AppendLine("            {");
+                            sb.AppendLine("                offset += 4;");
+                            sb.AppendLine("            }");
+                            sb.AppendLine("            else");
+                            sb.AppendLine("            {");
+                            GenerateDeserializeCode(sb, data.fields[i], access, "span", "offset", 4, 0);
+                    
+                            if(data.fields[i].Type is not LuminFiledType.String)  
+                                sb.AppendLine($"                offset = {GetFieldLength(data.fields[i], 0, pattern: "reader")};");
+                            sb.AppendLine("            }");
+                            break;
+                        case LuminFiledType.String:
+                            sb.AppendLine("            if (reader.PeekIsNullString(ref offset))");
+                            sb.AppendLine("            {");
+                            sb.AppendLine("                offset += reader.StringRecordLength();");
+                            sb.AppendLine("            }");
+                            sb.AppendLine("            else");
+                            sb.AppendLine("            {");
+                            GenerateDeserializeCode(sb, data.fields[i], access, "span", "offset", 4, 0);
+                    
+                            if(data.fields[i].Type is not LuminFiledType.String) 
+                                sb.AppendLine($"                offset += {GetFieldLength(data.fields[i], 0, pattern: "reader")};");
+                            sb.AppendLine("            }");
+                            break;
+                        default:
+                            sb.AppendLine("            if (reader.PeekIsNullObject(ref offset))");
+                            sb.AppendLine("            {");
+                            sb.AppendLine("                offset += 1;");
+                            sb.AppendLine("            }");
+                            sb.AppendLine("            else");
+                            sb.AppendLine("            {");
+                            GenerateDeserializeCode(sb, data.fields[i], access, "span", "offset", 4, 0);
+                            
+                            if(data.fields[i].Type is not LuminFiledType.String and not LuminFiledType.Class) 
+                                sb.AppendLine($"                offset += {GetFieldLength(data.fields[i], 0, pattern: "reader")};");
+                            sb.AppendLine("            }");
+                            break;
+                    }
+                }
+                else
+                {
+                    
+                    #region 连续值类型字段优化
+
+                    if (IsUnmanagedFiledType(data.fields[i].Type))
+                    {
+                        var num = FindNextUnmanagedType(data, i);
+
+                        if (num != i)
+                        {
+                            if (num - i >= 14)
+                            {
+                                num = i + 14;
+                            }
+                            
+                            sb.Append("            offset += reader.ReadUnmanaged(ref offset");
+                            for (var j = i; j <= num; j++)
+                            {
+                                
+                                sb.Append($", out {access}.{data.fields[j].Name}");
+                            }
+                            sb.Append(");");
+                            sb.AppendLine();
+                            i = num;
+                            continue;
+                            
+                        }
+                    }
+                    
+                    #endregion
+                    
+                    GenerateDeserializeCode(sb, data.fields[i], access, "span", "offset", 3, 0);
+                    
+                    if (data.fields[i].Type is LuminFiledType.String or LuminFiledType.Struct) continue;
+                    
+                    if (data.fields[i].Type is not LuminFiledType.Other) 
+                        sb.AppendLine($"            offset += {GetFieldLength(data.fields[i], 0, pattern: "reader")};");
+                }
+                
+            }
+            //sb.AppendLine($"            value = LuminPackMarshal.As<Local{data.classFullName}, {classGlobalName}>(ref local);");
+            //sb.AppendLine("            reader.FlushCurrentIndex(offset);");
+            
+            sb.AppendLine();
+            foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserialized))
+            {
+                sb.AppendLine(item.Item3
+                    ? $"            {classGlobalName}.{item.Item1}();"
+                    : $"            value?.{item.Item1}();");
+            }
+            sb.AppendLine();
         }
         
     }
