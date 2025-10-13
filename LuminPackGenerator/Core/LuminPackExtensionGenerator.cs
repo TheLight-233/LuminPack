@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using LuminPack.SourceGenerator;
@@ -8,8 +9,6 @@ namespace LuminPack.Code.Core;
 
 public static class LuminPackExtensionGenerator
 {
-    const string LuminPackGlobalExtension = "LuminPack.GlobalExtension.631798131";
-    
     public static ConditionalWeakTable<Compilation, HashSet<string>> AnalyzedTypes = new();
     
     public static string CodeGenerator(LuminDataInfo data, MetaInfo metaInfo, Compilation compilation)
@@ -21,39 +20,75 @@ public static class LuminPackExtensionGenerator
         HashSet<string> currentGenerationTypes = new HashSet<string>();
         
         sb.AppendLine();
-
-        if (analyzedTypes.Add(LuminPackGlobalExtension))
-        {
-            GeneratorGlobalMethod(sb);
-        }
         
-        foreach (var localField in data.localFields)
+        // foreach (var localField in data.localFields)
+        // {
+        //     string fieldType = localField.TypeName;
+        //     if (data.GenericParameters.Contains(fieldType))
+        //         continue;
+        //     
+        //     if (!analyzedTypes.Contains(fieldType) && !currentGenerationTypes.Contains(fieldType))
+        //     {
+        //         currentGenerationTypes.Add(fieldType);
+        //         analyzedTypes.Add(fieldType);
+        //         
+        //         // 生成Writer扩展方法
+        //         sb.AppendLine($"    public static void WriteValue(ref this LuminPackWriter writer, scoped in {fieldType} value)");
+        //         sb.AppendLine("    {");
+        //         sb.AppendLine("        // TODO: 实现序列化逻辑");
+        //         sb.AppendLine("    }");
+        //         sb.AppendLine();
+        //         
+        //         // 生成Reader扩展方法
+        //         sb.AppendLine($"    public static void ReadValue(ref this LuminPackReader reader, scoped ref {fieldType} value)");
+        //         sb.AppendLine("    {");
+        //         sb.AppendLine("        // TODO: 实现反序列化逻辑");
+        //         sb.AppendLine("        value = default;");
+        //         sb.AppendLine("    }");
+        //         sb.AppendLine();
+        //     }
+        // }
+
+        #region 生成自己
+
+        string classFullName = data.className + "Parser";
+        string classGlobalName = data.classFullName;
+        if (data.isGeneric)
         {
-            string fieldType = localField.TypeName;
-            if (data.GenericParameters.Contains(fieldType))
-                continue;
-            
-            if (!analyzedTypes.Contains(fieldType) && !currentGenerationTypes.Contains(fieldType))
+            classFullName += $"<{data.GenericParameters.FirstOrDefault()}";
+            for(var i = 1; i < data.GenericParameters.Count; i++)
             {
-                currentGenerationTypes.Add(fieldType);
-                analyzedTypes.Add(fieldType);
-                
-                // 生成Writer扩展方法
-                sb.AppendLine($"    public static void WriteValue(ref this LuminPackWriter writer, scoped in {fieldType} value)");
-                sb.AppendLine("    {");
-                sb.AppendLine("        // TODO: 实现序列化逻辑");
-                sb.AppendLine("    }");
-                sb.AppendLine();
-                
-                // 生成Reader扩展方法
-                sb.AppendLine($"    public static void ReadValue(ref this LuminPackReader reader, scoped ref {fieldType} value)");
-                sb.AppendLine("    {");
-                sb.AppendLine("        // TODO: 实现反序列化逻辑");
-                sb.AppendLine("        value = default;");
-                sb.AppendLine("    }");
-                sb.AppendLine();
+                classFullName += "," + data.GenericParameters[i];
+            }
+            classFullName += ">";
+        }
+
+        if (!classGlobalName.Contains(".") && data.classNameSpace != "<global namespace>")
+        {
+            classGlobalName = "global::" + data.classNameSpace + "." + data.classFullName;
+        }
+
+        if (analyzedTypes.Add(classGlobalName) && currentGenerationTypes.Add(classGlobalName))
+        {
+            sb.AppendLine($"    public static void WriteValue(ref this LuminPackWriter writer, scoped in {classGlobalName} value)");
+            sb.AppendLine("    {");
+            GenerateMyselfSerialize(data, sb);
+            sb.AppendLine("    }");
+            sb.AppendLine();
+            
+            sb.AppendLine($"    public static void ReadValue(ref this LuminPackReader reader, scoped ref {classGlobalName} value)");
+            sb.AppendLine("    {");
+            GenerateMyselfDeserialize(data, sb);
+            sb.AppendLine("    }");
+            sb.AppendLine();
+
+            if (data.generatorType is GeneratorType.Object)
+            {
+                LuminPackCodeGenerator.GenerateLocalClassStructure(sb, data, analyzedTypes);
             }
         }
+
+        #endregion
         
         return GenerateExtension(sb);
     }
@@ -67,7 +102,18 @@ public static class LuminPackExtensionGenerator
             
         StringBuilder fullCode = new StringBuilder();
         
-        fullCode.AppendLine("using LuminPack.Core;");
+        fullCode.AppendLine("using global::System;");
+        fullCode.AppendLine("using global::System.Collections.Generic;");
+        fullCode.AppendLine("using global::System.Runtime.CompilerServices;");
+        fullCode.AppendLine("using global::System.Runtime.InteropServices;");
+        fullCode.AppendLine("using global::System.Threading.Tasks;");
+        fullCode.AppendLine("using global::LuminPack;");
+        fullCode.AppendLine("using global::LuminPack.Data;");
+        fullCode.AppendLine("using global::LuminPack.Code;");
+        fullCode.AppendLine("using global::LuminPack.Core;");
+        fullCode.AppendLine("using global::LuminPack.Parsers;");
+        fullCode.AppendLine("using global::LuminPack.Utility;");
+        fullCode.AppendLine("using global::LuminPack.Attribute;");
         fullCode.AppendLine();
         fullCode.AppendLine($"namespace {LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE};");
         fullCode.AppendLine();
@@ -78,20 +124,36 @@ public static class LuminPackExtensionGenerator
         
         return fullCode.ToString();
     }
-
-    private static void GeneratorGlobalMethod(StringBuilder sb)
+    
+    private static void GenerateMyselfSerialize(LuminDataInfo data, StringBuilder sb)
     {
-        sb.AppendLine("    public static void WriteValue<T>(ref this LuminPackWriter writer, scoped in T value)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref System.Runtime.CompilerServices.Unsafe.AsRef(in value));");
-        sb.AppendLine("    }");
-        sb.AppendLine();
+        if (data.isUnion)
+        {
+            LuminPackUnionCodeGenerator.GenerateSerializeCode(data, sb);
+            return;
+        }
         
-        sb.AppendLine("    public static void ReadValue<T>(ref this LuminPackReader reader, scoped ref T value)");
-        sb.AppendLine("    {");
-        sb.AppendLine("        LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref value);");
-        sb.AppendLine("    }");
-        sb.AppendLine();
+        switch (data.generatorType)
+        {
+            case GeneratorType.Object : LuminPackCodeGenerator.GenerateSerializeCode(data, sb); break;
+            case GeneratorType.CircleReference : LuminPackCircleReferenceCodeGenerator.GenerateSerializeCode(data, sb); break;
+            case GeneratorType.VersionTolerant : LuminPackVersionTolerantCodeGenerator.GenerateSerializeCode(data, sb); break;
+        }
     }
     
+    private static void GenerateMyselfDeserialize(LuminDataInfo data, StringBuilder sb)
+    {
+        if (data.isUnion)
+        {
+            LuminPackUnionCodeGenerator.GenerateDeserializeCode(data, sb);
+            return;
+        }
+        
+        switch (data.generatorType)
+        {
+            case GeneratorType.Object : LuminPackCodeGenerator.GenerateDeserializeCode(data, sb); break;
+            case GeneratorType.CircleReference : LuminPackCircleReferenceCodeGenerator.GenerateDeserializeCode(data, sb); break;
+            case GeneratorType.VersionTolerant : LuminPackVersionTolerantCodeGenerator.GenerateDeserializeCode(data, sb); break;
+        }
+    }
 }
