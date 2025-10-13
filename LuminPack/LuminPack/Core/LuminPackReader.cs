@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -467,11 +467,11 @@ namespace LuminPack.Core
             }
         }
         
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void ReadValue<T>(scoped ref T? value)
-        {
-            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref value);
-        }
+        // [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        // public void ReadValue<T>(scoped ref T? value)
+        // {
+        //     LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref value);
+        // }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T? ReadValue<T>()
