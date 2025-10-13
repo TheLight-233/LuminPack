@@ -2557,7 +2557,7 @@ namespace LuminPack.Code.Core
             return sb.ToString();
         }
 
-        private static void GeneratorUnsafeAccessorMethod(StringBuilder sb, LuminDataField baseField, List<LuminDataField> fileds)
+        public static void GeneratorUnsafeAccessorMethod(StringBuilder sb, LuminDataField baseField, List<LuminDataField> fileds)
         {
             foreach (var filed in fileds)
             {
