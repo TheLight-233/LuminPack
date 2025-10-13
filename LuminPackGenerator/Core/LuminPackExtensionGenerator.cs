@@ -70,16 +70,16 @@ public static class LuminPackExtensionGenerator
 
         if (analyzedTypes.Add(classGlobalName) && currentGenerationTypes.Add(classGlobalName))
         {
-            sb.AppendLine($"    public static void WriteValue(ref this LuminPackWriter writer, scoped in {classGlobalName} value)");
-            sb.AppendLine("    {");
+            sb.AppendLine($"        public static void WriteValue(ref this LuminPackWriter writer, scoped in {classGlobalName} value)");
+            sb.AppendLine("        {");
             GenerateMyselfSerialize(data, sb);
-            sb.AppendLine("    }");
+            sb.AppendLine("        }");
             sb.AppendLine();
             
-            sb.AppendLine($"    public static void ReadValue(ref this LuminPackReader reader, scoped ref {classGlobalName} value)");
-            sb.AppendLine("    {");
+            sb.AppendLine($"        public static void ReadValue(ref this LuminPackReader reader, scoped ref {classGlobalName} value)");
+            sb.AppendLine("        {");
             GenerateMyselfDeserialize(data, sb);
-            sb.AppendLine("    }");
+            sb.AppendLine("        }");
             sb.AppendLine();
 
             if (data.generatorType is GeneratorType.Object)
@@ -115,11 +115,13 @@ public static class LuminPackExtensionGenerator
         fullCode.AppendLine("using global::LuminPack.Utility;");
         fullCode.AppendLine("using global::LuminPack.Attribute;");
         fullCode.AppendLine();
-        fullCode.AppendLine($"namespace {LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE};");
-        fullCode.AppendLine();
-        fullCode.AppendLine("public static partial class LuminPackExtensions");
+        fullCode.AppendLine($"namespace {LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}");
         fullCode.AppendLine("{");
+        fullCode.AppendLine();
+        fullCode.AppendLine("    public static partial class LuminPackExtensions");
+        fullCode.AppendLine("    {");
         fullCode.Append(extensionCode);
+        fullCode.AppendLine("    }");
         fullCode.AppendLine("}");
         
         return fullCode.ToString();
