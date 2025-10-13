@@ -70,12 +70,16 @@ public static class LuminPackExtensionGenerator
 
         if (analyzedTypes.Add(classGlobalName) && currentGenerationTypes.Add(classGlobalName))
         {
+            sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
+            sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
             sb.AppendLine($"        public static void WriteValue(ref this LuminPackWriter writer, scoped in {classGlobalName} value)");
             sb.AppendLine("        {");
             GenerateMyselfSerialize(data, sb);
             sb.AppendLine("        }");
             sb.AppendLine();
             
+            sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
+            sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
             sb.AppendLine($"        public static void ReadValue(ref this LuminPackReader reader, scoped ref {classGlobalName} value)");
             sb.AppendLine("        {");
             GenerateMyselfDeserialize(data, sb);
