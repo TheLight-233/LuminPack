@@ -3,6 +3,8 @@ using LuminPack.Code;
 
 namespace LuminPack.SourceGenerator.Formatter;
 
+using static FormatterDiscovery;
+
 public static class ListFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
@@ -18,7 +20,7 @@ public static class ListFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            writer.WriteSpan(LuminPackMarshal.GetListSpan(ref value));");
+        sb.AppendLine("            writer.WriteSpan(LuminPackMarshal.GetListSpan(ref Unsafe.AsRef(in value)));");
     }
 
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
@@ -36,14 +38,14 @@ public static class ListFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = new List<T?>(length);");
+        sb.AppendLine($"                value = new List<{GetFirstGeneric(fieldData.TypeName)}?>(length);");
         sb.AppendLine("            }");
         sb.AppendLine("            else if (value.Count == length)");
         sb.AppendLine("            {");
         sb.AppendLine("                value.Clear();");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(ref value, length);");
+        sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(ref Unsafe.AsRef(in value), length);");
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(4);");
         sb.AppendLine("            reader.ReadSpan(ref index, length, ref span);");
@@ -65,23 +67,23 @@ public static class DictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;");
-        sb.AppendLine("            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;");
+        //sb.AppendLine("            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;");
+        //sb.AppendLine("            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
         sb.AppendLine("            nuint dictIndex = 0;");
-        sb.AppendLine("            var dictView = LuminPackMarshal.GetDictionaryView(ref value);");
+        sb.AppendLine("            var dictView = LuminPackMarshal.GetDictionaryView(ref Unsafe.AsRef(in value));");
         sb.AppendLine("            ref var arrayRef = ref LuminPackMarshal.GetArrayReference(dictView._entries);");
         sb.AppendLine();
         sb.AppendLine("            while ((uint) dictIndex < (uint) dictView._count)");
         sb.AppendLine("            {");
-        sb.AppendLine("                ref LuminPackMarshal.DictionaryView<TKey, TValue?>.Entry local = ref Unsafe.Add(ref arrayRef, dictIndex++);");
+        sb.AppendLine($"                ref LuminPackMarshal.DictionaryView<{GetFirstGeneric(fieldData.TypeName)}, {GetSecondGeneric(fieldData.TypeName)}?>.Entry local = ref Unsafe.Add(ref arrayRef, dictIndex++);");
         sb.AppendLine("                if (local.Next >= -1)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    keyParser!.Serialize(ref writer, ref local.Key;");
-        sb.AppendLine("                    valueParser!.Serialize(ref writer, ref local.Value);");
+        sb.AppendLine("                    writer.WriteValue(local.Key);");
+        sb.AppendLine("                    writer.WriteValue(local.Value);");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
     }
@@ -101,7 +103,7 @@ public static class DictionaryFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = new Dictionary<TKey, TValue?>(length, _equalityComparer);");
+        sb.AppendLine($"                value = new Dictionary<{GetFirstGeneric(fieldData.TypeName)}, {GetSecondGeneric(fieldData.TypeName)}?>(length);");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
@@ -109,8 +111,8 @@ public static class DictionaryFormatter
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(4);");
-        sb.AppendLine("            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;");
-        sb.AppendLine("            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;");
+        sb.AppendLine($"            var keyFormatter = LuminPackParseProvider.Cache<{GetFirstGeneric(fieldData.TypeName)}>.Parser!;");
+        sb.AppendLine($"            var valueFormatter = LuminPackParseProvider.Cache<{GetSecondGeneric(fieldData.TypeName)}>.Parser!;");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
         sb.AppendLine("                KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);");
