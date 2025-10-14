@@ -128,7 +128,9 @@ public static class LuminPackExtensionGenerator
             {
                 sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
                 sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
-                sb.AppendLine($"        public static void WriteValue(ref this LuminPackWriter writer, scoped in {v.TypeName} value)");
+                sb.AppendLine(metaInfo.IsNet8 
+                    ? $"        public static void WriteValue(ref this LuminPackWriter writer, scoped in {v.TypeName} value)"
+                    : $"        public static void WriteValue(ref this LuminPackWriter writer, in {v.TypeName} value)");
                 sb.AppendLine("        {");
                 formatter.Item1(v, sb);
                 sb.AppendLine("        }");
@@ -136,7 +138,9 @@ public static class LuminPackExtensionGenerator
             
                 sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
                 sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
-                sb.AppendLine($"        public static void ReadValue(ref this LuminPackReader reader, scoped ref {v.TypeName} value)");
+                sb.AppendLine(metaInfo.IsNet8 
+                    ? $"        public static void ReadValue(ref this LuminPackReader reader, scoped ref {v.TypeName} value)"
+                    : $"        public static void ReadValue(ref this LuminPackReader reader, ref {v.TypeName} value)");
                 sb.AppendLine("        {");
                 formatter.Item2(v, sb);
                 sb.AppendLine("        }");
@@ -171,7 +175,9 @@ public static class LuminPackExtensionGenerator
         {
             sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
             sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
-            sb.AppendLine($"        public static void WriteValue(ref this LuminPackWriter writer, scoped in {classGlobalName} value)");
+            sb.AppendLine(metaInfo.IsNet8 
+                ? $"        public static void WriteValue(ref this LuminPackWriter writer, scoped in {classGlobalName} value)"
+                : $"        public static void WriteValue(ref this LuminPackWriter writer, in {classGlobalName} value)");
             sb.AppendLine("        {");
             GenerateMyselfSerialize(data, sb);
             sb.AppendLine("        }");
@@ -179,7 +185,9 @@ public static class LuminPackExtensionGenerator
             
             sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
             sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
-            sb.AppendLine($"        public static void ReadValue(ref this LuminPackReader reader, scoped ref {classGlobalName} value)");
+            sb.AppendLine(metaInfo.IsNet8 
+                ? $"        public static void ReadValue(ref this LuminPackReader reader, scoped ref {classGlobalName} value)"
+                : $"        public static void ReadValue(ref this LuminPackReader reader, ref {classGlobalName} value)");
             sb.AppendLine("        {");
             GenerateMyselfDeserialize(data, sb);
             sb.AppendLine("        }");
