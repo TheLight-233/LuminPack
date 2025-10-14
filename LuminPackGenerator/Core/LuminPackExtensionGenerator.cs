@@ -117,33 +117,32 @@ public static class LuminPackExtensionGenerator
         
         sb.AppendLine();
 
-        // foreach (var v in data.localFields)
-        // {
-        //     var formatter = FormatterDiscovery.GetFormatter(v.TypeName);
-        //
-        //     if (analyzedTypes.Add(v.TypeName) && 
-        //         currentGenerationTypes.Add(v.Name) &&
-        //         formatter.Item1 != null && 
-        //         formatter.Item2 != null)
-        //     {
-        //         sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
-        //         sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
-        //         sb.AppendLine($"        public static void WriteValue(ref this LuminPackWriter writer, scoped in {v.TypeName} value)");
-        //         sb.AppendLine("        {");
-        //         sb.AppendLine("            value = ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in value);");
-        //         formatter.Item1(sb);
-        //         sb.AppendLine("        }");
-        //         sb.AppendLine();
-        //     
-        //         sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
-        //         sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
-        //         sb.AppendLine($"        public static void ReadValue(ref this LuminPackReader reader, scoped ref {v.TypeName} value)");
-        //         sb.AppendLine("        {");
-        //         formatter.Item2(sb);
-        //         sb.AppendLine("        }");
-        //         sb.AppendLine();
-        //     }
-        // }
+        foreach (var v in data.localFields)
+        {
+            var formatter = FormatterDiscovery.GetFormatter(v.TypeName);
+        
+            if (analyzedTypes.Add(v.TypeName) && 
+                currentGenerationTypes.Add(v.Name) &&
+                formatter.Item1 != null && 
+                formatter.Item2 != null)
+            {
+                sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
+                sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+                sb.AppendLine($"        public static void WriteValue(ref this LuminPackWriter writer, scoped in {v.TypeName} value)");
+                sb.AppendLine("        {");
+                formatter.Item1(v, sb);
+                sb.AppendLine("        }");
+                sb.AppendLine();
+            
+                sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
+                sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+                sb.AppendLine($"        public static void ReadValue(ref this LuminPackReader reader, scoped ref {v.TypeName} value)");
+                sb.AppendLine("        {");
+                formatter.Item2(v, sb);
+                sb.AppendLine("        }");
+                sb.AppendLine();
+            }
+        }
         
         //GenerateKnownTypeExtensions(sb, analyzedTypes, currentGenerationTypes, metaInfo);
         
@@ -174,7 +173,6 @@ public static class LuminPackExtensionGenerator
             sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
             sb.AppendLine($"        public static void WriteValue(ref this LuminPackWriter writer, scoped in {classGlobalName} value)");
             sb.AppendLine("        {");
-            sb.AppendLine("            value = ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in value);");
             GenerateMyselfSerialize(data, sb);
             sb.AppendLine("        }");
             sb.AppendLine();
@@ -225,6 +223,7 @@ public static class LuminPackExtensionGenerator
         fullCode.AppendLine("using global::LuminPack.Utility;");
         fullCode.AppendLine("using global::LuminPack.Attribute;");
         fullCode.AppendLine();
+        fullCode.AppendLine("#nullable enable");
         fullCode.AppendLine($"namespace {LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}");
         fullCode.AppendLine("{");
         fullCode.AppendLine();
