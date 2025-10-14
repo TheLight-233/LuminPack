@@ -580,7 +580,8 @@ public static class LuminPackUnionCodeGenerator
             
             var localType = classGlobalName;
             sb.AppendLine($"                case {member.Id}: ");
-            sb.AppendLine($"                    var tempValue = reader.ReadValue<{memberType}>();");
+            sb.AppendLine($"                    {memberType} tempValue = default!;");
+            sb.AppendLine($"                    reader.ReadValue(ref tempValue);");
             sb.AppendLine($"                    value = LuminPackMarshal.As<{memberType}, {localType}>(ref tempValue!);");
             sb.AppendLine($"                    break;");
         }
