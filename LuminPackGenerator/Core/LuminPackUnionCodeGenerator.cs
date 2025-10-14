@@ -467,154 +467,141 @@ public static class LuminPackUnionCodeGenerator
     }
 
     public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb)
+{
+    string paraNullable = data.isValueType ? string.Empty : "?";
+    string classFullName = data.className + "Parser";
+    string classGlobalName = data.classFullName;
+    string parserName = data.className + "Parser";
+    
+    if (data.isGeneric)
     {
-        string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = data.className + "Parser";
-        string classGlobalName = data.classFullName;
-        string parserName = data.className + "Parser";
-        
-        if (data.isGeneric)
+        classFullName += $"<{data.GenericParameters.FirstOrDefault()}";
+        for(var i = 1; i < data.GenericParameters.Count; i++)
         {
-            classFullName += $"<{data.GenericParameters.FirstOrDefault()}";
-            for(var i = 1; i < data.GenericParameters.Count; i++)
+            classFullName += "," + data.GenericParameters[i];
+        }
+        classFullName += ">";
+    }
+    
+    if (!classGlobalName.Contains(".") && data.classNameSpace != "<global namespace>")
+    {
+        classGlobalName = "global::" + data.classNameSpace + "." + data.classFullName;
+    }
+    
+    sb.AppendLine();
+    foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserializing))
+    {
+        sb.AppendLine(item.Item3
+            ? $"            {classGlobalName}.{item.Item1}();"
+            : $"            value?.{item.Item1}();");
+    }
+    sb.AppendLine();
+    
+    sb.AppendLine("            ref int offset = ref reader.GetCurrentSpanOffset();");
+    sb.AppendLine();
+    sb.AppendLine("            if (!reader.TryPeekUnionHeader(ref offset, out var tag))");
+    sb.AppendLine("            {");
+    sb.AppendLine("                value = default;");
+    sb.AppendLine("                return;");
+    sb.AppendLine("            }");
+    sb.AppendLine();
+    
+    if (data.UnionMembers.Count <= 4)
+    {
+        for (int i = 0; i < data.UnionMembers.Count; i++)
+        {
+            var member = data.UnionMembers[i];
+            string memberType;
+            if (member.Type.IsUnboundGenericType)
             {
-                classFullName += "," + data.GenericParameters[i];
+                string nameSpaceName = member.Type.ContainingNamespace?.ToDisplayString() ?? "";
+                if (nameSpaceName == "") 
+                    memberType = member.Type.Name;
+                else 
+                    memberType = "global::" + nameSpaceName + "." + member.Type.Name;
+                memberType += $"<{data.GenericParameters.FirstOrDefault()}";
+                for(var j = 1; j < data.GenericParameters.Count; j++)
+                {
+                    memberType += "," + data.GenericParameters[j];
+                }
+                memberType += ">";
             }
-            classFullName += ">";
-        }
-        
-        if (!classGlobalName.Contains(".") && data.classNameSpace != "<global namespace>")
-        {
-            classGlobalName = "global::" + data.classNameSpace + "." + data.classFullName;
-        }
-        
-        sb.AppendLine();
-        foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserializing))
-        {
-            sb.AppendLine(item.Item3
-                ? $"            {classGlobalName}.{item.Item1}();"
-                : $"            value?.{item.Item1}();");
-        }
-        sb.AppendLine();
-        
-        sb.AppendLine("            ref int offset = ref reader.GetCurrentSpanOffset();");
-        sb.AppendLine();
-        sb.AppendLine("            if (!reader.TryPeekUnionHeader(ref offset, out var tag))");
-        sb.AppendLine("            {");
-        sb.AppendLine("                value = default;");
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        
-        if (data.UnionMembers.Count <= 4)
-        {
-            for (int i = 0; i < data.UnionMembers.Count; i++)
+            else
+                memberType = "global::" + member.Type.ToDisplayString();
+            
+            var localType = classGlobalName;
+            if (i == 0)
             {
-                var member = data.UnionMembers[i];
-                string memberType;
-                if (member.Type.IsUnboundGenericType)
-                {
-                    string nameSpaceName = member.Type.ContainingNamespace?.ToDisplayString() ?? "";
-                    if (nameSpaceName == "") 
-                        memberType = member.Type.Name;
-                    else 
-                        memberType = "global::" + nameSpaceName + "." + member.Type.Name;
-                    memberType += $"<{data.GenericParameters.FirstOrDefault()}";
-                    for(var j = 1; j < data.GenericParameters.Count; j++)
-                    {
-                        memberType += "," + data.GenericParameters[j];
-                    }
-                    memberType += ">";
-                }
-                else
-                    memberType = "global::" + member.Type.ToDisplayString();
-                
-                var localType = classGlobalName;
-                if (i == 0)
-                {
-                    sb.AppendLine($"            if (tag == {member.Id})");
-                }
-                else
-                {
-                    sb.AppendLine($"            else if (tag == {member.Id})");
-                }
-                sb.AppendLine($"            {{");
-                sb.AppendLine($"                if (value is {memberType})");
-                sb.AppendLine($"                {{");
-                sb.AppendLine($"                    reader.ReadValue(ref LuminPackMarshal.As<{localType}, {memberType}>(ref value)!);");
-                sb.AppendLine($"                }}");
-                sb.AppendLine($"                else");
-                sb.AppendLine($"                {{");
-                sb.AppendLine($"                    var tempValue = reader.ReadValue<{memberType}>();");
-                sb.AppendLine($"                    value = LuminPackMarshal.As<{memberType}, {localType}>(ref tempValue!);");
-                sb.AppendLine($"                }}");
-                sb.AppendLine($"            }}");
+                sb.AppendLine($"            if (tag == {member.Id})");
             }
-            sb.AppendLine($"            else");
+            else
+            {
+                sb.AppendLine($"            else if (tag == {member.Id})");
+            }
             sb.AppendLine($"            {{");
-            sb.AppendLine($"                unsafe");
-            sb.AppendLine($"                {{");
-            sb.AppendLine($"                    ref var entry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag];");
-            sb.AppendLine($"                    if (entry.ReadDelegate != null) entry.ReadDelegate(ref reader, value);");
-            sb.AppendLine($"                    else LuminPackExceptionHelper.ThrowInvalidTag(tag, typeof({classGlobalName}));");
-            sb.AppendLine($"                }}");
+            sb.AppendLine($"                {memberType} tempValue = default;");
+            sb.AppendLine($"                reader.ReadValue(ref tempValue);");
+            sb.AppendLine($"                value = LuminPackMarshal.As<{memberType}, {localType}>(ref tempValue!);");
             sb.AppendLine($"            }}");
         }
-        else
-        {
-            sb.AppendLine("            switch(tag)");
-            sb.AppendLine("            {");
-            foreach (var member in data.UnionMembers)
-            {
-                string memberType;
-                if (member.Type.IsUnboundGenericType)
-                {
-                    string nameSpaceName = member.Type.ContainingNamespace?.ToDisplayString() ?? "";
-                    if (nameSpaceName == "") 
-                        memberType = member.Type.Name;
-                    else 
-                        memberType = "global::" + nameSpaceName + "." + member.Type.Name;
-                    memberType += $"<{data.GenericParameters.FirstOrDefault()}";
-                    for(var i = 1; i < data.GenericParameters.Count; i++)
-                    {
-                        memberType += "," + data.GenericParameters[i];
-                    }
-                    memberType += ">";
-                }
-                else
-                    memberType = "global::" + member.Type.ToDisplayString();
-                
-                var localType = classGlobalName;
-                sb.AppendLine($"                case {member.Id}: ");
-                sb.AppendLine($"                    if (value is {memberType})");
-                sb.AppendLine($"                    {{");
-                sb.AppendLine($"                        reader.ReadValue(ref LuminPackMarshal.As<{localType}, {memberType}>(ref value)!);");
-                sb.AppendLine($"                    }}");
-                sb.AppendLine($"                    else");
-                sb.AppendLine($"                    {{");
-                sb.AppendLine($"                        var tempValue = reader.ReadValue<{memberType}>();");
-                sb.AppendLine($"                        value = LuminPackMarshal.As<{memberType}, {localType}>(ref tempValue!);");
-                sb.AppendLine($"                    }}");
-                sb.AppendLine($"                    break;");
-            }
-            sb.AppendLine($"                default: ");
-            sb.AppendLine($"                    unsafe");
-            sb.AppendLine($"                    {{");
-            sb.AppendLine($"                        ref var entry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag];");
-            sb.AppendLine($"                        if (entry.ReadDelegate != null) entry.ReadDelegate(ref reader, value);");
-            sb.AppendLine($"                        else LuminPackExceptionHelper.ThrowInvalidTag(tag, typeof({classGlobalName}));");
-            sb.AppendLine($"                    }}");
-            sb.AppendLine($"                    break;");
-            sb.AppendLine("            }");
-        }
-        
-        sb.AppendLine();
-        foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserialized))
-        {
-            sb.AppendLine(item.Item3
-                ? $"            {classGlobalName}.{item.Item1}();"
-                : $"            value?.{item.Item1}();");
-        }
-        sb.AppendLine();
+        sb.AppendLine($"            else");
+        sb.AppendLine($"            {{");
+        sb.AppendLine($"                unsafe");
+        sb.AppendLine($"                {{");
+        sb.AppendLine($"                    ref var entry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag];");
+        sb.AppendLine($"                    if (entry.ReadDelegate != null) entry.ReadDelegate(ref reader, value);");
+        sb.AppendLine($"                    else LuminPackExceptionHelper.ThrowInvalidTag(tag, typeof({classGlobalName}));");
+        sb.AppendLine($"                }}");
+        sb.AppendLine($"            }}");
     }
+    else
+    {
+        sb.AppendLine("            switch(tag)");
+        sb.AppendLine("            {");
+        foreach (var member in data.UnionMembers)
+        {
+            string memberType;
+            if (member.Type.IsUnboundGenericType)
+            {
+                string nameSpaceName = member.Type.ContainingNamespace?.ToDisplayString() ?? "";
+                if (nameSpaceName == "") 
+                    memberType = member.Type.Name;
+                else 
+                    memberType = "global::" + nameSpaceName + "." + member.Type.Name;
+                memberType += $"<{data.GenericParameters.FirstOrDefault()}";
+                for(var i = 1; i < data.GenericParameters.Count; i++)
+                {
+                    memberType += "," + data.GenericParameters[i];
+                }
+                memberType += ">";
+            }
+            else
+                memberType = "global::" + member.Type.ToDisplayString();
+            
+            var localType = classGlobalName;
+            sb.AppendLine($"                case {member.Id}: ");
+            sb.AppendLine($"                    var tempValue = reader.ReadValue<{memberType}>();");
+            sb.AppendLine($"                    value = LuminPackMarshal.As<{memberType}, {localType}>(ref tempValue!);");
+            sb.AppendLine($"                    break;");
+        }
+        sb.AppendLine($"                default: ");
+        sb.AppendLine($"                    unsafe");
+        sb.AppendLine($"                    {{");
+        sb.AppendLine($"                        ref var entry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag];");
+        sb.AppendLine($"                        if (entry.ReadDelegate != null) entry.ReadDelegate(ref reader, value);");
+        sb.AppendLine($"                        else LuminPackExceptionHelper.ThrowInvalidTag(tag, typeof({classGlobalName}));");
+        sb.AppendLine($"                    }}");
+        sb.AppendLine($"                    break;");
+        sb.AppendLine("            }");
+    }
+    
+    sb.AppendLine();
+    foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserialized))
+    {
+        sb.AppendLine(item.Item3
+            ? $"            {classGlobalName}.{item.Item1}();"
+            : $"            value?.{item.Item1}();");
+    }
+    sb.AppendLine();
+}
 }
