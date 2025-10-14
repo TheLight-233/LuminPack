@@ -59,6 +59,7 @@ namespace LuminPack.SourceGenerator
                 ["global::System.UIntPtr"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
 
                 // 字符串类型
+                ["string"] = (StringFormatter.GenerateSerializeCode, StringFormatter.GenerateDeserializeCode),
                 ["global::System.String"] = (StringFormatter.GenerateSerializeCode, StringFormatter.GenerateDeserializeCode),
 
                 // URI类型
@@ -225,10 +226,83 @@ namespace LuminPack.SourceGenerator
             {
                 return fullTypeName.Substring(0, angleBracketIndex);
             }
-    
-            
-    
+
+
+
             return fullTypeName;
+        }
+
+        public static string GetFirstGeneric(string typeString)
+        {
+            if (string.IsNullOrEmpty(typeString))
+                return string.Empty;
+            
+            int startIndex = typeString.IndexOf('<');
+            if (startIndex == -1)
+                return string.Empty;
+            
+            int endIndex = typeString.LastIndexOf('>');
+            if (endIndex == -1 || endIndex <= startIndex)
+                return string.Empty;
+            
+            string genericPart = typeString.Substring(startIndex + 1, endIndex - startIndex - 1);
+            
+            string[] genericArgs = SplitGenericParameters(genericPart);
+    
+            if (genericArgs.Length > 0)
+                return genericArgs[0].Trim();
+    
+            return string.Empty;
+        }
+
+        public static string GetSecondGeneric(string typeString)
+        {
+            if (string.IsNullOrEmpty(typeString))
+                return string.Empty;
+            
+            int startIndex = typeString.IndexOf('<');
+            if (startIndex == -1)
+                return string.Empty;
+            
+            int endIndex = typeString.LastIndexOf('>');
+            if (endIndex == -1 || endIndex <= startIndex)
+                return string.Empty;
+            
+            string genericPart = typeString.Substring(startIndex + 1, endIndex - startIndex - 1);
+            
+            string[] genericArgs = SplitGenericParameters(genericPart);
+    
+            if (genericArgs.Length > 1)
+                return genericArgs[1].Trim();
+    
+            return string.Empty;
+        }
+
+        private static string[] SplitGenericParameters(string genericPart)
+        {
+            List<string> parameters = new List<string>();
+            int bracketCount = 0;
+            int start = 0;
+    
+            for (int i = 0; i < genericPart.Length; i++)
+            {
+                char c = genericPart[i];
+        
+                if (c == '<')
+                    bracketCount++;
+                else if (c == '>')
+                    bracketCount--;
+                else if (c == ',' && bracketCount == 0)
+                {
+                    parameters.Add(genericPart.Substring(start, i - start));
+                    start = i + 1;
+                }
+            }
+            
+            if (start < genericPart.Length)
+                parameters.Add(genericPart.Substring(start));
+    
+            return parameters.ToArray();
         }
     }
 }
