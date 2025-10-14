@@ -539,7 +539,7 @@ public static class LuminPackUnionCodeGenerator
                 sb.AppendLine($"            else if (tag == {member.Id})");
             }
             sb.AppendLine($"            {{");
-            sb.AppendLine($"                {memberType} tempValue = default;");
+            sb.AppendLine($"                {memberType} tempValue = default!;");
             sb.AppendLine($"                reader.ReadValue(ref tempValue);");
             sb.AppendLine($"                value = LuminPackMarshal.As<{memberType}, {localType}>(ref tempValue!);");
             sb.AppendLine($"            }}");
