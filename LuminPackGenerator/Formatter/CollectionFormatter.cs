@@ -111,11 +111,13 @@ public static class DictionaryFormatter
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(4);");
-        sb.AppendLine($"            var keyFormatter = LuminPackParseProvider.Cache<{GetFirstGeneric(fieldData.TypeName)}>.Parser!;");
-        sb.AppendLine($"            var valueFormatter = LuminPackParseProvider.Cache<{GetSecondGeneric(fieldData.TypeName)}>.Parser!;");
+        
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);");
+        sb.AppendLine($"                {GetFirstGeneric(fieldData.TypeName)} k = default!;");
+        sb.AppendLine($"                {GetSecondGeneric(fieldData.TypeName)} v = default!;");
+        sb.AppendLine("                reader.ReadValue(ref k);");
+        sb.AppendLine("                reader.ReadValue(ref v);");
         sb.AppendLine("                value.Add(k!, v);");
         sb.AppendLine("            }");
     }
