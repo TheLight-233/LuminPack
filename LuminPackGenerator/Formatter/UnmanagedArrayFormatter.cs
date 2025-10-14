@@ -1,24 +1,25 @@
 using System.Text;
+using LuminPack.Code;
 
 namespace LuminPack.SourceGenerator.Formatter;
 
 public static class UnmanagedArrayFormatter
 {
-    public static void GenerateSerializeCode(StringBuilder sb)
+    public static void GenerateSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
-        sb.AppendLine("        ref var offset = ref writer.GetCurrentSpanOffset();");
+        sb.AppendLine("            ref var offset = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
-        sb.AppendLine("        writer.WriteUnmanagedArray(ref offset, value, out var length);");
+        sb.AppendLine("            writer.WriteUnmanagedArray(ref offset, value, out var length);");
         sb.AppendLine();
-        sb.AppendLine("        writer.Advance(length);");
+        sb.AppendLine("            writer.Advance(length);");
     }
     
-    public static void GenerateDeserializeCode(StringBuilder sb)
+    public static void GenerateDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
-        sb.AppendLine("        ref var offset = ref reader.GetCurrentSpanOffset();");
+        sb.AppendLine("            ref var offset = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
-        sb.AppendLine("        reader.ReadUnmanagedArray(ref offset, ref value, out var length);");
+        sb.AppendLine("            reader.ReadUnmanagedArray(ref offset, ref value, out var length);");
         sb.AppendLine();
-        sb.AppendLine("        reader.Advance(length);");
+        sb.AppendLine("            reader.Advance(length);");
     }
 }
