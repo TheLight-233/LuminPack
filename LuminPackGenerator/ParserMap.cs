@@ -99,6 +99,14 @@ internal static class ParserMap
         "System.Collections.Immutable.ImmutableDictionary`2",
         "System.Collections.Immutable.ImmutableArray`1",
         "System.Collections.Immutable.ImmutableQueue`1",
-        "System.Collections.Immutable.ImmutableStack`1"
+        "System.Collections.Immutable.ImmutableStack`1",
+        "System.Collections.Immutable.ImmutableHashSet`1",
+        "System.Collections.Immutable.ImmutableSortedDictionary`2",
+        "System.Collections.Immutable.ImmutableSortedSet`1",
+        "System.Collections.Immutable.IImmutableList`1",
+        "System.Collections.Immutable.IImmutableDictionary`2",
+        "System.Collections.Immutable.IImmutableSet`1",
+        "System.Collections.Immutable.IImmutableQueue`1",
+        "System.Collections.Immutable.IImmutableStack`1",
     };
 }
