@@ -11,7 +11,7 @@ public static class TimeZoneInfoFormatter
         sb.AppendLine();
         sb.AppendLine("            writer.WriteString(value?.ToSerializedString(), length);");
         sb.AppendLine();
-        sb.AppendLine("            var symbol = writer.Option.StringRecording is LuminPackStringRecording.Token ? 1 : 4;");
+        sb.AppendLine("            var symbol = writer.Option.StringRecording is LuminPack.Option.LuminPackStringRecording.Token ? 1 : 4;");
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(length + symbol);");
     }
@@ -22,7 +22,7 @@ public static class TimeZoneInfoFormatter
         sb.AppendLine();
         sb.AppendLine("            reader.ReadStringLength(ref index, out var length);");
         sb.AppendLine();
-        sb.AppendLine("            if (reader.Option.StringRecording is LuminPackStringRecording.Length)");
+        sb.AppendLine("            if (reader.Option.StringRecording is LuminPack.Option.LuminPackStringRecording.Length)");
         sb.AppendLine("                reader.Advance(4);");
         sb.AppendLine();
         sb.AppendLine("            var source = reader.ReadString(length) ?? string.Empty;");
@@ -35,7 +35,7 @@ public static class TimeZoneInfoFormatter
         sb.AppendLine();
         sb.AppendLine("            value = TimeZoneInfo.FromSerializedString(source);");
         sb.AppendLine();
-        sb.AppendLine("            var symbol = reader.Option.StringRecording is LuminPackStringRecording.Token ? 1 : 0;");
+        sb.AppendLine("            var symbol = reader.Option.StringRecording is LuminPack.Option.LuminPackStringRecording.Token ? 1 : 0;");
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(length + symbol);");
     }
