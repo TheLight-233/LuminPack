@@ -45,7 +45,7 @@ public static class BigIntegerFormatter
         sb.AppendLine("            reader.Advance(4);");
         sb.AppendLine();
         sb.AppendLine("            ref var src = ref reader.GetSpanReference(length);");
-        sb.AppendLine("            value = new BigInteger(MemoryMarshal.CreateReadOnlySpan(ref src, length));");
+        sb.AppendLine("            value = new global::System.Numerics.BigInteger(MemoryMarshal.CreateReadOnlySpan(ref src, length));");
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(length);");
     }
