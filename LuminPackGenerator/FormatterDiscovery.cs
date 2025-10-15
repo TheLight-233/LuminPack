@@ -213,7 +213,7 @@ namespace LuminPack.SourceGenerator
 
                 // 冻结集合类型 (.NET 8+)
                 ["global::System.Collections.Frozen.FrozenDictionary"] = (FrozenDictionaryFormatter.GenerateSerializeCode, FrozenDictionaryFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Frozen.FrozenSet"] = (FrozenDictionaryFormatter.GenerateSerializeCode, FrozenDictionaryFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.Frozen.FrozenSet"] = (FrozenSetFormatter.GenerateSerializeCode, FrozenSetFormatter.GenerateDeserializeCode),
 
                 // 接口类型
                 ["global::System.Collections.Generic.IEnumerable"] = (InterfaceEnumerableFormatter.GenerateSerializeCode, InterfaceEnumerableFormatter.GenerateDeserializeCode),
