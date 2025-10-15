@@ -38,7 +38,7 @@ public static class ListFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                value = new List<{GetFirstGeneric(fieldData.TypeName)}?>(length);");
+        sb.AppendLine($"                value = new global::System.Collections.Generic.List<{GetFirstGeneric(fieldData.TypeName)}>(length);");
         sb.AppendLine("            }");
         sb.AppendLine("            else if (value.Count == length)");
         sb.AppendLine("            {");
@@ -67,8 +67,6 @@ public static class DictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        //sb.AppendLine("            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser;");
-        //sb.AppendLine("            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser;");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine("            writer.Advance(4);");
@@ -79,7 +77,7 @@ public static class DictionaryFormatter
         sb.AppendLine();
         sb.AppendLine("            while ((uint) dictIndex < (uint) dictView._count)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                ref LuminPackMarshal.DictionaryView<{GetFirstGeneric(fieldData.TypeName)}, {GetSecondGeneric(fieldData.TypeName)}?>.Entry local = ref Unsafe.Add(ref arrayRef, dictIndex++);");
+        sb.AppendLine($"                ref var local = ref Unsafe.Add(ref arrayRef, dictIndex++);");
         sb.AppendLine("                if (local.Next >= -1)");
         sb.AppendLine("                {");
         sb.AppendLine("                    writer.WriteValue(local.Key);");
@@ -103,7 +101,7 @@ public static class DictionaryFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                value = new Dictionary<{GetFirstGeneric(fieldData.TypeName)}, {GetSecondGeneric(fieldData.TypeName)}?>(length);");
+        sb.AppendLine($"                value = new global::System.Collections.Generic.Dictionary<{GetFirstGeneric(fieldData.TypeName)}, {GetSecondGeneric(fieldData.TypeName)}>(length);");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
@@ -138,8 +136,6 @@ public static class ConcurrentDictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;");
-        sb.AppendLine("            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine("            writer.Advance(4);");
@@ -149,7 +145,8 @@ public static class ConcurrentDictionaryFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                i++;");
-        sb.AppendLine("                KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item;");
+        sb.AppendLine("                writer.WriteValue(item.Key);");
+        sb.AppendLine("                writer.WriteValue(item.Value);");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            if (i != count)");
@@ -171,7 +168,7 @@ public static class ConcurrentDictionaryFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = new ConcurrentDictionary<TKey, TValue?>(_equalityComparer);");
+        sb.AppendLine($"                value = new global::System.Collections.Concurrent.ConcurrentDictionary<{GetFirstGeneric(fieldData.TypeName)}, {GetSecondGeneric(fieldData.TypeName)}>();");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
@@ -180,11 +177,12 @@ public static class ConcurrentDictionaryFormatter
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;");
-        sb.AppendLine("            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);");
+        sb.AppendLine($"                {GetFirstGeneric(fieldData.TypeName)} k = default!;");
+        sb.AppendLine($"                {GetSecondGeneric(fieldData.TypeName)} v = default!;");
+        sb.AppendLine("                reader.ReadValue(ref k);");
+        sb.AppendLine("                reader.ReadValue(ref v);");
         sb.AppendLine("                value.TryAdd(k!, v);");
         sb.AppendLine("            }");
     }
@@ -205,15 +203,13 @@ public static class SortedDictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;");
-        sb.AppendLine("            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
-        sb.AppendLine("                KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item;");
+        sb.AppendLine("                writer.WriteValue(item.Key);");
+        sb.AppendLine("                writer.WriteValue(item.Value);");
         sb.AppendLine("            }");
     }
 
@@ -234,18 +230,19 @@ public static class SortedDictionaryFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = new SortedDictionary<TKey, TValue?>(comparer);");
+        sb.AppendLine($"                value = new global::System.Collections.Generic.SortedDictionary<{GetFirstGeneric(fieldData.TypeName)}, {GetSecondGeneric(fieldData.TypeName)}>();");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
         sb.AppendLine("                value.Clear();");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;");
-        sb.AppendLine("            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;");
         sb.AppendLine("            for (var i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);");
+        sb.AppendLine($"                {GetFirstGeneric(fieldData.TypeName)} k = default!;");
+        sb.AppendLine($"                {GetSecondGeneric(fieldData.TypeName)} v = default!;");
+        sb.AppendLine("                reader.ReadValue(ref k);");
+        sb.AppendLine("                reader.ReadValue(ref v);");
         sb.AppendLine("                value.Add(k!, v);");
         sb.AppendLine("            }");
     }
@@ -266,7 +263,7 @@ public static class StackFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var span = LuminPackMarshal.GetStackSpan(ref value);");
+        sb.AppendLine("            var span = LuminPackMarshal.GetStackSpan(ref Unsafe.AsRef(in value));");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteSpan(ref index, span);");
     }
@@ -288,7 +285,7 @@ public static class StackFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = new Stack<T?>(length);");
+        sb.AppendLine($"                value = new global::System.Collections.Generic.Stack<{GetFirstGeneric(fieldData.TypeName)}>(length);");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
@@ -316,11 +313,11 @@ public static class QueueFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var span = LuminPackMarshal.GetQueueSpan(ref value, value.Count);");
+        sb.AppendLine("            var span = LuminPackMarshal.GetQueueSpan(ref Unsafe.AsRef(in value), value.Count);");
         sb.AppendLine();
-        sb.AppendLine("            LuminPackMarshal.GetQueueSize(ref value, out var head, out var tail, out var size);");
+        sb.AppendLine("            LuminPackMarshal.GetQueueSize(ref Unsafe.AsRef(in value), out var head, out var tail, out var size);");
         sb.AppendLine();
-        sb.AppendLine("            if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())");
+        sb.AppendLine($"            if (!RuntimeHelpers.IsReferenceOrContainsReferences<{GetFirstGeneric(fieldData.TypeName)}>())");
         sb.AppendLine("            {");
         sb.AppendLine("                if (span.IsEmpty)");
         sb.AppendLine("                {");
@@ -347,10 +344,10 @@ public static class QueueFormatter
         sb.AppendLine();
         sb.AppendLine("                writer.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("                var srcLength = Unsafe.SizeOf<T>() * span.Length;");
+        sb.AppendLine($"                var srcLength = Unsafe.SizeOf<{GetFirstGeneric(fieldData.TypeName)}>() * span.Length;");
         sb.AppendLine();
-        sb.AppendLine("                ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart.ToPointer()), (nint)index);");
-        sb.AppendLine("                ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference();");
+        sb.AppendLine("                ref var dest = ref writer.GetSpanReference(index);");
+        sb.AppendLine($"                ref var src = ref Unsafe.As<{GetFirstGeneric(fieldData.TypeName)}, byte>(ref span.GetPinnableReference());");
         sb.AppendLine();
         sb.AppendLine("                Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)srcLength);");
         sb.AppendLine();
@@ -367,8 +364,6 @@ public static class QueueFormatter
         sb.AppendLine();
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            var parser = LuminPackParseProvider.Cache<T>.Parser!;");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, span.Length);");
         sb.AppendLine();
@@ -389,7 +384,7 @@ public static class QueueFormatter
         sb.AppendLine("            foreach (var item in span)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                parser.Serialize(ref writer, ref v);");
+        sb.AppendLine("                writer.WriteValue(v);");
         sb.AppendLine("            }");
     }
 
@@ -410,7 +405,7 @@ public static class QueueFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = new Queue<T?>(length);");
+        sb.AppendLine($"                value = new global::System.Collections.Generic.Queue<{GetFirstGeneric(fieldData.TypeName)}>(length);");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
@@ -443,14 +438,14 @@ public static class QueueFormatter
         sb.AppendLine();
         sb.AppendLine("            if (span.Length != length)");
         sb.AppendLine("            {");
-        sb.AppendLine("                span = LuminPackMarshal.AllocateUninitializedArray<T>(length);");
+        sb.AppendLine($"                span = LuminPackMarshal.AllocateUninitializedArray<{GetFirstGeneric(fieldData.TypeName)}>(length);");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())");
+        sb.AppendLine($"            if (!RuntimeHelpers.IsReferenceOrContainsReferences<{GetFirstGeneric(fieldData.TypeName)}>())");
         sb.AppendLine("            {");
         sb.AppendLine("                ref var dest = ref LuminPackMarshal.GetReference(ref span.GetPinnableReference());");
         sb.AppendLine();
-        sb.AppendLine("                var srcLength = length * Unsafe.SizeOf<T>();");
+        sb.AppendLine($"                var srcLength = length * Unsafe.SizeOf<{GetFirstGeneric(fieldData.TypeName)}>();");
         sb.AppendLine();
         sb.AppendLine("                Unsafe.CopyBlockUnaligned(ref dest, ref reader.GetSpanReference(index), (uint)srcLength);");
         sb.AppendLine();
@@ -459,11 +454,9 @@ public static class QueueFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = LuminPackParseProvider.Cache<T>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                parser.Deserialize(ref reader, ref span[i]);");
+        sb.AppendLine("                reader.ReadValue(ref span[i]);");
         sb.AppendLine("            }");
     }
 }
@@ -483,8 +476,6 @@ public static class LinkedListFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = LuminPackParseProvider.Cache<T?>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(4);");
@@ -492,7 +483,7 @@ public static class LinkedListFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                parser.Serialize(ref writer, ref v);");
+        sb.AppendLine("                writer.WriteValue(v);");
         sb.AppendLine("            }");
     }
 
@@ -513,18 +504,17 @@ public static class LinkedListFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = new LinkedList<T?>();");
+        sb.AppendLine($"                value = new global::System.Collections.Generic.LinkedList<{GetFirstGeneric(fieldData.TypeName)}>();");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
         sb.AppendLine("                value.Clear();");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = LuminPackParseProvider.Cache<T?>.Parser!;");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                T? v = default;");
-        sb.AppendLine("                parser.Deserialize(ref reader, ref v);");
+        sb.AppendLine($"                {GetFirstGeneric(fieldData.TypeName)} v = default!;");
+        sb.AppendLine("                reader.ReadValue(ref v);");
         sb.AppendLine("                value.AddLast(v);");
         sb.AppendLine("            }");
     }
@@ -549,15 +539,15 @@ public static class HashSetFormatter
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
         sb.AppendLine("            nuint setIndex = 0;");
-        sb.AppendLine("            var setView = LuminPackMarshal.GetHashSetView(ref value);");
+        sb.AppendLine("            var setView = LuminPackMarshal.GetHashSetView(ref Unsafe.AsRef(in value));");
         sb.AppendLine("            ref var arrayRef = ref LuminPackMarshal.GetArrayReference(setView._entries);");
         sb.AppendLine();
         sb.AppendLine("            while ((uint) setIndex < (uint) setView._count)");
         sb.AppendLine("            {");
-        sb.AppendLine("                ref LuminPackMarshal.HashSetView<T?>.Entry local = ref Unsafe.Add(ref arrayRef, setIndex++);");
+        sb.AppendLine("                ref var local = ref Unsafe.Add(ref arrayRef, setIndex++);");
         sb.AppendLine("                if (local.Next >= -1)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref local.Value);");
+        sb.AppendLine("                    writer.WriteValue(local.Value);");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
     }
@@ -579,19 +569,17 @@ public static class HashSetFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = new HashSet<T?>(length, equalityComparer);");
+        sb.AppendLine($"                value = new global::System.Collections.Generic.HashSet<{GetFirstGeneric(fieldData.TypeName)}>(length);");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
         sb.AppendLine("                value.Clear();");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = LuminPackParseProvider.Cache<T?>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                T? v = default;");
-        sb.AppendLine("                parser.Deserialize(ref reader, ref v);");
+        sb.AppendLine($"                {GetFirstGeneric(fieldData.TypeName)} v = default!;");
+        sb.AppendLine("                reader.ReadValue(ref v);");
         sb.AppendLine("                value.Add(v);");
         sb.AppendLine("            }");
     }
@@ -612,8 +600,6 @@ public static class SortedSetFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = LuminPackParseProvider.Cache<T>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(4);");
@@ -621,7 +607,7 @@ public static class SortedSetFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                parser.Serialize(ref writer, ref v);");
+        sb.AppendLine("                writer.WriteValue(v);");
         sb.AppendLine("            }");
     }
 
@@ -642,18 +628,17 @@ public static class SortedSetFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = new SortedSet<T?>(comparer);");
+        sb.AppendLine($"                value = new global::System.Collections.Generic.SortedSet<{GetFirstGeneric(fieldData.TypeName)}>();");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
         sb.AppendLine("                value.Clear();");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = LuminPackParseProvider.Cache<T?>.Parser!;");
         sb.AppendLine("            for (var i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                T? v = default;");
-        sb.AppendLine("                parser.Deserialize(ref reader, ref v);");
+        sb.AppendLine($"                {GetFirstGeneric(fieldData.TypeName)} v = default!;");
+        sb.AppendLine("                reader.ReadValue(ref v);");
         sb.AppendLine("                value.Add(v);");
         sb.AppendLine("            }");
     }
@@ -674,16 +659,14 @@ public static class SortedListFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;");
-        sb.AppendLine("            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
-        sb.AppendLine("                KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item);");
+        sb.AppendLine("                writer.WriteValue(item.Key);");
+        sb.AppendLine("                writer.WriteValue(item.Value);");
         sb.AppendLine("            }");
     }
 
@@ -704,18 +687,19 @@ public static class SortedListFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = new SortedList<TKey, TValue?>(length, comparer);");
+        sb.AppendLine($"                value = new global::System.Collections.Generic.SortedList<{GetFirstGeneric(fieldData.TypeName)}, {GetSecondGeneric(fieldData.TypeName)}>(length);");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
         sb.AppendLine("                value.Clear();");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var keyFormatter = LuminPackParseProvider.Cache<TKey>.Parser!;");
-        sb.AppendLine("            var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;");
         sb.AppendLine("            for (var i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);");
+        sb.AppendLine($"                {GetFirstGeneric(fieldData.TypeName)} k = default!;");
+        sb.AppendLine($"                {GetSecondGeneric(fieldData.TypeName)} v = default!;");
+        sb.AppendLine($"                reader.ReadValue(ref k);");
+        sb.AppendLine($"                reader.ReadValue(ref v);");
         sb.AppendLine("                value.Add(k!, v);");
         sb.AppendLine("            }");
     }

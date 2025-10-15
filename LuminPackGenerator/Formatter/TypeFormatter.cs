@@ -26,7 +26,7 @@ public static class TypeFormatter
         sb.AppendLine();
         sb.AppendLine("            writer.WriteString(shortName, length);");
         sb.AppendLine();
-        sb.AppendLine("            var symbol = writer.Option.StringRecording is LuminPackStringRecording.Token ? 1 : 4;");
+        sb.AppendLine("            var symbol = writer.Option.StringRecording is LuminPack.Option.LuminPackStringRecording.Token ? 1 : 4;");
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(length + symbol);");
     }
@@ -37,7 +37,7 @@ public static class TypeFormatter
         sb.AppendLine();
         sb.AppendLine("            reader.ReadStringLength(ref index, out var length);");
         sb.AppendLine();
-        sb.AppendLine("            if (reader.Option.StringRecording is LuminPackStringRecording.Length)");
+        sb.AppendLine("            if (reader.Option.StringRecording is LuminPack.Option.LuminPackStringRecording.Length)");
         sb.AppendLine("                reader.Advance(4);");
         sb.AppendLine();
         sb.AppendLine("            var typeName = reader.ReadString(index, length) ?? string.Empty;");
@@ -50,7 +50,7 @@ public static class TypeFormatter
         sb.AppendLine();
         sb.AppendLine("            value = Type.GetType(typeName, throwOnError: true);");
         sb.AppendLine();
-        sb.AppendLine("            var symbol = reader.Option.StringRecording is LuminPackStringRecording.Token ? 1 : 0;");
+        sb.AppendLine("            var symbol = reader.Option.StringRecording is LuminPack.Option.LuminPackStringRecording.Token ? 1 : 0;");
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(length + symbol);");
     }

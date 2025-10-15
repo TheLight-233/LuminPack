@@ -26,7 +26,7 @@ public static class StringBuilderFormatter
         sb.AppendLine("            foreach (var chunk in value.GetChunks())");
         sb.AppendLine("            {");
         sb.AppendLine("                int index1 = checked(chunk.Length * 2);");
-        sb.AppendLine("                ref var p = ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart.ToPointer()), (nint)index1);");
+        sb.AppendLine("                ref var p = ref writer.GetSpanReference(index);");
         sb.AppendLine("                ref var src = ref LuminPackMarshal.As<char, byte>(ref MemoryMarshal.GetReference(chunk.Span));");
         sb.AppendLine("                Unsafe.CopyBlockUnaligned(ref p, ref src, (uint)chunk.Length * 2);");
         sb.AppendLine();
@@ -54,7 +54,7 @@ public static class StringBuilderFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = new StringBuilder(length);");
+        sb.AppendLine("                value = new global::System.Text.StringBuilder(length);");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");

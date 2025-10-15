@@ -18,7 +18,7 @@ public static class BitArrayFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            ref var view = ref LuminPackMarshal.As<BitArray, BitArrayView>(ref value);");
+        sb.AppendLine("            ref var view = ref LuminPackMarshal.As<global::System.Collections.BitArray, BitArrayView>(ref Unsafe.AsRef(in value));");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteUnmanagedArray(ref index, view.m_array, out var offset);");
         sb.AppendLine();
@@ -42,9 +42,9 @@ public static class BitArrayFormatter
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("            var bitArray = new BitArray(length, false);");
+        sb.AppendLine("            var bitArray = new global::System.Collections.BitArray(length, false);");
         sb.AppendLine();
-        sb.AppendLine("            ref var view = ref LuminPackMarshal.As<BitArray, BitArrayView>(ref bitArray);");
+        sb.AppendLine("            ref var view = ref LuminPackMarshal.As<global::System.Collections.BitArray, BitArrayView>(ref bitArray);");
         sb.AppendLine();
         sb.AppendLine("            reader.ReadUnmanagedArray(ref index, ref view.m_array!, length, out var offset);");
         sb.AppendLine();
