@@ -655,6 +655,10 @@ namespace LuminPack.SourceGenerator
                             field.Type = LuminFiledType.Enum;
                             field.EnumType = GetEnumFieldType(namedType);
                         }
+                        else if (namedType.TypeKind is TypeKind.Interface or TypeKind.Dynamic)
+                        {
+                            field.Type = LuminFiledType.Other;
+                        }
                         else if (namedType.TypeKind is TypeKind.Class or TypeKind.Struct)
                         {
                             var listSymbol = namedType.ContainingAssembly.GetTypeByMetadataName("System.Collections.Generic.List`1");
