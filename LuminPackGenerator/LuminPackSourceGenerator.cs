@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -604,6 +604,12 @@ namespace LuminPack.SourceGenerator
                 
                 INamedTypeSymbol originalSymbol = namedType.OriginalDefinition;
                 string metadataName = $"{originalSymbol.ContainingNamespace}.{originalSymbol.MetadataName}";
+                
+                if (ParserMap.Parsers.Contains(metadataName))
+                {
+                    field.Type = LuminFiledType.Other;
+                    return; 
+                }
                 
                 switch (namedType.SpecialType)
                 {
