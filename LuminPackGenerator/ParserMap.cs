@@ -61,6 +61,10 @@ internal static class ParserMap
         "System.Collections.Generic.HashSet`1",
         "System.Collections.Generic.SortedSet`1",
         "System.Collections.Generic.PriorityQueue`2",
+        
+        //Frozen集合
+        "System.Collections.Frozen.FrozenDictionary`2",
+        "System.Collections.Frozen.FrozenSet`1",
 
         // 字典类
         "System.Collections.Generic.Dictionary`2",
