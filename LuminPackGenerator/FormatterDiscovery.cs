@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Runtime.CompilerServices;
 using System.Text;
 using LuminPack.Code;
 using LuminPack.SourceGenerator.Formatter;
@@ -101,6 +102,7 @@ namespace LuminPack.SourceGenerator
                 ["global::System.TimeSpan[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
 
                 // 数值类型
+                ["global::System.Numerics.BigInteger"] = (BigIntegerFormatter.GenerateSerializeCode, BigIntegerFormatter.GenerateDeserializeCode),
                 ["global::System.Numerics.Complex"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
                 ["global::System.Numerics.Complex[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
 
@@ -271,6 +273,7 @@ namespace LuminPack.SourceGenerator
             "global::System.Collections.Generic.SortedList", "global::System.Collections.Generic.PriorityQueue",
         };
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static (Action<LuminLocalFieldData, StringBuilder>, Action<LuminLocalFieldData, StringBuilder>) GetFormatter(string typeName)
         {
             
@@ -278,6 +281,11 @@ namespace LuminPack.SourceGenerator
             if (Formatters.TryGetValue(baseTypeName, out var formatter))
             {
                 return formatter;
+            }
+            
+            if (typeName.EndsWith("[]"))
+            {
+                return (ArrayFormatter.GenerateSerializeCode, ArrayFormatter.GenerateDeserializeCode);
             }
     
             return (null, null);
