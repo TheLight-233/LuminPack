@@ -824,7 +824,11 @@ namespace LuminPack.Code.Core
                     break;
                 case LuminFiledType.Class:
                 case LuminFiledType.Struct:
-                    
+                    if (IsPureValueTypeStruct(field))
+                    {
+                        sb.AppendLine($"{indentStr}totalLength += Unsafe.SizeOf<{field.ClassName}>();");
+                        break;
+                    }
                     sb.AppendLine($"{indentStr}// {field.ClassName}长度计算");
                     sb.AppendLine($"{indentStr}totalLength += 1;");
                     for (int i = 0; i < field.ClassFields.Count; i++)
@@ -1367,6 +1371,15 @@ namespace LuminPack.Code.Core
                     break;
                 case LuminFiledType.Class:
                 case LuminFiledType.Struct:
+                    if (IsPureValueTypeStruct(field))
+                    {
+                        sb.AppendLine($"{indentStr}// 纯值类型结构体 {field.ClassName}，直接整体写入");
+                        if (isMultClass)
+                            sb.AppendLine($"{indentStr}writer.Advance(writer.WriteUnmanaged(ref {offset}, {fieldPath}));");
+                        else
+                            sb.AppendLine($"{indentStr}writer.WriteUnmanagedWithoutSizeReturn(ref {offset}, {fieldPath});");
+                        break;
+                    }
                     
                     sb.AppendLine($"{indentStr}// 序列化{field.ClassName}");
                     sb.AppendLine($"{indentStr}writer.WriteObjectHeader(ref {offset}, {field.ClassFields.Count});");
@@ -2017,6 +2030,22 @@ namespace LuminPack.Code.Core
                 case LuminFiledType.Class:
                 case LuminFiledType.Struct:
                     
+                    // 检查是否为纯值类型结构体
+                    if (IsPureValueTypeStruct(field))
+                    {
+                        sb.AppendLine($"{indentStr}// 纯值类型结构体");
+                        if (isFirst && !isPrivateFiled)
+                        {
+                            sb.AppendLine($"{indentStr}reader.ReadUnmanagedWithoutSizeReturn(ref {offset}, out {targetObj}.{field.Name});");
+                        }
+                        else
+                        {
+                            sb.AppendLine($"{indentStr}reader.ReadUnmanagedWithoutSizeReturn(ref {offset}, out {GetFullTypeName(field)} {field.Name}TempStruct{depthSuffix});");
+                            sb.AppendLine($"{indentStr}{targetObj} = {field.Name}TempStruct{depthSuffix};");
+                        }
+                        break;
+                    }
+                    
                     sb.AppendLine($"{indentStr}// 反序列化{field.ClassName}");
                     sb.AppendLine($"{indentStr}{offset} += 1;");
                     sb.AppendLine($"{indentStr}var {parentName}{field.Name}{multList}Temp = new {GetFullTypeName(field)}({GetClassConstructParameter(field)});");
@@ -2416,6 +2445,61 @@ namespace LuminPack.Code.Core
             LuminFiledType.Enum => true,
             _ => false
         };
+
+        private static bool IsPureValueTypeStruct(LuminDataField field)
+        {
+            if (field.Type != LuminFiledType.Struct)
+                return false;
+        
+            // 检查所有字段是否都是值类型
+            foreach (var subField in field.ClassFields)
+            {
+                // 如果是引用类型字段，返回false
+                if (subField.FieldType == LuminDataType.Reference)
+                    return false;
+            
+                // 如果是嵌套结构体，递归检查
+                if (subField.Type == LuminFiledType.Struct)
+                {
+                    if (!IsPureValueTypeStruct(subField))
+                        return false;
+                }
+                // 如果是数组、列表、字符串等引用类型，返回false
+                else if (subField.Type == LuminFiledType.Array || 
+                         subField.Type == LuminFiledType.List || 
+                         subField.Type == LuminFiledType.String)
+                {
+                    return false;
+                }
+                
+            }
+    
+            return true;
+        }
+
+        // 检查字段列表中是否有连续的纯值类型结构体可以进行优化
+        private static bool HasContinuousPureValueTypeStructs(List<LuminDataField> fields, int startIndex, out int count)
+        {
+            count = 0;
+    
+            for (int i = startIndex; i < fields.Count; i++)
+            {
+                var field = fields[i];
+        
+                // 如果是纯值类型结构体
+                if (field.Type == LuminFiledType.Struct && IsPureValueTypeStruct(field))
+                {
+                    count++;
+                }
+                else
+                {
+                    // 遇到非纯值类型结构体，停止计数
+                    break;
+                }
+            }
+    
+            return count > 0;
+        }
         
         public static bool IsUnmanagedFiledType(string filedType) => filedType switch
         {
@@ -2830,6 +2914,23 @@ namespace LuminPack.Code.Core
                 }
                 else
                 {
+                    // 检查连续的纯值类型结构体
+                    if (data.fields[i].Type == LuminFiledType.Struct && IsPureValueTypeStruct(data.fields[i]))
+                    {
+                        if (HasContinuousPureValueTypeStructs(data.fields, i, out int structCount))
+                        {
+                            sb.Append("            writer.Advance(writer.WriteUnmanaged(ref offset");
+                            for (var j = i; j < i + structCount; j++)
+                            {
+                                sb.Append($", {access}.{data.fields[j].Name}");
+                            }
+                            sb.Append("));");
+                            sb.AppendLine();
+                            i += structCount - 1; // 跳过已处理的结构体
+                            continue;
+                        }
+                    }
+                    
                     #region 连续值类型字段优化
 
                     if (IsUnmanagedFiledType(data.fields[i].Type))
@@ -2858,7 +2959,6 @@ namespace LuminPack.Code.Core
                     }
                     
                     #endregion
-                    
                     
                     GenerateSerializeCode(sb, data.fields[i], $"{access}." + data.fields[i].Name, "span", "offset", 3, 0);
                     
@@ -2981,6 +3081,23 @@ namespace LuminPack.Code.Core
                 }
                 else
                 {
+                    
+                    // 检查连续的纯值类型结构体
+                    if (data.fields[i].Type == LuminFiledType.Struct && IsPureValueTypeStruct(data.fields[i]))
+                    {
+                        if (HasContinuousPureValueTypeStructs(data.fields, i, out int structCount))
+                        {
+                            sb.Append("            offset += reader.ReadUnmanaged(ref offset");
+                            for (var j = i; j < i + structCount; j++)
+                            {
+                                sb.Append($", out {access}.{data.fields[j].Name}");
+                            }
+                            sb.Append(");");
+                            sb.AppendLine();
+                            i += structCount - 1; // 跳过已处理的结构体
+                            continue;
+                        }
+                    }
                     
                     #region 连续值类型字段优化
 
