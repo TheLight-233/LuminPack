@@ -626,9 +626,9 @@ namespace LuminPack.Code.Core
                                 
                                 #region 连续值类型字段优化
 
-                                if (IsUnmanagedFiledType(subField.Type))
+                                if (IsMergeableField(subField))
                                 {
-                                    var num = FindNextUnmanagedType(field.ClassFields, i);
+                                    var num = FindNextMergeableField(field.ClassFields, i);
 
                                     if (num != i)
                                     {
@@ -642,10 +642,8 @@ namespace LuminPack.Code.Core
                                         sb.AppendLine();
                                         i = num;
                                         continue;
-                            
                                     }
                                 }
-                    
                                 #endregion
                                 
                                 GenerateSerializeLengthCode(sb, subField, "element." + subField.Name, indent + 1, depth + 1);
@@ -759,9 +757,9 @@ namespace LuminPack.Code.Core
                             {
                                 #region 连续值类型字段优化
 
-                                if (IsUnmanagedFiledType(subField.Type))
+                                if (IsMergeableField(subField))
                                 {
-                                    var num = FindNextUnmanagedType(field.ClassFields, i);
+                                    var num = FindNextMergeableField(field.ClassFields, i);
 
                                     if (num != i)
                                     {
@@ -775,10 +773,8 @@ namespace LuminPack.Code.Core
                                         sb.AppendLine();
                                         i = num;
                                         continue;
-                            
                                     }
                                 }
-                    
                                 #endregion
                                 
                                 GenerateSerializeLengthCode(sb, subField, $"{fieldPath}[i{depthSuffix}]." + subField.Name, indent + 1, depth + 1);
@@ -1028,6 +1024,14 @@ namespace LuminPack.Code.Core
                     }
                     else if (elementField.Type is LuminFiledType.Class or LuminFiledType.Struct)
                     {
+                        if (IsPureValueTypeStruct(elementField))
+                        {
+                            sb.AppendLine($"{indentStr}    // 纯值类型结构体");
+                            sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += writer.WriteUnmanaged(ref {field.Name}ListOffset{depthSuffix}, v{depthSuffix});");
+                            sb.AppendLine($"{indentStr}}}");
+                            break;
+                        }
+                        
                         sb.AppendLine($"{indentStr}    var element = v{depthSuffix};");
 
                         if (elementField.Type is LuminFiledType.Class)
@@ -1092,9 +1096,9 @@ namespace LuminPack.Code.Core
                                 
                                 #region 连续值类型字段优化
 
-                                if (IsUnmanagedFiledType(subField.Type))
+                                if (IsMergeableField(subField))
                                 {
-                                    var num = FindNextUnmanagedType(elementField.ClassFields, i);
+                                    var num = FindNextMergeableField(elementField.ClassFields, i);
 
                                     if (num != i)
                                     {
@@ -1102,7 +1106,7 @@ namespace LuminPack.Code.Core
                                         {
                                             num = i + 14;
                                         }
-                            
+                        
                                         sb.Append($"{indentStr}    {field.Name}ListOffset{depthSuffix} += writer.WriteUnmanaged(ref {field.Name}ListOffset{depthSuffix}");
                                         for (var j = i; j <= num; j++)
                                         {
@@ -1115,7 +1119,6 @@ namespace LuminPack.Code.Core
                                         sb.AppendLine();
                                         i = num;
                                         continue;
-                            
                                     }
                                 }
                                 #endregion
@@ -1232,6 +1235,14 @@ namespace LuminPack.Code.Core
                     else if (arrayElementField.Type is LuminFiledType.Class or LuminFiledType.Struct)
                     {
                         
+                        if (IsPureValueTypeStruct(arrayElementField))
+                        {
+                            sb.AppendLine($"{indentStr}    // 纯值类型结构体");
+                            sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += writer.WriteUnmanaged(ref {field.Name}ListOffset{depthSuffix}, v{depthSuffix});");
+                            sb.AppendLine($"{indentStr}}}");
+                            break;
+                        }
+                        
                         if (arrayElementField.Type is LuminFiledType.Class)
                         {
                             sb.AppendLine($"{indentStr}    if (v{depthSuffix} == null)");
@@ -1294,9 +1305,9 @@ namespace LuminPack.Code.Core
                                 
                                 #region 连续值类型字段优化
 
-                                if (IsUnmanagedFiledType(subField.Type))
+                                if (IsMergeableField(subField))
                                 {
-                                    var num = FindNextUnmanagedType(arrayElementField.ClassFields, i);
+                                    var num = FindNextMergeableField(arrayElementField.ClassFields, i);
 
                                     if (num != i)
                                     {
@@ -1304,7 +1315,7 @@ namespace LuminPack.Code.Core
                                         {
                                             num = i + 14;
                                         }
-                            
+                        
                                         sb.Append($"{indentStr}    {field.Name}ListOffset{depthSuffix} += writer.WriteUnmanaged(ref {field.Name}ListOffset{depthSuffix}");
                                         for (var j = i; j <= num; j++)
                                         {
@@ -1317,7 +1328,6 @@ namespace LuminPack.Code.Core
                                         sb.AppendLine();
                                         i = num;
                                         continue;
-                            
                                     }
                                 }
                                 #endregion
