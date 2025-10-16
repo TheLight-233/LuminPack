@@ -121,10 +121,10 @@ public static class LuminPackExtensionGenerator
         {
             var formatter = FormatterDiscovery.GetFormatter(v.TypeName);
         
-            if (analyzedTypes.Add(v.TypeName) && 
-                currentGenerationTypes.Add(v.Name) &&
-                formatter.Item1 != null && 
-                formatter.Item2 != null)
+            if (formatter.Item1 != null && 
+                formatter.Item2 != null &&
+                analyzedTypes.Add(v.TypeName) && 
+                currentGenerationTypes.Add(v.TypeName))
             {
                 sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
                 sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
@@ -174,7 +174,7 @@ public static class LuminPackExtensionGenerator
             !data.isGeneric)
         {
             sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
-            sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            //sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
             sb.AppendLine(metaInfo.IsNet8 
                 ? $"        public static void WriteValue(ref this LuminPackWriter writer, scoped in {classGlobalName} value)"
                 : $"        public static void WriteValue(ref this LuminPackWriter writer, in {classGlobalName} value)");
@@ -199,7 +199,7 @@ public static class LuminPackExtensionGenerator
                 
                 foreach (var filed in data.fields.Where(x => x.ClassFields.Count > 0))
                 {
-                    LuminPackCodeGenerator.GeneratorUnsafeAccessorMethod(sb, filed, filed.ClassFields);
+                    LuminPackCodeGenerator.GeneratorUnsafeAccessorMethod(sb, filed, filed.ClassFields, analyzedTypes);
                 }
             }
         }
@@ -254,7 +254,7 @@ public static class LuminPackExtensionGenerator
         
         switch (data.generatorType)
         {
-            case GeneratorType.Object : LuminPackCodeGenerator.GenerateSerializeCode(data, sb); break;
+            case GeneratorType.Object : LuminPackCodeGenerator.GenerateSerializeCode(data, sb, true); break;
             case GeneratorType.CircleReference : LuminPackCircleReferenceCodeGenerator.GenerateSerializeCode(data, sb); break;
             case GeneratorType.VersionTolerant : LuminPackVersionTolerantCodeGenerator.GenerateSerializeCode(data, sb); break;
         }
