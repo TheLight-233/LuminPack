@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 
 namespace LuminPack.Code
 {
@@ -8,8 +8,8 @@ namespace LuminPack.Code
         public string Name = "NewField";
         public bool isProperty = false;
 
-        public string TypeName;
-        
+        public string TypeName { get; set; }
+
         public string NameSpace = "Your Data NameSpace";
         
         [System.NonSerialized]
@@ -30,6 +30,7 @@ namespace LuminPack.Code
         public List<LuminLocalFieldData> localFields = [];
         public string ClassName = "Your Class Name";
         public string ClassGenericType;
+        public LuminConstructorData SelectedConstructor { get; set; }
         public int ConstructParameterCount = 0;
         
         //Attribute
