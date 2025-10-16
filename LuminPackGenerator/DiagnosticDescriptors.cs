@@ -254,4 +254,28 @@ internal static class DiagnosticDescriptors
         isEnabledByDefault: true,
         description: "Union types can have at most 256 derived types (tags 0-255)."
     );
+    
+    public static readonly DiagnosticDescriptor MultipleConstructorsRequireAttribute = new(
+        id: "LuminPack031",
+        title: "Multiple constructors require LuminPackConstructor attribute",
+        messageFormat: "Type '{0}' has multiple constructors, one must be marked with [LuminPackConstructor]",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor ConstructorParameterNameMismatch = new(
+        id: "LuminPack032",
+        title: "Constructor parameter name does not match field name",
+        messageFormat: "Constructor parameter '{0}' in type '{1}' does not match any field name (case-insensitive comparison)",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor NoPublicConstructor = new(
+        id: "LuminPack033",
+        title: "No public constructor found",
+        messageFormat: "Type '{0}' has no public constructor",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }
