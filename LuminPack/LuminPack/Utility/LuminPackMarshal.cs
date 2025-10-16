@@ -171,13 +171,13 @@ public static class LuminPackMarshal
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static DictionaryView<TKey, TValue?> GetDictionaryView<TKey, TValue>(scoped ref Dictionary<TKey, TValue?>? dict) where TKey : notnull
+    public static DictionaryView<TKey, TValue?> GetDictionaryView<TKey, TValue>(scoped ref Dictionary<TKey, TValue?>? dict) where TKey : notnull
     {
         return Unsafe.As<Dictionary<TKey, TValue?>, DictionaryView<TKey, TValue?>>(ref dict!);
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal static HashSetView<T?> GetHashSetView<T>(scoped ref HashSet<T?>? set)
+    public static HashSetView<T?> GetHashSetView<T>(scoped ref HashSet<T?>? set)
     {
         return Unsafe.As<HashSet<T?>, HashSetView<T?>>(ref set!);
     }
@@ -1065,7 +1065,7 @@ public static class LuminPackMarshal
     }
     
     [Preserve]
-    internal sealed class DictionaryView<TKey, TValue>
+    public sealed class DictionaryView<TKey, TValue>
     {
         public int[] _buckets;
         public Entry[] _entries;
@@ -1088,7 +1088,7 @@ public static class LuminPackMarshal
     }
     
     [Preserve]
-    internal sealed class HashSetView<T>
+    public sealed class HashSetView<T>
     {
         public int[] _buckets;
         public Entry[] _entries;
