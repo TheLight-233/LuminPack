@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.Code
@@ -18,7 +18,8 @@ namespace LuminPack.Code
         public readonly List<LuminLocalFieldData> localFields = new ();
         public readonly List<(string, SerializeCallBackType, bool)> callBackMethods = new ();
         public readonly List<string> interfaces = new ();
-        
+        public LuminConstructorData SelectedConstructor { get; set; }
+        public List<LuminConstructorData> AllConstructors { get; set; } = new();
         public bool enableBurst;
 
         public GeneratorType generatorType;
