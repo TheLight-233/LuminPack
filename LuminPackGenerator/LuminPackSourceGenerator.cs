@@ -362,6 +362,8 @@ namespace LuminPack.SourceGenerator
             
             TypeMetaChecker.CheckSerializeCallBack(typeSymbol, dataInfo);
             
+            AnalyzeMainClassConstructors(typeSymbol, dataInfo);
+            
             return dataInfo;
 
             #region Method
@@ -675,332 +677,12 @@ namespace LuminPack.SourceGenerator
                             else if (namedType.IsGenericType)
                             {
                                 
-                                // 检查是否已处理过该类型
-                                if (ProcessedTypes.Contains(namedType))
-                                {
-                                    field.Type = LuminFiledType.Other;
-                                    return;
-                                }
-        
-                                // 添加到已处理集合
-                                ProcessedTypes.Add(namedType);
-                                
-                                // 处理普通泛型类（如Test<T>）
-                                field.Type = namedType.TypeKind == TypeKind.Class ? LuminFiledType.Class : LuminFiledType.Struct;
-                                field.ClassName = namedType.Name;
-                                // 提取泛型参数并填充到ClassGenericType（例如Test<string> -> "string"）
-                                field.ClassGenericType = string.Join(", ", namedType.TypeArguments.Select(t => t.Name));
-                                
-                                if (namedType.IsRecord || namedType.IsAbstract)
-                                {
-                                    field.Type = LuminFiledType.Other;
-                                
-                                    TypeMetaChecker.CheckFieldIsLuminPackable(namedType, _currentSymbol.Locations.FirstOrDefault());
-                                
-                                    return;
-                                }
-                                
-                                SetClassLocalField(namedType, field.localFields);
-                                
-                                GetConstructParameterCount(namedType, field);
-                
-                                foreach (var nestedTypeArg in namedType.TypeArguments)
-                                {
-                                    if (genericParameters is not null && genericParameters.Contains(nestedTypeArg.Name))
-                                    {
-                                        field.Type = LuminFiledType.Other;
-                                        
-                                        return;
-                                    }
-                                    
-                                }
-                                
-                                // 递归处理嵌套属性
-                                foreach (var member in namedType.GetMembers().OfType<IPropertySymbol>())
-                                {
-                                    if (member.IsStatic) continue;
-                                    
-                                    if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
-                                    
-                                    if (TypeMetaChecker.TryCheckIncludeAttribute(member) && !member.Type.IsAnonymousType)
-                                    {
-                                        if (_metadata is not null && !_metadata.IsNet8)
-                                        {
-                                            TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                                                DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                                                _location,
-                                                _mainSymbol.Name, type.Name
-                                            ));
-                                            continue;
-                                        }
-                                        
-                                        goto Set;
-                                    }
-                                    
-                                    if (member.DeclaredAccessibility is 
-                                        Accessibility.Private or 
-                                        Accessibility.ProtectedAndInternal or 
-                                        Accessibility.Protected) continue;
-                                    
-                                    Set:
-                                    if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(member))
-                                    {
-                                        field.Type = LuminFiledType.Other;
-                        
-                                        //CheckLuminPackable
-                                        TypeMetaChecker.CheckFieldIsLuminPackable(namedType, _currentSymbol.Locations.FirstOrDefault());
-                                        
-                                        return;
-                                    }
-                                    
-                                    var nestedField = new LuminDataField
-                                    {
-                                        Name = member.Name,
-                                        NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
-                                        TypeName = member.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : member.Type.Name,
-                                        IsPrivate = member.DeclaredAccessibility is 
-                                            Accessibility.Private or 
-                                            Accessibility.ProtectedAndInternal or 
-                                            Accessibility.Protected,
-                                        isProperty = true
-                                    };
-                                    
-                                    if (genericParameters?.Contains(member.Type.Name) is true ||
-                                        TypeMetaChecker.TryCheckPackableObjectAttribute(member))
-                                    {
-                                        nestedField.Type = LuminFiledType.Other;
-                                        
-                                        field.ClassFields.Add(nestedField);
-                                        
-                                        continue;
-                                    }
-                                    
-                                    ProcessFieldType(member.Type, nestedField, genericParameters);
-                                    
-                                    field.ClassFields.Add(nestedField);
-                                }
-                                
-                                // 递归处理嵌套字段
-                                foreach (var nestedMember in namedType.GetMembers().OfType<IFieldSymbol>())
-                                {
-                                    if (nestedMember.IsStatic) continue;
-                                    
-                                    if (TypeMetaChecker.TryCheckIgnoreAttribute(nestedMember)) continue;
-                                    
-                                    if (TypeMetaChecker.TryCheckIncludeAttribute(nestedMember) && !nestedMember.Type.IsAnonymousType)
-                                    {
-                                        if (_metadata is not null && !_metadata.IsNet8)
-                                        {
-                                            TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                                                DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                                                _location,
-                                                _mainSymbol.Name, type.Name
-                                            ));
-                                            continue;
-                                        }
-                                        
-                                        goto Set;
-                                    }
-                                    
-                                    if (nestedMember.IsImplicitlyDeclared || 
-                                        nestedMember.DeclaredAccessibility is 
-                                            Accessibility.Private or 
-                                            Accessibility.ProtectedAndInternal or 
-                                            Accessibility.Protected) continue; // 忽略自动生成的字段
-                                    
-                                    Set:
-                                    if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(nestedMember))
-                                    {
-                                        field.Type = LuminFiledType.Other;
-                        
-                                        //CheckLuminPackable
-                                        TypeMetaChecker.CheckFieldIsLuminPackable(namedType, _currentSymbol.Locations.FirstOrDefault());
-                                        
-                                        return;
-                                    }
-                                    
-                                    var nestedField = new LuminDataField
-                                    {
-                                        Name = nestedMember.Name,
-                                        NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
-                                        TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
-                                        IsPrivate = nestedMember.DeclaredAccessibility is 
-                                            Accessibility.Private or 
-                                            Accessibility.ProtectedAndInternal or 
-                                            Accessibility.Protected
-                                    };
-                                    
-                                    if (genericParameters?.Contains(nestedMember.Type.Name) is true || 
-                                        TypeMetaChecker.TryCheckPackableObjectAttribute(nestedMember))
-                                    {
-                                        nestedField.Type = LuminFiledType.Other;
-                                        
-                                        field.ClassFields.Add(nestedField);
-                                        
-                                        continue;
-                                    }
-                                    
-                                    ProcessFieldType(nestedMember.Type, nestedField, genericParameters);
-                                    field.ClassFields.Add(nestedField);
-                                }
+                                ProcessGenericClassOrStruct(namedType, field, genericParameters);
                             }
                             else
                             {
                                 
-                                // 检查是否已处理过该类型
-                                if (ProcessedTypes.Contains(namedType))
-                                {
-                                    field.Type = LuminFiledType.Other;
-                                    return;
-                                }
-        
-                                // 添加到已处理集合
-                                ProcessedTypes.Add(namedType);
-                                
-                                field.Type = namedType.TypeKind == TypeKind.Class ? LuminFiledType.Class : LuminFiledType.Struct;
-                                field.ClassName = namedType.Name;
-                                
-                                if (namedType.IsRecord || namedType.IsAbstract)
-                                {
-                                    field.Type = LuminFiledType.Other;
-                                
-                                    TypeMetaChecker.CheckFieldIsLuminPackable(namedType, _currentSymbol.Locations.FirstOrDefault());
-                                
-                                    return;
-                                }
-                                
-                                SetClassLocalField(namedType, field.localFields);
-                                
-                                GetConstructParameterCount(namedType, field);
-                                
-                                // 递归处理嵌套属性
-                                foreach (var member in namedType.GetMembers().OfType<IPropertySymbol>())
-                                {
-                
-                                    if (member.IsStatic) continue;
-                                    
-                                    if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
-                                    
-                                    if (TypeMetaChecker.TryCheckIncludeAttribute(member))
-                                    {
-                                        if (_metadata is not null && !_metadata.IsNet8)
-                                        {
-                                            TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                                                DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                                                _location,
-                                                _mainSymbol.Name, type.Name
-                                            ));
-                                            continue;
-                                        }
-                                        goto Set;
-                                    }
-                                    
-                                    if (member.DeclaredAccessibility is 
-                                        Accessibility.Private or 
-                                        Accessibility.ProtectedAndInternal or 
-                                        Accessibility.Protected) continue;
-                                    
-                                    Set:
-                                    if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(member))
-                                    {
-                                        field.Type = LuminFiledType.Other;
-                        
-                                        //CheckLuminPackable
-                                        TypeMetaChecker.CheckFieldIsLuminPackable(namedType, _currentSymbol.Locations.FirstOrDefault());
-                                        
-                                        return;
-                                    }
-                                    
-                                    var nestedField = new LuminDataField
-                                    {
-                                        Name = member.Name,
-                                        NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
-                                        TypeName = member.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : member.Type.Name,
-                                        IsPrivate = member.DeclaredAccessibility is 
-                                            Accessibility.Private or 
-                                            Accessibility.ProtectedAndInternal or 
-                                            Accessibility.Protected,
-                                        isProperty = true
-                                    };
-                                    
-                                    if (TypeMetaChecker.TryCheckPackableObjectAttribute(member))
-                                    {
-                                        nestedField.Type = LuminFiledType.Other;
-                    
-                                        field.ClassFields.Add(nestedField);
-
-                                        continue;
-                                    }
-                                    
-                                    ProcessFieldType(member.Type, nestedField, genericParameters);
-                                    field.ClassFields.Add(nestedField);
-                                }
-                                
-                                // 递归处理嵌套字段
-                                foreach (var nestedMember in namedType.GetMembers().OfType<IFieldSymbol>())
-                                {
-                                    
-                                    _currentSymbol = nestedMember;
-                
-                                    if (nestedMember.IsStatic) continue;
-                
-                                    if (TypeMetaChecker.TryCheckIgnoreAttribute(nestedMember)) continue;
-                
-                                    if (TypeMetaChecker.TryCheckIncludeAttribute(nestedMember))
-                                    {
-                                        if (_metadata is not null && !_metadata.IsNet8)
-                                        {
-                                            TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                                                DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                                                _location,
-                                                _mainSymbol.Name, type.Name
-                                            ));
-                                            continue;
-                                        }
-                                        
-                                        goto Set;
-                                    }
-                                    
-                                    if (nestedMember.IsImplicitlyDeclared || 
-                                        nestedMember.DeclaredAccessibility is 
-                                            Accessibility.Private or 
-                                            Accessibility.ProtectedAndInternal or 
-                                            Accessibility.Protected) continue; // 忽略自动生成的字段
-                                    
-                                    Set:
-                                    if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(nestedMember))
-                                    {
-                                        field.Type = LuminFiledType.Other;
-                        
-                                        //CheckLuminPackable
-                                        TypeMetaChecker.CheckFieldIsLuminPackable(namedType, _currentSymbol.Locations.FirstOrDefault());
-                                        
-                                        return;
-                                    }
-                                    
-                                    var nestedField = new LuminDataField
-                                    {
-                                        Name = nestedMember.Name,
-                                        NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
-                                        TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
-                                        IsPrivate = nestedMember.DeclaredAccessibility is 
-                                            Accessibility.Private or 
-                                            Accessibility.ProtectedAndInternal or 
-                                            Accessibility.Protected
-                                    };
-                                    
-                                    if (TypeMetaChecker.TryCheckPackableObjectAttribute(nestedMember))
-                                    {
-                                        nestedField.Type = LuminFiledType.Other;
-                    
-                                        field.ClassFields.Add(nestedField);
-
-                                        continue;
-                                    }
-                                    
-                                    ProcessFieldType(nestedMember.Type, nestedField, genericParameters);
-                                    field.ClassFields.Add(nestedField);
-                                }
+                                ProcessNonGenericClassOrStruct(namedType, field, genericParameters);
                             }
                         }
                         break;
@@ -1168,8 +850,6 @@ namespace LuminPack.SourceGenerator
                 
                 SetClassLocalField(namedTypeArg, field.localFields);
                 
-                GetConstructParameterCount(namedTypeArg, field);
-                
                 foreach (var nestedTypeArg in namedTypeArg.TypeArguments)
                 {
                     if (genericParameters is not null && genericParameters.Contains(nestedTypeArg.Name))
@@ -1304,6 +984,7 @@ namespace LuminPack.SourceGenerator
                     ProcessFieldType(nestedMember.Type, nestedField);
                     field.ClassFields.Add(nestedField);
                 }
+                
             }
             else
             {
@@ -1320,8 +1001,6 @@ namespace LuminPack.SourceGenerator
                 }
                 
                 SetClassLocalField(namedTypeArg, field.localFields);
-                
-                GetConstructParameterCount(namedTypeArg, field);
                 
                 // 递归处理嵌套属性
                 foreach (var member in namedTypeArg.GetMembers().OfType<IPropertySymbol>())
@@ -1454,6 +1133,8 @@ namespace LuminPack.SourceGenerator
                     field.ClassFields.Add(nestedField);
                 }
             }
+            
+            AnalyzeNestedClassConstructors(namedTypeArg, field);
         }
 
         private static LuminFiledType ConvertToLuminFieldType(INamedTypeSymbol symbol)
@@ -1613,27 +1294,6 @@ namespace LuminPack.SourceGenerator
             }
         }
 
-        private static void GetConstructParameterCount(INamedTypeSymbol typeSymbol, LuminDataField field)
-        {
-            if (!TypeMetaChecker.TryCheckConstructorHasPublic(typeSymbol))
-            {
-                TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                    DiagnosticDescriptors.ConstructorNoPublic,
-                    _currentSymbol.Locations.FirstOrDefault(),
-                    _currentSymbol.Name
-                ));
-                
-                return;
-            }
-            
-            var constructors = typeSymbol.Constructors
-                .ToList()
-                .Where(x => x.DeclaredAccessibility is Accessibility.Public)
-                .Min(x => x.Parameters.Length);
-            
-            field.ConstructParameterCount = constructors;
-        }
-
         /// <summary>
         /// 自动发现当前程序集内所有继承自指定基类的派生类，并分配确定性 Tag
         /// </summary>
@@ -1641,6 +1301,435 @@ namespace LuminPack.SourceGenerator
             INamedTypeSymbol baseTypeSymbol,
             LuminDataInfo dataInfo,
             Compilation compilation) => LuminPackDiscovery.Run(baseTypeSymbol, dataInfo, compilation);
+        
+        // 新增：处理泛型类和结构体的方法
+        private static void ProcessGenericClassOrStruct(INamedTypeSymbol namedType, LuminDataField field, List<string> genericParameters = null)
+        {
+            // 检查是否已处理过该类型
+            if (ProcessedTypes.Contains(namedType))
+            {
+                field.Type = LuminFiledType.Other;
+                return;
+            }
+
+            ProcessedTypes.Add(namedType);
+    
+            try
+            {
+                field.Type = namedType.TypeKind == TypeKind.Class ? LuminFiledType.Class : LuminFiledType.Struct;
+                field.ClassName = namedType.Name;
+                field.ClassGenericType = string.Join(", ", namedType.TypeArguments.Select(t => t.Name));
+        
+                // 修复：只有当类型确实是不可序列化时才标记为 Other
+                if (namedType.IsRecord || namedType.IsAbstract)
+                {
+                    field.Type = LuminFiledType.Other;
+                    TypeMetaChecker.CheckFieldIsLuminPackable(namedType, _currentSymbol.Locations.FirstOrDefault());
+                    return;
+                }
+        
+                SetClassLocalField(namedType, field.localFields);
+        
+                // 修复：只有当泛型参数确实在当前类的泛型参数列表中时才标记为 Other
+                if (genericParameters != null)
+                {
+                    foreach (var nestedTypeArg in namedType.TypeArguments)
+                    {
+                        if (nestedTypeArg is ITypeParameterSymbol typeParam && 
+                            genericParameters.Contains(typeParam.Name))
+                        {
+                            field.Type = LuminFiledType.Other;
+                            return;
+                        }
+                    }
+                }
+        
+                ProcessNestedMembers(namedType, field, genericParameters);
+            }
+            finally
+            {
+                AnalyzeNestedClassConstructors(namedType, field);
+                ProcessedTypes.Remove(namedType);
+            }
+        }
+
+// 新增：处理非泛型类和结构体的方法
+        private static void ProcessNonGenericClassOrStruct(INamedTypeSymbol namedType, LuminDataField field, List<string> genericParameters = null)
+        {
+            // 检查是否已处理过该类型
+            if (ProcessedTypes.Contains(namedType))
+            {
+                field.Type = LuminFiledType.Other;
+                return;
+            }
+
+            ProcessedTypes.Add(namedType);
+    
+            try
+            {
+                field.Type = namedType.TypeKind == TypeKind.Class ? LuminFiledType.Class : LuminFiledType.Struct;
+                field.ClassName = namedType.Name;
+        
+                // 修复：只有当类型确实是不可序列化时才标记为 Other
+                if (namedType.IsRecord || namedType.IsAbstract)
+                {
+                    field.Type = LuminFiledType.Other;
+                    TypeMetaChecker.CheckFieldIsLuminPackable(namedType, _currentSymbol.Locations.FirstOrDefault());
+                    return;
+                }
+        
+                SetClassLocalField(namedType, field.localFields);
+                ProcessNestedMembers(namedType, field, genericParameters);
+            }
+            finally
+            {
+                AnalyzeNestedClassConstructors(namedType, field);
+                ProcessedTypes.Remove(namedType);
+            }
+        }
+
+        private static void ProcessNestedMembers(INamedTypeSymbol namedType, LuminDataField field, List<string> genericParameters = null)
+        {
+            // 处理嵌套属性
+            foreach (var member in namedType.GetMembers().OfType<IPropertySymbol>())
+            {
+                if (member.IsStatic) continue;
+        
+                if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
+        
+                bool shouldInclude = TypeMetaChecker.TryCheckIncludeAttribute(member);
+        
+                if (!shouldInclude && member.DeclaredAccessibility is 
+                        Accessibility.Private or 
+                        Accessibility.ProtectedAndInternal or 
+                        Accessibility.Protected) 
+                {
+                    continue;
+                }
+        
+                if (shouldInclude && _metadata is not null && !_metadata.IsNet8)
+                {
+                    TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                        DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
+                        _location,
+                        _mainSymbol.Name, namedType.Name
+                    ));
+                    continue;
+                }
+        
+                // 修复：只对真正的只读结构体标记为 Other
+                if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(member))
+                {
+                    field.Type = LuminFiledType.Other;
+                    TypeMetaChecker.CheckFieldIsLuminPackable(namedType, _currentSymbol.Locations.FirstOrDefault());
+                    return;
+                }
+        
+                var nestedField = new LuminDataField
+                {
+                    Name = member.Name,
+                    NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
+                    TypeName = member.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : member.Type.Name,
+                    IsPrivate = member.DeclaredAccessibility is 
+                        Accessibility.Private or 
+                        Accessibility.ProtectedAndInternal or 
+                        Accessibility.Protected,
+                    isProperty = true
+                };
+        
+                // 修复：只有当明确标记 PackableObject 或确实是泛型参数时才使用 Other
+                if (TypeMetaChecker.TryCheckPackableObjectAttribute(member) ||
+                    (member.Type is ITypeParameterSymbol typeParam && genericParameters?.Contains(typeParam.Name) == true))
+                {
+                    nestedField.Type = LuminFiledType.Other;
+                    field.ClassFields.Add(nestedField);
+                    continue;
+                }
+        
+                ProcessFieldType(member.Type, nestedField, genericParameters);
+                field.ClassFields.Add(nestedField);
+            }
+    
+            // 处理嵌套字段（逻辑与属性类似）
+            foreach (var nestedMember in namedType.GetMembers().OfType<IFieldSymbol>())
+            {
+                if (nestedMember.IsStatic) continue;
+        
+                if (TypeMetaChecker.TryCheckIgnoreAttribute(nestedMember)) continue;
+        
+                bool shouldInclude = TypeMetaChecker.TryCheckIncludeAttribute(nestedMember);
+        
+                if (!shouldInclude && (nestedMember.IsImplicitlyDeclared || 
+                                       nestedMember.DeclaredAccessibility is 
+                                           Accessibility.Private or 
+                                           Accessibility.ProtectedAndInternal or 
+                                           Accessibility.Protected)) 
+                {
+                    continue;
+                }
+        
+                if (shouldInclude && _metadata is not null && !_metadata.IsNet8)
+                {
+                    TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                        DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
+                        _location,
+                        _mainSymbol.Name, namedType.Name
+                    ));
+                    continue;
+                }
+        
+                // 修复：只对真正的只读结构体标记为 Other
+                if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(nestedMember))
+                {
+                    field.Type = LuminFiledType.Other;
+                    TypeMetaChecker.CheckFieldIsLuminPackable(namedType, _currentSymbol.Locations.FirstOrDefault());
+                    return;
+                }
+        
+                var nestedField = new LuminDataField
+                {
+                    Name = nestedMember.Name,
+                    NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
+                    TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
+                    IsPrivate = nestedMember.DeclaredAccessibility is 
+                        Accessibility.Private or 
+                        Accessibility.ProtectedAndInternal or 
+                        Accessibility.Protected
+                };
+        
+                // 修复：只有当明确标记 PackableObject 或确实是泛型参数时才使用 Other
+                if (TypeMetaChecker.TryCheckPackableObjectAttribute(nestedMember) ||
+                    (nestedMember.Type is ITypeParameterSymbol typeParam && genericParameters?.Contains(typeParam.Name) == true))
+                {
+                    nestedField.Type = LuminFiledType.Other;
+                    field.ClassFields.Add(nestedField);
+                    continue;
+                }
+        
+                ProcessFieldType(nestedMember.Type, nestedField, genericParameters);
+                field.ClassFields.Add(nestedField);
+            }
+        }
+        
+        /// <summary>
+        /// 通用的构造函数分析方法，适用于主类和嵌套类
+        /// </summary>
+        private static LuminConstructorData AnalyzeTypeConstructors(
+            INamedTypeSymbol typeSymbol, 
+            List<LuminDataField> availableFields,
+            Location location,
+            bool isNestedClass = false)
+        {
+            // 获取所有显式定义的公共非静态构造函数
+            var explicitConstructors = typeSymbol.Constructors
+                .Where(c => c.DeclaredAccessibility == Accessibility.Public && 
+                            !c.IsStatic && 
+                            !c.IsImplicitlyDeclared)
+                .ToList();
+
+            // 如果没有显式定义的构造函数
+            if (explicitConstructors.Count == 0)
+            {
+                // 对于结构体，总是有隐式无参构造函数
+                if (typeSymbol.TypeKind == TypeKind.Struct)
+                {
+                    return new LuminConstructorData
+                    {
+                        Accessibility = Accessibility.Public,
+                        IsMarkedWithAttribute = false,
+                        Parameters = new List<ConstructorParameter>()
+                    };
+                }
+        
+                // 对于类，如果没有显式构造函数，使用隐式无参构造函数
+                if (typeSymbol.TypeKind == TypeKind.Class)
+                {
+                    return new LuminConstructorData
+                    {
+                        Accessibility = Accessibility.Public,
+                        IsMarkedWithAttribute = false,
+                        Parameters = new List<ConstructorParameter>()
+                    };
+                }
+        
+                return null;
+            }
+
+            // 收集所有可用字段名称（不区分大小写）
+            var allFieldNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var field in availableFields)
+            {
+                allFieldNames.Add(field.Name);
+            }
+
+            var allConstructorData = new List<LuminConstructorData>();
+
+            // 处理每个显式构造函数
+            foreach (var constructor in explicitConstructors)
+            {
+                var constructorData = new LuminConstructorData
+                {
+                    Accessibility = constructor.DeclaredAccessibility,
+                    IsMarkedWithAttribute = constructor.GetAttributes().Any(attr =>
+                        attr.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackConstructorAttribute")
+                };
+
+                foreach (var parameter in constructor.Parameters)
+                {
+                    var paramData = new ConstructorParameter
+                    {
+                        Name = parameter.Name,
+                        Type = parameter.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                        TypeNamespace = parameter.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace"
+                    };
+
+                    // 检查参数名是否匹配字段名
+                    var matchingField = availableFields.FirstOrDefault(f => 
+                        string.Equals(f.Name, parameter.Name, StringComparison.OrdinalIgnoreCase));
+            
+                    if (matchingField != null)
+                    {
+                        paramData.MatchesField = true;
+                        paramData.MatchingFieldName = matchingField.Name;
+                    }
+                    else
+                    {
+                        paramData.MatchesField = false;
+                    }
+
+                    constructorData.Parameters.Add(paramData);
+                }
+
+                allConstructorData.Add(constructorData);
+            }
+
+            // 选择构造函数逻辑
+            var markedConstructors = allConstructorData.Where(c => c.IsMarkedWithAttribute).ToList();
+    
+            LuminConstructorData selectedConstructor = null;
+
+            if (markedConstructors.Count > 1)
+            {
+                // 多个标记的构造函数，报错
+                TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                    DiagnosticDescriptors.MultipleConstructorsRequireAttribute,
+                    location,
+                    typeSymbol.Name
+                ));
+                return null;
+            }
+            else if (markedConstructors.Count == 1)
+            {
+                // 使用标记的构造函数
+                selectedConstructor = markedConstructors[0];
+            }
+            else
+            {
+                // 没有标记的构造函数，根据数量决定
+                if (allConstructorData.Count == 1)
+                {
+                    // 只有一个显式构造函数，自动选择它
+                    selectedConstructor = allConstructorData[0];
+                }
+                else if (allConstructorData.Count > 1)
+                {
+                    // 多个显式构造函数但没有标记，报错
+                    TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                        DiagnosticDescriptors.MultipleConstructorsRequireAttribute,
+                        location,
+                        typeSymbol.Name
+                    ));
+                    return null;
+                }
+                // 如果 allConstructorData.Count == 0，使用隐式无参构造函数（已在前面处理）
+            }
+
+            // 验证选中的构造函数参数是否都匹配字段（只有有参数时才验证）
+            if (selectedConstructor != null && selectedConstructor.Parameters.Count > 0)
+            {
+                ValidateConstructorParameters(selectedConstructor, typeSymbol, allFieldNames, location, isNestedClass);
+            }
+
+            return selectedConstructor;
+        }
+
+        /// <summary>
+        /// 验证构造函数参数是否匹配字段
+        /// </summary>
+        private static void ValidateConstructorParameters(
+            LuminConstructorData constructor, 
+            INamedTypeSymbol typeSymbol, 
+            HashSet<string> fieldNames,
+            Location location,
+            bool isNestedClass = false)
+        {
+            // 无参构造函数不需要验证
+            if (constructor.Parameters.Count == 0)
+                return;
+
+            foreach (var parameter in constructor.Parameters)
+            {
+                if (!fieldNames.Contains(parameter.Name))
+                {
+                    TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                        DiagnosticDescriptors.ConstructorParameterNameMismatch,
+                        location,
+                        parameter.Name, typeSymbol.Name
+                    ));
+                }
+            }
+        }
+        
+        /// <summary>
+        /// 分析主类的构造函数
+        /// </summary>
+        private static void AnalyzeMainClassConstructors(INamedTypeSymbol typeSymbol, LuminDataInfo dataInfo)
+        {
+            dataInfo.SelectedConstructor = AnalyzeTypeConstructors(
+                typeSymbol, 
+                dataInfo.fields,
+                typeSymbol.Locations.FirstOrDefault(),
+                isNestedClass: false);
+    
+            // 收集所有构造函数信息（用于诊断和调试）
+            dataInfo.AllConstructors = typeSymbol.Constructors
+                .Where(c => c.DeclaredAccessibility == Accessibility.Public && !c.IsStatic)
+                .Select(constructor => new LuminConstructorData
+                {
+                    Accessibility = constructor.DeclaredAccessibility,
+                    IsMarkedWithAttribute = constructor.GetAttributes().Any(attr =>
+                        attr.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackConstructorAttribute"),
+                    Parameters = constructor.Parameters.Select(parameter => new ConstructorParameter
+                    {
+                        Name = parameter.Name,
+                        Type = parameter.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                        TypeNamespace = parameter.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
+                        MatchesField = dataInfo.fields.Any(f => 
+                            string.Equals(f.Name, parameter.Name, StringComparison.OrdinalIgnoreCase))
+                    }).ToList()
+                }).ToList();
+        }
+        
+        /// <summary>
+        /// 分析嵌套类的构造函数
+        /// </summary>
+        private static void AnalyzeNestedClassConstructors(INamedTypeSymbol typeSymbol, LuminDataField field)
+        {
+            try
+            {
+                field.SelectedConstructor = AnalyzeTypeConstructors(
+                    typeSymbol, 
+                    field.ClassFields,
+                    _currentSymbol?.Locations.FirstOrDefault() ?? typeSymbol.Locations.FirstOrDefault(),
+                    isNestedClass: true);
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("Nested class"))
+            {
+                // 嵌套类构造函数参数不匹配，标记为不可序列化
+                field.Type = LuminFiledType.Other;
+                TypeMetaChecker.CheckFieldIsLuminPackable(typeSymbol, _currentSymbol?.Locations.FirstOrDefault());
+            }
+        }
         
     }
 }
