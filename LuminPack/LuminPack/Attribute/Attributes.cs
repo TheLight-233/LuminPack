@@ -55,6 +55,11 @@ public sealed class LuminPackableObjectAttribute : System.Attribute
 {
 }
 
+[AttributeUsage(AttributeTargets.Constructor, AllowMultiple = false, Inherited = false)]
+public sealed class LuminPackConstructor : System.Attribute
+{
+}
+
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = true, Inherited = false)]
 public sealed class LuminPackUnionAttribute : System.Attribute
 {
