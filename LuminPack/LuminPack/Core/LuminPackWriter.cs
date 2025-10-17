@@ -341,10 +341,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteNullStringHeader(ref int index)
         {
-            if (SerializeStringRecordAsToken) 
-                Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index), 0);
-            else
-                WriteStringRecordLengthHeader(ref _currentIndex, 0);
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index), 0);
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
