@@ -7,6 +7,12 @@ internal static class ParserMap
     public static readonly HashSet<string> Parsers = new HashSet<string>()
     {
         // 基础类型
+        "nint",
+        "nuint",
+        "decimal",
+        "System.IntPtr",
+        "System.UIntPtr",
+        "System.Decimal",
         "System.Uri",
         "System.Version",
         "System.Text.StringBuilder",
@@ -15,7 +21,8 @@ internal static class ParserMap
         "System.Collections.BitArray",
         "System.Globalization.CultureInfo",
         "System.Numerics.BigInteger",
-        "System.Guid",
+        "System.Guid", "System.DateTime", 
+        "System.DateTimeOffset", "System.TimeSpan",
         "System.Numerics.Complex",
         "System.Numerics.Matrix3x2",
         "System.Numerics.Matrix4x4",
@@ -24,6 +31,10 @@ internal static class ParserMap
         "System.Numerics.Vector2",
         "System.Numerics.Vector3",
         "System.Numerics.Vector4",
+        
+        // .Net8+
+        "global::System.Half", "global::System.Int128", "global::System.UInt128",
+        "global::System.DateOnly", "global::System.TimeOnly", "global::System.Text.Rune",
         
         // 内存/数组相关
         "System.Memory`1",
