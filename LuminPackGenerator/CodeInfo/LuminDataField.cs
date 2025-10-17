@@ -30,6 +30,7 @@ namespace LuminPack.Code
         public List<LuminLocalFieldData> localFields = [];
         public string ClassName = "Your Class Name";
         public string ClassGenericType;
+        public string belongClassName;
         public LuminConstructorData SelectedConstructor { get; set; }
         public int ConstructParameterCount = 0;
         
