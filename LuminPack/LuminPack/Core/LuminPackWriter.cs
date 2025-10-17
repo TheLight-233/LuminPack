@@ -1102,10 +1102,24 @@ namespace LuminPack.Core
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref T[]? array) 
+            where T : unmanaged
+        {
+            DangerousWriteUnmanagedArrayWithOutHeader(ref _currentIndex, array!);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedArray<T>(scoped ref int index, T[]? array) 
             where T : unmanaged
         {
             DangerousWriteUnmanagedArray(ref index, array!);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array) 
+            where T : unmanaged
+        {
+            DangerousWriteUnmanagedArrayWithOutHeader(ref index, array!);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1143,6 +1157,12 @@ namespace LuminPack.Core
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, out int length) 
+        {
+            DangerousWriteUnmanagedArrayWithOutHeader(ref index, array!, out length);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span, out int length) 
         {
             DangerousWriteUnmanagedSpan(ref index, span, out length);
@@ -1170,6 +1190,12 @@ namespace LuminPack.Core
         public void WriteUnmanagedArray<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
         {
             DangerousWriteUnmanagedArray(ref index, array!, length, out spanOffset);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
+        {
+            DangerousWriteUnmanagedArrayWithOutHeader(ref index, array!, length, out spanOffset);
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1224,6 +1250,31 @@ namespace LuminPack.Core
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref T[]? array) 
+        {
+            var index = _currentIndex;
+            
+            if (array is null)
+            {
+                return;
+            }
+            
+            if (array.Length == 0)
+            {
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+
+            Unsafe.WriteUnaligned(ref dest, array.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+            
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array) 
         {
             if (array is null)
@@ -1235,6 +1286,29 @@ namespace LuminPack.Core
             if (array.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+
+            Unsafe.WriteUnaligned(ref dest, array.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+            
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array) 
+        {
+            if (array is null)
+            {
+                return;
+            }
+            
+            if (array.Length == 0)
+            {
                 return;
             }
 
@@ -1277,6 +1351,30 @@ namespace LuminPack.Core
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, out int length) 
+        {
+            if (array is null)
+            {
+                length = 0;
+                return;
+            }
+            
+            if (array.Length == 0)
+            {
+                length = 0;
+                return;
+            }
+
+            length = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+
+            Unsafe.WriteUnaligned(ref dest, array.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)length);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
         {
             if (array is null)
@@ -1302,6 +1400,30 @@ namespace LuminPack.Core
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
             
             spanOffset = srcLength + 4;
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
+        {
+            if (array is null)
+            {
+                spanOffset = 0;
+                return;
+            }
+            
+            if (array.Length == 0)
+            {
+                spanOffset = 0;
+                return;
+            }
+            
+            
+            spanOffset = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+            
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)spanOffset);
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1518,14 +1640,12 @@ namespace LuminPack.Core
                 return;
             }
             
-            var srcLength = Unsafe.SizeOf<T>() * span.Length;
+            spanOffset = Unsafe.SizeOf<T>() * span.Length;
             
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
             
-            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
-            spanOffset = srcLength;
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)spanOffset);
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
