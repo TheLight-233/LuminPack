@@ -1198,7 +1198,7 @@ namespace LuminPack.Code.Core
                         sb.AppendLine($"{indentStr}if (!writer.IsReferenceOrContainsReferences<{field.ClassName}>())");
                         sb.AppendLine($"{indentStr}{{");
                         sb.AppendLine($"{indentStr}    var tempArray{depthSuffix} = {fieldPath};");
-                        sb.AppendLine($"{indentStr}    writer.WriteUnmanagedArray(ref {offset}, tempArray{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                        sb.AppendLine($"{indentStr}    writer.WriteUnmanagedArrayWithOutHeader(ref {offset}, tempArray{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
                         sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
                         sb.AppendLine($"{indentStr}}}");
                         sb.AppendLine($"{indentStr}else");
@@ -1675,7 +1675,7 @@ namespace LuminPack.Code.Core
                             sb.AppendLine($"{indentStr}    LuminPackMarshal.SetListSize(ref {targetObj}, {field.Name}Count{depthSuffix});");
                         }
                 
-                        sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} = {field.Name}TempLength{depthSuffix} + 4;");
+                        sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
                         sb.AppendLine($"{indentStr}}}");
                         sb.AppendLine($"{indentStr}else");
                     }
@@ -2006,22 +2006,83 @@ namespace LuminPack.Code.Core
                             sb.AppendLine($"{indentStr}}}");
                     }
             
-                    // 最后构造嵌套类对象并用初始化器设置字段
-                    sb.AppendLine($"{indentStr}// 构造{field.ClassName}对象");
-                    sb.AppendLine($"{indentStr}var {parentName}{field.Name}Temp{depthSuffix} = new {GetFullTypeName(field)}({GetClassConstructParameter(field)})");
-                    sb.AppendLine($"{indentStr}{{");
-                    foreach (var subField in field.ClassFields.Where(f => !f.IsPrivate))
+                    // 收集嵌套类构造函数参数
+                    var nestedConstructorParams = new List<string>();
+                    if (field.SelectedConstructor != null && field.SelectedConstructor.Parameters.Count > 0)
                     {
-                        sb.AppendLine($"{indentStr}    {subField.Name} = {parentName}{field.Name}{subField.Name}Temp{depthSuffix},");
+                        foreach (var param in field.SelectedConstructor.Parameters)
+                        {
+                            var matchingField = field.ClassFields.FirstOrDefault(f => f.Name == param.MatchingFieldName);
+                            if (matchingField != null)
+                            {
+                                nestedConstructorParams.Add($"{parentName}{field.Name}{matchingField.Name}Temp{depthSuffix}");
+                            }
+                            else
+                            {
+                                nestedConstructorParams.Add("default");
+                            }
+                        }
                     }
-                    sb.AppendLine($"{indentStr}}};");
-            
-                    // 设置私有字段
-                    foreach (var subField in field.ClassFields.Where(f => f.IsPrivate))
+
+                    string nestedConstructorArgs = string.Join(", ", nestedConstructorParams);
+
+                    // 收集需要对象初始化器赋值的public字段
+                    var nestedInitializerFields = field.ClassFields.Where(f => 
+                        (field.SelectedConstructor == null || 
+                         !field.SelectedConstructor.Parameters.Any(p => p.MatchingFieldName == f.Name)) &&
+                        !f.IsPrivate
+                    ).ToList();
+
+                    // 收集需要单独设置的private字段
+                    var nestedPrivateFields = field.ClassFields.Where(f => 
+                        (field.SelectedConstructor == null || 
+                         !field.SelectedConstructor.Parameters.Any(p => p.MatchingFieldName == f.Name)) &&
+                        f.IsPrivate
+                    ).ToList();
+
+                    // 使用对象初始化器创建嵌套类对象
+                    if (nestedInitializerFields.Count > 0)
                     {
-                        sb.AppendLine($"{indentStr}Get{field.Name}{subField.Name}({parentName}{field.Name}Temp{depthSuffix}) = {parentName}{field.Name}{subField.Name}Temp{depthSuffix};");
+                        // 有对象初始化器的情况
+                        if (field.SelectedConstructor != null && field.SelectedConstructor.Parameters.Count > 0)
+                        {
+                            sb.AppendLine($"{indentStr}{targetObj} = new {GetFullTypeName(field)}({nestedConstructorArgs})");
+                        }
+                        else
+                        {
+                            sb.AppendLine($"{indentStr}{targetObj} = new {GetFullTypeName(field)}()");
+                        }
+                        sb.AppendLine($"{indentStr}{{");
+                        foreach (var subField in nestedInitializerFields)
+                        {
+                            sb.AppendLine($"{indentStr}    {subField.Name} = {parentName}{field.Name}{subField.Name}Temp{depthSuffix},");
+                        }
+                        sb.AppendLine($"{indentStr}}};");
                     }
-            
+                    else
+                    {
+                        // 没有对象初始化器的情况
+                        if (field.SelectedConstructor != null && field.SelectedConstructor.Parameters.Count > 0)
+                        {
+                            sb.AppendLine($"{indentStr}{targetObj} = new {GetFullTypeName(field)}({nestedConstructorArgs});");
+                        }
+                        else
+                        {
+                            sb.AppendLine($"{indentStr}{targetObj} = new {GetFullTypeName(field)}();");
+                        }
+                    }
+
+                    // 设置private字段（使用UnsafeAccessor）
+                    if (nestedPrivateFields.Count > 0)
+                    {
+                        sb.AppendLine($"{indentStr}// 设置private字段");
+                        foreach (var subField in nestedPrivateFields)
+                        {
+                            sb.AppendLine($"{indentStr}Get{field.Name}{subField.Name}({targetObj}) = {parentName}{field.Name}{subField.Name}Temp{depthSuffix};");
+                        }
+                    }
+                    // 赋值给目标对象
+                    //sb.AppendLine($"{indentStr}{targetObj} = {parentName}{field.Name}Temp{depthSuffix};");
                     // if (isFirst && !isPrivateFiled)
                     //     sb.AppendLine($"{indentStr}{targetObj}.{field.Name} = {parentName}{field.Name}Temp{depthSuffix};");
                     // else 
@@ -2558,17 +2619,23 @@ namespace LuminPack.Code.Core
                 {
                     GeneratorUnsafeAccessorMethod(sb, filed, filed.ClassFields);
                 }
-                    
+            
                 if (filed.IsPrivate)
                 {
+                    // 使用 belongClassName 作为参数类型，如果为空则回退到 baseField.ClassName
+                    string containingClassName = !string.IsNullOrEmpty(filed.belongClassName) 
+                        ? filed.belongClassName 
+                        : GetFullTypeName(baseField);
+            
                     sb.AppendLine(filed.isProperty 
                         ? $@"        [UnsafeAccessor(UnsafeAccessorKind.Field, Name = ""<{filed.Name}>k__BackingField"")]"
                         : $@"        [UnsafeAccessor(UnsafeAccessorKind.Field, Name = ""{filed.Name}"")]");
-                    sb.AppendLine($@"        public static extern ref {filed.TypeName} Get{baseField.Name}{filed.Name}({GetFullTypeName(baseField)} value);");
+                    sb.AppendLine($@"        public static extern ref {filed.TypeName} Get{baseField.Name}{filed.Name}(in {containingClassName} value);");
                     sb.AppendLine();
                 }
             }
         }
+
         
         public static void GeneratorUnsafeAccessorMethod(StringBuilder sb, LuminDataField baseField, List<LuminDataField> fileds, HashSet<string> analyzedTypes)
         {
@@ -2578,15 +2645,26 @@ namespace LuminPack.Code.Core
                 {
                     GeneratorUnsafeAccessorMethod(sb, filed, filed.ClassFields, analyzedTypes);
                 }
-                
-                if (analyzedTypes.Add($"public static extern ref {filed.TypeName} Get{baseField.Name}{filed.Name}({GetFullTypeName(baseField)} value);") 
-                    && filed.IsPrivate)
+        
+                if (filed.IsPrivate)
                 {
-                    sb.AppendLine(filed.isProperty 
-                        ? $@"        [UnsafeAccessor(UnsafeAccessorKind.Field, Name = ""<{filed.Name}>k__BackingField"")]"
-                        : $@"        [UnsafeAccessor(UnsafeAccessorKind.Field, Name = ""{filed.Name}"")]");
-                    sb.AppendLine($@"        public static extern ref {filed.TypeName} Get{baseField.Name}{filed.Name}({GetFullTypeName(baseField)} value);");
-                    sb.AppendLine();
+                    // 使用 belongClassName 作为参数类型，如果为空则回退到 baseField.ClassName
+                    string containingClassName = !string.IsNullOrEmpty(filed.belongClassName) 
+                        ? filed.belongClassName 
+                        : GetFullTypeName(baseField);
+                
+                    string methodSignature = $"public static extern ref {filed.TypeName} Get{baseField.Name}{filed.Name}({containingClassName} value);";
+            
+                    if (analyzedTypes.Add(methodSignature))
+                    {
+                        sb.AppendLine(filed.isProperty 
+                            ? $@"        [UnsafeAccessor(UnsafeAccessorKind.Field, Name = ""<{filed.Name}>k__BackingField"")]"
+                            : $@"        [UnsafeAccessor(UnsafeAccessorKind.Field, Name = ""{filed.Name}"")]");
+                        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+                        sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+                        sb.AppendLine($@"        private static extern ref {filed.TypeName} Get{baseField.Name}{filed.Name}(in {containingClassName} value);");
+                        sb.AppendLine();
+                    }
                 }
             }
         }
@@ -3026,43 +3104,93 @@ namespace LuminPack.Code.Core
                 }
             }
     
-            // 最后构造对象并设置字段
             sb.AppendLine();
             sb.AppendLine("            // 构造对象并设置字段");
-            bool allFieldsPublic = data.fields.All(f => !f.IsPrivate);
     
-            if (allFieldsPublic)
+            // 收集构造函数参数
+            var constructorParams = new List<string>();
+            if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
             {
-                // 全为public字段，直接使用对象初始化器
-                sb.AppendLine($"            value = new {classGlobalName}()");
-                sb.AppendLine("            {");
-                foreach (var field in data.fields)
+                foreach (var param in data.SelectedConstructor.Parameters)
                 {
-                    sb.AppendLine($"                {field.Name} = {field.Name}Temp,");
+                    var matchingField = data.fields.FirstOrDefault(f => f.Name == param.MatchingFieldName);
+                    if (matchingField != null)
+                    {
+                        constructorParams.Add($"{matchingField.Name}Temp!");
+                    }
+                    else
+                    {
+                        constructorParams.Add("default");
+                    }
+                }
+            }
+
+            string constructorArgs = string.Join(", ", constructorParams);
+
+            // 收集需要对象初始化器赋值的public字段
+            var initializerFields = data.fields.Where(f => 
+                (data.SelectedConstructor == null || 
+                 !data.SelectedConstructor.Parameters.Any(p => p.MatchingFieldName == f.Name)) &&
+                !f.IsPrivate
+            ).ToList();
+
+            // 收集需要单独设置的private字段
+            var privateFields = data.fields.Where(f => 
+                (data.SelectedConstructor == null || 
+                 !data.SelectedConstructor.Parameters.Any(p => p.MatchingFieldName == f.Name)) &&
+                f.IsPrivate
+            ).ToList();
+
+            // 使用对象初始化器创建对象
+            if (initializerFields.Count > 0)
+            {
+                // 有对象初始化器的情况
+                if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
+                {
+                    sb.AppendLine($"            value = new {classGlobalName}({constructorArgs})");
+                }
+                else
+                {
+                    sb.AppendLine($"            value = new {classGlobalName}()");
+                }
+                sb.AppendLine("            {");
+                foreach (var field in initializerFields)
+                {
+                    sb.AppendLine($"                {field.Name} = {field.Name}Temp!,");
                 }
                 sb.AppendLine("            };");
             }
             else
             {
-                // 有private字段，使用Local类方式
-                if (_dataInfo.isValueType)
+                // 没有对象初始化器的情况
+                if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
                 {
-                    sb.AppendLine($"            value = new {classGlobalName}();");
-                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
+                    sb.AppendLine($"            value = new {classGlobalName}({constructorArgs});");
                 }
                 else
                 {
                     sb.AppendLine($"            value = new {classGlobalName}();");
-                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value!);");
-                }
-
-                // 为所有字段赋值（通过Local类，因为Local类字段都是public）
-                foreach (var field in data.fields)
-                {
-                    sb.AppendLine($"            local.{field.Name} = {field.Name}Temp;");
                 }
             }
-            sb.AppendLine();
+
+            // 设置private字段（通过Local类）
+            if (privateFields.Count > 0)
+            {
+                sb.AppendLine($"            // 设置private字段");
+                if (data.isValueType)
+                {
+                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
+                }
+                else
+                {
+                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value!);");
+                }
+        
+                foreach (var field in privateFields)
+                {
+                    sb.AppendLine($"            local.{field.Name} = {field.Name}Temp!;");
+                }
+            }
     
             foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserialized))
             {
