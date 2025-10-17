@@ -1627,7 +1627,7 @@ namespace LuminPack.Code.Core
                     sb.AppendLine($"{indentStr}reader.ReadStringLength(ref {offset}, out var {field.Name}{depthSuffix}Length);");
             
                     sb.AppendLine($"{indentStr}{targetObj} = reader.ReadString({offset}, {field.Name}{depthSuffix}Length)!;");
-                    sb.AppendLine($"{indentStr}{offset} += {field.Name}{depthSuffix}Length + reader.StringRecordLength();");
+                    sb.AppendLine($"{indentStr}{offset} += ({field.Name}{depthSuffix}Length + reader.StringRecordLength());");
                     break;
                 case LuminFiledType.List:
                     if (isFirst && depth is 0) 
@@ -2480,7 +2480,9 @@ namespace LuminPack.Code.Core
         private static bool IsMergeableField(LuminDataField field)
         {
             return IsUnmanagedFiledType(field.Type) || 
-                   (field.Type == LuminFiledType.Struct && IsPureValueTypeStruct(field));
+                   (field.Type == LuminFiledType.Struct && IsPureValueTypeStruct(field)) ||
+                   FormatterDiscovery.KnownValueTypes.Contains(field.TypeName) ||
+                   FormatterDiscovery.KnownValueTypes.Contains($"global::{field.TypeName}");
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -2974,6 +2976,7 @@ namespace LuminPack.Code.Core
                             sb.Append("            writer.Advance(writer.WriteUnmanaged(ref offset");
                             for (var j = i; j <= num; j++)
                             {
+                                access = data.fields[j].IsPrivate ? "local" : "value";
                                 sb.Append($", {access}.{data.fields[j].Name}");
                             }
                             sb.Append("));");
