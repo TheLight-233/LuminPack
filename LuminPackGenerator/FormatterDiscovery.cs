@@ -240,37 +240,39 @@ namespace LuminPack.SourceGenerator
             };
 
         // KnownType信息
-        public static readonly HashSet<string> KnownTypes = new HashSet<string>(StringComparer.Ordinal)
+        public static readonly HashSet<string> KnownValueTypes = new HashSet<string>(StringComparer.Ordinal)
         {
             // 基本类型
             "sbyte", "byte", "short", "ushort", "int", "uint", "long", "ulong",
-            "nint", "nuint", "float", "double", "decimal", "bool", "char",
-            
-            // 系统类型
-            "global::System.SByte", "global::System.Byte", "global::System.Int16", "global::System.UInt16",
-            "global::System.Int32", "global::System.UInt32", "global::System.Int64", "global::System.UInt64",
-            "global::System.IntPtr", "global::System.UIntPtr", "global::System.Single", "global::System.Double",
-            "global::System.Decimal", "global::System.Boolean", "global::System.Char",
-            "global::System.Guid", "global::System.DateTime", "global::System.DateTimeOffset",
-            "global::System.TimeSpan", "global::System.String", "global::System.Uri", "global::System.Version",
-            "global::System.Text.StringBuilder", "global::System.Globalization.CultureInfo",
-            "global::System.TimeZoneInfo", "global::System.Type",
-            
+            "float", "double", "decimal", "bool", "char", "nint", "nuint",
+    
+            // 系统类型别名
+            "global::System.SByte", "global::System.Byte", 
+            "global::System.Int16", "global::System.UInt16",
+            "global::System.Int32", "global::System.UInt32",
+            "global::System.Int64", "global::System.UInt64",
+            "global::System.Single", "global::System.Double", 
+            "global::System.Decimal", "global::System.Boolean", 
+            "global::System.Char",
+            "global::System.IntPtr", "global::System.UIntPtr",
+    
+            // 系统值类型
+            "global::System.Guid", "global::System.DateTime", 
+            "global::System.DateTimeOffset", "global::System.TimeSpan",
+    
             // 数值类型
-            "global::System.Numerics.Complex", "global::System.Numerics.Plane", "global::System.Numerics.Quaternion",
-            "global::System.Numerics.Matrix3x2", "global::System.Numerics.Matrix4x4", "global::System.Numerics.Vector2",
+            "global::System.Numerics.Complex", "global::System.Numerics.Plane", 
+            "global::System.Numerics.Quaternion", "global::System.Numerics.Matrix3x2", 
+            "global::System.Numerics.Matrix4x4", "global::System.Numerics.Vector2",
             "global::System.Numerics.Vector3", "global::System.Numerics.Vector4",
-            
+    
             // .NET 8+ 类型
             "global::System.Half", "global::System.Int128", "global::System.UInt128",
             "global::System.DateOnly", "global::System.TimeOnly", "global::System.Text.Rune",
-            
-            // 集合类型
-            "global::System.Collections.Generic.List", "global::System.Collections.Generic.Dictionary",
-            "global::System.Collections.Generic.HashSet", "global::System.Collections.Generic.Stack",
-            "global::System.Collections.Generic.Queue", "global::System.Collections.Generic.LinkedList",
-            "global::System.Collections.Generic.SortedDictionary", "global::System.Collections.Generic.SortedSet",
-            "global::System.Collections.Generic.SortedList", "global::System.Collections.Generic.PriorityQueue",
+    
+            // 其他已知的Unmanaged类型
+            "global::System.Runtime.InteropServices.GCHandle",
+            "global::System.Runtime.InteropServices.CriticalHandle"
         };
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
