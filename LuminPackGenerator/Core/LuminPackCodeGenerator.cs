@@ -2666,6 +2666,8 @@ namespace LuminPack.Code.Core
                     sb.AppendLine(filed.isProperty 
                         ? $@"        [UnsafeAccessor(UnsafeAccessorKind.Field, Name = ""<{filed.Name}>k__BackingField"")]"
                         : $@"        [UnsafeAccessor(UnsafeAccessorKind.Field, Name = ""{filed.Name}"")]");
+                    sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+                    sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
                     sb.AppendLine($@"        public static extern ref {filed.TypeName} Get{baseField.Name}{filed.Name}(in {containingClassName} value);");
                     sb.AppendLine();
                 }
