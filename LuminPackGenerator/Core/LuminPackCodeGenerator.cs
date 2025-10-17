@@ -985,23 +985,20 @@ namespace LuminPack.Code.Core
                         GenericType = field.GenericType.Skip(1).ToList()
                     };
                     
-                    if (elementField.Type is LuminFiledType.Struct)
+                    if (IsPureValueTypeStruct(elementField))
                     {
-                        if (IsPureValueTypeStruct(elementField))
-                        {
-                            //sb.AppendLine($"{indentStr}var {field.Name}ListTempValue{depthSuffix} = {fieldPath};");
-                            sb.AppendLine($"{indentStr}writer.WriteUnmanagedSpanWithOutHeader(ref {offset}, {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                            sb.AppendLine($"{indentStr}{field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
-                            break;
-                        }
+                        //sb.AppendLine($"{indentStr}var {field.Name}ListTempValue{depthSuffix} = {fieldPath};");
+                        sb.AppendLine($"{indentStr}writer.WriteUnmanagedSpanWithOutHeader(ref {offset}, {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                        sb.AppendLine($"{indentStr}{field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
+                        break;
                         
-                        sb.AppendLine($"{indentStr}if (!writer.IsReferenceOrContainsReferences<{field.ClassName}>() && {field.Name}Count{depthSuffix} is not 0)");
-                        sb.AppendLine($"{indentStr}{{");
-                        sb.AppendLine($"{indentStr}    var {field.Name}ListTempValue{depthSuffix} = {fieldPath};");
-                        sb.AppendLine($"{indentStr}    writer.WriteUnmanagedSpanWithOutHeader(ref {offset}, {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                        sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
-                        sb.AppendLine($"{indentStr}}}");
-                        sb.AppendLine($"{indentStr}else");
+                        // sb.AppendLine($"{indentStr}if (!writer.IsReferenceOrContainsReferences<{field.ClassName}>() && {field.Name}Count{depthSuffix} is not 0)");
+                        // sb.AppendLine($"{indentStr}{{");
+                        // sb.AppendLine($"{indentStr}    var {field.Name}ListTempValue{depthSuffix} = {fieldPath};");
+                        // sb.AppendLine($"{indentStr}    writer.WriteUnmanagedSpanWithOutHeader(ref {offset}, {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                        // sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
+                        // sb.AppendLine($"{indentStr}}}");
+                        // sb.AppendLine($"{indentStr}else");
                     }
                     
                     //sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.Name}Count{depthSuffix}; i{depthSuffix}++)");
@@ -1202,23 +1199,20 @@ namespace LuminPack.Code.Core
                     if (!IsPureValueTypeStruct(arrayElementField)) 
                         sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = {fieldPath}.AsSpan();");
                     
-                    if (arrayElementField.Type is LuminFiledType.Struct)
+                    if (IsPureValueTypeStruct(arrayElementField))
                     {
-                        if (IsPureValueTypeStruct(arrayElementField))
-                        {
-                            //sb.AppendLine($"{indentStr}var tempArray{depthSuffix} = {fieldPath};");
-                            sb.AppendLine($"{indentStr}writer.WriteUnmanagedArrayWithOutHeader(ref {offset}, {fieldPath}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                            sb.AppendLine($"{indentStr}{field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
-                            break;
-                        }
+                        //sb.AppendLine($"{indentStr}var tempArray{depthSuffix} = {fieldPath};");
+                        sb.AppendLine($"{indentStr}writer.WriteUnmanagedArrayWithOutHeader(ref {offset}, {fieldPath}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                        sb.AppendLine($"{indentStr}{field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
+                        break;
                         
-                        sb.AppendLine($"{indentStr}if (!writer.IsReferenceOrContainsReferences<{field.ClassName}>())");
-                        sb.AppendLine($"{indentStr}{{");
-                        sb.AppendLine($"{indentStr}    var tempArray{depthSuffix} = {fieldPath};");
-                        sb.AppendLine($"{indentStr}    writer.WriteUnmanagedArrayWithOutHeader(ref {offset}, tempArray{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                        sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
-                        sb.AppendLine($"{indentStr}}}");
-                        sb.AppendLine($"{indentStr}else");
+                        // sb.AppendLine($"{indentStr}if (!writer.IsReferenceOrContainsReferences<{field.ClassName}>())");
+                        // sb.AppendLine($"{indentStr}{{");
+                        // sb.AppendLine($"{indentStr}    var tempArray{depthSuffix} = {fieldPath};");
+                        // sb.AppendLine($"{indentStr}    writer.WriteUnmanagedArrayWithOutHeader(ref {offset}, tempArray{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                        // sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
+                        // sb.AppendLine($"{indentStr}}}");
+                        // sb.AppendLine($"{indentStr}else");
                     }
                     
                     
@@ -1675,44 +1669,41 @@ namespace LuminPack.Code.Core
                         break;
                     }
             
-                    if (elementField.Type is LuminFiledType.Struct)
+                    if (IsPureValueTypeStruct(elementField))
                     {
-                        if (IsPureValueTypeStruct(elementField))
-                        {
-                            if (depth > 0)
-                            {
-                                sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref element__{depth - 1}, {field.Name}Count{depthSuffix});");
-                                sb.AppendLine($"{indentStr}reader.ReadUnmanagedSpan(ref {offset}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                                sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize(ref element__{depth - 1}, {field.Name}Count{depthSuffix});");
-                            }
-                            else
-                            {
-                                sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref {targetObj}!, {field.Name}Count{depthSuffix});");
-                                sb.AppendLine($"{indentStr}reader.ReadUnmanagedSpan(ref {offset}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                                sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize(ref {targetObj}, {field.Name}Count{depthSuffix});");
-                            }
-                            sb.AppendLine($"{indentStr}{field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
-                            break;
-                        }
-                        
-                        sb.AppendLine($"{indentStr}if (!reader.IsReferenceOrContainsReferences<{field.ClassName}>())");
-                        sb.AppendLine($"{indentStr}{{");
                         if (depth > 0)
                         {
-                            sb.AppendLine($"{indentStr}    var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref element__{depth - 1}, {field.Name}Count{depthSuffix});");
-                            sb.AppendLine($"{indentStr}    reader.ReadUnmanagedSpan(ref {offset}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                            sb.AppendLine($"{indentStr}    LuminPackMarshal.SetListSize(ref element__{depth - 1}, {field.Name}Count{depthSuffix});");
+                            sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref element__{depth - 1}, {field.Name}Count{depthSuffix});");
+                            sb.AppendLine($"{indentStr}reader.ReadUnmanagedSpan(ref {offset}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                            sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize(ref element__{depth - 1}, {field.Name}Count{depthSuffix});");
                         }
                         else
                         {
-                            sb.AppendLine($"{indentStr}    var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref {targetObj}!, {field.Name}Count{depthSuffix});");
-                            sb.AppendLine($"{indentStr}    reader.ReadUnmanagedSpan(ref {offset}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                            sb.AppendLine($"{indentStr}    LuminPackMarshal.SetListSize(ref {targetObj}, {field.Name}Count{depthSuffix});");
+                            sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref {targetObj}!, {field.Name}Count{depthSuffix});");
+                            sb.AppendLine($"{indentStr}reader.ReadUnmanagedSpan(ref {offset}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                            sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize(ref {targetObj}, {field.Name}Count{depthSuffix});");
                         }
-                
-                        sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
-                        sb.AppendLine($"{indentStr}}}");
-                        sb.AppendLine($"{indentStr}else");
+                        sb.AppendLine($"{indentStr}{field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
+                        break;
+                        
+                        // sb.AppendLine($"{indentStr}if (!reader.IsReferenceOrContainsReferences<{field.ClassName}>())");
+                        // sb.AppendLine($"{indentStr}{{");
+                        // if (depth > 0)
+                        // {
+                        //     sb.AppendLine($"{indentStr}    var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref element__{depth - 1}, {field.Name}Count{depthSuffix});");
+                        //     sb.AppendLine($"{indentStr}    reader.ReadUnmanagedSpan(ref {offset}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                        //     sb.AppendLine($"{indentStr}    LuminPackMarshal.SetListSize(ref element__{depth - 1}, {field.Name}Count{depthSuffix});");
+                        // }
+                        // else
+                        // {
+                        //     sb.AppendLine($"{indentStr}    var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref {targetObj}!, {field.Name}Count{depthSuffix});");
+                        //     sb.AppendLine($"{indentStr}    reader.ReadUnmanagedSpan(ref {offset}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                        //     sb.AppendLine($"{indentStr}    LuminPackMarshal.SetListSize(ref {targetObj}, {field.Name}Count{depthSuffix});");
+                        // }
+                        //
+                        // sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
+                        // sb.AppendLine($"{indentStr}}}");
+                        // sb.AppendLine($"{indentStr}else");
                     }
             
                     sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.Name}Count{depthSuffix}; i{depthSuffix}++)");
@@ -1855,29 +1846,26 @@ namespace LuminPack.Code.Core
                         break;
                     }
             
-                    if (arrayElementField.Type is LuminFiledType.Struct)
+                    if (IsPureValueTypeStruct(arrayElementField))
                     {
-                        if (IsPureValueTypeStruct(arrayElementField))
-                        {
-                            if (depth > 0) 
-                                sb.AppendLine($"{indentStr}reader.ReadUnmanagedArray(ref {offset}, ref element__{depth - 1}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                            else
-                                sb.AppendLine($"{indentStr}reader.ReadUnmanagedArray(ref {offset}, ref {targetObj}!, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                
-                            sb.AppendLine($"{indentStr}{field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
-                            break;
-                        }
-                        
-                        sb.AppendLine($"{indentStr}if (!reader.IsReferenceOrContainsReferences<{field.ClassName}>())");
-                        sb.AppendLine($"{indentStr}{{");
                         if (depth > 0) 
-                            sb.AppendLine($"{indentStr}    reader.ReadUnmanagedArray(ref {offset}, ref element__{depth - 1}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                            sb.AppendLine($"{indentStr}reader.ReadUnmanagedArray(ref {offset}, ref element__{depth - 1}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
                         else
-                            sb.AppendLine($"{indentStr}    reader.ReadUnmanagedArray(ref {offset}, ref {targetObj}!, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                            sb.AppendLine($"{indentStr}reader.ReadUnmanagedArray(ref {offset}, ref {targetObj}!, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
                 
-                        sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
-                        sb.AppendLine($"{indentStr}}}");
-                        sb.AppendLine($"{indentStr}else");
+                        sb.AppendLine($"{indentStr}{field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
+                        break;
+                        
+                        // sb.AppendLine($"{indentStr}if (!reader.IsReferenceOrContainsReferences<{field.ClassName}>())");
+                        // sb.AppendLine($"{indentStr}{{");
+                        // if (depth > 0) 
+                        //     sb.AppendLine($"{indentStr}    reader.ReadUnmanagedArray(ref {offset}, ref element__{depth - 1}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                        // else
+                        //     sb.AppendLine($"{indentStr}    reader.ReadUnmanagedArray(ref {offset}, ref {targetObj}!, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                        //
+                        // sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
+                        // sb.AppendLine($"{indentStr}}}");
+                        // sb.AppendLine($"{indentStr}else");
                     }
             
                     sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.Name}Count{depthSuffix}; i{depthSuffix}++)");
