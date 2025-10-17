@@ -283,7 +283,7 @@ namespace LuminPack.Core
             }
             else
             {
-                TryReadStringHead(ref index, out length);
+                length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index));
             }
 
         }
