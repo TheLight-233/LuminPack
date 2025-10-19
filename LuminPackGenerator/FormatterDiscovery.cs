@@ -279,16 +279,19 @@ namespace LuminPack.SourceGenerator
         public static (Action<LuminLocalFieldData, StringBuilder>, Action<LuminLocalFieldData, StringBuilder>) GetFormatter(string typeName)
         {
             
+            if (typeName.EndsWith("[]"))
+            {
+                return (ArrayFormatter.GenerateSerializeCode, ArrayFormatter.GenerateDeserializeCode);
+            }
+            
             string baseTypeName = GetBaseTypeName(typeName);
+            
             if (Formatters.TryGetValue(baseTypeName, out var formatter))
             {
                 return formatter;
             }
             
-            if (typeName.EndsWith("[]"))
-            {
-                return (ArrayFormatter.GenerateSerializeCode, ArrayFormatter.GenerateDeserializeCode);
-            }
+            
     
             return (null, null);
         }

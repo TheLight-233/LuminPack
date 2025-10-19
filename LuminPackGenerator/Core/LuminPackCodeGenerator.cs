@@ -352,15 +352,15 @@ namespace LuminPack.Code.Core
             }
                 
             sb.AppendLine();
-            if (_dataInfo.fields.Count(x => x.IsPrivate) > 0)
+            if (_dataInfo.fields.Count(x => x.IsPrivate || x.isProperty) > 0)
             {
-                sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
+                sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value);");
             }
             sb.AppendLine("            int totalLength = 1;");
             sb.AppendLine();
             for (var i = 0; i < data.fields.Count; i++)
             {
-                var access = data.fields[i].IsPrivate ? "local" : "value";
+                var access = data.fields[i].IsPrivate || data.fields[i].isProperty ? "local" : "value";
                 
                 if (data.fields[i].FieldType is LuminDataType.Reference && data.fields[i].Type is not LuminFiledType.Other)
                 {
@@ -970,10 +970,10 @@ namespace LuminPack.Code.Core
                     if (depth > 0)
                     {
                         sb.AppendLine($"{indentStr}var {field.Name}v{depthSuffix} = {fieldPath};");
-                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref {field.Name}v{depthSuffix}!);");
+                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({field.Name}v{depthSuffix}!);");
                     }
                     else 
-                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref {fieldPath}!);");
+                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({fieldPath}!);");
                     
                     
                     var elementField = new LuminDataField
@@ -1624,10 +1624,10 @@ namespace LuminPack.Code.Core
                     }
                     break;
                 case LuminFiledType.String:
-                    sb.AppendLine($"{indentStr}reader.ReadStringLength(ref {offset}, out var {field.Name}{depthSuffix}Length);");
+                    sb.AppendLine($"{indentStr}reader.ReadStringLength(ref {offset}, out var {field.belongClassName.Split('.').Last()}{field.Name}{depthSuffix}Length);");
             
-                    sb.AppendLine($"{indentStr}{targetObj} = reader.ReadString({offset}, {field.Name}{depthSuffix}Length)!;");
-                    sb.AppendLine($"{indentStr}{offset} += ({field.Name}{depthSuffix}Length + reader.StringRecordLength());");
+                    sb.AppendLine($"{indentStr}{targetObj} = reader.ReadString({offset}, {field.belongClassName.Split('.').Last()}{field.Name}{depthSuffix}Length)!;");
+                    sb.AppendLine($"{indentStr}{offset} += ({field.belongClassName.Split('.').Last()}{field.Name}{depthSuffix}Length + reader.StringRecordLength());");
                     break;
                 case LuminFiledType.List:
                     if (isFirst && depth is 0) 
@@ -1654,15 +1654,15 @@ namespace LuminPack.Code.Core
                     {
                         if (depth > 0)
                         {
-                            sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref element__{depth - 1}, {field.Name}Count{depthSuffix});");
+                            sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(element__{depth - 1}, {field.Name}Count{depthSuffix});");
                             sb.AppendLine($"{indentStr}reader.ReadUnmanagedSpan(ref {field.Name}ListOffset{depthSuffix}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                            sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize(ref element__{depth - 1}, {field.Name}Count{depthSuffix});");
+                            sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize(element__{depth - 1}, {field.Name}Count{depthSuffix});");
                         }
                         else
                         {
-                            sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref {targetObj}!, {field.Name}Count{depthSuffix});");
+                            sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({targetObj}!, {field.Name}Count{depthSuffix});");
                             sb.AppendLine($"{indentStr}reader.ReadUnmanagedSpan(ref {field.Name}ListOffset{depthSuffix}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                            sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize(ref {targetObj}, {field.Name}Count{depthSuffix});");
+                            sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize({targetObj}, {field.Name}Count{depthSuffix});");
                         }
                 
                         sb.AppendLine($"{indentStr}{field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
@@ -1673,15 +1673,15 @@ namespace LuminPack.Code.Core
                     {
                         if (depth > 0)
                         {
-                            sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref element__{depth - 1}, {field.Name}Count{depthSuffix});");
+                            sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(element__{depth - 1}, {field.Name}Count{depthSuffix});");
                             sb.AppendLine($"{indentStr}reader.ReadUnmanagedSpan(ref {offset}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                            sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize(ref element__{depth - 1}, {field.Name}Count{depthSuffix});");
+                            sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize(element__{depth - 1}, {field.Name}Count{depthSuffix});");
                         }
                         else
                         {
-                            sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref {targetObj}!, {field.Name}Count{depthSuffix});");
+                            sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({targetObj}!, {field.Name}Count{depthSuffix});");
                             sb.AppendLine($"{indentStr}reader.ReadUnmanagedSpan(ref {offset}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
-                            sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize(ref {targetObj}, {field.Name}Count{depthSuffix});");
+                            sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize({targetObj}, {field.Name}Count{depthSuffix});");
                         }
                         sb.AppendLine($"{indentStr}{field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
                         break;
@@ -1706,16 +1706,18 @@ namespace LuminPack.Code.Core
                         // sb.AppendLine($"{indentStr}else");
                     }
             
+                    if (depth > 0)
+                    {
+                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({fieldPath}!, {field.Name}Count{depthSuffix});");
+                    }
+                    else 
+                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({targetObj}!, {field.Name}Count{depthSuffix});");
+
+                    
                     sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.Name}Count{depthSuffix}; i{depthSuffix}++)");
                     sb.AppendLine($"{indentStr}{{");
             
-                    if (depth > 0)
-                    {
-                        sb.AppendLine($"{indentStr}    var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref {fieldPath}!, {field.Name}Count{depthSuffix});");
-                    }
-                    else 
-                        sb.AppendLine($"{indentStr}    var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(ref {targetObj}!, {field.Name}Count{depthSuffix});");
-            
+                    
                     StringBuilder arrayIndexFullSB = new StringBuilder();
                     if (isArray)
                     {
@@ -1868,15 +1870,15 @@ namespace LuminPack.Code.Core
                         // sb.AppendLine($"{indentStr}else");
                     }
             
-                    sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.Name}Count{depthSuffix}; i{depthSuffix}++)");
-                    sb.AppendLine($"{indentStr}{{");
-            
                     if (depth > 0)
                     {
-                        sb.AppendLine($"{indentStr}    var {field.Name}TempSpan{depthSuffix} = {fieldPath}.AsSpan();");
+                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = {fieldPath}.AsSpan();");
                     }
                     else 
-                        sb.AppendLine($"{indentStr}    var {field.Name}TempSpan{depthSuffix} = {targetObj}.AsSpan();");
+                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = {targetObj}.AsSpan();");
+                    
+                    sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.Name}Count{depthSuffix}; i{depthSuffix}++)");
+                    sb.AppendLine($"{indentStr}{{");
             
                     if (arrayElementField.Type is LuminFiledType.List)
                     {
@@ -1984,7 +1986,7 @@ namespace LuminPack.Code.Core
                                     num = i + 14;
                                 }
                         
-                                sb.Append($"{indentStr}offset += reader.ReadUnmanaged(ref offset");
+                                sb.Append($"{indentStr}{offset} += reader.ReadUnmanaged(ref {offset}");
                                 for (var j = i; j <= num; j++)
                                 {
                                     sb.Append($", out {parentName}{field.Name}{field.ClassFields[j].Name}Temp{depthSuffix}");
@@ -2080,11 +2082,11 @@ namespace LuminPack.Code.Core
                         // 有对象初始化器的情况
                         if (field.SelectedConstructor != null && field.SelectedConstructor.Parameters.Count > 0)
                         {
-                            sb.AppendLine($"{indentStr}{targetObj} = new {GetFullTypeName(field)}({nestedConstructorArgs})");
+                            sb.AppendLine($"{indentStr}{targetObj} = new {field.FullTypeName}({nestedConstructorArgs})");
                         }
                         else
                         {
-                            sb.AppendLine($"{indentStr}{targetObj} = new {GetFullTypeName(field)}()");
+                            sb.AppendLine($"{indentStr}{targetObj} = new {field.FullTypeName}()");
                         }
                         sb.AppendLine($"{indentStr}{{");
                         foreach (var subField in nestedInitializerFields)
@@ -2098,11 +2100,11 @@ namespace LuminPack.Code.Core
                         // 没有对象初始化器的情况
                         if (field.SelectedConstructor != null && field.SelectedConstructor.Parameters.Count > 0)
                         {
-                            sb.AppendLine($"{indentStr}{targetObj} = new {GetFullTypeName(field)}({nestedConstructorArgs});");
+                            sb.AppendLine($"{indentStr}{targetObj} = new {field.FullTypeName}({nestedConstructorArgs});");
                         }
                         else
                         {
-                            sb.AppendLine($"{indentStr}{targetObj} = new {GetFullTypeName(field)}();");
+                            sb.AppendLine($"{indentStr}{targetObj} = new {field.FullTypeName}();");
                         }
                     }
 
@@ -2738,13 +2740,13 @@ namespace LuminPack.Code.Core
                 current = current.Parent;
             }
             
-            if (set.Add($"global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.Local{dataInfo.classFullName}")) 
+            if (set.Add(dataInfo.classFullName + "LocalForLuminPackExtension1782819")) 
                 GenerateSingleLocalClass(sb, dataInfo);
 
             // 为每个父类生成 Local
             foreach (var classInfo in allClassInfos)
             {
-                if (set.Add($"global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.Local{classInfo.classFullName}")) 
+                if (set.Add(dataInfo.classFullName + "LocalForLuminPackExtension1782819")) 
                     GenerateParentClass(sb, classInfo, dataInfo.localFields);
             }
         }
@@ -2755,7 +2757,7 @@ namespace LuminPack.Code.Core
             string inheritance = "";
             if (classInfo.Parent != null)
             {
-                inheritance = $" : Local{classInfo.Parent.classFullName}";
+                inheritance = $" : Local{classInfo.Parent.classFileName}";
             }
 
             switch (classInfo.structLayout)
@@ -2775,8 +2777,8 @@ namespace LuminPack.Code.Core
     
             sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
             sb.AppendLine(classInfo.isValueType 
-                ? $"        private struct Local{classInfo.classFullName}{inheritance}" 
-                : $"        private class Local{classInfo.classFullName}{inheritance}");
+                ? $"        private struct Local{classInfo.classFileName}{inheritance}" 
+                : $"        private class Local{classInfo.classFileName}{inheritance}");
             sb.AppendLine("        {");
             
             foreach (var field in classInfo.fields)
@@ -2802,7 +2804,7 @@ namespace LuminPack.Code.Core
             string inheritance = "";
             if (classInfo.Parent != null)
             {
-                inheritance = $" : Local{classInfo.Parent.classFullName}";
+                inheritance = $" : Local{classInfo.Parent.classFileName}";
             }
 
             switch (classInfo.structLayout)
@@ -2822,8 +2824,8 @@ namespace LuminPack.Code.Core
     
             sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
             sb.AppendLine(classInfo.isValueType 
-                ? $"        private struct Local{classInfo.classFullName}{inheritance}" 
-                : $"        private class Local{classInfo.classFullName}{inheritance}");
+                ? $"        private struct Local{classInfo.classFileName}{inheritance}" 
+                : $"        private class Local{classInfo.classFileName}{inheritance}");
             sb.AppendLine("        {");
             
             foreach (var field in GetMyLocalFiled(classInfo))
@@ -2901,11 +2903,11 @@ namespace LuminPack.Code.Core
             }
             
             sb.AppendLine();
-            if (_dataInfo.fields.Count(x => x.IsPrivate) > 0)
+            if (_dataInfo.fields.Count(x => x.IsPrivate || x.isProperty) > 0)
             {
                 sb.AppendLine(extension 
-                    ? $"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref Unsafe.AsRef(in value));"
-                    : $"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
+                    ? $"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref Unsafe.AsRef(in value));"
+                    : $"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value);");
             }
             sb.AppendLine("            ref int offset = ref writer.GetCurrentSpanOffset();");
             sb.AppendLine($"            writer.WriteObjectHeader(ref offset, {data.fields.Count});");
@@ -2915,7 +2917,7 @@ namespace LuminPack.Code.Core
 
             for (var i = 0; i < data.fields.Count; i++)
             {
-                var access = data.fields[i].IsPrivate ? "local" : "value";
+                var access = data.fields[i].IsPrivate || data.fields[i].isProperty ? "local" : "value";
                 
                 if (data.fields[i].FieldType is LuminDataType.Reference && data.fields[i].Type is not LuminFiledType.Other)
                 {
@@ -3170,14 +3172,14 @@ namespace LuminPack.Code.Core
             var initializerFields = data.fields.Where(f => 
                 (data.SelectedConstructor == null || 
                  !data.SelectedConstructor.Parameters.Any(p => p.MatchingFieldName == f.Name)) &&
-                !f.IsPrivate
+                !f.IsPrivate && !f.isProperty
             ).ToList();
 
             // 收集需要单独设置的private字段
             var privateFields = data.fields.Where(f => 
                 (data.SelectedConstructor == null || 
                  !data.SelectedConstructor.Parameters.Any(p => p.MatchingFieldName == f.Name)) &&
-                f.IsPrivate
+                (f.IsPrivate || f.isProperty)
             ).ToList();
 
             // 使用对象初始化器创建对象
@@ -3218,11 +3220,11 @@ namespace LuminPack.Code.Core
                 sb.AppendLine($"            // 设置private字段");
                 if (data.isValueType)
                 {
-                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
+                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value);");
                 }
                 else
                 {
-                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value!);");
+                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value!);");
                 }
         
                 foreach (var field in privateFields)

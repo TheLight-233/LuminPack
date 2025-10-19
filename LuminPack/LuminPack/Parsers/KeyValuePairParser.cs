@@ -25,42 +25,46 @@ public static class KeyValuePairParser
             return;
         }
 
+#if DEBUG
         if (keyFormatter is null)
             LuminPackExceptionHelper.ThrowUnSupportedDataType(typeof(TKey));
         
         if (valueFormatter is null)
             LuminPackExceptionHelper.ThrowUnSupportedDataType(typeof(TValue));
+#endif
         
         value.Deconstruct(out var k, out var v);
-        keyFormatter.Serialize(ref writer, ref k);
-        valueFormatter.Serialize(ref writer, ref v);
+        keyFormatter!.Serialize(ref writer, ref k);
+        valueFormatter!.Serialize(ref writer, ref v);
     }
 
     [Preserve]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Deserialize<TKey, TValue>(ILuminPackableParser<TKey>? keyFormatter, ILuminPackableParser<TValue>? valueFormatter, ref LuminPackReader reader, out TKey? key, out TValue? value)
     {
-        if (!RuntimeHelpers.IsReferenceOrContainsReferences<KeyValuePair<TKey?, TValue?>>())
+        if (!RuntimeHelpers.IsReferenceOrContainsReferences<KeyValuePair<TKey, TValue>>())
         {
-            reader.DangerousReadUnmanaged(out KeyValuePair<TKey?, TValue?> kvp);
+            reader.DangerousReadUnmanaged(out KeyValuePair<TKey, TValue> kvp);
             key = kvp.Key;
             value = kvp.Value;
             
-            reader.Advance(Unsafe.SizeOf<KeyValuePair<TKey?, TValue?>>());
+            reader.Advance(Unsafe.SizeOf<KeyValuePair<TKey, TValue>>());
             
             return;
         }
 
+#if DEBUG
         if (keyFormatter is null)
             LuminPackExceptionHelper.ThrowUnSupportedDataType(typeof(TKey));
         
         if (valueFormatter is null)
             LuminPackExceptionHelper.ThrowUnSupportedDataType(typeof(TValue));
+#endif
         
         key = default;
         value = default;
-        keyFormatter.Deserialize(ref reader, ref key);
-        valueFormatter.Deserialize(ref reader, ref value);
+        keyFormatter!.Deserialize(ref reader, ref key);
+        valueFormatter!.Deserialize(ref reader, ref value);
     }
     
     [Preserve]
@@ -74,14 +78,17 @@ public static class KeyValuePairParser
             return;
         }
 
+#if DEBUG
         if (keyFormatter is null)
             LuminPackExceptionHelper.ThrowUnSupportedDataType(typeof(TKey));
         
         if (valueFormatter is null)
             LuminPackExceptionHelper.ThrowUnSupportedDataType(typeof(TValue));
+#endif
         
-        keyFormatter.CalculateOffset(ref evaluator, ref key);
-        valueFormatter.CalculateOffset(ref evaluator, ref value);
+        
+        keyFormatter!.CalculateOffset(ref evaluator, ref key);
+        valueFormatter!.CalculateOffset(ref evaluator, ref value);
     }
 }
 

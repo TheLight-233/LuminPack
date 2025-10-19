@@ -71,10 +71,11 @@ namespace LuminPack.SourceGenerator
                     var extension = LuminPackExtensionGenerator.CodeGenerator(dataInfo, metaInfo, compilation);
                     if (string.IsNullOrEmpty(code)) return;
                     
-                    var name = dataInfo.classFullName.Replace("<", "_").Replace(">", "_").Replace(",", "_");
+                    var name = dataInfo.classFileName.Replace("<", "_").Replace(">", "_").Replace(",", "_");
                     
                     context.AddSource($"{name}Parser.g.cs", code);
-                    context.AddSource($"{name}Parser.Extension.g.cs", extension);
+                    if (!dataInfo.isGeneric) 
+                        context.AddSource($"{name}Parser.Extension.g.cs", extension);
                 });
             }
             catch (Exception ex)
@@ -90,13 +91,19 @@ namespace LuminPack.SourceGenerator
             _mainSymbol = symbol;
             var typeSymbol = (INamedTypeSymbol)symbol;
             _location = symbol.Locations.FirstOrDefault();
+
+            if (typeSymbol.ContainingType != null)
+            {
+                CheckNestedClassAccessibility(typeSymbol);
+            }
             
             ProcessedTypes.Add(typeSymbol);
             
             var dataInfo = new LuminDataInfo
             {
                 className = typeSymbol.Name,
-                classFullName = typeSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                classFileName = typeSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                classFullName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                 classNameSpace = typeSymbol.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                 isGeneric = typeSymbol.IsGenericType,
                 isValueType = typeSymbol.TypeKind == TypeKind.Struct,
@@ -386,7 +393,8 @@ namespace LuminPack.SourceGenerator
                 currentParent.Parent = new LuminDataInfo()
                 {
                     className = baseClassSymbol.Name,
-                    classFullName = baseClassSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    classFileName = baseClassSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat),
+                    classFullName = baseClassSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     classNameSpace = baseClassSymbol.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     isGeneric = baseClassSymbol.IsGenericType,
                     isValueType = baseClassSymbol.TypeKind == TypeKind.Struct,
@@ -458,6 +466,8 @@ namespace LuminPack.SourceGenerator
                     if (member.IsStatic) continue;
                 
                     if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
+                    
+                    if (!IsAutoProperty(member)) continue;
                 
                     if (TypeMetaChecker.TryCheckIncludeAttribute(member)) goto Set;
                 
@@ -471,6 +481,7 @@ namespace LuminPack.SourceGenerator
                     var field = new LuminDataField
                     {
                         Name = member.Name, // 直接使用属性名称
+                        FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                         NameSpace = member.Type.ContainingNamespace?.ToString() ?? 
                                     member.ContainingNamespace?.ToString() ?? 
                                     "Your.Data.Namespace",
@@ -535,6 +546,7 @@ namespace LuminPack.SourceGenerator
                     var field = new LuminDataField
                     {
                         Name = member.Name,
+                        FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                         NameSpace = member.Type.ContainingNamespace?.ToString() ?? 
                                     member.ContainingNamespace?.ToString() ?? 
                                     "Your.Data.Namespace",
@@ -653,6 +665,9 @@ namespace LuminPack.SourceGenerator
                     case SpecialType.System_String:
                         field.Type = LuminFiledType.String;
                         break;
+                    case SpecialType.System_Decimal:
+                        field.Type = LuminFiledType.Other;
+                        break;
                     default:
                         if (namedType.TypeKind is TypeKind.Enum)
                         {
@@ -678,11 +693,19 @@ namespace LuminPack.SourceGenerator
                             }
                             else if (namedType.IsGenericType)
                             {
+                                if (namedType.ContainingType != null)
+                                {
+                                    CheckNestedClassAccessibility(namedType);
+                                }
                                 
                                 ProcessGenericClassOrStruct(namedType, field, genericParameters);
                             }
                             else
                             {
+                                if (namedType.ContainingType != null)
+                                {
+                                    CheckNestedClassAccessibility(namedType);
+                                }
                                 
                                 ProcessNonGenericClassOrStruct(namedType, field, genericParameters);
                             }
@@ -824,6 +847,11 @@ namespace LuminPack.SourceGenerator
 
         private static void ProcessClassFiled(INamedTypeSymbol namedTypeArg, LuminDataField field, bool isFullName = true, List<string> genericParameters = null)
         {
+            if (namedTypeArg.ContainingType != null)
+            {
+                CheckNestedClassAccessibility(namedTypeArg);
+            }
+            
             if (ProcessedTypes.Contains(namedTypeArg))
             {
                 field.Type = LuminFiledType.Other;
@@ -875,6 +903,8 @@ namespace LuminPack.SourceGenerator
                 
                         if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
 
+                        if (!IsAutoProperty(member)) continue;
+                        
                         if (TypeMetaChecker.TryCheckIncludeAttribute(member) && !member.Type.IsAnonymousType)
                         {
                             if (_metadata is not null && !_metadata.IsNet8)
@@ -908,6 +938,7 @@ namespace LuminPack.SourceGenerator
                         var nestedField = new LuminDataField
                         {
                             Name = member.Name,
+                            FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                             TypeName = member.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : member.Type.Name,
                             IsPrivate = member.DeclaredAccessibility is 
@@ -972,6 +1003,7 @@ namespace LuminPack.SourceGenerator
                         var nestedField = new LuminDataField
                         {
                             Name = nestedMember.Name,
+                            FullTypeName = nestedMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                             TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
                             IsPrivate = nestedMember.DeclaredAccessibility is 
@@ -1027,6 +1059,8 @@ namespace LuminPack.SourceGenerator
             
                         if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
             
+                        if (!IsAutoProperty(member)) continue;
+                        
                         if (TypeMetaChecker.TryCheckIncludeAttribute(member))
                         {
                             if (_metadata is not null && !_metadata.IsNet8)
@@ -1061,6 +1095,7 @@ namespace LuminPack.SourceGenerator
                         var nestedField = new LuminDataField
                         {
                             Name = member.Name,
+                            FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                             TypeName = member.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : member.Type.Name,
                             IsPrivate = member.DeclaredAccessibility is 
@@ -1128,6 +1163,7 @@ namespace LuminPack.SourceGenerator
                         var nestedField = new LuminDataField
                         {
                             Name = nestedMember.Name,
+                            FullTypeName = nestedMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                             TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
                             IsPrivate = nestedMember.DeclaredAccessibility is 
@@ -1285,6 +1321,8 @@ namespace LuminPack.SourceGenerator
                 
                 if (member is IPropertySymbol property)
                 {
+                    if (!IsAutoProperty(property)) continue;
+                    
                     typeName = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     isValue = property.Type.IsValueType;
                 }
@@ -1451,6 +1489,8 @@ namespace LuminPack.SourceGenerator
 
                 if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
 
+                if (!IsAutoProperty(member)) continue;
+                
                 if (TypeMetaChecker.TryCheckIncludeAttribute(member))
                 {
                     if (_metadata is not null && !_metadata.IsNet8)
@@ -1480,6 +1520,7 @@ namespace LuminPack.SourceGenerator
                 var nestedField = new LuminDataField
                 {
                     Name = member.Name,
+                    FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = member.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : member.Type.Name,
                     IsPrivate = member.DeclaredAccessibility is 
@@ -1540,6 +1581,7 @@ namespace LuminPack.SourceGenerator
                 var nestedField = new LuminDataField
                 {
                     Name = nestedMember.Name,
+                    FullTypeName = nestedMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
                     IsPrivate = nestedMember.DeclaredAccessibility is 
@@ -1570,6 +1612,8 @@ namespace LuminPack.SourceGenerator
         
                 if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
         
+                if (!IsAutoProperty(member)) continue;
+                
                 bool shouldInclude = TypeMetaChecker.TryCheckIncludeAttribute(member);
         
                 if (!shouldInclude && member.DeclaredAccessibility is 
@@ -1601,6 +1645,7 @@ namespace LuminPack.SourceGenerator
                 var nestedField = new LuminDataField
                 {
                     Name = member.Name,
+                    FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = member.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : member.Type.Name,
                     IsPrivate = member.DeclaredAccessibility is 
@@ -1663,6 +1708,7 @@ namespace LuminPack.SourceGenerator
                 var nestedField = new LuminDataField
                 {
                     Name = nestedMember.Name,
+                    FullTypeName = nestedMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
                     IsPrivate = nestedMember.DeclaredAccessibility is 
@@ -1906,5 +1952,49 @@ namespace LuminPack.SourceGenerator
             }
         }
         
+        /// <summary>
+        /// 精确检测属性是否会生成后台字段（支持泛型属性）
+        /// </summary>
+        public static bool IsAutoProperty(IPropertySymbol property)
+        {
+            if (property == null)
+                return false;
+
+            // 1. 基本检查：必须是实例属性，不能是抽象、外部或静态的
+            if (property.IsStatic || property.IsAbstract || property.IsExtern)
+                return false;
+
+            var standardBackingFieldName = $"<{property.Name}>k__BackingField";
+    
+            // 查找标准命名的后台字段
+            return property.ContainingType.GetMembers()
+                .OfType<IFieldSymbol>()
+                .Any(f => 
+                    f.Name == standardBackingFieldName);
+        }
+        
+        /// <summary>
+        /// 检查嵌套类的可访问性
+        /// </summary>
+        private static void CheckNestedClassAccessibility(INamedTypeSymbol nestedType)
+        {
+            if (nestedType.DeclaredAccessibility != Accessibility.Public && 
+                nestedType.DeclaredAccessibility != Accessibility.Internal)
+            {
+                TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                    DiagnosticDescriptors.NestedClassMustBePublicOrInternal,
+                    _location,
+                    nestedType.Name
+                ));
+                
+                TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                    DiagnosticDescriptors.NestedClassAccessibilityError,
+                    _location,
+                    nestedType.Name,
+                    nestedType.DeclaredAccessibility.ToString()
+                ));
+                
+            }
+        }
     }
 }

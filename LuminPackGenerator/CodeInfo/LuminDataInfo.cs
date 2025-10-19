@@ -6,6 +6,7 @@ namespace LuminPack.Code
     public sealed class LuminDataInfo
     {
         public string className = "NewData";
+        public string classFileName;
         public string classFullName;
         public string classNameSpace = "Your Data NameSpace";
         public bool isGeneric;

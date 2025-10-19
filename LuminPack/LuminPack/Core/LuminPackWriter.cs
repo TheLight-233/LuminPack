@@ -1678,7 +1678,7 @@ namespace LuminPack.Core
                 return;
             }
             
-            var span = LuminPackMarshal.GetListSpan(ref list, list.Count);
+            var span = LuminPackMarshal.GetListSpan(list, list.Count);
             
             WriteUnmanagedSpan(ref index, span, out spanOffset);
         }
@@ -1696,7 +1696,7 @@ namespace LuminPack.Core
                 return;
             }
 
-            var span = LuminPackMarshal.GetListSpan(ref list, list.Count);
+            var span = LuminPackMarshal.GetListSpan(list, list.Count);
             
             WriteUnmanagedSpan(ref index, span, length, out spanOffset);
         }
@@ -1712,7 +1712,7 @@ namespace LuminPack.Core
                 return;
             }
             
-            var span = LuminPackMarshal.GetListSpan(ref list, list.Count);
+            var span = LuminPackMarshal.GetListSpan(list, list.Count);
             
             WriteUnmanagedSpanWithOutHeader(ref index, span, out spanOffset);
         }
@@ -1728,7 +1728,7 @@ namespace LuminPack.Core
                 return;
             }
 
-            var span = LuminPackMarshal.GetListSpan(ref list, list.Count);
+            var span = LuminPackMarshal.GetListSpan(list, list.Count);
             
             WriteUnmanagedSpanWithOutHeader(ref index, span, length, out spanOffset);
         }

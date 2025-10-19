@@ -31,7 +31,7 @@ namespace LuminPack.Parsers
                 return;
             }
             
-            writer.WriteSpan(LuminPackMarshal.GetListSpan(ref value));
+            writer.WriteSpan(LuminPackMarshal.GetListSpan(value));
         }
 
         [Preserve]
@@ -67,7 +67,7 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
             
-            var span = LuminPackMarshal.GetListSpan(ref value, length);
+            var span = LuminPackMarshal.GetListSpan(value, length);
             
             reader.Advance(4);
             reader.ReadSpan(ref index, length, ref span);
@@ -246,7 +246,7 @@ namespace LuminPack.Parsers
                 return;
             }
             
-            writer.WriteSpan(LuminPackMarshal.GetListSpan(ref value));
+            writer.WriteSpan(LuminPackMarshal.GetListSpan(value));
         }
 
         [Preserve]
@@ -272,7 +272,7 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
             
-            var span = LuminPackMarshal.GetListSpan(ref value, length);
+            var span = LuminPackMarshal.GetListSpan(value, length);
             
             reader.Advance(4);
             
@@ -291,7 +291,7 @@ namespace LuminPack.Parsers
                 return;
             }
             
-            var span = LuminPackMarshal.GetListSpan(ref value);
+            var span = LuminPackMarshal.GetListSpan(value);
             evaluator.CalculateSpan(ref span);
         }
     }
@@ -345,7 +345,7 @@ namespace LuminPack.Parsers
             writer.Advance(4);
             
             nuint dictIndex = 0;
-            var dictView = LuminPackMarshal.GetDictionaryView(ref value);
+            var dictView = LuminPackMarshal.GetDictionaryView(value);
             ref var arrayRef =
                 ref LuminPackMarshal.GetArrayReference(dictView._entries); 
             
@@ -388,7 +388,10 @@ namespace LuminPack.Parsers
             var valueFormatter = LuminPackParseProvider.Cache<TValue>.Parser!;
             for (int i = 0; i < length; i++)
             {
-                KeyValuePairParser.Deserialize(keyFormatter, valueFormatter, ref reader, out var k, out var v);
+                TKey k = default!;
+                TValue v = default!;
+                keyFormatter.Deserialize(ref reader, ref k!);
+                valueFormatter.Deserialize(ref reader, ref v!);
                 value.Add(k!, v);
             }
         }
@@ -649,7 +652,7 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var span = LuminPackMarshal.GetStackSpan(ref value);
+            var span = LuminPackMarshal.GetStackSpan(value);
             
             writer.WriteSpan(ref index, span);
         }
@@ -679,7 +682,7 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
             
-            var span = LuminPackMarshal.GetStackSpan(ref value, length);
+            var span = LuminPackMarshal.GetStackSpan(value, length);
             
             reader.ReadSpan(ref index, length, ref span);
         }
@@ -694,7 +697,7 @@ namespace LuminPack.Parsers
                 return;
             }
             
-            var span = LuminPackMarshal.GetStackSpan(ref value);
+            var span = LuminPackMarshal.GetStackSpan(value);
             evaluator.CalculateSpan(ref span);
             
         }
@@ -717,9 +720,9 @@ namespace LuminPack.Parsers
                 return;
             }
 
-            var span = LuminPackMarshal.GetQueueSpan(ref value, value.Count);
+            var span = LuminPackMarshal.GetQueueSpan(value, value.Count);
             
-            LuminPackMarshal.GetQueueSize(ref value, out var head, out var tail, out var size);
+            LuminPackMarshal.GetQueueSize(value, out var head, out var tail, out var size);
             
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
@@ -825,7 +828,7 @@ namespace LuminPack.Parsers
             }
 
 
-            var span = LuminPackMarshal.GetQueueSpan(ref value, length);
+            var span = LuminPackMarshal.GetQueueSpan(value, length);
 
             reader.ReadUnmanaged(out int head);
             
@@ -839,7 +842,7 @@ namespace LuminPack.Parsers
             
             reader.Advance(4);
             
-            LuminPackMarshal.SetQueueSize(ref value, head, tail, size);
+            LuminPackMarshal.SetQueueSize(value, head, tail, size);
             
             if (length is 0)
             {
@@ -888,7 +891,7 @@ namespace LuminPack.Parsers
             }
 
 
-            var span = LuminPackMarshal.GetQueueSpan(ref value);
+            var span = LuminPackMarshal.GetQueueSpan(value);
             evaluator.CalculateSpan(ref span);
 
             //head, tail and size
@@ -1015,7 +1018,7 @@ namespace LuminPack.Parsers
             writer.Advance(4);
             
             nuint setIndex = 0;
-            var setView = LuminPackMarshal.GetHashSetView(ref value);
+            var setView = LuminPackMarshal.GetHashSetView(value);
             ref var arrayRef =
                 ref LuminPackMarshal.GetArrayReference(setView._entries); 
             
@@ -1350,7 +1353,7 @@ namespace LuminPack.Parsers
             
             var list = LuminPackMarshal.As<Collection<T?>, CollectionView<T?>>(ref value);
             
-            var span = LuminPackMarshal.GetListSpan(ref list.items!, length);
+            var span = LuminPackMarshal.GetListSpan(list.items!, length);
             
             reader.ReadSpan(ref index, length, ref span);
         }
@@ -1371,7 +1374,7 @@ namespace LuminPack.Parsers
             
             if (list != null)
             {
-                var span = LuminPackMarshal.GetListSpan(ref list);
+                var span = LuminPackMarshal.GetListSpan(list);
                 
                 evaluator.CalculateSpan(ref span);
             }
@@ -1462,7 +1465,7 @@ namespace LuminPack.Parsers
 
             list.items = new List<T?>(length);
             
-            var span = LuminPackMarshal.GetListSpan(ref list.items!, length);
+            var span = LuminPackMarshal.GetListSpan(list.items!, length);
             
             reader.ReadSpan(ref index, length, ref span);
         }
@@ -1483,7 +1486,7 @@ namespace LuminPack.Parsers
             
             if (list != null)
             {
-                var span = LuminPackMarshal.GetListSpan(ref list);
+                var span = LuminPackMarshal.GetListSpan(list);
                 
                 evaluator.CalculateSpan(ref span);
             }
@@ -1985,7 +1988,7 @@ namespace LuminPack.Parsers
             
             if (list != null)
             {
-                var span = LuminPackMarshal.GetListSpan(ref list);
+                var span = LuminPackMarshal.GetListSpan(list);
                 
                 evaluator.CalculateSpan(ref span);
             }
@@ -2077,7 +2080,7 @@ namespace LuminPack.Parsers
             
             if (list != null)
             {
-                var span = LuminPackMarshal.GetListSpan(ref list);
+                var span = LuminPackMarshal.GetListSpan(list);
                 
                 evaluator.CalculateSpan(ref span);
             }
@@ -2196,7 +2199,7 @@ namespace LuminPack.Parsers
             
             var list = LuminPackMarshal.As<ReadOnlyCollectionBuilder<T?>, List<T?>>(ref value);
             
-            writer.WriteSpan(LuminPackMarshal.GetListSpan(ref list));
+            writer.WriteSpan(LuminPackMarshal.GetListSpan(list));
         }
 
         [Preserve]
@@ -2224,7 +2227,7 @@ namespace LuminPack.Parsers
             
             var list = LuminPackMarshal.As<ReadOnlyCollectionBuilder<T?>, List<T?>>(ref value);
             
-            var span = LuminPackMarshal.GetListSpan(ref list, length);
+            var span = LuminPackMarshal.GetListSpan(list, length);
             
             reader.Advance(4);
             
@@ -2245,7 +2248,7 @@ namespace LuminPack.Parsers
             
             var list = LuminPackMarshal.As<ReadOnlyCollectionBuilder<T?>, List<T?>>(ref value);
             
-            var span = LuminPackMarshal.GetListSpan(ref list);
+            var span = LuminPackMarshal.GetListSpan(list);
             
             evaluator.CalculateSpan(ref span);
         }

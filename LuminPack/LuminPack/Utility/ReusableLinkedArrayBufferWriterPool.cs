@@ -96,10 +96,15 @@ public sealed class ReusableLinkedArrayBufferWriter :
 
     public Span<byte> DangerousGetBuffer() => _buffer.WrittenBuffer;
 
+    [Obsolete("This method causes GC allocations. Avoid calling it frequently; consider using GetSpan instead.")]
     public Memory<byte> GetMemory(int index = 0)
     {
-        // LuminPack don't use GetMemory.
-        throw new NotSupportedException();
+        if (_buffer.IsNull)
+        {
+            _buffer = AllocatedBuffer();
+        }
+
+        return new Memory<byte>(_buffer.WrittenBuffer.ToArray());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -13,7 +13,7 @@ public static class LuminPackMarshal
 {
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Span<T?> GetListSpan<T>(scoped ref List<T?>? list)
+    public static Span<T?> GetListSpan<T>(List<T?>? list)
     {
         if (list is null)
         {
@@ -24,14 +24,14 @@ public static class LuminPackMarshal
         CollectionsMarshal.SetCount(list, list.Count);
         return CollectionsMarshal.AsSpan(list);
 #else
-        SetListSize(ref list, list.Count);
+        SetListSize(list, list.Count);
         ref ListView<T?> local = ref As<List<T?>, ListView<T?>>(ref list);
         return local._items.AsSpan(0, list.Count);
 #endif
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Span<T?> GetListSpan<T>(scoped ref List<T?>? list, int length)
+    public static Span<T?> GetListSpan<T>(List<T?>? list, int length)
     {
         if (list is null)
         {
@@ -48,14 +48,14 @@ public static class LuminPackMarshal
         CollectionsMarshal.SetCount(list, length);
         return CollectionsMarshal.AsSpan(list).Slice(0, length);
 #else
-        SetListSize(ref list, length);
+        SetListSize(list, length);
         ref ListView<T?> local = ref As<List<T?>, ListView<T?>>(ref list);
         return local._items.AsSpan(0, length);
 #endif
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SetListSize<T>(scoped ref List<T?>? list, int size)
+    public static void SetListSize<T>(List<T?>? list, int size)
     {
         if (list is null) return;
         
@@ -73,33 +73,33 @@ public static class LuminPackMarshal
     
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Span<T?> GetStackSpan<T>(scoped ref Stack<T?>? stack)
+    public static Span<T?> GetStackSpan<T>(Stack<T?>? stack)
     {
         if (stack is null)
         {
             return Span<T?>.Empty;
         }
         
-        SetStackSize(ref stack, stack.Count);
+        SetStackSize(stack, stack.Count);
         ref var view = ref As<Stack<T?>, StackView<T?>>(ref stack);
         return view._items.AsSpan(0, stack.Count);
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Span<T?> GetStackSpan<T>(scoped ref Stack<T?>? stack, int length)
+    public static Span<T?> GetStackSpan<T>(Stack<T?>? stack, int length)
     {
         if (stack is null)
         {
             return Span<T?>.Empty;
         }
         
-        SetStackSize(ref stack, length);
+        SetStackSize(stack, length);
         ref var view = ref As<Stack<T?>, StackView<T?>>(ref stack);
         return view._items.AsSpan(0, length);
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SetStackSize<T>(scoped ref Stack<T?>? stack, int size)
+    public static void SetStackSize<T>(Stack<T?>? stack, int size)
     {
         if (stack is null) return;
         
@@ -108,7 +108,7 @@ public static class LuminPackMarshal
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Span<T?> GetQueueSpan<T>(scoped ref Queue<T?>? queue)
+    public static Span<T?> GetQueueSpan<T>(Queue<T?>? queue)
     {
         if (queue is null)
         {
@@ -120,7 +120,7 @@ public static class LuminPackMarshal
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static Span<T?> GetQueueSpan<T>(scoped ref Queue<T?>? queue, int size)
+    public static Span<T?> GetQueueSpan<T>(Queue<T?>? queue, int size)
     {
         if (queue is null)
         {
@@ -132,7 +132,7 @@ public static class LuminPackMarshal
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void GetQueueSize<T>(scoped ref Queue<T?>? queue, out int tail, out int head, out int size)
+    public static void GetQueueSize<T>(Queue<T?>? queue, out int tail, out int head, out int size)
     {
         if (queue is null)
         {
@@ -152,7 +152,7 @@ public static class LuminPackMarshal
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void SetQueueSize<T>(scoped ref Queue<T?>? queue, int tail, int head, int size)
+    public static void SetQueueSize<T>(Queue<T?>? queue, int tail, int head, int size)
     {
         if (queue is null) return;
         
@@ -171,13 +171,13 @@ public static class LuminPackMarshal
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static DictionaryView<TKey, TValue?> GetDictionaryView<TKey, TValue>(scoped ref Dictionary<TKey, TValue?>? dict) where TKey : notnull
+    public static DictionaryView<TKey, TValue?> GetDictionaryView<TKey, TValue>(Dictionary<TKey, TValue?>? dict) where TKey : notnull
     {
         return Unsafe.As<Dictionary<TKey, TValue?>, DictionaryView<TKey, TValue?>>(ref dict!);
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static HashSetView<T?> GetHashSetView<T>(scoped ref HashSet<T?>? set)
+    public static HashSetView<T?> GetHashSetView<T>(HashSet<T?>? set)
     {
         return Unsafe.As<HashSet<T?>, HashSetView<T?>>(ref set!);
     }

@@ -60,6 +60,27 @@ namespace LuminPack
                 state.Reset();
             }
         }
+        
+        /// <summary>
+        /// 序列化主方法
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Serialize<T>(in T? value, ReusableLinkedArrayBufferWriter writerBuffer, LuminPackSerializerOption? option = null)
+        {
+            var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();
+            state.Init(option);
+            
+            try
+            {
+                var writer = new LuminPackWriter(writerBuffer, state);
+
+                writer.WriteValue(value);
+            }
+            finally
+            {
+                state.Reset();
+            }
+        }
 
         /// <summary>
         /// 异步序列化

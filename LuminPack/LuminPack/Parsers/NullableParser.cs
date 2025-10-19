@@ -13,24 +13,23 @@ public sealed class NullableParser<T> : LuminPackParser<T?>
     {
         ref var index = ref writer.GetCurrentSpanOffset();
         
-        if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
-        {
-            writer.DangerousWriteUnmanaged(ref index, value);
-            
-            index += Unsafe.SizeOf<T>();
-            
-            return;
-        }
-        
         if (!value.HasValue)
         {
             writer.WriteNullObjectHeader(ref index);
-            index += 1;
+            writer.Advance(1);
             return;
         }
         
-
-        writer.WriteValue(value.Value);
+        if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            T val = value.Value;
+            writer.DangerousWriteUnmanaged(ref index, val);
+            writer.Advance(Unsafe.SizeOf<T>());
+            return;
+        }
+        
+        T valRef = value.Value;
+        writer.WriteValue(valRef);
     }
 
     [Preserve]
@@ -38,25 +37,44 @@ public sealed class NullableParser<T> : LuminPackParser<T?>
     {
         ref var index = ref reader.GetCurrentSpanOffset();
         
+        if (reader.PeekIsNullObject(ref index))
+        {
+            value = null;
+            reader.Advance(1);
+            return;
+        }
+        
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
         {
-            reader.DangerousReadUnmanaged(ref index, out value);
+            T val;
+            reader.DangerousReadUnmanaged(ref index, out val);
+            value = val;
+            reader.Advance(Unsafe.SizeOf<T>());
+            return;
         }
-        value = reader.ReadValue<T>();
+        
+        T valRef = reader.ReadValue<T>();
+        value = valRef;
     }
 
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref T? value)
     {
-        if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        if (!value.HasValue)
         {
-            evaluator += Unsafe.SizeOf<T>();
-            
+            evaluator += 1;
             return;
         }
         
-        var eva = evaluator.GetEvaluator<T?>();
-
-        eva.CalculateOffset(ref evaluator, ref value);
+        if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+        {
+            evaluator += Unsafe.SizeOf<T>();
+            return;
+        }
+        
+        
+        T val = value.Value;
+        var eva = evaluator.GetEvaluator<T>();
+        eva.CalculateOffset(ref evaluator, ref val);
     }
 }

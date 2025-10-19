@@ -11,7 +11,7 @@ namespace LuminPack.Parsers;
 
 using static InterfaceCollectionParserUtils;
 
-file static class InterfaceCollectionParserUtils
+public static class InterfaceCollectionParserUtils
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TrySerializeOptimized<TCollection, TElement>(ref LuminPackWriter writer, [NotNullWhen(false)] scoped ref TCollection? value)
@@ -39,7 +39,7 @@ file static class InterfaceCollectionParserUtils
 
         if (value is List<TElement?> list)
         {
-            writer.WriteSpan(LuminPackMarshal.GetListSpan(ref list, list.Count));
+            writer.WriteSpan(LuminPackMarshal.GetListSpan(list, list.Count));
             return true;
         }
 
@@ -69,7 +69,7 @@ file static class InterfaceCollectionParserUtils
 
         if (value is List<TElement?> list)
         {
-            var span = LuminPackMarshal.GetListSpan(ref list, list.Count);
+            var span = LuminPackMarshal.GetListSpan(list, list.Count);
             evaluator.CalculateSpan(ref span);
             return true;
         }

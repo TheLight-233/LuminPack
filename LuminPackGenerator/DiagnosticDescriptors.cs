@@ -278,4 +278,20 @@ internal static class DiagnosticDescriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+    
+    public static readonly DiagnosticDescriptor NestedClassMustBePublicOrInternal = new(
+        id: "LuminPack034",
+        title: "Nested class must be public or internal",
+        messageFormat: "The LuminPackable nested class '{0}' must be public or internal to be serializable",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor NestedClassAccessibilityError = new(
+        id: "LuminPack035", 
+        title: "Nested class accessibility error",
+        messageFormat: "Nested class '{0}' has invalid accessibility '{1}'. Only public and internal are supported for serialization",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
 }

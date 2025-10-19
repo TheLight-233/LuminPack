@@ -20,7 +20,7 @@ public static class ListFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            writer.WriteSpan(LuminPackMarshal.GetListSpan(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in value)));");
+        sb.AppendLine("            writer.WriteSpan(LuminPackMarshal.GetListSpan(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value)));");
     }
 
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
@@ -45,7 +45,7 @@ public static class ListFormatter
         sb.AppendLine("                value.Clear();");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in value), length);");
+        sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value), length);");
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(4);");
         sb.AppendLine("            reader.ReadSpan(ref index, length, ref span);");
@@ -72,7 +72,7 @@ public static class DictionaryFormatter
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
         sb.AppendLine("            nuint dictIndex = 0;");
-        sb.AppendLine("            var dictView = LuminPackMarshal.GetDictionaryView(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in value));");
+        sb.AppendLine("            var dictView = LuminPackMarshal.GetDictionaryView(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value));");
         sb.AppendLine("            ref var arrayRef = ref LuminPackMarshal.GetArrayReference(dictView._entries);");
         sb.AppendLine();
         sb.AppendLine("            while ((uint) dictIndex < (uint) dictView._count)");
@@ -117,6 +117,284 @@ public static class DictionaryFormatter
         sb.AppendLine("                reader.ReadValue(ref k);");
         sb.AppendLine("                reader.ReadValue(ref v);");
         sb.AppendLine("                value.Add(k!, v);");
+        sb.AppendLine("            }");
+    }
+}
+
+public static class StackFormatter
+{
+    public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
+        sb.AppendLine();
+        sb.AppendLine("            if (value is null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNullCollectionHeader(ref index);");
+        sb.AppendLine();
+        sb.AppendLine("                index += 4;");
+        sb.AppendLine();
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            var span = LuminPackMarshal.GetStackSpan(Unsafe.AsRef(in value));");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteSpan(ref index, span);");
+    }
+
+    public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
+        sb.AppendLine();
+        sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine();
+        sb.AppendLine("                reader.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            reader.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("            if (value is null)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                value = new global::System.Collections.Generic.Stack<{GetFirstGeneric(fieldData.TypeName)}>(length);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            else");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value.Clear();");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            var span = LuminPackMarshal.GetStackSpan(value, length);");
+        sb.AppendLine();
+        sb.AppendLine("            reader.ReadSpan(ref index, length, ref span);");
+    }
+}
+
+public static class QueueFormatter
+{
+    public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
+        sb.AppendLine();
+        sb.AppendLine("            if (value is null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNullCollectionHeader(ref index);");
+        sb.AppendLine();
+        sb.AppendLine("                index += 4;");
+        sb.AppendLine();
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            var span = LuminPackMarshal.GetQueueSpan(Unsafe.AsRef(in value), value.Count);");
+        sb.AppendLine();
+        sb.AppendLine("            LuminPackMarshal.GetQueueSize(Unsafe.AsRef(in value), out var head, out var tail, out var size);");
+        sb.AppendLine();
+        sb.AppendLine($"            if (!RuntimeHelpers.IsReferenceOrContainsReferences<{GetFirstGeneric(fieldData.TypeName)}>())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                if (span.IsEmpty)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    writer.WriteCollectionHeader(ref index, 0);");
+        sb.AppendLine();
+        sb.AppendLine("                    writer.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("                    return;");
+        sb.AppendLine("                }");
+        sb.AppendLine();
+        sb.AppendLine("                writer.WriteCollectionHeader(ref index, span.Length);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.WriteUnmanaged(head);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.WriteUnmanaged(tail);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.WriteUnmanaged(size);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine($"                var srcLength = Unsafe.SizeOf<{GetFirstGeneric(fieldData.TypeName)}>() * span.Length;");
+        sb.AppendLine();
+        sb.AppendLine("                ref var dest = ref writer.GetSpanReference(index);");
+        sb.AppendLine($"                ref var src = ref Unsafe.As<{GetFirstGeneric(fieldData.TypeName)}, byte>(ref span.GetPinnableReference());");
+        sb.AppendLine();
+        sb.AppendLine("                Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)srcLength);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.Advance(srcLength);");
+        sb.AppendLine();
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            if (span.IsEmpty)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNullCollectionHeader(ref index);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteCollectionHeader(ref index, span.Length);");
+        sb.AppendLine();
+        sb.AppendLine("            writer.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteUnmanaged(head);");
+        sb.AppendLine();
+        sb.AppendLine("            writer.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteUnmanaged(tail);");
+        sb.AppendLine();
+        sb.AppendLine("            writer.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteUnmanaged(size);");
+        sb.AppendLine();
+        sb.AppendLine("            writer.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("            foreach (var item in span)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var v = item;");
+        sb.AppendLine("                writer.WriteValue(v);");
+        sb.AppendLine("            }");
+    }
+
+    public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
+        sb.AppendLine();
+        sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine();
+        sb.AppendLine("                reader.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            reader.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("            if (value is null)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                value = new global::System.Collections.Generic.Queue<{GetFirstGeneric(fieldData.TypeName)}>(length);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            else");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value.Clear();");
+        sb.AppendLine("#if NET8_0_OR_GREATER");
+        sb.AppendLine("                value.EnsureCapacity(length);");
+        sb.AppendLine("#endif");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            var span = LuminPackMarshal.GetQueueSpan(value, length);");
+        sb.AppendLine();
+        sb.AppendLine("            reader.ReadUnmanaged(out int head);");
+        sb.AppendLine();
+        sb.AppendLine("            reader.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("            reader.ReadUnmanaged(out int tail);");
+        sb.AppendLine();
+        sb.AppendLine("            reader.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("            reader.ReadUnmanaged(out int size);");
+        sb.AppendLine();
+        sb.AppendLine("            reader.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("            LuminPackMarshal.SetQueueSize(ref value, head, tail, size);");
+        sb.AppendLine();
+        sb.AppendLine("            if (length is 0)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            if (span.Length != length)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                span = LuminPackMarshal.AllocateUninitializedArray<{GetFirstGeneric(fieldData.TypeName)}>(length);");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine($"            if (!RuntimeHelpers.IsReferenceOrContainsReferences<{GetFirstGeneric(fieldData.TypeName)}>())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                ref var dest = ref LuminPackMarshal.GetReference(ref span.GetPinnableReference());");
+        sb.AppendLine();
+        sb.AppendLine($"                var srcLength = length * Unsafe.SizeOf<{GetFirstGeneric(fieldData.TypeName)}>();");
+        sb.AppendLine();
+        sb.AppendLine("                Unsafe.CopyBlockUnaligned(ref dest, ref reader.GetSpanReference(index), (uint)srcLength);");
+        sb.AppendLine();
+        sb.AppendLine("                reader.Advance(srcLength);");
+        sb.AppendLine();
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            for (int i = 0; i < length; i++)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                reader.ReadValue(ref span[i]);");
+        sb.AppendLine("            }");
+    }
+}
+
+public static class HashSetFormatter
+{
+    public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
+        sb.AppendLine();
+        sb.AppendLine("            if (value is null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNullCollectionHeader(ref index);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
+        sb.AppendLine("            writer.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("            nuint setIndex = 0;");
+        sb.AppendLine("            var setView = LuminPackMarshal.GetHashSetView(Unsafe.AsRef(in value));");
+        sb.AppendLine("            ref var arrayRef = ref LuminPackMarshal.GetArrayReference(setView._entries);");
+        sb.AppendLine();
+        sb.AppendLine("            while ((uint) setIndex < (uint) setView._count)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                ref var local = ref Unsafe.Add(ref arrayRef, setIndex++);");
+        sb.AppendLine("                if (local.Next >= -1)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    writer.WriteValue(local.Value);");
+        sb.AppendLine("                }");
+        sb.AppendLine("            }");
+    }
+
+    public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
+        sb.AppendLine();
+        sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine();
+        sb.AppendLine("                reader.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            reader.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("            if (value is null)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                value = new global::System.Collections.Generic.HashSet<{GetFirstGeneric(fieldData.TypeName)}>(length);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            else");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value.Clear();");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            for (int i = 0; i < length; i++)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                {GetFirstGeneric(fieldData.TypeName)} v = default!;");
+        sb.AppendLine("                reader.ReadValue(ref v);");
+        sb.AppendLine("                value.Add(v);");
         sb.AppendLine("            }");
     }
 }
@@ -248,219 +526,6 @@ public static class SortedDictionaryFormatter
     }
 }
 
-public static class StackFormatter
-{
-    public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
-    {
-        sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
-        sb.AppendLine();
-        sb.AppendLine("            if (value is null)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                writer.WriteNullCollectionHeader(ref index);");
-        sb.AppendLine();
-        sb.AppendLine("                index += 4;");
-        sb.AppendLine();
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            var span = LuminPackMarshal.GetStackSpan(ref Unsafe.AsRef(in value));");
-        sb.AppendLine();
-        sb.AppendLine("            writer.WriteSpan(ref index, span);");
-    }
-
-    public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
-    {
-        sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
-        sb.AppendLine();
-        sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
-        sb.AppendLine("            {");
-        sb.AppendLine("                value = null;");
-        sb.AppendLine();
-        sb.AppendLine("                reader.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            reader.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("            if (value is null)");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                value = new global::System.Collections.Generic.Stack<{GetFirstGeneric(fieldData.TypeName)}>(length);");
-        sb.AppendLine("            }");
-        sb.AppendLine("            else");
-        sb.AppendLine("            {");
-        sb.AppendLine("                value.Clear();");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            var span = LuminPackMarshal.GetStackSpan(ref value, length);");
-        sb.AppendLine();
-        sb.AppendLine("            reader.ReadSpan(ref index, length, ref span);");
-    }
-}
-
-public static class QueueFormatter
-{
-    public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
-    {
-        sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
-        sb.AppendLine();
-        sb.AppendLine("            if (value is null)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                writer.WriteNullCollectionHeader(ref index);");
-        sb.AppendLine();
-        sb.AppendLine("                index += 4;");
-        sb.AppendLine();
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            var span = LuminPackMarshal.GetQueueSpan(ref Unsafe.AsRef(in value), value.Count);");
-        sb.AppendLine();
-        sb.AppendLine("            LuminPackMarshal.GetQueueSize(ref Unsafe.AsRef(in value), out var head, out var tail, out var size);");
-        sb.AppendLine();
-        sb.AppendLine($"            if (!RuntimeHelpers.IsReferenceOrContainsReferences<{GetFirstGeneric(fieldData.TypeName)}>())");
-        sb.AppendLine("            {");
-        sb.AppendLine("                if (span.IsEmpty)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    writer.WriteCollectionHeader(ref index, 0);");
-        sb.AppendLine();
-        sb.AppendLine("                    writer.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("                    return;");
-        sb.AppendLine("                }");
-        sb.AppendLine();
-        sb.AppendLine("                writer.WriteCollectionHeader(ref index, span.Length);");
-        sb.AppendLine();
-        sb.AppendLine("                writer.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("                writer.WriteUnmanaged(head);");
-        sb.AppendLine();
-        sb.AppendLine("                writer.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("                writer.WriteUnmanaged(tail);");
-        sb.AppendLine();
-        sb.AppendLine("                writer.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("                writer.WriteUnmanaged(size);");
-        sb.AppendLine();
-        sb.AppendLine("                writer.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine($"                var srcLength = Unsafe.SizeOf<{GetFirstGeneric(fieldData.TypeName)}>() * span.Length;");
-        sb.AppendLine();
-        sb.AppendLine("                ref var dest = ref writer.GetSpanReference(index);");
-        sb.AppendLine($"                ref var src = ref Unsafe.As<{GetFirstGeneric(fieldData.TypeName)}, byte>(ref span.GetPinnableReference());");
-        sb.AppendLine();
-        sb.AppendLine("                Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)srcLength);");
-        sb.AppendLine();
-        sb.AppendLine("                writer.Advance(srcLength);");
-        sb.AppendLine();
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            if (span.IsEmpty)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                writer.WriteNullCollectionHeader(ref index);");
-        sb.AppendLine();
-        sb.AppendLine("                writer.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            writer.WriteCollectionHeader(ref index, span.Length);");
-        sb.AppendLine();
-        sb.AppendLine("            writer.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("            writer.WriteUnmanaged(head);");
-        sb.AppendLine();
-        sb.AppendLine("            writer.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("            writer.WriteUnmanaged(tail);");
-        sb.AppendLine();
-        sb.AppendLine("            writer.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("            writer.WriteUnmanaged(size);");
-        sb.AppendLine();
-        sb.AppendLine("            writer.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("            foreach (var item in span)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                var v = item;");
-        sb.AppendLine("                writer.WriteValue(v);");
-        sb.AppendLine("            }");
-    }
-
-    public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
-    {
-        sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
-        sb.AppendLine();
-        sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
-        sb.AppendLine("            {");
-        sb.AppendLine("                value = null;");
-        sb.AppendLine();
-        sb.AppendLine("                reader.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            reader.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("            if (value is null)");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                value = new global::System.Collections.Generic.Queue<{GetFirstGeneric(fieldData.TypeName)}>(length);");
-        sb.AppendLine("            }");
-        sb.AppendLine("            else");
-        sb.AppendLine("            {");
-        sb.AppendLine("                value.Clear();");
-        sb.AppendLine("#if NET8_0_OR_GREATER");
-        sb.AppendLine("                value.EnsureCapacity(length);");
-        sb.AppendLine("#endif");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            var span = LuminPackMarshal.GetQueueSpan(ref value, length);");
-        sb.AppendLine();
-        sb.AppendLine("            reader.ReadUnmanaged(out int head);");
-        sb.AppendLine();
-        sb.AppendLine("            reader.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("            reader.ReadUnmanaged(out int tail);");
-        sb.AppendLine();
-        sb.AppendLine("            reader.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("            reader.ReadUnmanaged(out int size);");
-        sb.AppendLine();
-        sb.AppendLine("            reader.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("            LuminPackMarshal.SetQueueSize(ref value, head, tail, size);");
-        sb.AppendLine();
-        sb.AppendLine("            if (length is 0)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            if (span.Length != length)");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                span = LuminPackMarshal.AllocateUninitializedArray<{GetFirstGeneric(fieldData.TypeName)}>(length);");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine($"            if (!RuntimeHelpers.IsReferenceOrContainsReferences<{GetFirstGeneric(fieldData.TypeName)}>())");
-        sb.AppendLine("            {");
-        sb.AppendLine("                ref var dest = ref LuminPackMarshal.GetReference(ref span.GetPinnableReference());");
-        sb.AppendLine();
-        sb.AppendLine($"                var srcLength = length * Unsafe.SizeOf<{GetFirstGeneric(fieldData.TypeName)}>();");
-        sb.AppendLine();
-        sb.AppendLine("                Unsafe.CopyBlockUnaligned(ref dest, ref reader.GetSpanReference(index), (uint)srcLength);");
-        sb.AppendLine();
-        sb.AppendLine("                reader.Advance(srcLength);");
-        sb.AppendLine();
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            for (int i = 0; i < length; i++)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                reader.ReadValue(ref span[i]);");
-        sb.AppendLine("            }");
-    }
-}
-
 public static class LinkedListFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
@@ -516,71 +581,6 @@ public static class LinkedListFormatter
         sb.AppendLine($"                {GetFirstGeneric(fieldData.TypeName)} v = default!;");
         sb.AppendLine("                reader.ReadValue(ref v);");
         sb.AppendLine("                value.AddLast(v);");
-        sb.AppendLine("            }");
-    }
-}
-
-public static class HashSetFormatter
-{
-    public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
-    {
-        sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
-        sb.AppendLine();
-        sb.AppendLine("            if (value is null)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                writer.WriteNullCollectionHeader(ref index);");
-        sb.AppendLine();
-        sb.AppendLine("                writer.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
-        sb.AppendLine("            writer.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("            nuint setIndex = 0;");
-        sb.AppendLine("            var setView = LuminPackMarshal.GetHashSetView(ref Unsafe.AsRef(in value));");
-        sb.AppendLine("            ref var arrayRef = ref LuminPackMarshal.GetArrayReference(setView._entries);");
-        sb.AppendLine();
-        sb.AppendLine("            while ((uint) setIndex < (uint) setView._count)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                ref var local = ref Unsafe.Add(ref arrayRef, setIndex++);");
-        sb.AppendLine("                if (local.Next >= -1)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    writer.WriteValue(local.Value);");
-        sb.AppendLine("                }");
-        sb.AppendLine("            }");
-    }
-
-    public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
-    {
-        sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
-        sb.AppendLine();
-        sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
-        sb.AppendLine("            {");
-        sb.AppendLine("                value = null;");
-        sb.AppendLine();
-        sb.AppendLine("                reader.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            reader.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("            if (value is null)");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                value = new global::System.Collections.Generic.HashSet<{GetFirstGeneric(fieldData.TypeName)}>(length);");
-        sb.AppendLine("            }");
-        sb.AppendLine("            else");
-        sb.AppendLine("            {");
-        sb.AppendLine("                value.Clear();");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            for (int i = 0; i < length; i++)");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                {GetFirstGeneric(fieldData.TypeName)} v = default!;");
-        sb.AppendLine("                reader.ReadValue(ref v);");
-        sb.AppendLine("                value.Add(v);");
         sb.AppendLine("            }");
     }
 }

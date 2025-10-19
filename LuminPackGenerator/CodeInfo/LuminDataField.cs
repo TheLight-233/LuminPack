@@ -6,8 +6,11 @@ namespace LuminPack.Code
     {
         public LuminFiledType Type;
         public string Name = "NewField";
+        
         public bool isProperty = false;
 
+        public string FullTypeName { get; set; }
+        
         public string TypeName { get; set; }
 
         public string NameSpace = "Your Data NameSpace";
