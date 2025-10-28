@@ -81,7 +81,7 @@ public static class LuminPackVersionTolerantCodeGenerator
         sb.AppendLine();
         sb.AppendLine("            int size = 1;");
         sb.AppendLine();
-        sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
+        sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value);");
         foreach (var field in data.fields)
         {
             if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
@@ -101,27 +101,7 @@ public static class LuminPackVersionTolerantCodeGenerator
         sb.AppendLine("        }");
         
         sb.AppendLine();
-        switch (data.structLayout)
-        {
-            case StructLayout.Explicit : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Explicit)]"); break;
-            case StructLayout.Auto : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Auto)]"); break;
-            case StructLayout.Sequential : sb.AppendLine("        [global::System.Runtime.InteropServices.StructLayout(LayoutKind.Sequential)]"); break;
-            case StructLayout.Default : break;
-        }
-        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-        sb.AppendLine(data.isValueType 
-            ? $"        private struct Local{data.classFullName}" 
-            : $"        private sealed class Local{data.classFullName}");
-        sb.AppendLine("        {");
-        foreach (var field in data.localFields)
-        {
-            if (data.structLayout is StructLayout.Explicit)
-                sb.AppendLine($"            [global::System.Runtime.InteropServices.FieldOffset({field.filedOffset})]");
-            var nullable = LuminPackCodeGenerator.IsUnmanagedFiledType(field.TypeName) || field.IsValue ? string.Empty : "?";
-            sb.AppendLine($"            internal {field.TypeName}{nullable} {field.Name};");
-        }
-            
-        sb.AppendLine("        }");
+        LuminPackCodeGenerator.GenerateLocalClassStructure(sb, data);
             
         sb.AppendLine();
         sb.AppendLine("    }");
@@ -172,7 +152,7 @@ public static class LuminPackVersionTolerantCodeGenerator
         }
         sb.AppendLine();
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
-        sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFullName}>(ref value);");
+        sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref Unsafe.AsRef(in value));");
         sb.AppendLine();
         if (isAllUnmanagedType)
         {
@@ -241,7 +221,7 @@ public static class LuminPackVersionTolerantCodeGenerator
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine($"                var tempWriter = new LuminPackWriter(writerBuffer, writer.OptionState);");
-            sb.AppendLine($"                Span<int> offsets = stackalloc int[{data.fields.Count}];");
+            sb.AppendLine($"                Span<int> offsets = stackalloc int[{data.fields.Max(x => x.Order) + 1}];");
             // 处理每个字段（按Order顺序，跳过空字段）
             for (int order = 0; order < memberCount; order++)
             {
@@ -335,8 +315,16 @@ public static class LuminPackVersionTolerantCodeGenerator
         sb.AppendLine();
         
         sb.AppendLine("            ref var offset = ref reader.GetCurrentSpanOffset();");
-        sb.AppendLine($"            var local = new Local{data.classFullName}();");
+        
+        // 为所有字段定义局部变量
+        sb.AppendLine("            // 定义局部变量存储字段值");
+        foreach (var field in data.localFields)
+        {
+            var nullable = field.IsValue ? "" : "?";
+            sb.AppendLine($"            {field.TypeName}{nullable} {field.Name}Temp = default!;");
+        }
         sb.AppendLine();
+        
         sb.AppendLine("            if (!reader.TryReadObjectHead(ref offset, out var count))");
         sb.AppendLine("            {");
         sb.AppendLine("                value = default;");
@@ -352,6 +340,8 @@ public static class LuminPackVersionTolerantCodeGenerator
         sb.AppendLine("                reader.Advance(LuminPackEvaluator.CalculateVarInt(deltas[i]));");
         sb.AppendLine("            }");
         sb.AppendLine();
+        
+        // 反序列化到局部变量
         for (var order = 0; order < memberCount; order++)
         {
             var field = data.fields.FirstOrDefault(f => f.Order == order);
@@ -360,18 +350,18 @@ public static class LuminPackVersionTolerantCodeGenerator
             {
                 sb.AppendLine($"            if (deltas[{order}] != 0)");
                 sb.AppendLine("            {");
-                if (LuminPackCodeGenerator.IsUnmanagedFiledType(data.fields[order].Type)) 
+                if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type)) 
                 {
-                    sb.AppendLine($"                reader.Advance(reader.ReadUnmanaged(ref offset, out local.@{field.Name}));");
+                    sb.AppendLine($"                reader.Advance(reader.ReadUnmanaged(ref offset, out {field.Name}Temp));");
                 }
                 else
                 {
-                    sb.AppendLine($"                reader.ReadValue(ref local.@{field.Name});");
+                    sb.AppendLine($"                reader.ReadValue(ref {field.Name}Temp);");
                 }
                 sb.AppendLine("            }");
                 sb.AppendLine("            else");
                 sb.AppendLine("            {");
-                sb.AppendLine($"                local.@{field.Name} = default;");
+                sb.AppendLine($"                {field.Name}Temp = default!;");
                 sb.AppendLine("            }");
             }
             else
@@ -381,7 +371,92 @@ public static class LuminPackVersionTolerantCodeGenerator
             sb.AppendLine();
         }
         
-        sb.AppendLine($"            value = LuminPackMarshal.As<Local{data.classFullName}, {classGlobalName}>(ref local);");
+        sb.AppendLine("            // 构造对象并设置字段");
+        
+        // 收集构造函数参数
+        var constructorParams = new List<string>();
+        if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
+        {
+            foreach (var param in data.SelectedConstructor.Parameters)
+            {
+                var matchingField = data.fields.FirstOrDefault(f => f.Name == param.MatchingFieldName);
+                if (matchingField != null)
+                {
+                    constructorParams.Add($"{matchingField.Name}Temp!");
+                }
+                else
+                {
+                    constructorParams.Add("default");
+                }
+            }
+        }
+
+        string constructorArgs = string.Join(", ", constructorParams);
+
+        // 收集需要对象初始化器赋值的public字段
+        var initializerFields = data.fields.Where(f => 
+            (data.SelectedConstructor == null || 
+             !data.SelectedConstructor.Parameters.Any(p => p.MatchingFieldName == f.Name)) &&
+            !f.IsPrivate && !f.isProperty
+        ).ToList();
+
+        // 收集需要单独设置的private字段
+        var privateFields = data.fields.Where(f => 
+            (data.SelectedConstructor == null || 
+             !data.SelectedConstructor.Parameters.Any(p => p.MatchingFieldName == f.Name)) &&
+            (f.IsPrivate || f.isProperty)
+        ).ToList();
+
+        // 使用对象初始化器创建对象
+        if (initializerFields.Count > 0)
+        {
+            // 有对象初始化器的情况
+            if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
+            {
+                sb.AppendLine($"            value = new {classGlobalName}({constructorArgs})");
+            }
+            else
+            {
+                sb.AppendLine($"            value = new {classGlobalName}()");
+            }
+            sb.AppendLine("            {");
+            foreach (var field in initializerFields)
+            {
+                sb.AppendLine($"                {field.Name} = {field.Name}Temp!,");
+            }
+            sb.AppendLine("            };");
+        }
+        else
+        {
+            // 没有对象初始化器的情况
+            if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
+            {
+                sb.AppendLine($"            value = new {classGlobalName}({constructorArgs});");
+            }
+            else
+            {
+                sb.AppendLine($"            value = new {classGlobalName}();");
+            }
+        }
+
+        // 设置private字段（通过Local类）
+        if (privateFields.Count > 0)
+        {
+            sb.AppendLine($"            // 设置private字段");
+            if (data.isValueType)
+            {
+                sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value);");
+            }
+            else
+            {
+                sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value!);");
+            }
+    
+            foreach (var field in privateFields)
+            {
+                sb.AppendLine($"            local.{field.Name} = {field.Name}Temp!;");
+            }
+        }
         
         sb.AppendLine();
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserialized))
