@@ -2886,7 +2886,7 @@ namespace LuminPack.Core
         
         public byte ReadVarIntByte()
         {
-            ReadUnmanaged(out sbyte typeCode);
+            Advance(ReadUnmanaged(out sbyte typeCode));
 
             switch (typeCode)
             {
@@ -2913,7 +2913,7 @@ namespace LuminPack.Core
 
         public sbyte ReadVarIntSByte()
         {
-            ReadUnmanaged(out sbyte typeCode);
+            Advance(ReadUnmanaged(out sbyte typeCode));
 
             switch (typeCode)
             {
@@ -2940,7 +2940,7 @@ namespace LuminPack.Core
 
         public ushort ReadVarIntUInt16()
         {
-            ReadUnmanaged(out sbyte typeCode);
+            Advance(ReadUnmanaged(out sbyte typeCode));
 
             switch (typeCode)
             {
@@ -2967,7 +2967,7 @@ namespace LuminPack.Core
 
         public short ReadVarIntInt16()
         {
-            ReadUnmanaged(out sbyte typeCode);
+            Advance(ReadUnmanaged(out sbyte typeCode));
 
             switch (typeCode)
             {
@@ -2994,7 +2994,7 @@ namespace LuminPack.Core
 
         public uint ReadVarIntUInt32()
         {
-            ReadUnmanaged(out sbyte typeCode);
+            Advance(ReadUnmanaged(out sbyte typeCode));
 
             switch (typeCode)
             {
@@ -3021,8 +3021,8 @@ namespace LuminPack.Core
 
         public int ReadVarIntInt32()
         {
-            ReadUnmanaged(out sbyte typeCode);
-
+            Advance(ReadUnmanaged(out sbyte typeCode));
+            
             switch (typeCode)
             {
                 case VarIntCodes.Byte:
@@ -3048,7 +3048,7 @@ namespace LuminPack.Core
 
         public ulong ReadVarIntUInt64()
         {
-            ReadUnmanaged(out sbyte typeCode);
+            Advance(ReadUnmanaged(out sbyte typeCode));
 
             switch (typeCode)
             {
@@ -3075,7 +3075,7 @@ namespace LuminPack.Core
 
         public long ReadVarIntInt64()
         {
-            ReadUnmanaged(out sbyte typeCode);
+            Advance(ReadUnmanaged(out sbyte typeCode));
 
             switch (typeCode)
             {
