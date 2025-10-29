@@ -888,21 +888,21 @@ public static class LuminPackMarshal
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe MethodTable* GetMethodTable(object obj)
+    public static IntPtr GetMethodTable(object obj)
     {
-        return (MethodTable*) Unsafe.Add(ref Unsafe.As<byte, IntPtr>(ref Unsafe.As<RawData>(obj).Data), -1);
+        return Unsafe.Add(ref Unsafe.As<byte, IntPtr>(ref Unsafe.As<RawData>(obj).Data), -1);
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe MethodTable* GetMethodTable<T>(T obj) where T : class
+    public static IntPtr GetMethodTable<T>(T obj) where T : class
     {
-        return (MethodTable*) Unsafe.Add(ref Unsafe.As<byte, IntPtr>(ref Unsafe.As<RawData>(obj).Data), -1);
+        return Unsafe.Add(ref Unsafe.As<byte, IntPtr>(ref Unsafe.As<RawData>(obj).Data), -1);
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe MethodTable* GetMethodTable(Type type)
+    public static IntPtr GetMethodTable(Type type)
     {
-        return (MethodTable*)type.TypeHandle.Value.ToPointer();
+        return type.TypeHandle.Value;
     }
     
     private sealed class RawData
