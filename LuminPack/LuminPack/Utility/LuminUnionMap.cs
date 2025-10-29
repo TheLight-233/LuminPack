@@ -77,21 +77,15 @@ public sealed unsafe class LuminUnionMap<TValue> : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryGetValue(nint key, out TValue value)
     {
-        nint hash1 = key & _capacityMask;
-        ref var entry1 = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table1), hash1);
-        if (entry1.IsOccupied && entry1.Key == key)
+        ref var entry1 = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table1), key & _capacityMask);
+        if (entry1.Key == key)
         {
             value = entry1.Value;
             return true;
         }
         
-        nint key1 = key;
-        key1 = (key1 << 5) - key1; // x * 31
-        key1 = (key1 << 7) - key1; // x * 127
-        key1 = (key1 << 13) - key1; // x * 8191
-        nint hash2 = key1 & _capacityMask;
-        ref var entry2 = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table2), hash2);
-        if (entry2.IsOccupied && entry2.Key == key)
+        ref var entry2 = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table2), key & _capacityMask);
+        if (entry2.Key == key)
         {
             value = entry2.Value;
             return true;
@@ -104,17 +98,11 @@ public sealed unsafe class LuminUnionMap<TValue> : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref TValue GetValueRef(nint key)
     {
-        nint hash1 = key & _capacityMask;
-        ref Entry entry1 = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table1), hash1);
+        ref Entry entry1 = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table1), key & _capacityMask);
         if (entry1.IsOccupied && entry1.Key == key)
             return ref entry1.Value;
         
-        nint key1 = key;
-        key1 = (key1 << 5) - key1; // x * 31
-        key1 = (key1 << 7) - key1; // x * 127
-        key1 = (key1 << 13) - key1; // x * 8191
-        nint hash2 = key1 & _capacityMask;
-        ref Entry entry2 = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table2), hash2);
+        ref Entry entry2 = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table2), key & _capacityMask);
         if (entry2.IsOccupied && entry2.Key == key)
             return ref entry2.Value;
 
@@ -131,8 +119,7 @@ public sealed unsafe class LuminUnionMap<TValue> : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryRegister(nint key, TValue value)
     {
-        nint hash1 = key & _capacityMask;
-        ref Entry entry1 = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table1), hash1);
+        ref Entry entry1 = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table1), key & _capacityMask);
         if (!entry1.IsOccupied)
         {
             entry1.Key = key;
@@ -150,12 +137,7 @@ public sealed unsafe class LuminUnionMap<TValue> : IDisposable
             return false;
         }
         
-        nint key1 = key;
-        key1 = (key1 << 5) - key1; // x * 31
-        key1 = (key1 << 7) - key1; // x * 127
-        key1 = (key1 << 13) - key1; // x * 8191
-        nint hash2 = key1 & _capacityMask;
-        ref Entry entry2 = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table2), hash2);
+        ref Entry entry2 = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table2), key & _capacityMask);
         if (!entry2.IsOccupied)
         {
             entry2.Key = key;
@@ -188,8 +170,7 @@ public sealed unsafe class LuminUnionMap<TValue> : IDisposable
         {
             if (useTable1)
             {
-                nint hash1 = currentKey & _capacityMask;
-                ref Entry entry = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table1), hash1);
+                ref Entry entry = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table1), key & _capacityMask);
                 
                 if (!entry.IsOccupied)
                 {
@@ -211,12 +192,7 @@ public sealed unsafe class LuminUnionMap<TValue> : IDisposable
             }
             else
             {
-                nint key1 = currentKey;
-                key1 = (key1 << 5) - key1; // x * 31
-                key1 = (key1 << 7) - key1; // x * 127
-                key1 = (key1 << 13) - key1; // x * 8191
-                nint hash2 = key1 & _capacityMask;
-                ref Entry entry = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table2), hash2);
+                ref Entry entry = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table2), key & _capacityMask);
                 
                 if (!entry.IsOccupied)
                 {
