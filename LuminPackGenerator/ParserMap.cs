@@ -9,10 +9,8 @@ internal static class ParserMap
         // 基础类型
         "nint",
         "nuint",
-        "decimal",
         "System.IntPtr",
         "System.UIntPtr",
-        "System.Decimal",
         "System.Uri",
         "System.Version",
         "System.Text.StringBuilder",
