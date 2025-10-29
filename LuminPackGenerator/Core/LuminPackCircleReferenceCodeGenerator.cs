@@ -365,10 +365,10 @@ public static class LuminPackCircleReferenceCodeGenerator
         sb.AppendLine("            for (int i = 0; i < count; i++)");
         sb.AppendLine("            {");
         sb.AppendLine("                deltas[i] = reader.ReadVarIntInt32();");
-        sb.AppendLine("                reader.Advance(LuminPackEvaluator.CalculateVarInt(deltas[i]));");
+        //sb.AppendLine("                reader.Advance(LuminPackEvaluator.CalculateVarInt(deltas[i]));");
         sb.AppendLine("            }");
         sb.AppendLine("            id = reader.ReadVarIntUInt32();");
-        sb.AppendLine("            reader.Advance(LuminPackEvaluator.CalculateVarInt(id));");
+        //sb.AppendLine("            reader.Advance(LuminPackEvaluator.CalculateVarInt(id));");
         sb.AppendLine();
         
         // 反序列化到局部变量
