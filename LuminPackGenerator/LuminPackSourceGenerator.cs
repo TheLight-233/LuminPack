@@ -636,7 +636,7 @@ namespace LuminPack.SourceGenerator
                         field.Type = LuminFiledType.Byte;
                         break;
                     case SpecialType.System_SByte:
-                        field.Type = LuminFiledType.Byte;
+                        field.Type = LuminFiledType.SByte;
                         break;
                     case SpecialType.System_Int16:
                         field.Type = LuminFiledType.Short;
@@ -662,11 +662,14 @@ namespace LuminPack.SourceGenerator
                     case SpecialType.System_Double:
                         field.Type = LuminFiledType.Double;
                         break;
+                    case SpecialType.System_Decimal:
+                        field.Type = LuminFiledType.Decimal;
+                        break;
+                    case SpecialType.System_Char:
+                        field.Type = LuminFiledType.Char;
+                        break;
                     case SpecialType.System_String:
                         field.Type = LuminFiledType.String;
-                        break;
-                    case SpecialType.System_Decimal:
-                        field.Type = LuminFiledType.Other;
                         break;
                     default:
                         if (namedType.TypeKind is TypeKind.Enum)
