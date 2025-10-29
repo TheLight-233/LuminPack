@@ -279,10 +279,10 @@ public static class LuminPackCircleReferenceCodeGenerator
             sb.AppendLine($"                        delta = offsets[i] - offsets[i - 1];");
             sb.AppendLine($"                    }}");
             sb.AppendLine($"                    writer.WriteVarInt(delta);");
-            sb.AppendLine($"                    writer.Advance(LuminPackEvaluator.CalculateVarInt(delta));");
+            //sb.AppendLine($"                    writer.Advance(LuminPackEvaluator.CalculateVarInt(delta));");
             sb.AppendLine($"                }}");
             sb.AppendLine($"                writer.WriteVarInt(id);");
-            sb.AppendLine($"                writer.Advance(LuminPackEvaluator.CalculateVarInt(id));");
+            //sb.AppendLine($"                writer.Advance(LuminPackEvaluator.CalculateVarInt(id));");
             sb.AppendLine($"                writerBuffer.WriteToAndReset(ref writer);");
             sb.AppendLine("            }");
             sb.AppendLine("            finally");
