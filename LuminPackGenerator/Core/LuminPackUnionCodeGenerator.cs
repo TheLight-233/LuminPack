@@ -106,6 +106,7 @@ public static class LuminPackUnionCodeGenerator
 
         // Serialize 方法
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine("        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
         sb.AppendLine(metaInfo.IsNet8
             ? $"        public override void Serialize(ref LuminPackWriter writer, scoped ref {classGlobalName}{paraNullable} value)"
             : $"        public override void Serialize(ref LuminPackWriter writer, ref {classGlobalName}{paraNullable} value)");
@@ -116,6 +117,7 @@ public static class LuminPackUnionCodeGenerator
 
         // Deserialize 方法
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine("        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
         sb.AppendLine(metaInfo.IsNet8
             ? $"        public override void Deserialize(ref LuminPackReader reader, scoped ref {data.classFullName}{paraNullable} value)"
             : $"        public override void Deserialize(ref LuminPackReader reader, ref {data.classFullName}{paraNullable} value)");
