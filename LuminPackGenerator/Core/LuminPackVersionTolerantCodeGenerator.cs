@@ -337,7 +337,7 @@ public static class LuminPackVersionTolerantCodeGenerator
         sb.AppendLine("            for (int i = 0; i < count; i++)");
         sb.AppendLine("            {");
         sb.AppendLine("                deltas[i] = reader.ReadVarIntInt32();");
-        sb.AppendLine("                reader.Advance(LuminPackEvaluator.CalculateVarInt(deltas[i]));");
+        //sb.AppendLine("                reader.Advance(LuminPackEvaluator.CalculateVarInt(deltas[i]));");
         sb.AppendLine("            }");
         sb.AppendLine();
         
