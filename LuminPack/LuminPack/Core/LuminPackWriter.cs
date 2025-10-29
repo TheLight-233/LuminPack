@@ -395,6 +395,23 @@ namespace LuminPack.Core
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnionHeader(ushort tag)
+        {
+            if (tag < LuminPackCode.WideTag)
+            {
+                Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)_currentIndex) = (byte)tag;
+                Advance(1);
+            }
+            else
+            {
+                ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)_currentIndex);
+                Unsafe.WriteUnaligned(ref spanRef, LuminPackCode.WideTag);
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref spanRef, 1), tag);
+                Advance(3);
+            }
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnionHeader(ref int index, ushort tag)
         {
             if (tag < LuminPackCode.WideTag)
@@ -1756,10 +1773,12 @@ namespace LuminPack.Core
         {
             
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)_currentIndex);
+            var offset = 0;
             Unsafe.WriteUnaligned(ref spanRef, value1);
-            Unsafe.WriteUnaligned(ref spanRef, value2);
+            offset += Unsafe.SizeOf<T1>();
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref spanRef, offset), value2);
 
-            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>();
+            return offset + Unsafe.SizeOf<T2>();
         }
         
         /// <summary>
@@ -3182,11 +3201,11 @@ namespace LuminPack.Core
         {
             if (x <= VarIntCodes.MaxSingleValue)
             {
-                WriteUnmanaged((sbyte)x);
+                Advance(WriteUnmanaged((sbyte)x));
             }
             else
             {
-                WriteUnmanaged(VarIntCodes.Byte, x);
+                Advance(WriteUnmanaged(VarIntCodes.Byte, x));
             }
         }
 
@@ -3194,11 +3213,11 @@ namespace LuminPack.Core
         {
             if (VarIntCodes.MinSingleValue <= x)
             {
-                WriteUnmanaged(x);
+                Advance(WriteUnmanaged(x));
             }
             else
             {
-                WriteUnmanaged(VarIntCodes.SByte, x);
+                Advance(WriteUnmanaged(VarIntCodes.SByte, x));
             }
         }
 
@@ -3206,11 +3225,11 @@ namespace LuminPack.Core
         {
             if (x <= VarIntCodes.MaxSingleValue)
             {
-                WriteUnmanaged((sbyte)x);
+                Advance(WriteUnmanaged((sbyte)x));
             }
             else
             {
-                WriteUnmanaged(VarIntCodes.UInt16, (UInt16)x);
+                Advance(WriteUnmanaged(VarIntCodes.UInt16, (UInt16)x));
             }
         }
 
@@ -3220,26 +3239,26 @@ namespace LuminPack.Core
             {
                 if (x <= VarIntCodes.MaxSingleValue) // same as sbyte.MaxValue
                 {
-                    WriteUnmanaged((sbyte)x);
+                    Advance(WriteUnmanaged((sbyte)x));
                 }
                 else
                 {
-                    WriteUnmanaged(VarIntCodes.Int16, (Int16)x);
+                    Advance(WriteUnmanaged(VarIntCodes.Int16, (Int16)x));
                 }
             }
             else
             {
                 if (VarIntCodes.MinSingleValue <= x)
                 {
-                    WriteUnmanaged((sbyte)x);
+                    Advance(WriteUnmanaged((sbyte)x));
                 }
                 else if (sbyte.MinValue <= x)
                 {
-                    WriteUnmanaged(VarIntCodes.SByte, (SByte)x);
+                    Advance(WriteUnmanaged(VarIntCodes.SByte, (SByte)x));
                 }
                 else
                 {
-                    WriteUnmanaged(VarIntCodes.Int16, (Int16)x);
+                    Advance(WriteUnmanaged(VarIntCodes.Int16, (Int16)x));
                 }
             }
         }
@@ -3248,15 +3267,15 @@ namespace LuminPack.Core
         {
             if (x <= VarIntCodes.MaxSingleValue)
             {
-                WriteUnmanaged((sbyte)x);
+                Advance(WriteUnmanaged((sbyte)x));
             }
             else if (x <= ushort.MaxValue)
             {
-                WriteUnmanaged(VarIntCodes.UInt16, (UInt16)x);
+                Advance(WriteUnmanaged(VarIntCodes.UInt16, (UInt16)x));
             }
             else
             {
-                WriteUnmanaged(VarIntCodes.UInt32, (UInt32)x);
+                Advance(WriteUnmanaged(VarIntCodes.UInt32, (UInt32)x));
             }
         }
 
@@ -3266,34 +3285,34 @@ namespace LuminPack.Core
             {
                 if (x <= VarIntCodes.MaxSingleValue) // same as sbyte.MaxValue
                 {
-                    WriteUnmanaged((sbyte)x);
+                    Advance(WriteUnmanaged((sbyte)x));
                 }
                 else if (x <= short.MaxValue)
                 {
-                    WriteUnmanaged(VarIntCodes.Int16, (Int16)x);
+                    Advance(WriteUnmanaged(VarIntCodes.Int16, (Int16)x));
                 }
                 else
                 {
-                    WriteUnmanaged(VarIntCodes.Int32, (Int32)x);
+                    Advance(WriteUnmanaged(VarIntCodes.Int32, (Int32)x));
                 }
             }
             else
             {
                 if (VarIntCodes.MinSingleValue <= x)
                 {
-                    WriteUnmanaged((sbyte)x);
+                    Advance(WriteUnmanaged((sbyte)x));
                 }
                 else if (sbyte.MinValue <= x)
                 {
-                    WriteUnmanaged(VarIntCodes.SByte, (SByte)x);
+                    Advance(WriteUnmanaged(VarIntCodes.SByte, (SByte)x));
                 }
                 else if (short.MinValue <= x)
                 {
-                    WriteUnmanaged(VarIntCodes.Int16, (Int16)x);
+                    Advance(WriteUnmanaged(VarIntCodes.Int16, (Int16)x));
                 }
                 else
                 {
-                    WriteUnmanaged(VarIntCodes.Int32, (Int32)x);
+                    Advance(WriteUnmanaged(VarIntCodes.Int32, (Int32)x));
                 }
             }
         }
@@ -3302,19 +3321,19 @@ namespace LuminPack.Core
         {
             if (x <= VarIntCodes.MaxSingleValue)
             {
-                WriteUnmanaged((sbyte)x);
+                Advance(WriteUnmanaged((sbyte)x));
             }
             else if (x <= ushort.MaxValue)
             {
-                WriteUnmanaged(VarIntCodes.UInt16, (UInt16)x);
+                Advance(WriteUnmanaged(VarIntCodes.UInt16, (UInt16)x));
             }
             else if (x <= uint.MaxValue)
             {
-                WriteUnmanaged(VarIntCodes.UInt32, (UInt32)x);
+                Advance(WriteUnmanaged(VarIntCodes.UInt32, (UInt32)x));
             }
             else
             {
-                WriteUnmanaged(VarIntCodes.UInt64, (UInt64)x);
+                Advance(WriteUnmanaged(VarIntCodes.UInt64, (UInt64)x));
             }
         }
 
@@ -3324,42 +3343,42 @@ namespace LuminPack.Core
             {
                 if (x <= VarIntCodes.MaxSingleValue) // same as sbyte.MaxValue
                 {
-                    WriteUnmanaged((sbyte)x);
+                    Advance(WriteUnmanaged((sbyte)x));
                 }
                 else if (x <= short.MaxValue)
                 {
-                    WriteUnmanaged(VarIntCodes.Int16, (Int16)x);
+                    Advance(WriteUnmanaged(VarIntCodes.Int16, (Int16)x));
                 }
                 else if (x <= int.MaxValue)
                 {
-                    WriteUnmanaged(VarIntCodes.Int32, (Int32)x);
+                    Advance(WriteUnmanaged(VarIntCodes.Int32, (Int32)x));
                 }
                 else
                 {
-                    WriteUnmanaged(VarIntCodes.Int64, (Int64)x);
+                    Advance(WriteUnmanaged(VarIntCodes.Int64, (Int64)x));
                 }
             }
             else
             {
                 if (VarIntCodes.MinSingleValue <= x)
                 {
-                    WriteUnmanaged((sbyte)x);
+                    Advance(WriteUnmanaged((sbyte)x));
                 }
                 else if (sbyte.MinValue <= x)
                 {
-                    WriteUnmanaged(VarIntCodes.SByte, (SByte)x);
+                    Advance(WriteUnmanaged(VarIntCodes.SByte, (SByte)x));
                 }
                 else if (short.MinValue <= x)
                 {
-                    WriteUnmanaged(VarIntCodes.Int16, (Int16)x);
+                    Advance(WriteUnmanaged(VarIntCodes.Int16, (Int16)x));
                 }
                 else if (int.MinValue <= x)
                 {
-                    WriteUnmanaged(VarIntCodes.Int32, (Int32)x);
+                    Advance(WriteUnmanaged(VarIntCodes.Int32, (Int32)x));
                 }
                 else
                 {
-                    WriteUnmanaged(VarIntCodes.Int64, (Int64)x);
+                    Advance(WriteUnmanaged(VarIntCodes.Int64, (Int64)x));
                 }
             }
         }
