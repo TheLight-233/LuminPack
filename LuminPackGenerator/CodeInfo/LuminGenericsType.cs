@@ -1,9 +1,10 @@
-﻿namespace LuminPack.Code
+namespace LuminPack.Code
 {
     public enum LuminGenericsType : byte
     {
         Null,
         Byte,
+        SByte,
         Short,
         UShort,
         Int,
@@ -12,6 +13,8 @@
         ULong,
         Float,
         Double,
+        Decimal,
+        Char,
         String,
         Bool,
         Class,
