@@ -184,12 +184,12 @@ public static class LuminPackCircleReferenceCodeGenerator
                 else
                 {
                     sb.AppendLine($"            writer.WriteVarInt(System.Runtime.CompilerServices.Unsafe.SizeOf<{field.TypeName}>());");
-                    sb.AppendLine($"            writer.Advance(LuminPackEvaluator.CalculateVarInt(System.Runtime.CompilerServices.Unsafe.SizeOf<{field.TypeName}>()));");
+                    //sb.AppendLine($"            writer.Advance(LuminPackEvaluator.CalculateVarInt(System.Runtime.CompilerServices.Unsafe.SizeOf<{field.TypeName}>()));");
                 }
                 sb.AppendLine();
             }
             sb.AppendLine($"            writer.WriteVarInt(id);");
-            sb.AppendLine($"            writer.Advance(LuminPackEvaluator.CalculateVarInt(id));");
+            //sb.AppendLine($"            writer.Advance(LuminPackEvaluator.CalculateVarInt(id));");
             if (data.fields.Count <= MaxParametersPerCall)
             {
                 // 不超过15个字段，直接单次调用
