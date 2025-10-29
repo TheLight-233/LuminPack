@@ -261,7 +261,7 @@ public static class LuminPackVersionTolerantCodeGenerator
             sb.AppendLine($"                        delta = offsets[i] - offsets[i - 1];");
             sb.AppendLine($"                    }}");
             sb.AppendLine($"                    writer.WriteVarInt(delta);");
-            sb.AppendLine($"                    writer.Advance(LuminPackEvaluator.CalculateVarInt(delta));");
+            //sb.AppendLine($"                    writer.Advance(LuminPackEvaluator.CalculateVarInt(delta));");
             sb.AppendLine($"                }}");
             sb.AppendLine($"                writerBuffer.WriteToAndReset(ref writer);");
             sb.AppendLine("            }");
