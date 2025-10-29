@@ -531,10 +531,10 @@ namespace LuminPack.Code.Core
 
             switch (field.Type)
             {
-                case LuminFiledType.Byte or LuminFiledType.Bool:
+                case LuminFiledType.Byte or LuminFiledType.Bool or LuminFiledType.SByte:
                     sb.AppendLine($"{indentStr}totalLength += 1;");
                     break;
-                case LuminFiledType.Short or LuminFiledType.UShort:
+                case LuminFiledType.Short or LuminFiledType.UShort or LuminFiledType.Char:
                     sb.AppendLine($"{indentStr}totalLength += 2;");
                     break;
                 case LuminFiledType.Int or LuminFiledType.Float or LuminFiledType.UInt:
@@ -542,6 +542,9 @@ namespace LuminPack.Code.Core
                     break;
                 case LuminFiledType.Long or  LuminFiledType.Double or LuminFiledType.ULong:
                     sb.AppendLine($"{indentStr}totalLength += 8;");
+                    break;
+                case LuminFiledType.Decimal:
+                    sb.AppendLine($"{indentStr}totalLength += 16;");
                     break;
                 case LuminFiledType.String:
                     //sb.AppendLine($"{indentStr}var {field.Name}Length = System.Text.Encoding.UTF8.GetByteCount({fieldPath});");
@@ -915,7 +918,7 @@ namespace LuminPack.Code.Core
 
             switch (field.Type)
             {
-                case LuminFiledType.Byte:
+                case LuminFiledType.Byte or LuminFiledType.SByte:
                     sb.AppendLine($"{indentStr}writer.GetSpanReference({offset}) = {fieldPath};");
                     if (isMultClass)
                         sb.AppendLine($"{indentStr}{offset} += 1;");
@@ -925,7 +928,7 @@ namespace LuminPack.Code.Core
                     if (isMultClass)
                         sb.AppendLine($"{indentStr}{offset} += 1;");
                     break;
-                case LuminFiledType.Short or LuminFiledType.UShort:
+                case LuminFiledType.Short or LuminFiledType.UShort or LuminFiledType.Char:
                     sb.AppendLine($"{indentStr}writer.WriteUnmanagedWithoutSizeReturn(ref {offset}, {fieldPath});");
                     if (isMultClass)
                         sb.AppendLine($"{indentStr}{offset} += 2;");
@@ -941,6 +944,11 @@ namespace LuminPack.Code.Core
                     sb.AppendLine($"{indentStr}writer.WriteUnmanagedWithoutSizeReturn(ref {offset}, {fieldPath});");
                     if (isMultClass)
                         sb.AppendLine($"{indentStr}{offset} += 8;");
+                    break;
+                case LuminFiledType.Decimal:
+                    sb.AppendLine($"{indentStr}writer.WriteUnmanagedWithoutSizeReturn(ref {offset}, {fieldPath});");
+                    if (isMultClass)
+                        sb.AppendLine($"{indentStr}{offset} += 16;");
                     break;
                 case LuminFiledType.String:
                     //if (depth < 1) sb.AppendLine($"{indentStr}var {field.Name}Length = writer.GetStringLength({fieldPath});");
@@ -1524,6 +1532,17 @@ namespace LuminPack.Code.Core
                         sb.AppendLine($"{indentStr}{targetObj} = {field.Name}TempValue{depthSuffix};");
                     }
                     break;
+                case LuminFiledType.SByte:
+                    if (isFirst) 
+                    {
+                        sb.AppendLine($"{indentStr}reader.ReadUnmanagedWithoutSizeReturn(ref {offset}, out {targetObj});");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"{indentStr}reader.ReadUnmanagedWithoutSizeReturn(ref {offset}, out sbyte {field.Name}TempValue{depthSuffix});");
+                        sb.AppendLine($"{indentStr}{targetObj} = {field.Name}TempValue{depthSuffix};");
+                    }
+                    break;
                 case LuminFiledType.Bool:
                     if (isFirst) 
                     {
@@ -1620,6 +1639,28 @@ namespace LuminPack.Code.Core
                     else
                     {
                         sb.AppendLine($"{indentStr}reader.ReadUnmanagedWithoutSizeReturn(ref {offset}, out double {field.Name}TempValue{depthSuffix});");
+                        sb.AppendLine($"{indentStr}{targetObj} = {field.Name}TempValue{depthSuffix};");
+                    }
+                    break;
+                case LuminFiledType.Decimal:
+                    if (isFirst) 
+                    {
+                        sb.AppendLine($"{indentStr}reader.ReadUnmanagedWithoutSizeReturn(ref {offset}, out {targetObj});");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"{indentStr}reader.ReadUnmanagedWithoutSizeReturn(ref {offset}, out decimal {field.Name}TempValue{depthSuffix});");
+                        sb.AppendLine($"{indentStr}{targetObj} = {field.Name}TempValue{depthSuffix};");
+                    }
+                    break;
+                case LuminFiledType.Char:
+                    if (isFirst) 
+                    {
+                        sb.AppendLine($"{indentStr}reader.ReadUnmanagedWithoutSizeReturn(ref {offset}, out {targetObj});");
+                    }
+                    else
+                    {
+                        sb.AppendLine($"{indentStr}reader.ReadUnmanagedWithoutSizeReturn(ref {offset}, out char {field.Name}TempValue{depthSuffix});");
                         sb.AppendLine($"{indentStr}{targetObj} = {field.Name}TempValue{depthSuffix};");
                     }
                     break;
@@ -2181,6 +2222,7 @@ namespace LuminPack.Code.Core
             return genericType switch
             {
                 LuminGenericsType.Byte => LuminFiledType.Byte,
+                LuminGenericsType.SByte => LuminFiledType.SByte,
                 LuminGenericsType.Short => LuminFiledType.Short,
                 LuminGenericsType.UShort => LuminFiledType.UShort,
                 LuminGenericsType.Int => LuminFiledType.Int,
@@ -2189,6 +2231,8 @@ namespace LuminPack.Code.Core
                 LuminGenericsType.ULong => LuminFiledType.ULong,
                 LuminGenericsType.Float => LuminFiledType.Float,
                 LuminGenericsType.Double => LuminFiledType.Double,
+                LuminGenericsType.Decimal => LuminFiledType.Decimal,
+                LuminGenericsType.Char => LuminFiledType.Char,
                 LuminGenericsType.String => LuminFiledType.String,
                 LuminGenericsType.Bool => LuminFiledType.Bool,
                 LuminGenericsType.Class => LuminFiledType.Class,
@@ -2215,6 +2259,7 @@ namespace LuminPack.Code.Core
             return currentType switch
             {
                 LuminGenericsType.Byte => LuminFiledType.Byte,
+                LuminGenericsType.SByte => LuminFiledType.SByte,
                 LuminGenericsType.Short => LuminFiledType.Short,
                 LuminGenericsType.UShort => LuminFiledType.UShort,
                 LuminGenericsType.Int => LuminFiledType.Int,
@@ -2223,7 +2268,9 @@ namespace LuminPack.Code.Core
                 LuminGenericsType.ULong => LuminFiledType.ULong,
                 LuminGenericsType.Float => LuminFiledType.Float,
                 LuminGenericsType.Double => LuminFiledType.Double,
+                LuminGenericsType.Decimal => LuminFiledType.Decimal,
                 LuminGenericsType.Bool => LuminFiledType.Bool,
+                LuminGenericsType.Char => LuminFiledType.Char,
                 LuminGenericsType.String => LuminFiledType.String,
                 LuminGenericsType.Class => LuminFiledType.Class,
                 LuminGenericsType.Struct => LuminFiledType.Struct,
@@ -2235,6 +2282,8 @@ namespace LuminPack.Code.Core
         {
             return genericType switch
             {
+                LuminGenericsType.Byte => "byte",
+                LuminGenericsType.SByte => "sbyte",
                 LuminGenericsType.Short => "short",
                 LuminGenericsType.UShort => "ushort",
                 LuminGenericsType.Int => "int",
@@ -2243,6 +2292,8 @@ namespace LuminPack.Code.Core
                 LuminGenericsType.ULong => "ulong",
                 LuminGenericsType.Float => "float",
                 LuminGenericsType.Double => "double",
+                LuminGenericsType.Decimal => "decimal",
+                LuminGenericsType.Char => "char",
                 LuminGenericsType.String => "string",
                 LuminGenericsType.Bool => "bool",
                 LuminGenericsType.List => "List",
@@ -2256,6 +2307,7 @@ namespace LuminPack.Code.Core
             return genericType switch
             {
                 LuminEnumFieldType.Byte => "byte",
+                LuminEnumFieldType.SByte => "sbyte",
                 LuminEnumFieldType.Short => "short",
                 LuminEnumFieldType.UShort => "ushort",
                 LuminEnumFieldType.Int => "int",
@@ -2273,6 +2325,7 @@ namespace LuminPack.Code.Core
             return field.Type switch
             {
                 LuminFiledType.Byte => "1",
+                LuminFiledType.SByte => "1",
                 LuminFiledType.Short => "2",
                 LuminFiledType.UShort => "2",
                 LuminFiledType.Int => "4",
@@ -2281,7 +2334,9 @@ namespace LuminPack.Code.Core
                 LuminFiledType.ULong => "8",
                 LuminFiledType.Float => "4",
                 LuminFiledType.Double => "8",
+                LuminFiledType.Decimal => "16",
                 LuminFiledType.Bool => "1",
+                LuminFiledType.Char => "2",
                 LuminFiledType.String => pattern == "null" ? $"{field.Name}Length + 1" : $"{field.Name}Length + {pattern}.StringRecordLength()",
                 LuminFiledType.List or LuminFiledType.Array => $"{field.Name}ListOffset{depthSuffix}",
                 LuminFiledType.Class or LuminFiledType.Struct =>
@@ -2297,6 +2352,7 @@ namespace LuminPack.Code.Core
             return enumField switch
             {
                 LuminEnumFieldType.Byte => "1",
+                LuminEnumFieldType.SByte => "1",
                 LuminEnumFieldType.Short => "2",
                 LuminEnumFieldType.UShort => "2",
                 LuminEnumFieldType.Int => "4",
@@ -2314,13 +2370,14 @@ namespace LuminPack.Code.Core
             var type = field.GenericType.Last();
             return type switch
             {
-                LuminGenericsType.Byte => $"4 + {field.Name}Count{depthSuffix} * 1",
+                LuminGenericsType.Byte or LuminGenericsType.SByte => $"4 + {field.Name}Count{depthSuffix} * 1",
                 LuminGenericsType.Bool => $"4 + ({field.Name}Count{depthSuffix} * 1)",
-                LuminGenericsType.Short or LuminGenericsType.UShort => $"4 + ({field.Name}Count{depthSuffix} * 2)",
+                LuminGenericsType.Short or LuminGenericsType.UShort or LuminGenericsType.Char => $"4 + ({field.Name}Count{depthSuffix} * 2)",
                 LuminGenericsType.Int or LuminGenericsType.UInt => $"4 + ({field.Name}Count{depthSuffix} * 4)",
                 LuminGenericsType.Long or LuminGenericsType.ULong => $"4 + ({field.Name}Count{depthSuffix} * 8)",
                 LuminGenericsType.Float => $"4 + ({field.Name}Count{depthSuffix} * 4)",
                 LuminGenericsType.Double => $"4 + ({field.Name}Count{depthSuffix} * 8)",
+                LuminGenericsType.Decimal => $"4 + ({field.Name}Count{depthSuffix} * 16)",
                 LuminGenericsType.String => $"4 + {field.Name}Count{depthSuffix} * ({field.Name}Count{depthSuffix} + 1)",
                 LuminGenericsType.Class => $"4 + {field.Name}Count{depthSuffix} * {field.Name}Count{depthSuffix}",
                 LuminGenericsType.Struct => $"4 + {field.Name}Count{depthSuffix} * {field.Name}Count{depthSuffix}",
@@ -2370,6 +2427,7 @@ namespace LuminPack.Code.Core
         public static bool IsReferenceGenericType(LuminGenericsType? genericType) => genericType switch
         {
             LuminGenericsType.Byte => false,
+            LuminGenericsType.SByte => false,
             LuminGenericsType.Bool => false,
             LuminGenericsType.Short => false,
             LuminGenericsType.UShort => false,
@@ -2379,7 +2437,9 @@ namespace LuminPack.Code.Core
             LuminGenericsType.ULong => false,
             LuminGenericsType.Float => false,
             LuminGenericsType.Double => false,
+            LuminGenericsType.Decimal => false,
             LuminGenericsType.Enum => false,
+            LuminGenericsType.Char => false,
             LuminGenericsType.String => true,
             LuminGenericsType.Class => true,
             LuminGenericsType.Struct => true,
@@ -2391,6 +2451,7 @@ namespace LuminPack.Code.Core
         public static bool IsReferenceFiledType(LuminFiledType filedType) => filedType switch
         {
             LuminFiledType.Byte => false,
+            LuminFiledType.SByte => false,
             LuminFiledType.Bool => false,
             LuminFiledType.Short => false,
             LuminFiledType.UShort => false,
@@ -2400,6 +2461,8 @@ namespace LuminPack.Code.Core
             LuminFiledType.ULong => false,
             LuminFiledType.Float => false,
             LuminFiledType.Double => false,
+            LuminFiledType.Decimal => false,
+            LuminFiledType.Char => false,
             LuminFiledType.String => true,
             LuminFiledType.Class => true,
             LuminFiledType.Struct => true,
@@ -2411,6 +2474,7 @@ namespace LuminPack.Code.Core
         public static bool IsUnmanagedFiledType(LuminFiledType filedType) => filedType switch
         {
             LuminFiledType.Byte => true,
+            LuminFiledType.SByte => true,
             LuminFiledType.Bool => true,
             LuminFiledType.Short => true,
             LuminFiledType.UShort => true,
@@ -2420,6 +2484,8 @@ namespace LuminPack.Code.Core
             LuminFiledType.ULong => true,
             LuminFiledType.Float => true,
             LuminFiledType.Double => true,
+            LuminFiledType.Decimal => true,
+            LuminFiledType.Char => true,
             LuminFiledType.Enum => true,
             _ => false
         };
@@ -2512,6 +2578,7 @@ namespace LuminPack.Code.Core
         public static bool IsUnmanagedFiledType(string filedType) => filedType switch
         {
             "byte" => true,
+            "sbyte" => true,
             "bool" => true,
             "short" => true,
             "ushort" => true,
@@ -2521,6 +2588,8 @@ namespace LuminPack.Code.Core
             "ulong" => true,
             "float" => true,
             "double" => true,
+            "decimal" => true,
+            "char" => true,
             _ => false
         };
         
@@ -2529,6 +2598,7 @@ namespace LuminPack.Code.Core
             return type switch
             {
                 LuminFiledType.Byte    => true,
+                LuminFiledType.SByte    => true,
                 LuminFiledType.Short   => true,
                 LuminFiledType.UShort  => true,
                 LuminFiledType.Int     => true,
@@ -2537,6 +2607,8 @@ namespace LuminPack.Code.Core
                 LuminFiledType.ULong   => true,
                 LuminFiledType.Float   => true,
                 LuminFiledType.Double  => true,
+                LuminFiledType.Decimal  => true,
+                LuminFiledType.Char  => true,
                 LuminFiledType.Bool    => true,
                 LuminFiledType.Enum    => true,
                 _                      => false // String/List/Class/Struct 为可变长度
@@ -2549,14 +2621,17 @@ namespace LuminPack.Code.Core
             return field.Type switch
             {
                 LuminFiledType.Byte    => "1",
+                LuminFiledType.SByte    => "1",
                 LuminFiledType.Short   => "2",
                 LuminFiledType.UShort  => "2",
+                LuminFiledType.Char  => "2",
                 LuminFiledType.Int     => "4",
                 LuminFiledType.UInt    => "4",
                 LuminFiledType.Long    => "8",
                 LuminFiledType.ULong   => "8",
                 LuminFiledType.Float   => "4",
                 LuminFiledType.Double  => "8",
+                LuminFiledType.Decimal  => "16",
                 LuminFiledType.Bool    => "1",
                 LuminFiledType.Enum    => GetEnumFieldLength(field.EnumType),
             };
@@ -2620,12 +2695,12 @@ namespace LuminPack.Code.Core
         {
             foreach (var v in datas)
             {
-                if (v.Type is LuminFiledType.Array or LuminFiledType.List or LuminFiledType.String or LuminFiledType.Other)
+                if (v.Type is LuminFiledType.Array or LuminFiledType.List or LuminFiledType.String or LuminFiledType.Other or LuminFiledType.Class)
                 {
                     return false;
                 }
 
-                if (v.Type is LuminFiledType.Class or LuminFiledType.Struct)
+                if (v.Type is LuminFiledType.Struct)
                 {
                     if (!FindAllUnmanagedType(v.ClassFields)) return false;
                 }
