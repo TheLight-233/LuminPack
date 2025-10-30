@@ -53,8 +53,8 @@ public static class LuminPackUnionCodeGenerator
 
         // 使用 LuminUnionMap 作为注册表
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-        sb.AppendLine(
-            $"        internal static readonly global::LuminPack.Utility.LuminUnionMap<HashEntry> _unionMap = new global::LuminPack.Utility.LuminUnionMap<HashEntry>({data.UnionMembers.Count});");
+        //sb.AppendLine($"        internal static readonly global::LuminPack.Utility.LuminF14Map<nint, HashEntry> _unionMap = new global::LuminPack.Utility.LuminF14Map<nint, HashEntry>({data.UnionMembers.Count});");
+        sb.AppendLine($"        internal static readonly global::LuminPack.Utility.LuminUnionMap<HashEntry> _unionMap = new global::LuminPack.Utility.LuminUnionMap<HashEntry>({data.UnionMembers.Count});");
         sb.AppendLine();
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine($"        internal static HashEntry[] _directTable {{ get; private set; }} = new HashEntry[{directTableSize}];");
@@ -257,14 +257,11 @@ public static class LuminPackUnionCodeGenerator
                 : $"            value?.{item.Item1}();");
         }
         
-        // 序列化方法中保留 offset
-        sb.AppendLine("            ref int offset = ref writer.GetCurrentSpanOffset();");
-        sb.AppendLine();
-        
         if (!data.isValueType)
         {
             sb.AppendLine("            if (value is null)");
             sb.AppendLine("            {");
+            sb.AppendLine("                ref int offset = ref writer.GetCurrentSpanOffset();");
             sb.AppendLine("                writer.WriteNullUnionHeader(ref offset);");
             sb.AppendLine("                offset += 1;");
             sb.AppendLine("                return;");
@@ -302,10 +299,8 @@ public static class LuminPackUnionCodeGenerator
                 : $"            value?.{item.Item1}();");
         }
         
-        // 反序列化方法中保留 offset
-        sb.AppendLine("            ref int offset = ref reader.GetCurrentSpanOffset();");
-        sb.AppendLine();
-        sb.AppendLine("            if (!reader.TryPeekUnionHeader(ref offset, out var tag))");
+        //sb.AppendLine("            ref int offset = ref reader.GetCurrentSpanOffset();");
+        sb.AppendLine("            if (!reader.TryPeekUnionHeader(out var tag))");
         sb.AppendLine("            {");
         sb.AppendLine("                value = default;");
         sb.AppendLine("                return;");
@@ -314,8 +309,9 @@ public static class LuminPackUnionCodeGenerator
         
         sb.AppendLine("            unsafe");
         sb.AppendLine("            {");
-        sb.AppendLine($"                ref var entry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag];");
-        sb.AppendLine("                entry.ReadDelegate(ref reader, ref value!);");
+        //sb.AppendLine($"                ref var entry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag];");
+        //sb.AppendLine($"                global::System.Runtime.CompilerServices.Unsafe.Add(ref LuminPackMarshal.GetArrayReference(global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable), tag).ReadDelegate(ref reader, ref value!);");
+        sb.AppendLine($"                global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag].ReadDelegate(ref reader, ref value!);");
         sb.AppendLine("            }");
         
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserialized))
