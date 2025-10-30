@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -575,6 +576,30 @@ namespace LuminPack.Core
         public void ReadObjectHeader(ref int index, out byte memberCount)
         {
             memberCount = _bufferReference[index];
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryPeekUnionHeader(out ushort tag)
+        {
+            ref var firstTag = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)_currentIndex);
+            if (firstTag < LuminPackCode.WideTag)
+            {
+                tag = firstTag;
+                Advance(1);
+                return true;
+            }
+            else if (firstTag == LuminPackCode.WideTag)
+            {
+                tag = Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref firstTag, 1));
+                Advance(3);
+                return true;
+            }
+            else
+            {
+                tag = 0;
+                Advance(1);
+                return false;
+            }
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -3172,5 +3197,15 @@ namespace LuminPack.Core
                     return typeCode;
             }
         }
+
+        #region Delegate
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Delegate ReadAction(Type type, object? instance, MethodInfo methodInfo)
+        {
+            return Delegate.CreateDelegate(type, instance, methodInfo);
+        }
+
+        #endregion
     }
 }
