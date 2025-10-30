@@ -671,16 +671,16 @@ namespace LuminPack.Core
             if (string.IsNullOrEmpty(value) || value.Length is 0)
             {
                 WriteStringRecordTokenHeader(ref index);
-                return 1;
+                return 0;
             }
             
-            StringSerializer.Serialize(value, _bufferReference.Slice(index), out _, out _);
+            StringSerializer.Serialize(value, _bufferReference.Slice(index), out _, out var bytesWritten, SerializeMode.Utf16, replaceInvalidSequences: false);
             
-            var tokenIndex = index + checked(value.Length * sizeof(char));
+            var tokenIndex = index + bytesWritten;
             
             WriteStringRecordTokenHeader(ref tokenIndex);
             
-            return tokenIndex + 1;
+            return bytesWritten;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -693,7 +693,7 @@ namespace LuminPack.Core
                 return;
             }
             
-            StringSerializer.Serialize(value, _bufferReference.Slice(index, length), out _, out _);
+            StringSerializer.Serialize(value, _bufferReference.Slice(index, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
             
             var tokenIndex = index + length;
             
@@ -712,12 +712,11 @@ namespace LuminPack.Core
             }
             
             var length = checked(value.Length * 2);
-
-            if (!MemoryMarshal.AsBytes(value).TryCopyTo(_bufferReference.Slice(index)))
-            {
-                LuminPackExceptionHelper.ThrowFailedEncodingUtf16();
-            }
+            
+            StringSerializer.Serialize(value, _bufferReference.Slice(index, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
+            
             var tokenIndex = index + length;
+            
             WriteStringRecordTokenHeader(ref tokenIndex);
             
             return length;
@@ -732,13 +731,13 @@ namespace LuminPack.Core
                 return 0;
             }
             
-            var length = checked(value.Length * 2);
+            var length = unchecked(value.Length * 2);
             
             WriteStringRecordLengthHeader(ref index, length);
             var startIndex = index + 4;
-            StringSerializer.Serialize(value, _bufferReference.Slice(startIndex, length), out _, out _);
+            StringSerializer.Serialize(value, _bufferReference.Slice(startIndex, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
             
-            return startIndex + length;
+            return length;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -755,7 +754,7 @@ namespace LuminPack.Core
             
             var startIndex = index + 4;
             
-            StringSerializer.Serialize(value, _bufferReference.Slice(startIndex, length), out _, out _);
+            StringSerializer.Serialize(value, _bufferReference.Slice(startIndex, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -773,12 +772,9 @@ namespace LuminPack.Core
             
             var startIndex = index + 4;
             
-            if (!MemoryMarshal.AsBytes(value).TryCopyTo(_bufferReference.Slice(startIndex)))
-            {
-                LuminPackExceptionHelper.ThrowFailedEncodingUtf16();
-            }
+            StringSerializer.Serialize(value, _bufferReference.Slice(startIndex, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
             
-            return startIndex + length;
+            return length;
         }
 
         
