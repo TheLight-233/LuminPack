@@ -40,6 +40,58 @@ public sealed class LuminPackIncludeAttribute : System.Attribute
 }
 
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
+public sealed class LuminPackDelegateAttribute : System.Attribute
+{
+    public string InstanceName { get; set; }
+    public string MethodName { get; set; }
+    
+    public LuminPackDelegateAttribute(string instanceName, string methodName)
+    {
+        InstanceName = instanceName;
+        MethodName = methodName;
+    }
+}
+
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
+public sealed class LuminPackStaticDelegateAttribute : System.Attribute
+{
+    public Type TypeName { get; set; }
+    
+    public string MethodName { get; set; }
+
+    public LuminPackStaticDelegateAttribute(Type typeName, string methodName)
+    {
+        TypeName = typeName;
+        MethodName = methodName;
+    }
+}
+
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
+public sealed class LuminPackSingletonDelegateAttribute : System.Attribute
+{
+    
+    public Type TypeName { get; set; }
+    
+    public string SingletonFiledName { get; set; }
+    
+    public string MethodName { get; set; }
+
+    public LuminPackSingletonDelegateAttribute(Type typeName, string singletonFiledName, string methodName)
+    {
+        TypeName = typeName;
+        SingletonFiledName = singletonFiledName;
+        MethodName = methodName;
+    }
+
+    //Default is TypeName.Instance
+    public LuminPackSingletonDelegateAttribute(Type typeName, string methodName)
+    {
+        TypeName = typeName;
+        MethodName = methodName;
+    }
+}
+
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class LuminPackFixedLengthAttribute : System.Attribute
 {
     public uint FixedLength { get; set; }
