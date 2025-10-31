@@ -9,10 +9,11 @@ public static class ListFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
+        sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
+        sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine("                var index = writer.CurrentIndex;");
-        sb.AppendLine();
         sb.AppendLine("                writer.WriteNullCollectionHeader(ref index);");
         sb.AppendLine();
         sb.AppendLine("                writer.Advance(4);");
@@ -20,11 +21,28 @@ public static class ListFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            writer.WriteSpan(LuminPackMarshal.GetListSpan(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value)));");
+        sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value));");
+        sb.AppendLine();
+        sb.AppendLine($"            if (!RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                int spanOffset;");
+        sb.AppendLine("                writer.DangerousWriteUnmanagedSpan(ref index, span, out spanOffset);");
+        sb.AppendLine("                writer.Advance(spanOffset);");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteCollectionHeader(ref index, span.Length);");
+        sb.AppendLine("            writer.Advance(4);");
+        sb.AppendLine();
+        sb.AppendLine("            foreach (ref var item in span)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteValue(item!);");
+        sb.AppendLine("            }");
     }
 
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -38,7 +56,7 @@ public static class ListFormatter
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                value = new global::System.Collections.Generic.List<{GetFirstGeneric(fieldData.TypeName)}>(length);");
+        sb.AppendLine($"                value = new global::System.Collections.Generic.List<{elementType}>(length);");
         sb.AppendLine("            }");
         sb.AppendLine("            else if (value.Count == length)");
         sb.AppendLine("            {");
@@ -48,7 +66,26 @@ public static class ListFormatter
         sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value), length);");
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(4);");
-        sb.AppendLine("            reader.ReadSpan(ref index, length, ref span);");
+        sb.AppendLine();
+        sb.AppendLine($"            if (!RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                int spanOffset;");
+        sb.AppendLine("                reader.DangerousReadUnmanagedSpan(ref index, ref span, out spanOffset);");
+        sb.AppendLine("                reader.Advance(spanOffset);");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            if (span.IsEmpty)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            for (int i = 0; i < span.Length; i++)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                {elementType} item = default!;");
+        sb.AppendLine("                reader.ReadValue(ref item!);");
+        sb.AppendLine("                span[i] = item;");
+        sb.AppendLine("            }");
     }
 }
 
