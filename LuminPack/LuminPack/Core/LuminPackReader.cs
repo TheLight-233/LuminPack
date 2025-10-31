@@ -673,10 +673,10 @@ namespace LuminPack.Core
 
             var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
-            var span = array.AsSpan();
-            for (int i = 0; i < length; i++)
+            ref T first = ref LuminPackMarshal.GetArrayReference(array);
+            for (nint i = 0; i < length; i++)
             {
-                parser.Deserialize(ref this, ref span[i]!);
+                parser.Deserialize(ref this, ref Unsafe.Add(ref first, i)!);
             }
 
         }
@@ -718,10 +718,10 @@ namespace LuminPack.Core
 
             var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
-            var span = array.AsSpan();
-            for (int i = 0; i < length; i++)
+            ref T first = ref LuminPackMarshal.GetArrayReference(array);
+            for (nint i = 0; i < length; i++)
             {
-                parser.Deserialize(ref this, ref span[i]!);
+                parser.Deserialize(ref this, ref Unsafe.Add(ref first, i)!);
             }
 
         }
@@ -764,11 +764,12 @@ namespace LuminPack.Core
             }
 
             var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
 
-            for (int i = 0; i < length; i++)
+
+            ref var first = ref MemoryMarshal.GetReference(span);
+            for (nint i = 0; i < length; i++)
             {
-                parser.Deserialize(ref this, ref span[i]);
+                parser.Deserialize(ref this, ref Unsafe.Add(ref first, i)!);
             }
 
         }
@@ -812,9 +813,10 @@ namespace LuminPack.Core
             var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
 
-            for (int i = 0; i < length; i++)
+            ref var first = ref MemoryMarshal.GetReference(span);
+            for (nint i = 0; i < length; i++)
             {
-                parser.Deserialize(ref this, ref span[i]);
+                parser.Deserialize(ref this, ref Unsafe.Add(ref first, i)!);
             }
 
         }
@@ -845,10 +847,10 @@ namespace LuminPack.Core
 
             var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
-            var span = array.AsSpan();
-            for (int i = 0; i < length; i++)
+            ref T first = ref LuminPackMarshal.GetArrayReference(array);
+            for (nint i = 0; i < length; i++)
             {
-                parser.Deserialize(ref this, ref span[i]!);
+                parser.Deserialize(ref this, ref Unsafe.Add(ref first, i)!);
             }
 
         }
@@ -879,10 +881,10 @@ namespace LuminPack.Core
 
             var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
-
-            for (int i = 0; i < length; i++)
+            ref var first = ref MemoryMarshal.GetReference(span);
+            for (nint i = 0; i < length; i++)
             {
-                parser.Deserialize(ref this, ref span[i]);
+                parser.Deserialize(ref this, ref Unsafe.Add(ref first, i)!);
             }
 
         }
