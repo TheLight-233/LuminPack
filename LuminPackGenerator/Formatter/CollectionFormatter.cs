@@ -23,14 +23,25 @@ public static class ListFormatter
         sb.AppendLine();
         sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value));");
         sb.AppendLine();
-        sb.AppendLine($"            if (!RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
-        sb.AppendLine("            {");
-        sb.AppendLine("                int spanOffset;");
-        sb.AppendLine("                writer.DangerousWriteUnmanagedSpan(ref index, span, out spanOffset);");
-        sb.AppendLine("                writer.Advance(spanOffset);");
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
+
+        if (KnownValueTypes.Contains(elementType))
+        {
+            sb.AppendLine("            writer.DangerousWriteUnmanagedSpan(ref index, span, out var spanOffset);");
+            sb.AppendLine("            writer.Advance(spanOffset);");
+            return;
+        }
+
+        if (fieldData.IsValue)
+        {
+            sb.AppendLine($"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
+            sb.AppendLine("            {");
+            sb.AppendLine("                writer.DangerousWriteUnmanagedSpan(ref index, span, out var spanOffset);");
+            sb.AppendLine("                writer.Advance(spanOffset);");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+        }
+        
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, span.Length);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
@@ -67,24 +78,33 @@ public static class ListFormatter
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine($"            if (!RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
-        sb.AppendLine("            {");
-        sb.AppendLine("                int spanOffset;");
-        sb.AppendLine("                reader.DangerousReadUnmanagedSpan(ref index, ref span, out spanOffset);");
-        sb.AppendLine("                reader.Advance(spanOffset);");
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
+        if (KnownValueTypes.Contains(elementType))
+        {
+            sb.AppendLine("            reader.DangerousReadUnmanagedSpan(ref index, ref span, out var spanOffset);");
+            sb.AppendLine("            reader.Advance(spanOffset);");
+            return;
+        }
+
+        if (fieldData.IsValue)
+        {
+            sb.AppendLine($"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
+            sb.AppendLine("            {");
+            sb.AppendLine("                reader.DangerousReadUnmanagedSpan(ref index, ref span, out var spanOffset);");
+            sb.AppendLine("                reader.Advance(spanOffset);");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+        }
+        
         sb.AppendLine("            if (span.IsEmpty)");
         sb.AppendLine("            {");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            for (int i = 0; i < span.Length; i++)");
+        sb.AppendLine("            ref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(span);");
+        sb.AppendLine("            for (nint i = 0; i < span.Length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                {elementType} item = default!;");
-        sb.AppendLine("                reader.ReadValue(ref item!);");
-        sb.AppendLine("                span[i] = item;");
+        sb.AppendLine("                reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
         sb.AppendLine("            }");
     }
 }
