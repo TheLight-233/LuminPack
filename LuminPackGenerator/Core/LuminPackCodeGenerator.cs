@@ -1010,7 +1010,7 @@ namespace LuminPack.Code.Core
                     }
                     
                     //sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.Name}Count{depthSuffix}; i{depthSuffix}++)");
-                    sb.AppendLine($"{indentStr}foreach (var v{depthSuffix} in {field.Name}TempSpan{depthSuffix})");
+                    sb.AppendLine($"{indentStr}foreach (ref var v{depthSuffix} in {field.Name}TempSpan{depthSuffix})");
                     sb.AppendLine($"{indentStr}{{");
                     
                     // 特殊处理字符串元素
@@ -1045,7 +1045,7 @@ namespace LuminPack.Code.Core
                             break;
                         }
                         
-                        sb.AppendLine($"{indentStr}    var element = v{depthSuffix};");
+                        sb.AppendLine($"{indentStr}    ref var element = ref v{depthSuffix};");
 
                         if (elementField.Type is LuminFiledType.Class)
                         {
@@ -1225,7 +1225,7 @@ namespace LuminPack.Code.Core
                     
                     
                     //sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.Name}Count{depthSuffix}; i{depthSuffix}++)");
-                    sb.AppendLine($"{indentStr}foreach (var v{depthSuffix} in {field.Name}TempSpan{depthSuffix})");
+                    sb.AppendLine($"{indentStr}foreach (ref var v{depthSuffix} in {field.Name}TempSpan{depthSuffix})");
                     sb.AppendLine($"{indentStr}{{");
     
                     
