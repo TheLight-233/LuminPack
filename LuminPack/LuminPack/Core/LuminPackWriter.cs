@@ -825,10 +825,9 @@ namespace LuminPack.Core
             
             Advance(4);
             
-            foreach (var value in array.AsSpan())
+            foreach (ref var value in array.AsSpan())
             {
-                var v = value;
-                parser.Serialize(ref this, ref v);
+                parser.Serialize(ref this, ref value);
             }
         }
         
@@ -865,10 +864,9 @@ namespace LuminPack.Core
             WriteCollectionHeader(ref index, array.Length);
             Advance(4);
             
-            foreach (var value in array.AsSpan())
+            foreach (ref var value in array.AsSpan())
             {
-                var v = value;
-                parser.Serialize(ref this, ref v);
+                parser.Serialize(ref this, ref value);
             }
         }
         
@@ -904,10 +902,9 @@ namespace LuminPack.Core
             WriteCollectionHeader(ref _currentIndex, span.Length);
             Advance(4);
             
-            foreach (var value in span)
+            foreach (ref var value in span)
             {
-                var v = value;
-                parser.Serialize(ref this, ref v);
+                parser.Serialize(ref this, ref value!);
             }
         }
         
@@ -982,10 +979,9 @@ namespace LuminPack.Core
             
             var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
-            foreach (var value in span)
+            foreach (ref var value in span)
             {
-                var v = value;
-                parser.Serialize(ref this, ref v);
+                parser.Serialize(ref this, ref value!);
             }
         }
         
@@ -1063,10 +1059,9 @@ namespace LuminPack.Core
             
             WriteCollectionHeader(ref index, span.Length);
             Advance(4);
-            foreach (var value in span)
+            foreach (ref var value in span)
             {
-                var v = value;
-                parser.Serialize(ref this, ref v);
+                parser.Serialize(ref this, ref value!);
             }
         }
         
@@ -3380,6 +3375,5 @@ namespace LuminPack.Core
         }
         
         #endregion
-        
     }
 }
