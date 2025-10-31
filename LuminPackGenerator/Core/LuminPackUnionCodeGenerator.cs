@@ -39,7 +39,7 @@ public static class LuminPackUnionCodeGenerator
         // 定义新的 HashEntry 结构体
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine(
-            "        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential)]");
+            "        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 1)]");
         sb.AppendLine("        public unsafe struct HashEntry");
         sb.AppendLine("        {");
         sb.AppendLine("            public IntPtr MethodTable;");
@@ -58,6 +58,9 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine();
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine($"        internal static HashEntry[] _directTable {{ get; private set; }} = new HashEntry[{directTableSize}];");
+        // sb.AppendLine();
+        // sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        // sb.AppendLine("        internal static unsafe HashEntry* _directTablePtr;");
         sb.AppendLine();
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine($"        static object _registerLock = new object();");
@@ -79,6 +82,11 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("            unsafe");
         sb.AppendLine("            {");
 
+        // sb.AppendLine("                fixed (HashEntry* ptr = _directTable)");
+        // sb.AppendLine("                {");
+        // sb.AppendLine("                    _directTablePtr = ptr;");
+        // sb.AppendLine("                }");
+        
         // 注册所有联合成员
         for (int i = 0; i < data.UnionMembers.Count; i++)
         {
@@ -165,6 +173,10 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("                    var newDirectSize = tag + 1;");
         sb.AppendLine("                    _directTable = new HashEntry[newDirectSize];");
         sb.AppendLine("                    System.Array.Copy(oldDirectTable, _directTable, oldDirectTable.Length);");
+        // sb.AppendLine("                    fixed (HashEntry* ptr = _directTable)");
+        // sb.AppendLine("                    {");
+        // sb.AppendLine("                        _directTablePtr = ptr;");
+        // sb.AppendLine("                    }");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                _directTable[tag] = entry;");
@@ -309,9 +321,11 @@ public static class LuminPackUnionCodeGenerator
         
         sb.AppendLine("            unsafe");
         sb.AppendLine("            {");
+        sb.AppendLine(
+            $"                global::System.Runtime.CompilerServices.Unsafe.Add(ref LuminPackMarshal.GetArrayReference(global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable), tag).ReadDelegate(ref reader, ref value!);");
         //sb.AppendLine($"                ref var entry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag];");
-        //sb.AppendLine($"                global::System.Runtime.CompilerServices.Unsafe.Add(ref LuminPackMarshal.GetArrayReference(global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable), tag).ReadDelegate(ref reader, ref value!);");
-        sb.AppendLine($"                global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag].ReadDelegate(ref reader, ref value!);");
+        //sb.AppendLine($"                global::System.Runtime.CompilerServices.Unsafe.Add(ref global::System.Runtime.CompilerServices.Unsafe.AsRef<global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser.HashEntry>(global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTablePtr), tag).ReadDelegate(ref reader, ref value!);");
+        //sb.AppendLine($"                global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag].ReadDelegate(ref reader, ref value!);");
         sb.AppendLine("            }");
         
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserialized))
