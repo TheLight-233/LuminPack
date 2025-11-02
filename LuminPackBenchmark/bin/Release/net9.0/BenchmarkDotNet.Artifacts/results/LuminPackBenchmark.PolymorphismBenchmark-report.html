@@ -1,0 +1,38 @@
+<!DOCTYPE html>
+<html lang='en'>
+<head>
+<meta charset='utf-8' />
+<title>LuminPackBenchmark.PolymorphismBenchmark-20251101-164743</title>
+
+<style type="text/css">
+	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
+	td, th { padding: 6px 13px; border: 1px solid #ddd; text-align: right; }
+	tr { background-color: #fff; border-top: 1px solid #ccc; }
+	tr:nth-child(even) { background: #f8f8f8; }
+</style>
+</head>
+<body>
+<pre><code>
+BenchmarkDotNet v0.15.4, Windows 11 (10.0.26100.6899/24H2/2024Update/HudsonValley)
+13th Gen Intel Core i7-13650HX 2.60GHz, 1 CPU, 20 logical and 14 physical cores
+  [Host]            : .NET 9.0.3, X64 NativeAOT x86-64-v3
+  ShortRun-.NET 9.0 : .NET 9.0.3 (9.0.3, 9.0.325.11113), X64 RyuJIT x86-64-v3
+</code></pre>
+<pre><code>Job=ShortRun-.NET 9.0  Runtime=.NET 9.0  Server=False  
+IterationCount=3  LaunchCount=1  WarmupCount=3  
+</code></pre>
+
+<table>
+<thead><tr><th>Method          </th><th>Mean</th><th>Min </th><th>Max </th><th>Gen0</th><th>Gen1</th><th>Allocated</th>
+</tr>
+</thead><tbody><tr><td>LuminPackSerialize</td><td>5.201 &mu;s</td><td>5.144 &mu;s</td><td>5.308 &mu;s</td><td>-</td><td>-</td><td>-</td>
+</tr><tr><td>MemoryPackSerialize</td><td>26.206 &mu;s</td><td>25.212 &mu;s</td><td>27.327 &mu;s</td><td>-</td><td>-</td><td>65536 B</td>
+</tr><tr><td>MessagePackSerialize</td><td>85.844 &mu;s</td><td>85.510 &mu;s</td><td>86.210 &mu;s</td><td>5.2490</td><td>-</td><td>67232 B</td>
+</tr><tr><td>NinoSerialize</td><td>37.244 &mu;s</td><td>37.183 &mu;s</td><td>37.354 &mu;s</td><td>-</td><td>-</td><td>-</td>
+</tr><tr><td>LuminPackDeserialize</td><td>11.080 &mu;s</td><td>10.752 &mu;s</td><td>11.351 &mu;s</td><td>6.0272</td><td>1.0681</td><td>75688 B</td>
+</tr><tr><td>MemoryPackDeserialize</td><td>17.149 &mu;s</td><td>17.084 &mu;s</td><td>17.268 &mu;s</td><td>6.0120</td><td>1.0681</td><td>75688 B</td>
+</tr><tr><td>MessagePackDeserialize</td><td>120.778 &mu;s</td><td>120.083 &mu;s</td><td>121.165 &mu;s</td><td>6.3477</td><td>1.2207</td><td>79856 B</td>
+</tr><tr><td>NinoDeserialize</td><td>15.581 &mu;s</td><td>15.507 &mu;s</td><td>15.672 &mu;s</td><td>6.0120</td><td>1.0681</td><td>75688 B</td>
+</tr></tbody></table>
+</body>
+</html>

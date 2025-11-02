@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using LuminPack.Code;
+using LuminPack.Utility;
 
 namespace LuminPack.Option
 {
@@ -29,19 +30,19 @@ namespace LuminPack.Option
     {
         internal static readonly LuminPackReaderOptionalState NullOption = new LuminPackReaderOptionalState(true);
         
-        private readonly Dictionary<uint, object> refToObject;
+        private readonly LuminCircleReferenceMap<uint, object> refToObject;
         
         public LuminPackSerializerOption Option { get; private set; }
         
         public LuminPackReaderOptionalState(LuminPackSerializerOption? option = null)
         {
-            refToObject = new Dictionary<uint, object>();
+            refToObject = new LuminCircleReferenceMap<uint, object>();
             Option = option ?? LuminPackSerializerOption.Default;
         }
 
         private LuminPackReaderOptionalState(bool _)
         {
-            refToObject = new Dictionary<uint, object>();
+            refToObject = new LuminCircleReferenceMap<uint, object>();
             Option = LuminPackSerializerOption.Default;
         }
         

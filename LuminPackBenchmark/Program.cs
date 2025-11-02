@@ -15,6 +15,5 @@ class MyClass
         var res = LuminPackSerializer.Deserialize<SimpleClassBase>(buffer);
         var obj = LuminPackMarshal.As<SimpleClassBase, SimpleClass>(ref res);
         Console.WriteLine(obj.Map1[1].Id);
-        
     }
 }

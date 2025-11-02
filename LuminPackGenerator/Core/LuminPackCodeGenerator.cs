@@ -122,9 +122,9 @@ namespace LuminPack.Code.Core
             sb.AppendLine($"namespace {LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}");
             sb.AppendLine("{");
 
-            string classFullName = data.className + "Parser";
+            string classFullName = TypeMetaChecker.BuildParserClassName(data);
             string classGlobalName = data.classFullName;
-            string parserName = data.className + "Parser";
+            string parserName = classFullName;
             if (data.isGeneric)
             {
                 classFullName += $"<{_dataInfo.GenericParameters.FirstOrDefault()}";
@@ -215,6 +215,11 @@ namespace LuminPack.Code.Core
             sb.AppendLine("        {");
             sb.AppendLine($"            LuminPackParseProvider.Register(new {classFullName}());");
             sb.AppendLine($"            LuminPackParseProvider.RegisterParsers(new ArrayParser<{classGlobalName}>());");
+            if (data.isValueType)
+            {
+                sb.AppendLine($"            LuminPackParseProvider.Cache<{classGlobalName}?>.Parser = new NullableParser<{classGlobalName}>();");
+            }
+                
             sb.AppendLine("        }");
             sb.AppendLine();
             
@@ -226,8 +231,8 @@ namespace LuminPack.Code.Core
             sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
             sb.AppendLine($"        public override void RegisterParser()");
             sb.AppendLine("        {");
-            sb.AppendLine($"            LuminPackParseProvider.RegisterDataHandler<{classGlobalName}>(() => new {classFullName}());");
-            sb.AppendLine($"            LuminPackParseProvider.RegisterAsyncHandler<{classGlobalName}>(() => new {classFullName}());");
+            sb.AppendLine($"            LuminPackParseProvider.RegisterDataHandler<{classGlobalName}>(static () => new {classFullName}());");
+            sb.AppendLine($"            LuminPackParseProvider.RegisterAsyncHandler<{classGlobalName}>(static () => new {classFullName}());");
             sb.AppendLine("        }");
             sb.AppendLine();
             
@@ -262,7 +267,7 @@ namespace LuminPack.Code.Core
             else
             {
                 sb.AppendLine();
-                sb.AppendLine("            var writerBuffer = ReusableLinkedArrayBufferWriterPool.Rent();");
+                sb.AppendLine("            var writerBuffer = global::LuminPack.Utility.LuminBufferWriterPool.Rent();");
                 sb.AppendLine("            try");
                 sb.AppendLine("            {");
                 sb.AppendLine("                var writer = new LuminPackWriter(writerBuffer);");
@@ -275,7 +280,7 @@ namespace LuminPack.Code.Core
                 sb.AppendLine("            }");
                 sb.AppendLine("            finally");
                 sb.AppendLine("            {");
-                sb.AppendLine("                ReusableLinkedArrayBufferWriterPool.Return(writerBuffer);");
+                sb.AppendLine("                global::LuminPack.Utility.LuminBufferWriterPool.Return(writerBuffer);");
                 sb.AppendLine("            }");
                 sb.AppendLine("        }");
                 sb.AppendLine();
@@ -1665,10 +1670,16 @@ namespace LuminPack.Code.Core
                     }
                     break;
                 case LuminFiledType.String:
-                    sb.AppendLine($"{indentStr}reader.ReadStringLength(ref {offset}, out var {field.belongClassName.Split('.').Last()}{field.Name}{depthSuffix}Length);");
+                    if (field.belongClassName.StartsWith("global::"))
+                    {
+                        field.belongClassName = field.belongClassName.Substring(8);
+                    }
+
+                    field.belongClassName = field.belongClassName.Replace('<', '_').Replace('>', '_');
+                    sb.AppendLine($"{indentStr}reader.ReadStringLength(ref {offset}, out var {field.belongClassName.Split('.').Last()}{field.belongClassFieldName}{field.Name}{depthSuffix}Length);");
             
-                    sb.AppendLine($"{indentStr}{targetObj} = reader.ReadString({offset}, {field.belongClassName.Split('.').Last()}{field.Name}{depthSuffix}Length)!;");
-                    sb.AppendLine($"{indentStr}{offset} += ({field.belongClassName.Split('.').Last()}{field.Name}{depthSuffix}Length + reader.StringRecordLength());");
+                    sb.AppendLine($"{indentStr}{targetObj} = reader.ReadString({offset}, {field.belongClassName.Split('.').Last()}{field.belongClassFieldName}{field.Name}{depthSuffix}Length)!;");
+                    sb.AppendLine($"{indentStr}{offset} += ({field.belongClassName.Split('.').Last()}{field.belongClassFieldName}{field.Name}{depthSuffix}Length + reader.StringRecordLength());");
                     break;
                 case LuminFiledType.List:
                     if (isFirst && depth is 0) 
@@ -2014,6 +2025,7 @@ namespace LuminPack.Code.Core
                     for (int i = 0; i < field.ClassFields.Count; i++)
                     {
                         var subField = field.ClassFields[i];
+                        subField.belongClassFieldName = field.Name;
                         var indentTemp = indent;
                         
                         #region 连续值类型字段优化
@@ -2634,6 +2646,7 @@ namespace LuminPack.Code.Core
                 LuminFiledType.Decimal  => "16",
                 LuminFiledType.Bool    => "1",
                 LuminFiledType.Enum    => GetEnumFieldLength(field.EnumType),
+                _ => $"Unsafe.SizeOf<{field.TypeName}>()>"
             };
         }
         
@@ -2834,6 +2847,8 @@ namespace LuminPack.Code.Core
             {
                 inheritance = $" : Local{classInfo.Parent.classFileName}";
             }
+            
+            string genericParameters = classInfo.GenericParameters.Count is 0 ? string.Empty : $"<{string.Join(", ", classInfo.GenericParameters)}>";
 
             switch (classInfo.structLayout)
             {
@@ -2852,8 +2867,39 @@ namespace LuminPack.Code.Core
     
             sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
             sb.AppendLine(classInfo.isValueType 
-                ? $"        private struct Local{classInfo.classFileName}{inheritance}" 
-                : $"        private class Local{classInfo.classFileName}{inheritance}");
+                ? $"        private struct Local{classInfo.className}{genericParameters}{inheritance}" 
+                : $"        private class Local{classInfo.className}{genericParameters}{inheritance}");
+            foreach (var constraint in classInfo.GenericConstraints)
+            {
+                if (constraint.IsUnmanaged is false && 
+                    constraint.IsClass is false && 
+                    constraint.IsStruct is false &&
+                    constraint.IsNotNull is false &&
+                    constraint.HasDefault is false &&
+                    constraint.HasNewConstructor is false &&
+                    constraint.Constraints.Count is 0) continue;
+                sb.Append("            ");
+                sb.Append("where ");
+                sb.Append(constraint.ParameterName);
+                sb.Append(" : ");
+
+                var constraints = new List<string>();
+
+                // 特殊约束
+                if (constraint.IsUnmanaged) constraints.Add("unmanaged");
+                if (constraint.IsClass) constraints.Add("class");
+                if (constraint.IsStruct) constraints.Add("struct");
+                if (constraint.IsNotNull) constraints.Add("notnull");
+                if (constraint.HasNewConstructor) constraints.Add("new()");
+                if (constraint.HasDefault) constraints.Add("default");
+
+                // 类型约束（如 IComparable）
+                constraints.AddRange(constraint.Constraints);
+
+                sb.Append(string.Join(", ", constraints));
+                
+                sb.AppendLine();
+            }
             sb.AppendLine("        {");
             
             foreach (var field in classInfo.fields)
@@ -2939,7 +2985,7 @@ namespace LuminPack.Code.Core
             return localFields;
         }
 
-        public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb, bool extension = false)
+        public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb, bool extension = false, bool polymorphism = false)
         {
             string classFullName = data.className + "Parser";
             string classGlobalName = data.classFullName;
@@ -2967,7 +3013,7 @@ namespace LuminPack.Code.Core
             }
             sb.AppendLine();
             
-            if (!_dataInfo.isValueType)
+            if (!_dataInfo.isValueType && !polymorphism)
             {
                 sb.AppendLine("            if (value is null)");
                 sb.AppendLine("            {");
@@ -2985,8 +3031,13 @@ namespace LuminPack.Code.Core
                     : $"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value);");
             }
             sb.AppendLine("            ref int offset = ref writer.GetCurrentSpanOffset();");
-            sb.AppendLine($"            writer.WriteObjectHeader(ref offset, {data.fields.Count});");
-            sb.AppendLine($"            writer.Advance(1);");
+            
+            if (!polymorphism)
+            {
+                sb.AppendLine($"            writer.WriteObjectHeader(ref offset, {data.fields.Count});");
+                sb.AppendLine($"            writer.Advance(1);");
+            }
+            
             //sb.AppendLine("            var span = writer.GetSpan();");
             sb.AppendLine();
 
@@ -3087,7 +3138,7 @@ namespace LuminPack.Code.Core
             sb.AppendLine();
         }
 
-        public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb)
+        public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb, bool polymorphism = false)
         {
             string classFullName = data.className + "Parser";
             string classGlobalName = data.classFullName;
@@ -3126,15 +3177,18 @@ namespace LuminPack.Code.Core
                 sb.AppendLine($"            {field.TypeName}{nullable} {field.Name}Temp = default!;");
             }
             sb.AppendLine();
-    
-            sb.AppendLine($"            if (reader.PeekIsNullObject(ref offset))");
-            sb.AppendLine($"            {{");
-            sb.AppendLine($"                offset += 1;");
-            sb.AppendLine($"                return;");
-            sb.AppendLine($"            }}");
-            sb.AppendLine($"            offset += 1;");
-            sb.AppendLine();
-    
+
+            if (!polymorphism)
+            {
+                sb.AppendLine($"            if (reader.PeekIsNullObject(ref offset))");
+                sb.AppendLine($"            {{");
+                sb.AppendLine($"                offset += 1;");
+                sb.AppendLine($"                return;");
+                sb.AppendLine($"            }}");
+                sb.AppendLine($"            offset += 1;");
+                sb.AppendLine();
+            }
+            
             // 反序列化到局部变量
             for (var i = 0; i < data.fields.Count; i++)
             {
@@ -3316,6 +3370,7 @@ namespace LuminPack.Code.Core
             }
             sb.AppendLine();
         }
+        
         
     }
     

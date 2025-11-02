@@ -12,9 +12,7 @@ using LuminPack.Attribute;
 using LuminPack.Code;
 using LuminPack.Core;
 using LuminPack.Data;
-using LuminPack.Enum;
 using LuminPack.Interface;
-using LuminPack.Internal;
 using LuminPack.Option;
 using LuminPack.Parsers;
 using LuminPack.Utility;
@@ -39,7 +37,7 @@ namespace LuminPack
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static byte[] Serialize<T>(in T? value, LuminPackSerializerOption? option = null)
         {
-            var writerBuffer = ReusableLinkedArrayBufferWriterPool.Rent();
+            var writerBuffer = LuminBufferWriterPool.Rent();
             
             var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();
             state.Init(option);
@@ -56,7 +54,7 @@ namespace LuminPack
             }
             finally
             {
-                ReusableLinkedArrayBufferWriterPool.Return(writerBuffer);
+                LuminBufferWriterPool.Return(writerBuffer);
                 state.Reset();
             }
         }
@@ -65,7 +63,7 @@ namespace LuminPack
         /// 序列化主方法
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void Serialize<T>(in T? value, ReusableLinkedArrayBufferWriter writerBuffer, LuminPackSerializerOption? option = null)
+        public static void Serialize<T>(in T? value, LuminBufferWriter writerBuffer, LuminPackSerializerOption? option = null)
         {
             var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();
             state.Init(option);
@@ -90,7 +88,7 @@ namespace LuminPack
             LuminPackSerializerOption? option = null, 
             CancellationToken cancellationToken = default)
         {
-            var tempWriter = ReusableLinkedArrayBufferWriterPool.Rent();
+            var tempWriter = LuminBufferWriterPool.Rent();
             try
             {
                 var buffer = Serialize(value, option);
@@ -99,7 +97,7 @@ namespace LuminPack
             }
             finally
             {
-                ReusableLinkedArrayBufferWriterPool.Return(tempWriter);
+                LuminBufferWriterPool.Return(tempWriter);
             }
         }
 
@@ -203,7 +201,7 @@ namespace LuminPack
             }
 
             // 处理一般流
-            var builder = ReusableReadOnlySequenceBuilderPool.Rent();
+            var builder = ReadOnlySequenceBuilderPool.Rent();
             try
             {
                 const int initialBufferSize = 65536;
@@ -215,7 +213,7 @@ namespace LuminPack
                     if (offset == buffer.Length)
                     {
                         builder.Add(buffer, returnToPool: true);
-                        buffer = ArrayPool<byte>.Shared.Rent(MathEx.NewArrayCapacity(buffer.Length));
+                        buffer = ArrayPool<byte>.Shared.Rent(Math.Min(buffer.Length << 2, 0x7FFFFFC7));
                         offset = 0;
                     }
 
@@ -355,89 +353,6 @@ namespace LuminPack
             {
                 LuminPackExceptionHelper.ThrowNoParserRegistered(typeof(T));
             }
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static byte[] SerializeUnmanaged<T>(in T? value)
-        {
-            byte[] array = AllocateUninitializedArray<byte>(Unsafe.SizeOf<T>());
-            Unsafe.WriteUnaligned(ref GetArrayDataReference(array), value);
-            return array;
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static byte[] SerializeFixedSize<T>(in T? value, int elementSize)
-        {
-            var buffer = new byte[(value is null) ? 1 : elementSize];
-            var bufferWriter = new FixedArrayBufferWriter(buffer);
-            var writer = new LuminPackWriter(bufferWriter, LuminPackWriterOptionalState.NullOption);
-            writer.WriteValue(value);
-            
-            var result = AllocateUninitializedArray<byte>(writer.CurrentIndex);
-            var dest = result.AsSpan();
-            
-            writer.GetSpan().CopyTo(dest);
-            
-            return result;
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static byte[] SerializeUnmanagedArray<T>(in T? value, int elementSize)
-        {
-            if (value is null) return LuminPackCode.NullCollectionData.ToArray();
-            
-            var srcArray = (Array)(object)value;
-            if (srcArray.Length is 0) return "\0\0\0\0"u8.ToArray();
-            
-            int length = srcArray.Length;
-            int dataSize = elementSize * length;
-            byte[] destArray = AllocateUninitializedArray<byte>(dataSize + 4);
-            
-            ref byte head = ref GetArrayDataReference(destArray);
-            Unsafe.WriteUnaligned(ref head, length);
-            Unsafe.CopyBlockUnaligned(
-                ref Unsafe.Add(ref head, 4), 
-                ref GetArrayDataReference(srcArray), 
-                (uint)dataSize);
-            return destArray;
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static byte[] SerializeComplexType<T>(in T? value, LuminPackSerializerOption? option)
-        {
-            var writerBuffer = ReusableLinkedArrayBufferWriterPool.Rent();
-            
-            var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();
-            state.Init(option);
-            
-            try
-            {
-                var writer = new LuminPackWriter(writerBuffer, state);
-
-                writer.WriteValue(value);
-                
-                var buffer = AllocateUninitializedArray<byte>(writer.CurrentIndex);
-                writer.GetSpan().CopyTo(buffer.AsSpan());
-                return buffer;
-            }
-            finally
-            {
-                ReusableLinkedArrayBufferWriterPool.Return(writerBuffer);
-                state.Reset();
-            }
-            
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int DeserializeUnmanaged<T>(ReadOnlySpan<byte> buffer, scoped ref T? value)
-        {
-            int size = Unsafe.SizeOf<T>();
-            if (buffer.Length < size)
-            {
-                LuminPackExceptionHelper.ThrowInvalidRange(size, buffer.Length);
-            }
-            value = Unsafe.ReadUnaligned<T>(ref MemoryMarshal.GetReference(buffer));
-            return size;
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

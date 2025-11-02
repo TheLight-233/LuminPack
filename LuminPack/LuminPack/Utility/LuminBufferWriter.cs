@@ -9,32 +9,32 @@ namespace LuminPack.Utility;
 
 
 
-public static class ReusableLinkedArrayBufferWriterPool
+public static class LuminBufferWriterPool
 {
     public const int MaxPooledBufferSize = 4 * 1024 * 1024; // 4MB
     public const int MaxPoolSize = 32;
     
 #if NET8_0_OR_GREATER
-    private static readonly ObjectPool<ReusableLinkedArrayBufferWriter> _pool = 
+    private static readonly ObjectPool<LuminBufferWriter> _pool = 
         new(MaxPoolSize);
 #else
-    private static readonly ObjectPool<ReusableLinkedArrayBufferWriter> _pool = 
+    private static readonly ObjectPool<LuminBufferWriter> _pool = 
         new(new BufferWriterPolicy(), MaxPoolSize);
 #endif
     
-    public static ReusableLinkedArrayBufferWriter Rent() => _pool.Rent();
+    public static LuminBufferWriter Rent() => _pool.Rent();
     
-    public static void Return(ReusableLinkedArrayBufferWriter writer) => 
+    public static void Return(LuminBufferWriter writer) => 
         _pool.Return(writer);
 
 #if !NET8_0_OR_GREATER
-    private sealed class BufferWriterPolicy : IPooledObjectPolicy<ReusableLinkedArrayBufferWriter>
+    private sealed class BufferWriterPolicy : IPooledObjectPolicy<LuminBufferWriter>
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ReusableLinkedArrayBufferWriter Create() => new(true);
+        public LuminBufferWriter Create() => new(true);
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Return(ReusableLinkedArrayBufferWriter writer)
+        public bool Return(LuminBufferWriter writer)
         {
             if (writer.TotalLength < MaxPooledBufferSize)
             {
@@ -50,9 +50,9 @@ public static class ReusableLinkedArrayBufferWriterPool
 }
 
 // This class has large buffer so should cache [ThreadStatic] or Pool.
-public sealed class ReusableLinkedArrayBufferWriter :
+public sealed class LuminBufferWriter :
 #if NET8_0_OR_GREATER
-    IBufferWriter<byte>, IDisposable, IPooledObjectPolicy<ReusableLinkedArrayBufferWriter>
+    IBufferWriter<byte>, IDisposable, IPooledObjectPolicy<LuminBufferWriter>
 #else
     IBufferWriter<byte>, IDisposable
 #endif
@@ -81,7 +81,7 @@ public sealed class ReusableLinkedArrayBufferWriter :
     
     public bool UseFirstBuffer => !_buffer.IsNull;
 
-    public ReusableLinkedArrayBufferWriter(bool useFirstBuffer)
+    public LuminBufferWriter(bool useFirstBuffer)
     {
         
         this._buffer = useFirstBuffer
@@ -89,7 +89,7 @@ public sealed class ReusableLinkedArrayBufferWriter :
             : default;
     }
     
-    ~ReusableLinkedArrayBufferWriter()
+    ~LuminBufferWriter()
     {
         Dispose();
     }
@@ -219,13 +219,13 @@ public sealed class ReusableLinkedArrayBufferWriter :
 
 #if NET8_0_OR_GREATER
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    static ReusableLinkedArrayBufferWriter IPooledObjectPolicy<ReusableLinkedArrayBufferWriter>.Create() 
+    static LuminBufferWriter IPooledObjectPolicy<LuminBufferWriter>.Create() 
         => new(true);
         
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    static bool IPooledObjectPolicy<ReusableLinkedArrayBufferWriter>.Return(ReusableLinkedArrayBufferWriter writer)
+    static bool IPooledObjectPolicy<LuminBufferWriter>.Return(LuminBufferWriter writer)
     {
-        if (writer.TotalLength < ReusableLinkedArrayBufferWriterPool.MaxPooledBufferSize)
+        if (writer.TotalLength < LuminBufferWriterPool.MaxPooledBufferSize)
         {
             writer.ResetCore();
             return true; // 可回收

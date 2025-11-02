@@ -545,33 +545,6 @@ public interface Ifoo
 }
 
 
-[MemoryPackable]
-[MessagePackObject]
-[LuminPackable]
-[NinoType]
-public partial class Transform
-{
-    [Key(0)] public float x;
-    [Key(1)] public float y;
-    [Key(2)] public float z;
-    
-    
-    public Transform()
-    {
-    }
-
-    [LuminPackConstructor]
-    [MemoryPackConstructor]
-    [NinoConstructor]
-    public Transform(float x, float y, float z)
-    {
-        this.x = x;
-        this.y = y;
-        this.z = z;
-    }
-    
-}
-
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MinColumn, MaxColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -583,7 +556,7 @@ public class PolymorphismBenchmark
 {
     private PolymorphismClassBase myClass = PolymorphismClass.Create();
     
-    private ReusableLinkedArrayBufferWriter luminBufferWriter = ReusableLinkedArrayBufferWriterPool.Rent();
+    private LuminBufferWriter luminBufferWriter = LuminBufferWriterPool.Rent();
     private MemoryPack.Internal.ReusableLinkedArrayBufferWriter memoryBufferWriter = MemoryPack.Internal.ReusableLinkedArrayBufferWriterPool.Rent();
     private NinoArrayBufferWriter ninoBufferWriter = new NinoArrayBufferWriter(100000);
     
@@ -601,7 +574,7 @@ public class PolymorphismBenchmark
     [GlobalSetup]
     public void SetUp()
     {
-        for (int i = 0; i < 100; i++)
+        for (int i = 0; i < 1000; i++)
         {
             switch (i % 20)
             {

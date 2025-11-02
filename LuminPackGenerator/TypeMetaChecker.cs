@@ -213,7 +213,7 @@ public static class TypeMetaChecker
         return false;
     }
     
-     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void ValidateOrderAttributesForType(
         INamedTypeSymbol typeSymbol, 
         IEnumerable<ISymbol> members, 
@@ -221,6 +221,19 @@ public static class TypeMetaChecker
     {
         var membersWithoutOrder = new List<ISymbol>();
         var orderValueMap = new Dictionary<uint, List<ISymbol>>();
+        
+        // 第一步：收集所有自动属性的后台字段名称
+        var autoPropertyBackingFields = new HashSet<string>();
+        foreach (var property in members.OfType<IPropertySymbol>())
+        {
+            // 检查是否是自动属性（通过查找后台字段判断）
+            var backingFieldName = $"<{property.Name}>k__BackingField";
+            var backingField = typeSymbol.GetMembers(backingFieldName).OfType<IFieldSymbol>().FirstOrDefault();
+            if (backingField != null)
+            {
+                autoPropertyBackingFields.Add(backingFieldName);
+            }
+        }
         
         foreach (var member in members)
         {
@@ -239,6 +252,10 @@ public static class TypeMetaChecker
             {
                 // 跳过常量字段
                 if (field.IsConst)
+                    continue;
+                
+                // 跳过自动属性的后台字段
+                if (field.IsImplicitlyDeclared || autoPropertyBackingFields.Contains(field.Name))
                     continue;
                     
                 if (TryCheckIgnoreAttribute(field))
@@ -603,5 +620,43 @@ public static class TypeMetaChecker
         }
         
         return true;
+    }
+    
+    public static string BuildParserClassName(LuminDataInfo data)
+    {
+        string classFullName = data.classFullName;
+
+        if (classFullName.StartsWith("global::"))
+        {
+            classFullName = classFullName.Substring(8);
+        }
+            
+        classFullName = classFullName.Replace(".", "_").Replace('+', '_');
+
+        if (classFullName.Contains('<'))
+        {
+            classFullName = classFullName.Split('<').FirstOrDefault();
+        }
+    
+        return classFullName + "Parser";
+    }
+    
+    public static string BuildParserClassName(string fullName)
+    {
+        string classFullName = fullName;
+
+        if (classFullName.StartsWith("global::"))
+        {
+            classFullName = classFullName.Substring(8);
+        }
+            
+        classFullName = classFullName.Replace(".", "_").Replace('+', '_');
+
+        if (classFullName.Contains('<'))
+        {
+            classFullName = classFullName.Split('<').FirstOrDefault();
+        }
+    
+        return classFullName + "Parser";
     }
 }

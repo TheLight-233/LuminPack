@@ -9,6 +9,7 @@ public sealed unsafe class LuminUnionMap<TValue> : IDisposable
 {
     private const int MIN_CAPACITY = 8;
 
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
     internal struct Entry
     {
         public IntPtr Key;

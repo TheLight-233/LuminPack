@@ -31,12 +31,21 @@ public static class ListFormatter
             return;
         }
 
-        if (fieldData.IsValue)
+        if (!elementType.Contains("?"))
         {
             sb.AppendLine($"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
             sb.AppendLine("            {");
             sb.AppendLine("                writer.DangerousWriteUnmanagedSpan(ref index, span, out var spanOffset);");
             sb.AppendLine("                writer.Advance(spanOffset);");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+        }
+        else
+        {
+            sb.AppendLine($"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
+            sb.AppendLine("            {");
+            sb.AppendLine("                writer.WriteSpan(span);");
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
             sb.AppendLine();
@@ -85,12 +94,21 @@ public static class ListFormatter
             return;
         }
 
-        if (fieldData.IsValue)
+        if (!elementType.Contains("?"))
         {
             sb.AppendLine($"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
             sb.AppendLine("            {");
             sb.AppendLine("                reader.DangerousReadUnmanagedSpan(ref index, ref span, out var spanOffset);");
             sb.AppendLine("                reader.Advance(spanOffset);");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+        }
+        else
+        {
+            sb.AppendLine($"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
+            sb.AppendLine("            {");
+            sb.AppendLine("                reader.ReadSpan(ref index, length, ref span);");
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
             sb.AppendLine();

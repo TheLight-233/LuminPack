@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Linq;
 using LuminPack;
 using LuminPack.Attribute;
+using LuminPack.Option;
 
 namespace LuminPackUnitTest
 {
@@ -226,6 +227,60 @@ namespace LuminPackUnitTest
             catch (Exception ex)
             {
                 results.Add($"✗ TestString - ERROR: {ex.Message}");
+            }
+        }
+        
+        public static void TestStringUtf8Token(List<string> results)
+        {
+            try
+            {
+                string val = "嗨嗨Test！";
+                byte[] buf = LuminPackSerializer.Serialize(val, new LuminPackSerializerOption()
+                {
+                    StringEncoding = LuminPackStringEncoding.UTF8,
+                    StringRecording = LuminPackStringRecording.Token
+                });
+                string result = LuminPackSerializer.Deserialize<string>(buf, new LuminPackSerializerOption()
+                {
+                    StringEncoding = LuminPackStringEncoding.UTF8,
+                    StringRecording = LuminPackStringRecording.Token
+                });
+                
+                if (val == result && result == "嗨嗨Test！")
+                    results.Add("✓ TestStringUtf8Token - PASSED");
+                else
+                    results.Add("✗ TestStringUtf8Token - FAILED");
+            }
+            catch (Exception ex)
+            {
+                results.Add($"✗ TestStringUtf8Token - ERROR: {ex.Message}");
+            }
+        }
+        
+        public static void TestStringUtf16(List<string> results)
+        {
+            try
+            {
+                string val = "嗨嗨Test！";
+                byte[] buf = LuminPackSerializer.Serialize(val, new LuminPackSerializerOption()
+                {
+                    StringEncoding = LuminPackStringEncoding.UTF16,
+                    StringRecording = LuminPackStringRecording.Length
+                });
+                string result = LuminPackSerializer.Deserialize<string>(buf, new LuminPackSerializerOption()
+                {
+                    StringEncoding = LuminPackStringEncoding.UTF16,
+                    StringRecording = LuminPackStringRecording.Length
+                });
+                
+                if (val == result && result == "嗨嗨Test！")
+                    results.Add("✓ TestStringUtf16 - PASSED");
+                else
+                    results.Add("✗ TestStringUtf16 - FAILED");
+            }
+            catch (Exception ex)
+            {
+                results.Add($"✗ TestStringUtf16 - ERROR: {ex.Message}");
             }
         }
 

@@ -36,7 +36,7 @@ namespace LuminPack.SourceGenerator
                     _metadata = new MetaInfo(csOptions, langVersion, net8);
                     return _metadata;
                 }).WithTrackingName("LuminPack.LuminPackable.0_ParseOptionsProvider");
-                
+        
                 var typeDeclarations = context.SyntaxProvider.ForAttributeWithMetadataName(
                     LUMIN_PACKABLE_ATTRIBUTE,
                     static (node, _) => node 
@@ -46,8 +46,18 @@ namespace LuminPack.SourceGenerator
                         or RecordDeclarationSyntax,
                     static (context, _) =>
                     {
-                        ProcessedTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-                        return CreateLuminDataInfo(context.TargetSymbol, context.SemanticModel.Compilation);
+                        try
+                        {
+                            ProcessedTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+                            return CreateLuminDataInfo(context.TargetSymbol, context.SemanticModel.Compilation);
+                        }
+                        catch (Exception ex)
+                        {
+                            // 捕获创建LuminDataInfo时的异常
+                            var errorMsg = $"{DateTime.Now}: CreateLuminDataInfo failed for {context.TargetSymbol?.Name}\n{ex}\nStack: {ex.StackTrace}";
+                            File.WriteAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "LuminPack_CreateLuminDataInfo_error.txt"), errorMsg);
+                            throw;
+                        }
                     }).WithTrackingName("LuminPack.LuminPackable.1_ForAttributeLuminPackableAttribute");
 
                 var provider = typeDeclarations
@@ -55,35 +65,61 @@ namespace LuminPack.SourceGenerator
                     .WithComparer(Comparer.Instance)
                     .Combine(metaInfo)
                     .WithTrackingName("LuminPack.LuminPackable.2_LuminPackCombined");
-                
+        
                 context.RegisterSourceOutput(provider, static (context, source) =>
                 {
-                    if (TypeMetaChecker.TryReportContext(ref context))
+                    try
                     {
-                        return;
-                    }
+                        if (TypeMetaChecker.TryReportContext(ref context))
+                        {
+                            return;
+                        }
 
-                    var dataInfo = source.Left.Item1;
-                    var compilation = source.Left.Item2;
-                    var metaInfo = source.Right;
-                    
-                    var code = LuminPackCodeGenerator.CodeGenerator(dataInfo, metaInfo);
-                    var extension = LuminPackExtensionGenerator.CodeGenerator(dataInfo, metaInfo, compilation);
-                    if (string.IsNullOrEmpty(code)) return;
-                    
-                    var name = dataInfo.classFileName.Replace("<", "_").Replace(">", "_").Replace(",", "_");
-                    
-                    context.AddSource($"{name}Parser.g.cs", code);
-                    if (!dataInfo.isGeneric) 
+                        var dataInfo = source.Left.Item1;
+                        var compilation = source.Left.Item2;
+                        var metaInfo = source.Right;
+                
+                        var code = LuminPackCodeGenerator.CodeGenerator(dataInfo, metaInfo);
+                        var extension = LuminPackExtensionGenerator.CodeGenerator(dataInfo, metaInfo, compilation);
+                        if (string.IsNullOrEmpty(code)) return;
+                
+                        var name = dataInfo.classFullName;
+                        if (name.StartsWith("global::"))
+                        {
+                            name = name.Substring(8);
+                        }
+                        name = name.Replace("<", "_").Replace('>', '_');
+                        
+                        context.AddSource($"{name}Parser.g.cs", code);
                         context.AddSource($"{name}Parser.Extension.g.cs", extension);
+                        
+                        
+                    }
+                    catch (Exception ex)
+                    {
+                        // 捕获代码生成时的异常
+                        var errorMsg = $"{DateTime.Now}: Code generation failed\n{ex}\nStack: {ex.StackTrace}";
+                        File.WriteAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "LuminPack_CodeGen_error.txt"), errorMsg);
+                
+                        // 同时报告诊断信息，让用户在IDE中看到错误
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            new DiagnosticDescriptor(
+                                "LUMINPACK001",
+                                "Code Generation Failed",
+                                $"LuminPack code generation failed: {ex.Message}",
+                                "LuminPack",
+                                DiagnosticSeverity.Error,
+                                true),
+                            Location.None));
+                    }
                 });
             }
             catch (Exception ex)
             {
-                File.WriteAllText(@"C:\LuminPack_log.txt", 
-                    $"{DateTime.Now}: Generator failed\n{ex}");
+                // 捕获初始化过程中的异常
+                var errorMsg = $"{DateTime.Now}: Generator initialization failed\n{ex}\nStack: {ex.StackTrace}";
+                File.WriteAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "LuminPack_Init_error.txt"), errorMsg);
             }
-            
         }
 
         private static LuminDataInfo CreateLuminDataInfo(ISymbol symbol, Compilation compilation)
@@ -894,7 +930,8 @@ namespace LuminPack.SourceGenerator
                     }
             
                     // 新增：递归处理基类成员（排除System.Object）
-                    if (namedTypeArg.BaseType?.SpecialType != SpecialType.System_Object)
+                    if (namedTypeArg.BaseType?.SpecialType != SpecialType.System_Object &&
+                        namedTypeArg.BaseType?.SpecialType != SpecialType.System_ValueType)
                     {
                         ProcessBaseClassMembersForNestedClass(namedTypeArg.BaseType, field, genericParameters);
                     }
@@ -1047,7 +1084,8 @@ namespace LuminPack.SourceGenerator
                     SetClassLocalField(namedTypeArg, field.localFields);
             
                     // 新增：递归处理基类成员（排除System.Object）
-                    if (namedTypeArg.BaseType?.SpecialType != SpecialType.System_Object)
+                    if (namedTypeArg.BaseType?.SpecialType != SpecialType.System_Object && 
+                        namedTypeArg.BaseType?.SpecialType != SpecialType.System_ValueType)
                     {
                         ProcessBaseClassMembersForNestedClass(namedTypeArg.BaseType, field, genericParameters);
                     }
@@ -1407,7 +1445,8 @@ namespace LuminPack.SourceGenerator
                 }
 
                 // 新增：处理基类成员
-                if (namedType.BaseType?.SpecialType != SpecialType.System_Object)
+                if (namedType.BaseType?.SpecialType != SpecialType.System_Object &&
+                    namedType.BaseType?.SpecialType != SpecialType.System_ValueType)
                 {
                     ProcessBaseClassMembersForNestedClass(namedType.BaseType, field, genericParameters);
                 }
@@ -1448,7 +1487,8 @@ namespace LuminPack.SourceGenerator
                 SetClassLocalField(namedType, field.localFields);
         
                 // 新增：处理基类成员
-                if (namedType.BaseType?.SpecialType != SpecialType.System_Object)
+                if (namedType.BaseType?.SpecialType != SpecialType.System_Object&&
+                    namedType.BaseType?.SpecialType != SpecialType.System_ValueType)
                 {
                     ProcessBaseClassMembersForNestedClass(namedType.BaseType, field, genericParameters);
                 }

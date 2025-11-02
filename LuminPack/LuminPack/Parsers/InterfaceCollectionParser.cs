@@ -185,7 +185,7 @@ public sealed class InterfaceEnumerableParser<T> : LuminPackParser<IEnumerable<T
         else
         {
             // write to tempbuffer(because we don't know length so can't write header)
-            var tempBuffer = ReusableLinkedArrayBufferWriterPool.Rent();
+            var tempBuffer = LuminBufferWriterPool.Rent();
             try
             {
                 var tempWriter = new LuminPackWriter(writer.OptionState);
@@ -211,7 +211,7 @@ public sealed class InterfaceEnumerableParser<T> : LuminPackParser<IEnumerable<T
             }
             finally
             {
-                ReusableLinkedArrayBufferWriterPool.Return(tempBuffer);
+                LuminBufferWriterPool.Return(tempBuffer);
             }
         }
     }

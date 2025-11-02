@@ -11,9 +11,9 @@ public static class LuminPackUnionCodeGenerator
     public static void UnionCodeGenerator(StringBuilder sb, LuminDataInfo data, MetaInfo metaInfo)
     {
         string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = data.className + "Parser";
+        string classFullName = TypeMetaChecker.BuildParserClassName(data);
         string classGlobalName = data.classFullName;
-        string parserName = data.className + "Parser";
+        string parserName = classFullName;
 
         if (data.isGeneric)
         {
@@ -42,7 +42,6 @@ public static class LuminPackUnionCodeGenerator
             "        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, Pack = 1)]");
         sb.AppendLine("        public unsafe struct HashEntry");
         sb.AppendLine("        {");
-        sb.AppendLine("            public IntPtr MethodTable;");
         sb.AppendLine("            public ushort Tag;");
         sb.AppendLine("            public delegate* managed<ref LuminPackWriter, ref " + classGlobalName +
                       ", void> WriteDelegate;");
@@ -155,7 +154,7 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("                var mt = LuminPackMarshal.GetMethodTable(type);");
         sb.AppendLine("                var entry = new HashEntry");
         sb.AppendLine("                {");
-        sb.AppendLine("                    MethodTable = mt,");
+        //sb.AppendLine("                    MethodTable = mt,");
         sb.AppendLine("                    Tag = tag,");
         sb.AppendLine("                    WriteDelegate = writeDelegate,");
         sb.AppendLine("                    ReadDelegate = readDelegate");
@@ -201,7 +200,7 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine("        {");
             // 静态方法中去掉 offset 相关代码
             sb.AppendLine($"            writer.WriteUnionHeader({member.Id});");
-            sb.AppendLine($"            writer.WriteValue(LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value));");
+            sb.AppendLine($"            writer.WritePolymorphismValue(LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value));");
             sb.AppendLine("        }");
             sb.AppendLine();
         }
@@ -219,7 +218,7 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine($"        private static unsafe void Read{methodName}(ref LuminPackReader reader, ref {classGlobalName} value)");
             sb.AppendLine("        {");
             sb.AppendLine($"            {memberType} tempValue = default!;");
-            sb.AppendLine($"            reader.ReadValue(ref tempValue);");
+            sb.AppendLine($"            reader.ReadPolymorphismValue(ref tempValue);");
             sb.AppendLine($"            value = LuminPackMarshal.As<{memberType}, {classGlobalName}>(ref tempValue!);");
             sb.AppendLine("        }");
             sb.AppendLine();
@@ -260,7 +259,9 @@ public static class LuminPackUnionCodeGenerator
     public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb)
     {
         string paraNullable = data.isValueType ? string.Empty : "?";
+        string classFullName = TypeMetaChecker.BuildParserClassName(data);
         string classGlobalName = data.classFullName;
+        string genericParameters = data.GenericParameters.Count == 0 ? string.Empty : "<" + string.Join(", ", data.GenericParameters) + ">";
         
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerializing))
         {
@@ -284,7 +285,7 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("            unsafe");
         sb.AppendLine("            {");
         sb.AppendLine("                var valueMT = LuminPackMarshal.GetMethodTable(value);");
-        sb.AppendLine($"                if (!global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser.TryGetEntry(valueMT, out var entry))");
+        sb.AppendLine($"                if (!global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}.TryGetEntry(valueMT, out var entry))");
         sb.AppendLine("                {");
         sb.AppendLine($"                    LuminPackExceptionHelper.ThrowNotFoundInUnionType(value.GetType(), typeof({classGlobalName}));");
         sb.AppendLine("                }");
@@ -302,7 +303,9 @@ public static class LuminPackUnionCodeGenerator
     public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb)
     {
         string paraNullable = data.isValueType ? string.Empty : "?";
+        string classFullName = TypeMetaChecker.BuildParserClassName(data);
         string classGlobalName = data.classFullName;
+        string genericParameters = data.GenericParameters.Count == 0 ? string.Empty : "<" + string.Join(", ", data.GenericParameters) + ">";
         
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserializing))
         {
@@ -322,7 +325,7 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("            unsafe");
         sb.AppendLine("            {");
         sb.AppendLine(
-            $"                global::System.Runtime.CompilerServices.Unsafe.Add(ref LuminPackMarshal.GetArrayReference(global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable), tag).ReadDelegate(ref reader, ref value!);");
+            $"                global::System.Runtime.CompilerServices.Unsafe.Add(ref LuminPackMarshal.GetArrayReference(global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._directTable), tag).ReadDelegate(ref reader, ref value!);");
         //sb.AppendLine($"                ref var entry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag];");
         //sb.AppendLine($"                global::System.Runtime.CompilerServices.Unsafe.Add(ref global::System.Runtime.CompilerServices.Unsafe.AsRef<global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser.HashEntry>(global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTablePtr), tag).ReadDelegate(ref reader, ref value!);");
         //sb.AppendLine($"                global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag].ReadDelegate(ref reader, ref value!);");

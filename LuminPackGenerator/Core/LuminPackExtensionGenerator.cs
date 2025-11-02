@@ -25,6 +25,22 @@ public static class LuminPackExtensionGenerator
 
         foreach (var v in data.localFields)
         {
+            #region Generic
+
+            bool containsGeneric = false;
+            foreach (var genericParameter in data.GenericParameters)
+            {
+                if (v.TypeName.Contains(genericParameter))
+                {
+                    containsGeneric = true;
+                    break;
+                }
+            }
+            if (containsGeneric)
+                continue;
+
+            #endregion
+            
             var formatter = FormatterDiscovery.GetFormatter(v.TypeName);
         
             if (formatter.Item1 != null && 
@@ -69,23 +85,177 @@ public static class LuminPackExtensionGenerator
             }
             classFullName += ">";
         }
-
+        string genericParameters = string.Join(", ", data.GenericParameters);
         if (!classGlobalName.Contains(".") && data.classNameSpace != "<global namespace>")
         {
             classGlobalName = "global::" + data.classNameSpace + "." + data.classFullName;
         }
 
         if (analyzedTypes.Add(classGlobalName) && 
-            currentGenerationTypes.Add(classGlobalName) &&
-            !data.isGeneric)
+            currentGenerationTypes.Add(classGlobalName))
         {
             sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
             sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
-            sb.AppendLine(metaInfo.IsNet8 
-                ? $"        public static void WriteValue(ref this LuminPackWriter writer, scoped in {classGlobalName} value)"
-                : $"        public static void WriteValue(ref this LuminPackWriter writer, in {classGlobalName} value)");
+
+            if (data.isGeneric)
+            {
+                sb.AppendLine(metaInfo.IsNet8 
+                    ? $"        public static void WriteValue<{genericParameters}>(ref this LuminPackWriter writer, scoped in {classGlobalName} value)"
+                    : $"        public static void WriteValue<{genericParameters}>(ref this LuminPackWriter writer, in {classGlobalName} value)");
+                foreach (var constraint in data.GenericConstraints)
+                {
+                
+                    if (constraint.IsUnmanaged is false && 
+                        constraint.IsClass is false && 
+                        constraint.IsStruct is false &&
+                        constraint.IsNotNull is false &&
+                        constraint.HasDefault is false &&
+                        constraint.HasNewConstructor is false &&
+                        constraint.Constraints.Count is 0) continue;
+                    sb.Append("            ");
+                    sb.Append("where ");
+                    sb.Append(constraint.ParameterName);
+                    sb.Append(" : ");
+
+                    var constraints = new List<string>();
+
+                    // 特殊约束
+                    if (constraint.IsUnmanaged) constraints.Add("unmanaged");
+                    if (constraint.IsClass) constraints.Add("class");
+                    if (constraint.IsStruct) constraints.Add("struct");
+                    if (constraint.IsNotNull) constraints.Add("notnull");
+                    if (constraint.HasNewConstructor) constraints.Add("new()");
+                    if (constraint.HasDefault) constraints.Add("default");
+
+                    // 类型约束（如 IComparable）
+                    constraints.AddRange(constraint.Constraints);
+
+                    sb.Append(string.Join(", ", constraints));
+                
+                    sb.AppendLine();
+                }
+            }
+            else
+            {
+                sb.AppendLine(metaInfo.IsNet8 
+                    ? $"        public static void WriteValue(ref this LuminPackWriter writer, scoped in {classGlobalName} value)"
+                    : $"        public static void WriteValue(ref this LuminPackWriter writer, in {classGlobalName} value)");
+            }
             sb.AppendLine("        {");
             GenerateMyselfSerialize(data, sb);
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            
+            sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
+            
+            if (metaInfo.IsNet8) 
+                sb.AppendLine($"        [global::System.Runtime.CompilerServices.SkipLocalsInit]");
+            sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+
+            if (data.isGeneric)
+            {
+                sb.AppendLine(metaInfo.IsNet8 
+                    ? $"        public static void ReadValue<{genericParameters}>(ref this LuminPackReader reader, scoped ref {classGlobalName} value)"
+                    : $"        public static void ReadValue<{genericParameters}>(ref this LuminPackReader reader, ref {classGlobalName} value)");
+                foreach (var constraint in data.GenericConstraints)
+                {
+                
+                    if (constraint.IsUnmanaged is false && 
+                        constraint.IsClass is false && 
+                        constraint.IsStruct is false &&
+                        constraint.IsNotNull is false &&
+                        constraint.HasDefault is false &&
+                        constraint.HasNewConstructor is false &&
+                        constraint.Constraints.Count is 0) continue;
+                    sb.Append("            ");
+                    sb.Append("where ");
+                    sb.Append(constraint.ParameterName);
+                    sb.Append(" : ");
+
+                    var constraints = new List<string>();
+
+                    // 特殊约束
+                    if (constraint.IsUnmanaged) constraints.Add("unmanaged");
+                    if (constraint.IsClass) constraints.Add("class");
+                    if (constraint.IsStruct) constraints.Add("struct");
+                    if (constraint.IsNotNull) constraints.Add("notnull");
+                    if (constraint.HasNewConstructor) constraints.Add("new()");
+                    if (constraint.HasDefault) constraints.Add("default");
+
+                    // 类型约束（如 IComparable）
+                    constraints.AddRange(constraint.Constraints);
+
+                    sb.Append(string.Join(", ", constraints));
+                
+                    sb.AppendLine();
+                }
+            }
+            else
+            {
+                sb.AppendLine(metaInfo.IsNet8 
+                    ? $"        public static void ReadValue(ref this LuminPackReader reader, scoped ref {classGlobalName} value)"
+                    : $"        public static void ReadValue(ref this LuminPackReader reader, ref {classGlobalName} value)");
+
+            }
+            sb.AppendLine("        {");
+            GenerateMyselfDeserialize(data, sb);
+            sb.AppendLine("        }");
+            sb.AppendLine();
+
+            #region Polymorpshim
+
+            if (data.isUnion) goto Local;
+                
+            sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
+            sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+
+            if (data.isGeneric)
+            {
+                sb.AppendLine(metaInfo.IsNet8 
+                    ? $"        public static void WritePolymorphismValue<{genericParameters}>(ref this LuminPackWriter writer, scoped in {classGlobalName} value)"
+                    : $"        public static void WritePolymorphismValue<{genericParameters}>(ref this LuminPackWriter writer, in {classGlobalName} value)");
+                foreach (var constraint in data.GenericConstraints)
+                {
+                
+                    if (constraint.IsUnmanaged is false && 
+                        constraint.IsClass is false && 
+                        constraint.IsStruct is false &&
+                        constraint.IsNotNull is false &&
+                        constraint.HasDefault is false &&
+                        constraint.HasNewConstructor is false &&
+                        constraint.Constraints.Count is 0) continue;
+                    sb.Append("            ");
+                    sb.Append("where ");
+                    sb.Append(constraint.ParameterName);
+                    sb.Append(" : ");
+
+                    var constraints = new List<string>();
+
+                    // 特殊约束
+                    if (constraint.IsUnmanaged) constraints.Add("unmanaged");
+                    if (constraint.IsClass) constraints.Add("class");
+                    if (constraint.IsStruct) constraints.Add("struct");
+                    if (constraint.IsNotNull) constraints.Add("notnull");
+                    if (constraint.HasNewConstructor) constraints.Add("new()");
+                    if (constraint.HasDefault) constraints.Add("default");
+
+                    // 类型约束（如 IComparable）
+                    constraints.AddRange(constraint.Constraints);
+
+                    sb.Append(string.Join(", ", constraints));
+                
+                    sb.AppendLine();
+                }
+            }
+            else
+            {
+                sb.AppendLine(metaInfo.IsNet8 
+                    ? $"        public static void WritePolymorphismValue(ref this LuminPackWriter writer, scoped in {classGlobalName} value)"
+                    : $"        public static void WritePolymorphismValue(ref this LuminPackWriter writer, in {classGlobalName} value)");
+            }
+            
+            sb.AppendLine("        {");
+            GenerateMyselfSerialize(data, sb, polymorphism: true);
             sb.AppendLine("        }");
             sb.AppendLine();
             
@@ -93,22 +263,65 @@ public static class LuminPackExtensionGenerator
             if (metaInfo.IsNet8) 
                 sb.AppendLine($"        [global::System.Runtime.CompilerServices.SkipLocalsInit]");
             sb.AppendLine($"        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
-            sb.AppendLine(metaInfo.IsNet8 
-                ? $"        public static void ReadValue(ref this LuminPackReader reader, scoped ref {classGlobalName} value)"
-                : $"        public static void ReadValue(ref this LuminPackReader reader, ref {classGlobalName} value)");
+
+            if (data.isGeneric)
+            {
+                sb.AppendLine(metaInfo.IsNet8 
+                    ? $"        public static void ReadPolymorphismValue<{genericParameters}>(ref this LuminPackReader reader, scoped ref {classGlobalName} value)"
+                    : $"        public static void ReadPolymorphismValue<{genericParameters}>(ref this LuminPackReader reader, ref {classGlobalName} value)");
+                foreach (var constraint in data.GenericConstraints)
+                {
+                
+                    if (constraint.IsUnmanaged is false && 
+                        constraint.IsClass is false && 
+                        constraint.IsStruct is false &&
+                        constraint.IsNotNull is false &&
+                        constraint.HasDefault is false &&
+                        constraint.HasNewConstructor is false &&
+                        constraint.Constraints.Count is 0) continue;
+                    sb.Append("            ");
+                    sb.Append("where ");
+                    sb.Append(constraint.ParameterName);
+                    sb.Append(" : ");
+
+                    var constraints = new List<string>();
+
+                    // 特殊约束
+                    if (constraint.IsUnmanaged) constraints.Add("unmanaged");
+                    if (constraint.IsClass) constraints.Add("class");
+                    if (constraint.IsStruct) constraints.Add("struct");
+                    if (constraint.IsNotNull) constraints.Add("notnull");
+                    if (constraint.HasNewConstructor) constraints.Add("new()");
+                    if (constraint.HasDefault) constraints.Add("default");
+
+                    // 类型约束（如 IComparable）
+                    constraints.AddRange(constraint.Constraints);
+
+                    sb.Append(string.Join(", ", constraints));
+                
+                    sb.AppendLine();
+                }
+            }
+            else
+            {
+                sb.AppendLine(metaInfo.IsNet8 
+                    ? $"        public static void ReadPolymorphismValue(ref this LuminPackReader reader, scoped ref {classGlobalName} value)"
+                    : $"        public static void ReadPolymorphismValue(ref this LuminPackReader reader, ref {classGlobalName} value)");
+            }
+            
             sb.AppendLine("        {");
-            GenerateMyselfDeserialize(data, sb);
+            GenerateMyselfDeserialize(data, sb, polymorphism: true);
             sb.AppendLine("        }");
             sb.AppendLine();
 
-            if (data.generatorType is GeneratorType.Object)
-            {
-                LuminPackCodeGenerator.GenerateLocalClassStructure(sb, data, analyzedTypes);
+            #endregion
                 
-                foreach (var filed in data.fields.Where(x => x.ClassFields.Count > 0))
-                {
-                    LuminPackCodeGenerator.GeneratorUnsafeAccessorMethod(sb, filed, filed.ClassFields, analyzedTypes);
-                }
+            Local:
+            LuminPackCodeGenerator.GenerateLocalClassStructure(sb, data, analyzedTypes);
+                
+            foreach (var filed in data.fields.Where(x => x.ClassFields.Count > 0))
+            {
+                LuminPackCodeGenerator.GeneratorUnsafeAccessorMethod(sb, filed, filed.ClassFields, analyzedTypes);
             }
         }
 
@@ -152,7 +365,7 @@ public static class LuminPackExtensionGenerator
         return fullCode.ToString();
     }
     
-    private static void GenerateMyselfSerialize(LuminDataInfo data, StringBuilder sb)
+    private static void GenerateMyselfSerialize(LuminDataInfo data, StringBuilder sb, bool polymorphism = false)
     {
         if (data.isUnion)
         {
@@ -162,13 +375,13 @@ public static class LuminPackExtensionGenerator
         
         switch (data.generatorType)
         {
-            case GeneratorType.Object : LuminPackCodeGenerator.GenerateSerializeCode(data, sb, true); break;
+            case GeneratorType.Object : LuminPackCodeGenerator.GenerateSerializeCode(data, sb, true, polymorphism); break;
             case GeneratorType.CircleReference : LuminPackCircleReferenceCodeGenerator.GenerateSerializeCode(data, sb); break;
             case GeneratorType.VersionTolerant : LuminPackVersionTolerantCodeGenerator.GenerateSerializeCode(data, sb); break;
         }
     }
     
-    private static void GenerateMyselfDeserialize(LuminDataInfo data, StringBuilder sb)
+    private static void GenerateMyselfDeserialize(LuminDataInfo data, StringBuilder sb, bool polymorphism = false)
     {
         if (data.isUnion)
         {
@@ -178,7 +391,7 @@ public static class LuminPackExtensionGenerator
         
         switch (data.generatorType)
         {
-            case GeneratorType.Object : LuminPackCodeGenerator.GenerateDeserializeCode(data, sb); break;
+            case GeneratorType.Object : LuminPackCodeGenerator.GenerateDeserializeCode(data, sb, polymorphism); break;
             case GeneratorType.CircleReference : LuminPackCircleReferenceCodeGenerator.GenerateDeserializeCode(data, sb); break;
             case GeneratorType.VersionTolerant : LuminPackVersionTolerantCodeGenerator.GenerateDeserializeCode(data, sb); break;
         }

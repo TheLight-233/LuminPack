@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using LuminPack.Attribute;
+using LuminPack.Enum;
 
 #nullable disable
 
@@ -460,16 +461,26 @@ public class TestClass2 : TestClass
 [LuminPackable]
 public class TestClass3 : TestClass2
 {
+    [LuminPackOrder(4)]
     public bool D;
+    [LuminPackOrder(5)]
     public TestClass E;
+    [LuminPackOrder(6)]
     public TestStruct F;
+    [LuminPackOrder(7)]
     public TestStruct? G;
+    [LuminPackOrder(8)]
     public IList<TestStruct2> H;
+    [LuminPackOrder(9)]
     public List<TestStruct2?> I;
+    [LuminPackOrder(10)]
     public TestStruct3[] J;
+    [LuminPackOrder(11)]
     public Dictionary<int, int> K;
+    [LuminPackOrder(12)]
     public Dictionary<int, TestClass3> L;
-    public TestClass3 M;
+    [LuminPackOrder(13)]
+    public Dictionary<int, TestClass3> M;
 }
 
 [LuminPackable]

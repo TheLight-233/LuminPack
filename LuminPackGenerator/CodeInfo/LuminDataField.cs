@@ -34,6 +34,7 @@ namespace LuminPack.Code
         public string ClassName = "Your Class Name";
         public string ClassGenericType;
         public string belongClassName;
+        public string belongClassFieldName;
         public LuminConstructorData SelectedConstructor { get; set; }
         public int ConstructParameterCount = 0;
         

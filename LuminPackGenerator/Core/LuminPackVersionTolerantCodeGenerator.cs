@@ -13,9 +13,9 @@ public static class LuminPackVersionTolerantCodeGenerator
     public static void VersionTolerantCodeGenerator(StringBuilder sb, LuminDataInfo data, MetaInfo metaInfo)
     {
         string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = data.className + "Parser";
+        string classFullName = TypeMetaChecker.BuildParserClassName(data);
         string classGlobalName = data.classFullName;
-        string parserName = data.className + "Parser";
+        string parserName = classFullName;
         bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
         uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
         
@@ -43,6 +43,8 @@ public static class LuminPackVersionTolerantCodeGenerator
         
         // Serialize实现
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        if (metaInfo.IsNet8) 
+            sb.AppendLine("        [global::System.Runtime.CompilerServices.SkipLocalsInit]");
         sb.AppendLine(metaInfo.IsNet8 
             ? $"        public override void Serialize(ref LuminPackWriter writer, scoped ref {classGlobalName}{paraNullable} value)"
             : $"        public override void Serialize(ref LuminPackWriter writer, ref {classGlobalName}{paraNullable} value)");
@@ -54,6 +56,8 @@ public static class LuminPackVersionTolerantCodeGenerator
         
         // Deserialize实现
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        if (metaInfo.IsNet8) 
+            sb.AppendLine("        [global::System.Runtime.CompilerServices.SkipLocalsInit]");
         sb.AppendLine(metaInfo.IsNet8 
             ? $"        public override void Deserialize(ref LuminPackReader reader, scoped ref {data.classFullName}{paraNullable} value)"
             : $"        public override void Deserialize(ref LuminPackReader reader, ref {data.classFullName}{paraNullable} value)");
@@ -111,9 +115,10 @@ public static class LuminPackVersionTolerantCodeGenerator
     public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb)
     {
         string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = data.className + "Parser";
+        string classFullName = data.classNameSpace is not "<global namespace>"
+            ? data.classNameSpace.Replace(".", "_") + "_" + data.className + "Parser"
+            : data.className + "Parser";
         string classGlobalName = data.classFullName;
-        string parserName = data.className + "Parser";
         bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
         uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
         
@@ -146,7 +151,7 @@ public static class LuminPackVersionTolerantCodeGenerator
             sb.AppendLine("            if (value is null)");
             sb.AppendLine("            {");
             sb.AppendLine("                writer.WriteNullObjectHeader();");
-            sb.AppendLine("                writer.Advance(1);");
+            //sb.AppendLine("                writer.Advance(1);");
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
         }
@@ -217,7 +222,7 @@ public static class LuminPackVersionTolerantCodeGenerator
         }
         else
         {
-            sb.AppendLine("            var writerBuffer = global::LuminPack.Utility.ReusableLinkedArrayBufferWriterPool.Rent();");
+            sb.AppendLine("            var writerBuffer = global::LuminPack.Utility.LuminBufferWriterPool.Rent();");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine($"                var tempWriter = new LuminPackWriter(writerBuffer, writer.OptionState);");
@@ -267,7 +272,7 @@ public static class LuminPackVersionTolerantCodeGenerator
             sb.AppendLine("            }");
             sb.AppendLine("            finally");
             sb.AppendLine("            {");
-            sb.AppendLine("                global::LuminPack.Utility.ReusableLinkedArrayBufferWriterPool.Return(writerBuffer);");
+            sb.AppendLine("                global::LuminPack.Utility.LuminBufferWriterPool.Return(writerBuffer);");
             sb.AppendLine("            }");
         }
         
@@ -284,9 +289,10 @@ public static class LuminPackVersionTolerantCodeGenerator
     public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb)
     {
         string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = data.className + "Parser";
+        string classFullName = data.classNameSpace is not "<global namespace>"
+            ? data.classNameSpace.Replace(".", "_") + "_" + data.className + "Parser"
+            : data.className + "Parser";
         string classGlobalName = data.classFullName;
-        string parserName = data.className + "Parser";
         bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
         uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
         

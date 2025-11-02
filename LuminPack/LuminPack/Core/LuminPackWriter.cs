@@ -78,7 +78,7 @@ namespace LuminPack.Core
             _optionState = option ?? LuminPackWriterOptionalState.NullOption;
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
-            (bufferWriter as ReusableLinkedArrayBufferWriter)?.SetCurrentIndexPtr(ref _currentIndex);
+            (bufferWriter as LuminBufferWriter)?.SetCurrentIndexPtr(ref _currentIndex);
             _bufferReference = bufferWriter.GetSpan();
             _bufferStart = new IntPtr(Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference)));
             _writerBuffer = bufferWriter;
@@ -437,10 +437,9 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteObjectReferenceId(ref int index, uint referenceId)
         {
-            Unsafe.Add(ref Unsafe.AsRef<byte>(this._bufferStart.ToPointer()), (nint)index) = (byte) 250;
+            Unsafe.Add(ref Unsafe.AsRef<byte>(this._bufferStart.ToPointer()), (nint)index) = LuminPackCode.ReferenceId;
             Advance(1);
             this.WriteVarInt(referenceId);
-            Advance(LuminPackEvaluator.CalculateVarInt(referenceId));
         }
 
         /// <summary>
@@ -1851,15 +1850,11 @@ namespace LuminPack.Core
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             
-            int offset = 0;
             Unsafe.WriteUnaligned(ref spanRef, value1);
-            offset += Unsafe.SizeOf<T1>();
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref spanRef, offset), value2);
-            offset += Unsafe.SizeOf<T2>();
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref spanRef, offset), value3);
-            offset += Unsafe.SizeOf<T3>();
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()), value2);
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()), value3);
 
-            return offset;
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

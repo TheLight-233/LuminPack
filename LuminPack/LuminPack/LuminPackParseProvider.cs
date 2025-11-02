@@ -65,7 +65,6 @@ namespace LuminPack
             Cache<T>.Parser = parser;
         }
 
-
         /// <summary>
         /// 注册同步解析器工厂
         /// </summary>
@@ -233,9 +232,14 @@ namespace LuminPack
                     }
                 }
             }
-
+            
             if (type.IsEnum || !typeIsReferenceOrContainsReferences)
             {
+                if (!type.IsEnum && type.GetGenericTypeDefinition() == typeof(Nullable<>))
+                {
+                    parserType = typeof(NullableParser<>).MakeGenericType(type.GetGenericArguments().First());
+                    goto CREATE;
+                }
                 parserType = typeof(DangerousUnmanagedParsers<>).MakeGenericType(type);
                 goto CREATE;
             }
@@ -463,23 +467,33 @@ namespace LuminPack
             const string parserNamespace = "LuminPack.Generated";
             bool isGeneric = originalType.IsGenericType;
 
-            string typeName;
+            // 移除可能的 global:: 前缀
+            static string RemoveGlobalPrefix(string typeName)
+            {
+                const string globalPrefix = "global::";
+                return typeName.StartsWith(globalPrefix, StringComparison.Ordinal) 
+                    ? typeName.Substring(globalPrefix.Length) 
+                    : typeName;
+            }
+            
+            string originalFullName = RemoveGlobalPrefix(originalType.FullName ?? originalType.Name);
+            
+            string normalizedName = originalFullName.Replace('.', '_').Replace('+', '_');
+    
+            string fullTypeName;
             if (isGeneric)
             {
-                Type genericDef = originalType.GetGenericTypeDefinition();
-                string baseName = genericDef.Name.Split('`')[0];
-                int argCount = genericDef.GetGenericArguments().Length;
-                typeName = $"{parserNamespace}.{baseName}Parser`{argCount}";
+                string baseName = normalizedName.Split('`')[0];
+                int argCount = originalType.GetGenericArguments().Length;
+                fullTypeName = $"{parserNamespace}.{baseName}Parser`{argCount}";
             }
             else
             {
-                typeName = $"{parserNamespace}.{originalType.Name}Parser";
+                fullTypeName = $"{parserNamespace}.{normalizedName}Parser";
             }
-            
-            
-            // 仅在LuminPack程序集中查找
-            Type? parserType = GetTypeWithName(typeName);
-            
+
+            // 查找解析器类型
+            Type? parserType = GetTypeWithName(fullTypeName);
 
             return parserType;
         }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
+using LuminPack.Utility;
 
 namespace LuminPack.Option
 {
@@ -31,13 +32,13 @@ namespace LuminPack.Option
         internal static readonly LuminPackWriterOptionalState NullOption = new LuminPackWriterOptionalState(true);
 
         private uint _nextId;
-        private Dictionary<object, uint> ObjectToRef { get; set; }
+        private LuminCircleReferenceMap<object, uint> ObjectToRef { get; set; }
         
         public LuminPackSerializerOption Option { get; private set; }
         
         public LuminPackWriterOptionalState(LuminPackSerializerOption? option = null)
         {
-            ObjectToRef = new Dictionary<object, uint>(ReferenceEqualityComparer.Instance);
+            ObjectToRef = new LuminCircleReferenceMap<object, uint>(ReferenceEqualityComparer.Instance);
             _nextId = 0;
             Option = option ?? LuminPackSerializerOption.Default;
             
@@ -45,7 +46,7 @@ namespace LuminPack.Option
 
         private LuminPackWriterOptionalState(bool _)
         {
-            ObjectToRef = new Dictionary<object, uint>(ReferenceEqualityComparer.Instance);
+            ObjectToRef = new LuminCircleReferenceMap<object, uint>(ReferenceEqualityComparer.Instance);
             _nextId = 0;
             Option = LuminPackSerializerOption.Default;
         }
@@ -64,8 +65,8 @@ namespace LuminPack.Option
         
         public (bool existsReference, uint id) GetOrAddReference(object value)
         {
-#if NET8_0_OR_GREATER
-            ref var id = ref CollectionsMarshal.GetValueRefOrAddDefault(ObjectToRef, value, out var exists);
+
+            ref var id = ref ObjectToRef.GetValueRefOrAddDefault(value, out var exists);
             if (exists)
             {
                 return (true, id);
@@ -75,18 +76,6 @@ namespace LuminPack.Option
                 id = _nextId++;
                 return (false, id);
             }
-#else
-            if (ObjectToRef.TryGetValue(value, out var id))
-            {
-                return (true, id);
-            }
-            else
-            {
-                id = _nextId++;
-                ObjectToRef.Add(value, id);
-                return (false, id);
-            }
-#endif
         }
         
         void IDisposable.Dispose()

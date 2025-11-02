@@ -15,4 +15,16 @@ public static class LuminPackLocalExtension
     {
         LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref value!);
     }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void WritePolymorphismValue<T>(ref this LuminPackWriter writer, scoped in T value)
+    {
+        WriteValue(ref writer, in value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void ReadPolymorphismValue<T>(ref this LuminPackReader reader, ref T value)
+    {
+        ReadValue(ref reader, ref value);
+    }
 }

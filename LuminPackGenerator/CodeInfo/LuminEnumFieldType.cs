@@ -3,6 +3,7 @@
     public enum LuminEnumFieldType : byte
     {
         Byte,
+        SByte,
         Short,
         UShort,
         Int,

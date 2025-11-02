@@ -22,12 +22,20 @@ public static class ArrayFormatter
             return;
         }
 
-        if (fieldData.IsValue)
+        if (!baseTypeName.Contains("?"))
         {
-            sb.AppendLine("            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + fieldData.TypeName.TrimEnd(']').TrimEnd('[') + ">())");
+            sb.AppendLine("            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + baseTypeName + ">())");
             sb.AppendLine("            {");
             sb.AppendLine("                writer.DangerousWriteUnmanagedArray(ref index, value, out var offset);");
             sb.AppendLine("                writer.Advance(offset);");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+        }
+        else
+        {
+            sb.AppendLine("            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + baseTypeName + ">())");
+            sb.AppendLine("            {");
+            sb.AppendLine("                writer.WriteArray(value);");
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
         }
@@ -62,13 +70,23 @@ public static class ArrayFormatter
             return;
         }
 
-        if (fieldData.IsValue)
+        if (!baseTypeName.Contains("?"))
         {
-            sb.AppendLine($@"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{fieldData.TypeName.TrimEnd(']').TrimEnd('[')}>())");
+            sb.AppendLine($@"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{baseTypeName}>())");
             sb.AppendLine(@"            {");
             sb.AppendLine(@"                reader.DangerousReadUnmanagedArray(ref index, ref value!, out var offset);");
             sb.AppendLine(@"                ");
             sb.AppendLine(@"                reader.Advance(offset);");
+            sb.AppendLine(@"                ");
+            sb.AppendLine(@"                return;");
+            sb.AppendLine(@"            }");
+            sb.AppendLine();
+        }
+        else
+        {
+            sb.AppendLine($@"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{baseTypeName}>())");
+            sb.AppendLine(@"            {");
+            sb.AppendLine(@"                reader.ReadArray(ref value!);");
             sb.AppendLine(@"                ");
             sb.AppendLine(@"                return;");
             sb.AppendLine(@"            }");

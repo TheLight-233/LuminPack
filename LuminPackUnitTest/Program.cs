@@ -1,9 +1,11 @@
 ﻿using System.Collections.Concurrent;
 using LuminPack;
-
 using static LuminPackUnitTest.PrimitivesSerializationTest;
 using static LuminPackUnitTest.MultiThreadSerializationTest;
 using static LuminPackUnitTest.ComplexSerializationTest;
+using static LuminPackUnitTest.VersionTolerantSerializationTest;
+using static LuminPackUnitTest.CircleReferenceSerializationTest;
+using static LuminPackUnitTest.GenericSerializationTest;
 
 namespace LuminPackUnitTest
 {
@@ -13,7 +15,7 @@ namespace LuminPackUnitTest
         {
             Console.WriteLine("Starting LuminPack Serialization Tests...");
             Console.WriteLine("=========================================\n");
-
+            
             var testResults = new List<string>();
             
             // Run all tests
@@ -28,6 +30,8 @@ namespace LuminPackUnitTest
             TestLong(testResults);
             TestULong(testResults);
             TestString(testResults);
+            TestStringUtf8Token(testResults);
+            TestStringUtf16(testResults);
             TestBool(testResults);
             TestDecimal(testResults);
             TestDouble(testResults);
@@ -126,7 +130,23 @@ namespace LuminPackUnitTest
             TestNestedDataSerialization(testResults);
             TestComplexDataWithNullValues(testResults);
             TestComplexDataWithEmptyCollections(testResults);
-
+            TestVersionTolerantSerialization(testResults);
+            TestSimpleReference(testResults);
+            TestSimpleCircleReference(testResults);
+            TestSimpleTree(testResults);
+            TestComplexCircleReference(testResults);
+            TestRingCircleReference(testResults);
+            TestGenericIntSerialization(testResults);
+            TestGenericClassSerialization(testResults);
+            TestGenericDoubleSerialization(testResults);
+            TestNestedGenericSerialization(testResults);
+            TestGenericClass2Serialization(testResults);
+            TestGenericPolymorphismWithString(testResults);
+            TestGenericPolymorphismWithInt(testResults);
+            TestNumericGenericPolymorphism(testResults);
+            TestComplexGenericPolymorphism(testResults);
+            
+            
             // Print summary
             Console.WriteLine("\n=========================================");
             Console.WriteLine("Test Summary:");
@@ -915,8 +935,6 @@ namespace LuminPackUnitTest
                     I = new List<TestStruct2?> { new TestStruct2 { A = 7, B = false }, null },
                     J = new TestStruct3[] { new TestStruct3 { A = 8, B = 1.5f } },
                     K = new Dictionary<int, int> { { 1, 100 } },
-                    L = new Dictionary<int, TestClass3>(),
-                    M = null
                 };
                 
                 var bytes = LuminPackSerializer.Serialize(original);
@@ -932,7 +950,7 @@ namespace LuminPackUnitTest
                               original.F.B == deserialized.F.B &&
                               original.G.Value.A == deserialized.G.Value.A &&
                               original.H.Count == deserialized.H.Count &&
-                              original.I.Count == deserialized.I.Count &&
+                              original.I[0].Value.A == deserialized.I[0].Value.A &&
                               original.J.Length == deserialized.J.Length &&
                               original.K[1] == deserialized.K[1];
                 
@@ -943,7 +961,7 @@ namespace LuminPackUnitTest
             }
             catch (Exception ex)
             {
-                results.Add($"✗ Test_TestClass3 - ERROR: {ex.Message}");
+                results.Add($"✗ Test_TestClass3 - ERROR: {ex}");
             }
         }
 

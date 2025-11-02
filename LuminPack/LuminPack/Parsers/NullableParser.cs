@@ -22,8 +22,7 @@ public sealed class NullableParser<T> : LuminPackParser<T?>
         
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
         {
-            T val = value.Value;
-            writer.DangerousWriteUnmanaged(ref index, val);
+            writer.DangerousWriteUnmanaged(ref index, value.Value);
             writer.Advance(Unsafe.SizeOf<T>());
             return;
         }
@@ -46,8 +45,7 @@ public sealed class NullableParser<T> : LuminPackParser<T?>
         
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
         {
-            T val;
-            reader.DangerousReadUnmanaged(ref index, out val);
+            reader.DangerousReadUnmanaged(ref index, out T val);
             value = val;
             reader.Advance(Unsafe.SizeOf<T>());
             return;

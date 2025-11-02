@@ -180,7 +180,7 @@ public sealed class ImmutableQueueParser<T> : LuminPackParser<ImmutableQueue<T?>
 
         // ImmutableQueue<T> has no Count, so use similar serialization of IEnumerable<T>
 
-        var tempBuffer = ReusableLinkedArrayBufferWriterPool.Rent();
+        var tempBuffer = LuminBufferWriterPool.Rent();
         try
         {
             var tempWriter = new LuminPackWriter(writer.OptionState);
@@ -204,7 +204,7 @@ public sealed class ImmutableQueueParser<T> : LuminPackParser<ImmutableQueue<T?>
         }
         finally
         {
-            ReusableLinkedArrayBufferWriterPool.Return(tempBuffer);
+            LuminBufferWriterPool.Return(tempBuffer);
         }
     }
 
@@ -304,7 +304,7 @@ public sealed class ImmutableStackParser<T> : LuminPackParser<ImmutableStack<T?>
             return;
         }
 
-        var tempBuffer = ReusableLinkedArrayBufferWriterPool.Rent();
+        var tempBuffer = LuminBufferWriterPool.Rent();
         try
         {
             var tempWriter = new LuminPackWriter(writer.OptionState);
@@ -328,7 +328,7 @@ public sealed class ImmutableStackParser<T> : LuminPackParser<ImmutableStack<T?>
         }
         finally
         {
-            ReusableLinkedArrayBufferWriterPool.Return(tempBuffer);
+            LuminBufferWriterPool.Return(tempBuffer);
         }
     }
 
@@ -953,7 +953,7 @@ public sealed class InterfaceImmutableQueueParser<T> : LuminPackParser<IImmutabl
 
         // ImmutableQueue<T> has no Count, so use similar serialization of IEnumerable<T>
 
-        var tempBuffer = ReusableLinkedArrayBufferWriterPool.Rent();
+        var tempBuffer = LuminBufferWriterPool.Rent();
         try
         {
             var tempWriter = new LuminPackWriter(writer.OptionState);
@@ -977,7 +977,7 @@ public sealed class InterfaceImmutableQueueParser<T> : LuminPackParser<IImmutabl
         }
         finally
         {
-            ReusableLinkedArrayBufferWriterPool.Return(tempBuffer);
+            LuminBufferWriterPool.Return(tempBuffer);
         }
     }
 
@@ -1077,7 +1077,7 @@ public sealed class InterfaceImmutableStackParser<T> : LuminPackParser<IImmutabl
             return;
         }
 
-        var tempBuffer = ReusableLinkedArrayBufferWriterPool.Rent();
+        var tempBuffer = LuminBufferWriterPool.Rent();
         try
         {
             var tempWriter = new LuminPackWriter(writer.OptionState);
@@ -1101,7 +1101,7 @@ public sealed class InterfaceImmutableStackParser<T> : LuminPackParser<IImmutabl
         }
         finally
         {
-            ReusableLinkedArrayBufferWriterPool.Return(tempBuffer);
+            LuminBufferWriterPool.Return(tempBuffer);
         }
     }
 

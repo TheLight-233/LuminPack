@@ -13,9 +13,9 @@ public static class LuminPackCircleReferenceCodeGenerator
     public static void CircleReferenceCodeGenerator(StringBuilder sb, LuminDataInfo data, MetaInfo metaInfo)
     {
         string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = data.className + "Parser";
+        string classFullName = TypeMetaChecker.BuildParserClassName(data);
         string classGlobalName = data.classFullName;
-        string parserName = data.className + "Parser";
+        string parserName = classFullName;
         bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
         uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
         
@@ -43,6 +43,8 @@ public static class LuminPackCircleReferenceCodeGenerator
         
         // Serialize实现
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        if (metaInfo.IsNet8) 
+            sb.AppendLine("        [global::System.Runtime.CompilerServices.SkipLocalsInit]");
         sb.AppendLine(metaInfo.IsNet8 
             ? $"        public override void Serialize(ref LuminPackWriter writer, scoped ref {classGlobalName}{paraNullable} value)"
             : $"        public override void Serialize(ref LuminPackWriter writer, ref {classGlobalName}{paraNullable} value)");
@@ -54,6 +56,8 @@ public static class LuminPackCircleReferenceCodeGenerator
         
         // Deserialize实现
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        if (metaInfo.IsNet8) 
+            sb.AppendLine("        [global::System.Runtime.CompilerServices.SkipLocalsInit]");
         sb.AppendLine(metaInfo.IsNet8 
             ? $"        public override void Deserialize(ref LuminPackReader reader, scoped ref {data.classFullName}{paraNullable} value)"
             : $"        public override void Deserialize(ref LuminPackReader reader, ref {data.classFullName}{paraNullable} value)");
@@ -82,10 +86,10 @@ public static class LuminPackCircleReferenceCodeGenerator
         sb.AppendLine("            var (existsReference, id) = evaluator.OptionState.GetOrAddReference(value);");
         sb.AppendLine("            if (existsReference)");
         sb.AppendLine("            {");
-            sb.AppendLine("                evaluator += 1;");
-            sb.AppendLine("                evaluator += LuminPackEvaluator.CalculateVarInt(id);");
-            sb.AppendLine("                return;");
-            sb.AppendLine("            }");
+        sb.AppendLine("                evaluator += 1;");
+        sb.AppendLine("                evaluator += LuminPackEvaluator.CalculateVarInt(id);");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            int size = 1;");
         sb.AppendLine("            size += LuminPackEvaluator.CalculateVarInt(id);");
@@ -120,9 +124,10 @@ public static class LuminPackCircleReferenceCodeGenerator
     public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb)
     {
         string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = data.className + "Parser";
+        string classFullName = data.classNameSpace is not "<global namespace>"
+            ? data.classNameSpace.Replace(".", "_") + "_" + data.className + "Parser"
+            : data.className + "Parser";
         string classGlobalName = data.classFullName;
-        string parserName = data.className + "Parser";
         bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
         uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
         
@@ -155,7 +160,7 @@ public static class LuminPackCircleReferenceCodeGenerator
             sb.AppendLine("            if (value is null)");
             sb.AppendLine("            {");
             sb.AppendLine("                writer.WriteNullObjectHeader();");
-            sb.AppendLine("                writer.Advance(1);");
+            //sb.AppendLine("                writer.Advance(1);");
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
         }
@@ -163,7 +168,7 @@ public static class LuminPackCircleReferenceCodeGenerator
         sb.AppendLine();
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref Unsafe.AsRef(in value));");
-        sb.AppendLine("            var (existsReference, id) = writer.OptionState.GetOrAddReference(local);");
+        sb.AppendLine("            var (existsReference, id) = writer.OptionState.GetOrAddReference(value);");
         sb.AppendLine("            if (existsReference)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.WriteObjectReferenceId(ref index, id);");
@@ -235,7 +240,7 @@ public static class LuminPackCircleReferenceCodeGenerator
         }
         else
         {
-            sb.AppendLine("            var writerBuffer = global::LuminPack.Utility.ReusableLinkedArrayBufferWriterPool.Rent();");
+            sb.AppendLine("            var writerBuffer = global::LuminPack.Utility.LuminBufferWriterPool.Rent();");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine($"                var tempWriter = new LuminPackWriter(writerBuffer, writer.OptionState);");
@@ -287,7 +292,7 @@ public static class LuminPackCircleReferenceCodeGenerator
             sb.AppendLine("            }");
             sb.AppendLine("            finally");
             sb.AppendLine("            {");
-            sb.AppendLine("                global::LuminPack.Utility.ReusableLinkedArrayBufferWriterPool.Return(writerBuffer);");
+            sb.AppendLine("                global::LuminPack.Utility.LuminBufferWriterPool.Return(writerBuffer);");
             sb.AppendLine("            }");
         }
         
@@ -304,12 +309,13 @@ public static class LuminPackCircleReferenceCodeGenerator
     public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb)
     {
         string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = data.className + "Parser";
+        string classFullName = data.classNameSpace is not "<global namespace>"
+            ? data.classNameSpace.Replace(".", "_") + "_" + data.className + "Parser"
+            : data.className + "Parser";
         string classGlobalName = data.classFullName;
-        string parserName = data.className + "Parser";
         bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
         uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
-        
+    
         if (data.isGeneric)
         {
             classFullName += $"<{data.GenericParameters.FirstOrDefault()}";
@@ -319,12 +325,12 @@ public static class LuminPackCircleReferenceCodeGenerator
             }
             classFullName += ">";
         }
-        
+    
         if (!classGlobalName.Contains(".") && data.classNameSpace != "<global namespace>")
         {
             classGlobalName = "global::" + data.classNameSpace + "." + data.classFullName;
         }
-        
+    
         sb.AppendLine();
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserializing))
         {
@@ -333,9 +339,9 @@ public static class LuminPackCircleReferenceCodeGenerator
                 : $"            value?.{item.Item1}();");
         }
         sb.AppendLine();
-        
+    
         sb.AppendLine("            ref var offset = ref reader.GetCurrentSpanOffset();");
-        
+    
         // 为所有字段定义局部变量
         sb.AppendLine("            // 定义局部变量存储字段值");
         foreach (var field in data.localFields)
@@ -344,7 +350,7 @@ public static class LuminPackCircleReferenceCodeGenerator
             sb.AppendLine($"            {field.TypeName}{nullable} {field.Name}Temp = default!;");
         }
         sb.AppendLine();
-        
+    
         sb.AppendLine("            if (!reader.TryReadObjectHead(ref offset, out var count))");
         sb.AppendLine("            {");
         sb.AppendLine("                value = default;");
@@ -357,20 +363,45 @@ public static class LuminPackCircleReferenceCodeGenerator
         sb.AppendLine("            if (count is LuminPackCode.ReferenceId)");
         sb.AppendLine("            {");
         sb.AppendLine("                id = reader.ReadVarIntUInt32();");
-        sb.AppendLine("                reader.Advance(LuminPackEvaluator.CalculateVarInt(id));");
         sb.AppendLine($"                value = ({classGlobalName})reader.OptionState.GetObjectReference(id);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
+    
         sb.AppendLine("            Span<int> deltas = stackalloc int[count];");
         sb.AppendLine("            for (int i = 0; i < count; i++)");
         sb.AppendLine("            {");
         sb.AppendLine("                deltas[i] = reader.ReadVarIntInt32();");
-        //sb.AppendLine("                reader.Advance(LuminPackEvaluator.CalculateVarInt(deltas[i]));");
         sb.AppendLine("            }");
         sb.AppendLine("            id = reader.ReadVarIntUInt32();");
-        //sb.AppendLine("            reader.Advance(LuminPackEvaluator.CalculateVarInt(id));");
         sb.AppendLine();
         
+        // 收集构造函数参数（使用默认值）
+        var constructorParams = new List<string>();
+        if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
+        {
+            foreach (var param in data.SelectedConstructor.Parameters)
+            {
+                // 使用默认值而不是从字段读取
+                constructorParams.Add("default!");
+            }
+        }
+
+        string constructorArgs = string.Join(", ", constructorParams);
+
+        // 使用默认值创建对象
+        if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
+        {
+            sb.AppendLine($"            value = new {classGlobalName}({constructorArgs});");
+        }
+        else
+        {
+            sb.AppendLine($"            value = new {classGlobalName}();");
+        }
+    
+        // 立即将对象添加到引用字典
+        sb.AppendLine($"            reader.OptionState.AddObjectReference(id, value!);");
+        sb.AppendLine();
+    
         // 反序列化到局部变量
         for (var order = 0; order < memberCount; order++)
         {
@@ -400,29 +431,9 @@ public static class LuminPackCircleReferenceCodeGenerator
             }
             sb.AppendLine();
         }
-        
-        sb.AppendLine("            // 构造对象并设置字段");
-        
-        // 收集构造函数参数
-        var constructorParams = new List<string>();
-        if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
-        {
-            foreach (var param in data.SelectedConstructor.Parameters)
-            {
-                var matchingField = data.fields.FirstOrDefault(f => f.Name == param.MatchingFieldName);
-                if (matchingField != null)
-                {
-                    constructorParams.Add($"{matchingField.Name}Temp!");
-                }
-                else
-                {
-                    constructorParams.Add("default");
-                }
-            }
-        }
-
-        string constructorArgs = string.Join(", ", constructorParams);
-
+    
+        sb.AppendLine("            // 设置字段值");
+    
         // 收集需要对象初始化器赋值的public字段
         var initializerFields = data.fields.Where(f => 
             (data.SelectedConstructor == null || 
@@ -437,42 +448,21 @@ public static class LuminPackCircleReferenceCodeGenerator
             (f.IsPrivate || f.isProperty)
         ).ToList();
 
-        // 使用对象初始化器创建对象
+        // 使用对象初始化器设置public字段
         if (initializerFields.Count > 0)
         {
-            // 有对象初始化器的情况
-            if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
-            {
-                sb.AppendLine($"            value = new {classGlobalName}({constructorArgs})");
-            }
-            else
-            {
-                sb.AppendLine($"            value = new {classGlobalName}()");
-            }
-            sb.AppendLine("            {");
+            sb.AppendLine("            // 设置public字段");
             foreach (var field in initializerFields)
             {
-                sb.AppendLine($"                {field.Name} = {field.Name}Temp!,");
+                sb.AppendLine($"            value.{field.Name} = {field.Name}Temp!;");
             }
-            sb.AppendLine("            };");
-        }
-        else
-        {
-            // 没有对象初始化器的情况
-            if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
-            {
-                sb.AppendLine($"            value = new {classGlobalName}({constructorArgs});");
-            }
-            else
-            {
-                sb.AppendLine($"            value = new {classGlobalName}();");
-            }
+            sb.AppendLine();
         }
 
         // 设置private字段（通过Local类）
         if (privateFields.Count > 0)
         {
-            sb.AppendLine($"            // 设置private字段");
+            sb.AppendLine("            // 设置private字段");
             if (data.isValueType)
             {
                 sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value);");
@@ -487,11 +477,7 @@ public static class LuminPackCircleReferenceCodeGenerator
                 sb.AppendLine($"            local.{field.Name} = {field.Name}Temp!;");
             }
         }
-
-        // 将对象添加到引用表
-        sb.AppendLine($"            reader.OptionState.AddObjectReference(id, value!);");
         
-        sb.AppendLine();
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserialized))
         {
             sb.AppendLine(item.Item3
