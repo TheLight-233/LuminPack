@@ -1354,19 +1354,13 @@ namespace LuminPack.Core
             where T5 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-    
-            return (int)offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1379,21 +1373,14 @@ namespace LuminPack.Core
             where T6 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-    
-            return (int)offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1407,23 +1394,15 @@ namespace LuminPack.Core
             where T7 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-    
-            return (int)offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1438,25 +1417,16 @@ namespace LuminPack.Core
             where T8 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-    
-            return (int)offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1472,27 +1442,17 @@ namespace LuminPack.Core
             where T9 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-    
-            return (int)offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1509,29 +1469,18 @@ namespace LuminPack.Core
             where T10 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-    
-            return (int)offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1549,31 +1498,19 @@ namespace LuminPack.Core
             where T11 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-    
-            return (int)offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1592,33 +1529,20 @@ namespace LuminPack.Core
             where T12 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-    
-            return (int)offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1638,35 +1562,21 @@ namespace LuminPack.Core
             where T13 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T13>();
-    
-            return (int)offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>()));
+
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1687,37 +1597,22 @@ namespace LuminPack.Core
             where T14 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T13>();
-            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T14>();
-    
-            return (int)offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>()));
+            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>()));
+
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>() + Unsafe.SizeOf<T14>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1739,39 +1634,23 @@ namespace LuminPack.Core
             where T15 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T13>();
-            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T14>();
-            value15 = Unsafe.ReadUnaligned<T15>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T15>();
-    
-            return (int)offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>()));
+            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>()));
+            value15 = Unsafe.ReadUnaligned<T15>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>() + Unsafe.SizeOf<T14>()));
+
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>() + Unsafe.SizeOf<T14>() + Unsafe.SizeOf<T15>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1780,7 +1659,6 @@ namespace LuminPack.Core
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1789,11 +1667,8 @@ namespace LuminPack.Core
             where T2 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1803,13 +1678,9 @@ namespace LuminPack.Core
             where T3 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1820,14 +1691,10 @@ namespace LuminPack.Core
             where T4 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1839,17 +1706,11 @@ namespace LuminPack.Core
             where T5 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1862,19 +1723,12 @@ namespace LuminPack.Core
             where T6 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1888,21 +1742,13 @@ namespace LuminPack.Core
             where T7 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1917,23 +1763,14 @@ namespace LuminPack.Core
             where T8 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1949,25 +1786,15 @@ namespace LuminPack.Core
             where T9 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1984,27 +1811,16 @@ namespace LuminPack.Core
             where T10 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -2022,29 +1838,17 @@ namespace LuminPack.Core
             where T11 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -2063,31 +1867,18 @@ namespace LuminPack.Core
             where T12 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -2107,33 +1898,19 @@ namespace LuminPack.Core
             where T13 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -2154,35 +1931,20 @@ namespace LuminPack.Core
             where T14 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T13>();
-            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>()));
+            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -2204,67 +1966,37 @@ namespace LuminPack.Core
             where T15 : unmanaged
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            nint offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T13>();
-            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T14>();
-            value15 = Unsafe.ReadUnaligned<T15>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>()));
+            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>()));
+            value15 = Unsafe.ReadUnaligned<T15>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>() + Unsafe.SizeOf<T14>()));
         }
         
-        /// <summary>
-        /// 反序列化值类型
-        /// </summary>
-        /// <param name="value1"></param>
-        /// <typeparam name="T1"></typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1>(out T1 value1)
         {
             var index = _currentIndex;
-
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-
             return Unsafe.SizeOf<T1>();
         }
 
-        /// <summary>
-        /// 反序列化值类型
-        /// </summary>
-        /// <param name="index"></param>
-        /// <param name="value1"></param>
-        /// <typeparam name="T1"></typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1>(ref int index, out T1 value1)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-    
             return Unsafe.SizeOf<T1>();
         }
 
@@ -2272,371 +2004,223 @@ namespace LuminPack.Core
         public int DangerousReadUnmanaged<T1, T2>(ref int index, out T1 value1, out T2 value2)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3>(ref int index, out T1 value1, out T2 value2, out T3 value3)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T13>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T13>();
-            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T14>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>()));
+            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>() + Unsafe.SizeOf<T14>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14, out T15 value15)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T13>();
-            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T14>();
-            value15 = Unsafe.ReadUnaligned<T15>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T15>();
-    
-            return offset;
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>()));
+            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>()));
+            value15 = Unsafe.ReadUnaligned<T15>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>() + Unsafe.SizeOf<T14>()));
+            return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>() + Unsafe.SizeOf<T14>() + Unsafe.SizeOf<T15>();
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1>(ref int index, out T1 value1)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
         }
 
@@ -2644,335 +2228,203 @@ namespace LuminPack.Core
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2>(ref int index, out T1 value1, out T2 value2)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3>(ref int index, out T1 value1, out T2 value2, out T3 value3)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, offset));
-            
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T13>();
-            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, offset));
-    
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>()));
+            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>()));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14, out T15 value15)
         {
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            int offset = 0;
             value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
-            offset += Unsafe.SizeOf<T1>();
-            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T2>();
-            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T3>();
-            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T4>();
-            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T5>();
-            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T6>();
-            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T7>();
-            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T8>();
-            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T9>();
-            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T10>();
-            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T11>();
-            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T12>();
-            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T13>();
-            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, offset));
-            offset += Unsafe.SizeOf<T14>();
-            value15 = Unsafe.ReadUnaligned<T15>(ref Unsafe.Add(ref spanRef, offset));
-    
+            value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
+            value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
+            value4 = Unsafe.ReadUnaligned<T4>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>()));
+            value5 = Unsafe.ReadUnaligned<T5>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>()));
+            value6 = Unsafe.ReadUnaligned<T6>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>()));
+            value7 = Unsafe.ReadUnaligned<T7>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>()));
+            value8 = Unsafe.ReadUnaligned<T8>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>()));
+            value9 = Unsafe.ReadUnaligned<T9>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>()));
+            value10 = Unsafe.ReadUnaligned<T10>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>()));
+            value11 = Unsafe.ReadUnaligned<T11>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>()));
+            value12 = Unsafe.ReadUnaligned<T12>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>()));
+            value13 = Unsafe.ReadUnaligned<T13>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>()));
+            value14 = Unsafe.ReadUnaligned<T14>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>()));
+            value15 = Unsafe.ReadUnaligned<T15>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>() + Unsafe.SizeOf<T3>() + Unsafe.SizeOf<T4>() + Unsafe.SizeOf<T5>() + Unsafe.SizeOf<T6>() + Unsafe.SizeOf<T7>() + Unsafe.SizeOf<T8>() + Unsafe.SizeOf<T9>() + Unsafe.SizeOf<T10>() + Unsafe.SizeOf<T11>() + Unsafe.SizeOf<T12>() + Unsafe.SizeOf<T13>() + Unsafe.SizeOf<T14>()));
         }
         
         public byte ReadVarIntByte()
