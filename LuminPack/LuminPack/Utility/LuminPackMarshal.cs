@@ -890,13 +890,22 @@ public static class LuminPackMarshal
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static IntPtr GetMethodTable(object obj)
     {
+#if NET8_0_OR_GREATER
         return Unsafe.Add(ref Unsafe.As<byte, IntPtr>(ref Unsafe.As<RawData>(obj).Data), -1);
+#else
+        return GetMethodTable(obj.GetType());
+#endif
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static IntPtr GetMethodTable<T>(T obj) where T : class
     {
+#if NET8_0_OR_GREATER
         return Unsafe.Add(ref Unsafe.As<byte, IntPtr>(ref Unsafe.As<RawData>(obj).Data), -1);
+#else
+        return GetMethodTable(obj.GetType());
+#endif
+        
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
