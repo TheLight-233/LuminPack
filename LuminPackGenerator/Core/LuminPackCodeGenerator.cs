@@ -3047,7 +3047,7 @@ namespace LuminPack.Code.Core
                 
                 if (data.fields[i].FieldType is LuminDataType.Reference && data.fields[i].Type is not LuminFiledType.Other)
                 {
-                    sb.AppendLine($"            if ({access}.{data.fields[i].Name} != null)");
+                    sb.AppendLine($"            if ({access}.{data.fields[i].Name} is not null)");
                     sb.AppendLine("            {");
                     GenerateSerializeCode(sb, data.fields[i], $"{access}." + data.fields[i].Name, "span", "offset", 4, 0);
                     if (data.fields[i].Type is not LuminFiledType.Class)
