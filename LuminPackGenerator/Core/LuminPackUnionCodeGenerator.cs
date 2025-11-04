@@ -52,14 +52,18 @@ public static class LuminPackUnionCodeGenerator
 
         // 使用 LuminUnionMap 作为注册表
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-        //sb.AppendLine($"        internal static readonly global::LuminPack.Utility.LuminF14Map<nint, HashEntry> _unionMap = new global::LuminPack.Utility.LuminF14Map<nint, HashEntry>({data.UnionMembers.Count});");
         sb.AppendLine($"        internal static readonly global::LuminPack.Utility.LuminUnionMap<HashEntry> _unionMap = new global::LuminPack.Utility.LuminUnionMap<HashEntry>({data.UnionMembers.Count});");
         sb.AppendLine();
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine($"        internal static HashEntry[] _directTable {{ get; private set; }} = new HashEntry[{directTableSize}];");
-        // sb.AppendLine();
-        // sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-        // sb.AppendLine("        internal static unsafe HashEntry* _directTablePtr;");
+        
+        // 添加 GCHandle 来固定 _directTable 数组
+        sb.AppendLine();
+        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine("        internal static global::System.Runtime.InteropServices.GCHandle _directTableGcHandle;");
+        sb.AppendLine();
+        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine("        internal static unsafe HashEntry* _directTablePtr;");
         sb.AppendLine();
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine($"        static object _registerLock = new object();");
@@ -80,11 +84,9 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine();
         sb.AppendLine("            unsafe");
         sb.AppendLine("            {");
-
-        // sb.AppendLine("                fixed (HashEntry* ptr = _directTable)");
-        // sb.AppendLine("                {");
-        // sb.AppendLine("                    _directTablePtr = ptr;");
-        // sb.AppendLine("                }");
+        // 固定 _directTable 数组并获取指针
+        sb.AppendLine("                _directTableGcHandle = global::System.Runtime.InteropServices.GCHandle.Alloc(_directTable, global::System.Runtime.InteropServices.GCHandleType.Pinned);");
+        sb.AppendLine("                _directTablePtr = (HashEntry*)_directTableGcHandle.AddrOfPinnedObject();");
         
         // 注册所有联合成员
         for (int i = 0; i < data.UnionMembers.Count; i++)
@@ -154,7 +156,6 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("                var mt = LuminPackMarshal.GetMethodTable(type);");
         sb.AppendLine("                var entry = new HashEntry");
         sb.AppendLine("                {");
-        //sb.AppendLine("                    MethodTable = mt,");
         sb.AppendLine("                    Tag = tag,");
         sb.AppendLine("                    WriteDelegate = writeDelegate,");
         sb.AppendLine("                    ReadDelegate = readDelegate");
@@ -172,10 +173,16 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("                    var newDirectSize = tag + 1;");
         sb.AppendLine("                    _directTable = new HashEntry[newDirectSize];");
         sb.AppendLine("                    System.Array.Copy(oldDirectTable, _directTable, oldDirectTable.Length);");
-        // sb.AppendLine("                    fixed (HashEntry* ptr = _directTable)");
-        // sb.AppendLine("                    {");
-        // sb.AppendLine("                        _directTablePtr = ptr;");
-        // sb.AppendLine("                    }");
+        // 重新固定新的数组
+        sb.AppendLine("                    if (_directTableGcHandle.IsAllocated)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        _directTableGcHandle.Free();");
+        sb.AppendLine("                    }");
+        sb.AppendLine("                    _directTableGcHandle = global::System.Runtime.InteropServices.GCHandle.Alloc(_directTable, global::System.Runtime.InteropServices.GCHandleType.Pinned);");
+        sb.AppendLine("                    unsafe");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        _directTablePtr = (HashEntry*)_directTableGcHandle.AddrOfPinnedObject();");
+        sb.AppendLine("                    }");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                _directTable[tag] = entry;");
@@ -314,7 +321,6 @@ public static class LuminPackUnionCodeGenerator
                 : $"            value?.{item.Item1}();");
         }
         
-        //sb.AppendLine("            ref int offset = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine("            if (!reader.TryPeekUnionHeader(out var tag))");
         sb.AppendLine("            {");
         sb.AppendLine("                value = default;");
@@ -324,11 +330,7 @@ public static class LuminPackUnionCodeGenerator
         
         sb.AppendLine("            unsafe");
         sb.AppendLine("            {");
-        sb.AppendLine(
-            $"                global::System.Runtime.CompilerServices.Unsafe.Add(ref LuminPackMarshal.GetArrayReference(global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._directTable), tag).ReadDelegate(ref reader, ref value!);");
-        //sb.AppendLine($"                ref var entry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag];");
-        //sb.AppendLine($"                global::System.Runtime.CompilerServices.Unsafe.Add(ref global::System.Runtime.CompilerServices.Unsafe.AsRef<global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser.HashEntry>(global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTablePtr), tag).ReadDelegate(ref reader, ref value!);");
-        //sb.AppendLine($"                global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{data.className}Parser._directTable[tag].ReadDelegate(ref reader, ref value!);");
+        sb.AppendLine($"                global::System.Runtime.CompilerServices.Unsafe.Add(ref global::System.Runtime.CompilerServices.Unsafe.AsRef<global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}.HashEntry>(global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._directTablePtr), tag).ReadDelegate(ref reader, ref value!);");
         sb.AppendLine("            }");
         
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserialized))
