@@ -29,9 +29,9 @@ public readonly unsafe ref struct LuminSpan<T>
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET8_0_OR_GREATER
-        get => ref Unsafe.Add(ref _reference, index);
+        get => ref Unsafe.Add(ref _reference, (nint)(uint)index);
 #else
-        get => ref Unsafe.Add(ref Unsafe.AsRef<T>(_reference.ToPointer()), index);
+        get => ref Unsafe.Add(ref Unsafe.AsRef<T>(_reference.ToPointer()), (nint)(uint)index);
 #endif
     }
 
@@ -252,7 +252,7 @@ public readonly unsafe ref struct LuminSpan<T>
         private nint _index;
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal Enumerator(LuminSpan<T> span)
+        internal Enumerator(in LuminSpan<T> span)
         {
             _span = span;
             _index = -1;
