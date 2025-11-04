@@ -45,6 +45,7 @@ public readonly unsafe ref struct LuminSpan<T>
 #endif
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LuminSpan(T[] array)
     {
 #if NET8_0_OR_GREATER
@@ -56,6 +57,7 @@ public readonly unsafe ref struct LuminSpan<T>
         _length = array.Length;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LuminSpan(in Span<T> span)
     {
 #if NET8_0_OR_GREATER
@@ -67,6 +69,7 @@ public readonly unsafe ref struct LuminSpan<T>
         _length = span.Length;
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LuminSpan(in ReadOnlySpan<T> span)
     {
 #if NET8_0_OR_GREATER
@@ -78,6 +81,7 @@ public readonly unsafe ref struct LuminSpan<T>
         _length = span.Length;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LuminSpan(ref T reference, int length)
     {
 #if NET8_0_OR_GREATER
@@ -89,6 +93,7 @@ public readonly unsafe ref struct LuminSpan<T>
         _length = length;
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LuminSpan(ref T reference, nint length)
     {
 #if NET8_0_OR_GREATER
@@ -100,6 +105,7 @@ public readonly unsafe ref struct LuminSpan<T>
         _length = length;
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LuminSpan(void* ptr, int length)
     {
 #if NET8_0_OR_GREATER
@@ -111,6 +117,7 @@ public readonly unsafe ref struct LuminSpan<T>
         _length = length;
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LuminSpan(void* ptr, nint length)
     {
 #if NET8_0_OR_GREATER
