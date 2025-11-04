@@ -60,10 +60,10 @@ public static class LuminPackUnionCodeGenerator
         // 添加 GCHandle 来固定 _directTable 数组
         sb.AppendLine();
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-        sb.AppendLine("        internal static global::System.Runtime.InteropServices.GCHandle _directTableGcHandle;");
+        sb.AppendLine("        internal static global::System.Runtime.InteropServices.GCHandle _directTableGcHandle { get; private set; }");
         sb.AppendLine();
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-        sb.AppendLine("        internal static unsafe HashEntry* _directTablePtr;");
+        sb.AppendLine("        internal static unsafe HashEntry* _directTablePtr { get; private set; }");
         sb.AppendLine();
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine($"        static object _registerLock = new object();");
