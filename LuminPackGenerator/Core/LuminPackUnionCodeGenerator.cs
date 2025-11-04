@@ -107,7 +107,7 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine(
             "        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
-        sb.AppendLine("        public static unsafe bool TryGetEntry(IntPtr mt, out HashEntry entry)");
+        sb.AppendLine("        public static unsafe bool TryGetEntry(in IntPtr mt, out HashEntry entry)");
         sb.AppendLine("        {");
         sb.AppendLine("            return _unionMap.TryGetValue(mt, out entry);");
         sb.AppendLine("        }");
