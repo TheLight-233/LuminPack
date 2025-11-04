@@ -150,7 +150,7 @@ public static class DictionaryFormatter
         sb.AppendLine("            var dictView = LuminPackMarshal.GetDictionaryView(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value));");
         sb.AppendLine("            ref var arrayRef = ref LuminPackMarshal.GetArrayReference(dictView._entries);");
         sb.AppendLine();
-        sb.AppendLine("            while ((uint) dictIndex < (uint) dictView._count)");
+        sb.AppendLine("            while (dictIndex < dictView._count)");
         sb.AppendLine("            {");
         sb.AppendLine($"                ref var local = ref Unsafe.Add(ref arrayRef, dictIndex++);");
         sb.AppendLine("                if (local.Next >= -1)");
