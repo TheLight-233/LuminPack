@@ -349,7 +349,7 @@ namespace LuminPack.Parsers
             ref var arrayRef =
                 ref LuminPackMarshal.GetArrayReference(dictView._entries); 
             
-            while ((uint) dictIndex < (uint) dictView._count)
+            while (dictIndex < dictView._count)
             {
                 ref LuminPackMarshal.DictionaryView<TKey, TValue?>.Entry local = ref Unsafe.Add(ref arrayRef, dictIndex++);
                 if (local.Next >= -1)
