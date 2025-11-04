@@ -22,8 +22,10 @@ public static class LuminBufferWriterPool
         new(new BufferWriterPolicy(), MaxPoolSize);
 #endif
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static LuminBufferWriter Rent() => _pool.Rent();
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Return(LuminBufferWriter writer) => 
         _pool.Return(writer);
 
