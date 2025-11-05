@@ -1187,7 +1187,7 @@ namespace LuminPack.Code.Core
                     
                     if (!IsReferenceGenericType(field.GenericType.FirstOrDefault()))
                     {
-                        sb.AppendLine($"{indentStr}writer.WriteUnmanagedArray(ref {offset}, {fieldPath}, out var {field.Name}TempLength{depthSuffix});");
+                        sb.AppendLine($"{indentStr}writer.DangerousWriteUnmanagedArray(ref {offset}, {fieldPath}, out var {field.Name}TempLength{depthSuffix});");
                         sb.AppendLine($"{indentStr}var {field.Name}ListOffset{depthSuffix} = {offset} + {field.Name}TempLength{depthSuffix};");
                         
                         if (isMultClass)
