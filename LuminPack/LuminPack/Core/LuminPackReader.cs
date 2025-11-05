@@ -581,6 +581,22 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPeekUnionHeader(out ushort tag)
         {
+            tag = Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)_currentIndex);
+            Advance(1);
+            return tag is not LuminPackCode.NullObject;
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryPeekUnionHeader(ref int index, out ushort tag)
+        {
+            tag = Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)_currentIndex);
+            index += 1;
+            return tag is not LuminPackCode.NullObject;
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryPeekWideUnionHeader(out ushort tag)
+        {
             ref var firstTag = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)_currentIndex);
             if (firstTag < LuminPackCode.WideTag)
             {
@@ -603,7 +619,7 @@ namespace LuminPack.Core
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool TryPeekUnionHeader(ref int index, out ushort tag)
+        public bool TryPeekWideUnionHeader(ref int index, out ushort tag)
         {
             ref var firstTag = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             if (firstTag < LuminPackCode.WideTag)
