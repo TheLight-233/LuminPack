@@ -1083,7 +1083,7 @@ public static class LuminPackMarshal
         public int[] _buckets;
         public Entry[] _entries;
         private ulong _fastModMultiplier;
-        public uint _count;
+        public int _count;
         public int _version;
         public int _freeList;
         public int _freeCount;
@@ -1106,7 +1106,7 @@ public static class LuminPackMarshal
         public int[] _buckets;
         public Entry[] _entries;
         private ulong _fastModMultiplier;
-        public uint _count;
+        public int _count;
         public int _version;
         public int _freeList;
         public int _freeCount;
