@@ -80,11 +80,7 @@ public sealed unsafe class LuminUnionMap<TValue> : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref TValue GetValueRef(in nint key)
     {
-        ref Entry entry = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table1), key & _capacityMask);
-        if (entry.Key != IntPtr.Zero && entry.Key == key)
-            return ref entry.Value;
-
-        throw new KeyNotFoundException($"The given key '{key}' was not present in the dictionary.");
+        return ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table1), key & _capacityMask).Value;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
