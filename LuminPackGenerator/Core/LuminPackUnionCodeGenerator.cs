@@ -179,6 +179,7 @@ public static class LuminPackUnionCodeGenerator
 
     static void GenerateStaticSerializeMethods(LuminDataInfo data, StringBuilder sb, string classGlobalName)
     {
+        var maxTag = data.UnionMembers.Max(x => x.Id);
         foreach (var member in data.UnionMembers)
         {
             string memberType = GetMemberType(data, member);
@@ -188,8 +189,9 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
             sb.AppendLine($"        private static unsafe void Write{methodName}(ref LuminPackWriter writer, ref {classGlobalName} value)");
             sb.AppendLine("        {");
-            // 静态方法中去掉 offset 相关代码
-            sb.AppendLine($"            writer.WriteUnionHeader({member.Id});");
+            sb.AppendLine(maxTag <= 255 
+                ? $"            writer.WriteUnionHeader({member.Id});"
+                : $"            writer.WriteWideUnionHeader({member.Id});");
             sb.AppendLine($"            writer.WritePolymorphismValue(LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value));");
             sb.AppendLine("        }");
             sb.AppendLine();
@@ -292,6 +294,7 @@ public static class LuminPackUnionCodeGenerator
         string classFullName = TypeMetaChecker.BuildParserClassName(data);
         string classGlobalName = data.classFullName;
         string genericParameters = data.GenericParameters.Count == 0 ? string.Empty : "<" + string.Join(", ", data.GenericParameters) + ">";
+        var maxTag = data.UnionMembers.Max(x => x.Id);
         
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserializing))
         {
@@ -301,7 +304,9 @@ public static class LuminPackUnionCodeGenerator
         }
         
         //sb.AppendLine("            ref int offset = ref reader.GetCurrentSpanOffset();");
-        sb.AppendLine("            if (!reader.TryPeekUnionHeader(out var tag))");
+        sb.AppendLine(maxTag <= 255 
+            ? "            if (!reader.TryPeekUnionHeader(out var tag))"
+            : "            if (!reader.TryPeekWideUnionHeader(out var tag))");
         sb.AppendLine("            {");
         sb.AppendLine("                value = default;");
         sb.AppendLine("                return;");
