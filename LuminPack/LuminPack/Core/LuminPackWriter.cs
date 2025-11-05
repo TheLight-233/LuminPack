@@ -397,6 +397,20 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnionHeader(ushort tag)
         {
+            Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)_currentIndex) = (byte)tag;
+            Advance(1);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnionHeader(ref int index, ushort tag)
+        {
+            Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index) = (byte)tag;
+            Advance(1);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteWideUnionHeader(ushort tag)
+        {
             if (tag < LuminPackCode.WideTag)
             {
                 Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)_currentIndex) = (byte)tag;
@@ -412,7 +426,7 @@ namespace LuminPack.Core
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnionHeader(ref int index, ushort tag)
+        public void WriteWideUnionHeader(ref int index, ushort tag)
         {
             if (tag < LuminPackCode.WideTag)
             {
@@ -1102,240 +1116,112 @@ namespace LuminPack.Core
         public void WriteUnmanagedArray<T>(scoped ref T[]? array) 
             where T : unmanaged
         {
-            DangerousWriteUnmanagedArray(ref _currentIndex, array!);
-        }
+            var index = _currentIndex;
         
+            if (array is null)
+            {
+                WriteNullCollectionHeader(ref index);
+                return;
+            }
+        
+            if (array.Length == 0)
+            {
+                WriteCollectionHeader(ref index, 0);
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+
+            Unsafe.WriteUnaligned(ref dest, array.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        }
+    
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref T[]? array) 
             where T : unmanaged
         {
-            DangerousWriteUnmanagedArrayWithOutHeader(ref _currentIndex, array!);
-        }
+            var index = _currentIndex;
         
+            if (array is null)
+            {
+                return;
+            }
+        
+            if (array.Length == 0)
+            {
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+
+            Unsafe.WriteUnaligned(ref dest, array.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        }
+    
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedArray<T>(scoped ref int index, T[]? array) 
             where T : unmanaged
         {
-            DangerousWriteUnmanagedArray(ref index, array!);
-        }
+            if (array is null)
+            {
+                WriteNullCollectionHeader(ref index);
+                return;
+            }
         
+            if (array.Length == 0)
+            {
+                WriteCollectionHeader(ref index, 0);
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+
+            Unsafe.WriteUnaligned(ref dest, array.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        }
+    
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array) 
             where T : unmanaged
         {
-            DangerousWriteUnmanagedArrayWithOutHeader(ref index, array!);
+            if (array is null)
+            {
+                return;
+            }
+        
+            if (array.Length == 0)
+            {
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+
+            Unsafe.WriteUnaligned(ref dest, array.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span) 
-            where T : unmanaged
-        {
-            DangerousWriteUnmanagedSpan(ref index, span);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span) 
-            where T : unmanaged
-        {
-            DangerousWriteUnmanagedSpan(ref index, span);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped Span<T> span) 
-            where T : unmanaged
-        {
-            DangerousWriteUnmanagedSpanWithOutHeader(ref index, span);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped ReadOnlySpan<T> span) 
-            where T : unmanaged
-        {
-            DangerousWriteUnmanagedSpanWithOutHeader(ref index, span);
-        }
-        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedArray<T>(scoped ref int index, T[]? array, out int length) 
         {
-            DangerousWriteUnmanagedArray(ref index, array!, out length);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, out int length) 
-        {
-            DangerousWriteUnmanagedArrayWithOutHeader(ref index, array!, out length);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span, out int length) 
-        {
-            DangerousWriteUnmanagedSpan(ref index, span, out length);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span, out int length) 
-        {
-            DangerousWriteUnmanagedSpan(ref index, span, out length);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped Span<T> span, out int length) 
-        {
-            DangerousWriteUnmanagedSpanWithOutHeader(ref index, span, out length);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped ReadOnlySpan<T> span, out int length) 
-        {
-            DangerousWriteUnmanagedSpanWithOutHeader(ref index, span, out length);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedArray<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
-        {
-            DangerousWriteUnmanagedArray(ref index, array!, length, out spanOffset);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
-        {
-            DangerousWriteUnmanagedArrayWithOutHeader(ref index, array!, length, out spanOffset);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span, int length, out int spanOffset) 
-        {
-            DangerousWriteUnmanagedSpan(ref index, span, length, out spanOffset);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span, int length, out int spanOffset) 
-        {
-            DangerousWriteUnmanagedSpan(ref index, span, length, out spanOffset);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped Span<T> span, int length, out int spanOffset) 
-        {
-            DangerousWriteUnmanagedSpanWithOutHeader(ref index, span, length, out spanOffset);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped ReadOnlySpan<T> span, int length, out int spanOffset) 
-        {
-            DangerousWriteUnmanagedSpanWithOutHeader(ref index, span, length, out spanOffset);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArray<T>(scoped ref T[]? array) 
-        {
-            var index = _currentIndex;
-            
-            if (array is null)
-            {
-                WriteNullCollectionHeader(ref index);
-                return;
-            }
-            
-            if (array.Length == 0)
-            {
-                WriteCollectionHeader(ref index, 0);
-                return;
-            }
-
-            var srcLength = Unsafe.SizeOf<T>() * array.Length;
-
-            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
-
-            Unsafe.WriteUnaligned(ref dest, array.Length);
-            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref T[]? array) 
-        {
-            var index = _currentIndex;
-            
-            if (array is null)
-            {
-                return;
-            }
-            
-            if (array.Length == 0)
-            {
-                return;
-            }
-
-            var srcLength = Unsafe.SizeOf<T>() * array.Length;
-
-            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
-
-            Unsafe.WriteUnaligned(ref dest, array.Length);
-            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array) 
-        {
-            if (array is null)
-            {
-                WriteNullCollectionHeader(ref index);
-                return;
-            }
-            
-            if (array.Length == 0)
-            {
-                WriteCollectionHeader(ref index, 0);
-                return;
-            }
-
-            var srcLength = Unsafe.SizeOf<T>() * array.Length;
-
-            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
-
-            Unsafe.WriteUnaligned(ref dest, array.Length);
-            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array) 
-        {
-            if (array is null)
-            {
-                return;
-            }
-            
-            if (array.Length == 0)
-            {
-                return;
-            }
-
-            var srcLength = Unsafe.SizeOf<T>() * array.Length;
-
-            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
-            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
-
-            Unsafe.WriteUnaligned(ref dest, array.Length);
-            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array, out int length) 
-        {
             if (array is null)
             {
                 WriteNullCollectionHeader(ref index);
                 length = 4;
                 return;
             }
-            
+        
             if (array.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
@@ -1350,19 +1236,19 @@ namespace LuminPack.Core
 
             Unsafe.WriteUnaligned(ref dest, array.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
+        
             length = srcLength + 4;
         }
-        
+    
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, out int length) 
+        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, out int length) 
         {
             if (array is null)
             {
                 length = 0;
                 return;
             }
-            
+        
             if (array.Length == 0)
             {
                 length = 0;
@@ -1377,9 +1263,9 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, array.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)length);
         }
-        
+    
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
+        public void WriteUnmanagedArray<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
         {
             if (array is null)
             {
@@ -1387,46 +1273,430 @@ namespace LuminPack.Core
                 spanOffset = 4;
                 return;
             }
-            
+        
             if (array.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
                 spanOffset = 4;
                 return;
             }
-            
-            
+        
             var srcLength = Unsafe.SizeOf<T>() * array.Length;
 
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
-            
+        
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
+        
             spanOffset = srcLength + 4;
         }
-        
+    
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
+        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
         {
             if (array is null)
             {
                 spanOffset = 0;
                 return;
             }
-            
+        
             if (array.Length == 0)
             {
                 spanOffset = 0;
                 return;
             }
-            
-            
+        
             spanOffset = Unsafe.SizeOf<T>() * array.Length;
 
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
             ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
-            
+        
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)spanOffset);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span) 
+            where T : unmanaged
+        {
+            if (span.Length == 0)
+            {
+                WriteCollectionHeader(ref index, 0);
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * span.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference());
+
+            Unsafe.WriteUnaligned(ref dest, span.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span) 
+            where T : unmanaged
+        {
+            if (span.Length == 0)
+            {
+                WriteCollectionHeader(ref index, 0);
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * span.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
+
+            Unsafe.WriteUnaligned(ref dest, span.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped Span<T> span) 
+            where T : unmanaged
+        {
+            if (span.Length == 0)
+            {
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * span.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference());
+
+            Unsafe.WriteUnaligned(ref dest, span.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped ReadOnlySpan<T> span) 
+            where T : unmanaged
+        {
+            if (span.Length == 0)
+            {
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * span.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
+
+            Unsafe.WriteUnaligned(ref dest, span.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span, out int spanOffset)
+        {
+            if (span.Length == 0)
+            {
+                WriteCollectionHeader(ref index, 0);
+                spanOffset = 4;
+                return;
+            }
+        
+            WriteCollectionHeader(ref index, span.Length);
+        
+            var srcLength = Unsafe.SizeOf<T>() * span.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference());
+        
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        
+            spanOffset = srcLength + 4;
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span, out int spanOffset)
+        {
+            if (span.Length == 0)
+            {
+                WriteCollectionHeader(ref index, 0);
+                spanOffset = 4;
+                return;
+            }
+        
+            WriteCollectionHeader(ref index, span.Length);
+        
+            var srcLength = Unsafe.SizeOf<T>() * span.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
+        
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        
+            spanOffset = srcLength + 4;
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped Span<T> span, out int spanOffset)
+        {
+            if (span.Length == 0)
+            {
+                spanOffset = 0;
+                return;
+            }
+        
+            var srcLength = Unsafe.SizeOf<T>() * span.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference());
+        
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        
+            spanOffset = srcLength;
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped ReadOnlySpan<T> span, out int spanOffset)
+        {
+            if (span.Length == 0)
+            {
+                spanOffset = 0;
+                return;
+            }
+        
+            var srcLength = Unsafe.SizeOf<T>() * span.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
+        
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        
+            spanOffset = srcLength;
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span, int length, out int spanOffset)
+        {
+            if (span.Length == 0)
+            {
+                WriteCollectionHeader(ref index, 0);
+                spanOffset = 4;
+                return;
+            }
+
+            WriteCollectionHeader(ref index, length);
+        
+            var srcLength = Unsafe.SizeOf<T>() * span.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference());
+        
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        
+            spanOffset = srcLength + 4;
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span, int length, out int spanOffset)
+        {
+            if (span.Length == 0)
+            {
+                WriteCollectionHeader(ref index, 0);
+                spanOffset = 4;
+                return;
+            }
+
+            WriteCollectionHeader(ref index, length);
+        
+            var srcLength = Unsafe.SizeOf<T>() * span.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
+        
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        
+            spanOffset = srcLength + 4;
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped Span<T> span, int length, out int spanOffset)
+        {
+            if (span.Length == 0)
+            {
+                spanOffset = 0;
+                return;
+            }
+        
+            spanOffset = Unsafe.SizeOf<T>() * span.Length;
+        
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
+        
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)spanOffset);
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped ReadOnlySpan<T> span, int length, out int spanOffset)
+        {
+            if (span.Length == 0)
+            {
+                spanOffset = 0;
+                return;
+            }
+        
+            var srcLength = Unsafe.SizeOf<T>() * span.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
+        
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        
+            spanOffset = srcLength;
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedArray<T>(scoped ref T[]? array) 
+        {
+            var index = _currentIndex;
+        
+            if (array!.Length == 0)
+            {
+                WriteCollectionHeader(ref index, 0);
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+
+            Unsafe.WriteUnaligned(ref dest, array.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref T[]? array) 
+        {
+            var index = _currentIndex;
+        
+            if (array!.Length == 0)
+            {
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+
+            Unsafe.WriteUnaligned(ref dest, array.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array) 
+        {
+            if (array!.Length == 0)
+            {
+                WriteCollectionHeader(ref index, 0);
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+
+            Unsafe.WriteUnaligned(ref dest, array.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array) 
+        {
+            if (array!.Length == 0)
+            {
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+
+            Unsafe.WriteUnaligned(ref dest, array.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array, out int length) 
+        {
+            if (array!.Length == 0)
+            {
+                WriteCollectionHeader(ref index, 0);
+                length = 4;
+                return;
+            }
+
+            var srcLength = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+
+            Unsafe.WriteUnaligned(ref dest, array.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        
+            length = srcLength + 4;
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, out int length) 
+        {
+            if (array!.Length == 0)
+            {
+                length = 0;
+                return;
+            }
+
+            length = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+
+            Unsafe.WriteUnaligned(ref dest, array.Length);
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)length);
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
+        {
+            if (array!.Length == 0)
+            {
+                WriteCollectionHeader(ref index, 0);
+                spanOffset = 4;
+                return;
+            }
+        
+            var srcLength = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+        
+            Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+        
+            spanOffset = srcLength + 4;
+        }
+    
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
+        {
+            if (array!.Length == 0)
+            {
+                spanOffset = 0;
+                return;
+            }
+        
+            spanOffset = Unsafe.SizeOf<T>() * array.Length;
+
+            ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart.ToPointer()), (nint)index);
+            ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
+        
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)spanOffset);
         }
         
