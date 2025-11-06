@@ -443,11 +443,7 @@ public static class LuminPackMarshal
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ref T GetArrayReference<T>(T[] array)
     {
-#if NET8_0_OR_GREATER
-        return ref MemoryMarshal.GetArrayDataReference(array);
-#else
         return ref array.AsSpan().GetPinnableReference();
-#endif
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
