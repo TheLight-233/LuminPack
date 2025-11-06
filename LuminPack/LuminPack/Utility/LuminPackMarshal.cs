@@ -335,17 +335,15 @@ public static class LuminPackMarshal
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe Span<T> CreateSpan<T>(scoped ref T reference, int length)
+    public static Span<T> CreateSpan<T>(scoped ref T reference, int length)
     {
-        var ptr = Unsafe.AsPointer(ref reference);
-        return new Span<T>(ptr, length);
+        return MemoryMarshal.CreateSpan(ref reference, length);
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe ReadOnlySpan<T> CreateReadOnlySpan<T>(scoped ref T reference, int length)
+    public static ReadOnlySpan<T> CreateReadOnlySpan<T>(scoped ref T reference, int length)
     {
-        var ptr = Unsafe.AsPointer(ref reference);
-        return new ReadOnlySpan<T>(ptr, length);
+        return MemoryMarshal.CreateSpan(ref reference, length);
     }
 
     /// <summary>
