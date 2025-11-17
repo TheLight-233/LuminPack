@@ -6,6 +6,7 @@ using static LuminPackUnitTest.ComplexSerializationTest;
 using static LuminPackUnitTest.VersionTolerantSerializationTest;
 using static LuminPackUnitTest.CircleReferenceSerializationTest;
 using static LuminPackUnitTest.GenericSerializationTest;
+using static LuminPackUnitTest.MultiDimensionalArraySerializationTest;
 
 namespace LuminPackUnitTest
 {
@@ -145,7 +146,14 @@ namespace LuminPackUnitTest
             TestGenericPolymorphismWithInt(testResults);
             TestNumericGenericPolymorphism(testResults);
             TestComplexGenericPolymorphism(testResults);
-            
+            TestTwoDimensionalArray(testResults);
+            TestThreeDimensionalArray(testResults);
+            TestFourDimensionalArray(testResults);
+            TestFiveDimensionalArray(testResults);
+            TestSixDimensionalArray(testResults);
+            TestSevenDimensionalArray(testResults);
+            TestAllArraysInOneContainer(testResults);
+            TestLargeTwoDimensionalArray(testResults);
             
             // Print summary
             Console.WriteLine("\n=========================================");
