@@ -51,7 +51,7 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
             
             var parser = writer.GetParser<T?>();
             
-            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.GetArrayReference(value));
+            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
             var span = LuminPackMarshal.CreateSpan(ref first, totalLength);
             
             foreach (ref var item in span)
@@ -109,22 +109,12 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
         {
             var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
-            var i = 0;
-            var j = -1;
-            var count = 0;
-            while (count++ < length)
+            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
+            var span = LuminPackMarshal.CreateSpan(ref first, iLength * jLength);
+
+            foreach (ref var v in span)
             {
-                if (j < jLength - 1)
-                {
-                    j++;
-                }
-                else
-                {
-                    j = 0;
-                    i++;
-                }
-                
-                parser.Deserialize(ref reader, ref value[i, j]);
+                parser.Deserialize(ref reader, ref v);
             }
         }
         
@@ -204,7 +194,7 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
             
             var parser = writer.GetParser<T?>();
             
-            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.GetArrayReference(value));
+            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
             var span = LuminPackMarshal.CreateSpan(ref first, totalLength);
             
             foreach (ref var item in span)
@@ -263,29 +253,12 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
         {
             var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
-            var i = 0;
-            var j = 0;
-            var k = -1;
-            var count = 0;
-            while (count++ < length)
-            {
-                if (k < kLength - 1)
-                {
-                    k++;
-                }
-                else if (j < jLength - 1)
-                {
-                    k = 0;
-                    j++;
-                }
-                else
-                {
-                    k = 0;
-                    j = 0;
-                    i++;
-                }
+            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
+            var span = LuminPackMarshal.CreateSpan(ref first, iLength * jLength * kLength);
 
-                parser.Deserialize(ref reader, ref value[i, j, k]);
+            foreach (ref var v in span)
+            {
+                parser.Deserialize(ref reader, ref v);
             }
         }
     }
@@ -364,7 +337,7 @@ public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
             
             var parser = writer.GetParser<T?>();
             
-            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.GetArrayReference(value));
+            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
             var span = LuminPackMarshal.CreateSpan(ref first, totalLength);
             
             foreach (ref var item in span)
@@ -423,37 +396,12 @@ public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
         {
             var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
-            var i = 0;
-            var j = 0;
-            var k = 0;
-            var l = -1;
-            var count = 0;
-            while (count++ < length)
-            {
-                if (l < lLength - 1)
-                {
-                    l++;
-                }
-                else if (k < kLength - 1)
-                {
-                    l = 0;
-                    k++;
-                }
-                else if (j < jLength - 1)
-                {
-                    l = 0;
-                    k = 0;
-                    j++;
-                }
-                else
-                {
-                    l = 0;
-                    k = 0;
-                    j = 0;
-                    i++;
-                }
+            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
+            var span = LuminPackMarshal.CreateSpan(ref first, iLength * jLength * kLength * lLength);
 
-                parser.Deserialize(ref reader, ref value[i, j, k, l]);
+            foreach (ref var v in span)
+            {
+                parser.Deserialize(ref reader, ref v);
             }
         }
     }
@@ -530,7 +478,7 @@ public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
             
             var parser = writer.GetParser<T?>();
             
-            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.GetArrayReference(value));
+            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
             var span = LuminPackMarshal.CreateSpan(ref first, totalLength);
 
             foreach (ref var item in span)
@@ -584,46 +532,12 @@ public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
         {
             var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
-            var i = 0;
-            var j = 0;
-            var k = 0;
-            var l = 0;
-            var m = -1;
-            var count = 0;
-            while (count++ < length)
-            {
-                if (m < mLength - 1)
-                {
-                    m++;
-                }
-                else if (l < lLength - 1)
-                {
-                    m = 0;
-                    l++;
-                }
-                else if (k < kLength - 1)
-                {
-                    m = 0;
-                    l = 0;
-                    k++;
-                }
-                else if (j < jLength - 1)
-                {
-                    m = 0;
-                    l = 0;
-                    k = 0;
-                    j++;
-                }
-                else
-                {
-                    m = 0;
-                    l = 0;
-                    k = 0;
-                    j = 0;
-                    i++;
-                }
+            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
+            var span = LuminPackMarshal.CreateSpan(ref first, iLength * jLength * kLength * lLength * mLength);
 
-                parser.Deserialize(ref reader, ref value[i, j, k, l, m]);
+            foreach (ref var v in span)
+            {
+                parser.Deserialize(ref reader, ref v);
             }
         }
     }
@@ -700,7 +614,7 @@ public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
             
             var parser = writer.GetParser<T?>();
             
-            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.GetArrayReference(value));
+            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
             var span = LuminPackMarshal.CreateSpan(ref first, totalLength);
 
             foreach (ref var item in span)
@@ -757,56 +671,12 @@ public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
         {
             var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
-            var i = 0;
-            var j = 0;
-            var k = 0;
-            var l = 0;
-            var m = 0;
-            var n = -1;
-            var count = 0;
-            while (count++ < length)
-            {
-                if (n < nLength - 1)
-                {
-                    n++;
-                }
-                else if (m < mLength - 1)
-                {
-                    n = 0;
-                    m++;
-                }
-                else if (l < lLength - 1)
-                {
-                    n = 0;
-                    m = 0;
-                    l++;
-                }
-                else if (k < kLength - 1)
-                {
-                    n = 0;
-                    m = 0;
-                    l = 0;
-                    k++;
-                }
-                else if (j < jLength - 1)
-                {
-                    n = 0;
-                    m = 0;
-                    l = 0;
-                    k = 0;
-                    j++;
-                }
-                else
-                {
-                    n = 0;
-                    m = 0;
-                    l = 0;
-                    k = 0;
-                    j = 0;
-                    i++;
-                }
+            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
+            var span = LuminPackMarshal.CreateSpan(ref first, iLength * jLength * kLength * lLength * mLength * nLength);
 
-                parser.Deserialize(ref reader, ref value[i, j, k, l, m, n]);
+            foreach (ref var v in span)
+            {
+                parser.Deserialize(ref reader, ref v);
             }
         }
     }
@@ -885,7 +755,7 @@ public sealed class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,,]>
             
             var parser = writer.GetParser<T?>();
             
-            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.GetArrayReference(value));
+            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
             var span = LuminPackMarshal.CreateSpan(ref first, totalLength);
 
             foreach (ref var item in span)
@@ -940,67 +810,12 @@ public sealed class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,,]>
         {
             var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
-            var i = 0;
-            var j = 0;
-            var k = 0;
-            var l = 0;
-            var m = 0;
-            var n = 0;
-            var o = -1;
-            var count = 0;
-            while (count++ < length)
-            {
-                if (o < oLength - 1)
-                {
-                    o++;
-                }
-                else if (n < nLength - 1)
-                {
-                    o = 0;
-                    n++;
-                }
-                else if (m < mLength - 1)
-                {
-                    o = 0;
-                    n = 0;
-                    m++;
-                }
-                else if (l < lLength - 1)
-                {
-                    o = 0;
-                    n = 0;
-                    m = 0;
-                    l++;
-                }
-                else if (k < kLength - 1)
-                {
-                    o = 0;
-                    n = 0;
-                    m = 0;
-                    l = 0;
-                    k++;
-                }
-                else if (j < jLength - 1)
-                {
-                    o = 0;
-                    n = 0;
-                    m = 0;
-                    l = 0;
-                    k = 0;
-                    j++;
-                }
-                else
-                {
-                    o = 0;
-                    n = 0;
-                    m = 0;
-                    l = 0;
-                    k = 0;
-                    j = 0;
-                    i++;
-                }
+            ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
+            var span = LuminPackMarshal.CreateSpan(ref first, iLength * jLength * kLength * lLength * mLength * oLength);
 
-                parser.Deserialize(ref reader, ref value[i, j, k, l, m, n, o]);
+            foreach (ref var v in span)
+            {
+                parser.Deserialize(ref reader, ref v);
             }
         }
     }

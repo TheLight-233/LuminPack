@@ -54,9 +54,9 @@ public static class LuminBufferWriterPool
 // This class has large buffer so should cache [ThreadStatic] or Pool.
 public sealed class LuminBufferWriter :
 #if NET8_0_OR_GREATER
-    IBufferWriter<byte>, IDisposable, IPooledObjectPolicy<LuminBufferWriter>
+    IDisposable, IPooledObjectPolicy<LuminBufferWriter>
 #else
-    IBufferWriter<byte>, IDisposable
+    IDisposable
 #endif
 {
     
@@ -137,14 +137,14 @@ public sealed class LuminBufferWriter :
         _currentIndex = (int*)Unsafe.AsPointer(ref index);
         _buffer.SetCurrentIndexPtr(ref index);
     }
-
+    
     /// <summary>
     /// 不进行偏移，仅检测边界。
     /// 偏移完全交由LuminPackWriter
     /// </summary>
-    /// <param name="count"></param>
+    /// <param name="writer"></param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Advance(int count) => _buffer.Advance(count);
+    public void Check(ref LuminPackWriter writer) => _buffer.Check(ref writer);
 
     public unsafe byte[] ToArrayAndReset()
     {
@@ -165,9 +165,13 @@ public sealed class LuminBufferWriter :
     public unsafe void WriteToAndReset(ref LuminPackWriter writer)
     {
         if (_currentIndex is null || *_currentIndex == 0) return;
+
+#if NET8_0_OR_GREATER
+        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref writer._bufferStart, (nint)(uint)writer.CurrentIndex), ref _buffer.WrittenBuffer.Slice(0, CurrentIndex).GetPinnableReference(), (uint)CurrentIndex);
+#else
+        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart), (nint)(uint)writer.CurrentIndex), ref _buffer.WrittenBuffer.Slice(0, CurrentIndex).GetPinnableReference(), (uint)CurrentIndex);
+#endif
         
-        
-        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart.ToPointer()), (nint)writer.CurrentIndex), ref _buffer.WrittenBuffer.Slice(0, CurrentIndex).GetPinnableReference(), (uint)CurrentIndex);
 
         writer.Advance(CurrentIndex);
         
@@ -242,6 +246,7 @@ public sealed class LuminBufferWriter :
 internal unsafe struct BufferSegment : IDisposable
 {
     IntPtr _buffer;
+    int _resizeThreshold;
     int* _written;
     int _totalLength;
     bool _disposed;
@@ -264,15 +269,18 @@ internal unsafe struct BufferSegment : IDisposable
         _buffer = Marshal.AllocHGlobal(size);
 #endif
         _totalLength = size;
+        _resizeThreshold = _totalLength - (_totalLength >> 3);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Advance(int count)
+    public void Check(ref LuminPackWriter writer)
     {
         
-        if (*_written > (_totalLength - (_totalLength >> 3))) // 87.5% 阈值
+        if (*_written > _resizeThreshold) // 87.5% 阈值
         {
             Resize(_totalLength << 1); // 双倍扩容
+            writer.FlushBuffer();
+            _resizeThreshold = _totalLength - (_totalLength >> 3);
         }
         
     }

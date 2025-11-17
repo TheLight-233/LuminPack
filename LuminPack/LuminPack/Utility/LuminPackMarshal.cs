@@ -441,29 +441,39 @@ public static class LuminPackMarshal
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ref T GetArrayReference<T>(T[] array)
+    public static ref T GetNotNullArrayReference<T>(T[] array)
     {
+#if NET8_0_OR_GREATER
+        return ref MemoryMarshal.GetArrayDataReference(array);
+#endif
         return ref array.AsSpan().GetPinnableReference();
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe ref byte GetArrayReference(Array array)
+    public static unsafe ref T GetArrayReference<T>(T[]? array)
     {
-        if (array == null)
-            throw new ArgumentNullException(nameof(array));
+#if NET8_0_OR_GREATER
+        if (array is null)
+            return ref Unsafe.NullRef<T>();
         
-        return ref Unsafe.AsRef<byte>(GetArrayDataPointer(array));
-    }
+        return ref Unsafe.As<byte, T>(ref Unsafe.AddByteOffset(ref Unsafe.As<RawData>(array).Data, (nuint)(Unsafe.AsRef<MethodTable>(GetMethodTable((object) array).ToPointer()).BaseSize -  2 * sizeof (IntPtr))));
+#else
+        return ref array.AsSpan().GetPinnableReference();
+#endif
 
+    }
+    
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static unsafe byte* GetArrayDataPointer(Array array)
+    public static unsafe ref byte GetArrayReference<T>(Array? array)
     {
-        fixed (void* ptr = &Unsafe.As<LuminRawArrayData>(array).Data)
-        {
-            // 根据数组维度计算数据偏移量
-            int offset = array.Rank is 1 ? 0 : array.Rank * sizeof(UIntPtr);
-            return (byte*)ptr + offset;
-        }
+#if NET8_0_OR_GREATER
+        if (array is null)
+            return ref Unsafe.NullRef<byte>();
+        
+        return ref Unsafe.AddByteOffset(ref Unsafe.As<RawData>(array).Data, (nuint)(Unsafe.AsRef<MethodTable>(GetMethodTable((object) array).ToPointer()).BaseSize -  2 * sizeof (IntPtr)));
+#else
+        return ref DangerousGetArrayDataReference<T>(array);
+#endif
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -474,9 +484,9 @@ public static class LuminPackMarshal
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe ref byte GetArrayDataReference(Array array)
+    public static unsafe ref byte GetArrayDataReference<T>(Array array)
     {
-        ref var elementRef = ref GetArrayReference(array);
+        ref var elementRef = ref GetArrayReference<T>(array);
         return ref Unsafe.AsRef<byte>(Unsafe.AsPointer(ref elementRef));
     }
     
@@ -487,26 +497,24 @@ public static class LuminPackMarshal
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ref byte DangerousGetArrayDataReference<T>(T[] array)
+    public static ref T DangerousGetArrayDataReference<T>(T[] array)
     {
-        ref var src = ref Unsafe.As<T, byte>(ref Unsafe.As<byte, T>(ref Unsafe.As<LuminRawArrayData>(array).Data));
-
 #if NETSTANDARD2_1
-        return ref Unsafe.Add(ref src, Unsafe.SizeOf<UIntPtr>());
+        ref var src = ref Unsafe.As<T, byte>(ref Unsafe.As<byte, T>(ref Unsafe.As<LuminRawArrayData>(array).Data));
+        return ref Unsafe.As<byte, T>(ref Unsafe.Add(ref src, Unsafe.SizeOf<UIntPtr>()));
 #else
-        return ref src;
+        return ref GetArrayReference(array);
 #endif
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ref byte DangerousGetArrayDataReference<T>(Array array)
     {
-        ref var src = ref Unsafe.As<T, byte>(ref Unsafe.As<byte, T>(ref Unsafe.As<LuminRawArrayData>(array).Data));
-        
 #if NETSTANDARD2_1
+        ref var src = ref Unsafe.As<T, byte>(ref Unsafe.As<byte, T>(ref Unsafe.As<LuminRawArrayData>(array).Data));
         return ref Unsafe.Add(ref src, Unsafe.SizeOf<UIntPtr>());
 #else
-        return ref Unsafe.Add(ref src, array.Rank is 1 ? 0 : array.Rank * Unsafe.SizeOf<UIntPtr>());
+        return ref GetArrayReference<T>(array);
 #endif
     }
     
@@ -1076,7 +1084,6 @@ public static class LuminPackMarshal
     {
         public int[] _buckets;
         public Entry[] _entries;
-        private ulong _fastModMultiplier;
         public int _count;
         public int _version;
         public int _freeList;
@@ -1099,7 +1106,6 @@ public static class LuminPackMarshal
     {
         public int[] _buckets;
         public Entry[] _entries;
-        private ulong _fastModMultiplier;
         public int _count;
         public int _version;
         public int _freeList;

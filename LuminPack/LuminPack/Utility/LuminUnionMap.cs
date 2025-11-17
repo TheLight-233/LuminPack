@@ -17,9 +17,9 @@ public sealed unsafe class LuminUnionMap<TValue> : IDisposable
     }
 
     internal Entry* _table1;
-    private int _capacity;
-    private int _count;
-    private nint _capacityMask;
+    internal int _capacity;
+    internal int _count;
+    internal nint _capacityMask;
 
     public int Count => _count;
     public int Capacity => _capacity;
@@ -73,7 +73,15 @@ public sealed unsafe class LuminUnionMap<TValue> : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryGetValue(in nint key, out TValue value)
     {
-        value = Unsafe.Add(ref Unsafe.AsRef<Entry>(_table1), key & _capacityMask).Value;
+        ref var entry = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table1), key & _capacityMask);
+
+        if (entry.Key != key)
+        {
+            value = default;
+            return false;
+        }
+        
+        value = entry.Value;
         return true;
     }
 
@@ -198,6 +206,196 @@ public sealed unsafe class LuminUnionMap<TValue> : IDisposable
 #else
             Marshal.FreeHGlobal((IntPtr)oldTable);
 #endif
+        }
+    }
+}
+
+[StructLayout(LayoutKind.Sequential)]
+public sealed unsafe class LuminFrozenUnionMap<TValue> : IDisposable
+    where TValue : unmanaged
+{
+    [StructLayout(LayoutKind.Sequential, Pack = 1)]
+    internal struct Entry
+    {
+        public IntPtr Key;
+        public TValue Value;
+    }
+
+    internal Entry* _table;
+    private int _capacity;
+    private nint _capacityMask;
+    private nint _seed;
+    private const int MAX_SEED_SEARCH = 100_000;
+    
+    public int Capacity => _capacity;
+
+    public static LuminFrozenUnionMap<TValue> CreateFrom(LuminUnionMap<TValue> source, int maxSeedSearch = MAX_SEED_SEARCH)
+    {
+        if (source == null || source._count == 0)
+            throw new ArgumentException("Source map cannot be null or empty");
+
+        var frozen = new LuminFrozenUnionMap<TValue>();
+
+        Span<int> multipliers = stackalloc int[]{ 2, 3, 4, 5, 6, 8, 10, 12, 16 };
+        
+        foreach (int multiplier in multipliers)
+        {
+            frozen._capacity = CalculateCapacity(source._count * multiplier);
+            frozen._capacityMask = frozen._capacity - 1;
+        
+            if (frozen.TryFindPerfectSeed(source, maxSeedSearch, out frozen._seed))
+            {
+                frozen.AllocateTable();
+                frozen.PopulateFrom(source);
+                return frozen;
+            }
+        }
+
+        throw new InvalidOperationException($"无法找到完美哈希种子: Keys={source._count}");
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static nint Hash(nint key, nint seed)
+    {
+        key *= seed;
+        return key ^ (key >> 27);
+    }
+
+    private bool TryFindPerfectSeed(LuminUnionMap<TValue> source, int maxSeedSearch, out nint foundSeed)
+    {
+        bool* used = stackalloc bool[_capacity];
+        
+        Random rand = new Random(Environment.TickCount);
+        nint startSeed = rand.Next(1, 1000);
+        
+        for (nint seed = startSeed; seed < startSeed + maxSeedSearch; seed++)
+        {
+            Unsafe.InitBlock(used, 0, (uint)_capacity);
+            bool collision = false;
+        
+            for (int i = 0; i < source._capacity; i++)
+            {
+                ref Entry entry = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(source._table1), i);
+                if (entry.Key == IntPtr.Zero) continue;
+
+                nint idx = Hash(entry.Key, seed) & _capacityMask;
+                if (Unsafe.Add(ref Unsafe.AsRef<bool>(used), idx))
+                {
+                    collision = true;
+                    break;
+                }
+                Unsafe.Add(ref Unsafe.AsRef<bool>(used), idx) = true;
+            }
+        
+            if (!collision)
+            {
+                foundSeed = seed;
+                return true;
+            }
+        }
+    
+        foundSeed = 0;
+        return false;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int CalculateCapacity(int count)
+    {
+        int capacity = 1;
+        while (capacity < count) capacity <<= 1;
+        return capacity;
+    }
+
+    private void AllocateTable()
+    {
+        nuint tableSize = (nuint)(_capacity * sizeof(Entry));
+        
+#if NET5_0_OR_GREATER
+        _table = (Entry*)NativeMemory.AllocZeroed(tableSize);
+#else
+        _table = (Entry*)Marshal.AllocHGlobal((nint)tableSize);
+        Unsafe.InitBlock(_table, 0, (uint)tableSize);
+#endif
+    }
+
+    private void PopulateFrom(LuminUnionMap<TValue> source)
+    {
+        for (int i = 0; i < source._capacity; i++)
+        {
+            ref Entry srcEntry = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(source._table1), i);
+            if (srcEntry.Key == IntPtr.Zero) continue;
+
+            nint idx = Hash(srcEntry.Key, _seed) & _capacityMask;
+            ref Entry destEntry = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table), idx);
+            destEntry.Key = srcEntry.Key;
+            destEntry.Value = srcEntry.Value;
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public ref TValue GetValueRef(in nint key)
+    {
+        nint idx = Hash(key, _seed) & _capacityMask;
+        return ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table), idx).Value;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryGetValue(in nint key, out TValue value)
+    {
+        nint idx = Hash(key, _seed) & _capacityMask;
+        ref Entry entry = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table), idx);
+        
+        if (entry.Key != key)
+        {
+            value = default;
+            return false;
+        }
+        
+        value = entry.Value;
+        return true;
+    }
+    
+    public bool TryRegister(nint key, TValue value)
+    {
+        using var tempMap = new LuminUnionMap<TValue>(_capacity);
+        
+        for (int i = 0; i < _capacity; i++)
+        {
+            ref Entry entry = ref Unsafe.Add(ref Unsafe.AsRef<Entry>(_table), i);
+            if (entry.Key != IntPtr.Zero)
+            {
+                if (!tempMap.TryRegister(entry.Key, entry.Value))
+                    return false;
+            }
+        }
+        
+        if (!tempMap.TryRegister(key, value))
+            return false;
+        
+        var newFrozen = CreateFrom(tempMap);
+        
+        this.Dispose();
+        this._table = newFrozen._table;
+        this._capacity = newFrozen._capacity;
+        this._capacityMask = newFrozen._capacityMask;
+        this._seed = newFrozen._seed;
+        
+        newFrozen._table = null;
+        newFrozen.Dispose();
+        
+        return true;
+    }
+
+    public void Dispose()
+    {
+        if (_table != null)
+        {
+#if NET5_0_OR_GREATER
+            NativeMemory.Free(_table);
+#else
+            Marshal.FreeHGlobal((nint)_table);
+#endif
+            _table = null;
         }
     }
 }

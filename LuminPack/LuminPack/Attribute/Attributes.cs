@@ -150,3 +150,8 @@ public sealed class LuminPackOnDeserializingAttribute : System.Attribute
 public sealed class LuminPackOnDeserializedAttribute : System.Attribute
 {
 }
+
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
+public sealed class MultThreadAttribute : System.Attribute
+{
+}

@@ -753,7 +753,11 @@ namespace LuminPack.Parsers
             
                 var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
-                ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart.ToPointer()), (nint)index);
+#if NET8_0_OR_GREATER
+                ref var dest = ref Unsafe.Add(ref writer._bufferStart, (nint)(uint)index);
+#else
+                ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart), (nint)(uint)index);
+#endif
                 ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference()!);
             
                 Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)srcLength);

@@ -35,7 +35,7 @@ public sealed class StringBuilderParser : LuminPackParser<StringBuilder>
         foreach (var chunk in value.GetChunks())
         {
             int index1 = checked(chunk.Length * 2);
-            ref var p = ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart.ToPointer()), (nint)index1);
+            ref var p = ref Unsafe.Add(ref writer._bufferStart, (nint)(uint)index1);
             ref var src = ref LuminPackMarshal.As<char, byte>(ref MemoryMarshal.GetReference(chunk.Span));
             Unsafe.CopyBlockUnaligned(ref p, ref src, (uint)chunk.Length * 2);
 

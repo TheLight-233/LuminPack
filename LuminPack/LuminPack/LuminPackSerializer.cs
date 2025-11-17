@@ -20,7 +20,7 @@ using static LuminPack.Code.LuminPackMarshal;
 
 namespace LuminPack
 {
-    public static partial class LuminPackSerializer
+    public static class LuminPackSerializer
     {
         [ThreadStatic]
         private static LuminPackWriterOptionalState? _threadStaticWriterOptionalState;
