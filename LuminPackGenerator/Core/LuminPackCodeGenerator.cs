@@ -359,7 +359,7 @@ namespace LuminPack.Code.Core
             sb.AppendLine();
             if (_dataInfo.fields.Count(x => x.IsPrivate || x.isProperty) > 0)
             {
-                sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value);");
+                sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value);");
             }
             sb.AppendLine("            int totalLength = 1;");
             sb.AppendLine();
@@ -2841,15 +2841,16 @@ namespace LuminPack.Code.Core
 
         private static void GenerateParentClass(StringBuilder sb, LuminDataInfo classInfo, List<LuminLocalFieldData> allClassInfos)
         {
+            string localClassName = TypeMetaChecker.BuildLocalMyClassName(classInfo);
             // 确定继承关系
             string inheritance = "";
             if (classInfo.Parent != null)
             {
-                inheritance = $" : Local{classInfo.Parent.classFileName}";
+                inheritance = $" : {TypeMetaChecker.BuildLocalClassName(classInfo.Parent)}";
             }
-            
-            string genericParameters = classInfo.GenericParameters.Count is 0 ? string.Empty : $"<{string.Join(", ", classInfo.GenericParameters)}>";
 
+            string genericParameters = classInfo.GenericParameters.Count is 0 ? string.Empty : $"<{string.Join(", ", classInfo.GenericParameters)}>";
+            
             switch (classInfo.structLayout)
             {
                 case StructLayout.Explicit: 
@@ -2867,8 +2868,8 @@ namespace LuminPack.Code.Core
     
             sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
             sb.AppendLine(classInfo.isValueType 
-                ? $"        private struct Local{classInfo.className}{genericParameters}{inheritance}" 
-                : $"        private class Local{classInfo.className}{genericParameters}{inheritance}");
+                ? $"        private struct {localClassName}{genericParameters}{inheritance}" 
+                : $"        private class {localClassName}{genericParameters}{inheritance}");
             foreach (var constraint in classInfo.GenericConstraints)
             {
                 if (constraint.IsUnmanaged is false && 
@@ -2922,12 +2923,15 @@ namespace LuminPack.Code.Core
         
         private static void GenerateSingleLocalClass(StringBuilder sb, LuminDataInfo classInfo)
         {
+            string localClassName = TypeMetaChecker.BuildLocalMyClassName(classInfo);
             string inheritance = "";
             if (classInfo.Parent != null)
             {
-                inheritance = $" : Local{classInfo.Parent.classFileName}";
+                inheritance = $" : {TypeMetaChecker.BuildLocalClassName(classInfo.Parent)}";
             }
-
+            
+            string genericParameters = classInfo.GenericParameters.Count is 0 ? string.Empty : $"<{string.Join(", ", classInfo.GenericParameters)}>";
+            
             switch (classInfo.structLayout)
             {
                 case StructLayout.Explicit: 
@@ -2945,8 +2949,8 @@ namespace LuminPack.Code.Core
     
             sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
             sb.AppendLine(classInfo.isValueType 
-                ? $"        private struct Local{classInfo.classFileName}{inheritance}" 
-                : $"        private class Local{classInfo.classFileName}{inheritance}");
+                ? $"        private struct {localClassName}{genericParameters}{inheritance}" 
+                : $"        private class {localClassName}{genericParameters}{inheritance}");
             sb.AppendLine("        {");
             
             foreach (var field in GetMyLocalFiled(classInfo))
@@ -2987,7 +2991,7 @@ namespace LuminPack.Code.Core
 
         public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb, bool extension = false, bool polymorphism = false)
         {
-            string classFullName = data.className + "Parser";
+            string classFullName = TypeMetaChecker.BuildParserClassName(data);
             string classGlobalName = data.classFullName;
             string parserName = data.className + "Parser";
             if (data.isGeneric)
@@ -3027,8 +3031,8 @@ namespace LuminPack.Code.Core
             if (_dataInfo.fields.Count(x => x.IsPrivate || x.isProperty) > 0)
             {
                 sb.AppendLine(extension 
-                    ? $"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref Unsafe.AsRef(in value));"
-                    : $"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value);");
+                    ? $"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref Unsafe.AsRef(in value));"
+                    : $"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value);");
             }
             sb.AppendLine("            ref int offset = ref writer.GetCurrentSpanOffset();");
             
@@ -3140,7 +3144,7 @@ namespace LuminPack.Code.Core
 
         public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb, bool polymorphism = false)
         {
-            string classFullName = data.className + "Parser";
+            string classFullName = TypeMetaChecker.BuildParserClassName(data);
             string classGlobalName = data.classFullName;
             string parserName = data.className + "Parser";
             if (data.isGeneric)
@@ -3349,11 +3353,11 @@ namespace LuminPack.Code.Core
                 sb.AppendLine($"            // 设置private字段");
                 if (data.isValueType)
                 {
-                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value);");
+                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value);");
                 }
                 else
                 {
-                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value!);");
+                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value!);");
                 }
         
                 foreach (var field in privateFields)

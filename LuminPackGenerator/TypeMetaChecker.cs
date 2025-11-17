@@ -622,6 +622,39 @@ public static class TypeMetaChecker
         return true;
     }
     
+    public static string BuildLocalClassName(LuminDataInfo data)
+    {
+        string classFullName = data.classFullName;
+
+        if (classFullName.StartsWith("global::"))
+        {
+            classFullName = classFullName.Substring(8);
+        }
+            
+        classFullName = classFullName.Replace(".", "_").Replace('+', '_');
+    
+        return "Local" + classFullName;
+    }
+    
+    public static string BuildLocalMyClassName(LuminDataInfo data)
+    {
+        string classFullName = data.classFullName;
+
+        if (classFullName.StartsWith("global::"))
+        {
+            classFullName = classFullName.Substring(8);
+        }
+            
+        classFullName = classFullName.Replace(".", "_").Replace('+', '_');
+    
+        if (classFullName.Contains('<'))
+        {
+            classFullName = classFullName.Split('<').FirstOrDefault();
+        }
+        
+        return "Local" + classFullName;
+    }
+    
     public static string BuildParserClassName(LuminDataInfo data)
     {
         string classFullName = data.classFullName;

@@ -94,7 +94,7 @@ public static class LuminPackCircleReferenceCodeGenerator
         sb.AppendLine("            int size = 1;");
         sb.AppendLine("            size += LuminPackEvaluator.CalculateVarInt(id);");
         sb.AppendLine();
-        sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value);");
+        sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value);");
         foreach (var field in data.fields)
         {
             if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
@@ -124,9 +124,7 @@ public static class LuminPackCircleReferenceCodeGenerator
     public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb)
     {
         string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = data.classNameSpace is not "<global namespace>"
-            ? data.classNameSpace.Replace(".", "_") + "_" + data.className + "Parser"
-            : data.className + "Parser";
+        string classFullName = TypeMetaChecker.BuildParserClassName(data);
         string classGlobalName = data.classFullName;
         bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
         uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
@@ -167,7 +165,7 @@ public static class LuminPackCircleReferenceCodeGenerator
         
         sb.AppendLine();
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
-        sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref Unsafe.AsRef(in value));");
+        sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref Unsafe.AsRef(in value));");
         sb.AppendLine("            var (existsReference, id) = writer.OptionState.GetOrAddReference(value);");
         sb.AppendLine("            if (existsReference)");
         sb.AppendLine("            {");
@@ -309,9 +307,7 @@ public static class LuminPackCircleReferenceCodeGenerator
     public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb)
     {
         string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = data.classNameSpace is not "<global namespace>"
-            ? data.classNameSpace.Replace(".", "_") + "_" + data.className + "Parser"
-            : data.className + "Parser";
+        string classFullName = TypeMetaChecker.BuildParserClassName(data);
         string classGlobalName = data.classFullName;
         bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
         uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
@@ -465,11 +461,11 @@ public static class LuminPackCircleReferenceCodeGenerator
             sb.AppendLine("            // 设置private字段");
             if (data.isValueType)
             {
-                sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value);");
+                sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value);");
             }
             else
             {
-                sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, Local{data.classFileName}>(ref value!);");
+                sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value!);");
             }
     
             foreach (var field in privateFields)

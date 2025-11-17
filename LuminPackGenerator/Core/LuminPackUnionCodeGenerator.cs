@@ -14,7 +14,8 @@ public static class LuminPackUnionCodeGenerator
         string classFullName = TypeMetaChecker.BuildParserClassName(data);
         string classGlobalName = data.classFullName;
         string parserName = classFullName;
-
+        int unionMemberCount = data.UnionMembers.Count;
+        
         if (data.isGeneric)
         {
             classFullName += $"<{data.GenericParameters.FirstOrDefault()}";
@@ -53,7 +54,9 @@ public static class LuminPackUnionCodeGenerator
         // 使用 LuminUnionMap 作为注册表
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         //sb.AppendLine($"        internal static readonly global::LuminPack.Utility.LuminF14Map<nint, HashEntry> _unionMap = new global::LuminPack.Utility.LuminF14Map<nint, HashEntry>({data.UnionMembers.Count});");
-        sb.AppendLine($"        internal static readonly global::LuminPack.Utility.LuminUnionMap<HashEntry> _unionMap = new global::LuminPack.Utility.LuminUnionMap<HashEntry>({data.UnionMembers.Count});");
+        sb.AppendLine(unionMemberCount <= 30 
+            ? $"        internal static readonly global::LuminPack.Utility.LuminUnionMap<HashEntry> _unionMap = new global::LuminPack.Utility.LuminUnionMap<HashEntry>({data.UnionMembers.Count});"
+            : "        internal static readonly global::LuminPack.Utility.LuminFrozenUnionMap<HashEntry> _unionMap = new global::LuminPack.Utility.LuminFrozenUnionMap<HashEntry>();");
         sb.AppendLine();
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine($"        internal static HashEntry[] _directTable {{ get; private set; }} = new HashEntry[{directTableSize}];");
@@ -179,6 +182,11 @@ public static class LuminPackUnionCodeGenerator
 
     static void GenerateStaticSerializeMethods(LuminDataInfo data, StringBuilder sb, string classGlobalName)
     {
+        if (!data.UnionMembers.Any())
+        {
+            return;
+        }
+        
         var maxTag = data.UnionMembers.Max(x => x.Id);
         foreach (var member in data.UnionMembers)
         {
@@ -200,6 +208,11 @@ public static class LuminPackUnionCodeGenerator
     
     static void GenerateStaticDeserializeMethods(LuminDataInfo data, StringBuilder sb, string classGlobalName)
     {
+        if (!data.UnionMembers.Any())
+        {
+            return;
+        }
+        
         foreach (var member in data.UnionMembers)
         {
             string memberType = GetMemberType(data, member);
@@ -273,11 +286,21 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine("            }");
         }
         
-        sb.AppendLine();
+        // sb.AppendLine();
+        // sb.AppendLine("            unsafe");
+        // sb.AppendLine("            {");
+        // sb.AppendLine("                var valueMT = LuminPackMarshal.GetMethodTable(value);");
+        // sb.AppendLine($"                global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._unionMap.GetValueRef(valueMT).WriteDelegate(ref writer, ref Unsafe.AsRef(in value!));");
+        // sb.AppendLine("            }");
+        // sb.AppendLine();
         sb.AppendLine("            unsafe");
         sb.AppendLine("            {");
         sb.AppendLine("                var valueMT = LuminPackMarshal.GetMethodTable(value);");
-        sb.AppendLine($"                global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._unionMap.GetValueRef(valueMT).WriteDelegate(ref writer, ref Unsafe.AsRef(in value!));");
+        sb.AppendLine($"                if (!global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._unionMap.TryGetValue(valueMT, out var entry))");
+        sb.AppendLine("                {");
+        sb.AppendLine($"                    LuminPackExceptionHelper.ThrowNotFoundInUnionType(value.GetType(), typeof({classGlobalName}));");
+        sb.AppendLine("                }");
+        sb.AppendLine("                entry.WriteDelegate(ref writer, ref Unsafe.AsRef(in value!));");
         sb.AppendLine("            }");
         
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerialized))

@@ -23,6 +23,7 @@ internal static class LuminPackDiscovery
         var derivedList = GetAllTypesInCompilation(compilation)
             .Where(t => !t.IsAbstract && !t.IsStatic)
             .Where(t => t.GetAttributes().Any(a => a.AttributeClass?.Name == LuminPackableAttributeName))
+            .Where(t => !dataInfo.UnionMembers.Any(m => SymbolEqualityComparer.Default.Equals(m.Type, t)))
             .Where(t => IsValidDerivedType(t, baseDef, baseName, baseArity))
             .OrderBy(d => d.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
             .ToList();
