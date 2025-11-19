@@ -1,8 +1,191 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
-namespace LuminPack.Utility.VIewModel;
+namespace LuminPack.Utility.ViewModel;
 
 #pragma warning disable CS0168 
+
+internal static class UnmanagedViewModel
+{
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1> Create<T1>(T1 value1) where T1 : unmanaged
+        => new UnmanagedViewModel<T1>(value1);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2> Create<T1, T2>(T1 value1, T2 value2) 
+        where T1 : unmanaged 
+        where T2 : unmanaged
+        => new UnmanagedViewModel<T1, T2>(value1, value2);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2, T3> Create<T1, T2, T3>(T1 value1, T2 value2, T3 value3) 
+        where T1 : unmanaged 
+        where T2 : unmanaged 
+        where T3 : unmanaged
+        => new UnmanagedViewModel<T1, T2, T3>(value1, value2, value3);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2, T3, T4> Create<T1, T2, T3, T4>(T1 value1, T2 value2, T3 value3, T4 value4) 
+        where T1 : unmanaged 
+        where T2 : unmanaged 
+        where T3 : unmanaged
+        where T4 : unmanaged
+        => new UnmanagedViewModel<T1, T2, T3, T4>(value1, value2, value3, value4);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2, T3, T4, T5> Create<T1, T2, T3, T4, T5>(T1 value1, T2 value2, T3 value3, T4 value4, T5 value5) 
+        where T1 : unmanaged 
+        where T2 : unmanaged 
+        where T3 : unmanaged
+        where T4 : unmanaged
+        where T5 : unmanaged
+        => new UnmanagedViewModel<T1, T2, T3, T4, T5>(value1, value2, value3, value4, value5);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6> Create<T1, T2, T3, T4, T5, T6>(T1 value1, T2 value2, T3 value3, T4 value4, T5 value5, T6 value6) 
+        where T1 : unmanaged 
+        where T2 : unmanaged 
+        where T3 : unmanaged
+        where T4 : unmanaged
+        where T5 : unmanaged
+        where T6 : unmanaged
+        => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6>(value1, value2, value3, value4, value5, value6);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7> Create<T1, T2, T3, T4, T5, T6, T7>(T1 value1, T2 value2, T3 value3, T4 value4, T5 value5, T6 value6, T7 value7) 
+        where T1 : unmanaged 
+        where T2 : unmanaged 
+        where T3 : unmanaged
+        where T4 : unmanaged
+        where T5 : unmanaged
+        where T6 : unmanaged
+        where T7 : unmanaged
+        => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>(value1, value2, value3, value4, value5, value6, value7);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8> Create<T1, T2, T3, T4, T5, T6, T7, T8>(T1 value1, T2 value2, T3 value3, T4 value4, T5 value5, T6 value6, T7 value7, T8 value8) 
+        where T1 : unmanaged 
+        where T2 : unmanaged 
+        where T3 : unmanaged
+        where T4 : unmanaged
+        where T5 : unmanaged
+        where T6 : unmanaged
+        where T7 : unmanaged
+        where T8 : unmanaged
+        => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>(value1, value2, value3, value4, value5, value6, value7, value8);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9>(T1 value1, T2 value2, T3 value3, T4 value4, T5 value5, T6 value6, T7 value7, T8 value8, T9 value9) 
+        where T1 : unmanaged 
+        where T2 : unmanaged 
+        where T3 : unmanaged
+        where T4 : unmanaged
+        where T5 : unmanaged
+        where T6 : unmanaged
+        where T7 : unmanaged
+        where T8 : unmanaged
+        where T9 : unmanaged
+        => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>(value1, value2, value3, value4, value5, value6, value7, value8, value9);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(T1 value1, T2 value2, T3 value3, T4 value4, T5 value5, T6 value6, T7 value7, T8 value8, T9 value9, T10 value10) 
+        where T1 : unmanaged 
+        where T2 : unmanaged 
+        where T3 : unmanaged
+        where T4 : unmanaged
+        where T5 : unmanaged
+        where T6 : unmanaged
+        where T7 : unmanaged
+        where T8 : unmanaged
+        where T9 : unmanaged
+        where T10 : unmanaged
+        => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(T1 value1, T2 value2, T3 value3, T4 value4, T5 value5, T6 value6, T7 value7, T8 value8, T9 value9, T10 value10, T11 value11) 
+        where T1 : unmanaged 
+        where T2 : unmanaged 
+        where T3 : unmanaged
+        where T4 : unmanaged
+        where T5 : unmanaged
+        where T6 : unmanaged
+        where T7 : unmanaged
+        where T8 : unmanaged
+        where T9 : unmanaged
+        where T10 : unmanaged
+        where T11 : unmanaged
+        => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(T1 value1, T2 value2, T3 value3, T4 value4, T5 value5, T6 value6, T7 value7, T8 value8, T9 value9, T10 value10, T11 value11, T12 value12) 
+        where T1 : unmanaged 
+        where T2 : unmanaged 
+        where T3 : unmanaged
+        where T4 : unmanaged
+        where T5 : unmanaged
+        where T6 : unmanaged
+        where T7 : unmanaged
+        where T8 : unmanaged
+        where T9 : unmanaged
+        where T10 : unmanaged
+        where T11 : unmanaged
+        where T12 : unmanaged
+        => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(T1 value1, T2 value2, T3 value3, T4 value4, T5 value5, T6 value6, T7 value7, T8 value8, T9 value9, T10 value10, T11 value11, T12 value12, T13 value13) 
+        where T1 : unmanaged 
+        where T2 : unmanaged 
+        where T3 : unmanaged
+        where T4 : unmanaged
+        where T5 : unmanaged
+        where T6 : unmanaged
+        where T7 : unmanaged
+        where T8 : unmanaged
+        where T9 : unmanaged
+        where T10 : unmanaged
+        where T11 : unmanaged
+        where T12 : unmanaged
+        where T13 : unmanaged
+        => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(T1 value1, T2 value2, T3 value3, T4 value4, T5 value5, T6 value6, T7 value7, T8 value8, T9 value9, T10 value10, T11 value11, T12 value12, T13 value13, T14 value14) 
+        where T1 : unmanaged 
+        where T2 : unmanaged 
+        where T3 : unmanaged
+        where T4 : unmanaged
+        where T5 : unmanaged
+        where T6 : unmanaged
+        where T7 : unmanaged
+        where T8 : unmanaged
+        where T9 : unmanaged
+        where T10 : unmanaged
+        where T11 : unmanaged
+        where T12 : unmanaged
+        where T13 : unmanaged
+        where T14 : unmanaged
+        => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14);
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(T1 value1, T2 value2, T3 value3, T4 value4, T5 value5, T6 value6, T7 value7, T8 value8, T9 value9, T10 value10, T11 value11, T12 value12, T13 value13, T14 value14, T15 value15) 
+        where T1 : unmanaged 
+        where T2 : unmanaged 
+        where T3 : unmanaged
+        where T4 : unmanaged
+        where T5 : unmanaged
+        where T6 : unmanaged
+        where T7 : unmanaged
+        where T8 : unmanaged
+        where T9 : unmanaged
+        where T10 : unmanaged
+        where T11 : unmanaged
+        where T12 : unmanaged
+        where T13 : unmanaged
+        where T14 : unmanaged
+        where T15 : unmanaged
+        => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15);
+}
 
 [StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1>
