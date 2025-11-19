@@ -1091,6 +1091,7 @@ public static class LuminPackMarshal
         public IEqualityComparer<TKey> _comparer;
         public Dictionary<TKey, TValue>.KeyCollection _keys;
         public Dictionary<TKey, TValue>.ValueCollection _values;
+        public object _syncRoot;
         
         public struct Entry
         {
@@ -1111,7 +1112,7 @@ public static class LuminPackMarshal
         public int _freeList;
         public int _freeCount;
         public IEqualityComparer<T> _comparer;
-        
+        public object _syncRoot;
         
         public struct Entry
         {
