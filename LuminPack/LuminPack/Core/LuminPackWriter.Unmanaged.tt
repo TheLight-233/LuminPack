@@ -1,0 +1,352 @@
+<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".cs" #>
+<#
+    int maxTypeParams = 15;
+#>
+// Auto-generated code
+
+using System;
+using System.Runtime.CompilerServices;
+using LuminPack.Utility.ViewModel;
+
+namespace LuminPack.Core
+{
+    public unsafe ref partial struct LuminPackWriter
+    {
+
+<# for (int i = 1; i <= 2; i++) { 
+    var typeParams = string.Join(", ", Enumerable.Range(1, i).Select(n => $"T{n}"));
+    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, i).Select(n => $"        /// <typeparam name=\"T{n}\">值类型 {n}</typeparam>"));
+    var typeConstraints = string.Join(" ", Enumerable.Range(1, i).Select(n => $"where T{n} : unmanaged"));
+    var sizeCalculation = string.Join(" + ", Enumerable.Range(1, i).Select(n => $"Unsafe.SizeOf<T{n}>()"));
+    var writeStatements64 = new List<string>();
+    var writeStatements32 = new List<string>();
+    
+    for (int j = 1; j <= i; j++)
+    {
+        if (j == 1)
+        {
+            writeStatements64.Add($"Unsafe.WriteUnaligned(ref spanRef, value{j});");
+        }
+        else
+        {
+            var offset = string.Join(" + ", Enumerable.Range(1, j-1).Select(n => $"Unsafe.SizeOf<T{n}>()"));
+            writeStatements64.Add($"Unsafe.WriteUnaligned(ref Unsafe.Add(ref spanRef, {offset}), value{j});");
+        }
+    }
+    
+    // 32位版本使用UnmanagedViewModel
+    writeStatements32.Add($"var view = UnmanagedViewModel.Create({string.Join(", ", Enumerable.Range(1, i).Select(n => $"value{n}"))});");
+    writeStatements32.Add($"Unsafe.CopyBlockUnaligned(ref spanRef, ref Unsafe.As<UnmanagedViewModel<{typeParams}>, byte>(ref view), (uint)Unsafe.SizeOf<UnmanagedViewModel<{typeParams}>>());");
+#>
+        /// <summary>
+        /// 序列化值类型
+        /// </summary>
+<# for (int j = 1; j <= i; j++) { #>
+        /// <param name="value<#= j #>">值 <#= j #></param>
+<# } #>
+<#= typeParamDocs #>
+        /// <returns>写入的字节数</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int WriteUnmanaged<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>) 
+            <#= typeConstraints #>
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)_currentIndex);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var statement in writeStatements64) { #>
+                <#= statement #>
+<# } #>
+                return <#= sizeCalculation #>;
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var statement in writeStatements32) { #>
+                <#= statement #>
+<# } #>
+                return Unsafe.SizeOf<UnmanagedViewModel<<#= typeParams #>>>();
+            }
+        }
+        
+        /// <summary>
+        /// 序列化已知值类型
+        /// </summary>
+<# for (int j = 1; j <= i; j++) { #>
+        /// <param name="value<#= j #>">值 <#= j #></param>
+<# } #>
+<#= typeParamDocs #>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedWithoutSizeReturn<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>) 
+            <#= typeConstraints #>
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)_currentIndex);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var statement in writeStatements64) { #>
+                <#= statement #>
+<# } #>
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var statement in writeStatements32) { #>
+                <#= statement #>
+<# } #>
+            }
+        }
+
+        /// <summary>
+        /// 序列化值类型（无类型约束检查）
+        /// </summary>
+<# for (int j = 1; j <= i; j++) { #>
+        /// <param name="value<#= j #>">值 <#= j #></param>
+<# } #>
+<#= typeParamDocs #>
+        /// <returns>写入的字节数</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int DangerousWriteUnmanaged<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>)
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)_currentIndex);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var statement in writeStatements64) { #>
+                <#= statement #>
+<# } #>
+                return <#= sizeCalculation #>;
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var statement in writeStatements32) { #>
+                <#= statement #>
+<# } #>
+                return Unsafe.SizeOf<UnmanagedViewModel<<#= typeParams #>>>();
+            }
+        }
+        
+        /// <summary>
+        /// 序列化已知值类型（无类型约束检查）
+        /// </summary>
+<# for (int j = 1; j <= i; j++) { #>
+        /// <param name="value<#= j #>">值 <#= j #></param>
+<# } #>
+<#= typeParamDocs #>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedWithoutSizeReturn<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>)
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)_currentIndex);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var statement in writeStatements64) { #>
+                <#= statement #>
+<# } #>
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var statement in writeStatements32) { #>
+                <#= statement #>
+<# } #>
+            }
+        }
+
+<# } #>
+       
+<# for (int i = 1; i <= maxTypeParams; i++) { 
+    var typeParams = string.Join(", ", Enumerable.Range(1, i).Select(n => $"T{n}"));
+    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, i).Select(n => $"        /// <typeparam name=\"T{n}\">值类型 {n}</typeparam>"));
+    var typeConstraints = string.Join(" ", Enumerable.Range(1, i).Select(n => $"where T{n} : unmanaged"));
+    var sizeCalculation = string.Join(" + ", Enumerable.Range(1, i).Select(n => $"Unsafe.SizeOf<T{n}>()"));
+    var writeStatements64 = new List<string>();
+    var writeStatements32 = new List<string>();
+    
+    for (int j = 1; j <= i; j++)
+    {
+        if (j == 1)
+        {
+            writeStatements64.Add($"Unsafe.WriteUnaligned(ref spanRef, value{j});");
+        }
+        else
+        {
+            var offset = string.Join(" + ", Enumerable.Range(1, j-1).Select(n => $"Unsafe.SizeOf<T{n}>()"));
+            writeStatements64.Add($"Unsafe.WriteUnaligned(ref Unsafe.Add(ref spanRef, {offset}), value{j});");
+        }
+    }
+    
+    // 32位版本使用UnmanagedViewModel
+    writeStatements32.Add($"var view = UnmanagedViewModel.Create({string.Join(", ", Enumerable.Range(1, i).Select(n => $"value{n}"))});");
+    writeStatements32.Add($"Unsafe.CopyBlockUnaligned(ref spanRef, ref Unsafe.As<UnmanagedViewModel<{typeParams}>, byte>(ref view), (uint)Unsafe.SizeOf<UnmanagedViewModel<{typeParams}>>());");
+#>
+        /// <summary>
+        /// 序列化值类型
+        /// </summary>
+        /// <param name="index">写入起始索引</param>
+<# for (int j = 1; j <= i; j++) { #>
+        /// <param name="value<#= j #>">值 <#= j #></param>
+<# } #>
+<#= typeParamDocs #>
+        /// <returns>写入的字节数</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int WriteUnmanaged<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>) 
+            <#= typeConstraints #>
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var statement in writeStatements64) { #>
+                <#= statement #>
+<# } #>
+                return <#= sizeCalculation #>;
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var statement in writeStatements32) { #>
+                <#= statement #>
+<# } #>
+                return Unsafe.SizeOf<UnmanagedViewModel<<#= typeParams #>>>();
+            }
+        }
+        
+        /// <summary>
+        /// 序列化已知值类型
+        /// </summary>
+        /// <param name="index">写入起始索引</param>
+<# for (int j = 1; j <= i; j++) { #>
+        /// <param name="value<#= j #>">值 <#= j #></param>
+<# } #>
+<#= typeParamDocs #>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteUnmanagedWithoutSizeReturn<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>) 
+            <#= typeConstraints #>
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var statement in writeStatements64) { #>
+                <#= statement #>
+<# } #>
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var statement in writeStatements32) { #>
+                <#= statement #>
+<# } #>
+            }
+        }
+
+        /// <summary>
+        /// 序列化值类型（无类型约束检查）
+        /// </summary>
+        /// <param name="index">写入起始索引</param>
+<# for (int j = 1; j <= i; j++) { #>
+        /// <param name="value<#= j #>">值 <#= j #></param>
+<# } #>
+<#= typeParamDocs #>
+        /// <returns>写入的字节数</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int DangerousWriteUnmanaged<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>)
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var statement in writeStatements64) { #>
+                <#= statement #>
+<# } #>
+                return <#= sizeCalculation #>;
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var statement in writeStatements32) { #>
+                <#= statement #>
+<# } #>
+                return Unsafe.SizeOf<UnmanagedViewModel<<#= typeParams #>>>();
+            }
+        }
+        
+        /// <summary>
+        /// 序列化已知值类型（无类型约束检查）
+        /// </summary>
+        /// <param name="index">写入起始索引</param>
+<# for (int j = 1; j <= i; j++) { #>
+        /// <param name="value<#= j #>">值 <#= j #></param>
+<# } #>
+<#= typeParamDocs #>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousWriteUnmanagedWithoutSizeReturn<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>)
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var statement in writeStatements64) { #>
+                <#= statement #>
+<# } #>
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var statement in writeStatements32) { #>
+                <#= statement #>
+<# } #>
+            }
+        }
+
+<# } #>
+     
+    }
+}
