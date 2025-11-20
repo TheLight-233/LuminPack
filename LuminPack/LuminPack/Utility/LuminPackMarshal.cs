@@ -441,24 +441,35 @@ public static class LuminPackMarshal
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static ref T GetNotNullArrayReference<T>(T[] array)
+    public static unsafe ref T GetNotNullArrayReference<T>(T[] array)
     {
 #if NET8_0_OR_GREATER
-        return ref MemoryMarshal.GetArrayDataReference(array);
+        return ref Unsafe.As<byte, T>(ref Unsafe.AddByteOffset(ref Unsafe.As<RawData>(array).Data, (nuint)(Unsafe.AsRef<MethodTable>(GetMethodTable((object) array).ToPointer()).BaseSize -  2 * sizeof (IntPtr))));
+#else
+        return ref DangerousGetArrayDataReference(array!);
 #endif
-        return ref array.AsSpan().GetPinnableReference();
+    }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static unsafe ref byte GetNotNullArrayReference<T>(Array array)
+    {
+#if NET8_0_OR_GREATER
+        return ref Unsafe.AddByteOffset(ref Unsafe.As<RawData>(array).Data, (nuint)(Unsafe.AsRef<MethodTable>(GetMethodTable((object) array).ToPointer()).BaseSize -  2 * sizeof (IntPtr)));
+#else
+        return ref DangerousGetArrayDataReference<T>(array!);
+#endif
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static unsafe ref T GetArrayReference<T>(T[]? array)
     {
-#if NET8_0_OR_GREATER
         if (array is null)
             return ref Unsafe.NullRef<T>();
         
+#if NET8_0_OR_GREATER
         return ref Unsafe.As<byte, T>(ref Unsafe.AddByteOffset(ref Unsafe.As<RawData>(array).Data, (nuint)(Unsafe.AsRef<MethodTable>(GetMethodTable((object) array).ToPointer()).BaseSize -  2 * sizeof (IntPtr))));
 #else
-        return ref array.AsSpan().GetPinnableReference();
+        return ref DangerousGetArrayDataReference(array!);
 #endif
 
     }
@@ -466,21 +477,21 @@ public static class LuminPackMarshal
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static unsafe ref byte GetArrayReference<T>(Array? array)
     {
-#if NET8_0_OR_GREATER
         if (array is null)
             return ref Unsafe.NullRef<byte>();
         
+#if NET8_0_OR_GREATER
         return ref Unsafe.AddByteOffset(ref Unsafe.As<RawData>(array).Data, (nuint)(Unsafe.AsRef<MethodTable>(GetMethodTable((object) array).ToPointer()).BaseSize -  2 * sizeof (IntPtr)));
 #else
-        return ref DangerousGetArrayDataReference<T>(array);
+        return ref DangerousGetArrayDataReference<T>(array!);
 #endif
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe ref byte GetArrayDataReference<T>(T[] array)
+    public static ref byte GetArrayDataReference<T>(T[] array)
     {
         ref var elementRef = ref GetArrayReference(array);
-        return ref Unsafe.AsRef<byte>(Unsafe.AsPointer(ref elementRef));
+        return ref Unsafe.As<T, byte>(ref elementRef);
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -491,9 +502,9 @@ public static class LuminPackMarshal
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe ref byte GetReference<T>(ref T value)
+    public static ref byte GetReference<T>(ref T value)
     {
-        return ref Unsafe.AsRef<byte>(Unsafe.AsPointer(ref value));
+        return ref Unsafe.As<T, byte>(ref value);
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
