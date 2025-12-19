@@ -11,12 +11,12 @@ public sealed partial class TypeParser : LuminPackParser<Type>
 #if NET7_0_OR_GREATER
 
     [GeneratedRegex(@", Version=\d+.\d+.\d+.\d+, Culture=[\w-]+, PublicKeyToken=(?:null|[a-f0-9]{16})")]
-    private static partial Regex ShortTypeNameRegex();
+    public static partial Regex ShortTypeNameRegex();
 
 #else
 
     static readonly Regex _shortTypeNameRegex = new Regex(@", Version=\d+.\d+.\d+.\d+, Culture=[\w-]+, PublicKeyToken=(?:null|[a-f0-9]{16})", RegexOptions.Compiled);
-    static Regex ShortTypeNameRegex() => _shortTypeNameRegex;
+    public static Regex ShortTypeNameRegex() => _shortTypeNameRegex;
 
 #endif
     
@@ -25,26 +25,29 @@ public sealed partial class TypeParser : LuminPackParser<Type>
     {
         ref var index = ref writer.GetCurrentSpanOffset();
         
-        var full = value?.AssemblyQualifiedName;
-        
-        if (full is null)
+        if (value == null)
         {
-            writer.WriteNullStringHeader(ref index, out var offset);
+            writer.WriteNullObjectHeader();
+            writer.Advance(1);
+            return;
+        }
+        
+        var full = value.AssemblyQualifiedName;
+        
+        if (string.IsNullOrEmpty(full))
+        {
+            writer.WriteNullStringHeader(ref index, out var offset2);
                 
-            writer.Advance(offset);
+            writer.Advance(offset2);
             
             return;
         }
-
+        
         var shortName = ShortTypeNameRegex().Replace(full, "");
 
-        var length = writer.GetStringLength(shortName);
+        int offset = writer.WriteString(shortName) + writer.StringRecordLength();
         
-        writer.WriteString(shortName, length);
-        
-        var symbol = writer.Option.StringRecording is LuminPackStringRecording.Token ? 1 : 4;
-        
-        writer.Advance(length + symbol);
+        writer.Advance(offset);
     }
 
     [Preserve]
@@ -52,24 +55,28 @@ public sealed partial class TypeParser : LuminPackParser<Type>
     {
         ref var index = ref reader.GetCurrentSpanOffset();
         
+        if (reader.PeekIsNullObject(ref index))
+        {
+            reader.Advance(1);
+            value = null;
+            return;
+        }
+        
         reader.ReadStringLength(ref index, out var length);
         
-        if (reader.Option.StringRecording is LuminPackStringRecording.Length)
-            reader.Advance(4);
+        var typeName  = reader.ReadString(length);
         
-        var typeName = reader.ReadString(index, length) ?? string.Empty;
+        var symbol = reader.StringRecordLength();
         
-        if (typeName == string.Empty)
+        reader.Advance(length + symbol);
+        
+        if (string.IsNullOrEmpty(typeName))
         {
             value = null;
             return;
         }
 
         value = Type.GetType(typeName, throwOnError: true);
-        
-        var symbol = reader.Option.StringRecording is LuminPackStringRecording.Token ? 1 : 0;
-        
-        reader.Advance(length + symbol);
         
     }
 
@@ -79,5 +86,39 @@ public sealed partial class TypeParser : LuminPackParser<Type>
         var full = value?.AssemblyQualifiedName;
 
         evaluator.GetStringLength(ref full);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Type? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        var full = value.AssemblyQualifiedName;
+        
+        if (full is null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        var shortName = ShortTypeNameRegex().Replace(full, "");
+        writer.WriteString(shortName);
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Type? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        var typeName = reader.ReadString();
+        value = Type.GetType(typeName, throwOnError: true);
     }
 }

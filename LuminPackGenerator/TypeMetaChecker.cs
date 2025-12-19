@@ -19,6 +19,7 @@ public static class TypeMetaChecker
     private const string LUMIN_PACK_FIX_LENGTH = "LuminPackFixedLengthAttribute";
     private const string LUMIN_PACK_OBJECT = "LuminPackableObjectAttribute";
     private const string LUMIN_PACK_UNION = "LuminPackUnionAttribute";
+    private const string LUMIN_PACK_WIDE_TAG = "LuminPackWideTagAttribute";
     private const string LUMIN_PACK_ONSERIALIZING = "LuminPackOnSerializingAttribute";
     private const string LUMIN_PACK_ONSERIALIZED = "LuminPackOnSerializedAttribute";
     private const string LUMIN_PACK_ONDESERIALIZING = "LuminPackOnDeserializingAttribute";
@@ -370,6 +371,14 @@ public static class TypeMetaChecker
         
         return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_UNION);
     }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TryCheckWideTagAttribute(INamedTypeSymbol symbol)
+    {
+        var attributeData = symbol.GetAttributes();
+        
+        return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_WIDE_TAG);
+    }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void FindAndSetFixedLengthAttribute(ref LuminDataField data, IPropertySymbol property)
@@ -691,5 +700,83 @@ public static class TypeMetaChecker
         }
     
         return classFullName + "Parser";
+    }
+    
+    /// <summary>
+    /// 分析类中标记了 LuminPackPoolRentAttribute 的方法
+    /// </summary>
+    public static IMethodSymbol AnalyzeRentPoolMethod(INamedTypeSymbol typeSymbol, Location location)
+    {
+        var rentMethods = typeSymbol.GetMembers()
+            .OfType<IMethodSymbol>()
+            .Where(method => 
+                method.GetAttributes().Any(attr => 
+                    attr.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackPoolRentAttribute")
+            )
+            .ToList();
+
+        if (rentMethods.Count == 0)
+            return null;
+
+        if (rentMethods.Count > 1)
+        {
+            TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                DiagnosticDescriptors.MultipleRentPoolMethods,
+                location,
+                typeSymbol.Name
+            ));
+            return null;
+        }
+
+        var rentMethod = rentMethods[0];
+
+        // 检查方法必须是静态的
+        if (!rentMethod.IsStatic)
+        {
+            TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                DiagnosticDescriptors.RentPoolMethodIsStatic,
+                location,
+                rentMethod.Name, typeSymbol.Name
+            ));
+            return null;
+        }
+
+        // 检查方法必须无参数
+        if (rentMethod.Parameters.Length != 0)
+        {
+            TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                DiagnosticDescriptors.RentPoolMethodHasParameters,
+                location,
+                rentMethod.Name, typeSymbol.Name
+            ));
+            return null;
+        }
+
+        // 检查返回类型必须与当前类型相同
+        if (!SymbolEqualityComparer.Default.Equals(rentMethod.ReturnType, typeSymbol))
+        {
+            TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                DiagnosticDescriptors.RentPoolMethodReturnTypeMismatch,
+                location,
+                rentMethod.Name, typeSymbol.Name
+            ));
+            return null;
+        }
+
+        return rentMethod;
+    }
+    
+    /// <summary>
+    /// 检测当前是否为 Unity 项目
+    /// </summary>
+    public static bool IsUnityProject(Compilation compilation)
+    {
+        // 检查 UnityEngine.Application 类型是否存在
+        var unityApplicationType = compilation.GetTypeByMetadataName("UnityEngine.Application");
+        
+        // 检查 UnityEditor 命名空间（只在编辑器模式下存在）
+        var unityEditorType = compilation.GetTypeByMetadataName("UnityEditor.Editor");
+        
+        return unityApplicationType != null || unityEditorType != null;
     }
 }

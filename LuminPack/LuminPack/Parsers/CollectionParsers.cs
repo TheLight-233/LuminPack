@@ -3,10 +3,13 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.ObjectModel;
 using System.Runtime.CompilerServices;
+using System.Text;
+using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Code;
 using LuminPack.Core;
 using LuminPack.Interface;
+using LuminPack.Parsers;
 
 namespace LuminPack.Parsers
 {
@@ -71,7 +74,6 @@ namespace LuminPack.Parsers
             
             reader.Advance(4);
             reader.ReadSpan(ref index, length, ref span);
-            
         }
 
         #region IList
@@ -232,6 +234,7 @@ namespace LuminPack.Parsers
     public sealed class ListParser<T> : LuminPackParser<List<T?>>
     {
         [Preserve]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override void Serialize(ref LuminPackWriter writer, scoped ref List<T?>? value)
         {
             
@@ -250,6 +253,7 @@ namespace LuminPack.Parsers
         }
 
         [Preserve]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public override void Deserialize(ref LuminPackReader reader, scoped ref List<T?>? value)
         {
             ref var index = ref reader.GetCurrentSpanOffset();
@@ -293,6 +297,67 @@ namespace LuminPack.Parsers
             
             var span = LuminPackMarshal.GetListSpan(value);
             evaluator.CalculateSpan(ref span);
+        }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref List<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            writer.WriteArrayStart();
+
+            if (value.Count == 0)
+            {
+                writer.WriteArrayEnd();
+                return;
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            var span = LuminPackMarshal.GetListSpan(value);
+            foreach (ref var v in span)
+            {
+                parser.SerializeJson(ref writer, ref v);
+            }
+            
+            writer.WriteArrayEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref List<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            if (value is null)
+            {
+                value = new List<T?>();
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                value.Add(item);
+            }
         }
     }
     
@@ -416,7 +481,110 @@ namespace LuminPack.Parsers
                 var v = item.Value;
                 KeyValuePairParser.CalculateOffset(keyFormatter, valueFormatter, ref evaluator, ref k, ref v);
             }
+        }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Dictionary<TKey, TValue?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
             
+            // 数组格式: [[k1,v1], [k2,v2], [k3,v3]]
+            writer.WriteArrayStart();
+
+            if (value.Count > 0)
+            {
+                nuint dictIndex = 0;
+                var dictView = LuminPackMarshal.GetDictionaryView(value);
+                ref var arrayRef = ref LuminPackMarshal.GetArrayReference(dictView._entries); 
+                
+                while (dictIndex < (uint) dictView._count)
+                {
+                    ref LuminPackMarshal.DictionaryView<TKey, TValue?>.Entry local = ref Unsafe.Add(ref arrayRef, dictIndex++);
+                    if (local.Next >= -1)
+                    {
+                        // [key, value] 元素
+                        writer.WriteArrayStart();
+                        
+                        var tempKey = local.Key;
+                        keyParser.SerializeJson(ref writer, ref tempKey);
+                        
+                        var tempValue = local.Value;
+                        valueParser.SerializeJson(ref writer, ref tempValue);
+                        
+                        writer.WriteArrayEnd();
+                    }
+                }
+            }
+
+            writer.WriteArrayEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Dictionary<TKey, TValue?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            if (value is null)
+            {
+                value = new Dictionary<TKey, TValue?>(_equalityComparer);
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+            
+            // 数组格式: [[k1,v1], [k2,v2], [k3,v3]]
+            reader.TryConsumeArrayStart();
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+
+                if (reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ArrayStart)
+                    continue;
+
+                // 读取 [key, value] 元素
+                reader.TryConsumeArrayStart();
+                
+                TKey key = default!;
+                TValue? val = default;
+                
+                // 读取key (第一个元素)
+                if (reader.Read() && reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                {
+                    keyParser.DeserializeJson(ref reader, ref key);
+                    
+                    // 读取value (第二个元素)
+                    if (reader.Read() && reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    {
+                        valueParser.DeserializeJson(ref reader, ref val);
+                    }
+                }
+                
+                // 跳到数组结束
+                while (reader.Read())
+                {
+                    if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                        break;
+                }
+                
+                value[key!] = val;
+            }
         }
     }
 
@@ -532,6 +700,107 @@ namespace LuminPack.Parsers
             if (i != count) 
                 LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();
         }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ConcurrentDictionary<TKey, TValue?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+            
+            var count = value.Count;
+            var i = 0;
+            
+            // 数组格式: [[k1,v1], [k2,v2], [k3,v3]]
+            writer.WriteArrayStart();
+            
+            foreach (var kvp in value)
+            {
+                i++;
+                
+                // [key, value] 元素
+                writer.WriteArrayStart();
+                
+                var tempKey = kvp.Key;
+                keyParser.SerializeJson(ref writer, ref tempKey);
+                
+                var tempValue = kvp.Value;
+                valueParser.SerializeJson(ref writer, ref tempValue);
+                
+                writer.WriteArrayEnd();
+            }
+            
+            writer.WriteArrayEnd();
+            
+            if (i != count) 
+                LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ConcurrentDictionary<TKey, TValue?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            if (value is null)
+            {
+                value = new ConcurrentDictionary<TKey, TValue?>(_equalityComparer);
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+            
+            // 数组格式: [[k1,v1], [k2,v2], [k3,v3]]
+            reader.TryConsumeArrayStart();
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+
+                if (reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ArrayStart)
+                    continue;
+
+                // 读取 [key, value] 元素
+                reader.TryConsumeArrayStart();
+                
+                TKey key = default!;
+                TValue? val = default;
+                
+                // 读取key (第一个元素)
+                if (reader.Read() && reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                {
+                    keyParser.DeserializeJson(ref reader, ref key);
+                    
+                    // 读取value (第二个元素)
+                    if (reader.Read() && reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    {
+                        valueParser.DeserializeJson(ref reader, ref val);
+                    }
+                }
+                
+                // 跳到数组结束
+                while (reader.Read())
+                {
+                    if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                        break;
+                }
+                
+                value.TryAdd(key!, val);
+            }
+        }
     }
 
     [Preserve]
@@ -633,6 +902,99 @@ namespace LuminPack.Parsers
                 KeyValuePairParser.CalculateOffset(keyFormatter, valueFormatter, ref evaluator, ref k, ref v);
             }
         }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref SortedDictionary<TKey, TValue?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+            
+            // 数组格式: [[k1,v1], [k2,v2], [k3,v3]]
+            writer.WriteArrayStart();
+            
+            foreach (var kvp in value)
+            {
+                // [key, value] 元素
+                writer.WriteArrayStart();
+                
+                var tempKey = kvp.Key;
+                keyParser.SerializeJson(ref writer, ref tempKey);
+                
+                var tempValue = kvp.Value;
+                valueParser.SerializeJson(ref writer, ref tempValue);
+                
+                writer.WriteArrayEnd();
+            }
+            
+            writer.WriteArrayEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref SortedDictionary<TKey, TValue?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            if (value is null)
+            {
+                value = new SortedDictionary<TKey, TValue?>(comparer);
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+            
+            // 数组格式: [[k1,v1], [k2,v2], [k3,v3]]
+            reader.TryConsumeArrayStart();
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+
+                if (reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ArrayStart)
+                    continue;
+
+                // 读取 [key, value] 元素
+                reader.TryConsumeArrayStart();
+                
+                TKey key = default!;
+                TValue? val = default;
+                
+                // 读取key (第一个元素)
+                if (reader.Read() && reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                {
+                    keyParser.DeserializeJson(ref reader, ref key);
+                    
+                    // 读取value (第二个元素)
+                    if (reader.Read() && reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    {
+                        valueParser.DeserializeJson(ref reader, ref val);
+                    }
+                }
+                
+                // 跳到数组结束
+                while (reader.Read())
+                {
+                    if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                        break;
+                }
+                
+                value.Add(key!, val);
+            }
+        }
     }
 
     [Preserve]
@@ -699,7 +1061,75 @@ namespace LuminPack.Parsers
             
             var span = LuminPackMarshal.GetStackSpan(value);
             evaluator.CalculateSpan(ref span);
+        }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Stack<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            writer.WriteArrayStart();
+
+            if (value.Count == 0)
+            {
+                writer.WriteArrayEnd();
+                return;
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
+            // 使用内部Span进行快速遍历
+            var span = LuminPackMarshal.GetStackSpan(value);
+            foreach (ref var v in span)
+            {
+                parser.SerializeJson(ref writer, ref v);
+            }
+
+            writer.WriteArrayEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Stack<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            if (value is null)
+            {
+                value = new Stack<T?>();
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            var tempList = new List<T?>();
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                tempList.Add(item);
+            }
+            
+            // 将元素按相反顺序推入栈中
+            for (int i = tempList.Count - 1; i >= 0; i--)
+            {
+                value.Push(tempList[i]);
+            }
         }
     }
 
@@ -901,6 +1331,68 @@ namespace LuminPack.Parsers
             //head, tail and size
             evaluator += 12;
         }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Queue<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            writer.WriteArrayStart();
+
+            if (value.Count == 0)
+            {
+                writer.WriteArrayEnd();
+                return;
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            // 使用内部Span进行快速遍历
+            var span = LuminPackMarshal.GetQueueSpan(value, value.Count);
+            foreach (ref var v in span)
+            {
+                parser.SerializeJson(ref writer, ref v);
+            }
+
+            writer.WriteArrayEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Queue<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            if (value is null)
+            {
+                value = new Queue<T?>();
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                value.Enqueue(item);
+            }
+        }
     }
 
     [Preserve]
@@ -985,6 +1477,67 @@ namespace LuminPack.Parsers
             {
                 var v = item;
                 eval.CalculateOffset(ref evaluator, ref v);
+            }
+        }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref LinkedList<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            writer.WriteArrayStart();
+
+            if (value.Count == 0)
+            {
+                writer.WriteArrayEnd();
+                return;
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            foreach (var item in value)
+            {
+                var temp = item;
+                parser.SerializeJson(ref writer, ref temp);
+            }
+
+            writer.WriteArrayEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref LinkedList<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            if (value is null)
+            {
+                value = new LinkedList<T?>();
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                value.AddLast(item);
             }
         }
     }
@@ -1091,6 +1644,78 @@ namespace LuminPack.Parsers
                 eval.CalculateOffset(ref evaluator, ref v);
             }
         }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref HashSet<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            writer.WriteArrayStart();
+
+            if (value.Count == 0)
+            {
+                writer.WriteArrayEnd();
+                return;
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            
+            // 使用与二进制相同的内部视图进行优化遍历
+            nuint setIndex = 0;
+            var setView = LuminPackMarshal.GetHashSetView(value);
+            ref var arrayRef =
+                ref LuminPackMarshal.GetArrayReference(setView._entries); 
+            
+            while ((uint) setIndex < (uint) setView._count)
+            {
+                ref LuminPackMarshal.HashSetView<T?>.Entry local = ref Unsafe.Add(ref arrayRef, setIndex++);
+                if (local.Next >= -1)
+                {
+                    var temp = local.Value;
+                    parser.SerializeJson(ref writer, ref temp);
+                }
+            }
+
+            writer.WriteArrayEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref HashSet<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            if (value is null)
+            {
+                value = new HashSet<T?>(equalityComparer);
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                value.Add(item);
+            }
+        }
     }
 
     [Preserve]
@@ -1190,6 +1815,67 @@ namespace LuminPack.Parsers
                 eval.CalculateOffset(ref evaluator, ref v);
             }
         }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref SortedSet<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            writer.WriteArrayStart();
+
+            if (value.Count == 0)
+            {
+                writer.WriteArrayEnd();
+                return;
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            foreach (var item in value)
+            {
+                var temp = item;
+                parser.SerializeJson(ref writer, ref temp);
+            }
+
+            writer.WriteArrayEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref SortedSet<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            if (value is null)
+            {
+                value = new SortedSet<T?>(comparer);
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                value.Add(item);
+            }
+        }
     }
     
 #if NET7_0_OR_GREATER
@@ -1283,6 +1969,95 @@ namespace LuminPack.Parsers
             {
                 var v = item;
                 eval.CalculateOffset(ref evaluator, ref v);
+            }
+        }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref PriorityQueue<TElement?, TPriority?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            writer.WriteArrayStart();
+
+            if (value.Count == 0)
+            {
+                writer.WriteArrayEnd();
+                return;
+            }
+
+            var elementParser = LuminPackParseProvider.Cache<TElement>.Parser!;
+            var priorityParser = LuminPackParseProvider.Cache<TPriority>.Parser!;
+            
+            foreach (var item in value.UnorderedItems)
+            {
+                writer.WriteArrayStart();
+                
+                var tempElement = item.Element;
+                elementParser.SerializeJson(ref writer, ref tempElement);
+                
+                writer.WriteByteRaw((byte)',');
+                
+                var tempPriority = item.Priority;
+                priorityParser.SerializeJson(ref writer, ref tempPriority);
+                
+                writer.WriteArrayEnd();
+            }
+
+            writer.WriteArrayEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref PriorityQueue<TElement?, TPriority?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            if (value is null)
+            {
+                value = new PriorityQueue<TElement?, TPriority?>();
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var elementParser = LuminPackParseProvider.Cache<TElement>.Parser!;
+            var priorityParser = LuminPackParseProvider.Cache<TPriority>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+
+                if (reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ArrayStart)
+                    continue;
+                
+                // 读取元素
+                reader.Read();
+                TElement? element = default;
+                elementParser.DeserializeJson(ref reader, ref element);
+                
+                // 读取逗号
+                reader.Read();
+                
+                // 读取优先级
+                reader.Read();
+                TPriority? priority = default;
+                priorityParser.DeserializeJson(ref reader, ref priority);
+                
+                // 读取数组结束
+                reader.Read();
+                
+                value.Enqueue(element, priority);
             }
         }
     }
@@ -1393,6 +2168,95 @@ namespace LuminPack.Parsers
                     var temp = item;
                     eval.CalculateOffset(ref evaluator, ref temp);
                 }
+            }
+        }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Collection<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            var depth = 0;
+            var list = ListParser.GetUnderlyingIList(value, ref depth);
+            
+            if (list != null)
+            {
+                // 使用底层List进行优化序列化
+                writer.WriteArrayStart();
+
+                if (list.Count == 0)
+                {
+                    writer.WriteArrayEnd();
+                    return;
+                }
+
+                var parser = LuminPackParseProvider.Cache<T>.Parser!;
+                
+                // 使用内部Span进行快速遍历
+                var span = LuminPackMarshal.GetListSpan(list);
+                foreach (ref var v in span)
+                {
+                    parser.SerializeJson(ref writer, ref v);
+                }
+
+                writer.WriteArrayEnd();
+            }
+            else
+            {
+                writer.WriteArrayStart();
+
+                if (value.Count == 0)
+                {
+                    writer.WriteArrayEnd();
+                    return;
+                }
+
+                var parser = LuminPackParseProvider.Cache<T>.Parser!;
+                
+                foreach (var item in value)
+                {
+                    var temp = item;
+                    parser.SerializeJson(ref writer, ref temp);
+                }
+
+                writer.WriteArrayEnd();
+            }
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Collection<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            if (value is null)
+            {
+                value = new Collection<T?>(new List<T?>());
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                value.Add(item);
             }
         }
         
@@ -1507,6 +2371,95 @@ namespace LuminPack.Parsers
                 }
             }
         }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ObservableCollection<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            var depth = 0;
+            var list = ListParser.GetUnderlyingIList(value, ref depth);
+            
+            if (list != null)
+            {
+                // 使用底层List进行优化序列化
+                writer.WriteArrayStart();
+
+                if (list.Count == 0)
+                {
+                    writer.WriteArrayEnd();
+                    return;
+                }
+
+                var parser = LuminPackParseProvider.Cache<T>.Parser!;
+                
+                // 使用内部Span进行快速遍历
+                var span = LuminPackMarshal.GetListSpan(list);
+                foreach (ref var v in span)
+                {
+                    parser.SerializeJson(ref writer, ref v);
+                }
+
+                writer.WriteArrayEnd();
+            }
+            else
+            {
+                writer.WriteArrayStart();
+
+                if (value.Count == 0)
+                {
+                    writer.WriteArrayEnd();
+                    return;
+                }
+
+                var parser = LuminPackParseProvider.Cache<T>.Parser!;
+                
+                foreach (var item in value)
+                {
+                    var temp = item;
+                    parser.SerializeJson(ref writer, ref temp);
+                }
+
+                writer.WriteArrayEnd();
+            }
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ObservableCollection<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            if (value is null)
+            {
+                value = new ObservableCollection<T?>();
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                value.Add(item);
+            }
+        }
         
         
     }
@@ -1608,6 +2561,74 @@ namespace LuminPack.Parsers
             }
             
             if (i != count) LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();
+        }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ConcurrentQueue<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            writer.WriteArrayStart();
+
+            if (value.IsEmpty)
+            {
+                writer.WriteArrayEnd();
+                return;
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            var count = value.Count;
+            var i = 0;
+            
+            foreach (var item in value)
+            {
+                i++;
+                
+                var temp = item;
+                parser.SerializeJson(ref writer, ref temp);
+            }
+
+            if (i != count) LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();
+
+            writer.WriteArrayEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ConcurrentQueue<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            if (value is null)
+            {
+                value = new ConcurrentQueue<T?>();
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                value.Enqueue(item);
+            }
         }
     }
 
@@ -1718,6 +2739,92 @@ namespace LuminPack.Parsers
             
             if (i != count) LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();
         }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ConcurrentStack<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            var count = value.Count;
+            if (count == 0)
+            {
+                writer.WriteArrayStart();
+                writer.WriteArrayEnd();
+                return;
+            }
+
+            T?[] rentArray = ArrayPool<T?>.Shared.Rent(count);
+            try
+            {
+                var i = 0;
+                foreach (var item in value)
+                {
+                    rentArray[i++] = item;
+                }
+                if (i != count) LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();
+
+                var parser = LuminPackParseProvider.Cache<T>.Parser!;
+                
+                writer.WriteArrayStart();
+                
+                // 逆序输出
+                for (i = i - 1; i >= 0; i--)
+                {
+                    var temp = rentArray[i];
+                    parser.SerializeJson(ref writer, ref temp);
+                }
+
+                writer.WriteArrayEnd();
+            }
+            finally
+            {
+                ArrayPool<T?>.Shared.Return(rentArray, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            }
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ConcurrentStack<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            if (value is null)
+            {
+                value = new ConcurrentStack<T?>();
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            var tempList = new List<T?>();
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                tempList.Add(item);
+            }
+            
+            // 将元素按相反顺序推入栈中
+            for (int i = tempList.Count - 1; i >= 0; i--)
+            {
+                value.Push(tempList[i]);
+            }
+        }
     }
 
     [Preserve]
@@ -1816,6 +2923,76 @@ namespace LuminPack.Parsers
             
             if (i != count) 
                 LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();
+        }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ConcurrentBag<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            var count = value.Count;
+            if (count == 0)
+            {
+                writer.WriteArrayStart();
+                writer.WriteArrayEnd();
+                return;
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            writer.WriteArrayStart();
+            
+            var i = 0;
+            
+            foreach (var item in value)
+            {
+                i++;
+                
+                var temp = item;
+                parser.SerializeJson(ref writer, ref temp);
+            }
+
+            if (i != count) 
+                LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();
+
+            writer.WriteArrayEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ConcurrentBag<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            if (value is null)
+            {
+                value = new ConcurrentBag<T?>();
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                value.Add(item);
+            }
         }
     }
 
@@ -1918,6 +3095,87 @@ namespace LuminPack.Parsers
                 KeyValuePairParser.CalculateOffset(keyFormatter, valueFormatter, ref evaluator, ref k, ref v);
             }
         }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref SortedList<TKey, TValue?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            writer.WriteObjectStart();
+
+            if (value.Count == 0)
+            {
+                writer.WriteObjectEnd();
+                return;
+            }
+
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+            
+            foreach (var kvp in value)
+            {
+                writer.WritePropertyName(kvp.Key.ToString()!);
+                
+                var tempValue = kvp.Value;
+                valueParser.SerializeJson(ref writer, ref tempValue);
+            }
+
+            writer.WriteObjectEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref SortedList<TKey, TValue?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeObjectStart();
+
+            if (value is null)
+            {
+                value = new SortedList<TKey, TValue?>(comparer);
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ObjectEnd)
+                    break;
+
+                if (reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.String)
+                    continue;
+
+                var keyStr = reader.ReadString();
+                
+                if (!reader.Read())
+                    break;
+
+                TKey key = default!;
+                if (typeof(TKey) == typeof(string))
+                {
+                    key = (TKey)(object)keyStr;
+                }
+                else
+                {
+                    key = (TKey)Convert.ChangeType(keyStr, typeof(TKey));
+                }
+                
+                TValue? val = default;
+                valueParser.DeserializeJson(ref reader, ref val);
+                value.Add(key, val);
+            }
+        }
     }
 
     [Preserve]
@@ -2008,6 +3266,89 @@ namespace LuminPack.Parsers
                     eval.CalculateOffset(ref evaluator, ref temp);
                 }
             }
+        }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ReadOnlyCollection<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            var depth = 0;
+            var list = ListParser.GetUnderlyingIList(value, ref depth);
+            
+            if (list != null)
+            {
+                // 使用底层List进行优化序列化
+                writer.WriteArrayStart();
+
+                if (list.Count == 0)
+                {
+                    writer.WriteArrayEnd();
+                    return;
+                }
+
+                var parser = LuminPackParseProvider.Cache<T>.Parser!;
+                
+                // 使用内部Span进行快速遍历
+                var span = LuminPackMarshal.GetListSpan(list);
+                foreach (ref var v in span)
+                {
+                    parser.SerializeJson(ref writer, ref v);
+                }
+
+                writer.WriteArrayEnd();
+            }
+            else
+            {
+                writer.WriteArrayStart();
+
+                if (value.Count == 0)
+                {
+                    writer.WriteArrayEnd();
+                    return;
+                }
+
+                var parser = LuminPackParseProvider.Cache<T>.Parser!;
+                
+                foreach (var item in value)
+                {
+                    var temp = item;
+                    parser.SerializeJson(ref writer, ref temp);
+                }
+
+                writer.WriteArrayEnd();
+            }
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ReadOnlyCollection<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            var items = new List<T?>();
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                items.Add(item);
+            }
+            
+            value = new ReadOnlyCollection<T?>(items);
         }
         
     }
@@ -2101,6 +3442,89 @@ namespace LuminPack.Parsers
                 }
             }
         }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ReadOnlyObservableCollection<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            var depth = 0;
+            var list = ListParser.GetUnderlyingIList(value, ref depth);
+            
+            if (list != null)
+            {
+                // 使用底层List进行优化序列化
+                writer.WriteArrayStart();
+
+                if (list.Count == 0)
+                {
+                    writer.WriteArrayEnd();
+                    return;
+                }
+
+                var parser = LuminPackParseProvider.Cache<T>.Parser!;
+                
+                // 使用内部Span进行快速遍历
+                var span = LuminPackMarshal.GetListSpan(list);
+                foreach (ref var v in span)
+                {
+                    parser.SerializeJson(ref writer, ref v);
+                }
+
+                writer.WriteArrayEnd();
+            }
+            else
+            {
+                writer.WriteArrayStart();
+
+                if (value.Count == 0)
+                {
+                    writer.WriteArrayEnd();
+                    return;
+                }
+
+                var parser = LuminPackParseProvider.Cache<T>.Parser!;
+                
+                foreach (var item in value)
+                {
+                    var temp = item;
+                    parser.SerializeJson(ref writer, ref temp);
+                }
+
+                writer.WriteArrayEnd();
+            }
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ReadOnlyObservableCollection<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            var items = new List<T?>();
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                items.Add(item);
+            }
+            
+            value = new ReadOnlyObservableCollection<T?>(new ObservableCollection<T?>(items));
+        }
         
     }
 
@@ -2181,6 +3605,60 @@ namespace LuminPack.Parsers
                 eval.CalculateOffset(ref evaluator, ref v);
             }
         }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref BlockingCollection<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            writer.WriteArrayStart();
+
+            if (value.Count == 0)
+            {
+                writer.WriteArrayEnd();
+                return;
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            foreach (var item in value)
+            {
+                var temp = item;
+                parser.SerializeJson(ref writer, ref temp);
+            }
+
+            writer.WriteArrayEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref BlockingCollection<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            value = new BlockingCollection<T?>();
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                value.Add(item);
+            }
+        }
     }
     
     [Preserve]
@@ -2256,45 +3734,110 @@ namespace LuminPack.Parsers
             
             evaluator.CalculateSpan(ref span);
         }
+
+        [Preserve]
+        public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ReadOnlyCollectionBuilder<T?>? value)
+        {
+            if (value == null)
+            {
+                writer.WriteNull();
+                return;
+            }
+
+            writer.WriteArrayStart();
+
+            if (value.Count == 0)
+            {
+                writer.WriteArrayEnd();
+                return;
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            // 使用底层List进行优化序列化
+            var list = LuminPackMarshal.As<ReadOnlyCollectionBuilder<T?>, List<T?>>(ref value);
+            
+            // 使用内部Span进行快速遍历
+            var span = LuminPackMarshal.GetListSpan(list);
+            foreach (ref var v in span)
+            {
+                parser.SerializeJson(ref writer, ref v);
+            }
+
+            writer.WriteArrayEnd();
+        }
+
+        [Preserve]
+        public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ReadOnlyCollectionBuilder<T?>? value)
+        {
+            if (reader.IsNull())
+            {
+                value = null;
+                return;
+            }
+
+            reader.TryConsumeArrayStart();
+
+            if (value is null)
+            {
+                value = new ReadOnlyCollectionBuilder<T?>();
+            }
+            else
+            {
+                value.Clear();
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            
+            while (reader.Read())
+            {
+                if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                    break;
+                
+                T? item = default;
+                parser.DeserializeJson(ref reader, ref item);
+                value.Add(item);
+            }
+        }
         
     }
     
-    internal class CollectionIListView<TValue>
+    public class CollectionIListView<TValue>
     {
         public IList<TValue> items;
     }
     
-    internal class CollectionView<TValue>
+    public class CollectionView<TValue>
     {
         public List<TValue> items;
     }
     
-    internal class ObservableCollectionView<TValue>
+    public class ObservableCollectionView<TValue>
     {
         public List<TValue> items;
     }
     
-    internal class ObservableCollectionIListView<TValue>
+    public class ObservableCollectionIListView<TValue>
     {
         public IList<TValue> items;
     }
     
-    internal class ReadOnlyCollectionView<TValue>
+    public class ReadOnlyCollectionView<TValue>
     {
         public List<TValue> items;
     }
     
-    internal class ReadOnlyCollectionIListView<TValue>
+    public class ReadOnlyCollectionIListView<TValue>
     {
         public IList<TValue> items;
     }
     
-    internal class ReadOnlyObservableCollectionView<TCollection>
+    public class ReadOnlyObservableCollectionView<TCollection>
     {
         public ObservableCollection<TCollection> items;
     }
     
-    internal class ReadOnlyCollectionBuilderView<TValue>
+    public class ReadOnlyCollectionBuilderView<TValue>
     {
         public TValue[] items;
         public int size;

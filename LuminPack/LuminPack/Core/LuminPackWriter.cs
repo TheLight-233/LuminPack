@@ -1,4 +1,6 @@
+using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
@@ -1422,7 +1424,7 @@ namespace LuminPack.Core
                 return;
             }
         
-            var srcLength = Unsafe.SizeOf<T>() * array.Length;
+            var srcLength = Unsafe.SizeOf<T>() * length;
 
 #if NET8_0_OR_GREATER
             ref var dest = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
@@ -1451,7 +1453,7 @@ namespace LuminPack.Core
                 return;
             }
         
-            spanOffset = Unsafe.SizeOf<T>() * array.Length;
+            spanOffset = Unsafe.SizeOf<T>() * length;
 
 #if NET8_0_OR_GREATER
             ref var dest = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);

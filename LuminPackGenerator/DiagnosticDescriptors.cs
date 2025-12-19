@@ -294,4 +294,37 @@ internal static class DiagnosticDescriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+    
+    public static readonly DiagnosticDescriptor MultipleRentPoolMethods = new(
+        id: "LuminPack036",
+        title: "Multiple RentPool methods",
+        messageFormat: "Type '{0}' has multiple methods marked with LuminPackPoolRentAttribute. Only one is allowed.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor RentPoolMethodHasParameters = new(
+        id: "LuminPack037",
+        title: "RentPool method must have no parameters",
+        messageFormat: "RentPool method '{0}' in type '{1}' must have no parameters",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor RentPoolMethodReturnTypeMismatch = new(
+        id: "LuminPack038",
+        title: "RentPool method return type mismatch",
+        messageFormat: "RentPool method '{0}' in type '{1}' must return the same type as the containing type.",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor RentPoolMethodIsStatic = new(
+        id: "LuminPack039",
+        title: "RentPool method must be static",
+        messageFormat: "RentPool method '{0}' in type '{1}' must be static",
+        category: Category,
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
 }

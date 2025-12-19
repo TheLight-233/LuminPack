@@ -9,7 +9,7 @@ public class MultiDimensionalArraySerializationTest
     [LuminPackable]
     public class ArrayContainer
     {
-        [LuminPackOrder(0)] public int[,]? TwoDimensionalArray { get; set; }
+        [LuminPackOrder(0)] public string[,]? TwoDimensionalArray { get; set; }
         [LuminPackOrder(1)] public int[,,]? ThreeDimensionalArray { get; set; }
         [LuminPackOrder(2)] public int[,,,]? FourDimensionalArray { get; set; }
         [LuminPackOrder(3)] public int[,,,,]? FiveDimensionalArray { get; set; }
@@ -23,7 +23,7 @@ public class MultiDimensionalArraySerializationTest
         {
             var container = new ArrayContainer
             {
-                TwoDimensionalArray = new int[3, 4]
+                TwoDimensionalArray = new string[3, 4]
             };
 
             // 初始化二维数组
@@ -31,7 +31,7 @@ public class MultiDimensionalArraySerializationTest
             {
                 for (int j = 0; j < 4; j++)
                 {
-                    container.TwoDimensionalArray[i, j] = i * 10 + j;
+                    container.TwoDimensionalArray[i, j] = i * 10 + j.ToString();
                 }
             }
 
@@ -470,7 +470,7 @@ public class MultiDimensionalArraySerializationTest
         {
             var container = new ArrayContainer
             {
-                TwoDimensionalArray = new int[2, 2] { { 1, 2 }, { 3, 4 } },
+                TwoDimensionalArray = new string[2, 2] { { "1", "2" }, { "3", "4" } },
                 ThreeDimensionalArray = new int[2, 2, 2] { { { 1, 2 }, { 3, 4 } }, { { 5, 6 }, { 7, 8 } } },
                 FourDimensionalArray = new int[2, 2, 2, 2] 
                 { 
@@ -485,8 +485,8 @@ public class MultiDimensionalArraySerializationTest
             bool passed = deserializedContainer?.TwoDimensionalArray != null &&
                          deserializedContainer.ThreeDimensionalArray != null &&
                          deserializedContainer.FourDimensionalArray != null &&
-                         deserializedContainer.TwoDimensionalArray[0, 0] == 1 &&
-                         deserializedContainer.TwoDimensionalArray[1, 1] == 4 &&
+                         deserializedContainer.TwoDimensionalArray[0, 0] == 1.ToString() &&
+                         deserializedContainer.TwoDimensionalArray[1, 1] == 4.ToString() &&
                          deserializedContainer.ThreeDimensionalArray[0, 0, 0] == 1 &&
                          deserializedContainer.ThreeDimensionalArray[1, 1, 1] == 8;
 

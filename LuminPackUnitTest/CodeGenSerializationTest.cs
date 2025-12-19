@@ -47,6 +47,12 @@ public class D
         return $"{Name}={string.Join(",", Bs.Select(b => b.Val))}";
     }
 }
+
+[LuminPackable]
+public class E
+{
+    public E Child { get; set; }
+}
     
 [LuminPackable]
 public class CodeGenSerializationTest

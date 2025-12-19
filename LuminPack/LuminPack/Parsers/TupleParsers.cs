@@ -10,16 +10,14 @@ public sealed class TupleParser<T1> : LuminPackParser<Tuple<T1?>>
     public override void Serialize(ref LuminPackWriter writer, scoped ref Tuple<T1?>? value)
     {
         ref var index = ref writer.GetCurrentSpanOffset();
-        
-        if (value is null)
+
+        if (value == null)
         {
             writer.WriteNullObjectHeader(ref index);
-            
             writer.Advance(1);
-            
             return;
         }
-        
+
         writer.WriteValue(value.Item1);
     }
 
@@ -27,13 +25,11 @@ public sealed class TupleParser<T1> : LuminPackParser<Tuple<T1?>>
     public override void Deserialize(ref LuminPackReader reader, scoped ref Tuple<T1?>? value)
     {
         ref var index = ref reader.GetCurrentSpanOffset();
-        
+
         if (!reader.TryReadObjectHead(ref index))
         {
             value = null;
-            
             reader.Advance(1);
-            
             return;
         }
 
@@ -45,15 +41,55 @@ public sealed class TupleParser<T1> : LuminPackParser<Tuple<T1?>>
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref Tuple<T1?>? value)
     {
-        if (value is null)
+        if (value == null)
         {
             evaluator += 1;
-            
             return;
         }
 
-        var v = value.Item1;
-        evaluator.CalculateValue(in v);
+        var v1 = value.Item1;
+        evaluator.CalculateValue(in v1);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Tuple<T1?>? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Tuple<T1?>? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+
+        reader.Read(); // consume array end
+
+        value = new Tuple<T1?>(item1);
     }
 }
 
@@ -65,7 +101,7 @@ public sealed class TupleParser<T1, T2> : LuminPackParser<Tuple<T1?, T2?>>
     {
         ref var index = ref writer.GetCurrentSpanOffset();
 
-        if (value is null)
+        if (value == null)
         {
             writer.WriteNullObjectHeader(ref index);
             writer.Advance(1);
@@ -97,22 +133,67 @@ public sealed class TupleParser<T1, T2> : LuminPackParser<Tuple<T1?, T2?>>
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref Tuple<T1?, T2?>? value)
     {
-        if (value is null)
+        if (value == null)
         {
             evaluator += 1;
             return;
         }
 
-        
         var v1 = value.Item1;
         evaluator.CalculateValue(in v1);
-        
         var v2 = value.Item2;
         evaluator.CalculateValue(in v2);
     }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Tuple<T1?, T2?>? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Tuple<T1?, T2?>? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+
+        reader.Read(); // consume array end
+
+        value = new Tuple<T1?, T2?>(item1, item2);
+    }
 }
 
-// TupleParser<T1, T2, T3> 类
 [Preserve]
 public sealed class TupleParser<T1, T2, T3> : LuminPackParser<Tuple<T1?, T2?, T3?>>
 {
@@ -121,7 +202,7 @@ public sealed class TupleParser<T1, T2, T3> : LuminPackParser<Tuple<T1?, T2?, T3
     {
         ref var index = ref writer.GetCurrentSpanOffset();
 
-        if (value is null)
+        if (value == null)
         {
             writer.WriteNullObjectHeader(ref index);
             writer.Advance(1);
@@ -155,25 +236,76 @@ public sealed class TupleParser<T1, T2, T3> : LuminPackParser<Tuple<T1?, T2?, T3
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref Tuple<T1?, T2?, T3?>? value)
     {
-        if (value is null)
+        if (value == null)
         {
             evaluator += 1;
             return;
         }
 
-        
         var v1 = value.Item1;
         evaluator.CalculateValue(in v1);
-        
         var v2 = value.Item2;
         evaluator.CalculateValue(in v2);
-        
         var v3 = value.Item3;
         evaluator.CalculateValue(in v3);
     }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Tuple<T1?, T2?, T3?>? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+        var v3 = value.Item3;
+        parser3.SerializeJson(ref writer, ref v3);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Tuple<T1?, T2?, T3?>? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+        reader.Read();
+        T3? item3 = default;
+        parser3.DeserializeJson(ref reader, ref item3);
+
+        reader.Read(); // consume array end
+
+        value = new Tuple<T1?, T2?, T3?>(item1, item2, item3);
+    }
 }
 
-// TupleParser<T1, T2, T3, T4> 类
 [Preserve]
 public sealed class TupleParser<T1, T2, T3, T4> : LuminPackParser<Tuple<T1?, T2?, T3?, T4?>>
 {
@@ -182,7 +314,7 @@ public sealed class TupleParser<T1, T2, T3, T4> : LuminPackParser<Tuple<T1?, T2?
     {
         ref var index = ref writer.GetCurrentSpanOffset();
 
-        if (value is null)
+        if (value == null)
         {
             writer.WriteNullObjectHeader(ref index);
             writer.Advance(1);
@@ -218,7 +350,7 @@ public sealed class TupleParser<T1, T2, T3, T4> : LuminPackParser<Tuple<T1?, T2?
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref Tuple<T1?, T2?, T3?, T4?>? value)
     {
-        if (value is null)
+        if (value == null)
         {
             evaluator += 1;
             return;
@@ -226,19 +358,77 @@ public sealed class TupleParser<T1, T2, T3, T4> : LuminPackParser<Tuple<T1?, T2?
 
         var v1 = value.Item1;
         evaluator.CalculateValue(in v1);
-        
         var v2 = value.Item2;
         evaluator.CalculateValue(in v2);
-        
         var v3 = value.Item3;
         evaluator.CalculateValue(in v3);
-        
         var v4 = value.Item4;
         evaluator.CalculateValue(in v4);
     }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Tuple<T1?, T2?, T3?, T4?>? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+        var v3 = value.Item3;
+        parser3.SerializeJson(ref writer, ref v3);
+        var v4 = value.Item4;
+        parser4.SerializeJson(ref writer, ref v4);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Tuple<T1?, T2?, T3?, T4?>? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+        reader.Read();
+        T3? item3 = default;
+        parser3.DeserializeJson(ref reader, ref item3);
+        reader.Read();
+        T4? item4 = default;
+        parser4.DeserializeJson(ref reader, ref item4);
+
+        reader.Read(); // consume array end
+
+        value = new Tuple<T1?, T2?, T3?, T4?>(item1, item2, item3, item4);
+    }
 }
 
-// TupleParser<T1, T2, T3, T4, T5> 类
 [Preserve]
 public sealed class TupleParser<T1, T2, T3, T4, T5> : LuminPackParser<Tuple<T1?, T2?, T3?, T4?, T5?>>
 {
@@ -247,7 +437,7 @@ public sealed class TupleParser<T1, T2, T3, T4, T5> : LuminPackParser<Tuple<T1?,
     {
         ref var index = ref writer.GetCurrentSpanOffset();
 
-        if (value is null)
+        if (value == null)
         {
             writer.WriteNullObjectHeader(ref index);
             writer.Advance(1);
@@ -285,7 +475,7 @@ public sealed class TupleParser<T1, T2, T3, T4, T5> : LuminPackParser<Tuple<T1?,
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref Tuple<T1?, T2?, T3?, T4?, T5?>? value)
     {
-        if (value is null)
+        if (value == null)
         {
             evaluator += 1;
             return;
@@ -293,22 +483,86 @@ public sealed class TupleParser<T1, T2, T3, T4, T5> : LuminPackParser<Tuple<T1?,
 
         var v1 = value.Item1;
         evaluator.CalculateValue(in v1);
-        
         var v2 = value.Item2;
         evaluator.CalculateValue(in v2);
-        
         var v3 = value.Item3;
         evaluator.CalculateValue(in v3);
-        
         var v4 = value.Item4;
         evaluator.CalculateValue(in v4);
-        
         var v5 = value.Item5;
         evaluator.CalculateValue(in v5);
     }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Tuple<T1?, T2?, T3?, T4?, T5?>? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+        var v3 = value.Item3;
+        parser3.SerializeJson(ref writer, ref v3);
+        var v4 = value.Item4;
+        parser4.SerializeJson(ref writer, ref v4);
+        var v5 = value.Item5;
+        parser5.SerializeJson(ref writer, ref v5);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Tuple<T1?, T2?, T3?, T4?, T5?>? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+        reader.Read();
+        T3? item3 = default;
+        parser3.DeserializeJson(ref reader, ref item3);
+        reader.Read();
+        T4? item4 = default;
+        parser4.DeserializeJson(ref reader, ref item4);
+        reader.Read();
+        T5? item5 = default;
+        parser5.DeserializeJson(ref reader, ref item5);
+
+        reader.Read(); // consume array end
+
+        value = new Tuple<T1?, T2?, T3?, T4?, T5?>(item1, item2, item3, item4, item5);
+    }
 }
 
-// TupleParser<T1, T2, T3, T4, T5, T6> 类
 [Preserve]
 public sealed class TupleParser<T1, T2, T3, T4, T5, T6> : LuminPackParser<Tuple<T1?, T2?, T3?, T4?, T5?, T6?>>
 {
@@ -317,7 +571,7 @@ public sealed class TupleParser<T1, T2, T3, T4, T5, T6> : LuminPackParser<Tuple<
     {
         ref var index = ref writer.GetCurrentSpanOffset();
 
-        if (value is null)
+        if (value == null)
         {
             writer.WriteNullObjectHeader(ref index);
             writer.Advance(1);
@@ -357,7 +611,7 @@ public sealed class TupleParser<T1, T2, T3, T4, T5, T6> : LuminPackParser<Tuple<
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref Tuple<T1?, T2?, T3?, T4?, T5?, T6?>? value)
     {
-        if (value is null)
+        if (value == null)
         {
             evaluator += 1;
             return;
@@ -365,25 +619,95 @@ public sealed class TupleParser<T1, T2, T3, T4, T5, T6> : LuminPackParser<Tuple<
 
         var v1 = value.Item1;
         evaluator.CalculateValue(in v1);
-        
         var v2 = value.Item2;
         evaluator.CalculateValue(in v2);
-        
         var v3 = value.Item3;
         evaluator.CalculateValue(in v3);
-        
         var v4 = value.Item4;
         evaluator.CalculateValue(in v4);
-        
         var v5 = value.Item5;
         evaluator.CalculateValue(in v5);
-        
         var v6 = value.Item6;
         evaluator.CalculateValue(in v6);
     }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Tuple<T1?, T2?, T3?, T4?, T5?, T6?>? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        var parser6 = LuminPackParseProvider.Cache<T6>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+        var v3 = value.Item3;
+        parser3.SerializeJson(ref writer, ref v3);
+        var v4 = value.Item4;
+        parser4.SerializeJson(ref writer, ref v4);
+        var v5 = value.Item5;
+        parser5.SerializeJson(ref writer, ref v5);
+        var v6 = value.Item6;
+        parser6.SerializeJson(ref writer, ref v6);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Tuple<T1?, T2?, T3?, T4?, T5?, T6?>? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        var parser6 = LuminPackParseProvider.Cache<T6>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+        reader.Read();
+        T3? item3 = default;
+        parser3.DeserializeJson(ref reader, ref item3);
+        reader.Read();
+        T4? item4 = default;
+        parser4.DeserializeJson(ref reader, ref item4);
+        reader.Read();
+        T5? item5 = default;
+        parser5.DeserializeJson(ref reader, ref item5);
+        reader.Read();
+        T6? item6 = default;
+        parser6.DeserializeJson(ref reader, ref item6);
+
+        reader.Read(); // consume array end
+
+        value = new Tuple<T1?, T2?, T3?, T4?, T5?, T6?>(item1, item2, item3, item4, item5, item6);
+    }
 }
 
-// TupleParser<T1, T2, T3, T4, T5, T6, T7> 类
 [Preserve]
 public sealed class TupleParser<T1, T2, T3, T4, T5, T6, T7> : LuminPackParser<Tuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?>>
 {
@@ -392,7 +716,7 @@ public sealed class TupleParser<T1, T2, T3, T4, T5, T6, T7> : LuminPackParser<Tu
     {
         ref var index = ref writer.GetCurrentSpanOffset();
 
-        if (value is null)
+        if (value == null)
         {
             writer.WriteNullObjectHeader(ref index);
             writer.Advance(1);
@@ -434,7 +758,7 @@ public sealed class TupleParser<T1, T2, T3, T4, T5, T6, T7> : LuminPackParser<Tu
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref Tuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?>? value)
     {
-        if (value is null)
+        if (value == null)
         {
             evaluator += 1;
             return;
@@ -442,38 +766,113 @@ public sealed class TupleParser<T1, T2, T3, T4, T5, T6, T7> : LuminPackParser<Tu
 
         var v1 = value.Item1;
         evaluator.CalculateValue(in v1);
-        
         var v2 = value.Item2;
         evaluator.CalculateValue(in v2);
-        
         var v3 = value.Item3;
         evaluator.CalculateValue(in v3);
-        
         var v4 = value.Item4;
         evaluator.CalculateValue(in v4);
-        
         var v5 = value.Item5;
         evaluator.CalculateValue(in v5);
-        
         var v6 = value.Item6;
         evaluator.CalculateValue(in v6);
-        
         var v7 = value.Item7;
         evaluator.CalculateValue(in v7);
     }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Tuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?>? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        var parser6 = LuminPackParseProvider.Cache<T6>.Parser!;
+        var parser7 = LuminPackParseProvider.Cache<T7>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+        var v3 = value.Item3;
+        parser3.SerializeJson(ref writer, ref v3);
+        var v4 = value.Item4;
+        parser4.SerializeJson(ref writer, ref v4);
+        var v5 = value.Item5;
+        parser5.SerializeJson(ref writer, ref v5);
+        var v6 = value.Item6;
+        parser6.SerializeJson(ref writer, ref v6);
+        var v7 = value.Item7;
+        parser7.SerializeJson(ref writer, ref v7);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Tuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?>? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        var parser6 = LuminPackParseProvider.Cache<T6>.Parser!;
+        var parser7 = LuminPackParseProvider.Cache<T7>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+        reader.Read();
+        T3? item3 = default;
+        parser3.DeserializeJson(ref reader, ref item3);
+        reader.Read();
+        T4? item4 = default;
+        parser4.DeserializeJson(ref reader, ref item4);
+        reader.Read();
+        T5? item5 = default;
+        parser5.DeserializeJson(ref reader, ref item5);
+        reader.Read();
+        T6? item6 = default;
+        parser6.DeserializeJson(ref reader, ref item6);
+        reader.Read();
+        T7? item7 = default;
+        parser7.DeserializeJson(ref reader, ref item7);
+
+        reader.Read(); // consume array end
+
+        value = new Tuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?>(item1, item2, item3, item4, item5, item6, item7);
+    }
 }
 
-// TupleParser<T1, T2, T3, T4, T5, T6, T7, TRest> 类
 [Preserve]
-public sealed class TupleParser<T1, T2, T3, T4, T5, T6, T7, TRest> : LuminPackParser<Tuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>> 
-    where TRest : notnull
+public sealed class TupleParser<T1, T2, T3, T4, T5, T6, T7, TRest> : LuminPackParser<Tuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>>
 {
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref Tuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>? value)
     {
         ref var index = ref writer.GetCurrentSpanOffset();
 
-        if (value is null)
+        if (value == null)
         {
             writer.WriteNullObjectHeader(ref index);
             writer.Advance(1);
@@ -510,14 +909,14 @@ public sealed class TupleParser<T1, T2, T3, T4, T5, T6, T7, TRest> : LuminPackPa
             reader.ReadValue<T5>(),
             reader.ReadValue<T6>(),
             reader.ReadValue<T7>(),
-            reader.ReadValue<TRest>()!
+            reader.ReadValue<TRest>()
         );
     }
 
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref Tuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>? value)
     {
-        if (value is null)
+        if (value == null)
         {
             evaluator += 1;
             return;
@@ -525,27 +924,110 @@ public sealed class TupleParser<T1, T2, T3, T4, T5, T6, T7, TRest> : LuminPackPa
 
         var v1 = value.Item1;
         evaluator.CalculateValue(in v1);
-        
         var v2 = value.Item2;
         evaluator.CalculateValue(in v2);
-        
         var v3 = value.Item3;
         evaluator.CalculateValue(in v3);
-        
         var v4 = value.Item4;
         evaluator.CalculateValue(in v4);
-        
         var v5 = value.Item5;
         evaluator.CalculateValue(in v5);
-        
         var v6 = value.Item6;
         evaluator.CalculateValue(in v6);
-        
         var v7 = value.Item7;
         evaluator.CalculateValue(in v7);
+        var vRest = value.Rest;
+        evaluator.CalculateValue(in vRest);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Tuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        var parser6 = LuminPackParseProvider.Cache<T6>.Parser!;
+        var parser7 = LuminPackParseProvider.Cache<T7>.Parser!;
+        var parserRest = LuminPackParseProvider.Cache<TRest>.Parser!;
         
-        var rest = value.Rest;
-        evaluator.CalculateValue(in rest);
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+        var v3 = value.Item3;
+        parser3.SerializeJson(ref writer, ref v3);
+        var v4 = value.Item4;
+        parser4.SerializeJson(ref writer, ref v4);
+        var v5 = value.Item5;
+        parser5.SerializeJson(ref writer, ref v5);
+        var v6 = value.Item6;
+        parser6.SerializeJson(ref writer, ref v6);
+        var v7 = value.Item7;
+        parser7.SerializeJson(ref writer, ref v7);
+        var vRest = value.Rest;
+        parserRest.SerializeJson(ref writer, ref vRest);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Tuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        var parser6 = LuminPackParseProvider.Cache<T6>.Parser!;
+        var parser7 = LuminPackParseProvider.Cache<T7>.Parser!;
+        var parserRest = LuminPackParseProvider.Cache<TRest>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+        reader.Read();
+        T3? item3 = default;
+        parser3.DeserializeJson(ref reader, ref item3);
+        reader.Read();
+        T4? item4 = default;
+        parser4.DeserializeJson(ref reader, ref item4);
+        reader.Read();
+        T5? item5 = default;
+        parser5.DeserializeJson(ref reader, ref item5);
+        reader.Read();
+        T6? item6 = default;
+        parser6.DeserializeJson(ref reader, ref item6);
+        reader.Read();
+        T7? item7 = default;
+        parser7.DeserializeJson(ref reader, ref item7);
+        reader.Read();
+        TRest itemRest = default;
+        parserRest.DeserializeJson(ref reader, ref itemRest);
+
+        reader.Read(); // consume array end
+
+        value = new Tuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>(item1, item2, item3, item4, item5, item6, item7, itemRest);
     }
 }
 
@@ -555,9 +1037,12 @@ public sealed class ValueTupleParser<T1> : LuminPackParser<ValueTuple<T1?>>
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref ValueTuple<T1?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?>>())
+        ref var index = ref writer.GetCurrentSpanOffset();
+
+        if (value.Equals(default))
         {
-            writer.DangerousWriteUnmanaged(value);
+            writer.WriteNullObjectHeader(ref index);
+            writer.Advance(1);
             return;
         }
 
@@ -567,9 +1052,12 @@ public sealed class ValueTupleParser<T1> : LuminPackParser<ValueTuple<T1?>>
     [Preserve]
     public override void Deserialize(ref LuminPackReader reader, scoped ref ValueTuple<T1?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?>>())
+        ref var index = ref reader.GetCurrentSpanOffset();
+
+        if (!reader.TryReadObjectHead(ref index))
         {
-            reader.DangerousReadUnmanaged(out value);
+            value = default;
+            reader.Advance(1);
             return;
         }
 
@@ -581,13 +1069,55 @@ public sealed class ValueTupleParser<T1> : LuminPackParser<ValueTuple<T1?>>
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref ValueTuple<T1?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?>>())
+        if (value.Equals(default))
         {
-            evaluator += evaluator.DangerousCalculateUnmanaged<ValueTuple<T1?>>();
+            evaluator += 1;
             return;
         }
+
+        var v1 = value.Item1;
+        evaluator.CalculateValue(in v1);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ValueTuple<T1?> value)
+    {
+        if (value.Equals(default))
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
         
-        evaluator.CalculateValue(in value.Item1);
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ValueTuple<T1?> value)
+    {
+        if (reader.IsNull())
+        {
+            value = default;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+
+        reader.Read(); // consume array end
+
+        value = new ValueTuple<T1?>(item1);
     }
 }
 
@@ -597,9 +1127,12 @@ public sealed class ValueTupleParser<T1, T2> : LuminPackParser<ValueTuple<T1?, T
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref ValueTuple<T1?, T2?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?>>())
+        ref var index = ref writer.GetCurrentSpanOffset();
+
+        if (value.Equals(default))
         {
-            writer.DangerousWriteUnmanaged(value);
+            writer.WriteNullObjectHeader(ref index);
+            writer.Advance(1);
             return;
         }
 
@@ -610,9 +1143,12 @@ public sealed class ValueTupleParser<T1, T2> : LuminPackParser<ValueTuple<T1?, T
     [Preserve]
     public override void Deserialize(ref LuminPackReader reader, scoped ref ValueTuple<T1?, T2?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?>>())
+        ref var index = ref reader.GetCurrentSpanOffset();
+
+        if (!reader.TryReadObjectHead(ref index))
         {
-            reader.DangerousReadUnmanaged(out value);
+            value = default;
+            reader.Advance(1);
             return;
         }
 
@@ -625,14 +1161,64 @@ public sealed class ValueTupleParser<T1, T2> : LuminPackParser<ValueTuple<T1?, T
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref ValueTuple<T1?, T2?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?>>())
+        if (value.Equals(default))
         {
-            evaluator += evaluator.DangerousCalculateUnmanaged<ValueTuple<T1?, T2?>>();
+            evaluator += 1;
             return;
         }
 
-        evaluator.CalculateValue(in value.Item1);
-        evaluator.CalculateValue(in value.Item2);
+        var v1 = value.Item1;
+        evaluator.CalculateValue(in v1);
+        var v2 = value.Item2;
+        evaluator.CalculateValue(in v2);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ValueTuple<T1?, T2?> value)
+    {
+        if (value.Equals(default))
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ValueTuple<T1?, T2?> value)
+    {
+        if (reader.IsNull())
+        {
+            value = default;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+
+        reader.Read(); // consume array end
+
+        value = new ValueTuple<T1?, T2?>(item1, item2);
     }
 }
 
@@ -642,9 +1228,12 @@ public sealed class ValueTupleParser<T1, T2, T3> : LuminPackParser<ValueTuple<T1
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref ValueTuple<T1?, T2?, T3?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?>>())
+        ref var index = ref writer.GetCurrentSpanOffset();
+
+        if (value.Equals(default))
         {
-            writer.DangerousWriteUnmanaged(value);
+            writer.WriteNullObjectHeader(ref index);
+            writer.Advance(1);
             return;
         }
 
@@ -656,9 +1245,12 @@ public sealed class ValueTupleParser<T1, T2, T3> : LuminPackParser<ValueTuple<T1
     [Preserve]
     public override void Deserialize(ref LuminPackReader reader, scoped ref ValueTuple<T1?, T2?, T3?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?>>())
+        ref var index = ref reader.GetCurrentSpanOffset();
+
+        if (!reader.TryReadObjectHead(ref index))
         {
-            reader.DangerousReadUnmanaged(out value);
+            value = default;
+            reader.Advance(1);
             return;
         }
 
@@ -672,15 +1264,73 @@ public sealed class ValueTupleParser<T1, T2, T3> : LuminPackParser<ValueTuple<T1
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref ValueTuple<T1?, T2?, T3?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?>>())
+        if (value.Equals(default))
         {
-            evaluator += evaluator.DangerousCalculateUnmanaged<ValueTuple<T1?, T2?, T3?>>();
+            evaluator += 1;
             return;
         }
 
-        evaluator.CalculateValue(in value.Item1);
-        evaluator.CalculateValue(in value.Item2);
-        evaluator.CalculateValue(in value.Item3);
+        var v1 = value.Item1;
+        evaluator.CalculateValue(in v1);
+        var v2 = value.Item2;
+        evaluator.CalculateValue(in v2);
+        var v3 = value.Item3;
+        evaluator.CalculateValue(in v3);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ValueTuple<T1?, T2?, T3?> value)
+    {
+        if (value.Equals(default))
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+        var v3 = value.Item3;
+        parser3.SerializeJson(ref writer, ref v3);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ValueTuple<T1?, T2?, T3?> value)
+    {
+        if (reader.IsNull())
+        {
+            value = default;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+        reader.Read();
+        T3? item3 = default;
+        parser3.DeserializeJson(ref reader, ref item3);
+
+        reader.Read(); // consume array end
+
+        value = new ValueTuple<T1?, T2?, T3?>(item1, item2, item3);
     }
 }
 
@@ -690,9 +1340,12 @@ public sealed class ValueTupleParser<T1, T2, T3, T4> : LuminPackParser<ValueTupl
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref ValueTuple<T1?, T2?, T3?, T4?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?>>())
+        ref var index = ref writer.GetCurrentSpanOffset();
+
+        if (value.Equals(default))
         {
-            writer.DangerousWriteUnmanaged(value);
+            writer.WriteNullObjectHeader(ref index);
+            writer.Advance(1);
             return;
         }
 
@@ -705,9 +1358,12 @@ public sealed class ValueTupleParser<T1, T2, T3, T4> : LuminPackParser<ValueTupl
     [Preserve]
     public override void Deserialize(ref LuminPackReader reader, scoped ref ValueTuple<T1?, T2?, T3?, T4?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?>>())
+        ref var index = ref reader.GetCurrentSpanOffset();
+
+        if (!reader.TryReadObjectHead(ref index))
         {
-            reader.DangerousReadUnmanaged(out value);
+            value = default;
+            reader.Advance(1);
             return;
         }
 
@@ -722,16 +1378,82 @@ public sealed class ValueTupleParser<T1, T2, T3, T4> : LuminPackParser<ValueTupl
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref ValueTuple<T1?, T2?, T3?, T4?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?>>())
+        if (value.Equals(default))
         {
-            evaluator += evaluator.DangerousCalculateUnmanaged<ValueTuple<T1?, T2?, T3?, T4?>>();
+            evaluator += 1;
             return;
         }
 
-        evaluator.CalculateValue(in value.Item1);
-        evaluator.CalculateValue(in value.Item2);
-        evaluator.CalculateValue(in value.Item3);
-        evaluator.CalculateValue(in value.Item4);
+        var v1 = value.Item1;
+        evaluator.CalculateValue(in v1);
+        var v2 = value.Item2;
+        evaluator.CalculateValue(in v2);
+        var v3 = value.Item3;
+        evaluator.CalculateValue(in v3);
+        var v4 = value.Item4;
+        evaluator.CalculateValue(in v4);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ValueTuple<T1?, T2?, T3?, T4?> value)
+    {
+        if (value.Equals(default))
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+        var v3 = value.Item3;
+        parser3.SerializeJson(ref writer, ref v3);
+        var v4 = value.Item4;
+        parser4.SerializeJson(ref writer, ref v4);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ValueTuple<T1?, T2?, T3?, T4?> value)
+    {
+        if (reader.IsNull())
+        {
+            value = default;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+        reader.Read();
+        T3? item3 = default;
+        parser3.DeserializeJson(ref reader, ref item3);
+        reader.Read();
+        T4? item4 = default;
+        parser4.DeserializeJson(ref reader, ref item4);
+
+        reader.Read(); // consume array end
+
+        value = new ValueTuple<T1?, T2?, T3?, T4?>(item1, item2, item3, item4);
     }
 }
 
@@ -741,9 +1463,12 @@ public sealed class ValueTupleParser<T1, T2, T3, T4, T5> : LuminPackParser<Value
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?, T5?>>())
+        ref var index = ref writer.GetCurrentSpanOffset();
+
+        if (value.Equals(default))
         {
-            writer.DangerousWriteUnmanaged(value);
+            writer.WriteNullObjectHeader(ref index);
+            writer.Advance(1);
             return;
         }
 
@@ -757,9 +1482,12 @@ public sealed class ValueTupleParser<T1, T2, T3, T4, T5> : LuminPackParser<Value
     [Preserve]
     public override void Deserialize(ref LuminPackReader reader, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?, T5?>>())
+        ref var index = ref reader.GetCurrentSpanOffset();
+
+        if (!reader.TryReadObjectHead(ref index))
         {
-            reader.DangerousReadUnmanaged(out value);
+            value = default;
+            reader.Advance(1);
             return;
         }
 
@@ -775,17 +1503,91 @@ public sealed class ValueTupleParser<T1, T2, T3, T4, T5> : LuminPackParser<Value
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?, T5?>>())
+        if (value.Equals(default))
         {
-            evaluator += evaluator.DangerousCalculateUnmanaged<ValueTuple<T1?, T2?, T3?, T4?, T5?>>();
+            evaluator += 1;
             return;
         }
 
-        evaluator.CalculateValue(in value.Item1);
-        evaluator.CalculateValue(in value.Item2);
-        evaluator.CalculateValue(in value.Item3);
-        evaluator.CalculateValue(in value.Item4);
-        evaluator.CalculateValue(in value.Item5);
+        var v1 = value.Item1;
+        evaluator.CalculateValue(in v1);
+        var v2 = value.Item2;
+        evaluator.CalculateValue(in v2);
+        var v3 = value.Item3;
+        evaluator.CalculateValue(in v3);
+        var v4 = value.Item4;
+        evaluator.CalculateValue(in v4);
+        var v5 = value.Item5;
+        evaluator.CalculateValue(in v5);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?> value)
+    {
+        if (value.Equals(default))
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+        var v3 = value.Item3;
+        parser3.SerializeJson(ref writer, ref v3);
+        var v4 = value.Item4;
+        parser4.SerializeJson(ref writer, ref v4);
+        var v5 = value.Item5;
+        parser5.SerializeJson(ref writer, ref v5);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?> value)
+    {
+        if (reader.IsNull())
+        {
+            value = default;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+        reader.Read();
+        T3? item3 = default;
+        parser3.DeserializeJson(ref reader, ref item3);
+        reader.Read();
+        T4? item4 = default;
+        parser4.DeserializeJson(ref reader, ref item4);
+        reader.Read();
+        T5? item5 = default;
+        parser5.DeserializeJson(ref reader, ref item5);
+
+        reader.Read(); // consume array end
+
+        value = new ValueTuple<T1?, T2?, T3?, T4?, T5?>(item1, item2, item3, item4, item5);
     }
 }
 
@@ -795,9 +1597,12 @@ public sealed class ValueTupleParser<T1, T2, T3, T4, T5, T6> : LuminPackParser<V
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?>>())
+        ref var index = ref writer.GetCurrentSpanOffset();
+
+        if (value.Equals(default))
         {
-            writer.DangerousWriteUnmanaged(value);
+            writer.WriteNullObjectHeader(ref index);
+            writer.Advance(1);
             return;
         }
 
@@ -812,9 +1617,12 @@ public sealed class ValueTupleParser<T1, T2, T3, T4, T5, T6> : LuminPackParser<V
     [Preserve]
     public override void Deserialize(ref LuminPackReader reader, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?>>())
+        ref var index = ref reader.GetCurrentSpanOffset();
+
+        if (!reader.TryReadObjectHead(ref index))
         {
-            reader.DangerousReadUnmanaged(out value);
+            value = default;
+            reader.Advance(1);
             return;
         }
 
@@ -831,18 +1639,100 @@ public sealed class ValueTupleParser<T1, T2, T3, T4, T5, T6> : LuminPackParser<V
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?>>())
+        if (value.Equals(default))
         {
-            evaluator += evaluator.DangerousCalculateUnmanaged<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?>>();
+            evaluator += 1;
             return;
         }
 
-        evaluator.CalculateValue(in value.Item1);
-        evaluator.CalculateValue(in value.Item2);
-        evaluator.CalculateValue(in value.Item3);
-        evaluator.CalculateValue(in value.Item4);
-        evaluator.CalculateValue(in value.Item5);
-        evaluator.CalculateValue(in value.Item6);
+        var v1 = value.Item1;
+        evaluator.CalculateValue(in v1);
+        var v2 = value.Item2;
+        evaluator.CalculateValue(in v2);
+        var v3 = value.Item3;
+        evaluator.CalculateValue(in v3);
+        var v4 = value.Item4;
+        evaluator.CalculateValue(in v4);
+        var v5 = value.Item5;
+        evaluator.CalculateValue(in v5);
+        var v6 = value.Item6;
+        evaluator.CalculateValue(in v6);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?> value)
+    {
+        if (value.Equals(default))
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        var parser6 = LuminPackParseProvider.Cache<T6>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+        var v3 = value.Item3;
+        parser3.SerializeJson(ref writer, ref v3);
+        var v4 = value.Item4;
+        parser4.SerializeJson(ref writer, ref v4);
+        var v5 = value.Item5;
+        parser5.SerializeJson(ref writer, ref v5);
+        var v6 = value.Item6;
+        parser6.SerializeJson(ref writer, ref v6);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?> value)
+    {
+        if (reader.IsNull())
+        {
+            value = default;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        var parser6 = LuminPackParseProvider.Cache<T6>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+        reader.Read();
+        T3? item3 = default;
+        parser3.DeserializeJson(ref reader, ref item3);
+        reader.Read();
+        T4? item4 = default;
+        parser4.DeserializeJson(ref reader, ref item4);
+        reader.Read();
+        T5? item5 = default;
+        parser5.DeserializeJson(ref reader, ref item5);
+        reader.Read();
+        T6? item6 = default;
+        parser6.DeserializeJson(ref reader, ref item6);
+
+        reader.Read(); // consume array end
+
+        value = new ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?>(item1, item2, item3, item4, item5, item6);
     }
 }
 
@@ -852,9 +1742,12 @@ public sealed class ValueTupleParser<T1, T2, T3, T4, T5, T6, T7> : LuminPackPars
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?>>())
+        ref var index = ref writer.GetCurrentSpanOffset();
+
+        if (value.Equals(default))
         {
-            writer.DangerousWriteUnmanaged(value);
+            writer.WriteNullObjectHeader(ref index);
+            writer.Advance(1);
             return;
         }
 
@@ -870,9 +1763,12 @@ public sealed class ValueTupleParser<T1, T2, T3, T4, T5, T6, T7> : LuminPackPars
     [Preserve]
     public override void Deserialize(ref LuminPackReader reader, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?>>())
+        ref var index = ref reader.GetCurrentSpanOffset();
+
+        if (!reader.TryReadObjectHead(ref index))
         {
-            reader.DangerousReadUnmanaged(out value);
+            value = default;
+            reader.Advance(1);
             return;
         }
 
@@ -890,32 +1786,125 @@ public sealed class ValueTupleParser<T1, T2, T3, T4, T5, T6, T7> : LuminPackPars
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?>>())
+        if (value.Equals(default))
         {
-            evaluator += evaluator.DangerousCalculateUnmanaged<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?>>();
+            evaluator += 1;
             return;
         }
 
-        evaluator.CalculateValue(in value.Item1);
-        evaluator.CalculateValue(in value.Item2);
-        evaluator.CalculateValue(in value.Item3);
-        evaluator.CalculateValue(in value.Item4);
-        evaluator.CalculateValue(in value.Item5);
-        evaluator.CalculateValue(in value.Item6);
-        evaluator.CalculateValue(in value.Item7);
+        var v1 = value.Item1;
+        evaluator.CalculateValue(in v1);
+        var v2 = value.Item2;
+        evaluator.CalculateValue(in v2);
+        var v3 = value.Item3;
+        evaluator.CalculateValue(in v3);
+        var v4 = value.Item4;
+        evaluator.CalculateValue(in v4);
+        var v5 = value.Item5;
+        evaluator.CalculateValue(in v5);
+        var v6 = value.Item6;
+        evaluator.CalculateValue(in v6);
+        var v7 = value.Item7;
+        evaluator.CalculateValue(in v7);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?> value)
+    {
+        if (value.Equals(default))
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        var parser6 = LuminPackParseProvider.Cache<T6>.Parser!;
+        var parser7 = LuminPackParseProvider.Cache<T7>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+        var v3 = value.Item3;
+        parser3.SerializeJson(ref writer, ref v3);
+        var v4 = value.Item4;
+        parser4.SerializeJson(ref writer, ref v4);
+        var v5 = value.Item5;
+        parser5.SerializeJson(ref writer, ref v5);
+        var v6 = value.Item6;
+        parser6.SerializeJson(ref writer, ref v6);
+        var v7 = value.Item7;
+        parser7.SerializeJson(ref writer, ref v7);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?> value)
+    {
+        if (reader.IsNull())
+        {
+            value = default;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        var parser6 = LuminPackParseProvider.Cache<T6>.Parser!;
+        var parser7 = LuminPackParseProvider.Cache<T7>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+        reader.Read();
+        T3? item3 = default;
+        parser3.DeserializeJson(ref reader, ref item3);
+        reader.Read();
+        T4? item4 = default;
+        parser4.DeserializeJson(ref reader, ref item4);
+        reader.Read();
+        T5? item5 = default;
+        parser5.DeserializeJson(ref reader, ref item5);
+        reader.Read();
+        T6? item6 = default;
+        parser6.DeserializeJson(ref reader, ref item6);
+        reader.Read();
+        T7? item7 = default;
+        parser7.DeserializeJson(ref reader, ref item7);
+
+        reader.Read(); // consume array end
+
+        value = new ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?>(item1, item2, item3, item4, item5, item6, item7);
     }
 }
 
 [Preserve]
-public sealed class ValueTupleParser<T1, T2, T3, T4, T5, T6, T7, TRest> : LuminPackParser<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>> 
+public sealed class ValueTupleParser<T1, T2, T3, T4, T5, T6, T7, TRest> : LuminPackParser<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>>
     where TRest : struct
 {
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>>())
+        ref var index = ref writer.GetCurrentSpanOffset();
+
+        if (value.Equals(default))
         {
-            writer.DangerousWriteUnmanaged(value);
+            writer.WriteNullObjectHeader(ref index);
+            writer.Advance(1);
             return;
         }
 
@@ -932,9 +1921,12 @@ public sealed class ValueTupleParser<T1, T2, T3, T4, T5, T6, T7, TRest> : LuminP
     [Preserve]
     public override void Deserialize(ref LuminPackReader reader, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>>())
+        ref var index = ref reader.GetCurrentSpanOffset();
+
+        if (!reader.TryReadObjectHead(ref index))
         {
-            reader.DangerousReadUnmanaged(out value);
+            value = default;
+            reader.Advance(1);
             return;
         }
 
@@ -953,19 +1945,117 @@ public sealed class ValueTupleParser<T1, T2, T3, T4, T5, T6, T7, TRest> : LuminP
     [Preserve]
     public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest> value)
     {
-        if (!System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>>())
+        if (value.Equals(default))
         {
-            evaluator += evaluator.DangerousCalculateUnmanaged<ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>>();
+            evaluator += 1;
             return;
         }
 
-        evaluator.CalculateValue(in value.Item1);
-        evaluator.CalculateValue(in value.Item2);
-        evaluator.CalculateValue(in value.Item3);
-        evaluator.CalculateValue(in value.Item4);
-        evaluator.CalculateValue(in value.Item5);
-        evaluator.CalculateValue(in value.Item6);
-        evaluator.CalculateValue(in value.Item7);
-        evaluator.CalculateValue(in value.Rest);
+        var v1 = value.Item1;
+        evaluator.CalculateValue(in v1);
+        var v2 = value.Item2;
+        evaluator.CalculateValue(in v2);
+        var v3 = value.Item3;
+        evaluator.CalculateValue(in v3);
+        var v4 = value.Item4;
+        evaluator.CalculateValue(in v4);
+        var v5 = value.Item5;
+        evaluator.CalculateValue(in v5);
+        var v6 = value.Item6;
+        evaluator.CalculateValue(in v6);
+        var v7 = value.Item7;
+        evaluator.CalculateValue(in v7);
+        var vRest = value.Rest;
+        evaluator.CalculateValue(in vRest);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest> value)
+    {
+        if (value.Equals(default))
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        var parser6 = LuminPackParseProvider.Cache<T6>.Parser!;
+        var parser7 = LuminPackParseProvider.Cache<T7>.Parser!;
+        var parserRest = LuminPackParseProvider.Cache<TRest>.Parser!;
+        
+        var v1 = value.Item1;
+        parser1.SerializeJson(ref writer, ref v1);
+        var v2 = value.Item2;
+        parser2.SerializeJson(ref writer, ref v2);
+        var v3 = value.Item3;
+        parser3.SerializeJson(ref writer, ref v3);
+        var v4 = value.Item4;
+        parser4.SerializeJson(ref writer, ref v4);
+        var v5 = value.Item5;
+        parser5.SerializeJson(ref writer, ref v5);
+        var v6 = value.Item6;
+        parser6.SerializeJson(ref writer, ref v6);
+        var v7 = value.Item7;
+        parser7.SerializeJson(ref writer, ref v7);
+        var vRest = value.Rest;
+        parserRest.SerializeJson(ref writer, ref vRest);
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest> value)
+    {
+        if (reader.IsNull())
+        {
+            value = default;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var parser1 = LuminPackParseProvider.Cache<T1>.Parser!;
+        var parser2 = LuminPackParseProvider.Cache<T2>.Parser!;
+        var parser3 = LuminPackParseProvider.Cache<T3>.Parser!;
+        var parser4 = LuminPackParseProvider.Cache<T4>.Parser!;
+        var parser5 = LuminPackParseProvider.Cache<T5>.Parser!;
+        var parser6 = LuminPackParseProvider.Cache<T6>.Parser!;
+        var parser7 = LuminPackParseProvider.Cache<T7>.Parser!;
+        var parserRest = LuminPackParseProvider.Cache<TRest>.Parser!;
+
+        reader.Read();
+        T1? item1 = default;
+        parser1.DeserializeJson(ref reader, ref item1);
+        reader.Read();
+        T2? item2 = default;
+        parser2.DeserializeJson(ref reader, ref item2);
+        reader.Read();
+        T3? item3 = default;
+        parser3.DeserializeJson(ref reader, ref item3);
+        reader.Read();
+        T4? item4 = default;
+        parser4.DeserializeJson(ref reader, ref item4);
+        reader.Read();
+        T5? item5 = default;
+        parser5.DeserializeJson(ref reader, ref item5);
+        reader.Read();
+        T6? item6 = default;
+        parser6.DeserializeJson(ref reader, ref item6);
+        reader.Read();
+        T7? item7 = default;
+        parser7.DeserializeJson(ref reader, ref item7);
+        reader.Read();
+        TRest itemRest = default;
+        parserRest.DeserializeJson(ref reader, ref itemRest);
+
+        reader.Read(); // consume array end
+
+        value = new ValueTuple<T1?, T2?, T3?, T4?, T5?, T6?, T7?, TRest>(item1, item2, item3, item4, item5, item6, item7, itemRest);
     }
 }

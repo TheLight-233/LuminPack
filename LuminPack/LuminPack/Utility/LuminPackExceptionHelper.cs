@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
+using LuminPack.Attribute;
 
 namespace LuminPack.Code
 {
-    public sealed class LuminPackExceptionHelper
+    [Preserve]
+    public static class LuminPackExceptionHelper
     {
         private class LuminPackException : Exception
         {
@@ -137,6 +139,12 @@ namespace LuminPack.Code
         public static void ThrowInvalidRange(int expected, int actual)
         {
             throw new LuminPackException($"Requires size is {expected} but buffer length is {actual}.");
+        }
+
+        [DoesNotReturn]
+        public static void ThrowJsonNotSupported(Type type)
+        {
+            throw new LuminPackException($"Type of {type} Json is not supported.");
         }
     }
 }

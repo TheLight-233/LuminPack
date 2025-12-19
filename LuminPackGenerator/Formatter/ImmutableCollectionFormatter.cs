@@ -3,10 +3,13 @@ using LuminPack.Code;
 
 namespace LuminPack.SourceGenerator.Formatter;
 
+using static FormatterDiscovery;
+
 public static class ImmutableArrayFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value.IsDefault)");
@@ -17,13 +20,14 @@ public static class ImmutableArrayFormatter
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
-        sb.AppendLine("                writer.WriteSpan(value.AsSpan());");
+        sb.AppendLine($"                writer.WriteSpan(value.AsSpan());");
         sb.AppendLine("            }");
     }
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        sb.AppendLine("            var array = reader.ReadArray<T?>();");
+        var elementType = GetFirstGeneric(fieldData.TypeName);
+        sb.AppendLine($"            var array = reader.ReadArray<{elementType}>();");
         sb.AppendLine();
         sb.AppendLine("            if (array is null)");
         sb.AppendLine("            {");
@@ -33,15 +37,15 @@ public static class ImmutableArrayFormatter
         sb.AppendLine();
         sb.AppendLine("            if (array.Length == 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = ImmutableArray<T?>.Empty;");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableArray<{elementType}>.Empty;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("#if NET8_0_OR_GREATER");
-        sb.AppendLine("            value = ImmutableCollectionsMarshal.AsImmutableArray(array);");
+        sb.AppendLine($"            value = global::System.Runtime.InteropServices.ImmutableCollectionsMarshal.AsImmutableArray(array);");
         sb.AppendLine("#else");
-        sb.AppendLine("            value = ImmutableArray.Create<T?>();");
-        sb.AppendLine("            ref var view = ref LuminPackMarshal.As<ImmutableArray<T?>, ImmutableArrayView<T?>>(ref value);");
+        sb.AppendLine($"            value = global::System.Collections.Immutable.ImmutableArray.Create<{elementType}>();");
+        sb.AppendLine($"            ref var view = ref LuminPackMarshal.As<global::System.Collections.Immutable.ImmutableArray<{elementType}>, ImmutableArrayView<{elementType}>>(ref value);");
         sb.AppendLine("            view.array = array;");
         sb.AppendLine("#endif");
     }
@@ -51,6 +55,7 @@ public static class ImmutableListFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -62,7 +67,7 @@ public static class ImmutableListFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = writer.GetParser<T?>();");
+        sb.AppendLine($"            var parser = writer.GetParser<{elementType}>();");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
@@ -77,6 +82,7 @@ public static class ImmutableListFormatter
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -92,23 +98,23 @@ public static class ImmutableListFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length == 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = ImmutableList<T?>.Empty;");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableList<{elementType}>.Empty;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            if (length == 1)");
         sb.AppendLine("            {");
-        sb.AppendLine("                var item = reader.ReadValue<T>();");
-        sb.AppendLine("                value = ImmutableList.Create(item);");
+        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableList.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = LuminPackParseProvider.Cache<T?>.Parser!;");
+        sb.AppendLine($"            var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
         sb.AppendLine();
-        sb.AppendLine("            var builder = ImmutableList.CreateBuilder<T?>();");
+        sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableList.CreateBuilder<{elementType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                T? item = default;");
+        sb.AppendLine($"                {elementType} item = default;");
         sb.AppendLine("                parser.Deserialize(ref reader, ref item);");
         sb.AppendLine("                builder.Add(item);");
         sb.AppendLine("            }");
@@ -121,6 +127,7 @@ public static class ImmutableQueueFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -132,17 +139,13 @@ public static class ImmutableQueueFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            // ImmutableQueue<T> has no Count, so use similar serialization of IEnumerable<T>");
-        sb.AppendLine();
-        sb.AppendLine("            var tempBuffer = ReusableLinkedArrayBufferWriterPool.Rent();");
+        sb.AppendLine("            var tempBuffer = LuminBufferWriterPool.Rent();");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                var tempWriter = new LuminPackWriter(writer.OptionState);");
-        sb.AppendLine();
-        sb.AppendLine("                tempWriter.SetWriteBuffer(tempBuffer);");
+        sb.AppendLine("                var tempWriter = new LuminPackWriter(tempBuffer, writer.OptionState);");
         sb.AppendLine();
         sb.AppendLine("                var count = 0;");
-        sb.AppendLine("                var parser = writer.GetParser<T?>();");
+        sb.AppendLine($"                var parser = writer.GetParser<{elementType}>();");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
         sb.AppendLine("                    count++;");
@@ -150,20 +153,21 @@ public static class ImmutableQueueFormatter
         sb.AppendLine("                    parser.Serialize(ref tempWriter, ref v);");
         sb.AppendLine("                }");
         sb.AppendLine();
-        sb.AppendLine("                tempWriter.Flush();");
-        sb.AppendLine();
-        sb.AppendLine("                // write to parameter writer.");
         sb.AppendLine("                writer.WriteCollectionHeader(ref index, count);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.Advance(4);");
+        sb.AppendLine();
         sb.AppendLine("                tempBuffer.WriteToAndReset(ref writer);");
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
-        sb.AppendLine("                ReusableLinkedArrayBufferWriterPool.Return(tempBuffer);");
+        sb.AppendLine("                LuminBufferWriterPool.Return(tempBuffer);");
         sb.AppendLine("            }");
     }
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -179,42 +183,38 @@ public static class ImmutableQueueFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = ImmutableQueue<T?>.Empty;");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableQueue<{elementType}>.Empty;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            if (length is 1)");
         sb.AppendLine("            {");
-        sb.AppendLine("                var item = reader.ReadValue<T>();");
-        sb.AppendLine("                value = ImmutableQueue.Create(item);");
+        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableQueue.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            // ImmutableQueue<T> has no builder");
-        sb.AppendLine();
-        sb.AppendLine("            var rentArray = ArrayPool<T?>.Shared.Rent(length);");
+        sb.AppendLine($"            var rentArray = global::System.Buffers.ArrayPool<{elementType}>.Shared.Rent(length);");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                var parser = LuminPackParseProvider.Cache<T?>.Parser!;");
+        sb.AppendLine($"                var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
         sb.AppendLine("                for (int i = 0; i < length; i++)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    parser.Deserialize(ref reader, ref rentArray[i]);");
+        sb.AppendLine($"                    parser.Deserialize(ref reader, ref rentArray[i]);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                if (rentArray.Length == length)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    // we can use T[] ctor");
-        sb.AppendLine("                    value = ImmutableQueue.Create(rentArray);");
+        sb.AppendLine($"                    value = global::System.Collections.Immutable.ImmutableQueue.Create(rentArray);");
         sb.AppendLine("                }");
         sb.AppendLine("                else");
         sb.AppendLine("                {");
-        sb.AppendLine("                    // IEnumerable<T> method");
-        sb.AppendLine("                    value = ImmutableQueue.CreateRange((new ArraySegment<T?>(rentArray, 0, length)).AsEnumerable());");
+        sb.AppendLine($"                    value = global::System.Collections.Immutable.ImmutableQueue.CreateRange((new global::System.ArraySegment<{elementType}>(rentArray, 0, length)).AsEnumerable());");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
-        sb.AppendLine("                ArrayPool<T?>.Shared.Return(rentArray, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>());");
+        sb.AppendLine($"                global::System.Buffers.ArrayPool<{elementType}>.Shared.Return(rentArray, clearArray: global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>());");
         sb.AppendLine("            }");
     }
 }
@@ -223,6 +223,7 @@ public static class ImmutableStackFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -234,15 +235,13 @@ public static class ImmutableStackFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var tempBuffer = ReusableLinkedArrayBufferWriterPool.Rent();");
+        sb.AppendLine("            var tempBuffer = LuminBufferWriterPool.Rent();");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                var tempWriter = new LuminPackWriter(writer.OptionState);");
-        sb.AppendLine();
-        sb.AppendLine("                tempWriter.SetWriteBuffer(tempBuffer);");
+        sb.AppendLine("                var tempWriter = new LuminPackWriter(tempBuffer, writer.OptionState);");
         sb.AppendLine();
         sb.AppendLine("                var count = 0;");
-        sb.AppendLine("                var parser = writer.GetParser<T?>();");
+        sb.AppendLine($"                var parser = writer.GetParser<{elementType}>();");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
         sb.AppendLine("                    count++;");
@@ -250,20 +249,21 @@ public static class ImmutableStackFormatter
         sb.AppendLine("                    parser.Serialize(ref tempWriter, ref v);");
         sb.AppendLine("                }");
         sb.AppendLine();
-        sb.AppendLine("                tempWriter.Flush();");
-        sb.AppendLine();
-        sb.AppendLine("                // write to parameter writer.");
         sb.AppendLine("                writer.WriteCollectionHeader(ref index, count);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.Advance(4);");
+        sb.AppendLine();
         sb.AppendLine("                tempBuffer.WriteToAndReset(ref writer);");
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
-        sb.AppendLine("                ReusableLinkedArrayBufferWriterPool.Return(tempBuffer);");
+        sb.AppendLine("                LuminBufferWriterPool.Return(tempBuffer);");
         sb.AppendLine("            }");
     }
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -279,40 +279,38 @@ public static class ImmutableStackFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = ImmutableStack<T?>.Empty;");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableStack<{elementType}>.Empty;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            if (length is 1)");
         sb.AppendLine("            {");
-        sb.AppendLine("                var item = reader.ReadValue<T>();");
-        sb.AppendLine("                value = ImmutableStack.Create(item);");
+        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableStack.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var rentArray = ArrayPool<T?>.Shared.Rent(length);");
+        sb.AppendLine($"            var rentArray = global::System.Buffers.ArrayPool<{elementType}>.Shared.Rent(length);");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                var parser = LuminPackParseProvider.Cache<T?>.Parser!;");
-        sb.AppendLine("                for (int i = 0; i < length; i++)");
+        sb.AppendLine($"                var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
+        sb.AppendLine("                for (int i = length - 1; i >= 0; i--)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    parser.Deserialize(ref reader, ref rentArray[i]);");
+        sb.AppendLine($"                    parser.Deserialize(ref reader, ref rentArray[i]);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                if (rentArray.Length == length)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    // we can use T[] ctor");
-        sb.AppendLine("                    value = ImmutableStack.Create(rentArray);");
+        sb.AppendLine($"                    value = global::System.Collections.Immutable.ImmutableStack.Create(rentArray);");
         sb.AppendLine("                }");
         sb.AppendLine("                else");
         sb.AppendLine("                {");
-        sb.AppendLine("                    // IEnumerable<T> method");
-        sb.AppendLine("                    value = ImmutableStack.CreateRange((new ArraySegment<T?>(rentArray, 0, length)).AsEnumerable());");
+        sb.AppendLine($"                    value = global::System.Collections.Immutable.ImmutableStack.CreateRange((new global::System.ArraySegment<{elementType}>(rentArray, 0, length)).AsEnumerable());");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
-        sb.AppendLine("                ArrayPool<T?>.Shared.Return(rentArray, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>());");
+        sb.AppendLine($"                global::System.Buffers.ArrayPool<{elementType}>.Shared.Return(rentArray, clearArray: global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>());");
         sb.AppendLine("            }");
     }
 }
@@ -321,6 +319,8 @@ public static class ImmutableDictionaryFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var keyType = GetFirstGeneric(fieldData.TypeName);
+        var valueType = GetSecondGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -332,19 +332,21 @@ public static class ImmutableDictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var keyFormatter = writer.GetParser<TKey>();");
-        sb.AppendLine("            var valueFormatter = writer.GetParser<TValue>();");
+        sb.AppendLine($"            var keyFormatter = writer.GetParser<{keyType}>();");
+        sb.AppendLine($"            var valueFormatter = writer.GetParser<{valueType}>();");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
-        sb.AppendLine("                KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item!);");
+        sb.AppendLine($"                KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item!);");
         sb.AppendLine("            }");
     }
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var keyType = GetFirstGeneric(fieldData.TypeName);
+        var valueType = GetSecondGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -360,21 +362,17 @@ public static class ImmutableDictionaryFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = ImmutableDictionary<TKey, TValue?>.Empty;");
-        sb.AppendLine("                if (keyEqualityComparer != null || valueEqualityComparer != null)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    value = value.WithComparers(keyEqualityComparer, valueEqualityComparer);");
-        sb.AppendLine("                }");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableDictionary<{keyType}, {valueType}>.Empty;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;");
-        sb.AppendLine("            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;");
+        sb.AppendLine($"            var keyParser = LuminPackParseProvider.Cache<{keyType}>.Parser!;");
+        sb.AppendLine($"            var valueParser = LuminPackParseProvider.Cache<{valueType}>.Parser!;");
         sb.AppendLine();
-        sb.AppendLine("            var builder = ImmutableDictionary.CreateBuilder(keyEqualityComparer, valueEqualityComparer);");
+        sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableDictionary.CreateBuilder<{keyType}, {valueType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);");
+        sb.AppendLine($"                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);");
         sb.AppendLine("                builder.Add(k!, v);");
         sb.AppendLine("            }");
         sb.AppendLine();
@@ -386,6 +384,7 @@ public static class ImmutableHashSetFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -397,7 +396,7 @@ public static class ImmutableHashSetFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = writer.GetParser<T?>();");
+        sb.AppendLine($"            var parser = writer.GetParser<{elementType}>();");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
@@ -412,6 +411,7 @@ public static class ImmutableHashSetFormatter
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -427,27 +427,23 @@ public static class ImmutableHashSetFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = ImmutableHashSet<T?>.Empty;");
-        sb.AppendLine("                if (equalityComparer != null)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    value = value.WithComparer(equalityComparer);");
-        sb.AppendLine("                }");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableHashSet<{elementType}>.Empty;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            if (length == 1)");
         sb.AppendLine("            {");
-        sb.AppendLine("                var item = reader.ReadValue<T>();");
-        sb.AppendLine("                value = ImmutableHashSet.Create(equalityComparer, item);");
+        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableHashSet.Create<{elementType}>(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = LuminPackParseProvider.Cache<T?>.Parser!;");
+        sb.AppendLine($"            var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
         sb.AppendLine();
-        sb.AppendLine("            var builder = ImmutableHashSet.CreateBuilder(equalityComparer);");
+        sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableHashSet.CreateBuilder<{elementType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                T? item = default;");
+        sb.AppendLine($"                {elementType} item = default;");
         sb.AppendLine("                parser.Deserialize(ref reader, ref item);");
         sb.AppendLine("                builder.Add(item);");
         sb.AppendLine("            }");
@@ -460,6 +456,8 @@ public static class ImmutableSortedDictionaryFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var keyType = GetFirstGeneric(fieldData.TypeName);
+        var valueType = GetSecondGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -471,19 +469,21 @@ public static class ImmutableSortedDictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var keyFormatter = writer.GetParser<TKey>();");
-        sb.AppendLine("            var valueFormatter = writer.GetParser<TValue>();");
+        sb.AppendLine($"            var keyFormatter = writer.GetParser<{keyType}>();");
+        sb.AppendLine($"            var valueFormatter = writer.GetParser<{valueType}>();");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
-        sb.AppendLine("                KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item!);");
+        sb.AppendLine($"                KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item!);");
         sb.AppendLine("            }");
     }
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var keyType = GetFirstGeneric(fieldData.TypeName);
+        var valueType = GetSecondGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -499,21 +499,17 @@ public static class ImmutableSortedDictionaryFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = ImmutableSortedDictionary<TKey, TValue?>.Empty;");
-        sb.AppendLine("                if (keyComparer != null || valueEqualityComparer != null)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    value = value.WithComparers(keyComparer, valueEqualityComparer);");
-        sb.AppendLine("                }");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableSortedDictionary<{keyType}, {valueType}>.Empty;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;");
-        sb.AppendLine("            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;");
+        sb.AppendLine($"            var keyParser = LuminPackParseProvider.Cache<{keyType}>.Parser!;");
+        sb.AppendLine($"            var valueParser = LuminPackParseProvider.Cache<{valueType}>.Parser!;");
         sb.AppendLine();
-        sb.AppendLine("            var builder = ImmutableSortedDictionary.CreateBuilder(keyComparer, valueEqualityComparer);");
+        sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableSortedDictionary.CreateBuilder<{keyType}, {valueType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);");
+        sb.AppendLine($"                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);");
         sb.AppendLine("                builder.Add(k!, v);");
         sb.AppendLine("            }");
         sb.AppendLine();
@@ -525,6 +521,7 @@ public static class ImmutableSortedSetFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -536,7 +533,7 @@ public static class ImmutableSortedSetFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = writer.GetParser<T?>();");
+        sb.AppendLine($"            var parser = writer.GetParser<{elementType}>();");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
@@ -551,6 +548,7 @@ public static class ImmutableSortedSetFormatter
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -566,7 +564,7 @@ public static class ImmutableSortedSetFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = ImmutableSortedSet<T?>.Empty;");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableSortedSet<{elementType}>.Empty;");
         sb.AppendLine("                if (keyComparer != null)");
         sb.AppendLine("                {");
         sb.AppendLine("                    value = value.WithComparer(keyComparer);");
@@ -576,17 +574,17 @@ public static class ImmutableSortedSetFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length == 1)");
         sb.AppendLine("            {");
-        sb.AppendLine("                var item = reader.ReadValue<T>();");
-        sb.AppendLine("                value = ImmutableSortedSet.Create(keyComparer, item);");
+        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableSortedSet.Create(keyComparer, item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = LuminPackParseProvider.Cache<T?>.Parser!;");
+        sb.AppendLine($"            var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
         sb.AppendLine();
-        sb.AppendLine("            var builder = ImmutableSortedSet.CreateBuilder(keyComparer);");
+        sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableSortedSet.CreateBuilder<{elementType}>(keyComparer);");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                T? item = default;");
+        sb.AppendLine($"                {elementType} item = default;");
         sb.AppendLine("                parser.Deserialize(ref reader, ref item);");
         sb.AppendLine("                builder.Add(item);");
         sb.AppendLine("            }");
@@ -599,6 +597,7 @@ public static class InterfaceImmutableListFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -610,7 +609,7 @@ public static class InterfaceImmutableListFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = writer.GetParser<T?>();");
+        sb.AppendLine($"            var parser = writer.GetParser<{elementType}>();");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
@@ -625,6 +624,7 @@ public static class InterfaceImmutableListFormatter
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -640,23 +640,23 @@ public static class InterfaceImmutableListFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = ImmutableList<T?>.Empty;");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableList<{elementType}>.Empty;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            if (length == 1)");
         sb.AppendLine("            {");
-        sb.AppendLine("                var item = reader.ReadValue<T>();");
-        sb.AppendLine("                value = ImmutableList.Create(item);");
+        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableList.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = LuminPackParseProvider.Cache<T?>.Parser!;");
+        sb.AppendLine($"            var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
         sb.AppendLine();
-        sb.AppendLine("            var builder = ImmutableList.CreateBuilder<T?>();");
+        sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableList.CreateBuilder<{elementType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                T? item = default;");
+        sb.AppendLine($"                {elementType} item = default;");
         sb.AppendLine("                parser.Deserialize(ref reader, ref item);");
         sb.AppendLine("                builder.Add(item);");
         sb.AppendLine("            }");
@@ -669,6 +669,7 @@ public static class InterfaceImmutableQueueFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -680,17 +681,13 @@ public static class InterfaceImmutableQueueFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            // ImmutableQueue<T> has no Count, so use similar serialization of IEnumerable<T>");
-        sb.AppendLine();
-        sb.AppendLine("            var tempBuffer = ReusableLinkedArrayBufferWriterPool.Rent();");
+        sb.AppendLine("            var tempBuffer = LuminBufferWriterPool.Rent();");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                var tempWriter = new LuminPackWriter(writer.OptionState);");
-        sb.AppendLine();
-        sb.AppendLine("                tempWriter.SetWriteBuffer(tempBuffer);");
+        sb.AppendLine("                var tempWriter = new LuminPackWriter(tempBuffer, writer.OptionState);");
         sb.AppendLine();
         sb.AppendLine("                var count = 0;");
-        sb.AppendLine("                var parser = writer.GetParser<T?>();");
+        sb.AppendLine($"                var parser = writer.GetParser<{elementType}>();");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
         sb.AppendLine("                    count++;");
@@ -698,20 +695,21 @@ public static class InterfaceImmutableQueueFormatter
         sb.AppendLine("                    parser.Serialize(ref tempWriter, ref v);");
         sb.AppendLine("                }");
         sb.AppendLine();
-        sb.AppendLine("                tempWriter.Flush();");
-        sb.AppendLine();
-        sb.AppendLine("                // write to parameter writer.");
         sb.AppendLine("                writer.WriteCollectionHeader(ref index, count);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.Advance(4);");
+        sb.AppendLine();
         sb.AppendLine("                tempBuffer.WriteToAndReset(ref writer);");
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
-        sb.AppendLine("                ReusableLinkedArrayBufferWriterPool.Return(tempBuffer);");
+        sb.AppendLine("                LuminBufferWriterPool.Return(tempBuffer);");
         sb.AppendLine("            }");
     }
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -727,42 +725,38 @@ public static class InterfaceImmutableQueueFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = ImmutableQueue<T?>.Empty;");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableQueue<{elementType}>.Empty;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            if (length is 1)");
         sb.AppendLine("            {");
-        sb.AppendLine("                var item = reader.ReadValue<T>();");
-        sb.AppendLine("                value = ImmutableQueue.Create(item);");
+        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableQueue.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            // ImmutableQueue<T> has no builder");
-        sb.AppendLine();
-        sb.AppendLine("            var rentArray = ArrayPool<T?>.Shared.Rent(length);");
+        sb.AppendLine($"            var rentArray = global::System.Buffers.ArrayPool<{elementType}>.Shared.Rent(length);");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                var parser = LuminPackParseProvider.Cache<T?>.Parser!;");
+        sb.AppendLine($"                var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
         sb.AppendLine("                for (int i = 0; i < length; i++)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    parser.Deserialize(ref reader, ref rentArray[i]);");
+        sb.AppendLine($"                    parser.Deserialize(ref reader, ref rentArray[i]);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                if (rentArray.Length == length)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    // we can use T[] ctor");
-        sb.AppendLine("                    value = ImmutableQueue.Create(rentArray);");
+        sb.AppendLine($"                    value = global::System.Collections.Immutable.ImmutableQueue.Create(rentArray);");
         sb.AppendLine("                }");
         sb.AppendLine("                else");
         sb.AppendLine("                {");
-        sb.AppendLine("                    // IEnumerable<T> method");
-        sb.AppendLine("                    value = ImmutableQueue.CreateRange((new ArraySegment<T?>(rentArray, 0, length)).AsEnumerable());");
+        sb.AppendLine($"                    value = global::System.Collections.Immutable.ImmutableQueue.CreateRange((new global::System.ArraySegment<{elementType}>(rentArray, 0, length)).AsEnumerable());");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
-        sb.AppendLine("                ArrayPool<T?>.Shared.Return(rentArray, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>());");
+        sb.AppendLine($"                global::System.Buffers.ArrayPool<{elementType}>.Shared.Return(rentArray, clearArray: global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>());");
         sb.AppendLine("            }");
     }
 }
@@ -771,6 +765,7 @@ public static class InterfaceImmutableStackFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -782,15 +777,13 @@ public static class InterfaceImmutableStackFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var tempBuffer = ReusableLinkedArrayBufferWriterPool.Rent();");
+        sb.AppendLine("            var tempBuffer = LuminBufferWriterPool.Rent();");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                var tempWriter = new LuminPackWriter(writer.OptionState);");
-        sb.AppendLine();
-        sb.AppendLine("                tempWriter.SetWriteBuffer(tempBuffer);");
+        sb.AppendLine("                var tempWriter = new LuminPackWriter(tempBuffer, writer.OptionState);");
         sb.AppendLine();
         sb.AppendLine("                var count = 0;");
-        sb.AppendLine("                var parser = writer.GetParser<T?>();");
+        sb.AppendLine($"                var parser = writer.GetParser<{elementType}>();");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
         sb.AppendLine("                    count++;");
@@ -798,20 +791,21 @@ public static class InterfaceImmutableStackFormatter
         sb.AppendLine("                    parser.Serialize(ref tempWriter, ref v);");
         sb.AppendLine("                }");
         sb.AppendLine();
-        sb.AppendLine("                tempWriter.Flush();");
-        sb.AppendLine();
-        sb.AppendLine("                // write to parameter writer.");
         sb.AppendLine("                writer.WriteCollectionHeader(ref index, count);");
+        sb.AppendLine();
+        sb.AppendLine("                writer.Advance(4);");
+        sb.AppendLine();
         sb.AppendLine("                tempBuffer.WriteToAndReset(ref writer);");
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
-        sb.AppendLine("                ReusableLinkedArrayBufferWriterPool.Return(tempBuffer);");
+        sb.AppendLine("                LuminBufferWriterPool.Return(tempBuffer);");
         sb.AppendLine("            }");
     }
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -827,40 +821,38 @@ public static class InterfaceImmutableStackFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = ImmutableStack<T?>.Empty;");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableStack<{elementType}>.Empty;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            if (length is 1)");
         sb.AppendLine("            {");
-        sb.AppendLine("                var item = reader.ReadValue<T>();");
-        sb.AppendLine("                value = ImmutableStack.Create(item);");
+        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableStack.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var rentArray = ArrayPool<T?>.Shared.Rent(length);");
+        sb.AppendLine($"            var rentArray = global::System.Buffers.ArrayPool<{elementType}>.Shared.Rent(length);");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                var parser = LuminPackParseProvider.Cache<T?>.Parser!;");
-        sb.AppendLine("                for (int i = 0; i < length; i++)");
+        sb.AppendLine($"                var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
+        sb.AppendLine("                for (int i = length - 1; i >= 0; i--)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    parser.Deserialize(ref reader, ref rentArray[i]);");
+        sb.AppendLine($"                    parser.Deserialize(ref reader, ref rentArray[i]);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                if (rentArray.Length == length)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    // we can use T[] ctor");
-        sb.AppendLine("                    value = ImmutableStack.Create(rentArray);");
+        sb.AppendLine($"                    value = global::System.Collections.Immutable.ImmutableStack.Create(rentArray);");
         sb.AppendLine("                }");
         sb.AppendLine("                else");
         sb.AppendLine("                {");
-        sb.AppendLine("                    // IEnumerable<T> method");
-        sb.AppendLine("                    value = ImmutableStack.CreateRange((new ArraySegment<T?>(rentArray, 0, length)).AsEnumerable());");
+        sb.AppendLine($"                    value = global::System.Collections.Immutable.ImmutableStack.CreateRange((new global::System.ArraySegment<{elementType}>(rentArray, 0, length)).AsEnumerable());");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
-        sb.AppendLine("                ArrayPool<T?>.Shared.Return(rentArray, clearArray: RuntimeHelpers.IsReferenceOrContainsReferences<T>());");
+        sb.AppendLine($"                global::System.Buffers.ArrayPool<{elementType}>.Shared.Return(rentArray, clearArray: global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>());");
         sb.AppendLine("            }");
     }
 }
@@ -869,6 +861,8 @@ public static class InterfaceImmutableDictionaryFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var keyType = GetFirstGeneric(fieldData.TypeName);
+        var valueType = GetSecondGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -880,8 +874,8 @@ public static class InterfaceImmutableDictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var keyParser = writer.GetParser<TKey>();");
-        sb.AppendLine("            var valueParser = writer.GetParser<TValue>();");
+        sb.AppendLine($"            var keyParser = writer.GetParser<{keyType}>();");
+        sb.AppendLine($"            var valueParser = writer.GetParser<{valueType}>();");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
@@ -889,12 +883,14 @@ public static class InterfaceImmutableDictionaryFormatter
         sb.AppendLine();
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
-        sb.AppendLine("                KeyValuePairParser.Serialize(keyParser, valueParser, ref writer, item!);");
+        sb.AppendLine($"                KeyValuePairParser.Serialize(keyParser, valueParser, ref writer, item!);");
         sb.AppendLine("            }");
     }
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var keyType = GetFirstGeneric(fieldData.TypeName);
+        var valueType = GetSecondGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -910,24 +906,17 @@ public static class InterfaceImmutableDictionaryFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                if (keyEqualityComparer != null || valueEqualityComparer != null)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    value = ImmutableDictionary<TKey, TValue?>.Empty.WithComparers(keyEqualityComparer, valueEqualityComparer);");
-        sb.AppendLine("                }");
-        sb.AppendLine("                else");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    value = ImmutableDictionary<TKey, TValue?>.Empty;");
-        sb.AppendLine("                }");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableDictionary<{keyType}, {valueType}>.Empty;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;");
-        sb.AppendLine("            var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;");
+        sb.AppendLine($"            var keyParser = LuminPackParseProvider.Cache<{keyType}>.Parser!;");
+        sb.AppendLine($"            var valueParser = LuminPackParseProvider.Cache<{valueType}>.Parser!;");
         sb.AppendLine();
-        sb.AppendLine("            var builder = ImmutableDictionary.CreateBuilder(keyEqualityComparer, valueEqualityComparer);");
+        sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableDictionary.CreateBuilder<{keyType}, {valueType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);");
+        sb.AppendLine($"                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);");
         sb.AppendLine("                builder.Add(k!, v);");
         sb.AppendLine("            }");
         sb.AppendLine();
@@ -939,6 +928,7 @@ public static class InterfaceImmutableSetFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -950,7 +940,7 @@ public static class InterfaceImmutableSetFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = writer.GetParser<T?>();");
+        sb.AppendLine($"            var parser = writer.GetParser<{elementType}>();");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
@@ -965,6 +955,7 @@ public static class InterfaceImmutableSetFormatter
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -980,30 +971,23 @@ public static class InterfaceImmutableSetFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 0)");
         sb.AppendLine("            {");
-        sb.AppendLine("                if (equalityComparer != null)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    value = ImmutableHashSet<T?>.Empty.WithComparer(equalityComparer);");
-        sb.AppendLine("                }");
-        sb.AppendLine("                else");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    value = ImmutableHashSet<T?>.Empty;");
-        sb.AppendLine("                }");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableHashSet<{elementType}>.Empty;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            if (length == 1)");
         sb.AppendLine("            {");
-        sb.AppendLine("                var item = reader.ReadValue<T>();");
-        sb.AppendLine("                value = ImmutableHashSet.Create(equalityComparer, item);");
+        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableHashSet.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var parser = LuminPackParseProvider.Cache<T?>.Parser!;");
+        sb.AppendLine($"            var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
         sb.AppendLine();
-        sb.AppendLine("            var builder = ImmutableHashSet.CreateBuilder(equalityComparer);");
+        sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableHashSet.CreateBuilder<{elementType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                T? item = default;");
+        sb.AppendLine($"                {elementType} item = default;");
         sb.AppendLine("                parser.Deserialize(ref reader, ref item);");
         sb.AppendLine("                builder.Add(item);");
         sb.AppendLine("            }");

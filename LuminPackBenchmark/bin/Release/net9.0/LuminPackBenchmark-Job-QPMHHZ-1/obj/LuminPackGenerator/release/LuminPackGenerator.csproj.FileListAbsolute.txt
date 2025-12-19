@@ -1,0 +1,10 @@
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-Job-QPMHHZ-1\bin\Release\net9.0\win-x86\publish\LuminPackGenerator.deps.json
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-Job-QPMHHZ-1\bin\Release\net9.0\win-x86\publish\LuminPackGenerator.dll
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-Job-QPMHHZ-1\bin\Release\net9.0\win-x86\publish\LuminPackGenerator.pdb
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-Job-QPMHHZ-1\obj\LuminPackGenerator\release\LuminPackGenerator.csproj.AssemblyReference.cache
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-Job-QPMHHZ-1\obj\LuminPackGenerator\release\LuminPackGenerator.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-Job-QPMHHZ-1\obj\LuminPackGenerator\release\LuminPackGenerator.AssemblyInfoInputs.cache
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-Job-QPMHHZ-1\obj\LuminPackGenerator\release\LuminPackGenerator.AssemblyInfo.cs
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-Job-QPMHHZ-1\obj\LuminPackGenerator\release\LuminPackGenerator.csproj.CoreCompileInputs.cache
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-Job-QPMHHZ-1\obj\LuminPackGenerator\release\LuminPackGenerator.dll
+C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-Job-QPMHHZ-1\obj\LuminPackGenerator\release\LuminPackGenerator.pdb

@@ -931,6 +931,9 @@ public static class LuminPackMarshal
         return type.TypeHandle.Value;
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static nuint AlignOf<T>() where T : unmanaged => (nuint)Unsafe.SizeOf<AlignHelper<T>>() - (nuint)Unsafe.SizeOf<T>();
+    
     private sealed class RawData
     {
         public byte Data;
@@ -1102,11 +1105,11 @@ public static class LuminPackMarshal
         public IEqualityComparer<TKey> _comparer;
         public Dictionary<TKey, TValue>.KeyCollection _keys;
         public Dictionary<TKey, TValue>.ValueCollection _values;
-        public object _syncRoot;
+        private object sync;
         
         public struct Entry
         {
-            public int HashCode;
+            public uint HashCode;
             public int Next;
             public TKey Key;
             public TValue Value;
@@ -1123,14 +1126,20 @@ public static class LuminPackMarshal
         public int _freeList;
         public int _freeCount;
         public IEqualityComparer<T> _comparer;
-        public object _syncRoot;
+        private object sync;
         
         public struct Entry
         {
-            public int HashCode;
+            public uint HashCode;
             public int Next;
             public T Value;
         }
     }
     
+    [StructLayout(LayoutKind.Sequential)]
+    private struct AlignHelper<T> where T : unmanaged
+    {
+        private byte _dummy;
+        private T _data;
+    }
 }

@@ -51,7 +51,7 @@ public static class FrozenDictionaryFormatter
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("            var dict = new Dictionary<TKey, TValue?>(length, equalityComparer);");
+        sb.AppendLine("            var dict = new Dictionary<TKey, TValue?>(length);");
         sb.AppendLine();
         sb.AppendLine("            var keyParser = reader.GetParser<TKey>();");
         sb.AppendLine("            var valueParser = reader.GetParser<TValue>();");
@@ -60,7 +60,7 @@ public static class FrozenDictionaryFormatter
         sb.AppendLine("                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);");
         sb.AppendLine("                dict.Add(k!, v);");
         sb.AppendLine("            }");
-        sb.AppendLine("            value = dict.ToFrozenDictionary(equalityComparer);");
+        sb.AppendLine("            value = dict.ToFrozenDictionary();");
     }
 }
 
@@ -107,7 +107,7 @@ public static class FrozenSetFormatter
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("            var set = new HashSet<T?>(length, equalityComparer);");
+        sb.AppendLine("            var set = new HashSet<T?>(length);");
         sb.AppendLine();
         sb.AppendLine("            var parser = reader.GetParser<T?>();");
         sb.AppendLine("            for (var i = 0; i < length; i++)");
@@ -117,6 +117,6 @@ public static class FrozenSetFormatter
         sb.AppendLine("                set.Add(v);");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            value = set.ToFrozenSet(equalityComparer);");
+        sb.AppendLine("            value = set.ToFrozenSet();");
     }
 }

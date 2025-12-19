@@ -145,6 +145,14 @@ public sealed class LuminBufferWriter :
     /// <param name="writer"></param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Check(ref LuminPackWriter writer) => _buffer.Check(ref writer);
+    
+    /// <summary>
+    /// 不进行偏移，仅检测边界。
+    /// 偏移完全交由LuminPackJsonWriter
+    /// </summary>
+    /// <param name="writer"></param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Check(ref LuminPackJsonWriter writer) => _buffer.Check(ref writer);
 
     public unsafe byte[] ToArrayAndReset()
     {
@@ -171,7 +179,6 @@ public sealed class LuminBufferWriter :
 #else
         Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart), (nint)(uint)writer.CurrentIndex), ref _buffer.WrittenBuffer.Slice(0, CurrentIndex).GetPinnableReference(), (uint)CurrentIndex);
 #endif
-        
 
         writer.Advance(CurrentIndex);
         
@@ -274,6 +281,19 @@ internal unsafe struct BufferSegment : IDisposable
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Check(ref LuminPackWriter writer)
+    {
+        
+        if (*_written > _resizeThreshold) // 87.5% 阈值
+        {
+            Resize(_totalLength << 1); // 双倍扩容
+            writer.FlushBuffer();
+            _resizeThreshold = _totalLength - (_totalLength >> 3);
+        }
+        
+    }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Check(ref LuminPackJsonWriter writer)
     {
         
         if (*_written > _resizeThreshold) // 87.5% 阈值

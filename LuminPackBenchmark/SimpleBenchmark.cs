@@ -1,4 +1,5 @@
 
+using System.Buffers;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Jobs;
@@ -83,6 +84,14 @@ public sealed partial class SimpleClass : SimpleClassBase, Ifoo
             },
         };
     }
+
+    public static SimpleClass Instance = new();
+    
+    [LuminPackPoolRent]
+    public static SimpleClass Rent()
+    {
+        return Instance;
+    }
     
     public override void Write() => Console.WriteLine("Yeah！！！");
 }
@@ -90,7 +99,7 @@ public sealed partial class SimpleClass : SimpleClassBase, Ifoo
 
 [MemoryPackable]
 [MessagePackObject]
-[LuminPackable]
+[LuminPackable(json:true)]
 [NinoType]
 public partial struct Transform
 {
@@ -114,65 +123,12 @@ public partial struct Transform
     
 }
 
-[LuminPackable(generatorType: LuminPack.Enum.GeneratorType.CircleReference)]
-[MemoryPackable(MemoryPack.GenerateType.CircularReference)]
-public partial class Node
-{
-    [LuminPackOrder(0)] 
-    [MemoryPackOrder(0)] 
-    public string Name { get; set; } = string.Empty;
-
-    [LuminPackOrder(1)] 
-    [MemoryPackOrder(1)] 
-    public Node? Parent { get; set; }
-
-    [LuminPackOrder(2)] 
-    [MemoryPackOrder(2)] 
-    public List<Node> Children { get; set; } = new();
-    
-    public static void TestCircleReference(List<string> output)
-    {
-        try
-        {
-            // 构造循环引用：root ↔ child
-            var root = new Node { Name = "root", Children = new() };
-            var child = new Node { Name = "child", Parent = root, Children = new() };
-            root.Children.Add(child);
-
-            // 再加一个“孙子”，让它也指向 root，形成多重引用
-            var grandChild = new Node { Name = "grand", Parent = child, Children = new() };
-            child.Children.Add(grandChild);
-            grandChild.Children.Add(root); // ⚠️ 真正的循环：grandChild → root
-
-            // 序列化
-            var buf = LuminPackSerializer.Serialize(root);
-
-            // 反序列化
-            var root2 = LuminPackSerializer.Deserialize<Node>(buf);
-
-            // 验证对象身份
-            bool ok =
-                ReferenceEquals(root2, root2.Children[0].Parent) && // root ↔ child
-                ReferenceEquals(root2, root2.Children[0].Children[0].Children[0]); // grandChild → root
-
-            output.Add(ok ? "✓ TestCircleReference - PASSED"
-                : "✗ TestCircleReference - FAILED（引用未恢复为同一对象）");
-        }
-        catch (Exception ex)
-        {
-            output.Add($"✗ TestCircleReferenceSerialization - ERROR: {ex.Message}");
-            output.Add($"Stack trace: {ex.StackTrace}");
-        }
-    }
-}
-
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MinColumn, MaxColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
-[ShortRunJob(RuntimeMoniker.Net90)]
+[ShortRunJob(RuntimeMoniker.Net10_0)]
 [MemoryDiagnoser]
 [GcServer]
-[MarkdownExporterAttribute.GitHub]
 public class SimpleBenchmark
 {
     private SimpleClassBase myClass = SimpleClass.Create();
@@ -210,6 +166,7 @@ public class SimpleBenchmark
     [Benchmark]
     public void MemoryPackSerialize()
     {
+        memoryBufferWriter.Reset();
         MemoryPackSerializer.Serialize(memoryBufferWriter, myClass);
     }
     

@@ -10,13 +10,16 @@ public sealed class TimeZoneInfoParser : LuminPackParser<TimeZoneInfo>
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref TimeZoneInfo? value)
     {
-        var length = writer.GetStringLength(value?.ToSerializedString());
+        if (value == null)
+        {
+            writer.WriteNullObjectHeader();
+            writer.Advance(1);
+            return;
+        }
         
-        writer.WriteString(value?.ToSerializedString(), length);
+        int offset = writer.WriteString(value.ToSerializedString()) + writer.StringRecordLength();
         
-        var symbol = writer.Option.StringRecording is LuminPackStringRecording.Token ? 1 : 4;
-        
-        writer.Advance(length + symbol);
+        writer.Advance(offset);
         
     }
 
@@ -25,14 +28,22 @@ public sealed class TimeZoneInfoParser : LuminPackParser<TimeZoneInfo>
     {
         ref var index = ref reader.GetCurrentSpanOffset();
         
+        if (reader.PeekIsNullObject(ref index))
+        {
+            reader.Advance(1);
+            value = null;
+            return;
+        }
+        
         reader.ReadStringLength(ref index, out var length);
         
-        if (reader.Option.StringRecording is LuminPackStringRecording.Length)
-            reader.Advance(4);
+        var source = reader.ReadString(length);
         
-        var source  = reader.ReadString(length) ?? string.Empty;
+        var symbol = reader.StringRecordLength();
         
-        if (source == string.Empty)
+        reader.Advance(length + symbol);
+        
+        if (string.IsNullOrEmpty(source))
         {
             value = null;
             return;
@@ -40,9 +51,6 @@ public sealed class TimeZoneInfoParser : LuminPackParser<TimeZoneInfo>
 
         value = TimeZoneInfo.FromSerializedString(source);
         
-        var symbol = reader.Option.StringRecording is LuminPackStringRecording.Token ? 1 : 0;
-        
-        reader.Advance(length + symbol);
     }
 
     [Preserve]
@@ -50,5 +58,30 @@ public sealed class TimeZoneInfoParser : LuminPackParser<TimeZoneInfo>
     {
         var str = value?.ToSerializedString();
         evaluator += evaluator.GetStringLength(ref str);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref TimeZoneInfo? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteString(value.ToSerializedString());
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref TimeZoneInfo? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        var source = reader.ReadString();
+        value = TimeZoneInfo.FromSerializedString(source);
     }
 }

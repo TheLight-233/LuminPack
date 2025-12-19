@@ -1121,9 +1121,9 @@ public static class CollectionFormatter
         sb.AppendLine("                value.Clear();");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var list = LuminPackMarshal.As<global::System.Collections.ObjectModel.Collection<{elementType}>, CollectionView<{elementType}>>(ref value);");
+        sb.AppendLine($"            var list = LuminPackMarshal.As<global::System.Collections.ObjectModel.Collection<{elementType}>, CollectionView<{elementType}>>(ref value);");
         sb.AppendLine();
-        sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(ref list.items!, length);");
+        sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(list.items!, length);");
         sb.AppendLine();
         sb.AppendLine("            reader.ReadSpan(ref index, length, ref span);");
     }
@@ -1194,11 +1194,11 @@ public static class ObservableCollectionFormatter
         sb.AppendLine("                value.Clear();");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var list = LuminPackMarshal.As<global::System.Collections.ObjectModel.ObservableCollection<{elementType}>, ObservableCollectionView<{elementType}>>(ref value);");
+        sb.AppendLine($"            var list = LuminPackMarshal.As<global::System.Collections.ObjectModel.ObservableCollection<{elementType}>, ObservableCollectionView<{elementType}>>(ref value);");
         sb.AppendLine();
         sb.AppendLine("            list.items = new global::System.Collections.Generic.List<{elementType}>(length);");
         sb.AppendLine();
-        sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(ref list.items!, length);");
+        sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(list.items!, length);");
         sb.AppendLine();
         sb.AppendLine("            reader.ReadSpan(ref index, length, ref span);");
     }

@@ -12,11 +12,14 @@ public sealed class MetaInfo
     public bool IsNet8 { get; set; }
     
     public bool IsForUnity { get; set; }
+    
+    public bool AllowUnsafe { get; set; } 
 
-    public MetaInfo(CSharpParseOptions options, LanguageVersion version, bool isNet8)
+    public MetaInfo(CSharpParseOptions options, LanguageVersion version, bool isNet8, bool allowUnsafe)
     {
         ParseOptions = options;
         CSharpVersion = version;
         IsNet8 = isNet8;
+        AllowUnsafe = allowUnsafe;
     }
 }

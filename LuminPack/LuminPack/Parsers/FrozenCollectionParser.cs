@@ -113,6 +113,74 @@ public sealed class FrozenDictionaryParser<TKey, TValue> : LuminPackParser<Froze
         if (i != count) 
             LuminPackExceptionHelper.ThrowInvalidConcurrrentCollectionOperation();
     }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref FrozenDictionary<TKey, TValue?>? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+
+        writer.WriteArrayStart();
+
+        if (value.Count > 0)
+        {
+            foreach (var item in value)
+            {
+                writer.WriteArrayStart();
+                
+                var k = item.Key;
+                keyParser.SerializeJson(ref writer, ref k);
+                
+                var v = item.Value;
+                valueParser.SerializeJson(ref writer, ref v);
+                
+                writer.WriteArrayEnd();
+            }
+        }
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref FrozenDictionary<TKey, TValue?>? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        var dict = new Dictionary<TKey, TValue?>(equalityComparer);
+
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+
+        reader.TryConsumeArrayStart();
+
+        while (reader.Read())
+        {
+            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                break;
+
+            reader.TryConsumeArrayStart();
+            
+            TKey? k = default;
+            keyParser.DeserializeJson(ref reader, ref k);
+            
+            TValue? v = default;
+            valueParser.DeserializeJson(ref reader, ref v);
+            
+            dict.Add(k!, v);
+        }
+
+        value = dict.ToFrozenDictionary(equalityComparer);
+    }
     
 }
 
@@ -204,6 +272,59 @@ public sealed class FrozenSetParser<T> : LuminPackParser<FrozenSet<T?>>
             var v = item;
             eval.CalculateOffset(ref evaluator, ref v);
         }
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref FrozenSet<T?>? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        if (value.Count > 0)
+        {
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+
+            foreach (var item in value)
+            {
+                var temp = item;
+                parser.SerializeJson(ref writer, ref temp);
+            }
+        }
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref FrozenSet<T?>? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        var set = new HashSet<T?>(equalityComparer);
+
+        var parser = LuminPackParseProvider.Cache<T>.Parser!;
+
+        reader.TryConsumeArrayStart();
+
+        while (reader.Read())
+        {
+            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                break;
+
+            T? item = default;
+            parser.DeserializeJson(ref reader, ref item);
+            set.Add(item);
+        }
+
+        value = set.ToFrozenSet(equalityComparer)!;
     }
 }
 #endif

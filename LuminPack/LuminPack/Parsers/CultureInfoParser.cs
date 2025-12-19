@@ -8,29 +8,27 @@ namespace LuminPack.Parsers;
 [Preserve]
 public sealed class CultureInfoParser : LuminPackParser<CultureInfo>
 {
+    public static readonly bool IsInvariantMode = 
+        ReferenceEquals(CultureInfo.CurrentCulture, CultureInfo.InvariantCulture) &&
+        ReferenceEquals(CultureInfo.CurrentUICulture, CultureInfo.InvariantCulture);
+    
+    public static readonly string InvariantCultureName = CultureInfo.InvariantCulture.Name;
+    
     // treat as string
     
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref CultureInfo? value)
     {
-        ref var index = ref writer.GetCurrentSpanOffset();
-        
-        if (value is null)
+        if (value == null)
         {
-            writer.WriteNullStringHeader(ref index, out var offset);
-                
-            writer.Advance(offset);
-            
+            writer.WriteNullObjectHeader();
+            writer.Advance(1);
             return;
         }
         
-        var length = writer.GetStringLength(value.Name);
+        int offset = writer.WriteString(value.Name) + writer.StringRecordLength();
         
-        writer.WriteString(value.Name, length);
-        
-        var symbol = writer.Option.StringRecording is LuminPackStringRecording.Token ? 1 : 4;
-        
-        writer.Advance(length + symbol);
+        writer.Advance(offset);
     }
 
     [Preserve]
@@ -38,24 +36,36 @@ public sealed class CultureInfoParser : LuminPackParser<CultureInfo>
     {
         ref var index = ref reader.GetCurrentSpanOffset();
         
+        if (reader.PeekIsNullObject(ref index))
+        {
+            reader.Advance(1);
+            value = null;
+            return;
+        }
+        
         reader.ReadStringLength(ref index, out var length);
         
-        if (reader.Option.StringRecording is LuminPackStringRecording.Length)
-            reader.Advance(4);
+        var str  = reader.ReadString(length);
         
-        var str = reader.ReadString(index, length) ?? string.Empty;
-        if (str == string.Empty)
+        var symbol = reader.StringRecordLength();
+        
+        reader.Advance(length + symbol);
+        
+        if (string.IsNullOrEmpty(str))
         {
             value = null;
         }
         else
         {
-            value = CultureInfo.GetCultureInfo(str);
+            if (IsInvariantMode)
+            {
+                value = str == InvariantCultureName ? CultureInfo.InvariantCulture : null;
+            }
+            else
+            {
+                value = CultureInfo.GetCultureInfo(str);
+            }
         }
-        
-        var symbol = reader.Option.StringRecording is LuminPackStringRecording.Token ? 1 : 0;
-        
-        reader.Advance(length + symbol);
     }
 
     [Preserve]
@@ -63,5 +73,37 @@ public sealed class CultureInfoParser : LuminPackParser<CultureInfo>
     {
         var str = value is null ? string.Empty : value.Name;
         evaluator += evaluator.GetStringLength(ref str);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref CultureInfo? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteString(value.Name);
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref CultureInfo? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        var str = reader.ReadString();
+        if (IsInvariantMode)
+        {
+            value = str == InvariantCultureName ? CultureInfo.InvariantCulture : null;
+        }
+        else
+        {
+            value = CultureInfo.GetCultureInfo(str);
+        }
     }
 }

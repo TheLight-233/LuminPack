@@ -229,11 +229,11 @@ namespace LuminPack.SourceGenerator
                 ["global::System.Collections.Generic.IReadOnlySet"] = (InterfaceReadOnlySetFormatter.GenerateSerializeCode, InterfaceReadOnlySetFormatter.GenerateDeserializeCode),
 
                 // 不可变集合接口
-                ["global::System.Collections.Immutable.IImmutableList"] = (ImmutableListFormatter.GenerateSerializeCode, ImmutableListFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.IImmutableQueue"] = (ImmutableQueueFormatter.GenerateSerializeCode, ImmutableQueueFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.IImmutableStack"] = (ImmutableStackFormatter.GenerateSerializeCode, ImmutableStackFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.IImmutableDictionary"] = (ImmutableDictionaryFormatter.GenerateSerializeCode, ImmutableDictionaryFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.IImmutableSet"] = (ImmutableHashSetFormatter.GenerateSerializeCode, ImmutableHashSetFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.Immutable.IImmutableList"] = (InterfaceImmutableListFormatter.GenerateSerializeCode, InterfaceImmutableListFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.Immutable.IImmutableQueue"] = (InterfaceImmutableQueueFormatter.GenerateSerializeCode, InterfaceImmutableQueueFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.Immutable.IImmutableStack"] = (InterfaceImmutableStackFormatter.GenerateSerializeCode, InterfaceImmutableStackFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.Immutable.IImmutableDictionary"] = (InterfaceImmutableDictionaryFormatter.GenerateSerializeCode, InterfaceImmutableDictionaryFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.Immutable.IImmutableSet"] = (InterfaceImmutableSetFormatter.GenerateSerializeCode, InterfaceImmutableSetFormatter.GenerateDeserializeCode),
                 
                 // 数组类型
                 ["global::System.Array"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),

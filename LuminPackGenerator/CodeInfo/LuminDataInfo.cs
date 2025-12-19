@@ -27,10 +27,13 @@ namespace LuminPack.Code
         
         //Union
         public bool isUnion;
+        public bool IsWideTag { get; set; }
         public Dictionary<INamedTypeSymbol, List<string>> UnionGenericTypes { get; } = 
             new Dictionary<INamedTypeSymbol, List<string>>(SymbolEqualityComparer.Default);
         public List<LuminUnionMemberInfo> UnionMembers { get; } = new List<LuminUnionMemberInfo>();
         
+        //PoolRent
+        public IMethodSymbol RentPoolMethod { get; set; }
     }
     
     public class GenericParameterConstraint

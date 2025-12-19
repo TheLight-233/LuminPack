@@ -35,7 +35,7 @@ namespace LuminPack.Core
             else
             {
                 // 32位兼容版本
-                Unsafe.SkipInit(out value1);
+                value1 = default!;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
                 return Unsafe.SizeOf<T1>();
             }
@@ -66,7 +66,7 @@ namespace LuminPack.Core
             else
             {
                 // 32位兼容版本
-                Unsafe.SkipInit(out value1);
+                value1 = default!;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
             }
             
@@ -100,7 +100,7 @@ namespace LuminPack.Core
             else
             {
                 // 32位兼容版本
-                Unsafe.SkipInit(out value1);
+                value1 = default!;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
                 return Unsafe.SizeOf<T1>();
             }

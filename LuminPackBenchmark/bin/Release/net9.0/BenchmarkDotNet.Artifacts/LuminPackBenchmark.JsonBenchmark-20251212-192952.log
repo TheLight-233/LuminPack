@@ -1,0 +1,653 @@
+// Validating benchmarks:
+// ***** BenchmarkRunner: Start   *****
+// ***** Found 6 benchmark(s) in total *****
+// ***** Building 1 exe(s) in Parallel: Start   *****
+// start dotnet  restore --nodeReuse:false /p:UseSharedCompilation=false /p:Deterministic=true /p:Optimize=true /p:ArtifactsPath="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1/" /p:OutDir="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net10.0/" /p:OutputPath="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net10.0/" /p:PublishDir="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\publish/" in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1
+// command took 2.31 sec and exited with 0
+// start dotnet  build -c Release --no-restore --nodeReuse:false /p:UseSharedCompilation=false /p:Deterministic=true /p:Optimize=true /p:ArtifactsPath="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1/" /p:OutDir="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net10.0/" /p:OutputPath="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net10.0/" /p:PublishDir="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\publish/" --output "C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net10.0/" in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1
+// command took 13.7 sec and exited with 0
+// ***** Done, took 00:00:16 (16.09 sec)   *****
+// Found 6 benchmarks:
+//   JsonBenchmark.LuminPackDeserializeFromJson: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+//   JsonBenchmark.SystemTextJsonDeserialize: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+//   JsonBenchmark.NewtonsoftJsonDeserialize: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+//   JsonBenchmark.LuminPackSerializeToJson: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+//   JsonBenchmark.SystemTextJsonSerialize: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+//   JsonBenchmark.NewtonsoftJsonSerialize: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: JsonBenchmark.LuminPackDeserializeFromJson: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet LuminPackBenchmark-1.dll --anonymousPipes 1596 1584 --benchmarkName LuminPackBenchmark.JsonBenchmark.LuminPackDeserializeFromJson --job "ShortRun-.NET 10.0" --benchmarkId 0 in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net10.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.6
+// Runtime=.NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2+BMI1+BMI2+F16C+FMA+LZCNT+MOVBE,AVX,SSE3+SSSE3+SSE4.1+SSE4.2+POPCNT,X86Base+SSE+SSE2,AES+PCLMUL,AvxVnni,SERIALIZE VectorSize=256
+// Job: ShortRun-.NET 10.0(Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 155400.00 ns, 155.4000 us/op
+WorkloadJitting  1: 1 op, 6303700.00 ns, 6.3037 ms/op
+
+OverheadJitting  2: 16 op, 359000.00 ns, 22.4375 us/op
+WorkloadJitting  2: 16 op, 2595400.00 ns, 162.2125 us/op
+
+WorkloadPilot    1: 16 op, 2041500.00 ns, 127.5938 us/op
+WorkloadPilot    2: 32 op, 4362400.00 ns, 136.3250 us/op
+WorkloadPilot    3: 64 op, 8514900.00 ns, 133.0453 us/op
+WorkloadPilot    4: 128 op, 14983100.00 ns, 117.0555 us/op
+WorkloadPilot    5: 256 op, 25285000.00 ns, 98.7695 us/op
+WorkloadPilot    6: 512 op, 60469500.00 ns, 118.1045 us/op
+WorkloadPilot    7: 1024 op, 106221400.00 ns, 103.7318 us/op
+WorkloadPilot    8: 2048 op, 82681700.00 ns, 40.3719 us/op
+WorkloadPilot    9: 4096 op, 91164300.00 ns, 22.2569 us/op
+WorkloadPilot   10: 8192 op, 163183800.00 ns, 19.9199 us/op
+WorkloadPilot   11: 16384 op, 295899000.00 ns, 18.0602 us/op
+WorkloadPilot   12: 32768 op, 578217900.00 ns, 17.6458 us/op
+
+OverheadWarmup   1: 32768 op, 121300.00 ns, 3.7018 ns/op
+OverheadWarmup   2: 32768 op, 117500.00 ns, 3.5858 ns/op
+OverheadWarmup   3: 32768 op, 119100.00 ns, 3.6346 ns/op
+OverheadWarmup   4: 32768 op, 115100.00 ns, 3.5126 ns/op
+OverheadWarmup   5: 32768 op, 120100.00 ns, 3.6652 ns/op
+OverheadWarmup   6: 32768 op, 131200.00 ns, 4.0039 ns/op
+OverheadWarmup   7: 32768 op, 114000.00 ns, 3.4790 ns/op
+
+OverheadActual   1: 32768 op, 122200.00 ns, 3.7292 ns/op
+OverheadActual   2: 32768 op, 281800.00 ns, 8.5999 ns/op
+OverheadActual   3: 32768 op, 119100.00 ns, 3.6346 ns/op
+OverheadActual   4: 32768 op, 120300.00 ns, 3.6713 ns/op
+OverheadActual   5: 32768 op, 125100.00 ns, 3.8177 ns/op
+OverheadActual   6: 32768 op, 131000.00 ns, 3.9978 ns/op
+OverheadActual   7: 32768 op, 122200.00 ns, 3.7292 ns/op
+OverheadActual   8: 32768 op, 118400.00 ns, 3.6133 ns/op
+OverheadActual   9: 32768 op, 118500.00 ns, 3.6163 ns/op
+OverheadActual  10: 32768 op, 118300.00 ns, 3.6102 ns/op
+OverheadActual  11: 32768 op, 123000.00 ns, 3.7537 ns/op
+OverheadActual  12: 32768 op, 118500.00 ns, 3.6163 ns/op
+OverheadActual  13: 32768 op, 136200.00 ns, 4.1565 ns/op
+OverheadActual  14: 32768 op, 166500.00 ns, 5.0812 ns/op
+OverheadActual  15: 32768 op, 124300.00 ns, 3.7933 ns/op
+OverheadActual  16: 32768 op, 121300.00 ns, 3.7018 ns/op
+
+WorkloadWarmup   1: 32768 op, 583655300.00 ns, 17.8117 us/op
+WorkloadWarmup   2: 32768 op, 573333800.00 ns, 17.4968 us/op
+WorkloadWarmup   3: 32768 op, 570946200.00 ns, 17.4239 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 32768 op, 563966500.00 ns, 17.2109 us/op
+WorkloadActual   2: 32768 op, 563591700.00 ns, 17.1995 us/op
+WorkloadActual   3: 32768 op, 570842800.00 ns, 17.4207 us/op
+
+// AfterActualRun
+WorkloadResult   1: 32768 op, 563844300.00 ns, 17.2072 us/op
+WorkloadResult   2: 32768 op, 563469500.00 ns, 17.1957 us/op
+WorkloadResult   3: 32768 op, 570720600.00 ns, 17.4170 us/op
+// GC:  16 0 0 201326592 32768
+// Threading:  0 0 32768
+
+// AfterAll
+// Benchmark Process 23440 has exited with code 0.
+
+Mean = 17.273 μs, StdErr = 0.072 μs (0.42%), N = 3, StdDev = 0.125 μs
+Min = 17.196 μs, Q1 = 17.201 μs, Median = 17.207 μs, Q3 = 17.312 μs, Max = 17.417 μs
+IQR = 0.111 μs, LowerFence = 17.035 μs, UpperFence = 17.478 μs
+ConfidenceInterval = [15.000 μs; 19.546 μs] (CI 99.9%), Margin = 2.273 μs (13.16% of Mean)
+Skewness = 0.38, Kurtosis = 0.67, MValue = 2
+
+// ** Remained 5 (83.3 %) benchmark(s) to run. Estimated finish 2025-12-12 19:30 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: JsonBenchmark.SystemTextJsonDeserialize: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet LuminPackBenchmark-1.dll --anonymousPipes 1140 1308 --benchmarkName LuminPackBenchmark.JsonBenchmark.SystemTextJsonDeserialize --job "ShortRun-.NET 10.0" --benchmarkId 1 in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net10.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.6
+// Runtime=.NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2+BMI1+BMI2+F16C+FMA+LZCNT+MOVBE,AVX,SSE3+SSSE3+SSE4.1+SSE4.2+POPCNT,X86Base+SSE+SSE2,AES+PCLMUL,AvxVnni,SERIALIZE VectorSize=256
+// Job: ShortRun-.NET 10.0(Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 173800.00 ns, 173.8000 us/op
+WorkloadJitting  1: 1 op, 10492100.00 ns, 10.4921 ms/op
+
+OverheadJitting  2: 16 op, 332000.00 ns, 20.7500 us/op
+WorkloadJitting  2: 16 op, 3400300.00 ns, 212.5188 us/op
+
+WorkloadPilot    1: 16 op, 3232600.00 ns, 202.0375 us/op
+WorkloadPilot    2: 32 op, 6402700.00 ns, 200.0844 us/op
+WorkloadPilot    3: 64 op, 12581700.00 ns, 196.5891 us/op
+WorkloadPilot    4: 128 op, 23690400.00 ns, 185.0813 us/op
+WorkloadPilot    5: 256 op, 46635400.00 ns, 182.1695 us/op
+WorkloadPilot    6: 512 op, 100254200.00 ns, 195.8090 us/op
+WorkloadPilot    7: 1024 op, 162675900.00 ns, 158.8632 us/op
+WorkloadPilot    8: 2048 op, 247757600.00 ns, 120.9754 us/op
+WorkloadPilot    9: 4096 op, 295157400.00 ns, 72.0599 us/op
+WorkloadPilot   10: 8192 op, 220290800.00 ns, 26.8910 us/op
+WorkloadPilot   11: 16384 op, 429668900.00 ns, 26.2249 us/op
+WorkloadPilot   12: 32768 op, 849551800.00 ns, 25.9263 us/op
+
+OverheadWarmup   1: 32768 op, 164000.00 ns, 5.0049 ns/op
+OverheadWarmup   2: 32768 op, 125600.00 ns, 3.8330 ns/op
+OverheadWarmup   3: 32768 op, 124400.00 ns, 3.7964 ns/op
+OverheadWarmup   4: 32768 op, 125500.00 ns, 3.8300 ns/op
+OverheadWarmup   5: 32768 op, 124300.00 ns, 3.7933 ns/op
+OverheadWarmup   6: 32768 op, 127300.00 ns, 3.8849 ns/op
+OverheadWarmup   7: 32768 op, 123900.00 ns, 3.7811 ns/op
+
+OverheadActual   1: 32768 op, 122800.00 ns, 3.7476 ns/op
+OverheadActual   2: 32768 op, 122000.00 ns, 3.7231 ns/op
+OverheadActual   3: 32768 op, 122900.00 ns, 3.7506 ns/op
+OverheadActual   4: 32768 op, 122900.00 ns, 3.7506 ns/op
+OverheadActual   5: 32768 op, 123900.00 ns, 3.7811 ns/op
+OverheadActual   6: 32768 op, 123500.00 ns, 3.7689 ns/op
+OverheadActual   7: 32768 op, 136300.00 ns, 4.1595 ns/op
+OverheadActual   8: 32768 op, 126000.00 ns, 3.8452 ns/op
+OverheadActual   9: 32768 op, 116700.00 ns, 3.5614 ns/op
+OverheadActual  10: 32768 op, 137900.00 ns, 4.2084 ns/op
+OverheadActual  11: 32768 op, 114200.00 ns, 3.4851 ns/op
+OverheadActual  12: 32768 op, 122500.00 ns, 3.7384 ns/op
+OverheadActual  13: 32768 op, 121000.00 ns, 3.6926 ns/op
+OverheadActual  14: 32768 op, 124200.00 ns, 3.7903 ns/op
+OverheadActual  15: 32768 op, 120100.00 ns, 3.6652 ns/op
+
+WorkloadWarmup   1: 32768 op, 855296100.00 ns, 26.1016 us/op
+WorkloadWarmup   2: 32768 op, 846612700.00 ns, 25.8366 us/op
+WorkloadWarmup   3: 32768 op, 848132400.00 ns, 25.8829 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 32768 op, 852674200.00 ns, 26.0216 us/op
+WorkloadActual   2: 32768 op, 849086100.00 ns, 25.9121 us/op
+WorkloadActual   3: 32768 op, 856023600.00 ns, 26.1238 us/op
+
+// AfterActualRun
+WorkloadResult   1: 32768 op, 852551300.00 ns, 26.0178 us/op
+WorkloadResult   2: 32768 op, 848963200.00 ns, 25.9083 us/op
+WorkloadResult   3: 32768 op, 855900700.00 ns, 26.1200 us/op
+// GC:  31 0 0 393740288 32768
+// Threading:  0 0 32768
+
+// AfterAll
+// Benchmark Process 8612 has exited with code 0.
+
+Mean = 26.015 μs, StdErr = 0.061 μs (0.23%), N = 3, StdDev = 0.106 μs
+Min = 25.908 μs, Q1 = 25.963 μs, Median = 26.018 μs, Q3 = 26.069 μs, Max = 26.120 μs
+IQR = 0.106 μs, LowerFence = 25.804 μs, UpperFence = 26.228 μs
+ConfidenceInterval = [24.084 μs; 27.947 μs] (CI 99.9%), Margin = 1.932 μs (7.42% of Mean)
+Skewness = -0.02, Kurtosis = 0.67, MValue = 2
+
+// ** Remained 4 (66.7 %) benchmark(s) to run. Estimated finish 2025-12-12 19:31 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: JsonBenchmark.NewtonsoftJsonDeserialize: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet LuminPackBenchmark-1.dll --anonymousPipes 1620 1616 --benchmarkName LuminPackBenchmark.JsonBenchmark.NewtonsoftJsonDeserialize --job "ShortRun-.NET 10.0" --benchmarkId 2 in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net10.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.6
+// Runtime=.NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2+BMI1+BMI2+F16C+FMA+LZCNT+MOVBE,AVX,SSE3+SSSE3+SSE4.1+SSE4.2+POPCNT,X86Base+SSE+SSE2,AES+PCLMUL,AvxVnni,SERIALIZE VectorSize=256
+// Job: ShortRun-.NET 10.0(Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 138300.00 ns, 138.3000 us/op
+WorkloadJitting  1: 1 op, 18321700.00 ns, 18.3217 ms/op
+
+OverheadJitting  2: 16 op, 495800.00 ns, 30.9875 us/op
+WorkloadJitting  2: 16 op, 7034800.00 ns, 439.6750 us/op
+
+WorkloadPilot    1: 16 op, 6765000.00 ns, 422.8125 us/op
+WorkloadPilot    2: 32 op, 12658500.00 ns, 395.5781 us/op
+WorkloadPilot    3: 64 op, 24054200.00 ns, 375.8469 us/op
+WorkloadPilot    4: 128 op, 46090700.00 ns, 360.0836 us/op
+WorkloadPilot    5: 256 op, 120367800.00 ns, 470.1867 us/op
+WorkloadPilot    6: 512 op, 307800900.00 ns, 601.1736 us/op
+WorkloadPilot    7: 1024 op, 136972200.00 ns, 133.7619 us/op
+WorkloadPilot    8: 2048 op, 143385400.00 ns, 70.0124 us/op
+WorkloadPilot    9: 4096 op, 252836300.00 ns, 61.7276 us/op
+WorkloadPilot   10: 8192 op, 504377100.00 ns, 61.5695 us/op
+
+OverheadWarmup   1: 8192 op, 47300.00 ns, 5.7739 ns/op
+OverheadWarmup   2: 8192 op, 31000.00 ns, 3.7842 ns/op
+OverheadWarmup   3: 8192 op, 31300.00 ns, 3.8208 ns/op
+OverheadWarmup   4: 8192 op, 29800.00 ns, 3.6377 ns/op
+OverheadWarmup   5: 8192 op, 33400.00 ns, 4.0771 ns/op
+OverheadWarmup   6: 8192 op, 32000.00 ns, 3.9063 ns/op
+
+OverheadActual   1: 8192 op, 30300.00 ns, 3.6987 ns/op
+OverheadActual   2: 8192 op, 30600.00 ns, 3.7354 ns/op
+OverheadActual   3: 8192 op, 31500.00 ns, 3.8452 ns/op
+OverheadActual   4: 8192 op, 29800.00 ns, 3.6377 ns/op
+OverheadActual   5: 8192 op, 31200.00 ns, 3.8086 ns/op
+OverheadActual   6: 8192 op, 36600.00 ns, 4.4678 ns/op
+OverheadActual   7: 8192 op, 30800.00 ns, 3.7598 ns/op
+OverheadActual   8: 8192 op, 30600.00 ns, 3.7354 ns/op
+OverheadActual   9: 8192 op, 33000.00 ns, 4.0283 ns/op
+OverheadActual  10: 8192 op, 97000.00 ns, 11.8408 ns/op
+OverheadActual  11: 8192 op, 30900.00 ns, 3.7720 ns/op
+OverheadActual  12: 8192 op, 31300.00 ns, 3.8208 ns/op
+OverheadActual  13: 8192 op, 32200.00 ns, 3.9307 ns/op
+OverheadActual  14: 8192 op, 33000.00 ns, 4.0283 ns/op
+OverheadActual  15: 8192 op, 33000.00 ns, 4.0283 ns/op
+OverheadActual  16: 8192 op, 31800.00 ns, 3.8818 ns/op
+
+WorkloadWarmup   1: 8192 op, 504430600.00 ns, 61.5760 us/op
+WorkloadWarmup   2: 8192 op, 509514100.00 ns, 62.1965 us/op
+WorkloadWarmup   3: 8192 op, 498569600.00 ns, 60.8605 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 8192 op, 499939500.00 ns, 61.0278 us/op
+WorkloadActual   2: 8192 op, 499878200.00 ns, 61.0203 us/op
+WorkloadActual   3: 8192 op, 500310900.00 ns, 61.0731 us/op
+
+// AfterActualRun
+WorkloadResult   1: 8192 op, 499908100.00 ns, 61.0239 us/op
+WorkloadResult   2: 8192 op, 499846800.00 ns, 61.0165 us/op
+WorkloadResult   3: 8192 op, 500279500.00 ns, 61.0693 us/op
+// GC:  36 0 0 461373440 8192
+// Threading:  0 0 8192
+
+// AfterAll
+// Benchmark Process 18268 has exited with code 0.
+
+Mean = 61.037 μs, StdErr = 0.017 μs (0.03%), N = 3, StdDev = 0.029 μs
+Min = 61.016 μs, Q1 = 61.020 μs, Median = 61.024 μs, Q3 = 61.047 μs, Max = 61.069 μs
+IQR = 0.026 μs, LowerFence = 60.981 μs, UpperFence = 61.086 μs
+ConfidenceInterval = [60.515 μs; 61.558 μs] (CI 99.9%), Margin = 0.521 μs (0.85% of Mean)
+Skewness = 0.36, Kurtosis = 0.67, MValue = 2
+
+// ** Remained 3 (50.0 %) benchmark(s) to run. Estimated finish 2025-12-12 19:30 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: JsonBenchmark.LuminPackSerializeToJson: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet LuminPackBenchmark-1.dll --anonymousPipes 1256 1328 --benchmarkName LuminPackBenchmark.JsonBenchmark.LuminPackSerializeToJson --job "ShortRun-.NET 10.0" --benchmarkId 3 in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net10.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.6
+// Runtime=.NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2+BMI1+BMI2+F16C+FMA+LZCNT+MOVBE,AVX,SSE3+SSSE3+SSE4.1+SSE4.2+POPCNT,X86Base+SSE+SSE2,AES+PCLMUL,AvxVnni,SERIALIZE VectorSize=256
+// Job: ShortRun-.NET 10.0(Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 106400.00 ns, 106.4000 us/op
+WorkloadJitting  1: 1 op, 347300.00 ns, 347.3000 us/op
+
+OverheadJitting  2: 16 op, 130100.00 ns, 8.1313 us/op
+WorkloadJitting  2: 16 op, 1128200.00 ns, 70.5125 us/op
+
+WorkloadPilot    1: 16 op, 983500.00 ns, 61.4688 us/op
+WorkloadPilot    2: 32 op, 2119600.00 ns, 66.2375 us/op
+WorkloadPilot    3: 64 op, 3923400.00 ns, 61.3031 us/op
+WorkloadPilot    4: 128 op, 8399500.00 ns, 65.6211 us/op
+WorkloadPilot    5: 256 op, 15444000.00 ns, 60.3281 us/op
+WorkloadPilot    6: 512 op, 32523500.00 ns, 63.5225 us/op
+WorkloadPilot    7: 1024 op, 64391900.00 ns, 62.8827 us/op
+WorkloadPilot    8: 2048 op, 112713700.00 ns, 55.0360 us/op
+WorkloadPilot    9: 4096 op, 122420900.00 ns, 29.8879 us/op
+WorkloadPilot   10: 8192 op, 205358300.00 ns, 25.0682 us/op
+WorkloadPilot   11: 16384 op, 315176500.00 ns, 19.2368 us/op
+WorkloadPilot   12: 32768 op, 634316800.00 ns, 19.3578 us/op
+
+OverheadWarmup   1: 32768 op, 69400.00 ns, 2.1179 ns/op
+OverheadWarmup   2: 32768 op, 65500.00 ns, 1.9989 ns/op
+OverheadWarmup   3: 32768 op, 63300.00 ns, 1.9318 ns/op
+OverheadWarmup   4: 32768 op, 64100.00 ns, 1.9562 ns/op
+OverheadWarmup   5: 32768 op, 67400.00 ns, 2.0569 ns/op
+OverheadWarmup   6: 32768 op, 66100.00 ns, 2.0172 ns/op
+OverheadWarmup   7: 32768 op, 64700.00 ns, 1.9745 ns/op
+OverheadWarmup   8: 32768 op, 65500.00 ns, 1.9989 ns/op
+OverheadWarmup   9: 32768 op, 66000.00 ns, 2.0142 ns/op
+OverheadWarmup  10: 32768 op, 66000.00 ns, 2.0142 ns/op
+
+OverheadActual   1: 32768 op, 69800.00 ns, 2.1301 ns/op
+OverheadActual   2: 32768 op, 75300.00 ns, 2.2980 ns/op
+OverheadActual   3: 32768 op, 67900.00 ns, 2.0721 ns/op
+OverheadActual   4: 32768 op, 170400.00 ns, 5.2002 ns/op
+OverheadActual   5: 32768 op, 75200.00 ns, 2.2949 ns/op
+OverheadActual   6: 32768 op, 64100.00 ns, 1.9562 ns/op
+OverheadActual   7: 32768 op, 71900.00 ns, 2.1942 ns/op
+OverheadActual   8: 32768 op, 62700.00 ns, 1.9135 ns/op
+OverheadActual   9: 32768 op, 67400.00 ns, 2.0569 ns/op
+OverheadActual  10: 32768 op, 65600.00 ns, 2.0020 ns/op
+OverheadActual  11: 32768 op, 67400.00 ns, 2.0569 ns/op
+OverheadActual  12: 32768 op, 78700.00 ns, 2.4017 ns/op
+OverheadActual  13: 32768 op, 67800.00 ns, 2.0691 ns/op
+OverheadActual  14: 32768 op, 65600.00 ns, 2.0020 ns/op
+OverheadActual  15: 32768 op, 73800.00 ns, 2.2522 ns/op
+OverheadActual  16: 32768 op, 65400.00 ns, 1.9958 ns/op
+OverheadActual  17: 32768 op, 67400.00 ns, 2.0569 ns/op
+OverheadActual  18: 32768 op, 65600.00 ns, 2.0020 ns/op
+OverheadActual  19: 32768 op, 64600.00 ns, 1.9714 ns/op
+OverheadActual  20: 32768 op, 64100.00 ns, 1.9562 ns/op
+
+WorkloadWarmup   1: 32768 op, 631441600.00 ns, 19.2701 us/op
+WorkloadWarmup   2: 32768 op, 634208800.00 ns, 19.3545 us/op
+WorkloadWarmup   3: 32768 op, 626401600.00 ns, 19.1163 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 32768 op, 643530400.00 ns, 19.6390 us/op
+WorkloadActual   2: 32768 op, 644246200.00 ns, 19.6608 us/op
+WorkloadActual   3: 32768 op, 644580700.00 ns, 19.6710 us/op
+
+// AfterActualRun
+WorkloadResult   1: 32768 op, 643463000.00 ns, 19.6369 us/op
+WorkloadResult   2: 32768 op, 644178800.00 ns, 19.6588 us/op
+WorkloadResult   3: 32768 op, 644513300.00 ns, 19.6690 us/op
+// GC:  0 0 0 0 32768
+// Threading:  0 0 32768
+
+// AfterAll
+// Benchmark Process 18948 has exited with code 0.
+
+Mean = 19.655 μs, StdErr = 0.009 μs (0.05%), N = 3, StdDev = 0.016 μs
+Min = 19.637 μs, Q1 = 19.648 μs, Median = 19.659 μs, Q3 = 19.664 μs, Max = 19.669 μs
+IQR = 0.016 μs, LowerFence = 19.624 μs, UpperFence = 19.688 μs
+ConfidenceInterval = [19.356 μs; 19.954 μs] (CI 99.9%), Margin = 0.299 μs (1.52% of Mean)
+Skewness = -0.22, Kurtosis = 0.67, MValue = 2
+
+// ** Remained 2 (33.3 %) benchmark(s) to run. Estimated finish 2025-12-12 19:30 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: JsonBenchmark.SystemTextJsonSerialize: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet LuminPackBenchmark-1.dll --anonymousPipes 1516 1520 --benchmarkName LuminPackBenchmark.JsonBenchmark.SystemTextJsonSerialize --job "ShortRun-.NET 10.0" --benchmarkId 4 in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net10.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.6
+// Runtime=.NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2+BMI1+BMI2+F16C+FMA+LZCNT+MOVBE,AVX,SSE3+SSSE3+SSE4.1+SSE4.2+POPCNT,X86Base+SSE+SSE2,AES+PCLMUL,AvxVnni,SERIALIZE VectorSize=256
+// Job: ShortRun-.NET 10.0(Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 136100.00 ns, 136.1000 us/op
+WorkloadJitting  1: 1 op, 272700.00 ns, 272.7000 us/op
+
+OverheadJitting  2: 16 op, 287600.00 ns, 17.9750 us/op
+WorkloadJitting  2: 16 op, 1538500.00 ns, 96.1563 us/op
+
+WorkloadPilot    1: 16 op, 1136700.00 ns, 71.0438 us/op
+WorkloadPilot    2: 32 op, 2390800.00 ns, 74.7125 us/op
+WorkloadPilot    3: 64 op, 4723400.00 ns, 73.8031 us/op
+WorkloadPilot    4: 128 op, 8849900.00 ns, 69.1398 us/op
+WorkloadPilot    5: 256 op, 18292700.00 ns, 71.4559 us/op
+WorkloadPilot    6: 512 op, 35636000.00 ns, 69.6016 us/op
+WorkloadPilot    7: 1024 op, 67952500.00 ns, 66.3599 us/op
+WorkloadPilot    8: 2048 op, 190035000.00 ns, 92.7905 us/op
+WorkloadPilot    9: 4096 op, 293958300.00 ns, 71.7672 us/op
+WorkloadPilot   10: 8192 op, 222831300.00 ns, 27.2011 us/op
+WorkloadPilot   11: 16384 op, 359924500.00 ns, 21.9680 us/op
+WorkloadPilot   12: 32768 op, 715039000.00 ns, 21.8213 us/op
+
+OverheadWarmup   1: 32768 op, 115100.00 ns, 3.5126 ns/op
+OverheadWarmup   2: 32768 op, 131000.00 ns, 3.9978 ns/op
+OverheadWarmup   3: 32768 op, 112600.00 ns, 3.4363 ns/op
+OverheadWarmup   4: 32768 op, 111200.00 ns, 3.3936 ns/op
+OverheadWarmup   5: 32768 op, 118300.00 ns, 3.6102 ns/op
+OverheadWarmup   6: 32768 op, 112300.00 ns, 3.4271 ns/op
+
+OverheadActual   1: 32768 op, 116400.00 ns, 3.5522 ns/op
+OverheadActual   2: 32768 op, 113000.00 ns, 3.4485 ns/op
+OverheadActual   3: 32768 op, 124400.00 ns, 3.7964 ns/op
+OverheadActual   4: 32768 op, 121100.00 ns, 3.6957 ns/op
+OverheadActual   5: 32768 op, 116300.00 ns, 3.5492 ns/op
+OverheadActual   6: 32768 op, 123600.00 ns, 3.7720 ns/op
+OverheadActual   7: 32768 op, 115500.00 ns, 3.5248 ns/op
+OverheadActual   8: 32768 op, 115100.00 ns, 3.5126 ns/op
+OverheadActual   9: 32768 op, 115700.00 ns, 3.5309 ns/op
+OverheadActual  10: 32768 op, 127000.00 ns, 3.8757 ns/op
+OverheadActual  11: 32768 op, 123200.00 ns, 3.7598 ns/op
+OverheadActual  12: 32768 op, 127400.00 ns, 3.8879 ns/op
+OverheadActual  13: 32768 op, 109800.00 ns, 3.3508 ns/op
+OverheadActual  14: 32768 op, 121400.00 ns, 3.7048 ns/op
+OverheadActual  15: 32768 op, 115600.00 ns, 3.5278 ns/op
+
+WorkloadWarmup   1: 32768 op, 709894100.00 ns, 21.6642 us/op
+WorkloadWarmup   2: 32768 op, 702464600.00 ns, 21.4375 us/op
+WorkloadWarmup   3: 32768 op, 701926200.00 ns, 21.4211 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 32768 op, 719655500.00 ns, 21.9621 us/op
+WorkloadActual   2: 32768 op, 710752600.00 ns, 21.6904 us/op
+WorkloadActual   3: 32768 op, 706085600.00 ns, 21.5480 us/op
+
+// AfterActualRun
+WorkloadResult   1: 32768 op, 719539100.00 ns, 21.9586 us/op
+WorkloadResult   2: 32768 op, 710636200.00 ns, 21.6869 us/op
+WorkloadResult   3: 32768 op, 705969200.00 ns, 21.5445 us/op
+// GC:  37 0 0 468975616 32768
+// Threading:  0 0 32768
+
+// AfterAll
+// Benchmark Process 7660 has exited with code 0.
+
+Mean = 21.730 μs, StdErr = 0.121 μs (0.56%), N = 3, StdDev = 0.210 μs
+Min = 21.544 μs, Q1 = 21.616 μs, Median = 21.687 μs, Q3 = 21.823 μs, Max = 21.959 μs
+IQR = 0.207 μs, LowerFence = 21.305 μs, UpperFence = 22.133 μs
+ConfidenceInterval = [17.892 μs; 25.568 μs] (CI 99.9%), Margin = 3.838 μs (17.66% of Mean)
+Skewness = 0.2, Kurtosis = 0.67, MValue = 2
+
+// ** Remained 1 (16.7 %) benchmark(s) to run. Estimated finish 2025-12-12 19:30 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: JsonBenchmark.NewtonsoftJsonSerialize: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet LuminPackBenchmark-1.dll --anonymousPipes 1528 1256 --benchmarkName LuminPackBenchmark.JsonBenchmark.NewtonsoftJsonSerialize --job "ShortRun-.NET 10.0" --benchmarkId 5 in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net10.0
+// BeforeAnythingElse
+
+// Benchmark Process Environment Information:
+// BenchmarkDotNet v0.15.6
+// Runtime=.NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
+// GC=Concurrent Workstation
+// HardwareIntrinsics=AVX2+BMI1+BMI2+F16C+FMA+LZCNT+MOVBE,AVX,SSE3+SSSE3+SSE4.1+SSE4.2+POPCNT,X86Base+SSE+SSE2,AES+PCLMUL,AvxVnni,SERIALIZE VectorSize=256
+// Job: ShortRun-.NET 10.0(Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+
+OverheadJitting  1: 1 op, 133400.00 ns, 133.4000 us/op
+WorkloadJitting  1: 1 op, 428700.00 ns, 428.7000 us/op
+
+OverheadJitting  2: 16 op, 288800.00 ns, 18.0500 us/op
+WorkloadJitting  2: 16 op, 3783700.00 ns, 236.4813 us/op
+
+WorkloadPilot    1: 16 op, 3431900.00 ns, 214.4938 us/op
+WorkloadPilot    2: 32 op, 6506600.00 ns, 203.3313 us/op
+WorkloadPilot    3: 64 op, 13167200.00 ns, 205.7375 us/op
+WorkloadPilot    4: 128 op, 26298000.00 ns, 205.4531 us/op
+WorkloadPilot    5: 256 op, 47171600.00 ns, 184.2641 us/op
+WorkloadPilot    6: 512 op, 126104700.00 ns, 246.2982 us/op
+WorkloadPilot    7: 1024 op, 164592700.00 ns, 160.7351 us/op
+WorkloadPilot    8: 2048 op, 95011300.00 ns, 46.3922 us/op
+WorkloadPilot    9: 4096 op, 182320500.00 ns, 44.5118 us/op
+WorkloadPilot   10: 8192 op, 351139800.00 ns, 42.8637 us/op
+WorkloadPilot   11: 16384 op, 711760900.00 ns, 43.4424 us/op
+
+OverheadWarmup   1: 16384 op, 61700.00 ns, 3.7659 ns/op
+OverheadWarmup   2: 16384 op, 59200.00 ns, 3.6133 ns/op
+OverheadWarmup   3: 16384 op, 60200.00 ns, 3.6743 ns/op
+OverheadWarmup   4: 16384 op, 58500.00 ns, 3.5706 ns/op
+OverheadWarmup   5: 16384 op, 64600.00 ns, 3.9429 ns/op
+OverheadWarmup   6: 16384 op, 59700.00 ns, 3.6438 ns/op
+
+OverheadActual   1: 16384 op, 59700.00 ns, 3.6438 ns/op
+OverheadActual   2: 16384 op, 62700.00 ns, 3.8269 ns/op
+OverheadActual   3: 16384 op, 62600.00 ns, 3.8208 ns/op
+OverheadActual   4: 16384 op, 62400.00 ns, 3.8086 ns/op
+OverheadActual   5: 16384 op, 62600.00 ns, 3.8208 ns/op
+OverheadActual   6: 16384 op, 60800.00 ns, 3.7109 ns/op
+OverheadActual   7: 16384 op, 72100.00 ns, 4.4006 ns/op
+OverheadActual   8: 16384 op, 62200.00 ns, 3.7964 ns/op
+OverheadActual   9: 16384 op, 68300.00 ns, 4.1687 ns/op
+OverheadActual  10: 16384 op, 59000.00 ns, 3.6011 ns/op
+OverheadActual  11: 16384 op, 59100.00 ns, 3.6072 ns/op
+OverheadActual  12: 16384 op, 57600.00 ns, 3.5156 ns/op
+OverheadActual  13: 16384 op, 66800.00 ns, 4.0771 ns/op
+OverheadActual  14: 16384 op, 63500.00 ns, 3.8757 ns/op
+OverheadActual  15: 16384 op, 61100.00 ns, 3.7292 ns/op
+
+WorkloadWarmup   1: 16384 op, 718689000.00 ns, 43.8653 us/op
+WorkloadWarmup   2: 16384 op, 722587900.00 ns, 44.1033 us/op
+WorkloadWarmup   3: 16384 op, 699818000.00 ns, 42.7135 us/op
+
+// BeforeActualRun
+WorkloadActual   1: 16384 op, 709408000.00 ns, 43.2988 us/op
+WorkloadActual   2: 16384 op, 715644500.00 ns, 43.6795 us/op
+WorkloadActual   3: 16384 op, 726431300.00 ns, 44.3378 us/op
+
+// AfterActualRun
+WorkloadResult   1: 16384 op, 709345600.00 ns, 43.2950 us/op
+WorkloadResult   2: 16384 op, 715582100.00 ns, 43.6757 us/op
+WorkloadResult   3: 16384 op, 726368900.00 ns, 44.3340 us/op
+// GC:  110 6 0 1385562112 16384
+// Threading:  0 0 16384
+
+// AfterAll
+// Benchmark Process 18800 has exited with code 0.
+
+Mean = 43.768 μs, StdErr = 0.303 μs (0.69%), N = 3, StdDev = 0.526 μs
+Min = 43.295 μs, Q1 = 43.485 μs, Median = 43.676 μs, Q3 = 44.005 μs, Max = 44.334 μs
+IQR = 0.520 μs, LowerFence = 42.706 μs, UpperFence = 44.784 μs
+ConfidenceInterval = [34.178 μs; 53.358 μs] (CI 99.9%), Margin = 9.590 μs (21.91% of Mean)
+Skewness = 0.17, Kurtosis = 0.67, MValue = 2
+
+// ** Remained 0 (0.0 %) benchmark(s) to run. Estimated finish 2025-12-12 19:30 (0h 0m from now) **
+Successfully reverted power plan (GUID: 6fecc5ae-f350-48a5-b669-b472cb895ccf FriendlyName: Turbo)
+// ***** BenchmarkRunner: Finish  *****
+
+// * Export *
+  BenchmarkDotNet.Artifacts\results\LuminPackBenchmark.JsonBenchmark-report.csv
+  BenchmarkDotNet.Artifacts\results\LuminPackBenchmark.JsonBenchmark-report-github.md
+  BenchmarkDotNet.Artifacts\results\LuminPackBenchmark.JsonBenchmark-report.html
+
+// * Detailed results *
+JsonBenchmark.LuminPackDeserializeFromJson: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+Runtime = .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3; GC = Concurrent Workstation
+Mean = 17.273 μs, StdErr = 0.072 μs (0.42%), N = 3, StdDev = 0.125 μs
+Min = 17.196 μs, Q1 = 17.201 μs, Median = 17.207 μs, Q3 = 17.312 μs, Max = 17.417 μs
+IQR = 0.111 μs, LowerFence = 17.035 μs, UpperFence = 17.478 μs
+ConfidenceInterval = [15.000 μs; 19.546 μs] (CI 99.9%), Margin = 2.273 μs (13.16% of Mean)
+Skewness = 0.38, Kurtosis = 0.67, MValue = 2
+-------------------- Histogram --------------------
+[17.193 μs ; 17.420 μs) | @@@
+---------------------------------------------------
+
+JsonBenchmark.SystemTextJsonDeserialize: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+Runtime = .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3; GC = Concurrent Workstation
+Mean = 26.015 μs, StdErr = 0.061 μs (0.23%), N = 3, StdDev = 0.106 μs
+Min = 25.908 μs, Q1 = 25.963 μs, Median = 26.018 μs, Q3 = 26.069 μs, Max = 26.120 μs
+IQR = 0.106 μs, LowerFence = 25.804 μs, UpperFence = 26.228 μs
+ConfidenceInterval = [24.084 μs; 27.947 μs] (CI 99.9%), Margin = 1.932 μs (7.42% of Mean)
+Skewness = -0.02, Kurtosis = 0.67, MValue = 2
+-------------------- Histogram --------------------
+[25.812 μs ; 26.216 μs) | @@@
+---------------------------------------------------
+
+JsonBenchmark.NewtonsoftJsonDeserialize: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+Runtime = .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3; GC = Concurrent Workstation
+Mean = 61.037 μs, StdErr = 0.017 μs (0.03%), N = 3, StdDev = 0.029 μs
+Min = 61.016 μs, Q1 = 61.020 μs, Median = 61.024 μs, Q3 = 61.047 μs, Max = 61.069 μs
+IQR = 0.026 μs, LowerFence = 60.981 μs, UpperFence = 61.086 μs
+ConfidenceInterval = [60.515 μs; 61.558 μs] (CI 99.9%), Margin = 0.521 μs (0.85% of Mean)
+Skewness = 0.36, Kurtosis = 0.67, MValue = 2
+-------------------- Histogram --------------------
+[60.990 μs ; 61.095 μs) | @@@
+---------------------------------------------------
+
+JsonBenchmark.LuminPackSerializeToJson: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+Runtime = .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3; GC = Concurrent Workstation
+Mean = 19.655 μs, StdErr = 0.009 μs (0.05%), N = 3, StdDev = 0.016 μs
+Min = 19.637 μs, Q1 = 19.648 μs, Median = 19.659 μs, Q3 = 19.664 μs, Max = 19.669 μs
+IQR = 0.016 μs, LowerFence = 19.624 μs, UpperFence = 19.688 μs
+ConfidenceInterval = [19.356 μs; 19.954 μs] (CI 99.9%), Margin = 0.299 μs (1.52% of Mean)
+Skewness = -0.22, Kurtosis = 0.67, MValue = 2
+-------------------- Histogram --------------------
+[19.622 μs ; 19.684 μs) | @@@
+---------------------------------------------------
+
+JsonBenchmark.SystemTextJsonSerialize: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+Runtime = .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3; GC = Concurrent Workstation
+Mean = 21.730 μs, StdErr = 0.121 μs (0.56%), N = 3, StdDev = 0.210 μs
+Min = 21.544 μs, Q1 = 21.616 μs, Median = 21.687 μs, Q3 = 21.823 μs, Max = 21.959 μs
+IQR = 0.207 μs, LowerFence = 21.305 μs, UpperFence = 22.133 μs
+ConfidenceInterval = [17.892 μs; 25.568 μs] (CI 99.9%), Margin = 3.838 μs (17.66% of Mean)
+Skewness = 0.2, Kurtosis = 0.67, MValue = 2
+-------------------- Histogram --------------------
+[21.400 μs ; 22.150 μs) | @@@
+---------------------------------------------------
+
+JsonBenchmark.NewtonsoftJsonSerialize: ShortRun-.NET 10.0(Runtime=.NET 10.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+Runtime = .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3; GC = Concurrent Workstation
+Mean = 43.768 μs, StdErr = 0.303 μs (0.69%), N = 3, StdDev = 0.526 μs
+Min = 43.295 μs, Q1 = 43.485 μs, Median = 43.676 μs, Q3 = 44.005 μs, Max = 44.334 μs
+IQR = 0.520 μs, LowerFence = 42.706 μs, UpperFence = 44.784 μs
+ConfidenceInterval = [34.178 μs; 53.358 μs] (CI 99.9%), Margin = 9.590 μs (21.91% of Mean)
+Skewness = 0.17, Kurtosis = 0.67, MValue = 2
+-------------------- Histogram --------------------
+[43.007 μs ; 44.812 μs) | @@@
+---------------------------------------------------
+
+// * Summary *
+
+BenchmarkDotNet v0.15.6, Windows 11 (10.0.26100.7462/24H2/2024Update/HudsonValley)
+13th Gen Intel Core i7-13650HX 2.60GHz, 1 CPU, 20 logical and 14 physical cores
+  [Host]             : .NET 9.0.3, X64 NativeAOT x86-64-v3
+  ShortRun-.NET 10.0 : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
+
+Job=ShortRun-.NET 10.0  Runtime=.NET 10.0  Server=False  
+IterationCount=3  LaunchCount=1  WarmupCount=3  
+
+| Method                       | Mean     | Min      | Max      | Ratio | Gen0   | Gen1   | Allocated | Alloc Ratio |
+|----------------------------- |---------:|---------:|---------:|------:|-------:|-------:|----------:|------------:|
+| LuminPackDeserializeFromJson | 17.27 μs | 17.20 μs | 17.42 μs |     ? | 0.4883 |      - |    6144 B |           ? |
+| SystemTextJsonDeserialize    | 26.02 μs | 25.91 μs | 26.12 μs |     ? | 0.9460 |      - |   12016 B |           ? |
+| NewtonsoftJsonDeserialize    | 61.04 μs | 61.02 μs | 61.07 μs |     ? | 4.3945 |      - |   56320 B |           ? |
+|                              |          |          |          |       |        |        |           |             |
+| LuminPackSerializeToJson     | 19.65 μs | 19.64 μs | 19.67 μs |  1.00 |      - |      - |         - |          NA |
+| SystemTextJsonSerialize      | 21.73 μs | 21.54 μs | 21.96 μs |  1.11 | 1.1292 |      - |   14312 B |          NA |
+| NewtonsoftJsonSerialize      | 43.77 μs | 43.30 μs | 44.33 μs |  2.23 | 6.7139 | 0.3662 |   84568 B |          NA |
+
+// * Warnings *
+BaselineCustomAnalyzer
+  Summary -> A question mark '?' symbol indicates that it was not possible to compute the (Ratio, RatioSD, Alloc Ratio) column(s) because the baseline or benchmark could not be found, or the baseline value is too close to zero.
+
+// * Hints *
+HideColumnsAnalyser
+  Summary -> Hidden columns: Error, StdDev, RatioSD
+// * Config Issues *
+
+// * Warnings *
+Configuration
+  Summary -> The exporter MarkdownExporter-github is already present in configuration. There may be unexpected results.
+
+// * Legends *
+  Mean        : Arithmetic mean of all measurements
+  Min         : Minimum
+  Max         : Maximum
+  Ratio       : Mean of the ratio distribution ([Current]/[Baseline])
+  Gen0        : GC Generation 0 collects per 1000 operations
+  Gen1        : GC Generation 1 collects per 1000 operations
+  Allocated   : Allocated memory per single operation (managed only, inclusive, 1KB = 1024B)
+  Alloc Ratio : Allocated memory ratio distribution ([Current]/[Baseline])
+  1 μs        : 1 Microsecond (0.000001 sec)
+
+// * Diagnostic Output - MemoryDiagnoser *
+
+
+// ***** BenchmarkRunner: End *****
+Run time: 00:00:46 (46.45 sec), executed benchmarks: 6
+
+Global total time: 00:01:03 (63.24 sec), executed benchmarks: 6
+// * Artifacts cleanup *
+Artifacts cleanup is finished

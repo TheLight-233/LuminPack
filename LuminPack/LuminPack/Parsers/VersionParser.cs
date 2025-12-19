@@ -71,4 +71,29 @@ public sealed class VersionParser : LuminPackParser<Version>
         
         evaluator += 16;
     }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Version? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteString(value.ToString());
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Version? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        var str = reader.ReadString();
+        value = Version.Parse(str);
+    }
 }

@@ -1,0 +1,86 @@
+// Validating benchmarks:
+// ***** BenchmarkRunner: Start   *****
+// ***** Found 8 benchmark(s) in total *****
+// ***** Building 1 exe(s) in Parallel: Start   *****
+// start dotnet  restore --nodeReuse:false /p:UseSharedCompilation=false /p:Deterministic=true /p:Optimize=true /p:ArtifactsPath="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1/" /p:OutDir="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net9.0/" /p:OutputPath="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net9.0/" /p:PublishDir="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\publish/" in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1
+// command took 1.76 sec and exited with 0
+// start dotnet  build -c Release --no-restore --nodeReuse:false /p:UseSharedCompilation=false /p:Deterministic=true /p:Optimize=true /p:ArtifactsPath="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1/" /p:OutDir="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net9.0/" /p:OutputPath="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net9.0/" /p:PublishDir="C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\publish/" --output "C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net9.0/" in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1
+// command took 11.15 sec and exited with 0
+// ***** Done, took 00:00:12 (13 sec)   *****
+// Found 8 benchmarks:
+//   SimpleBenchmark.LuminPackSerialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+//   SimpleBenchmark.MemoryPackSerialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+//   SimpleBenchmark.MessagePackSerialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+//   SimpleBenchmark.NinoSerialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+//   SimpleBenchmark.LuminPackDeserialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+//   SimpleBenchmark.MemoryPackDeserialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+//   SimpleBenchmark.MessagePackDeserialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+//   SimpleBenchmark.NinoDeserialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: SimpleBenchmark.LuminPackSerialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet LuminPackBenchmark-1.dll --anonymousPipes 1048 1348 --benchmarkName LuminPackBenchmark.SimpleBenchmark.LuminPackSerialize --job "ShortRun-.NET 9.0" --benchmarkId 0 in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net9.0
+ExitCode != 0 and no results reported
+No Workload Results were obtained from the run.
+// Benchmark Process 29276 has exited with code -532462766.
+
+// ** Remained 7 (87.5 %) benchmark(s) to run. Estimated finish 2025-11-27 10:58 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: SimpleBenchmark.MemoryPackSerialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet LuminPackBenchmark-1.dll --anonymousPipes 1216 1300 --benchmarkName LuminPackBenchmark.SimpleBenchmark.MemoryPackSerialize --job "ShortRun-.NET 9.0" --benchmarkId 1 in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net9.0
+ExitCode != 0 and no results reported
+No Workload Results were obtained from the run.
+// Benchmark Process 2656 has exited with code -532462766.
+
+// ** Remained 6 (75.0 %) benchmark(s) to run. Estimated finish 2025-11-27 10:58 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: SimpleBenchmark.MessagePackSerialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet LuminPackBenchmark-1.dll --anonymousPipes 1300 1236 --benchmarkName LuminPackBenchmark.SimpleBenchmark.MessagePackSerialize --job "ShortRun-.NET 9.0" --benchmarkId 2 in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net9.0
+ExitCode != 0 and no results reported
+No Workload Results were obtained from the run.
+// Benchmark Process 46744 has exited with code -532462766.
+
+// ** Remained 5 (62.5 %) benchmark(s) to run. Estimated finish 2025-11-27 10:58 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: SimpleBenchmark.NinoSerialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet LuminPackBenchmark-1.dll --anonymousPipes 1032 1256 --benchmarkName LuminPackBenchmark.SimpleBenchmark.NinoSerialize --job "ShortRun-.NET 9.0" --benchmarkId 3 in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net9.0
+ExitCode != 0 and no results reported
+No Workload Results were obtained from the run.
+// Benchmark Process 12856 has exited with code -532462766.
+
+// ** Remained 4 (50.0 %) benchmark(s) to run. Estimated finish 2025-11-27 10:58 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: SimpleBenchmark.LuminPackDeserialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet LuminPackBenchmark-1.dll --anonymousPipes 1216 1408 --benchmarkName LuminPackBenchmark.SimpleBenchmark.LuminPackDeserialize --job "ShortRun-.NET 9.0" --benchmarkId 4 in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net9.0
+ExitCode != 0 and no results reported
+No Workload Results were obtained from the run.
+// Benchmark Process 41996 has exited with code -532462766.
+
+// ** Remained 3 (37.5 %) benchmark(s) to run. Estimated finish 2025-11-27 10:58 (0h 0m from now) **
+Setup power plan (GUID: 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c FriendlyName: 高性能)
+// **************************
+// Benchmark: SimpleBenchmark.MemoryPackDeserialize: ShortRun-.NET 9.0(Runtime=.NET 9.0, Server=False, IterationCount=3, LaunchCount=1, WarmupCount=3)
+// *** Execute ***
+// Launch: 1 / 1
+// Execute: dotnet LuminPackBenchmark-1.dll --anonymousPipes 1420 1392 --benchmarkName LuminPackBenchmark.SimpleBenchmark.MemoryPackDeserialize --job "ShortRun-.NET 9.0" --benchmarkId 5 in C:\Users\28027\Desktop\C#\LuminPack\LuminPackBenchmark\bin\Release\net9.0\LuminPackBenchmark-1\bin\Release\net9.0
+ExitCode != 0 and no results reported
+No Workload Results were obtained from the run.
+// Benchmark Process 43248 has exited with code -532462766.
+
+// ** Remained 2 (25.0 %) benchmark(s) to run. Estimated finish 2025-11-27 10:58 (0h 0m from now) **
+Setup power plan (GUID

@@ -75,4 +75,33 @@ public sealed class NullableParser<T> : LuminPackParser<T?>
         var eva = evaluator.GetEvaluator<T>();
         eva.CalculateOffset(ref evaluator, ref val);
     }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref T? value)
+    {
+        if (!value.HasValue)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        var v = value.Value;
+        var parser = LuminPackParseProvider.Cache<T>.Parser!;
+        parser.SerializeJson(ref writer, ref v);
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref T? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        var parser = LuminPackParseProvider.Cache<T>.Parser!;
+        T v = default;
+        parser.DeserializeJson(ref reader, ref v);
+        value = v;
+    }
 }

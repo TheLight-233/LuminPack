@@ -24,7 +24,7 @@ public sealed class StringBuilderParser : LuminPackParser<StringBuilder>
             return;
         }
 
-#if NET7_0_OR_GREATER
+#if NET8_0_OR_GREATER
 
         // for performance reason, currently StringBuilder encode as Utf16, however try to write Utf8?
         
@@ -34,12 +34,12 @@ public sealed class StringBuilderParser : LuminPackParser<StringBuilder>
 
         foreach (var chunk in value.GetChunks())
         {
-            int index1 = checked(chunk.Length * 2);
-            ref var p = ref Unsafe.Add(ref writer._bufferStart, (nint)(uint)index1);
-            ref var src = ref LuminPackMarshal.As<char, byte>(ref MemoryMarshal.GetReference(chunk.Span));
-            Unsafe.CopyBlockUnaligned(ref p, ref src, (uint)chunk.Length * 2);
+            int length = checked(chunk.Length * 2);
+            ref var p = ref Unsafe.Add(ref writer._bufferStart, (nint)(uint)index);
+            ref var src = ref MemoryMarshal.GetReference(MemoryMarshal.Cast<char, byte>(chunk.Span));
+            Unsafe.CopyBlockUnaligned(ref p, ref src, (uint)length);
 
-            writer.Advance(chunk.Length * 2);
+            writer.Advance(length);
         }
         
 
@@ -76,9 +76,9 @@ public sealed class StringBuilderParser : LuminPackParser<StringBuilder>
         }
         
         var size = checked(length * 2);
-        ref var p = ref reader.GetSpanReference(size);
-        var src = LuminPackMarshal.CreateSpan(ref Unsafe.As<byte, char>(ref p), length);
-        value.Append(src);
+        ref var p = ref reader.GetSpanReference(index);
+        var src = LuminPackMarshal.CreateSpan(ref p, size);
+        value.Append(MemoryMarshal.Cast<byte, char>(src));
 
         reader.Advance(size);
     }
@@ -89,11 +89,45 @@ public sealed class StringBuilderParser : LuminPackParser<StringBuilder>
 
         if (value is null || value.Length == 0)
         {
-            evaluator += 4;
+            evaluator += evaluator.StringRecordLength();
             
             return;
         }
         
-        evaluator += Encoding.Unicode.GetByteCount(value.ToString()) + 4;
+        evaluator += Encoding.Unicode.GetByteCount(value.ToString()) + evaluator.StringRecordLength();
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref StringBuilder? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteString(value.ToString());
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref StringBuilder? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        var str = reader.ReadString();
+        
+        if (value is null)
+        {
+            value = new StringBuilder(str);
+        }
+        else
+        {
+            value.Clear();
+            value.Append(str);
+        }
     }
 }

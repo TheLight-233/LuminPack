@@ -13,13 +13,16 @@ public sealed class UriParser : LuminPackParser<Uri?>
     [Preserve]
     public override void Serialize(ref LuminPackWriter writer, scoped ref Uri? value)
     {
-        var length = writer.GetStringLength(value?.OriginalString);
+        if (value == null)
+        {
+            writer.WriteNullObjectHeader();
+            writer.Advance(1);
+            return;
+        }
         
-        writer.WriteString(value?.OriginalString, length);
+        int offset = writer.WriteString(value.OriginalString) + writer.StringRecordLength();
         
-        var symbol = writer.Option.StringRecording is LuminPackStringRecording.Token ? 1 : 4;
-        
-        writer.Advance(length + symbol);
+        writer.Advance(offset);
     }
 
     [Preserve]
@@ -27,21 +30,28 @@ public sealed class UriParser : LuminPackParser<Uri?>
     {
         ref var index = ref reader.GetCurrentSpanOffset();
         
+        if (reader.PeekIsNullObject(ref index))
+        {
+            reader.Advance(1);
+            value = null;
+            return;
+        }
+        
         reader.ReadStringLength(ref index, out var length);
         
-        var str = reader.ReadString(length);
-
-        var symbol = reader.Option.StringRecording is LuminPackStringRecording.Token ? 1 : 4;
+        var source = reader.ReadString(length);
+        
+        var symbol = reader.StringRecordLength();
         
         reader.Advance(length + symbol);
         
-        if (str is null)
+        if (source is null)
         {
             value = null;
         }
         else
         {
-            value = new Uri(str, UriKind.RelativeOrAbsolute);
+            value = new Uri(source, UriKind.RelativeOrAbsolute);
         }
     }
 
@@ -50,5 +60,30 @@ public sealed class UriParser : LuminPackParser<Uri?>
     {
         var v = value?.OriginalString ?? string.Empty;
         evaluator += evaluator.GetStringLength(ref v);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref Uri? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteString(value.OriginalString);
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref Uri? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        var str = reader.ReadString();
+        value = new Uri(str, UriKind.RelativeOrAbsolute);
     }
 }

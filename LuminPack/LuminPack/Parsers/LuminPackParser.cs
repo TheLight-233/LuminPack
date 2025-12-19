@@ -1,5 +1,6 @@
 using System.Runtime.CompilerServices;
 using LuminPack.Attribute;
+using LuminPack.Code;
 using LuminPack.Core;
 using LuminPack.Interface;
 
@@ -18,6 +19,20 @@ public abstract class LuminPackParser<T> : ILuminPackableParser<T>, ILuminPackab
     [Preserve]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public abstract void Deserialize(ref LuminPackReader reader, scoped ref T? value);
+
+    [Preserve]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public virtual void SerializeJson(ref LuminPackJsonWriter writer, scoped ref T? value)
+    {
+        LuminPackExceptionHelper.ThrowJsonNotSupported(typeof(T));
+    }
+
+    [Preserve]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public virtual void DeserializeJson(ref LuminPackJsonReader reader, scoped ref T? value)
+    {
+        LuminPackExceptionHelper.ThrowJsonNotSupported(typeof(T));
+    }
     
     [Preserve]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

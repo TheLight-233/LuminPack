@@ -30,7 +30,8 @@ namespace LuminPack
 
         static LuminPackParseProvider()
         {
-            ParserFactory.Initialize();
+            if (LuminPackSerializer.NeedInitParserFactory) 
+                ParserFactory.Initialize();
 
             RegisterWellKnownTypesParsers();
 
@@ -118,7 +119,7 @@ namespace LuminPack
         public static ILuminPackableParser<T> GetParser<T>()
         {
 #if DEBUG
-            if (Cache<T>.parser is null)
+            if (Cache<T>.Parser is null)
                 LuminPackExceptionHelper.ThrowNoParserRegistered(typeof(T));
 #endif
             return Cache<T>.Parser;
@@ -247,10 +248,44 @@ namespace LuminPack
             parserType = TryCreateGenericParserType(type, _parsers);
             if (parserType != null) goto CREATE;
                 
+            if (type.IsGenericType)
+            {
+                var hasDefaultCtor = type.GetConstructor(Type.EmptyTypes) != null;
+        
+                if (hasDefaultCtor)
+                {
+                    var interfaceTypes = type.GetInterfaces();
+                    
+                    var dictInterface = interfaceTypes.FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IDictionary<,>));
+                    if (dictInterface != null)
+                    {
+                        var genericArgs = dictInterface.GetGenericArguments();
+                        parserType = typeof(GenericDictionaryParser<,,>).MakeGenericType(type, genericArgs[0], genericArgs[1]);
+                        goto CREATE;
+                    }
+                    
+                    var setInterface = interfaceTypes.FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ISet<>));
+                    if (setInterface != null)
+                    {
+                        var genericArg = setInterface.GetGenericArguments()[0];
+                        parserType = typeof(GenericSetParser<,>).MakeGenericType(type, genericArg);
+                        goto CREATE;
+                    }
+                    
+                    var collectionInterface = interfaceTypes.FirstOrDefault(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(ICollection<>));
+                    if (collectionInterface != null)
+                    {
+                        var genericArg = collectionInterface.GetGenericArguments()[0];
+                        parserType = typeof(GenericCollectionFormatter<,>).MakeGenericType(type, genericArg);
+                        goto CREATE;
+                    }
+                }
+            }
+            
             return null;
 
             CREATE:
-            return Activator.CreateInstance(parserType);
+            return RuntimeHelpers.GetUninitializedObject(parserType);
         }
 
         static Type? TryCreateGenericParserType(Type type, Dictionary<Type, Type> knownTypes)
@@ -432,7 +467,6 @@ namespace LuminPack
         
         public static void Initialize()
         {
-            
             foreach (var type in GetTypesWithAttribute<LuminPackableAttribute>())
             {
                 
@@ -442,6 +476,18 @@ namespace LuminPack
                 {
                     _parserCache[type] = parserType;
                 }
+            }
+
+#if NET8_0_OR_GREATER
+            ParserCache = System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(_parserCache);
+#endif
+        }
+        
+        public static void Initialize(List<(Type TargetType, Type ParserType)> registryType)
+        {
+            foreach (var type in registryType)
+            {
+                _parserCache[type.TargetType] = type.ParserType;
             }
 
 #if NET8_0_OR_GREATER

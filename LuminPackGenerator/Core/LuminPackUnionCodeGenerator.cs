@@ -48,13 +48,17 @@ public static class LuminPackUnionCodeGenerator
                       ", void> WriteDelegate;");
         sb.AppendLine("            public delegate* managed<ref LuminPackReader, ref " + classGlobalName +
                       ", void> ReadDelegate;");
+        sb.AppendLine("            public delegate* managed<ref global::LuminPack.Core.LuminPackJsonWriter, ref " + classGlobalName +
+                      ", void> WriteJsonDelegate;");
+        sb.AppendLine("            public delegate* managed<ref global::LuminPack.Core.LuminPackJsonReader, ref " + classGlobalName +
+                      ", void> ReadJsonDelegate;");
         sb.AppendLine("        }");
         sb.AppendLine();
 
         // 使用 LuminUnionMap 作为注册表
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         //sb.AppendLine($"        internal static readonly global::LuminPack.Utility.LuminF14Map<nint, HashEntry> _unionMap = new global::LuminPack.Utility.LuminF14Map<nint, HashEntry>({data.UnionMembers.Count});");
-        sb.AppendLine(unionMemberCount <= 30 
+        sb.AppendLine(unionMemberCount <= 30
             ? $"        internal static readonly global::LuminPack.Utility.LuminUnionMap<HashEntry> _unionMap = new global::LuminPack.Utility.LuminUnionMap<HashEntry>({data.UnionMembers.Count});"
             : "        internal static readonly global::LuminPack.Utility.LuminFrozenUnionMap<HashEntry> _unionMap = new global::LuminPack.Utility.LuminFrozenUnionMap<HashEntry>();");
         sb.AppendLine();
@@ -74,6 +78,14 @@ public static class LuminPackUnionCodeGenerator
 
         // 生成静态反序列化方法  
         GenerateStaticDeserializeMethods(data, sb, classGlobalName);
+        sb.AppendLine();
+        
+        // 生成JSON静态序列化方法
+        GenerateStaticJsonSerializeMethods(data, sb, classGlobalName);
+        sb.AppendLine();
+        
+        // 生成JSON静态反序列化方法
+        GenerateStaticJsonDeserializeMethods(data, sb, classGlobalName);
         sb.AppendLine();
 
         sb.AppendLine($"        static {parserName}()");
@@ -97,7 +109,7 @@ public static class LuminPackUnionCodeGenerator
             string methodName = GetMethodName(member.Type);
 
             sb.AppendLine(
-                $"                Register(typeof({fullName}), {member.Id}, &Write{methodName}, &Read{methodName});");
+                $"                Register(typeof({fullName}), {member.Id}, &Write{methodName}, &Read{methodName}, &WriteJson{methodName}, &ReadJson{methodName});");
         }
 
         sb.AppendLine("            }");
@@ -135,22 +147,47 @@ public static class LuminPackUnionCodeGenerator
         GenerateCalculateOffsetCode(data, sb, classGlobalName);
         sb.AppendLine("        }");
         sb.AppendLine();
+        
+        // SerializeJson 方法
+        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine("        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+        sb.AppendLine(metaInfo.IsNet8
+            ? $"        public override void SerializeJson(ref global::LuminPack.Core.LuminPackJsonWriter writer, scoped ref {classGlobalName}{paraNullable} value)"
+            : $"        public override void SerializeJson(ref global::LuminPack.Core.LuminPackJsonWriter writer, ref {classGlobalName}{paraNullable} value)");
+        sb.AppendLine("        {");
+        GenerateSerializeJsonCode(data, sb, classGlobalName);
+        sb.AppendLine("        }");
+        sb.AppendLine();
+
+        // DeserializeJson 方法
+        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine("        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+        sb.AppendLine(metaInfo.IsNet8
+            ? $"        public override void DeserializeJson(ref global::LuminPack.Core.LuminPackJsonReader reader, scoped ref {classGlobalName}{paraNullable} value)"
+            : $"        public override void DeserializeJson(ref global::LuminPack.Core.LuminPackJsonReader reader, ref {classGlobalName}{paraNullable} value)");
+        sb.AppendLine("        {");
+        GenerateDeserializeJsonCode(data, sb, classGlobalName);
+        sb.AppendLine("        }");
+        sb.AppendLine();
 
         // Register 方法
         sb.AppendLine(
-            "        public static unsafe void Register(System.Type type, ushort tag, delegate*<ref LuminPackWriter, ref " +
-            classGlobalName + ", void> writeDelegate, delegate*<ref LuminPackReader, ref " + classGlobalName +
-            ", void> readDelegate)");
+            "        public static unsafe void Register(System.Type type, ushort tag, " +
+            "delegate*<ref LuminPackWriter, ref " + classGlobalName + ", void> writeDelegate, " +
+            "delegate*<ref LuminPackReader, ref " + classGlobalName + ", void> readDelegate, " +
+            "delegate*<ref global::LuminPack.Core.LuminPackJsonWriter, ref " + classGlobalName + ", void> writeJsonDelegate, " +
+            "delegate*<ref global::LuminPack.Core.LuminPackJsonReader, ref " + classGlobalName + ", void> readJsonDelegate)");
         sb.AppendLine("        {");
         sb.AppendLine("            lock (_registerLock)");
         sb.AppendLine("            {");
         sb.AppendLine("                var mt = LuminPackMarshal.GetMethodTable(type);");
         sb.AppendLine("                var entry = new HashEntry");
         sb.AppendLine("                {");
-        //sb.AppendLine("                    MethodTable = mt,");
         sb.AppendLine("                    Tag = tag,");
         sb.AppendLine("                    WriteDelegate = writeDelegate,");
-        sb.AppendLine("                    ReadDelegate = readDelegate");
+        sb.AppendLine("                    ReadDelegate = readDelegate,");
+        sb.AppendLine("                    WriteJsonDelegate = writeJsonDelegate,");
+        sb.AppendLine("                    ReadJsonDelegate = readJsonDelegate");
         sb.AppendLine("                };");
         sb.AppendLine();
         sb.AppendLine("                if (!_unionMap.TryRegister(mt, entry))");
@@ -197,7 +234,7 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
             sb.AppendLine($"        private static unsafe void Write{methodName}(ref LuminPackWriter writer, ref {classGlobalName} value)");
             sb.AppendLine("        {");
-            sb.AppendLine(maxTag <= 255 
+            sb.AppendLine(maxTag <= 255 && !data.IsWideTag
                 ? $"            writer.WriteUnionHeader({member.Id});"
                 : $"            writer.WriteWideUnionHeader({member.Id});");
             sb.AppendLine($"            writer.WritePolymorphismValue(LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value));");
@@ -327,7 +364,7 @@ public static class LuminPackUnionCodeGenerator
         }
         
         //sb.AppendLine("            ref int offset = ref reader.GetCurrentSpanOffset();");
-        sb.AppendLine(maxTag <= 255 
+        sb.AppendLine(maxTag <= 255 && !data.IsWideTag
             ? "            if (!reader.TryPeekUnionHeader(out var tag))"
             : "            if (!reader.TryPeekWideUnionHeader(out var tag))");
         sb.AppendLine("            {");
@@ -405,5 +442,170 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine();
+    }
+    
+    static void GenerateStaticJsonSerializeMethods(LuminDataInfo data, StringBuilder sb, string classGlobalName)
+    {
+        if (!data.UnionMembers.Any())
+        {
+            return;
+        }
+        
+        foreach (var member in data.UnionMembers)
+        {
+            string memberType = GetMemberType(data, member);
+            string methodName = GetMethodName(member.Type);
+            
+            sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+            sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            sb.AppendLine($"        private static unsafe void WriteJson{methodName}(ref global::LuminPack.Core.LuminPackJsonWriter writer, ref {classGlobalName} value)");
+            sb.AppendLine("        {");
+            sb.AppendLine("            writer.WriteObjectStart();");
+            sb.AppendLine($"            writer.WritePropertyName(\"$type\"u8);");
+            sb.AppendLine($"            writer.WriteInt({member.Id});");
+            sb.AppendLine($"            writer.WritePropertyName(\"$value\"u8);");
+            sb.AppendLine($"            writer.WriteValue(ref LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value)!);");
+            sb.AppendLine("            writer.WriteObjectEnd();");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+        }
+    }
+    
+    static void GenerateStaticJsonDeserializeMethods(LuminDataInfo data, StringBuilder sb, string classGlobalName)
+    {
+        if (!data.UnionMembers.Any())
+        {
+            return;
+        }
+        
+        foreach (var member in data.UnionMembers)
+        {
+            string memberType = GetMemberType(data, member);
+            string methodName = GetMethodName(member.Type);
+            
+            sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+            sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            sb.AppendLine($"        private static unsafe void ReadJson{methodName}(ref global::LuminPack.Core.LuminPackJsonReader reader, ref {classGlobalName} value)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            {memberType} tempValue = default!;");
+            sb.AppendLine($"            reader.ReadValue(ref tempValue);");
+            sb.AppendLine($"            value = LuminPackMarshal.As<{memberType}, {classGlobalName}>(ref tempValue!);");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+        }
+    }
+    
+    public static void GenerateSerializeJsonCode(LuminDataInfo data, StringBuilder sb, string classGlobalName)
+    {
+        string paraNullable = data.isValueType ? string.Empty : "?";
+        string classFullName = TypeMetaChecker.BuildParserClassName(data);
+        string genericParameters = data.GenericParameters.Count == 0 ? string.Empty : "<" + string.Join(", ", data.GenericParameters) + ">";
+        
+        foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerializing))
+        {
+            sb.AppendLine(item.Item3
+                ? $"            {classGlobalName}.{item.Item1}();"
+                : $"            value?.{item.Item1}();");
+        }
+        
+        if (!data.isValueType)
+        {
+            sb.AppendLine("            if (value is null)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                writer.WriteNull();");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+        }
+        
+        sb.AppendLine();
+        sb.AppendLine("            unsafe");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var valueMT = LuminPackMarshal.GetMethodTable(value);");
+        sb.AppendLine($"                if (!global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._unionMap.TryGetValue(valueMT, out var entry))");
+        sb.AppendLine("                {");
+        sb.AppendLine($"                    LuminPackExceptionHelper.ThrowNotFoundInUnionType(value.GetType(), typeof({classGlobalName}));");
+        sb.AppendLine("                }");
+        sb.AppendLine("                entry.WriteJsonDelegate(ref writer, ref Unsafe.AsRef(in value!));");
+        sb.AppendLine("            }");
+        
+        foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerialized))
+        {
+            sb.AppendLine(item.Item3
+                ? $"            {classGlobalName}.{item.Item1}();"
+                : $"            value?.{item.Item1}();");
+        }
+    }
+
+    public static void GenerateDeserializeJsonCode(LuminDataInfo data, StringBuilder sb, string classGlobalName)
+    {
+        string paraNullable = data.isValueType ? string.Empty : "?";
+        string classFullName = TypeMetaChecker.BuildParserClassName(data);
+        string genericParameters = data.GenericParameters.Count == 0 ? string.Empty : "<" + string.Join(", ", data.GenericParameters) + ">";
+        
+        foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserializing))
+        {
+            sb.AppendLine(item.Item3
+                ? $"            {classGlobalName}.{item.Item1}();"
+                : $"            value?.{item.Item1}();");
+        }
+        
+        sb.AppendLine("            if (reader.IsNull())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = default;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        
+        sb.AppendLine("            reader.TryConsumeObjectStart();");
+        sb.AppendLine();
+        sb.AppendLine("            ushort tag = 0;");
+        sb.AppendLine("            bool foundType = false;");
+        sb.AppendLine("            bool foundValue = false;");
+        sb.AppendLine();
+        
+        sb.AppendLine("            while (reader.Read())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd)");
+        sb.AppendLine("                    break;");
+        sb.AppendLine();
+        sb.AppendLine("                if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
+        sb.AppendLine("                    continue;");
+        sb.AppendLine();
+        sb.AppendLine("                var propNameUtf8 = reader.ReadStringUtf8();");
+        sb.AppendLine();
+        sb.AppendLine("                if (!reader.Read())");
+        sb.AppendLine("                    break;");
+        sb.AppendLine();
+        
+        sb.AppendLine("                if (propNameUtf8.SequenceEqual(\"$type\"u8))");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    tag = (ushort)reader.ReadInt();");
+        sb.AppendLine("                    foundType = true;");
+        sb.AppendLine("                }");
+        sb.AppendLine("                else if (propNameUtf8.SequenceEqual(\"$value\"u8))");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    if (foundType)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        unsafe");
+        sb.AppendLine("                        {");
+        sb.AppendLine($"                            global::System.Runtime.CompilerServices.Unsafe.Add(ref LuminPackMarshal.GetArrayReference(global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._directTable), tag).ReadJsonDelegate(ref reader, ref value!);");
+        sb.AppendLine("                        }");
+        sb.AppendLine("                        foundValue = true;");
+        sb.AppendLine("                        break;");
+        sb.AppendLine("                    }");
+        sb.AppendLine("                }");
+        sb.AppendLine("                else");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    reader.Skip();");
+        sb.AppendLine("                }");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        
+        foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserialized))
+        {
+            sb.AppendLine(item.Item3
+                ? $"            {classGlobalName}.{item.Item1}();"
+                : $"            value?.{item.Item1}();");
+        }
     }
 }

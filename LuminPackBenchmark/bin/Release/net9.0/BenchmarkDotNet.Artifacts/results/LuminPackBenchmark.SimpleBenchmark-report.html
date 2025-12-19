@@ -2,7 +2,7 @@
 <html lang='en'>
 <head>
 <meta charset='utf-8' />
-<title>LuminPackBenchmark.SimpleBenchmark-20251102-190733</title>
+<title>LuminPackBenchmark.SimpleBenchmark-20251218-215653</title>
 
 <style type="text/css">
 	table { border-collapse: collapse; display: block; width: 100%; overflow: auto; }
@@ -13,26 +13,26 @@
 </head>
 <body>
 <pre><code>
-BenchmarkDotNet v0.15.4, Windows 11 (10.0.26100.6899/24H2/2024Update/HudsonValley)
+BenchmarkDotNet v0.15.6, Windows 11 (10.0.26100.7462/24H2/2024Update/HudsonValley)
 13th Gen Intel Core i7-13650HX 2.60GHz, 1 CPU, 20 logical and 14 physical cores
-  [Host]            : .NET 9.0.3, X64 NativeAOT x86-64-v3
-  ShortRun-.NET 9.0 : .NET 9.0.3 (9.0.3, 9.0.325.11113), X64 RyuJIT x86-64-v3
+  [Host]             : .NET 9.0.3, X64 NativeAOT x86-64-v3
+  ShortRun-.NET 10.0 : .NET 10.0.0 (10.0.0, 10.0.25.52411), X64 RyuJIT x86-64-v3
 </code></pre>
-<pre><code>Job=ShortRun-.NET 9.0  Runtime=.NET 9.0  Server=False  
+<pre><code>Job=ShortRun-.NET 10.0  Runtime=.NET 10.0  Server=False  
 IterationCount=3  LaunchCount=1  WarmupCount=3  
 </code></pre>
 
 <table>
-<thead><tr><th>Method          </th><th>Mean</th><th>Min </th><th>Max </th><th>Gen0</th><th>Gen1</th><th>Allocated</th>
+<thead><tr><th>Method          </th><th>Mean </th><th>Min  </th><th>Max  </th><th>Gen0</th><th>Gen1</th><th>Allocated</th>
 </tr>
-</thead><tbody><tr><td>LuminPackSerialize</td><td>101.1 ns</td><td>100.8 ns</td><td>101.3 ns</td><td>-</td><td>-</td><td>-</td>
-</tr><tr><td>MemoryPackSerialize</td><td>825.7 ns</td><td>773.4 ns</td><td>874.2 ns</td><td>-</td><td>-</td><td>2048 B</td>
-</tr><tr><td>MessagePackSerialize</td><td>2,434.3 ns</td><td>2,428.7 ns</td><td>2,444.8 ns</td><td>0.2251</td><td>-</td><td>2832 B</td>
-</tr><tr><td>NinoSerialize</td><td>791.2 ns</td><td>787.5 ns</td><td>794.5 ns</td><td>-</td><td>-</td><td>-</td>
-</tr><tr><td>LuminPackDeserialize</td><td>267.3 ns</td><td>262.4 ns</td><td>271.2 ns</td><td>0.2427</td><td>0.0014</td><td>3048 B</td>
-</tr><tr><td>MemoryPackDeserialize</td><td>343.5 ns</td><td>338.9 ns</td><td>352.3 ns</td><td>0.2427</td><td>0.0014</td><td>3048 B</td>
-</tr><tr><td>MessagePackDeserialize</td><td>3,268.8 ns</td><td>3,221.0 ns</td><td>3,302.9 ns</td><td>0.2403</td><td>-</td><td>3048 B</td>
-</tr><tr><td>NinoDeserialize</td><td>274.0 ns</td><td>273.3 ns</td><td>274.4 ns</td><td>0.2427</td><td>0.0014</td><td>3048 B</td>
+</thead><tbody><tr><td>LuminPackSerialize</td><td>78.14 ns</td><td>77.87 ns</td><td>78.44 ns</td><td>-</td><td>-</td><td>-</td>
+</tr><tr><td>MemoryPackSerialize</td><td>280.41 ns</td><td>279.71 ns</td><td>280.88 ns</td><td>-</td><td>-</td><td>-</td>
+</tr><tr><td>MessagePackSerialize</td><td>1,639.53 ns</td><td>1,634.75 ns</td><td>1,643.30 ns</td><td>0.2251</td><td>-</td><td>2832 B</td>
+</tr><tr><td>NinoSerialize</td><td>187.75 ns</td><td>187.29 ns</td><td>188.58 ns</td><td>-</td><td>-</td><td>-</td>
+</tr><tr><td>LuminPackDeserialize</td><td>250.47 ns</td><td>246.07 ns</td><td>255.00 ns</td><td>0.2375</td><td>0.0038</td><td>2984 B</td>
+</tr><tr><td>MemoryPackDeserialize</td><td>334.63 ns</td><td>328.47 ns</td><td>339.11 ns</td><td>0.2427</td><td>0.0014</td><td>3048 B</td>
+</tr><tr><td>MessagePackDeserialize</td><td>3,141.48 ns</td><td>3,121.21 ns</td><td>3,177.08 ns</td><td>0.2403</td><td>-</td><td>3048 B</td>
+</tr><tr><td>NinoDeserialize</td><td>275.37 ns</td><td>273.68 ns</td><td>277.51 ns</td><td>0.2427</td><td>0.0014</td><td>3048 B</td>
 </tr></tbody></table>
 </body>
 </html>

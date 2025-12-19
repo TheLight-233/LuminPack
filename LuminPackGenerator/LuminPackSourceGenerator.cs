@@ -13,9 +13,10 @@ namespace LuminPack.SourceGenerator
     [Generator(LanguageNames.CSharp)]
     public sealed class LuminPackSourceGenerator : IIncrementalGenerator
     {
-        private const string LUMIN_PACKABLE_ATTRIBUTE = "LuminPack.Attribute.LuminPackableAttribute";
-        private const string LUMIN_UNION_ATTRIBUTE = "LuminPack.Attribute.LuminPackUnionAttribute";
+        public const string LUMIN_PACKABLE_ATTRIBUTE = "LuminPack.Attribute.LuminPackableAttribute";
+        public const string LUMIN_UNION_ATTRIBUTE = "LuminPack.Attribute.LuminPackUnionAttribute";
         public const string LUMIN_GENERATED_NAMESPACE = "LuminPack.Generated";
+        public const string LUMIN_REGISTERS_NAMESPACE = "LuminPackRegisters";
         
         private static ISymbol _currentSymbol;
         private static ISymbol _mainSymbol;
@@ -28,14 +29,30 @@ namespace LuminPack.SourceGenerator
         {
             try
             {
-                var metaInfo = context.ParseOptionsProvider.Select((parseOptions, _) =>
+                var parseOptionsInfo = context.ParseOptionsProvider.Select((parseOptions, _) =>
                 {
                     var csOptions = (CSharpParseOptions)parseOptions;
                     var langVersion = csOptions.LanguageVersion;
                     var net8 = csOptions.PreprocessorSymbolNames.Contains("NET8_0_OR_GREATER");
-                    _metadata = new MetaInfo(csOptions, langVersion, net8);
-                    return _metadata;
+                    return (csOptions, langVersion, net8);
                 }).WithTrackingName("LuminPack.LuminPackable.0_ParseOptionsProvider");
+                
+                var metaInfo = parseOptionsInfo
+                    .Combine(context.CompilationProvider)
+                    .Select((combined, _) =>
+                    {
+                        var (parseInfo, compilation) = combined;
+                        var (csOptions, langVersion, net8) = parseInfo;
+                
+                        // 从 CompilationOptions 获取 unsafe 标志
+                        var allowUnsafe = compilation.Options is CSharpCompilationOptions csharpOptions 
+                            ? csharpOptions.AllowUnsafe 
+                            : false;
+                
+                        _metadata = new MetaInfo(csOptions, langVersion, net8, allowUnsafe);
+                        return _metadata;
+                    }).WithTrackingName("LuminPack.LuminPackable.0_MetaInfo");
+
         
                 var typeDeclarations = context.SyntaxProvider.ForAttributeWithMetadataName(
                     LUMIN_PACKABLE_ATTRIBUTE,
@@ -98,7 +115,8 @@ namespace LuminPack.SourceGenerator
                     catch (Exception ex)
                     {
                         // 捕获代码生成时的异常
-                        var errorMsg = $"{DateTime.Now}: Code generation failed\n{ex}\nStack: {ex.StackTrace}";
+                        System.Diagnostics.StackTrace trace = new System.Diagnostics.StackTrace(ex, true);
+                        var errorMsg = $"{DateTime.Now}: Code generation failed\n{ex}\nStack: {trace}";
                         File.WriteAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "LuminPack_CodeGen_error.txt"), errorMsg);
                 
                         // 同时报告诊断信息，让用户在IDE中看到错误
@@ -144,7 +162,7 @@ namespace LuminPack.SourceGenerator
                 isGeneric = typeSymbol.IsGenericType,
                 isValueType = typeSymbol.TypeKind == TypeKind.Struct,
                 enableBurst = false,
-                generatorType = TypeMetaChecker.CheckGeneratorType(typeSymbol)
+                generatorType = TypeMetaChecker.CheckGeneratorType(typeSymbol),
             };
 
             foreach (var iface in typeSymbol.AllInterfaces)
@@ -173,6 +191,8 @@ namespace LuminPack.SourceGenerator
                 // }
                 
                 dataInfo.isUnion = true;
+
+                dataInfo.IsWideTag = TypeMetaChecker.TryCheckWideTagAttribute(typeSymbol);
             }
             
             if (TypeMetaChecker.TryCheckUnionAttribute(typeSymbol) || symbol.IsAbstract)
@@ -407,6 +427,8 @@ namespace LuminPack.SourceGenerator
             
             AnalyzeMainClassConstructors(typeSymbol, dataInfo);
             
+            dataInfo.RentPoolMethod = TypeMetaChecker.AnalyzeRentPoolMethod(typeSymbol, _location);
+            
             return dataInfo;
 
             #region Method
@@ -435,7 +457,7 @@ namespace LuminPack.SourceGenerator
                     isGeneric = baseClassSymbol.IsGenericType,
                     isValueType = baseClassSymbol.TypeKind == TypeKind.Struct,
                     enableBurst = false,
-                    generatorType = TypeMetaChecker.CheckGeneratorType(baseClassSymbol)
+                    generatorType = TypeMetaChecker.CheckGeneratorType(baseClassSymbol),
                 };
                 
                 foreach (var iface in baseClassSymbol.AllInterfaces)
@@ -1229,6 +1251,8 @@ namespace LuminPack.SourceGenerator
                 }
         
                 AnalyzeNestedClassConstructors(namedTypeArg, field);
+                
+                field.RentPoolMethod = TypeMetaChecker.AnalyzeRentPoolMethod(namedTypeArg, _currentSymbol?.Locations.FirstOrDefault() ?? namedTypeArg.Locations.FirstOrDefault());
             }
             finally
             {
@@ -1293,6 +1317,8 @@ namespace LuminPack.SourceGenerator
                     SpecialType.System_Double => LuminGenericsType.Double,
                     SpecialType.System_String => LuminGenericsType.String,
                     SpecialType.System_Boolean => LuminGenericsType.Bool,
+                    SpecialType.System_Decimal => LuminGenericsType.Decimal,
+                    SpecialType.System_Char => LuminGenericsType.Char
                 };
             }
 
@@ -1355,7 +1381,7 @@ namespace LuminPack.SourceGenerator
             // 添加当前类的成员到列表
             foreach (var member in members)
             {
-                if (member.IsImplicitlyDeclared) continue;
+                if (member.IsImplicitlyDeclared || member.IsStatic) continue;
 
                 string typeName = "";
                 bool isValue = false;
@@ -1456,6 +1482,7 @@ namespace LuminPack.SourceGenerator
             finally
             {
                 AnalyzeNestedClassConstructors(namedType, field);
+                field.RentPoolMethod = TypeMetaChecker.AnalyzeRentPoolMethod(namedType, _currentSymbol?.Locations.FirstOrDefault() ?? namedType.Locations.FirstOrDefault());
                 ProcessedTypes.Remove(namedType);
             }
         }
@@ -1498,6 +1525,7 @@ namespace LuminPack.SourceGenerator
             finally
             {
                 AnalyzeNestedClassConstructors(namedType, field);
+                field.RentPoolMethod = TypeMetaChecker.AnalyzeRentPoolMethod(namedType, _currentSymbol?.Locations.FirstOrDefault() ?? namedType.Locations.FirstOrDefault());
                 ProcessedTypes.Remove(namedType);
             }
         }

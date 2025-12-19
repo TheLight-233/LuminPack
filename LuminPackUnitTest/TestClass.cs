@@ -498,6 +498,7 @@ public struct TestStruct2
     public TestStruct3 C;
 }
 
+[LuminPackable]
 public struct TestStruct3
 {
     public byte A;

@@ -8,6 +8,7 @@ using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+using System.Text;
 using LuminPack.Attribute;
 using LuminPack.Code;
 using LuminPack.Core;
@@ -29,6 +30,15 @@ namespace LuminPack
         [ThreadStatic]
         private static LuminPackEvaluatorOptionState? _threadStaticEvaluatorOptionalState;
 
+        internal static bool NeedInitParserFactory = true;
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void Initialize(List<(Type TargetType, Type ParserType)> registryType)
+        {
+            NeedInitParserFactory = false;
+            ParserFactory.Initialize(registryType);
+        }
+        
         #region Serialize
 
         /// <summary>
@@ -79,6 +89,47 @@ namespace LuminPack
                 state.Reset();
             }
         }
+        
+        /// <summary>
+        /// 序列化主方法
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static string SerializeJson<T>(T? value, LuminPackSerializerOption? option = null)
+        {
+            var writerBuffer = LuminBufferWriterPool.Rent();
+            
+            var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();
+                
+            state.Init(option);
+            
+            try
+            {
+                var writer = new LuminPackJsonWriter(writerBuffer, state);
+
+                LuminPackParseProvider.Cache<T>.Parser!.SerializeJson(ref writer, ref value);
+
+                return Encoding.UTF8.GetString(writer.GetSpan());
+            }
+            finally
+            {
+                LuminBufferWriterPool.Return(writerBuffer);
+            }
+        }
+        
+        /// <summary>
+        /// 序列化主方法
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void SerializeJson<T>(T? value, LuminBufferWriter writerBuffer, LuminPackSerializerOption? option = null)
+        {
+            var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();
+                
+            state.Init(option);
+            
+            var writer = new LuminPackJsonWriter(writerBuffer, state);
+
+            LuminPackParseProvider.Cache<T>.Parser!.SerializeJson(ref writer, ref value);
+        }
 
         /// <summary>
         /// 异步序列化
@@ -105,6 +156,7 @@ namespace LuminPack
         
         #region Deserialize
         
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T? Deserialize<
 #if NET8_0_OR_GREATER
             [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
@@ -143,6 +195,7 @@ namespace LuminPack
             }
         }
         
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T? Deserialize<
 #if NET8_0_OR_GREATER
             [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
@@ -180,6 +233,53 @@ namespace LuminPack
             {
                 state.Reset();
             }
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET8_0_OR_GREATER
+        [SkipLocalsInit]
+#endif
+        public static T? DeserializeJson<
+#if NET8_0_OR_GREATER
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+#endif
+            T>(string buffer)
+        {
+            T? value = default;
+            Span<byte> span = stackalloc byte[buffer.Length * 3];
+            var written = Encoding.UTF8.GetBytes(buffer, span);
+            DeserializeJson(MemoryMarshal.Cast<byte, char>(span[..written]), ref value);
+            return value;
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static T? DeserializeJson<
+#if NET8_0_OR_GREATER
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+#endif
+            T>(ReadOnlySpan<char> buffer)
+        {
+            T? value = default;
+            DeserializeJson(buffer, ref value);
+            return value;
+        }
+        
+        public static int DeserializeJson<
+#if NET8_0_OR_GREATER
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+#endif
+            T>(
+            ReadOnlySpan<char> buffer, ref T? value, LuminPackSerializerOption? options = null)
+        {
+            var state = _threadStaticReaderOptionalState ??= new LuminPackReaderOptionalState();
+            
+            state.Init(options);
+            
+            var span = MemoryMarshal.Cast<char, byte>(buffer);
+            var reader = new LuminPackJsonReader(ref span, state);
+            LuminPackParseProvider.Cache<T>.Parser!.DeserializeJson(ref reader, ref value);
+               
+            return reader.CurrentIndex;
         }
 
         public static async ValueTask<T?> DeserializeAsync<
@@ -341,9 +441,64 @@ namespace LuminPack
             
         }
         
+        /// <summary>
+        /// 获取指定类型的解析器名称
+        /// </summary>
+        /// <param name="type">目标类型</param>
+        /// <returns>预期生成的解析器名称</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static string GetParserName(Type type)
+        {
+            if (type is null) throw new ArgumentNullException(nameof(type));
+            
+            return GenerateExpectedParserName(type);
+        }
+
+        /// <summary>
+        /// 获取指定类型的解析器名称
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static string GetParserName<T>()
+        {
+            return GetParserName(typeof(T));
+        }
+        
         #endregion
         
         #region Private Helper Methods
+        
+        private static string GenerateExpectedParserName(Type originalType)
+        {
+            const string parserNamespace = "LuminPack.Generated";
+            bool isGeneric = originalType.IsGenericType;
+
+            // 移除可能的 global:: 前缀
+            static string RemoveGlobalPrefix(string typeName)
+            {
+                const string globalPrefix = "global::";
+                return typeName.StartsWith(globalPrefix, StringComparison.Ordinal) 
+                    ? typeName.Substring(globalPrefix.Length) 
+                    : typeName;
+            }
+    
+            string originalFullName = RemoveGlobalPrefix(originalType.FullName ?? originalType.Name);
+    
+            string normalizedName = originalFullName.Replace('.', '_').Replace('+', '_');
+
+            string fullTypeName;
+            if (isGeneric)
+            {
+                string baseName = normalizedName.Split('`')[0];
+                int argCount = originalType.GetGenericArguments().Length;
+                fullTypeName = $"{parserNamespace}.{baseName}Parser`{argCount}";
+            }
+            else
+            {
+                fullTypeName = $"{parserNamespace}.{normalizedName}Parser";
+            }
+
+            return fullTypeName;
+        }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void EnsureParserRegistered<T>()

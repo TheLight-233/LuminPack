@@ -1,4 +1,3 @@
-
 using System.Runtime.CompilerServices;
 using LuminPack.Attribute;
 using LuminPack.Code;
@@ -10,8 +9,6 @@ namespace LuminPack.Parsers;
 [Preserve]
 public static class KeyValuePairParser
 {
-    // for Dictionary serialization
-
     [Preserve]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void Serialize<TKey, TValue>(ILuminPackableParser<TKey>? keyFormatter, ILuminPackableParser<TValue>? valueFormatter, ref LuminPackWriter writer, KeyValuePair<TKey?, TValue?> value)
@@ -90,6 +87,22 @@ public static class KeyValuePairParser
         keyFormatter!.CalculateOffset(ref evaluator, ref key);
         valueFormatter!.CalculateOffset(ref evaluator, ref value);
     }
+
+    [Preserve]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void SerializeJson<TKey, TValue>(LuminPackParser<TKey>? keyFormatter, LuminPackParser<TValue>? valueFormatter, ref LuminPackJsonWriter writer, ref TKey key, ref TValue value)
+    {
+        keyFormatter!.SerializeJson(ref writer, ref key!);
+        valueFormatter!.SerializeJson(ref writer, ref value!);
+    }
+    
+    [Preserve]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void DeserializeJson<TKey, TValue>(LuminPackParser<TKey>? keyFormatter, LuminPackParser<TValue>? valueFormatter, ref LuminPackJsonReader reader, ref TKey key, ref TValue value)
+    {
+        keyFormatter!.DeserializeJson(ref reader, ref key!);
+        valueFormatter!.DeserializeJson(ref reader, ref value!);
+    }
 }
 
 [Preserve]
@@ -146,5 +159,37 @@ public sealed class KeyValuePairParser<TKey, TValue> : LuminPackParser<KeyValueP
 
         keyEvaluator.CalculateOffset(ref evaluator, ref key);
         valueEvaluator.CalculateOffset(ref evaluator, ref valueKey);
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref KeyValuePair<TKey?, TValue?> value)
+    {
+        writer.WriteArrayStart();
+        
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+        
+        var k = value.Key;
+        var v = value.Value;
+        
+        KeyValuePairParser.SerializeJson(keyParser, valueParser, ref writer, ref k, ref v);
+        
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref KeyValuePair<TKey?, TValue?> value)
+    {
+        reader.TryConsumeArrayStart();
+        
+        var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
+        var valueParser = LuminPackParseProvider.Cache<TValue>.Parser!;
+        
+        TKey? k = default;
+        TValue? v = default;
+        
+        KeyValuePairParser.DeserializeJson(keyParser, valueParser, ref reader, ref k, ref v);
+        
+        value = new KeyValuePair<TKey?, TValue?>(k, v);
     }
 }

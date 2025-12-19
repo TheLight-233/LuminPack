@@ -43,6 +43,8 @@ public static class LuminPackVersionTolerantCodeGenerator
         
         // Serialize实现
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        if (data.fields.Count <= 5) 
+            sb.AppendLine("        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
         if (metaInfo.IsNet8) 
             sb.AppendLine("        [global::System.Runtime.CompilerServices.SkipLocalsInit]");
         sb.AppendLine(metaInfo.IsNet8 
@@ -56,6 +58,8 @@ public static class LuminPackVersionTolerantCodeGenerator
         
         // Deserialize实现
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        if (data.fields.Count <= 5) 
+            sb.AppendLine("        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
         if (metaInfo.IsNet8) 
             sb.AppendLine("        [global::System.Runtime.CompilerServices.SkipLocalsInit]");
         sb.AppendLine(metaInfo.IsNet8 
@@ -105,6 +109,18 @@ public static class LuminPackVersionTolerantCodeGenerator
         sb.AppendLine("        }");
         
         sb.AppendLine();
+            
+        LuminPackJsonCodeGenerator.GenerateStaticUtf8Fields(sb, data);
+
+        sb.AppendLine();
+                
+        LuminPackJsonCodeGenerator.GenerateJsonSerialize(sb, data, classGlobalName, metaInfo);
+
+        sb.AppendLine();
+                
+        LuminPackJsonCodeGenerator.GenerateJsonDeserialize(sb, data, classGlobalName, metaInfo); 
+        sb.AppendLine();
+        
         LuminPackCodeGenerator.GenerateLocalClassStructure(sb, data);
             
         sb.AppendLine();
@@ -409,42 +425,20 @@ public static class LuminPackVersionTolerantCodeGenerator
             (f.IsPrivate || f.isProperty)
         ).ToList();
 
-        // 使用对象初始化器创建对象
-        if (initializerFields.Count > 0)
+        if (data.RentPoolMethod != null)
         {
-            // 有对象初始化器的情况
-            if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
-            {
-                sb.AppendLine($"            value = new {classGlobalName}({constructorArgs})");
-            }
+            // 使用对象池分配
+            if (data.RentPoolMethod.ReturnsByRef)
+                sb.AppendLine($"            value = ref {classGlobalName}.{data.RentPoolMethod.Name}()!;");
             else
             {
-                sb.AppendLine($"            value = new {classGlobalName}()");
+                sb.AppendLine($"            value = {classGlobalName}.{data.RentPoolMethod.Name}();");
             }
-            sb.AppendLine("            {");
-            foreach (var field in initializerFields)
-            {
-                sb.AppendLine($"                {field.Name} = {field.Name}Temp!,");
-            }
-            sb.AppendLine("            };");
-        }
-        else
-        {
-            // 没有对象初始化器的情况
-            if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
-            {
-                sb.AppendLine($"            value = new {classGlobalName}({constructorArgs});");
-            }
-            else
-            {
-                sb.AppendLine($"            value = new {classGlobalName}();");
-            }
-        }
-
-        // 设置private字段（通过Local类）
-        if (privateFields.Count > 0)
-        {
-            sb.AppendLine($"            // 设置private字段");
+        
+            // 对于对象池分配的对象，直接设置所有字段，不依赖构造函数
+            sb.AppendLine($"            // 设置所有字段（对象池分配）");
+        
+            // 通过Local类设置所有字段（包括public和private）
             if (data.isValueType)
             {
                 sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value);");
@@ -453,10 +447,64 @@ public static class LuminPackVersionTolerantCodeGenerator
             {
                 sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value!);");
             }
-    
-            foreach (var field in privateFields)
+        
+            // 设置所有字段
+            foreach (var field in data.fields)
             {
                 sb.AppendLine($"            local.{field.Name} = {field.Name}Temp!;");
+            }
+        }
+        else
+        {
+            // 使用对象初始化器创建对象
+            if (initializerFields.Count > 0)
+            {
+                // 有对象初始化器的情况
+                if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
+                {
+                    sb.AppendLine($"            value = new {classGlobalName}({constructorArgs})");
+                }
+                else
+                {
+                    sb.AppendLine($"            value = new {classGlobalName}()");
+                }
+                sb.AppendLine("            {");
+                foreach (var field in initializerFields)
+                {
+                    sb.AppendLine($"                {field.Name} = {field.Name}Temp!,");
+                }
+                sb.AppendLine("            };");
+            }
+            else
+            {
+                // 没有对象初始化器的情况
+                if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
+                {
+                    sb.AppendLine($"            value = new {classGlobalName}({constructorArgs});");
+                }
+                else
+                {
+                    sb.AppendLine($"            value = new {classGlobalName}();");
+                }
+            }
+
+            // 设置private字段（通过Local类）
+            if (privateFields.Count > 0)
+            {
+                sb.AppendLine($"            // 设置private字段");
+                if (data.isValueType)
+                {
+                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value);");
+                }
+                else
+                {
+                    sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value!);");
+                }
+    
+                foreach (var field in privateFields)
+                {
+                    sb.AppendLine($"            local.{field.Name} = {field.Name}Temp!;");
+                }
             }
         }
         

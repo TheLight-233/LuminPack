@@ -15,18 +15,20 @@ public sealed class BitArrayParser : LuminPackParser<BitArray>
         
         if (value is null)
         {
-            writer.WriteNullObjectHeader(ref index);
-            
-            writer.Advance(1);
-            
+            writer.WriteNullCollectionHeader(ref index);
+                
+            writer.Advance(4);
+                
             return;
         }
-
+        
         ref var view = ref LuminPackMarshal.As<BitArray, BitArrayView>(ref value);
         
-        writer.WriteUnmanagedArray(ref index, view.m_array, out var offset);
+        writer.WriteCollectionHeader(ref index, view.m_length);
         
-        writer.Advance(offset);
+        writer.WriteUnmanagedArrayWithOutHeader(ref index, view.m_array, view.m_array.Length, out var offset);
+        
+        writer.Advance(4 + offset);
     }
 
     [Preserve]
@@ -34,28 +36,27 @@ public sealed class BitArrayParser : LuminPackParser<BitArray>
     {
         ref var index = ref reader.GetCurrentSpanOffset();
         
-        if (!reader.TryReadObjectHead(ref index))
+        if (!reader.TryReadCollectionHead(ref index, out var length))
         {
             value = null;
-            
-            reader.Advance(1);
-            
+                
+            reader.Advance(4);
+                
             return;
         }
 
-        reader.ReadUnmanaged(out int length);
-
+        if (value is null)
+        {
+            value = new BitArray(length, false);
+        }
+        
         reader.Advance(4);
-        
-        var bitArray = new BitArray(length, false); // create internal int[] and set m_length to length
 
-        ref var view = ref LuminPackMarshal.As<BitArray, BitArrayView>(ref bitArray);
+        ref var view = ref LuminPackMarshal.As<BitArray, BitArrayView>(ref value);
         
-        reader.ReadUnmanagedArray(ref index, ref view.m_array!, length, out var offset);
+        reader.ReadUnmanagedArray(ref index, ref view.m_array!, view.m_array.Length, out var offset);
 
         reader.Advance(offset);
-        
-        value = bitArray;
     }
 
     [Preserve]
@@ -72,11 +73,67 @@ public sealed class BitArrayParser : LuminPackParser<BitArray>
         
         evaluator.CalculateArray(ref view.m_array);
     }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref BitArray? value)
+    {
+        if (value == null)
+        {
+            writer.WriteNull();
+            return;
+        }
+
+        writer.WriteArrayStart();
+
+        if (value.Count > 0)
+        {
+            for (int i = 0; i < value.Count; i++)
+            {
+                writer.WriteBool(value[i]);
+            }
+        }
+
+        writer.WriteArrayEnd();
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref BitArray? value)
+    {
+        if (reader.IsNull())
+        {
+            value = null;
+            return;
+        }
+
+        reader.TryConsumeArrayStart();
+
+        var tempList = new List<bool>();
+
+        while (reader.Read())
+        {
+            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ArrayEnd)
+                break;
+
+            tempList.Add(reader.GetBoolean());
+        }
+
+        if (tempList.Count > 0)
+        {
+            value = new BitArray(tempList.Count);
+            for (int i = 0; i < tempList.Count; i++)
+            {
+                value[i] = tempList[i];
+            }
+        }
+        else
+        {
+            value = new BitArray(0);
+        }
+    }
 }
 
-#pragma warning disable CS8618
 [Preserve]
-internal class BitArrayView
+public sealed class BitArrayView
 {
     public int[] m_array;
     public int m_length;

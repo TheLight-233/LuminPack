@@ -8,22 +8,21 @@
     ".NETCoreApp,Version=v9.0": {
       "LuminPackBenchmark/1.0.0": {
         "dependencies": {
-          "BenchmarkDotNet": "0.15.4",
+          "BenchmarkDotNet": "0.15.6",
           "LuminPack": "1.0.0",
           "LuminPackGenerator": "1.0.0",
           "MemoryPack": "1.21.4",
           "MessagePack": "3.1.4",
-          "Microsoft.DotNet.ILCompiler": "9.0.0",
-          "Microsoft.NET.ILLink.Tasks": "9.0.0",
-          "Nino": "4.0.0-beta.35"
+          "Newtonsoft.Json": "9.0.1",
+          "Nino": "4.0.0-beta.42"
         },
         "runtime": {
           "LuminPackBenchmark.dll": {}
         }
       },
-      "BenchmarkDotNet/0.15.4": {
+      "BenchmarkDotNet/0.15.6": {
         "dependencies": {
-          "BenchmarkDotNet.Annotations": "0.15.4",
+          "BenchmarkDotNet.Annotations": "0.15.6",
           "CommandLineParser": "2.9.1",
           "Gee.External.Capstone": "2.3.0",
           "Iced": "1.21.0",
@@ -31,21 +30,21 @@
           "Microsoft.Diagnostics.Runtime": "3.1.512801",
           "Microsoft.Diagnostics.Tracing.TraceEvent": "3.1.21",
           "Microsoft.DotNet.PlatformAbstractions": "3.1.6",
-          "Perfolizer": "0.5.3",
+          "Perfolizer": "0.6.0",
           "System.Management": "9.0.5"
         },
         "runtime": {
           "lib/net8.0/BenchmarkDotNet.dll": {
-            "assemblyVersion": "0.15.4.0",
-            "fileVersion": "0.15.4.0"
+            "assemblyVersion": "0.15.6.0",
+            "fileVersion": "0.15.6.0"
           }
         }
       },
-      "BenchmarkDotNet.Annotations/0.15.4": {
+      "BenchmarkDotNet.Annotations/0.15.6": {
         "runtime": {
           "lib/netstandard2.0/BenchmarkDotNet.Annotations.dll": {
-            "assemblyVersion": "0.15.4.0",
-            "fileVersion": "0.15.4.0"
+            "assemblyVersion": "0.15.6.0",
+            "fileVersion": "0.15.6.0"
           }
         }
       },
@@ -65,48 +64,8 @@
           }
         },
         "runtimeTargets": {
-          "runtimes/linux-arm/native/libcapstone.so": {
-            "rid": "linux-arm",
-            "assetType": "native",
-            "fileVersion": "0.0.0.0"
-          },
-          "runtimes/linux-arm64/native/libcapstone.so": {
-            "rid": "linux-arm64",
-            "assetType": "native",
-            "fileVersion": "0.0.0.0"
-          },
-          "runtimes/linux-x64/native/libcapstone.so": {
-            "rid": "linux-x64",
-            "assetType": "native",
-            "fileVersion": "0.0.0.0"
-          },
-          "runtimes/linux-x86/native/libcapstone.so": {
-            "rid": "linux-x86",
-            "assetType": "native",
-            "fileVersion": "0.0.0.0"
-          },
-          "runtimes/osx-arm64/native/libcapstone.dylib": {
-            "rid": "osx-arm64",
-            "assetType": "native",
-            "fileVersion": "0.0.0.0"
-          },
-          "runtimes/osx-x64/native/libcapstone.dylib": {
-            "rid": "osx-x64",
-            "assetType": "native",
-            "fileVersion": "0.0.0.0"
-          },
-          "runtimes/win-arm64/native/capstone.dll": {
-            "rid": "win-arm64",
-            "assetType": "native",
-            "fileVersion": "0.0.0.0"
-          },
           "runtimes/win-x64/native/capstone.dll": {
             "rid": "win-x64",
-            "assetType": "native",
-            "fileVersion": "0.0.0.0"
-          },
-          "runtimes/win-x86/native/capstone.dll": {
-            "rid": "win-x86",
             "assetType": "native",
             "fileVersion": "0.0.0.0"
           }
@@ -122,8 +81,7 @@
       },
       "MemoryPack/1.21.4": {
         "dependencies": {
-          "MemoryPack.Core": "1.21.4",
-          "MemoryPack.Generator": "1.21.4"
+          "MemoryPack.Core": "1.21.4"
         }
       },
       "MemoryPack.Core/1.21.4": {
@@ -134,11 +92,9 @@
           }
         }
       },
-      "MemoryPack.Generator/1.21.4": {},
       "MessagePack/3.1.4": {
         "dependencies": {
           "MessagePack.Annotations": "3.1.4",
-          "MessagePackAnalyzer": "3.1.4",
           "Microsoft.NET.StringTools": "17.11.4"
         },
         "runtime": {
@@ -156,114 +112,22 @@
           }
         }
       },
-      "MessagePackAnalyzer/3.1.4": {},
-      "Microsoft.CodeAnalysis.Analyzers/3.11.0": {},
       "Microsoft.CodeAnalysis.Common/4.14.0": {
-        "dependencies": {
-          "Microsoft.CodeAnalysis.Analyzers": "3.11.0",
-          "System.Collections.Immutable": "9.0.0",
-          "System.Reflection.Metadata": "9.0.0"
-        },
         "runtime": {
           "lib/net9.0/Microsoft.CodeAnalysis.dll": {
             "assemblyVersion": "4.14.0.0",
             "fileVersion": "4.1400.25.26210"
           }
-        },
-        "resources": {
-          "lib/net9.0/cs/Microsoft.CodeAnalysis.resources.dll": {
-            "locale": "cs"
-          },
-          "lib/net9.0/de/Microsoft.CodeAnalysis.resources.dll": {
-            "locale": "de"
-          },
-          "lib/net9.0/es/Microsoft.CodeAnalysis.resources.dll": {
-            "locale": "es"
-          },
-          "lib/net9.0/fr/Microsoft.CodeAnalysis.resources.dll": {
-            "locale": "fr"
-          },
-          "lib/net9.0/it/Microsoft.CodeAnalysis.resources.dll": {
-            "locale": "it"
-          },
-          "lib/net9.0/ja/Microsoft.CodeAnalysis.resources.dll": {
-            "locale": "ja"
-          },
-          "lib/net9.0/ko/Microsoft.CodeAnalysis.resources.dll": {
-            "locale": "ko"
-          },
-          "lib/net9.0/pl/Microsoft.CodeAnalysis.resources.dll": {
-            "locale": "pl"
-          },
-          "lib/net9.0/pt-BR/Microsoft.CodeAnalysis.resources.dll": {
-            "locale": "pt-BR"
-          },
-          "lib/net9.0/ru/Microsoft.CodeAnalysis.resources.dll": {
-            "locale": "ru"
-          },
-          "lib/net9.0/tr/Microsoft.CodeAnalysis.resources.dll": {
-            "locale": "tr"
-          },
-          "lib/net9.0/zh-Hans/Microsoft.CodeAnalysis.resources.dll": {
-            "locale": "zh-Hans"
-          },
-          "lib/net9.0/zh-Hant/Microsoft.CodeAnalysis.resources.dll": {
-            "locale": "zh-Hant"
-          }
         }
       },
       "Microsoft.CodeAnalysis.CSharp/4.14.0": {
         "dependencies": {
-          "Microsoft.CodeAnalysis.Analyzers": "3.11.0",
-          "Microsoft.CodeAnalysis.Common": "4.14.0",
-          "System.Collections.Immutable": "9.0.0",
-          "System.Reflection.Metadata": "9.0.0"
+          "Microsoft.CodeAnalysis.Common": "4.14.0"
         },
         "runtime": {
           "lib/net9.0/Microsoft.CodeAnalysis.CSharp.dll": {
             "assemblyVersion": "4.14.0.0",
             "fileVersion": "4.1400.25.26210"
-          }
-        },
-        "resources": {
-          "lib/net9.0/cs/Microsoft.CodeAnalysis.CSharp.resources.dll": {
-            "locale": "cs"
-          },
-          "lib/net9.0/de/Microsoft.CodeAnalysis.CSharp.resources.dll": {
-            "locale": "de"
-          },
-          "lib/net9.0/es/Microsoft.CodeAnalysis.CSharp.resources.dll": {
-            "locale": "es"
-          },
-          "lib/net9.0/fr/Microsoft.CodeAnalysis.CSharp.resources.dll": {
-            "locale": "fr"
-          },
-          "lib/net9.0/it/Microsoft.CodeAnalysis.CSharp.resources.dll": {
-            "locale": "it"
-          },
-          "lib/net9.0/ja/Microsoft.CodeAnalysis.CSharp.resources.dll": {
-            "locale": "ja"
-          },
-          "lib/net9.0/ko/Microsoft.CodeAnalysis.CSharp.resources.dll": {
-            "locale": "ko"
-          },
-          "lib/net9.0/pl/Microsoft.CodeAnalysis.CSharp.resources.dll": {
-            "locale": "pl"
-          },
-          "lib/net9.0/pt-BR/Microsoft.CodeAnalysis.CSharp.resources.dll": {
-            "locale": "pt-BR"
-          },
-          "lib/net9.0/ru/Microsoft.CodeAnalysis.CSharp.resources.dll": {
-            "locale": "ru"
-          },
-          "lib/net9.0/tr/Microsoft.CodeAnalysis.CSharp.resources.dll": {
-            "locale": "tr"
-          },
-          "lib/net9.0/zh-Hans/Microsoft.CodeAnalysis.CSharp.resources.dll": {
-            "locale": "zh-Hans"
-          },
-          "lib/net9.0/zh-Hant/Microsoft.CodeAnalysis.CSharp.resources.dll": {
-            "locale": "zh-Hant"
           }
         }
       },
@@ -291,13 +155,7 @@
       },
       "Microsoft.Diagnostics.Tracing.TraceEvent/3.1.21": {
         "dependencies": {
-          "Microsoft.Diagnostics.NETCore.Client": "0.2.510501",
-          "Microsoft.Win32.Registry": "5.0.0",
-          "System.Collections.Immutable": "9.0.0",
-          "System.Reflection.Metadata": "9.0.0",
-          "System.Reflection.TypeExtensions": "4.7.0",
-          "System.Runtime.CompilerServices.Unsafe": "6.1.0",
-          "System.Text.Json": "8.0.5"
+          "Microsoft.Diagnostics.NETCore.Client": "0.2.510501"
         },
         "runtime": {
           "lib/netstandard2.0/Dia2Lib.dll": {
@@ -318,7 +176,6 @@
           }
         }
       },
-      "Microsoft.DotNet.ILCompiler/9.0.0": {},
       "Microsoft.DotNet.PlatformAbstractions/3.1.6": {
         "runtime": {
           "lib/netstandard2.0/Microsoft.DotNet.PlatformAbstractions.dll": {
@@ -329,8 +186,7 @@
       },
       "Microsoft.Extensions.DependencyInjection/6.0.0": {
         "dependencies": {
-          "Microsoft.Extensions.DependencyInjection.Abstractions": "6.0.0",
-          "System.Runtime.CompilerServices.Unsafe": "6.1.0"
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "6.0.0"
         },
         "runtime": {
           "lib/net6.0/Microsoft.Extensions.DependencyInjection.dll": {
@@ -352,8 +208,7 @@
           "Microsoft.Extensions.DependencyInjection": "6.0.0",
           "Microsoft.Extensions.DependencyInjection.Abstractions": "6.0.0",
           "Microsoft.Extensions.Logging.Abstractions": "6.0.0",
-          "Microsoft.Extensions.Options": "6.0.0",
-          "System.Diagnostics.DiagnosticSource": "6.0.0"
+          "Microsoft.Extensions.Options": "6.0.0"
         },
         "runtime": {
           "lib/netstandard2.1/Microsoft.Extensions.Logging.dll": {
@@ -383,9 +238,6 @@
         }
       },
       "Microsoft.Extensions.Primitives/6.0.0": {
-        "dependencies": {
-          "System.Runtime.CompilerServices.Unsafe": "6.1.0"
-        },
         "runtime": {
           "lib/net6.0/Microsoft.Extensions.Primitives.dll": {
             "assemblyVersion": "6.0.0.0",
@@ -393,7 +245,6 @@
           }
         }
       },
-      "Microsoft.NET.ILLink.Tasks/9.0.0": {},
       "Microsoft.NET.StringTools/17.11.4": {
         "runtime": {
           "lib/net8.0/Microsoft.NET.StringTools.dll": {
@@ -402,17 +253,18 @@
           }
         }
       },
-      "Microsoft.NETCore.Platforms/5.0.0": {},
-      "Microsoft.Win32.Registry/5.0.0": {
-        "dependencies": {
-          "System.Security.AccessControl": "5.0.0",
-          "System.Security.Principal.Windows": "5.0.0"
+      "Newtonsoft.Json/9.0.1": {
+        "runtime": {
+          "lib/netstandard1.0/Newtonsoft.Json.dll": {
+            "assemblyVersion": "9.0.0.0",
+            "fileVersion": "9.0.1.19813"
+          }
         }
       },
-      "Nino/4.0.0-beta.35": {
+      "Nino/4.0.0-beta.42": {
         "dependencies": {
-          "Nino.Generator": "4.0.0-beta.35",
-          "Nino.Serialization": "4.0.0-beta.35"
+          "Nino.Generator": "4.0.0-beta.42",
+          "Nino.Serialization": "4.0.0-beta.42"
         },
         "runtime": {
           "lib/net6.0/Nino.dll": {
@@ -421,7 +273,7 @@
           }
         }
       },
-      "Nino.Generator/4.0.0-beta.35": {
+      "Nino.Generator/4.0.0-beta.42": {
         "runtime": {
           "lib/netstandard2.0/Nino.Generator.dll": {
             "assemblyVersion": "4.0.0.0",
@@ -429,12 +281,7 @@
           }
         }
       },
-      "Nino.Serialization/4.0.0-beta.35": {
-        "dependencies": {
-          "System.Buffers": "4.6.0",
-          "System.Memory": "4.6.0",
-          "System.Runtime.CompilerServices.Unsafe": "6.1.0"
-        },
+      "Nino.Serialization/4.0.0-beta.42": {
         "runtime": {
           "lib/net8.0/Nino.Core.dll": {
             "assemblyVersion": "4.0.0.0",
@@ -442,27 +289,31 @@
           }
         }
       },
-      "Perfolizer/0.5.3": {
+      "Perfolizer/0.6.0": {
+        "dependencies": {
+          "Pragmastat": "3.1.33"
+        },
         "runtime": {
           "lib/net6.0/Perfolizer.dll": {
-            "assemblyVersion": "0.5.3.0",
-            "fileVersion": "0.5.3.0"
+            "assemblyVersion": "0.6.0.0",
+            "fileVersion": "0.6.0.0"
           }
         }
       },
-      "System.Buffers/4.6.0": {},
+      "Pragmastat/3.1.33": {
+        "runtime": {
+          "lib/net6.0/Pragmastat.dll": {
+            "assemblyVersion": "3.1.33.0",
+            "fileVersion": "3.1.33.0"
+          }
+        }
+      },
       "System.CodeDom/9.0.5": {
         "runtime": {
           "lib/net9.0/System.CodeDom.dll": {
             "assemblyVersion": "9.0.0.0",
             "fileVersion": "9.0.525.21509"
           }
-        }
-      },
-      "System.Collections.Immutable/9.0.0": {},
-      "System.Diagnostics.DiagnosticSource/6.0.0": {
-        "dependencies": {
-          "System.Runtime.CompilerServices.Unsafe": "6.1.0"
         }
       },
       "System.Management/9.0.5": {
@@ -484,22 +335,10 @@
           }
         }
       },
-      "System.Memory/4.6.0": {},
-      "System.Reflection.Metadata/9.0.0": {},
-      "System.Reflection.TypeExtensions/4.7.0": {},
-      "System.Runtime.CompilerServices.Unsafe/6.1.0": {},
-      "System.Security.AccessControl/5.0.0": {
-        "dependencies": {
-          "Microsoft.NETCore.Platforms": "5.0.0",
-          "System.Security.Principal.Windows": "5.0.0"
-        }
-      },
-      "System.Security.Principal.Windows/5.0.0": {},
-      "System.Text.Json/8.0.5": {},
       "LuminPack/1.0.0": {
         "runtime": {
           "LuminPack.dll": {
-            "assemblyVersion": "1.0.0",
+            "assemblyVersion": "1.0.0.0",
             "fileVersion": "1.0.0.0"
           }
         }
@@ -510,7 +349,7 @@
         },
         "runtime": {
           "LuminPackGenerator.dll": {
-            "assemblyVersion": "1.0.0",
+            "assemblyVersion": "1.0.0.0",
             "fileVersion": "1.0.0.0"
           }
         }
@@ -523,19 +362,19 @@
       "serviceable": false,
       "sha512": ""
     },
-    "BenchmarkDotNet/0.15.4": {
+    "BenchmarkDotNet/0.15.6": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-hGHlCCf0HL5b1LvjXb84ZEAVw45Hl9lt4+0gLxaJ4Ty+GagIE8fH+GnzJc3w5MVscghd5NpTNmvwWub1Qg4foQ==",
-      "path": "benchmarkdotnet/0.15.4",
-      "hashPath": "benchmarkdotnet.0.15.4.nupkg.sha512"
+      "sha512": "sha512-jqp7RU91mYDAiX1Ju4iBSvsil33JOVwfEReXjHvWXqeQMPxwVS0rPzdHi6qs1qQPBPj+XnsA4fGO4Uk+rN4Vlg==",
+      "path": "benchmarkdotnet/0.15.6",
+      "hashPath": "benchmarkdotnet.0.15.6.nupkg.sha512"
     },
-    "BenchmarkDotNet.Annotations/0.15.4": {
+    "BenchmarkDotNet.Annotations/0.15.6": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-jLwEHO8EfrsVNNH9Lc4dHMmwD8TON8y8mGQLjqUbSZygQoAIjq6xwNz0bYIVNFl0aUhPgAd/1lnSz8uvUFoMPg==",
-      "path": "benchmarkdotnet.annotations/0.15.4",
-      "hashPath": "benchmarkdotnet.annotations.0.15.4.nupkg.sha512"
+      "sha512": "sha512-+yxYe9G/2APXXGOHWMdPYIRiR02JqULnKKztDjoNWS5bBtTQPuFtSdAdGxt67mNGKNbQJJMEEbHUIddn0YUGzQ==",
+      "path": "benchmarkdotnet.annotations/0.15.6",
+      "hashPath": "benchmarkdotnet.annotations.0.15.6.nupkg.sha512"
     },
     "CommandLineParser/2.9.1": {
       "type": "package",
@@ -572,13 +411,6 @@
       "path": "memorypack.core/1.21.4",
       "hashPath": "memorypack.core.1.21.4.nupkg.sha512"
     },
-    "MemoryPack.Generator/1.21.4": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-g14EsSS85yn0lHTi0J9ivqlZMf09A2iI51fmI+0KkzIzyCbWOBWPi5mdaY7YWmXprk12aYh9u/qfWHQUYthlwg==",
-      "path": "memorypack.generator/1.21.4",
-      "hashPath": "memorypack.generator.1.21.4.nupkg.sha512"
-    },
     "MessagePack/3.1.4": {
       "type": "package",
       "serviceable": true,
@@ -592,20 +424,6 @@
       "sha512": "sha512-aVWrDAkCdqxwQsz/q0ldPh2EFn48M99YUzE9OvZjMq2RNLKz4o2z88iGFvSvbMqOWRweRvKPHBJZe22PRqzslQ==",
       "path": "messagepack.annotations/3.1.4",
       "hashPath": "messagepack.annotations.3.1.4.nupkg.sha512"
-    },
-    "MessagePackAnalyzer/3.1.4": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-CTaSsN/liJ7MhLCAB7Z4ZLBNuVGCq9lt2BT/cbrc9vzGv89yK3CqIA+z9T19a11eQYl9etZHL6MQJgCqECRVpg==",
-      "path": "messagepackanalyzer/3.1.4",
-      "hashPath": "messagepackanalyzer.3.1.4.nupkg.sha512"
-    },
-    "Microsoft.CodeAnalysis.Analyzers/3.11.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-v/EW3UE8/lbEYHoC2Qq7AR/DnmvpgdtAMndfQNmpuIMx/Mto8L5JnuCfdBYtgvalQOtfNCnxFejxuRrryvUTsg==",
-      "path": "microsoft.codeanalysis.analyzers/3.11.0",
-      "hashPath": "microsoft.codeanalysis.analyzers.3.11.0.nupkg.sha512"
     },
     "Microsoft.CodeAnalysis.Common/4.14.0": {
       "type": "package",
@@ -641,13 +459,6 @@
       "sha512": "sha512-/OrJFKaojSR6TkUKtwh8/qA9XWNtxLrXMqvEb89dBSKCWjaGVTbKMYodIUgF5deCEtmd6GXuRerciXGl5bhZ7Q==",
       "path": "microsoft.diagnostics.tracing.traceevent/3.1.21",
       "hashPath": "microsoft.diagnostics.tracing.traceevent.3.1.21.nupkg.sha512"
-    },
-    "Microsoft.DotNet.ILCompiler/9.0.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-bbnlV2PbUmCQ8Ndpx0kJaicLyV28IU+4IzyctQLL57+DxrHurYr2qsJrC8+yD44Q0DyPfv2oM168c1Tk6Bxbmg==",
-      "path": "microsoft.dotnet.ilcompiler/9.0.0",
-      "hashPath": "microsoft.dotnet.ilcompiler.9.0.0.nupkg.sha512"
     },
     "Microsoft.DotNet.PlatformAbstractions/3.1.6": {
       "type": "package",
@@ -698,13 +509,6 @@
       "path": "microsoft.extensions.primitives/6.0.0",
       "hashPath": "microsoft.extensions.primitives.6.0.0.nupkg.sha512"
     },
-    "Microsoft.NET.ILLink.Tasks/9.0.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-zAwp213evC3UkimtVXRb+Dlgc/40QG145nmZDtp2LO9zJJMfrp+i/87BnXN7tRXEA4liyzdFkjqG1HE8/RPb4A==",
-      "path": "microsoft.net.illink.tasks/9.0.0",
-      "hashPath": "microsoft.net.illink.tasks.9.0.0.nupkg.sha512"
-    },
     "Microsoft.NET.StringTools/17.11.4": {
       "type": "package",
       "serviceable": true,
@@ -712,54 +516,47 @@
       "path": "microsoft.net.stringtools/17.11.4",
       "hashPath": "microsoft.net.stringtools.17.11.4.nupkg.sha512"
     },
-    "Microsoft.NETCore.Platforms/5.0.0": {
+    "Newtonsoft.Json/9.0.1": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-VyPlqzH2wavqquTcYpkIIAQ6WdenuKoFN0BdYBbCWsclXacSOHNQn66Gt4z5NBqEYW0FAPm5rlvki9ZiCij5xQ==",
-      "path": "microsoft.netcore.platforms/5.0.0",
-      "hashPath": "microsoft.netcore.platforms.5.0.0.nupkg.sha512"
+      "sha512": "sha512-U82mHQSKaIk+lpSVCbWYKNavmNH1i5xrExDEquU1i6I5pV6UMOqRnJRSlKO3cMPfcpp0RgDY+8jUXHdQ4IfXvw==",
+      "path": "newtonsoft.json/9.0.1",
+      "hashPath": "newtonsoft.json.9.0.1.nupkg.sha512"
     },
-    "Microsoft.Win32.Registry/5.0.0": {
+    "Nino/4.0.0-beta.42": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-dDoKi0PnDz31yAyETfRntsLArTlVAVzUzCIvvEDsDsucrl33Dl8pIJG06ePTJTI3tGpeyHS9Cq7Foc/s4EeKcg==",
-      "path": "microsoft.win32.registry/5.0.0",
-      "hashPath": "microsoft.win32.registry.5.0.0.nupkg.sha512"
+      "sha512": "sha512-GHUEpGnGjeBiRtvHBjZCRioIxoZwV3xj3HmS0ab0iPdGCv8icdrDoGtLcCmu6+c/VGKPJDddnCP78RYVt5gZoA==",
+      "path": "nino/4.0.0-beta.42",
+      "hashPath": "nino.4.0.0-beta.42.nupkg.sha512"
     },
-    "Nino/4.0.0-beta.35": {
+    "Nino.Generator/4.0.0-beta.42": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-ZBTG4ck3emEXSsU1Di5Wcx2hR7NxKc/QdEM0yrG6w863+Q+GrYcNAIHReE9YEIeNWCF95z28Ze2ZNsOhn4KLdw==",
-      "path": "nino/4.0.0-beta.35",
-      "hashPath": "nino.4.0.0-beta.35.nupkg.sha512"
+      "sha512": "sha512-l4tihH6fO290Kera78tGOmh4vdgdWSxRmiwbRhQlujJkk63W1PY2UJ5mxx3IzCqlHY31hgxhiP+2TDcsAv1Buw==",
+      "path": "nino.generator/4.0.0-beta.42",
+      "hashPath": "nino.generator.4.0.0-beta.42.nupkg.sha512"
     },
-    "Nino.Generator/4.0.0-beta.35": {
+    "Nino.Serialization/4.0.0-beta.42": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-xo1OERW/jOQLNKrGxxC6ecK6cGH/kr4czlU3rbiwKNE+TeG4ib/Q6tLShHx5XZXHrEL9heessi+RPU8MVEjSmA==",
-      "path": "nino.generator/4.0.0-beta.35",
-      "hashPath": "nino.generator.4.0.0-beta.35.nupkg.sha512"
+      "sha512": "sha512-j40lhj3dBsfxXzijmKwCD5thQWSNfKG7pijOT76sBrDLvegI8QWLFoAogZulKsAQ2ocsrII0A0FiFOeDLfzAWA==",
+      "path": "nino.serialization/4.0.0-beta.42",
+      "hashPath": "nino.serialization.4.0.0-beta.42.nupkg.sha512"
     },
-    "Nino.Serialization/4.0.0-beta.35": {
+    "Perfolizer/0.6.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-dzZwW4iyiJDyAB2I28fdifEN/NoFNi9YX5n+YHxngJGEEVZg0n9CWiVtk1Aop/4t6qqgaiBb6iVd4O70Vzi3fw==",
-      "path": "nino.serialization/4.0.0-beta.35",
-      "hashPath": "nino.serialization.4.0.0-beta.35.nupkg.sha512"
+      "sha512": "sha512-mIhFTO23WVG66d2sqr0B0YlIOuTbyZjpaDMFoWPD1FQUwLOrWeMEpZEf8BqN24IDzfplgaSjl67wy+yUmtYaZA==",
+      "path": "perfolizer/0.6.0",
+      "hashPath": "perfolizer.0.6.0.nupkg.sha512"
     },
-    "Perfolizer/0.5.3": {
+    "Pragmastat/3.1.33": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-EhHo0s4y+tHJKhZHgQvPgFWhAhnQpHHuFzutRzfqfv5z763wvhzXh849ZtpVePQNxXWoFafh1Ta2tZgnSIVsYQ==",
-      "path": "perfolizer/0.5.3",
-      "hashPath": "perfolizer.0.5.3.nupkg.sha512"
-    },
-    "System.Buffers/4.6.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-lN6tZi7Q46zFzAbRYXTIvfXcyvQQgxnY7Xm6C6xQ9784dEL1amjM6S6Iw4ZpsvesAKnRVsM4scrDQaDqSClkjA==",
-      "path": "system.buffers/4.6.0",
-      "hashPath": "system.buffers.4.6.0.nupkg.sha512"
+      "sha512": "sha512-qADZRnkNg1Emeu2xCnJAOl3ISrH5zfm/TMbk4qPgcvT9sydB+ceK27tdJM89Lycc0MleB/JMWpE9gPUooq7wgA==",
+      "path": "pragmastat/3.1.33",
+      "hashPath": "pragmastat.3.1.33.nupkg.sha512"
     },
     "System.CodeDom/9.0.5": {
       "type": "package",
@@ -768,75 +565,12 @@
       "path": "system.codedom/9.0.5",
       "hashPath": "system.codedom.9.0.5.nupkg.sha512"
     },
-    "System.Collections.Immutable/9.0.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-QhkXUl2gNrQtvPmtBTQHb0YsUrDiDQ2QS09YbtTTiSjGcf7NBqtYbrG/BE06zcBPCKEwQGzIv13IVdXNOSub2w==",
-      "path": "system.collections.immutable/9.0.0",
-      "hashPath": "system.collections.immutable.9.0.0.nupkg.sha512"
-    },
-    "System.Diagnostics.DiagnosticSource/6.0.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-frQDfv0rl209cKm1lnwTgFPzNigy2EKk1BS3uAvHvlBVKe5cymGyHO+Sj+NLv5VF/AhHsqPIUUwya5oV4CHMUw==",
-      "path": "system.diagnostics.diagnosticsource/6.0.0",
-      "hashPath": "system.diagnostics.diagnosticsource.6.0.0.nupkg.sha512"
-    },
     "System.Management/9.0.5": {
       "type": "package",
       "serviceable": true,
       "sha512": "sha512-n6o9PZm9p25+zAzC3/48K0oHnaPKTInRrxqFq1fi/5TPbMLjuoCm/h//mS3cUmSy+9AO1Z+qsC/Ilt/ZFatv5Q==",
       "path": "system.management/9.0.5",
       "hashPath": "system.management.9.0.5.nupkg.sha512"
-    },
-    "System.Memory/4.6.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-OEkbBQoklHngJ8UD8ez2AERSk2g+/qpAaSWWCBFbpH727HxDq5ydVkuncBaKcKfwRqXGWx64dS6G1SUScMsitg==",
-      "path": "system.memory/4.6.0",
-      "hashPath": "system.memory.4.6.0.nupkg.sha512"
-    },
-    "System.Reflection.Metadata/9.0.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-ANiqLu3DxW9kol/hMmTWbt3414t9ftdIuiIU7j80okq2YzAueo120M442xk1kDJWtmZTqWQn7wHDvMRipVOEOQ==",
-      "path": "system.reflection.metadata/9.0.0",
-      "hashPath": "system.reflection.metadata.9.0.0.nupkg.sha512"
-    },
-    "System.Reflection.TypeExtensions/4.7.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-VybpaOQQhqE6siHppMktjfGBw1GCwvCqiufqmP8F1nj7fTUNtW35LOEt3UZTEsECfo+ELAl/9o9nJx3U91i7vA==",
-      "path": "system.reflection.typeextensions/4.7.0",
-      "hashPath": "system.reflection.typeextensions.4.7.0.nupkg.sha512"
-    },
-    "System.Runtime.CompilerServices.Unsafe/6.1.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-5o/HZxx6RVqYlhKSq8/zronDkALJZUT2Vz0hx43f0gwe8mwlM0y2nYlqdBwLMzr262Bwvpikeb/yEwkAa5PADg==",
-      "path": "system.runtime.compilerservices.unsafe/6.1.0",
-      "hashPath": "system.runtime.compilerservices.unsafe.6.1.0.nupkg.sha512"
-    },
-    "System.Security.AccessControl/5.0.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-dagJ1mHZO3Ani8GH0PHpPEe/oYO+rVdbQjvjJkBRNQkX4t0r1iaeGn8+/ybkSLEan3/slM0t59SVdHzuHf2jmw==",
-      "path": "system.security.accesscontrol/5.0.0",
-      "hashPath": "system.security.accesscontrol.5.0.0.nupkg.sha512"
-    },
-    "System.Security.Principal.Windows/5.0.0": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-t0MGLukB5WAVU9bO3MGzvlGnyJPgUlcwerXn1kzBRjwLKixT96XV0Uza41W49gVd8zEMFu9vQEFlv0IOrytICA==",
-      "path": "system.security.principal.windows/5.0.0",
-      "hashPath": "system.security.principal.windows.5.0.0.nupkg.sha512"
-    },
-    "System.Text.Json/8.0.5": {
-      "type": "package",
-      "serviceable": true,
-      "sha512": "sha512-0f1B50Ss7rqxXiaBJyzUu9bWFOO2/zSlifZ/UNMdiIpDYe4cY4LQQicP4nirK1OS31I43rn062UIJ1Q9bpmHpg==",
-      "path": "system.text.json/8.0.5",
-      "hashPath": "system.text.json.8.0.5.nupkg.sha512"
     },
     "LuminPack/1.0.0": {
       "type": "project",

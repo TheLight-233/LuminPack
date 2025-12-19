@@ -7,47 +7,52 @@ public static class CultureInfoFormatter
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
-        sb.AppendLine();
-        sb.AppendLine("            if (value is null)");
+        sb.AppendLine("            if (value == null)");
         sb.AppendLine("            {");
-        sb.AppendLine("                writer.WriteNullStringHeader(ref index, out var offset);");
-        sb.AppendLine();
-        sb.AppendLine("                writer.Advance(offset);");
-        sb.AppendLine();
+        sb.AppendLine("                writer.WriteNullObjectHeader();");
+        sb.AppendLine("                writer.Advance(1);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            var length = writer.GetStringLength(value.Name);");
-        sb.AppendLine();
-        sb.AppendLine("            writer.WriteString(value.Name, length);");
-        sb.AppendLine();
-        sb.AppendLine("            var symbol = writer.Option.StringRecording is LuminPack.Option.LuminPackStringRecording.Token ? 1 : 4;");
-        sb.AppendLine();
-        sb.AppendLine("            writer.Advance(length + symbol);");
+        sb.AppendLine("            ");
+        sb.AppendLine("            int offset = writer.WriteString(value.Name) + writer.StringRecordLength();");
+        sb.AppendLine("            ");
+        sb.AppendLine("            writer.Advance(offset);");
     }
     
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
-        sb.AppendLine();
+        sb.AppendLine("            ");
+        sb.AppendLine("            if (reader.PeekIsNullObject(ref index))");
+        sb.AppendLine("            {");
+        sb.AppendLine("                reader.Advance(1);");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            ");
         sb.AppendLine("            reader.ReadStringLength(ref index, out var length);");
-        sb.AppendLine();
-        sb.AppendLine("            if (reader.Option.StringRecording is LuminPack.Option.LuminPackStringRecording.Length)");
-        sb.AppendLine("                reader.Advance(4);");
-        sb.AppendLine();
-        sb.AppendLine("            var str = reader.ReadString(index, length) ?? string.Empty;");
-        sb.AppendLine("            if (str == string.Empty)");
+        sb.AppendLine("            ");
+        sb.AppendLine("            var str = reader.ReadString(length);");
+        sb.AppendLine("            ");
+        sb.AppendLine("            var symbol = reader.StringRecordLength();");
+        sb.AppendLine("            ");
+        sb.AppendLine("            reader.Advance(length + symbol);");
+        sb.AppendLine("            ");
+        sb.AppendLine("            if (string.IsNullOrEmpty(str))");
         sb.AppendLine("            {");
         sb.AppendLine("                value = null;");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = global::System.Globalization.CultureInfo.GetCultureInfo(str);");
+        sb.AppendLine("                if (global::LuminPack.Parsers.CultureInfoParser.IsInvariantMode)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    value = str == global::LuminPack.Parsers.CultureInfoParser.InvariantCultureName ? ");
+        sb.AppendLine("                        global::System.Globalization.CultureInfo.InvariantCulture : null;");
+        sb.AppendLine("                }");
+        sb.AppendLine("                else");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    value = global::System.Globalization.CultureInfo.GetCultureInfo(str);");
+        sb.AppendLine("                }");
         sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            var symbol = reader.Option.StringRecording is LuminPack.Option.LuminPackStringRecording.Token ? 1 : 0;");
-        sb.AppendLine();
-        sb.AppendLine("            reader.Advance(length + symbol);");
     }
 }

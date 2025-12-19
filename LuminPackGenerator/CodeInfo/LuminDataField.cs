@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Microsoft.CodeAnalysis;
 
 namespace LuminPack.Code
 {
@@ -42,7 +43,8 @@ namespace LuminPack.Code
         public uint Order = int.MaxValue;
         public uint FixLength = int.MaxValue;
         public bool IsPrivate;
-        
+        //PoolRent
+        public IMethodSymbol RentPoolMethod { get; set; }
 
     }
     

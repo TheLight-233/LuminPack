@@ -17,7 +17,7 @@ public sealed class BigIntegerParser : LuminPackParser<BigInteger>
         Span<byte> temp = stackalloc byte[255];
         if (value.TryWriteBytes(temp, out var written))
         {
-            writer.WriteUnmanagedSpan(ref index, temp.Slice(written), out var offset);
+            writer.WriteUnmanagedSpan(ref index, temp[..written], out var offset);
             
             writer.Advance(offset);
             
@@ -50,7 +50,7 @@ public sealed class BigIntegerParser : LuminPackParser<BigInteger>
 
         reader.Advance(4);
         
-        ref var src = ref reader.GetSpanReference(length);
+        ref var src = ref reader.GetSpanReference(index);
         value = new BigInteger(MemoryMarshal.CreateReadOnlySpan(ref src, length));
 
         reader.Advance(length);
@@ -84,5 +84,18 @@ public sealed class BigIntegerParser : LuminPackParser<BigInteger>
             evaluator.CalculateArray(ref byteArray);
             
         }
+    }
+
+    [Preserve]
+    public override void SerializeJson(ref LuminPackJsonWriter writer, scoped ref BigInteger value)
+    {
+        writer.WriteString(value.ToString());
+    }
+
+    [Preserve]
+    public override void DeserializeJson(ref LuminPackJsonReader reader, scoped ref BigInteger value)
+    {
+        var str = reader.ReadString();
+        value = BigInteger.Parse(str);
     }
 }

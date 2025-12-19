@@ -30,7 +30,7 @@ public static class InterfaceEnumerableFormatter
         sb.AppendLine("            else");
         sb.AppendLine("            {");
         sb.AppendLine("                // write to tempbuffer(because we don't know length so can't write header)");
-        sb.AppendLine("                var tempBuffer = ReusableLinkedArrayBufferWriterPool.Rent();");
+        sb.AppendLine("                var tempBuffer = LuminBufferWriterPool.Rent();");
         sb.AppendLine("                try");
         sb.AppendLine("                {");
         sb.AppendLine("                    var tempWriter = new LuminPackWriter(writer.OptionState);");
@@ -55,7 +55,7 @@ public static class InterfaceEnumerableFormatter
         sb.AppendLine("                }");
         sb.AppendLine("                finally");
         sb.AppendLine("                {");
-        sb.AppendLine("                    ReusableLinkedArrayBufferWriterPool.Return(tempBuffer);");
+        sb.AppendLine("                    LuminBufferWriterPool.Return(tempBuffer);");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
     }

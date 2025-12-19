@@ -1,21 +1,27 @@
 {
   "version": 2,
-  "dgSpecHash": "/A7fvr9s6XY=",
+  "dgSpecHash": "JtiKJKn1JOQ=",
   "success": true,
   "projectFilePath": "C:\\Users\\28027\\Desktop\\C#\\LuminPack\\LuminPackUnitTest\\LuminPackUnitTest.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\28027\\.nuget\\packages\\microsoft.codeanalysis.analyzers\\3.3.3\\microsoft.codeanalysis.analyzers.3.3.3.nupkg.sha512",
     "C:\\Users\\28027\\.nuget\\packages\\microsoft.codeanalysis.common\\4.3.0-3.final\\microsoft.codeanalysis.common.4.3.0-3.final.nupkg.sha512",
     "C:\\Users\\28027\\.nuget\\packages\\microsoft.codeanalysis.csharp\\4.3.0-3.final\\microsoft.codeanalysis.csharp.4.3.0-3.final.nupkg.sha512",
-    "C:\\Users\\28027\\.nuget\\packages\\microsoft.dotnet.ilcompiler\\9.0.0\\microsoft.dotnet.ilcompiler.9.0.0.nupkg.sha512",
-    "C:\\Users\\28027\\.nuget\\packages\\microsoft.net.illink.tasks\\9.0.0\\microsoft.net.illink.tasks.9.0.0.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\microsoft.dotnet.ilcompiler\\9.0.11\\microsoft.dotnet.ilcompiler.9.0.11.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\microsoft.net.illink.tasks\\9.0.11\\microsoft.net.illink.tasks.9.0.11.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\microsoft.net.illink.tasks\\10.0.0\\microsoft.net.illink.tasks.10.0.0.nupkg.sha512",
     "C:\\Users\\28027\\.nuget\\packages\\system.collections.immutable\\5.0.0\\system.collections.immutable.5.0.0.nupkg.sha512",
     "C:\\Users\\28027\\.nuget\\packages\\system.memory\\4.5.4\\system.memory.4.5.4.nupkg.sha512",
     "C:\\Users\\28027\\.nuget\\packages\\system.reflection.metadata\\5.0.0\\system.reflection.metadata.5.0.0.nupkg.sha512",
     "C:\\Users\\28027\\.nuget\\packages\\system.runtime.compilerservices.unsafe\\6.0.0\\system.runtime.compilerservices.unsafe.6.0.0.nupkg.sha512",
     "C:\\Users\\28027\\.nuget\\packages\\system.text.encoding.codepages\\6.0.0\\system.text.encoding.codepages.6.0.0.nupkg.sha512",
     "C:\\Users\\28027\\.nuget\\packages\\system.threading.tasks.extensions\\4.5.4\\system.threading.tasks.extensions.4.5.4.nupkg.sha512",
-    "C:\\Users\\28027\\.nuget\\packages\\runtime.win-x64.microsoft.dotnet.ilcompiler\\9.0.0\\runtime.win-x64.microsoft.dotnet.ilcompiler.9.0.0.nupkg.sha512"
+    "C:\\Users\\28027\\.nuget\\packages\\runtime.win-x64.microsoft.dotnet.ilcompiler\\9.0.11\\runtime.win-x64.microsoft.dotnet.ilcompiler.9.0.11.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\microsoft.netcore.app.ref\\9.0.11\\microsoft.netcore.app.ref.9.0.11.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\microsoft.windowsdesktop.app.ref\\9.0.11\\microsoft.windowsdesktop.app.ref.9.0.11.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\microsoft.aspnetcore.app.ref\\9.0.11\\microsoft.aspnetcore.app.ref.9.0.11.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\runtime.win-x64.microsoft.dotnet.ilcompiler\\9.0.11\\runtime.win-x64.microsoft.dotnet.ilcompiler.9.0.11.nupkg.sha512",
+    "C:\\Users\\28027\\.nuget\\packages\\microsoft.netcore.app.host.win-x64\\9.0.11\\microsoft.netcore.app.host.win-x64.9.0.11.nupkg.sha512"
   ],
   "logs": []
 }

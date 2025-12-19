@@ -1,4 +1,5 @@
 
+using System;
 using LuminPack.Enum;
 
 namespace LuminPack.Attribute;
@@ -6,9 +7,9 @@ namespace LuminPack.Attribute;
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, AllowMultiple = false, Inherited = false)]
 public sealed class LuminPackableAttribute : System.Attribute
 {
-    public LuminPackableAttribute(GeneratorType generatorType = GeneratorType.Object)
+    
+    public LuminPackableAttribute(GeneratorType generatorType = GeneratorType.Object, bool json = false)
     {
-        
     }
 }
 
@@ -151,7 +152,12 @@ public sealed class LuminPackOnDeserializedAttribute : System.Attribute
 {
 }
 
-[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public sealed class MultThreadAttribute : System.Attribute
+[AttributeUsage(AttributeTargets.Method, AllowMultiple = false, Inherited = false)]
+public sealed class LuminPackPoolRentAttribute : System.Attribute
+{
+}
+
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = false, Inherited = false)]
+public sealed class LuminPackWideTagAttribute : System.Attribute
 {
 }

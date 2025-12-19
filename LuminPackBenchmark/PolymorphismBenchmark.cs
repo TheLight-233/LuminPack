@@ -105,6 +105,7 @@ public sealed partial class PolymorphismClass : PolymorphismClassBase, Ifoo
     public override void Write() => Console.WriteLine("Yeah！！！");
 }
 
+
 [NinoType]
 [MemoryPackable]
 [MemoryPackUnion(1, typeof(FooA))]
@@ -128,6 +129,7 @@ public sealed partial class PolymorphismClass : PolymorphismClassBase, Ifoo
 [MemoryPackUnion(19, typeof(FooS))]
 [MemoryPackUnion(20, typeof(FooZ))]
 [LuminPackable]
+[LuminPackUnion(15, typeof(FooO))]
 [Union(1, typeof(FooA))]
 [Union(2, typeof(FooB))]
 [Union(3, typeof(FooC))]
