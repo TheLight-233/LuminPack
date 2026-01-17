@@ -461,9 +461,9 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine($"        private static unsafe void WriteJson{methodName}(ref global::LuminPack.Core.LuminPackJsonWriter writer, ref {classGlobalName} value)");
             sb.AppendLine("        {");
             sb.AppendLine("            writer.WriteObjectStart();");
-            sb.AppendLine($"            writer.WritePropertyName(\"$type\"u8);");
+            sb.AppendLine($"            writer.WritePropertyName(LuminPackConstUtf8.TypeU8);");
             sb.AppendLine($"            writer.WriteInt({member.Id});");
-            sb.AppendLine($"            writer.WritePropertyName(\"$value\"u8);");
+            sb.AppendLine($"            writer.WritePropertyName(LuminPackConstUtf8.ValueU8);");
             sb.AppendLine($"            writer.WriteValue(ref LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value)!);");
             sb.AppendLine("            writer.WriteObjectEnd();");
             sb.AppendLine("        }");
@@ -488,7 +488,7 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine($"        private static unsafe void ReadJson{methodName}(ref global::LuminPack.Core.LuminPackJsonReader reader, ref {classGlobalName} value)");
             sb.AppendLine("        {");
             sb.AppendLine($"            {memberType} tempValue = default!;");
-            sb.AppendLine($"            reader.ReadValue(ref tempValue);");
+            sb.AppendLine($"            reader.ReadValue(ref tempValue!);");
             sb.AppendLine($"            value = LuminPackMarshal.As<{memberType}, {classGlobalName}>(ref tempValue!);");
             sb.AppendLine("        }");
             sb.AppendLine();
@@ -577,12 +577,12 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("                    break;");
         sb.AppendLine();
         
-        sb.AppendLine("                if (propNameUtf8.SequenceEqual(\"$type\"u8))");
+        sb.AppendLine("                if (propNameUtf8.SequenceEqual(LuminPackConstUtf8.TypeU8))");
         sb.AppendLine("                {");
         sb.AppendLine("                    tag = (ushort)reader.ReadInt();");
         sb.AppendLine("                    foundType = true;");
         sb.AppendLine("                }");
-        sb.AppendLine("                else if (propNameUtf8.SequenceEqual(\"$value\"u8))");
+        sb.AppendLine("                else if (propNameUtf8.SequenceEqual(LuminPackConstUtf8.ValueU8))");
         sb.AppendLine("                {");
         sb.AppendLine("                    if (foundType)");
         sb.AppendLine("                    {");
