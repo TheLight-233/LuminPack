@@ -15,7 +15,7 @@ namespace LuminPack
 {
     public static partial class LuminPackParseProvider
     {
-
+        
         // 同步工厂
         private static readonly ConcurrentDictionary<Type, Func<object>> _entitySyncFactor = new();
 

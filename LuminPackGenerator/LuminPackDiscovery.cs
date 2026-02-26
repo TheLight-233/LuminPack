@@ -61,12 +61,12 @@ internal static class LuminPackDiscovery
     /// 验证派生类型是否符合收集条件
     /// 规则：
     /// 1. 如果子类泛型参数数量超过基类，不收集
-    /// 2. 如果子类泛型参数不是直接传递给基类（如 MyClass&lt;U&gt; : MyClassBase&lt;T&gt;），不收集
+    /// 2. 如果子类泛型参数不是直接传递给基类（如 MyClass<U> : MyClassBase<T>），不收集
     /// 3. 如果子类有约束且和基类约束不一样，不收集
-    /// 4. 如果基类被完全具象化（如 MyClassBase&lt;int&gt;），子类不能有泛型参数
+    /// 4. 如果基类被完全具象化（如 MyClassBase<int>），子类不能有泛型参数
     /// 允许的情况：
-    /// - MyClass&lt;T&gt; : MyClassBase&lt;T&gt; （泛型参数完全匹配，约束一致）
-    /// - MyClass : MyClassBase&lt;int&gt; （完全具体化，子类无泛型）
+    /// - MyClass<T> : MyClassBase<T> （泛型参数完全匹配，约束一致）
+    /// - MyClass : MyClassBase<int> （完全具体化，子类无泛型）
     /// </summary>
     private static bool IsValidDerivedType(INamedTypeSymbol derivedType, INamedTypeSymbol baseDef, string baseName, int baseArity)
     {

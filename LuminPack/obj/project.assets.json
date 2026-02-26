@@ -2,6 +2,9 @@
   "version": 3,
   "targets": {
     ".NETStandard,Version=v2.1": {
+      "LuminPackGenerator/1.0.1": {
+        "type": "package"
+      },
       "System.Buffers/4.5.1": {
         "type": "package",
         "compile": {
@@ -77,11 +80,35 @@
         }
       }
     },
-    "net10.0": {},
-    "net8.0": {},
-    "net9.0": {}
+    "net10.0": {
+      "LuminPackGenerator/1.0.1": {
+        "type": "package"
+      }
+    },
+    "net8.0": {
+      "LuminPackGenerator/1.0.1": {
+        "type": "package"
+      }
+    },
+    "net9.0": {
+      "LuminPackGenerator/1.0.1": {
+        "type": "package"
+      }
+    }
   },
   "libraries": {
+    "LuminPackGenerator/1.0.1": {
+      "sha512": "u6eM0bLkognw+MXD8BUElih6dEfOgQmk1Bopr/bYr7+BMLAEJKflXq1iGmx7Rg1vwxi6WRpUtMQV+/42QM9AyQ==",
+      "type": "package",
+      "path": "luminpackgenerator/1.0.1",
+      "files": [
+        ".nupkg.metadata",
+        ".signature.p7s",
+        "analyzers/dotnet/cs/LuminPackGenerator.dll",
+        "luminpackgenerator.1.0.1.nupkg.sha512",
+        "luminpackgenerator.nuspec"
+      ]
+    },
     "System.Buffers/4.5.1": {
       "sha512": "Rw7ijyl1qqRS0YQD/WycNst8hUUMgrMH4FCn1nNm27M4VxchZ1js3fVjQaANHO5f3sN4isvP4a+Met9Y4YomAg==",
       "type": "package",
@@ -234,18 +261,25 @@
   },
   "projectFileDependencyGroups": {
     ".NETStandard,Version=v2.1": [
+      "LuminPackGenerator >= 1.0.1",
       "System.Collections.Immutable >= 9.0.8",
       "System.Runtime.CompilerServices.Unsafe >= 6.1.2"
     ],
-    "net10.0": [],
-    "net8.0": [],
-    "net9.0": []
+    "net10.0": [
+      "LuminPackGenerator >= 1.0.1"
+    ],
+    "net8.0": [
+      "LuminPackGenerator >= 1.0.1"
+    ],
+    "net9.0": [
+      "LuminPackGenerator >= 1.0.1"
+    ]
   },
   "packageFolders": {
     "C:\\Users\\28027\\.nuget\\packages\\": {}
   },
   "project": {
-    "version": "1.0.0",
+    "version": "1.0.2",
     "restore": {
       "projectUniqueName": "C:\\Users\\28027\\Desktop\\C#\\LuminPack\\LuminPack\\LuminPack.csproj",
       "projectName": "LuminPack",
@@ -301,6 +335,12 @@
     "frameworks": {
       "net8.0": {
         "targetAlias": "net8.0",
+        "dependencies": {
+          "LuminPackGenerator": {
+            "target": "Package",
+            "version": "[1.0.1, )"
+          }
+        },
         "imports": [
           "net461",
           "net462",
@@ -335,6 +375,12 @@
       },
       "net9.0": {
         "targetAlias": "net9.0",
+        "dependencies": {
+          "LuminPackGenerator": {
+            "target": "Package",
+            "version": "[1.0.1, )"
+          }
+        },
         "imports": [
           "net461",
           "net462",
@@ -369,6 +415,12 @@
       },
       "net10.0": {
         "targetAlias": "net10.0",
+        "dependencies": {
+          "LuminPackGenerator": {
+            "target": "Package",
+            "version": "[1.0.1, )"
+          }
+        },
         "imports": [
           "net461",
           "net462",
@@ -390,6 +442,10 @@
       "netstandard2.1": {
         "targetAlias": "netstandard2.1",
         "dependencies": {
+          "LuminPackGenerator": {
+            "target": "Package",
+            "version": "[1.0.1, )"
+          },
           "System.Collections.Immutable": {
             "target": "Package",
             "version": "[9.0.8, )"

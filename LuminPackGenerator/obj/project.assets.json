@@ -8,11 +8,11 @@
           "build/_._": {}
         }
       },
-      "Microsoft.CodeAnalysis.Common/4.3.0-3.final": {
+      "Microsoft.CodeAnalysis.Common/4.3.0": {
         "type": "package",
         "dependencies": {
           "Microsoft.CodeAnalysis.Analyzers": "3.3.3",
-          "System.Collections.Immutable": "5.0.0",
+          "System.Collections.Immutable": "6.0.0",
           "System.Memory": "4.5.4",
           "System.Reflection.Metadata": "5.0.0",
           "System.Runtime.CompilerServices.Unsafe": "6.0.0",
@@ -71,10 +71,10 @@
           }
         }
       },
-      "Microsoft.CodeAnalysis.CSharp/4.3.0-3.final": {
+      "Microsoft.CodeAnalysis.CSharp/4.3.0": {
         "type": "package",
         "dependencies": {
-          "Microsoft.CodeAnalysis.Common": "[4.3.0-3.final]"
+          "Microsoft.CodeAnalysis.Common": "[4.3.0]"
         },
         "compile": {
           "lib/netstandard2.0/Microsoft.CodeAnalysis.CSharp.dll": {
@@ -165,10 +165,11 @@
           }
         }
       },
-      "System.Collections.Immutable/5.0.0": {
+      "System.Collections.Immutable/6.0.0": {
         "type": "package",
         "dependencies": {
-          "System.Memory": "4.5.4"
+          "System.Memory": "4.5.4",
+          "System.Runtime.CompilerServices.Unsafe": "6.0.0"
         },
         "compile": {
           "lib/netstandard2.0/System.Collections.Immutable.dll": {
@@ -534,10 +535,10 @@
         "tools/uninstall.ps1"
       ]
     },
-    "Microsoft.CodeAnalysis.Common/4.3.0-3.final": {
-      "sha512": "1u7+F0XjGeC+NMWH3w0MpRfeuiABzKumJvwBcE0K9+edUyLf1oowsxKGT4XO8PXQLbb2NZCbkMvhOe+DH1+fZA==",
+    "Microsoft.CodeAnalysis.Common/4.3.0": {
+      "sha512": "Hhaw6DKZHiR+vgOdIqvndfUntJhmDR7MjylUJ55EvWtDyJFLDf2eij8r9tcwXP35FLD+bVNNCO0+KIYuvJjNnA==",
       "type": "package",
-      "path": "microsoft.codeanalysis.common/4.3.0-3.final",
+      "path": "microsoft.codeanalysis.common/4.3.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -575,14 +576,14 @@
         "lib/netstandard2.0/tr/Microsoft.CodeAnalysis.resources.dll",
         "lib/netstandard2.0/zh-Hans/Microsoft.CodeAnalysis.resources.dll",
         "lib/netstandard2.0/zh-Hant/Microsoft.CodeAnalysis.resources.dll",
-        "microsoft.codeanalysis.common.4.3.0-3.final.nupkg.sha512",
+        "microsoft.codeanalysis.common.4.3.0.nupkg.sha512",
         "microsoft.codeanalysis.common.nuspec"
       ]
     },
-    "Microsoft.CodeAnalysis.CSharp/4.3.0-3.final": {
-      "sha512": "o/1gHjHdsE6pDkOiC1OEImcMSrdRXHL1d0HnM0Zstyf9uZe4bjeD1CU8ef7DPveWWTluVGgLfNBHiPnbt8b4Qg==",
+    "Microsoft.CodeAnalysis.CSharp/4.3.0": {
+      "sha512": "0PU4a2h7L6N9SlF/oNHwj2A/+n0LK/7n6PEGvXyIZq8hc7r/TztB+47mhVLvapT6bWSV7nMT78cNxbQuC6tk6g==",
       "type": "package",
-      "path": "microsoft.codeanalysis.csharp/4.3.0-3.final",
+      "path": "microsoft.codeanalysis.csharp/4.3.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
@@ -620,7 +621,7 @@
         "lib/netstandard2.0/tr/Microsoft.CodeAnalysis.CSharp.resources.dll",
         "lib/netstandard2.0/zh-Hans/Microsoft.CodeAnalysis.CSharp.resources.dll",
         "lib/netstandard2.0/zh-Hant/Microsoft.CodeAnalysis.CSharp.resources.dll",
-        "microsoft.codeanalysis.csharp.4.3.0-3.final.nupkg.sha512",
+        "microsoft.codeanalysis.csharp.4.3.0.nupkg.sha512",
         "microsoft.codeanalysis.csharp.nuspec"
       ]
     },
@@ -799,30 +800,27 @@
         "version.txt"
       ]
     },
-    "System.Collections.Immutable/5.0.0": {
-      "sha512": "FXkLXiK0sVVewcso0imKQoOxjoPAj42R8HtjjbSjVPAzwDfzoyoznWxgA3c38LDbN9SJux1xXoXYAhz98j7r2g==",
+    "System.Collections.Immutable/6.0.0": {
+      "sha512": "l4zZJ1WU2hqpQQHXz1rvC3etVZN+2DLmQMO79FhOTZHMn8tDRr+WU287sbomD0BETlmKDn0ygUgVy9k5xkkJdA==",
       "type": "package",
-      "path": "system.collections.immutable/5.0.0",
+      "path": "system.collections.immutable/6.0.0",
       "files": [
         ".nupkg.metadata",
         ".signature.p7s",
         "Icon.png",
         "LICENSE.TXT",
         "THIRD-PARTY-NOTICES.TXT",
+        "buildTransitive/netcoreapp2.0/System.Collections.Immutable.targets",
+        "buildTransitive/netcoreapp3.1/_._",
         "lib/net461/System.Collections.Immutable.dll",
         "lib/net461/System.Collections.Immutable.xml",
-        "lib/netstandard1.0/System.Collections.Immutable.dll",
-        "lib/netstandard1.0/System.Collections.Immutable.xml",
-        "lib/netstandard1.3/System.Collections.Immutable.dll",
-        "lib/netstandard1.3/System.Collections.Immutable.xml",
+        "lib/net6.0/System.Collections.Immutable.dll",
+        "lib/net6.0/System.Collections.Immutable.xml",
         "lib/netstandard2.0/System.Collections.Immutable.dll",
         "lib/netstandard2.0/System.Collections.Immutable.xml",
-        "lib/portable-net45+win8+wp8+wpa81/System.Collections.Immutable.dll",
-        "lib/portable-net45+win8+wp8+wpa81/System.Collections.Immutable.xml",
-        "system.collections.immutable.5.0.0.nupkg.sha512",
+        "system.collections.immutable.6.0.0.nupkg.sha512",
         "system.collections.immutable.nuspec",
-        "useSharedDesignerContext.txt",
-        "version.txt"
+        "useSharedDesignerContext.txt"
       ]
     },
     "System.Memory/4.5.4": {
@@ -1019,7 +1017,7 @@
   },
   "projectFileDependencyGroups": {
     ".NETStandard,Version=v2.0": [
-      "Microsoft.CodeAnalysis.CSharp >= 4.3.0-3.final",
+      "Microsoft.CodeAnalysis.CSharp >= 4.3.0",
       "NETStandard.Library >= 2.0.3"
     ]
   },
@@ -1027,7 +1025,7 @@
     "C:\\Users\\28027\\.nuget\\packages\\": {}
   },
   "project": {
-    "version": "1.0.0",
+    "version": "1.0.1",
     "restore": {
       "projectUniqueName": "C:\\Users\\28027\\Desktop\\C#\\LuminPack\\LuminPackGenerator\\LuminPackGenerator.csproj",
       "projectName": "LuminPackGenerator",
@@ -1069,8 +1067,9 @@
         "targetAlias": "netstandard2.0",
         "dependencies": {
           "Microsoft.CodeAnalysis.CSharp": {
+            "suppressParent": "All",
             "target": "Package",
-            "version": "[4.3.0-3.final, )"
+            "version": "[4.3.0, )"
           },
           "NETStandard.Library": {
             "suppressParent": "All",

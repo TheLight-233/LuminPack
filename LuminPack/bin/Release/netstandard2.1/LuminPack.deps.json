@@ -7,7 +7,7 @@
   "targets": {
     ".NETStandard,Version=v2.1": {},
     ".NETStandard,Version=v2.1/": {
-      "LuminPack/1.0.0": {
+      "LuminPack/1.0.2": {
         "dependencies": {
           "System.Collections.Immutable": "9.0.8",
           "System.Runtime.CompilerServices.Unsafe": "6.1.2"
@@ -68,7 +68,7 @@
     }
   },
   "libraries": {
-    "LuminPack/1.0.0": {
+    "LuminPack/1.0.2": {
       "type": "project",
       "serviceable": false,
       "sha512": ""

@@ -5,7 +5,7 @@
   },
   "projects": {
     "C:\\Users\\28027\\Desktop\\C#\\LuminPack\\LuminPack\\LuminPack.csproj": {
-      "version": "1.0.0",
+      "version": "1.0.2",
       "restore": {
         "projectUniqueName": "C:\\Users\\28027\\Desktop\\C#\\LuminPack\\LuminPack\\LuminPack.csproj",
         "projectName": "LuminPack",
@@ -61,6 +61,12 @@
       "frameworks": {
         "net8.0": {
           "targetAlias": "net8.0",
+          "dependencies": {
+            "LuminPackGenerator": {
+              "target": "Package",
+              "version": "[1.0.1, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
@@ -95,6 +101,12 @@
         },
         "net9.0": {
           "targetAlias": "net9.0",
+          "dependencies": {
+            "LuminPackGenerator": {
+              "target": "Package",
+              "version": "[1.0.1, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
@@ -129,6 +141,12 @@
         },
         "net10.0": {
           "targetAlias": "net10.0",
+          "dependencies": {
+            "LuminPackGenerator": {
+              "target": "Package",
+              "version": "[1.0.1, )"
+            }
+          },
           "imports": [
             "net461",
             "net462",
@@ -150,6 +168,10 @@
         "netstandard2.1": {
           "targetAlias": "netstandard2.1",
           "dependencies": {
+            "LuminPackGenerator": {
+              "target": "Package",
+              "version": "[1.0.1, )"
+            },
             "System.Collections.Immutable": {
               "target": "Package",
               "version": "[9.0.8, )"

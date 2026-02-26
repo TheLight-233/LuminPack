@@ -70,9 +70,9 @@ namespace LuminPack.SourceGenerator
                         }
                         catch (Exception ex)
                         {
-                            // 捕获创建LuminDataInfo时的异常
-                            var errorMsg = $"{DateTime.Now}: CreateLuminDataInfo failed for {context.TargetSymbol?.Name}\n{ex}\nStack: {ex.StackTrace}";
-                            File.WriteAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "LuminPack_CreateLuminDataInfo_error.txt"), errorMsg);
+                            // // 捕获创建LuminDataInfo时的异常
+                            // var errorMsg = $"{DateTime.Now}: CreateLuminDataInfo failed for {context.TargetSymbol?.Name}\n{ex}\nStack: {ex.StackTrace}";
+                            // File.WriteAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "LuminPack_CreateLuminDataInfo_error.txt"), errorMsg);
                             throw;
                         }
                     }).WithTrackingName("LuminPack.LuminPackable.1_ForAttributeLuminPackableAttribute");
@@ -114,29 +114,29 @@ namespace LuminPack.SourceGenerator
                     }
                     catch (Exception ex)
                     {
-                        // 捕获代码生成时的异常
-                        System.Diagnostics.StackTrace trace = new System.Diagnostics.StackTrace(ex, true);
-                        var errorMsg = $"{DateTime.Now}: Code generation failed\n{ex}\nStack: {trace}";
-                        File.WriteAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "LuminPack_CodeGen_error.txt"), errorMsg);
-                
-                        // 同时报告诊断信息，让用户在IDE中看到错误
-                        context.ReportDiagnostic(Diagnostic.Create(
-                            new DiagnosticDescriptor(
-                                "LUMINPACK001",
-                                "Code Generation Failed",
-                                $"LuminPack code generation failed: {ex.Message}",
-                                "LuminPack",
-                                DiagnosticSeverity.Error,
-                                true),
-                            Location.None));
+                        // // 捕获代码生成时的异常
+                        // System.Diagnostics.StackTrace trace = new System.Diagnostics.StackTrace(ex, true);
+                        // var errorMsg = $"{DateTime.Now}: Code generation failed\n{ex}\nStack: {trace}";
+                        // File.WriteAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "LuminPack_CodeGen_error.txt"), errorMsg);
+                        //
+                        // // 同时报告诊断信息，让用户在IDE中看到错误
+                        // context.ReportDiagnostic(Diagnostic.Create(
+                        //     new DiagnosticDescriptor(
+                        //         "LUMINPACK001",
+                        //         "Code Generation Failed",
+                        //         $"LuminPack code generation failed: {ex.Message}",
+                        //         "LuminPack",
+                        //         DiagnosticSeverity.Error,
+                        //         true),
+                        //     Location.None));
                     }
                 });
             }
             catch (Exception ex)
             {
                 // 捕获初始化过程中的异常
-                var errorMsg = $"{DateTime.Now}: Generator initialization failed\n{ex}\nStack: {ex.StackTrace}";
-                File.WriteAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "LuminPack_Init_error.txt"), errorMsg);
+                // var errorMsg = $"{DateTime.Now}: Generator initialization failed\n{ex}\nStack: {ex.StackTrace}";
+                // File.WriteAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "LuminPack_Init_error.txt"), errorMsg);
             }
         }
 

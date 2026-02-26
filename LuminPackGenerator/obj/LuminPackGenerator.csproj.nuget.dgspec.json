@@ -5,7 +5,7 @@
   },
   "projects": {
     "C:\\Users\\28027\\Desktop\\C#\\LuminPack\\LuminPackGenerator\\LuminPackGenerator.csproj": {
-      "version": "1.0.0",
+      "version": "1.0.1",
       "restore": {
         "projectUniqueName": "C:\\Users\\28027\\Desktop\\C#\\LuminPack\\LuminPackGenerator\\LuminPackGenerator.csproj",
         "projectName": "LuminPackGenerator",
@@ -47,8 +47,9 @@
           "targetAlias": "netstandard2.0",
           "dependencies": {
             "Microsoft.CodeAnalysis.CSharp": {
+              "suppressParent": "All",
               "target": "Package",
-              "version": "[4.3.0-3.final, )"
+              "version": "[4.3.0, )"
             },
             "NETStandard.Library": {
               "suppressParent": "All",

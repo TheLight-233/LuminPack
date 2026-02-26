@@ -1,0 +1,30 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2012/06/nuspec.xsd">
+  <metadata>
+    <id>LuminPack</id>
+    <version>1.0.1</version>
+    <authors>TheLight233</authors>
+    <license type="expression">MIT</license>
+    <licenseUrl>https://licenses.nuget.org/MIT</licenseUrl>
+    <readme>README.md</readme>
+    <description>Ultra-performance binary and json serializer with source generator support</description>
+    <tags>serialization binary json high-performance luminpack sourcegenerator</tags>
+    <repository type="git" url="https://github.com/TheLight-233/LuminPack" />
+    <dependencies>
+      <group targetFramework="net8.0" />
+      <group targetFramework="net9.0" />
+      <group targetFramework="net10.0" />
+      <group targetFramework=".NETStandard2.1">
+        <dependency id="System.Collections.Immutable" version="9.0.8" exclude="Build,Analyzers" />
+        <dependency id="System.Runtime.CompilerServices.Unsafe" version="6.1.2" exclude="Build,Analyzers" />
+      </group>
+    </dependencies>
+  </metadata>
+  <files>
+    <file src="C:\Users\28027\Desktop\C#\LuminPack\LuminPack\bin\Release\net10.0\LuminPack.dll" target="lib\net10.0\LuminPack.dll" />
+    <file src="C:\Users\28027\Desktop\C#\LuminPack\LuminPack\bin\Release\net8.0\LuminPack.dll" target="lib\net8.0\LuminPack.dll" />
+    <file src="C:\Users\28027\Desktop\C#\LuminPack\LuminPack\bin\Release\net9.0\LuminPack.dll" target="lib\net9.0\LuminPack.dll" />
+    <file src="C:\Users\28027\Desktop\C#\LuminPack\LuminPack\bin\Release\netstandard2.1\LuminPack.dll" target="lib\netstandard2.1\LuminPack.dll" />
+    <file src="C:\Users\28027\Desktop\C#\LuminPack\LuminPack\README.md" target="\README.md" />
+  </files>
+</package>

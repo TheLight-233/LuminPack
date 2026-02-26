@@ -83,6 +83,8 @@ namespace LuminPack
                 var writer = new LuminPackWriter(writerBuffer, state);
 
                 writer.WriteValue(value);
+                
+                writerBuffer._writtenCount = writer.CurrentIndex;
             }
             finally
             {
@@ -107,8 +109,10 @@ namespace LuminPack
                 var writer = new LuminPackJsonWriter(writerBuffer, state);
 
                 LuminPackParseProvider.Cache<T>.Parser!.SerializeJson(ref writer, ref value);
-
-                return Encoding.UTF8.GetString(writer.GetSpan());
+                
+                return writer.Option.StringEncoding is LuminPackStringEncoding.UTF8 
+                    ? Encoding.UTF8.GetString(writer.GetSpan())
+                    : Encoding.Unicode.GetString(writer.GetSpan());
             }
             finally
             {
@@ -129,6 +133,8 @@ namespace LuminPack
             var writer = new LuminPackJsonWriter(writerBuffer, state);
 
             LuminPackParseProvider.Cache<T>.Parser!.SerializeJson(ref writer, ref value);
+            
+            writerBuffer._writtenCount = writer.CurrentIndex;
         }
 
         /// <summary>
@@ -165,6 +171,18 @@ namespace LuminPack
         {
             T? value = default;
             Deserialize(buffer, ref value, options);
+            return value;
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static T? Deserialize<
+#if NET8_0_OR_GREATER
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+#endif
+            T>(LuminBufferWriter bufferWriter, LuminPackSerializerOption? options = null)
+        {
+            T? value = default;
+            Deserialize(bufferWriter.GetSpan(), ref value, options);
             return value;
         }
         
@@ -243,12 +261,50 @@ namespace LuminPack
 #if NET8_0_OR_GREATER
             [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 #endif
-            T>(string buffer)
+            T>(string buffer, LuminPackSerializerOption? options = null)
         {
             T? value = default;
-            Span<byte> span = stackalloc byte[buffer.Length * 3];
-            var written = Encoding.UTF8.GetBytes(buffer, span);
-            DeserializeJson(MemoryMarshal.Cast<byte, char>(span[..written]), ref value);
+    
+            if (options == null || options.StringEncoding is LuminPackStringEncoding.UTF8)
+            {
+                if (buffer.Length > 1024)
+                {
+                    var byteCount = Encoding.UTF8.GetByteCount(buffer);
+                    byte[] byteBuffer = ArrayPool<byte>.Shared.Rent(byteCount);
+                    try
+                    {
+                        Encoding.UTF8.GetBytes(buffer, 0, buffer.Length, byteBuffer, 0);
+                        DeserializeJson(byteBuffer.AsSpan(0, byteCount), ref value, options);
+                    }
+                    finally
+                    {
+                        ArrayPool<byte>.Shared.Return(byteBuffer);
+                    }
+                }
+                else
+                {
+                    Span<byte> span = stackalloc byte[buffer.Length * 3];
+                    var written = Encoding.UTF8.GetBytes(buffer, span);
+                    DeserializeJson(span[..written], ref value, options);
+                }
+            }
+            else
+            {
+                DeserializeJson(buffer.AsSpan(), ref value, options);
+            }
+    
+            return value;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static T? DeserializeJson<
+#if NET8_0_OR_GREATER
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+#endif
+            T>(ReadOnlySpan<char> buffer, LuminPackSerializerOption? options = null)
+        {
+            T? value = default;
+            DeserializeJson(buffer, ref value, options);
             return value;
         }
         
@@ -257,14 +313,14 @@ namespace LuminPack
 #if NET8_0_OR_GREATER
             [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 #endif
-            T>(ReadOnlySpan<char> buffer)
+            T>(LuminBufferWriter bufferWriter, LuminPackSerializerOption? options = null)
         {
             T? value = default;
-            DeserializeJson(buffer, ref value);
+            DeserializeJson(bufferWriter.GetSpan(), ref value, options);
             return value;
         }
-        
-        public static int DeserializeJson<
+
+        private static int DeserializeJson<
 #if NET8_0_OR_GREATER
             [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 #endif
@@ -272,14 +328,45 @@ namespace LuminPack
             ReadOnlySpan<char> buffer, ref T? value, LuminPackSerializerOption? options = null)
         {
             var state = _threadStaticReaderOptionalState ??= new LuminPackReaderOptionalState();
-            
+    
             state.Init(options);
-            
-            var span = MemoryMarshal.Cast<char, byte>(buffer);
-            var reader = new LuminPackJsonReader(ref span, state);
-            LuminPackParseProvider.Cache<T>.Parser!.DeserializeJson(ref reader, ref value);
-               
-            return reader.CurrentIndex;
+    
+            try
+            {
+                var span = MemoryMarshal.Cast<char, byte>(buffer);
+                var reader = new LuminPackJsonReader(ref span, state);
+                LuminPackParseProvider.Cache<T>.Parser!.DeserializeJson(ref reader, ref value);
+           
+                return reader.CurrentIndex;
+            }
+            finally
+            {
+                state.Reset();
+            }
+        }
+        
+        private static int DeserializeJson<
+#if NET8_0_OR_GREATER
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+#endif
+            T>(
+            ReadOnlySpan<byte> buffer, ref T? value, LuminPackSerializerOption? options = null)
+        {
+            var state = _threadStaticReaderOptionalState ??= new LuminPackReaderOptionalState();
+    
+            state.Init(options);
+    
+            try
+            {
+                var reader = new LuminPackJsonReader(ref buffer, state);
+                LuminPackParseProvider.Cache<T>.Parser!.DeserializeJson(ref reader, ref value);
+           
+                return reader.CurrentIndex;
+            }
+            finally
+            {
+                state.Reset();
+            }
         }
 
         public static async ValueTask<T?> DeserializeAsync<

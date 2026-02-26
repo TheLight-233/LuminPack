@@ -65,6 +65,8 @@ public sealed class LuminBufferWriter :
     private BufferSegment _buffer;
 
     private unsafe int* _currentIndex;
+
+    internal int _writtenCount;
     
     private bool _disposed;
 
@@ -110,7 +112,13 @@ public sealed class LuminBufferWriter :
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Span<byte> GetSpan(int index = 0)
+    public Span<byte> GetSpan()
+    {
+        return _buffer.WrittenBuffer.Slice(0, _writtenCount);
+    }
+    
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Span<byte> GetFullSpan()
     {
         if (_buffer.IsNull)
         {

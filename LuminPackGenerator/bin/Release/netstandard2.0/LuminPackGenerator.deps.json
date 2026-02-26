@@ -7,17 +7,17 @@
   "targets": {
     ".NETStandard,Version=v2.0": {},
     ".NETStandard,Version=v2.0/": {
-      "LuminPackGenerator/1.0.0": {
+      "LuminPackGenerator/1.0.1": {
         "dependencies": {
-          "Microsoft.CodeAnalysis.CSharp": "4.3.0-3.final"
+          "Microsoft.CodeAnalysis.CSharp": "4.3.0"
         },
         "runtime": {
           "LuminPackGenerator.dll": {}
         }
       },
-      "Microsoft.CodeAnalysis.Common/4.3.0-3.final": {
+      "Microsoft.CodeAnalysis.Common/4.3.0": {
         "dependencies": {
-          "System.Collections.Immutable": "5.0.0",
+          "System.Collections.Immutable": "6.0.0",
           "System.Memory": "4.5.4",
           "System.Reflection.Metadata": "5.0.0",
           "System.Runtime.CompilerServices.Unsafe": "6.0.0",
@@ -27,7 +27,7 @@
         "runtime": {
           "lib/netstandard2.0/Microsoft.CodeAnalysis.dll": {
             "assemblyVersion": "4.3.0.0",
-            "fileVersion": "4.300.22.32930"
+            "fileVersion": "4.300.22.43017"
           }
         },
         "resources": {
@@ -72,14 +72,14 @@
           }
         }
       },
-      "Microsoft.CodeAnalysis.CSharp/4.3.0-3.final": {
+      "Microsoft.CodeAnalysis.CSharp/4.3.0": {
         "dependencies": {
-          "Microsoft.CodeAnalysis.Common": "4.3.0-3.final"
+          "Microsoft.CodeAnalysis.Common": "4.3.0"
         },
         "runtime": {
           "lib/netstandard2.0/Microsoft.CodeAnalysis.CSharp.dll": {
             "assemblyVersion": "4.3.0.0",
-            "fileVersion": "4.300.22.32930"
+            "fileVersion": "4.300.22.43017"
           }
         },
         "resources": {
@@ -132,14 +132,15 @@
           }
         }
       },
-      "System.Collections.Immutable/5.0.0": {
+      "System.Collections.Immutable/6.0.0": {
         "dependencies": {
-          "System.Memory": "4.5.4"
+          "System.Memory": "4.5.4",
+          "System.Runtime.CompilerServices.Unsafe": "6.0.0"
         },
         "runtime": {
           "lib/netstandard2.0/System.Collections.Immutable.dll": {
-            "assemblyVersion": "5.0.0.0",
-            "fileVersion": "5.0.20.51904"
+            "assemblyVersion": "6.0.0.0",
+            "fileVersion": "6.0.21.52210"
           }
         }
       },
@@ -166,7 +167,7 @@
       },
       "System.Reflection.Metadata/5.0.0": {
         "dependencies": {
-          "System.Collections.Immutable": "5.0.0"
+          "System.Collections.Immutable": "6.0.0"
         },
         "runtime": {
           "lib/netstandard2.0/System.Reflection.Metadata.dll": {
@@ -209,24 +210,24 @@
     }
   },
   "libraries": {
-    "LuminPackGenerator/1.0.0": {
+    "LuminPackGenerator/1.0.1": {
       "type": "project",
       "serviceable": false,
       "sha512": ""
     },
-    "Microsoft.CodeAnalysis.Common/4.3.0-3.final": {
+    "Microsoft.CodeAnalysis.Common/4.3.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-1u7+F0XjGeC+NMWH3w0MpRfeuiABzKumJvwBcE0K9+edUyLf1oowsxKGT4XO8PXQLbb2NZCbkMvhOe+DH1+fZA==",
-      "path": "microsoft.codeanalysis.common/4.3.0-3.final",
-      "hashPath": "microsoft.codeanalysis.common.4.3.0-3.final.nupkg.sha512"
+      "sha512": "sha512-Hhaw6DKZHiR+vgOdIqvndfUntJhmDR7MjylUJ55EvWtDyJFLDf2eij8r9tcwXP35FLD+bVNNCO0+KIYuvJjNnA==",
+      "path": "microsoft.codeanalysis.common/4.3.0",
+      "hashPath": "microsoft.codeanalysis.common.4.3.0.nupkg.sha512"
     },
-    "Microsoft.CodeAnalysis.CSharp/4.3.0-3.final": {
+    "Microsoft.CodeAnalysis.CSharp/4.3.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-o/1gHjHdsE6pDkOiC1OEImcMSrdRXHL1d0HnM0Zstyf9uZe4bjeD1CU8ef7DPveWWTluVGgLfNBHiPnbt8b4Qg==",
-      "path": "microsoft.codeanalysis.csharp/4.3.0-3.final",
-      "hashPath": "microsoft.codeanalysis.csharp.4.3.0-3.final.nupkg.sha512"
+      "sha512": "sha512-0PU4a2h7L6N9SlF/oNHwj2A/+n0LK/7n6PEGvXyIZq8hc7r/TztB+47mhVLvapT6bWSV7nMT78cNxbQuC6tk6g==",
+      "path": "microsoft.codeanalysis.csharp/4.3.0",
+      "hashPath": "microsoft.codeanalysis.csharp.4.3.0.nupkg.sha512"
     },
     "System.Buffers/4.5.1": {
       "type": "package",
@@ -235,12 +236,12 @@
       "path": "system.buffers/4.5.1",
       "hashPath": "system.buffers.4.5.1.nupkg.sha512"
     },
-    "System.Collections.Immutable/5.0.0": {
+    "System.Collections.Immutable/6.0.0": {
       "type": "package",
       "serviceable": true,
-      "sha512": "sha512-FXkLXiK0sVVewcso0imKQoOxjoPAj42R8HtjjbSjVPAzwDfzoyoznWxgA3c38LDbN9SJux1xXoXYAhz98j7r2g==",
-      "path": "system.collections.immutable/5.0.0",
-      "hashPath": "system.collections.immutable.5.0.0.nupkg.sha512"
+      "sha512": "sha512-l4zZJ1WU2hqpQQHXz1rvC3etVZN+2DLmQMO79FhOTZHMn8tDRr+WU287sbomD0BETlmKDn0ygUgVy9k5xkkJdA==",
+      "path": "system.collections.immutable/6.0.0",
+      "hashPath": "system.collections.immutable.6.0.0.nupkg.sha512"
     },
     "System.Memory/4.5.4": {
       "type": "package",

@@ -23,6 +23,15 @@ namespace LuminPack.Code.Core
             }
         }
         
+        internal static unsafe ulong ComputeUtf16Hash(string str)
+        {
+            fixed (char* charPtr = str)
+            {
+                byte* bytePtr = (byte*)charPtr;
+                return ComputeXxHash3(bytePtr, str.Length * 2);
+            }
+        }
+        
         private static unsafe ulong ComputeXxHash3(byte* input, int length)
         {
             const ulong Prime64_1 = 0x9E3779B185EBCA87UL;
@@ -113,16 +122,37 @@ namespace LuminPack.Code.Core
             foreach (var field in data.fields)
             {
                 string utf8FieldName = $"_utf8_{field.Name}";
-                string hashFieldName = $"_hash_{field.Name}";
+                string utf16FieldName = $"_utf16_{field.Name}";
+                string utf8HashFieldName = $"_utf8Hash_{field.Name}";
+                string utf16HashFieldName = $"_utf16Hash_{field.Name}";
                 
                 var utf8Bytes = System.Text.Encoding.UTF8.GetBytes(field.Name);
                 var bytesStr = string.Join(", ", utf8Bytes.Select(b => $"(byte){b}"));
                 
                 sb.AppendLine($"        private static readonly byte[] {utf8FieldName} = new byte[] {{ {bytesStr} }};");
                 
-                ulong hash = ComputeUtf8Hash(field.Name);
-                sb.AppendLine($"        private const ulong {hashFieldName} = {hash}UL;");
+                var charsStr = string.Join(", ", field.Name.Select(c => $"'{EscapeChar(c)}'"));
+                sb.AppendLine($"        private static readonly char[] {utf16FieldName} = new char[] {{ {charsStr} }};");
+                
+                ulong utf8Hash = ComputeUtf8Hash(field.Name);
+                sb.AppendLine($"        private const ulong {utf8HashFieldName} = {utf8Hash}UL;");
+                
+                ulong utf16Hash = ComputeUtf16Hash(field.Name);
+                sb.AppendLine($"        private const ulong {utf16HashFieldName} = {utf16Hash}UL;");
             }
+        }
+        
+        private static string EscapeChar(char c)
+        {
+            return c switch
+            {
+                '\'' => "\\'",
+                '\\' => "\\\\",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                _ => c.ToString()
+            };
         }
         
         public static void GenerateJsonMethods(StringBuilder sb, LuminDataInfo data, string classGlobalName, MetaInfo metaInfo)
@@ -136,6 +166,26 @@ namespace LuminPack.Code.Core
         
         public static void GenerateJsonSerialize(StringBuilder sb, LuminDataInfo data, string classGlobalName, MetaInfo metaInfo)
         {
+            // 预生成JSON片段常量（通用优化）
+            for (int i = 0; i < data.fields.Count; i++)
+            {
+                var field = data.fields[i];
+                
+                if (i == 0)
+                {
+                    // 第一个字段：{"fieldName":
+                    sb.AppendLine($"        private static readonly byte[] _jsonPrefixUtf8_{field.Name} = new byte[] {{ (byte)'{{', (byte)'\"', {string.Join(", ", field.Name.Select(c => $"(byte)'{c}'"))}, (byte)'\"', (byte)':' }};");
+                    sb.AppendLine($"        private static readonly char[] _jsonPrefixUtf16_{field.Name} = new char[] {{ (char)'{{', (char)'\"', {string.Join(", ", field.Name.Select(c => $"(char)'{c}'"))}, (char)'\"', (char)':' }};");
+                }
+                else
+                {
+                    // 后续字段：,"fieldName":
+                    sb.AppendLine($"        private static readonly byte[] _jsonSepUtf8_{field.Name} = new byte[] {{ (byte)',', (byte)'\"', {string.Join(", ", field.Name.Select(c => $"(byte)'{c}'"))}, (byte)'\"', (byte)':' }};");
+                    sb.AppendLine($"        private static readonly char[] _jsonSepUtf16_{field.Name} = new char[] {{ (char)',', (char)'\"', {string.Join(", ", field.Name.Select(c => $"(char)'{c}'"))}, (char)'\"', (char)':' }};");
+                }
+            }
+            sb.AppendLine();
+            
             sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
 
             if (data.isValueType)
@@ -177,23 +227,40 @@ namespace LuminPack.Code.Core
                 sb.AppendLine();
             }
             
-            sb.AppendLine("            writer.WriteObjectStart();");
+            // 特殊处理：如果没有字段，使用标准方法
+            if (data.fields.Count == 0)
+            {
+                sb.AppendLine("            writer.WriteObjectStart();");
+                sb.AppendLine("            writer.WriteObjectEnd();");
+                sb.AppendLine("        }");
+                return;
+            }
+            
+            // 不调用WriteObjectStart，使用预生成片段
+            sb.AppendLine();
+            sb.AppendLine("            bool isUtf8 = writer.Option.StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8;");
             sb.AppendLine();
             
-            foreach (var field in data.fields)
+            for (int i = 0; i < data.fields.Count; i++)
             {
+                var field = data.fields[i];
                 // 决定使用 local 还是 value 访问字段
                 var access = field.IsPrivate || field.isProperty ? "local" : "value";
+                string prefix = i == 0 ? "Prefix" : "Sep";
                 
                 sb.AppendLine($"            // 字段: {field.Name}");
-                sb.AppendLine($"            writer.WritePropertyName(_utf8_{field.Name});");
+                sb.AppendLine($"            if (isUtf8)");
+                sb.AppendLine($"                writer.WriteRaw(_json{prefix}Utf8_{field.Name});");
+                sb.AppendLine($"            else");
+                sb.AppendLine($"                writer.WriteRaw(_json{prefix}Utf16_{field.Name});");
+                sb.AppendLine($"            writer.SetFirstElement(true);");
                 
                 GenerateJsonSerializeField(sb, field, $"{access}.{field.Name}", "            ");
                 
                 sb.AppendLine();
             }
             
-            sb.AppendLine("            writer.WriteObjectEnd();");
+            sb.AppendLine("            writer.WriteByteRaw((byte)'}');");
             sb.AppendLine("        }");
         }
         
@@ -332,30 +399,64 @@ namespace LuminPack.Code.Core
             sb.AppendLine("                    continue;");
             sb.AppendLine();
             
-            sb.AppendLine("                var propNameUtf8 = reader.ReadStringUtf8();");
+            sb.AppendLine("                ulong propHash;");
+            sb.AppendLine("                if (reader.Option.StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    var propNameUtf8 = reader.ReadStringUtf8();");
+            sb.AppendLine("                    propHash = global::LuminPack.Internal.XxHash3.Hash64Utf8(propNameUtf8);");
+            sb.AppendLine("                }");
+            sb.AppendLine("                else");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    var propNameUtf16 = reader.ReadStringUtf16();");
+            sb.AppendLine("                    propHash = global::LuminPack.Internal.XxHash3.Hash64Utf16(propNameUtf16);");
+            sb.AppendLine("                }");
             sb.AppendLine();
             sb.AppendLine("                if (!reader.Read())");
             sb.AppendLine("                    break;");
             sb.AppendLine();
             
-            sb.AppendLine("                ulong propHash = global::LuminPack.Internal.XxHash3.Hash64Utf8(propNameUtf8);");
-            sb.AppendLine("                switch (propHash)");
+            sb.AppendLine("                if (reader.Option.StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)");
             sb.AppendLine("                {");
+            sb.AppendLine("                    switch (propHash)");
+            sb.AppendLine("                    {");
             
             foreach (var field in data.fields)
             {
-                sb.AppendLine($"                    case _hash_{field.Name}:");
-                sb.AppendLine("                    {");
-                GenerateJsonDeserializeField(sb, field, $"{field.Name}Temp", "                        ");
-                sb.AppendLine("                        break;");
-                sb.AppendLine("                    }");
+                sb.AppendLine($"                        case _utf8Hash_{field.Name}:");
+                sb.AppendLine("                        {");
+                GenerateJsonDeserializeField(sb, field, $"{field.Name}Temp", "                            ");
+                sb.AppendLine("                            break;");
+                sb.AppendLine("                        }");
             }
             
-            sb.AppendLine("                    default:");
-            sb.AppendLine("                    {");
-            sb.AppendLine("                        reader.Skip();");
-            sb.AppendLine("                        break;");
+            sb.AppendLine("                        default:");
+            sb.AppendLine("                        {");
+            sb.AppendLine("                            reader.Skip();");
+            sb.AppendLine("                            break;");
+            sb.AppendLine("                        }");
             sb.AppendLine("                    }");
+            sb.AppendLine("                }");
+            sb.AppendLine("                else");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    switch (propHash)");
+            sb.AppendLine("                    {");
+            
+            foreach (var field in data.fields)
+            {
+                sb.AppendLine($"                        case _utf16Hash_{field.Name}:");
+                sb.AppendLine("                        {");
+                GenerateJsonDeserializeField(sb, field, $"{field.Name}Temp", "                            ");
+                sb.AppendLine("                            break;");
+                sb.AppendLine("                        }");
+            }
+            
+            sb.AppendLine("                        default:");
+            sb.AppendLine("                        {");
+            sb.AppendLine("                            reader.Skip();");
+            sb.AppendLine("                            break;");
+            sb.AppendLine("                        }");
+            sb.AppendLine("                    }");
+            
             sb.AppendLine("                }");
             sb.AppendLine("            }");
             sb.AppendLine();
@@ -577,26 +678,55 @@ namespace LuminPack.Code.Core
         private const string JSON_REF_FIELD = "$ref";
         
         /// <summary>
-        /// 生成循环引用特殊字段的静态UTF-8字段和哈希常量
+        /// 生成循环引用特殊字段的静态UTF-8和UTF-16字段及哈希常量
         /// </summary>
         public static void GenerateStaticUtf8FieldsForCircleReference(StringBuilder sb)
         {
-            // 生成 $id 的静态字段
+            // 生成 $id 的 UTF8 静态字段
             var idBytes = System.Text.Encoding.UTF8.GetBytes(JSON_ID_FIELD);
             var idBytesStr = string.Join(", ", idBytes.Select(b => $"(byte){b}"));
             sb.AppendLine($"        private static readonly byte[] _utf8_id = new byte[] {{ {idBytesStr} }};");
-            
-            ulong idHash = LuminPackJsonCodeGenerator.ComputeUtf8Hash(JSON_ID_FIELD);
-            sb.AppendLine($"        private const ulong _hash_id = {idHash}UL;");
+    
+            // 生成 $id 的 UTF16 静态字段
+            var idCharsStr = string.Join(", ", JSON_ID_FIELD.Select(c => $"'{EscapeChar(c)}'"));
+            sb.AppendLine($"        private static readonly char[] _utf16_id = new char[] {{ {idCharsStr} }};");
+    
+            // 生成 $id 的哈希值
+            ulong idUtf8Hash = LuminPackJsonCodeGenerator.ComputeUtf8Hash(JSON_ID_FIELD);
+            sb.AppendLine($"        private const ulong _utf8Hash_id = {idUtf8Hash}UL;");
+    
+            ulong idUtf16Hash = LuminPackJsonCodeGenerator.ComputeUtf16Hash(JSON_ID_FIELD);
+            sb.AppendLine($"        private const ulong _utf16Hash_id = {idUtf16Hash}UL;");
             sb.AppendLine();
-            
-            // 生成 $ref 的静态字段
+    
+            // 生成 $ref 的 UTF8 静态字段
             var refBytes = System.Text.Encoding.UTF8.GetBytes(JSON_REF_FIELD);
             var refBytesStr = string.Join(", ", refBytes.Select(b => $"(byte){b}"));
             sb.AppendLine($"        private static readonly byte[] _utf8_ref = new byte[] {{ {refBytesStr} }};");
-            
-            ulong refHash = LuminPackJsonCodeGenerator.ComputeUtf8Hash(JSON_REF_FIELD);
-            sb.AppendLine($"        private const ulong _hash_ref = {refHash}UL;");
+    
+            // 生成 $ref 的 UTF16 静态字段
+            var refCharsStr = string.Join(", ", JSON_REF_FIELD.Select(c => $"'{EscapeChar(c)}'"));
+            sb.AppendLine($"        private static readonly char[] _utf16_ref = new char[] {{ {refCharsStr} }};");
+    
+            // 生成 $ref 的哈希值
+            ulong refUtf8Hash = LuminPackJsonCodeGenerator.ComputeUtf8Hash(JSON_REF_FIELD);
+            sb.AppendLine($"        private const ulong _utf8Hash_ref = {refUtf8Hash}UL;");
+    
+            ulong refUtf16Hash = LuminPackJsonCodeGenerator.ComputeUtf16Hash(JSON_REF_FIELD);
+            sb.AppendLine($"        private const ulong _utf16Hash_ref = {refUtf16Hash}UL;");
+        }
+        
+        private static string EscapeChar(char c)
+        {
+            return c switch
+            {
+                '\'' => "\\'",
+                '\\' => "\\\\",
+                '\n' => "\\n",
+                '\r' => "\\r",
+                '\t' => "\\t",
+                _ => c.ToString()
+            };
         }
         
         /// <summary>
@@ -629,17 +759,28 @@ namespace LuminPack.Code.Core
                 sb.AppendLine("                return;");
                 sb.AppendLine("            }");
                 sb.AppendLine();
+                sb.AppendLine("            bool isUtf8 = writer.Option.StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8;");
+                sb.AppendLine();
                 
                 // 检查循环引用
                 sb.AppendLine("            var (existsReference, id) = writer.OptionState.GetOrAddReference(value);");
                 sb.AppendLine("            if (existsReference)");
                 sb.AppendLine("            {");
                 sb.AppendLine("                writer.WriteObjectStart();");
-                sb.AppendLine($"                writer.WritePropertyName(System.Text.Encoding.UTF8.GetBytes(\"{JSON_REF_FIELD}\"));");
-                sb.AppendLine("                writer.WriteString(id.ToString());");
+                sb.AppendLine($"                if (isUtf8)");
+                sb.AppendLine($"                    writer.WritePropertyName(_utf8_ref);");
+                sb.AppendLine($"                else");
+                sb.AppendLine($"                    writer.WritePropertyName(_utf16_ref);");
+                sb.AppendLine("                writer.WriteUInt(id);");
                 sb.AppendLine("                writer.WriteObjectEnd();");
                 sb.AppendLine("                return;");
                 sb.AppendLine("            }");
+                sb.AppendLine();
+            }
+            else
+            {
+                sb.AppendLine();
+                sb.AppendLine("            bool isUtf8 = writer.Option.StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8;");
                 sb.AppendLine();
             }
             
@@ -664,8 +805,11 @@ namespace LuminPack.Code.Core
             {
                 sb.AppendLine();
                 sb.AppendLine("            // 写入对象ID");
-                sb.AppendLine($"            writer.WritePropertyName(System.Text.Encoding.UTF8.GetBytes(\"{JSON_ID_FIELD}\"));");
-                sb.AppendLine("                writer.WriteString(id.ToString());");
+                sb.AppendLine($"            if (isUtf8)");
+                sb.AppendLine($"                writer.WritePropertyName(_utf8_id);");
+                sb.AppendLine($"            else");
+                sb.AppendLine($"                writer.WritePropertyName(_utf16_id);");
+                sb.AppendLine("             writer.WriteUInt(id);");
             }
             
             sb.AppendLine();
@@ -677,7 +821,10 @@ namespace LuminPack.Code.Core
                 string accessor = useLocal ? "local" : "value";
                 
                 sb.AppendLine($"            // 字段: {field.Name}");
-                sb.AppendLine($"            writer.WritePropertyName(_utf8_{field.Name});");
+                sb.AppendLine($"            if (isUtf8)");
+                sb.AppendLine($"                writer.WritePropertyName(_utf8_{field.Name});");
+                sb.AppendLine($"            else");
+                sb.AppendLine($"                writer.WritePropertyName(_utf16_{field.Name});");
                 
                 GenerateJsonSerializeFieldWithCircleReference(sb, field, accessor, "            ");
                 sb.AppendLine();
@@ -843,7 +990,6 @@ namespace LuminPack.Code.Core
                 sb.AppendLine("            value = default;");
             }
             
-            sb.AppendLine("            // Temp vars for field values");
             foreach (var field in data.localFields)
             {
                 var nullable = field.IsValue ? "" : "?";
@@ -862,38 +1008,39 @@ namespace LuminPack.Code.Core
             sb.AppendLine("                if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
             sb.AppendLine("                    continue;");
             sb.AppendLine();
-            sb.AppendLine("                var propNameUtf8 = reader.ReadStringUtf8();");
+            sb.AppendLine("                ulong propHash;");
+            sb.AppendLine("                if (reader.Option.StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    var propNameUtf8 = reader.ReadStringUtf8();");
+            sb.AppendLine("                    propHash = global::LuminPack.Internal.XxHash3.Hash64Utf8(propNameUtf8);");
+            sb.AppendLine("                }");
+            sb.AppendLine("                else");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    var propNameUtf16 = reader.ReadStringUtf16();");
+            sb.AppendLine("                    propHash = global::LuminPack.Internal.XxHash3.Hash64Utf16(propNameUtf16);");
+            sb.AppendLine("                }");
             sb.AppendLine();
             sb.AppendLine("                if (!reader.Read())");
             sb.AppendLine("                    break;");
             sb.AppendLine();
             
-            sb.AppendLine("                ulong propHash = global::LuminPack.Internal.XxHash3.Hash64Utf8(propNameUtf8);");
-            sb.AppendLine();
             if (!data.isValueType)
             {
-                sb.AppendLine("                // 处理特殊字段");
-                sb.AppendLine($"                if (propHash == _hash_id)");
+                sb.AppendLine($"                if (propHash == _utf8Hash_id || propHash == _utf16Hash_id)");
                 sb.AppendLine("                {");
-                sb.AppendLine("                    var idStr = reader.ReadString();");
-                sb.AppendLine("                    if (uint.TryParse(idStr, out var id))");
-                sb.AppendLine("                    {");
-                sb.AppendLine("                        objectId = id;");
-                sb.AppendLine("                        reader.OptionState.AddObjectReference(id, preCreatedInstance);");
-                sb.AppendLine("                    }");
+                sb.AppendLine("                    var id = reader.ReadUInt();");
+                sb.AppendLine("                    objectId = id;");
+                sb.AppendLine("                    reader.OptionState.AddObjectReference(id, preCreatedInstance);");
                 sb.AppendLine("                    continue;");
                 sb.AppendLine("                }");
                 sb.AppendLine();
-                sb.AppendLine($"                if (propHash == _hash_ref)");
+                sb.AppendLine($"                if (propHash == _utf8Hash_ref || propHash == _utf16Hash_ref)");
                 sb.AppendLine("                {");
-                sb.AppendLine("                    var refStr = reader.ReadString();");
-                sb.AppendLine("                    if (uint.TryParse(refStr, out var rId))");
-                sb.AppendLine("                    {");
-                sb.AppendLine("                        refId = rId;");
-                sb.AppendLine($"                        value = ({classGlobalName})reader.OptionState.GetObjectReference(rId);");
-                sb.AppendLine("                        while (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd) {}");
-                sb.AppendLine("                        return;");
-                sb.AppendLine("                    }");
+                sb.AppendLine("                    var rId = reader.ReadUInt();");
+                sb.AppendLine("                    refId = rId;");
+                sb.AppendLine($"                    value = ({classGlobalName})reader.OptionState.GetObjectReference(rId);");
+                sb.AppendLine("                    while (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd) {}");
+                sb.AppendLine("                    return;");
                 sb.AppendLine("                }");
                 sb.AppendLine();
             }
@@ -903,7 +1050,8 @@ namespace LuminPack.Code.Core
             
             foreach (var field in data.fields)
             {
-                sb.AppendLine($"                    case _hash_{field.Name}:");
+                sb.AppendLine($"                    case _utf8Hash_{field.Name}:");
+                sb.AppendLine($"                    case _utf16Hash_{field.Name}:");
                 sb.AppendLine("                    {");
                 GenerateJsonDeserializeFieldWithCircleReference(sb, field, $"{field.Name}Temp", "                        ");
                 sb.AppendLine("                        break;");
@@ -919,8 +1067,6 @@ namespace LuminPack.Code.Core
             sb.AppendLine("            }");
             sb.AppendLine();
             
-            // 设置字段值
-            sb.AppendLine("            // 设置字段值");
             
             var publicFields = data.fields.Where(f => !f.IsPrivate && !f.isProperty).ToList();
             var privatePropFields = data.fields.Where(f => f.IsPrivate || f.isProperty).ToList();
@@ -940,7 +1086,6 @@ namespace LuminPack.Code.Core
                 // Public 字段直接设置
                 if (publicFields.Count > 0)
                 {
-                    sb.AppendLine("            // 设置 public 字段");
                     foreach (var field in publicFields)
                     {
                         sb.AppendLine($"            value.{field.Name} = {field.Name}Temp!;");
@@ -951,7 +1096,6 @@ namespace LuminPack.Code.Core
                 // Private/property 字段通过 Local 设置
                 if (privatePropFields.Count > 0)
                 {
-                    sb.AppendLine("            // 设置 private/property 字段");
                     sb.AppendLine($"            ref var local = ref global::LuminPack.Code.LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref {(data.isValueType ? "value" : "value!")});");
                     
                     foreach (var field in privatePropFields)

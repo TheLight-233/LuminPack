@@ -1,9 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "3u9SLxrQ2KY=",
+  "dgSpecHash": "1THEz+MWL6o=",
   "success": true,
   "projectFilePath": "C:\\Users\\28027\\Desktop\\C#\\LuminPack\\LuminPack\\LuminPack.csproj",
   "expectedPackageFiles": [
+    "C:\\Users\\28027\\.nuget\\packages\\luminpackgenerator\\1.0.1\\luminpackgenerator.1.0.1.nupkg.sha512",
     "C:\\Users\\28027\\.nuget\\packages\\system.buffers\\4.5.1\\system.buffers.4.5.1.nupkg.sha512",
     "C:\\Users\\28027\\.nuget\\packages\\system.collections.immutable\\9.0.8\\system.collections.immutable.9.0.8.nupkg.sha512",
     "C:\\Users\\28027\\.nuget\\packages\\system.memory\\4.5.5\\system.memory.4.5.5.nupkg.sha512",

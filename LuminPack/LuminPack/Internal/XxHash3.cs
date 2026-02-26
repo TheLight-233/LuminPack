@@ -10,22 +10,38 @@ namespace LuminPack.Internal
         private const ulong Prime64_3 = 0x165667B19E3779F9UL;
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static ulong Hash64Utf8(ReadOnlySpan<byte> input)
+        public static unsafe ulong Hash64Utf8(ReadOnlySpan<byte> data)
         {
-            if (input.Length == 0)
+            if (data.Length == 0)
                 return Prime64_3 ^ 11400714819323198485UL ^ 2870177450012600261UL;
             
-            unsafe
+            ref byte dataRef = ref MemoryMarshal.GetReference(data);
+            fixed (byte* ptr = &dataRef)
             {
-                fixed (byte* ptr = input)
-                {
-                    return Hash64Internal(ptr, input.Length);
-                }
+                return ComputeHash(ptr, data.Length);
             }
         }
         
-        private static unsafe ulong Hash64Internal(byte* input, int length)
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe ulong Hash64Utf16(ReadOnlySpan<char> chars)
         {
+            if (chars.Length == 0)
+                return Prime64_3 ^ 11400714819323198485UL ^ 2870177450012600261UL;
+            
+            ref char charRef = ref MemoryMarshal.GetReference(chars);
+            ref byte byteRef = ref Unsafe.As<char, byte>(ref charRef);
+            fixed (byte* ptr = &byteRef)
+            {
+                return ComputeHash(ptr, chars.Length * 2);
+            }
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe ulong ComputeHash(byte* input, int length)
+        {
+            if (length == 0)
+                return Prime64_3 ^ 11400714819323198485UL ^ 2870177450012600261UL;
+                
             if (length <= 16)
             {
                 if (length > 8)

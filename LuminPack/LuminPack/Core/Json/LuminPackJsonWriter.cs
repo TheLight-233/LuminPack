@@ -1,5 +1,4 @@
-﻿using System;
-using System.Buffers;
+﻿using System.Buffers;
 using System.Buffers.Text;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -25,6 +24,7 @@ namespace LuminPack.Core
         private int _currentIndex;
         private LuminBufferWriter? _writerBuffer;
         private readonly LuminPackWriterOptionalState _state;
+        private readonly bool SerializeStringAsUtf8;
         
         private int _depth;
         private bool _isFirstElement;
@@ -59,6 +59,7 @@ namespace LuminPack.Core
             _writerBuffer = null;
             _depth = 0;
             _isFirstElement = true;
+            SerializeStringAsUtf8 = _state.Option.StringEncoding is LuminPackStringEncoding.UTF8;
         }
         
         public LuminPackJsonWriter(LuminBufferWriter? bufferWriter, LuminPackWriterOptionalState state)
@@ -69,7 +70,7 @@ namespace LuminPack.Core
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
             
             bufferWriter.SetCurrentIndexPtr(ref _currentIndex);
-            _bufferReference = bufferWriter.GetSpan();
+            _bufferReference = bufferWriter.GetFullSpan();
 #if NET8_0_OR_GREATER
             _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
 #else
@@ -79,6 +80,7 @@ namespace LuminPack.Core
             _currentIndex = 0;
             _depth = 0;
             _isFirstElement = true;
+            SerializeStringAsUtf8 = _state.Option.StringEncoding is LuminPackStringEncoding.UTF8;
         }
         
         #endregion
@@ -136,7 +138,7 @@ namespace LuminPack.Core
         {
             if (_writerBuffer != null)
             {
-                _bufferReference = _writerBuffer.GetSpan();
+                _bufferReference = _writerBuffer.GetFullSpan();
 #if NET8_0_OR_GREATER
                 _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
 #else
@@ -173,17 +175,39 @@ namespace LuminPack.Core
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteByteRaw(byte value)
+        public void SetFirstElement(bool value)
         {
-            GetCurrentSpanReference() = value;
-            Advance(1);
+            _isFirstElement = value;
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void WriteRaw(ReadOnlySpan<byte> value)
+        public void WriteByteRaw(byte value)
+        {
+            if (SerializeStringAsUtf8)
+            {
+                GetCurrentSpanReference() = value;
+                Advance(1);
+            }
+            else
+            {
+                ref byte dst = ref GetCurrentSpanReference();
+                Unsafe.WriteUnaligned(ref dst, (char)value);
+                Advance(2);
+            }
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteRaw(scoped ReadOnlySpan<byte> value)
         {
             value.CopyTo(_bufferReference.Slice(_currentIndex, value.Length));
             Advance(value.Length);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteRaw(scoped ReadOnlySpan<char> value)
+        {
+            MemoryMarshal.Cast<char, byte>(value).CopyTo(_bufferReference.Slice(_currentIndex, value.Length << 1));
+            Advance(value.Length << 1);
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -250,6 +274,31 @@ namespace LuminPack.Core
             _isFirstElement = true;
         }
         
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WritePropertyName(ReadOnlySpan<char> utf16PropertyName)
+        {
+            WriteCommaIfNeeded();
+            WriteByteRaw(Quote);
+            
+            if (SerializeStringAsUtf8)
+            {
+                WriteStringContentUtf8(utf16PropertyName);
+            }
+            else
+            {
+                int byteCount = utf16PropertyName.Length * 2;
+                ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(utf16PropertyName));
+                ref byte dst = ref GetCurrentSpanReference();
+                Unsafe.CopyBlock(ref dst, ref src, (uint)byteCount);
+                Advance(byteCount);
+            }
+            
+            WriteByteRaw(Quote);
+            WriteByteRaw(Colon);
+            
+            _isFirstElement = true;
+        }
+        
         public void WritePropertyName(string propertyName)
         {
             WriteCommaIfNeeded();
@@ -299,34 +348,170 @@ namespace LuminPack.Core
             WriteCommaIfNeeded();
             WriteByteRaw(Quote);
             
-            bool needsSlow = false;
-            for (int i = 0; i < value.Length; i++)
+            if (SerializeStringAsUtf8)
             {
-                char c = value[i];
-                if (c > 0x7F || c < 0x20 || c == '"' || c == '\\')
-                {
-                    needsSlow = true;
-                    break;
-                }
-            }
-            
-            if (!needsSlow)
-            {
-                for (int i = 0; i < value.Length; i++)
-                {
-                    WriteByteRaw((byte)value[i]);
-                }
+                WriteStringContentUtf8(value.AsSpan());
             }
             else
             {
-                WriteStringContentSlow(value.AsSpan());
+                WriteStringContentUtf16(value.AsSpan());
             }
             
             WriteByteRaw(Quote);
         }
         
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteStringContentUtf8(ReadOnlySpan<char> value)
+        {
+            bool needsEscape = false;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (c > 0x7F || c < 0x20 || c == '"' || c == '\\')
+                {
+                    needsEscape = true;
+                    break;
+                }
+            }
+            
+            if (!needsEscape)
+            {
+                ref byte dst = ref GetCurrentSpanReference();
+                for (int i = 0; i < value.Length; i++)
+                {
+                    Unsafe.Add(ref dst, i) = (byte)value[i];
+                }
+                Advance(value.Length);
+            }
+            else
+            {
+                WriteStringContentSlow(value);
+            }
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteStringContentUtf16(ReadOnlySpan<char> value)
+        {
+            bool needsEscape = false;
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                if (c < 0x20 || c == '"' || c == '\\')
+                {
+                    needsEscape = true;
+                    break;
+                }
+            }
+            
+            if (!needsEscape)
+            {
+                int byteCount = value.Length * 2;
+                ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value));
+                ref byte dst = ref GetCurrentSpanReference();
+                Unsafe.CopyBlock(ref dst, ref src, (uint)byteCount);
+                Advance(byteCount);
+            }
+            else
+            {
+                WriteStringContentUtf16Slow(value);
+            }
+        }
+        
+        private void WriteStringContentUtf16Slow(ReadOnlySpan<char> value)
+        {
+            int lastWritten = 0;
+            
+            for (int i = 0; i < value.Length; i++)
+            {
+                char c = value[i];
+                bool needsEscape = false;
+                
+                if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\t' || c < 0x20)
+                {
+                    needsEscape = true;
+                }
+                
+                if (needsEscape)
+                {
+                    if (i > lastWritten)
+                    {
+                        var segment = value.Slice(lastWritten, i - lastWritten);
+                        int byteCount = segment.Length * 2;
+                        ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(segment));
+                        ref byte dst = ref GetCurrentSpanReference();
+                        Unsafe.CopyBlock(ref dst, ref src, (uint)byteCount);
+                        Advance(byteCount);
+                    }
+                    
+                    if (c == '"')
+                    {
+                        WriteByteRaw(Backslash);
+                        WriteUtf16CharDirect('"');
+                    }
+                    else if (c == '\\')
+                    {
+                        WriteByteRaw(Backslash);
+                        WriteUtf16CharDirect('\\');
+                    }
+                    else if (c == '\n')
+                    {
+                        WriteByteRaw(Backslash);
+                        WriteUtf16CharDirect('n');
+                    }
+                    else if (c == '\r')
+                    {
+                        WriteByteRaw(Backslash);
+                        WriteUtf16CharDirect('r');
+                    }
+                    else if (c == '\t')
+                    {
+                        WriteByteRaw(Backslash);
+                        WriteUtf16CharDirect('t');
+                    }
+                    else if (c < 0x20)
+                    {
+                        WriteByteRaw(Backslash);
+                        WriteUtf16CharDirect('u');
+                        WriteUtf16CharDirect(HexCharUtf16((c >> 12) & 0xF));
+                        WriteUtf16CharDirect(HexCharUtf16((c >> 8) & 0xF));
+                        WriteUtf16CharDirect(HexCharUtf16((c >> 4) & 0xF));
+                        WriteUtf16CharDirect(HexCharUtf16(c & 0xF));
+                    }
+                    
+                    lastWritten = i + 1;
+                }
+            }
+            
+            if (lastWritten < value.Length)
+            {
+                var segment = value.Slice(lastWritten);
+                int byteCount = segment.Length * 2;
+                ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(segment));
+                ref byte dst = ref GetCurrentSpanReference();
+                Unsafe.CopyBlock(ref dst, ref src, (uint)byteCount);
+                Advance(byteCount);
+            }
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteUtf16CharDirect(char c)
+        {
+            ref byte dst = ref GetCurrentSpanReference();
+            Unsafe.WriteUnaligned(ref dst, c);
+            Advance(2);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static char HexCharUtf16(int value)
+        {
+            return (char)(value < 10 ? '0' + value : 'a' + (value - 10));
+        }
+        
         private void WriteStringContentSlow(ReadOnlySpan<char> value)
         {
+            Span<byte> utf8Buf = stackalloc byte[4];
+            Span<char> charBuf = stackalloc char[1];
+            
             for (int i = 0; i < value.Length; i++)
             {
                 char c = value[i];
@@ -371,8 +556,7 @@ namespace LuminPack.Core
                 }
                 else
                 {
-                    Span<byte> utf8Buf = stackalloc byte[4];
-                    Span<char> charBuf = stackalloc char[1] { c };
+                    charBuf[0] = c;
                     int len = Encoding.UTF8.GetBytes(charBuf, utf8Buf);
                     WriteRaw(utf8Buf[..len]);
                 }
@@ -390,105 +574,250 @@ namespace LuminPack.Core
         #region Primitive Types
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET5_0_OR_GREATER
+        [SkipLocalsInit]
+#endif
         public void WriteInt(int value)
         {
             WriteCommaIfNeeded();
-            Span<byte> buffer = stackalloc byte[11];
-            Utf8Formatter.TryFormat(value, buffer, out int written);
-            WriteRaw(buffer[..written]);
+            if (SerializeStringAsUtf8)
+            {
+                Span<byte> buffer = stackalloc byte[11];
+                Utf8Formatter.TryFormat(value, buffer, out int written);
+                WriteRaw(buffer[..written]);
+            }
+            else
+            {
+                Span<char> buffer = stackalloc char[11];
+                value.TryFormat(buffer, out int written);
+                WriteUtf16Chars(buffer[..written]);
+            }
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET5_0_OR_GREATER
+        [SkipLocalsInit]
+#endif
         public void WriteUInt(uint value)
         {
             WriteCommaIfNeeded();
-            Span<byte> buffer = stackalloc byte[10];
-            Utf8Formatter.TryFormat(value, buffer, out int written);
-            WriteRaw(buffer[..written]);
+            if (SerializeStringAsUtf8)
+            {
+                Span<byte> buffer = stackalloc byte[10];
+                Utf8Formatter.TryFormat(value, buffer, out int written);
+                WriteRaw(buffer[..written]);
+            }
+            else
+            {
+                Span<char> buffer = stackalloc char[10];
+                value.TryFormat(buffer, out int written);
+                WriteUtf16Chars(buffer[..written]);
+            }
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET5_0_OR_GREATER
+        [SkipLocalsInit]
+#endif
         public void WriteByte(byte value)
         {
             WriteCommaIfNeeded();
-            Span<byte> buffer = stackalloc byte[3];
-            Utf8Formatter.TryFormat(value, buffer, out int written);
-            WriteRaw(buffer[..written]);
+            if (SerializeStringAsUtf8)
+            {
+                Span<byte> buffer = stackalloc byte[3];
+                Utf8Formatter.TryFormat(value, buffer, out int written);
+                WriteRaw(buffer[..written]);
+            }
+            else
+            {
+                Span<char> buffer = stackalloc char[3];
+                value.TryFormat(buffer, out int written);
+                WriteUtf16Chars(buffer[..written]);
+            }
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET5_0_OR_GREATER
+        [SkipLocalsInit]
+#endif
         public void WriteSByte(sbyte value)
         {
             WriteCommaIfNeeded();
-            Span<byte> buffer = stackalloc byte[4];
-            Utf8Formatter.TryFormat(value, buffer, out int written);
-            WriteRaw(buffer[..written]);
+            if (SerializeStringAsUtf8)
+            {
+                Span<byte> buffer = stackalloc byte[4];
+                Utf8Formatter.TryFormat(value, buffer, out int written);
+                WriteRaw(buffer[..written]);
+            }
+            else
+            {
+                Span<char> buffer = stackalloc char[4];
+                value.TryFormat(buffer, out int written);
+                WriteUtf16Chars(buffer[..written]);
+            }
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET5_0_OR_GREATER
+        [SkipLocalsInit]
+#endif
         public void WriteShort(short value)
         {
             WriteCommaIfNeeded();
-            Span<byte> buffer = stackalloc byte[6];
-            Utf8Formatter.TryFormat(value, buffer, out int written);
-            WriteRaw(buffer[..written]);
+            if (SerializeStringAsUtf8)
+            {
+                Span<byte> buffer = stackalloc byte[6];
+                Utf8Formatter.TryFormat(value, buffer, out int written);
+                WriteRaw(buffer[..written]);
+            }
+            else
+            {
+                Span<char> buffer = stackalloc char[6];
+                value.TryFormat(buffer, out int written);
+                WriteUtf16Chars(buffer[..written]);
+            }
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET5_0_OR_GREATER
+        [SkipLocalsInit]
+#endif
         public void WriteUShort(ushort value)
         {
             WriteCommaIfNeeded();
-            Span<byte> buffer = stackalloc byte[5];
-            Utf8Formatter.TryFormat(value, buffer, out int written);
-            WriteRaw(buffer[..written]);
+            if (SerializeStringAsUtf8)
+            {
+                Span<byte> buffer = stackalloc byte[5];
+                Utf8Formatter.TryFormat(value, buffer, out int written);
+                WriteRaw(buffer[..written]);
+            }
+            else
+            {
+                Span<char> buffer = stackalloc char[5];
+                value.TryFormat(buffer, out int written);
+                WriteUtf16Chars(buffer[..written]);
+            }
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET5_0_OR_GREATER
+        [SkipLocalsInit]
+#endif
         public void WriteLong(long value)
         {
             WriteCommaIfNeeded();
-            Span<byte> buffer = stackalloc byte[20];
-            Utf8Formatter.TryFormat(value, buffer, out int written);
-            WriteRaw(buffer[..written]);
+            if (SerializeStringAsUtf8)
+            {
+                Span<byte> buffer = stackalloc byte[20];
+                Utf8Formatter.TryFormat(value, buffer, out int written);
+                WriteRaw(buffer[..written]);
+            }
+            else
+            {
+                Span<char> buffer = stackalloc char[20];
+                value.TryFormat(buffer, out int written);
+                WriteUtf16Chars(buffer[..written]);
+            }
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET5_0_OR_GREATER
+        [SkipLocalsInit]
+#endif
         public void WriteULong(ulong value)
         {
             WriteCommaIfNeeded();
-            Span<byte> buffer = stackalloc byte[20];
-            Utf8Formatter.TryFormat(value, buffer, out int written);
-            WriteRaw(buffer[..written]);
+            if (SerializeStringAsUtf8)
+            {
+                Span<byte> buffer = stackalloc byte[20];
+                Utf8Formatter.TryFormat(value, buffer, out int written);
+                WriteRaw(buffer[..written]);
+            }
+            else
+            {
+                Span<char> buffer = stackalloc char[20];
+                value.TryFormat(buffer, out int written);
+                WriteUtf16Chars(buffer[..written]);
+            }
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET5_0_OR_GREATER
+        [SkipLocalsInit]
+#endif
         public void WriteFloat(float value)
         {
             WriteCommaIfNeeded();
-            Span<byte> buffer = stackalloc byte[32];
-            Utf8Formatter.TryFormat(value, buffer, out int written, new StandardFormat('G'));
-            WriteRaw(buffer[..written]);
+            if (SerializeStringAsUtf8)
+            {
+                Span<byte> buffer = stackalloc byte[32];
+                Utf8Formatter.TryFormat(value, buffer, out int written, new StandardFormat('G'));
+                WriteRaw(buffer[..written]);
+            }
+            else
+            {
+                Span<char> buffer = stackalloc char[32];
+                value.TryFormat(buffer, out int written, provider: System.Globalization.CultureInfo.InvariantCulture);
+                WriteUtf16Chars(buffer[..written]);
+            }
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET5_0_OR_GREATER
+        [SkipLocalsInit]
+#endif
         public void WriteDouble(double value)
         {
             WriteCommaIfNeeded();
-            Span<byte> buffer = stackalloc byte[32];
-            Utf8Formatter.TryFormat(value, buffer, out int written, new StandardFormat('G'));
-            WriteRaw(buffer[..written]);
+            if (SerializeStringAsUtf8)
+            {
+                Span<byte> buffer = stackalloc byte[32];
+                Utf8Formatter.TryFormat(value, buffer, out int written, new StandardFormat('G'));
+                WriteRaw(buffer[..written]);
+            }
+            else
+            {
+                Span<char> buffer = stackalloc char[32];
+                value.TryFormat(buffer, out int written, provider: System.Globalization.CultureInfo.InvariantCulture);
+                WriteUtf16Chars(buffer[..written]);
+            }
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET5_0_OR_GREATER
+        [SkipLocalsInit]
+#endif
         public void WriteDecimal(decimal value)
         {
             WriteCommaIfNeeded();
-            Span<byte> buffer = stackalloc byte[31];
-            Utf8Formatter.TryFormat(value, buffer, out int written);
-            WriteRaw(buffer[..written]);
+            if (SerializeStringAsUtf8)
+            {
+                Span<byte> buffer = stackalloc byte[31];
+                Utf8Formatter.TryFormat(value, buffer, out int written);
+                WriteRaw(buffer[..written]);
+            }
+            else
+            {
+                Span<char> buffer = stackalloc char[31];
+                value.TryFormat(buffer, out int written, provider: System.Globalization.CultureInfo.InvariantCulture);
+                WriteUtf16Chars(buffer[..written]);
+            }
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteUtf16Chars(scoped ReadOnlySpan<char> chars)
+        {
+            int byteCount = chars.Length * 2;
+            ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(chars));
+            ref byte dst = ref GetCurrentSpanReference();
+            Unsafe.CopyBlock(ref dst, ref src, (uint)byteCount);
+            Advance(byteCount);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#if NET5_0_OR_GREATER
+        [SkipLocalsInit]
+#endif
         public void WriteChar(char value)
         {
             WriteCommaIfNeeded();
@@ -497,23 +826,36 @@ namespace LuminPack.Core
             if (value == '"')
             {
                 WriteByteRaw(Backslash);
-                WriteByteRaw((byte)'"');
+                if (SerializeStringAsUtf8)
+                    WriteByteRaw((byte)'"');
+                else
+                    WriteUtf16CharDirect('"');
             }
             else if (value == '\\')
             {
                 WriteByteRaw(Backslash);
-                WriteByteRaw((byte)'\\');
+                if (SerializeStringAsUtf8)
+                    WriteByteRaw((byte)'\\');
+                else
+                    WriteUtf16CharDirect('\\');
             }
-            else if (value >= 0x20 && value <= 0x7F)
+            else if (SerializeStringAsUtf8)
             {
-                WriteByteRaw((byte)value);
+                if (value >= 0x20 && value <= 0x7F)
+                {
+                    WriteByteRaw((byte)value);
+                }
+                else
+                {
+                    Span<byte> utf8Buf = stackalloc byte[4];
+                    Span<char> charBuf = stackalloc char[1] { value };
+                    int len = Encoding.UTF8.GetBytes(charBuf, utf8Buf);
+                    WriteRaw(utf8Buf[..len]);
+                }
             }
             else
             {
-                Span<byte> utf8Buf = stackalloc byte[4];
-                Span<char> charBuf = stackalloc char[1] { value };
-                int len = Encoding.UTF8.GetBytes(charBuf, utf8Buf);
-                WriteRaw(utf8Buf[..len]);
+                WriteUtf16CharDirect(value);
             }
             
             WriteByteRaw(Quote);

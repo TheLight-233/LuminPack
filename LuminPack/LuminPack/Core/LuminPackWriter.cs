@@ -91,7 +91,7 @@ namespace LuminPack.Core
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
             bufferWriter.SetCurrentIndexPtr(ref _currentIndex);
-            _bufferReference = bufferWriter.GetSpan();
+            _bufferReference = bufferWriter.GetFullSpan();
 #if NET8_0_OR_GREATER
             _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
 #else
@@ -177,7 +177,7 @@ namespace LuminPack.Core
         {
             if (_writerBuffer is not null)
             {
-                _bufferReference = _writerBuffer.GetSpan();
+                _bufferReference = _writerBuffer.GetFullSpan();
 #if NET8_0_OR_GREATER
                 _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
 #else
