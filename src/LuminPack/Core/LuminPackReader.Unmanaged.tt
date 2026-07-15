@@ -1,0 +1,575 @@
+<#@ template debug="false" hostspecific="false" language="C#" #>
+<#@ assembly name="System.Core" #>
+<#@ import namespace="System.Linq" #>
+<#@ import namespace="System.Text" #>
+<#@ import namespace="System.Collections.Generic" #>
+<#@ output extension=".cs" #>
+<#
+    int maxTypeParams = 15;
+#>
+// Auto-generated code
+
+using System;
+using System.Runtime.CompilerServices;
+using LuminPack.Utility.ViewModel;
+
+namespace LuminPack.Core
+{
+    public unsafe ref partial struct LuminPackReader
+    {
+        /// <summary>
+        /// 反序列化值类型
+        /// </summary>
+        /// <param name="value1">输出值 1</param>
+        /// <typeparam name="T1">值类型 1</typeparam>
+        /// <returns>读取的字节数</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int ReadUnmanaged<T1>(out T1 value1)
+            where T1 : unmanaged
+        {
+            var index = _currentIndex;
+
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+                value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
+                return Unsafe.SizeOf<T1>();
+            }
+            else
+            {
+                // 32位兼容版本
+                value1 = default!;
+                Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
+                return Unsafe.SizeOf<T1>();
+            }
+        }
+        
+        /// <summary>
+        /// 反序列化值类型并前进读取位置
+        /// </summary>
+        /// <typeparam name="T1">值类型 1</typeparam>
+        /// <returns>反序列化的值</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T1 ReadUnmanaged<T1>()
+            where T1 : unmanaged
+        {
+            var size = Unsafe.SizeOf<T1>();
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)_currentIndex);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
+#endif
+            
+            T1 value1;
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+                value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
+            }
+            else
+            {
+                // 32位兼容版本
+                value1 = default!;
+                Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
+            }
+            
+            Advance(size);
+            return value1;
+        }
+
+        /// <summary>
+        /// 反序列化值类型
+        /// </summary>
+        /// <param name="index">读取起始索引</param>
+        /// <param name="value1">输出值 1</param>
+        /// <typeparam name="T1">值类型 1</typeparam>
+        /// <returns>读取的字节数</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int ReadUnmanaged<T1>(ref int index, out T1 value1)
+            where T1 : unmanaged
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+                value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
+                return Unsafe.SizeOf<T1>();
+            }
+            else
+            {
+                // 32位兼容版本
+                value1 = default!;
+                Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
+                return Unsafe.SizeOf<T1>();
+            }
+        }
+
+<# for (int count = 2; count <= maxTypeParams; count++) { 
+    var typeParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"T{i}"));
+    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, count).Select(i => $"        /// <typeparam name=\"T{i}\">值类型 {i}</typeparam>"));
+    var constraints = string.Join(" ", Enumerable.Range(1, count).Select(i => $"where T{i} : unmanaged"));
+    var sizeOfSum = string.Join(" + ", Enumerable.Range(1, count).Select(i => $"Unsafe.SizeOf<T{i}>()"));
+    
+    var readOperations64 = new List<string>();
+    var readOperations32 = new List<string>();
+    
+    for (int i = 1; i <= count; i++)
+    {
+        if (i == 1)
+            readOperations64.Add($"value{i} = Unsafe.ReadUnaligned<T{i}>(ref spanRef);");
+        else
+        {
+            var offset = string.Join(" + ", Enumerable.Range(1, i-1).Select(j => $"Unsafe.SizeOf<T{j}>()"));
+            readOperations64.Add($"value{i} = Unsafe.ReadUnaligned<T{i}>(ref Unsafe.Add(ref spanRef, {offset}));");
+        }
+    }
+    
+    var outParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"out value{i}"));
+    readOperations32.Add($"UnmanagedViewModel<{typeParams}> view = default;");
+    readOperations32.Add($"Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<{typeParams}>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<{typeParams}>>());");
+    readOperations32.Add($"view.Deconstruct({outParams});");
+#>
+        /// <summary>
+        /// 反序列化值类型
+        /// </summary>
+<# for (int i = 1; i <= count; i++) { #>
+        /// <param name="value<#= i #>">输出值 <#= i #></param>
+<# } #>
+<#= typeParamDocs #>
+        /// <returns>读取的字节数</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int ReadUnmanaged<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, count).Select(i => $"out T{i} value{i}")) #>)
+            <#= constraints #>
+        {
+            var index = _currentIndex;
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var operation in readOperations64) { #>
+                <#= operation #>
+<# } #>
+                return <#= sizeOfSum #>;
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var operation in readOperations32) { #>
+                <#= operation #>
+<# } #>
+                return Unsafe.SizeOf<UnmanagedViewModel<<#= typeParams #>>>();
+            }
+        }
+
+        /// <summary>
+        /// 反序列化值类型
+        /// </summary>
+        /// <param name="index">读取起始索引</param>
+<# for (int i = 1; i <= count; i++) { #>
+        /// <param name="value<#= i #>">输出值 <#= i #></param>
+<# } #>
+<#= typeParamDocs #>
+        /// <returns>读取的字节数</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int ReadUnmanaged<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, count).Select(i => $"out T{i} value{i}")) #>)
+            <#= constraints #>
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var operation in readOperations64) { #>
+                <#= operation #>
+<# } #>
+                return <#= sizeOfSum #>;
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var operation in readOperations32) { #>
+                <#= operation #>
+<# } #>
+                return Unsafe.SizeOf<UnmanagedViewModel<<#= typeParams #>>>();
+            }
+        }
+
+<# } #>
+
+<# for (int count = 1; count <= maxTypeParams; count++) { 
+    var typeParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"T{i}"));
+    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, count).Select(i => $"        /// <typeparam name=\"T{i}\">值类型 {i}</typeparam>"));
+    
+    var readOperations64 = new List<string>();
+    var readOperations32 = new List<string>();
+    
+    for (int i = 1; i <= count; i++)
+    {
+        if (i == 1)
+            readOperations64.Add($"value{i} = Unsafe.ReadUnaligned<T{i}>(ref spanRef);");
+        else
+        {
+            var offset = string.Join(" + ", Enumerable.Range(1, i-1).Select(j => $"Unsafe.SizeOf<T{j}>()"));
+            readOperations64.Add($"value{i} = Unsafe.ReadUnaligned<T{i}>(ref Unsafe.Add(ref spanRef, {offset}));");
+        }
+    }
+    
+    if (count == 1)
+    {
+        readOperations32.Add("Unsafe.SkipInit(out value1);");
+        readOperations32.Add("Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());");
+    }
+    else
+    {
+        var outParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"out value{i}"));
+        readOperations32.Add($"UnmanagedViewModel<{typeParams}> view = default;");
+        readOperations32.Add($"Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<{typeParams}>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<{typeParams}>>());");
+        readOperations32.Add($"view.Deconstruct({outParams});");
+    }
+#>
+        /// <summary>
+        /// 反序列化值类型（不返回读取大小）
+        /// </summary>
+<# for (int i = 1; i <= count; i++) { #>
+        /// <param name="value<#= i #>">输出值 <#= i #></param>
+<# } #>
+<#= typeParamDocs #>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void ReadUnmanagedWithoutSizeReturn<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, count).Select(i => $"out T{i} value{i}")) #>)
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)_currentIndex);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var operation in readOperations64) { #>
+                <#= operation #>
+<# } #>
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var operation in readOperations32) { #>
+                <#= operation #>
+<# } #>
+            }
+        }
+
+        /// <summary>
+        /// 反序列化值类型（不返回读取大小）
+        /// </summary>
+        /// <param name="index">读取起始索引</param>
+<# for (int i = 1; i <= count; i++) { #>
+        /// <param name="value<#= i #>">输出值 <#= i #></param>
+<# } #>
+<#= typeParamDocs #>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void ReadUnmanagedWithoutSizeReturn<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, count).Select(i => $"out T{i} value{i}")) #>)
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var operation in readOperations64) { #>
+                <#= operation #>
+<# } #>
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var operation in readOperations32) { #>
+                <#= operation #>
+<# } #>
+            }
+        }
+
+<# } #>
+
+        /// <summary>
+        /// 反序列化值类型（无类型约束检查）
+        /// </summary>
+        /// <param name="value1">输出值 1</param>
+        /// <typeparam name="T1">值类型 1</typeparam>
+        /// <returns>读取的字节数</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int DangerousReadUnmanaged<T1>(out T1 value1)
+        {
+            var index = _currentIndex;
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+                value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
+                return Unsafe.SizeOf<T1>();
+            }
+            else
+            {
+                // 32位兼容版本
+                Unsafe.SkipInit(out value1);
+                Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
+                return Unsafe.SizeOf<T1>();
+            }
+        }
+
+        /// <summary>
+        /// 反序列化值类型（无类型约束检查）
+        /// </summary>
+        /// <param name="index">读取起始索引</param>
+        /// <param name="value1">输出值 1</param>
+        /// <typeparam name="T1">值类型 1</typeparam>
+        /// <returns>读取的字节数</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int DangerousReadUnmanaged<T1>(ref int index, out T1 value1)
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+                value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
+                return Unsafe.SizeOf<T1>();
+            }
+            else
+            {
+                // 32位兼容版本
+                Unsafe.SkipInit(out value1);
+                Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
+                return Unsafe.SizeOf<T1>();
+            }
+        }
+
+<# for (int count = 2; count <= maxTypeParams; count++) { 
+    var typeParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"T{i}"));
+    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, count).Select(i => $"        /// <typeparam name=\"T{i}\">值类型 {i}</typeparam>"));
+    var sizeOfSum = string.Join(" + ", Enumerable.Range(1, count).Select(i => $"Unsafe.SizeOf<T{i}>()"));
+    
+    var readOperations64 = new List<string>();
+    var readOperations32 = new List<string>();
+    
+    for (int i = 1; i <= count; i++)
+    {
+        if (i == 1)
+            readOperations64.Add($"value{i} = Unsafe.ReadUnaligned<T{i}>(ref spanRef);");
+        else
+        {
+            var offset = string.Join(" + ", Enumerable.Range(1, i-1).Select(j => $"Unsafe.SizeOf<T{j}>()"));
+            readOperations64.Add($"value{i} = Unsafe.ReadUnaligned<T{i}>(ref Unsafe.Add(ref spanRef, {offset}));");
+        }
+    }
+    
+    var outParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"out value{i}"));
+    readOperations32.Add($"UnmanagedViewModel<{typeParams}> view = default;");
+    readOperations32.Add($"Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<{typeParams}>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<{typeParams}>>());");
+    readOperations32.Add($"view.Deconstruct({outParams});");
+#>
+        /// <summary>
+        /// 反序列化值类型（无类型约束检查）
+        /// </summary>
+<# for (int i = 1; i <= count; i++) { #>
+        /// <param name="value<#= i #>">输出值 <#= i #></param>
+<# } #>
+<#= typeParamDocs #>
+        /// <returns>读取的字节数</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int DangerousReadUnmanaged<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, count).Select(i => $"out T{i} value{i}")) #>)
+        {
+            var index = _currentIndex;
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var operation in readOperations64) { #>
+                <#= operation #>
+<# } #>
+                return <#= sizeOfSum #>;
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var operation in readOperations32) { #>
+                <#= operation #>
+<# } #>
+                return Unsafe.SizeOf<UnmanagedViewModel<<#= typeParams #>>>();
+            }
+        }
+
+        /// <summary>
+        /// 反序列化值类型（无类型约束检查）
+        /// </summary>
+        /// <param name="index">读取起始索引</param>
+<# for (int i = 1; i <= count; i++) { #>
+        /// <param name="value<#= i #>">输出值 <#= i #></param>
+<# } #>
+<#= typeParamDocs #>
+        /// <returns>读取的字节数</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int DangerousReadUnmanaged<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, count).Select(i => $"out T{i} value{i}")) #>)
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var operation in readOperations64) { #>
+                <#= operation #>
+<# } #>
+                return <#= sizeOfSum #>;
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var operation in readOperations32) { #>
+                <#= operation #>
+<# } #>
+                return Unsafe.SizeOf<UnmanagedViewModel<<#= typeParams #>>>();
+            }
+        }
+
+<# } #>
+
+<# for (int count = 1; count <= maxTypeParams; count++) { 
+    var typeParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"T{i}"));
+    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, count).Select(i => $"        /// <typeparam name=\"T{i}\">值类型 {i}</typeparam>"));
+    
+    var readOperations64 = new List<string>();
+    var readOperations32 = new List<string>();
+    
+    for (int i = 1; i <= count; i++)
+    {
+        if (i == 1)
+            readOperations64.Add($"value{i} = Unsafe.ReadUnaligned<T{i}>(ref spanRef);");
+        else
+        {
+            var offset = string.Join(" + ", Enumerable.Range(1, i-1).Select(j => $"Unsafe.SizeOf<T{j}>()"));
+            readOperations64.Add($"value{i} = Unsafe.ReadUnaligned<T{i}>(ref Unsafe.Add(ref spanRef, {offset}));");
+        }
+    }
+    
+    if (count == 1)
+    {
+        readOperations32.Add("Unsafe.SkipInit(out value1);");
+        readOperations32.Add("Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());");
+    }
+    else
+    {
+        var outParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"out value{i}"));
+        readOperations32.Add($"UnmanagedViewModel<{typeParams}> view = default;");
+        readOperations32.Add($"Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<{typeParams}>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<{typeParams}>>());");
+        readOperations32.Add($"view.Deconstruct({outParams});");
+    }
+#>
+        /// <summary>
+        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// </summary>
+<# for (int i = 1; i <= count; i++) { #>
+        /// <param name="value<#= i #>">输出值 <#= i #></param>
+<# } #>
+<#= typeParamDocs #>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousReadUnmanagedWithoutSizeReturn<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, count).Select(i => $"out T{i} value{i}")) #>)
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)_currentIndex);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var operation in readOperations64) { #>
+                <#= operation #>
+<# } #>
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var operation in readOperations32) { #>
+                <#= operation #>
+<# } #>
+            }
+        }
+
+        /// <summary>
+        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// </summary>
+        /// <param name="index">读取起始索引</param>
+<# for (int i = 1; i <= count; i++) { #>
+        /// <param name="value<#= i #>">输出值 <#= i #></param>
+<# } #>
+<#= typeParamDocs #>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void DangerousReadUnmanagedWithoutSizeReturn<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, count).Select(i => $"out T{i} value{i}")) #>)
+        {
+#if NET8_0_OR_GREATER
+            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
+#else
+            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
+#endif
+            
+            if (Environment.Is64BitProcess)
+            {
+                // 64位优化版本
+<# foreach (var operation in readOperations64) { #>
+                <#= operation #>
+<# } #>
+            }
+            else
+            {
+                // 32位兼容版本
+<# foreach (var operation in readOperations32) { #>
+                <#= operation #>
+<# } #>
+            }
+        }
+
+<# } #>
+    }
+}

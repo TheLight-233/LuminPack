@@ -1,0 +1,215 @@
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using LuminPack.Code.Core;
+using LuminPack.SourceGenerator.Mapping;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+namespace LuminPack.SourceGenerator;
+
+[Generator(LanguageNames.CSharp)]
+public sealed class LuminMapSourceGenerator : IIncrementalGenerator
+{
+    private const string LuminMapToAttr  = "LuminPack.Attribute.LuminMapToAttribute";
+    private const string LuminMapperAttr = "LuminPack.Attribute.LuminMapperAttribute";
+
+    public void Initialize(IncrementalGeneratorInitializationContext context)
+    {
+        var metaProvider = context.ParseOptionsProvider
+            .Combine(context.CompilationProvider)
+            .Select((pair, _) =>
+            {
+                var (opts, compilation) = pair;
+                var cs   = (CSharpParseOptions)opts;
+                var net8 = cs.PreprocessorSymbolNames.Contains("NET8_0_OR_GREATER");
+                return new MetaInfo(cs, cs.LanguageVersion, net8, false);
+            });
+
+        var autoMapDeclarations = context.SyntaxProvider.ForAttributeWithMetadataName(
+            LuminMapToAttr,
+            static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax,
+            static (ctx, _) =>
+                LuminAutoMapAnalyzer.Analyze(
+                    (INamedTypeSymbol)ctx.TargetSymbol,
+                    ctx.SemanticModel.Compilation)
+        ).Where(x => x != null)!;
+
+        
+        context.RegisterSourceOutput(
+            autoMapDeclarations.Combine(metaProvider),
+            static (spc, pair) =>
+            {
+                var (info, meta) = pair;
+                if (info == null || info.Pairs.Count == 0) return;
+                try
+                {
+                    var code = LuminAutoMapCodeGenerator.GenerateAutoMapperClass(info, meta);
+                    if (string.IsNullOrEmpty(code)) return;
+                    spc.AddSource($"{SafeFileName(info.SourceFullName)}Mapper.g.cs", code);
+                }
+                catch { }
+            });
+
+        var manualMapDeclarations = context.SyntaxProvider.ForAttributeWithMetadataName(
+            LuminMapperAttr,
+            static (node, _) =>
+                node is ClassDeclarationSyntax cls
+                && cls.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword))
+                && cls.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)),
+            static (ctx, _) =>
+                LuminMapAnalyzer.Analyze(
+                    (INamedTypeSymbol)ctx.TargetSymbol,
+                    ctx.SemanticModel.Compilation)
+        );
+
+        context.RegisterSourceOutput(
+            manualMapDeclarations.Combine(metaProvider),
+            static (spc, pair) =>
+            {
+                var (info, meta) = pair;
+                if (info.Methods.Count == 0) return;
+                try
+                {
+                    var code = LuminMapCodeGenerator.GenerateMapperImpl(info, meta);
+                    if (string.IsNullOrEmpty(code)) return;
+                    spc.AddSource($"{SafeFileName(info.ClassFullName)}.Mapper.g.cs", code);
+                }
+                catch { }
+            });
+
+        var allAuto   = autoMapDeclarations.Collect();
+        var allManual = manualMapDeclarations.Collect();
+
+        context.RegisterSourceOutput(
+            allAuto.Combine(allManual)
+                   .Combine(context.CompilationProvider)
+                   .Combine(metaProvider),
+            static (spc, pair) =>
+            {
+                var (((autoInfos, manualInfos), compilation), meta) = pair;
+
+                // 没有 [LuminPackable] 类型且没有任何 Mapper 声明，不生成
+                bool hasPackable = HasLuminPackableTypes(compilation);
+                bool hasMappers  = !autoInfos.IsEmpty || !manualInfos.IsEmpty;
+                if (!hasPackable && !hasMappers) return;
+
+                try
+                {
+                    var code = GenerateMappersRegistry(autoInfos!, manualInfos, compilation, meta);
+                    if (!string.IsNullOrEmpty(code))
+                        spc.AddSource("GeneratedMappersRegistry.g.cs", code);
+                }
+                catch { }
+            });
+    }
+
+    private static string GenerateMappersRegistry(
+        System.Collections.Immutable.ImmutableArray<AutoMapSourceInfo> autoInfos,
+        System.Collections.Immutable.ImmutableArray<LuminMapperClassInfo> manualInfos,
+        Compilation compilation,
+        MetaInfo meta)
+    {
+        bool   isUnity  = TypeMetaChecker.IsUnityProject(compilation);
+        string asmRaw   = compilation.AssemblyName ?? "Unknown";
+        string asmSafe  = SanitizeId(asmRaw);
+
+        string registryFqn = asmSafe == "Unknown"
+            ? "global::GeneratedMappersRegistry"
+            : $"global::LuminPackRegisters.{asmSafe}.GeneratedMappersRegistry";
+
+        var sb = new StringBuilder();
+        sb.AppendLine("// <auto-generated/>");
+        sb.AppendLine("// LuminMapper registry — do not modify");
+        sb.AppendLine("#nullable enable");
+        sb.AppendLine();
+        sb.AppendLine("using global::System;");
+        sb.AppendLine("using global::System.Collections.Generic;");
+        sb.AppendLine("using global::System.Runtime.CompilerServices;");
+        sb.AppendLine("using global::LuminPack;");
+        sb.AppendLine("using global::LuminPack.Mapping;");
+        sb.AppendLine();
+
+        bool hasNs = asmSafe != "Unknown";
+        if (hasNs) { sb.AppendLine($"namespace LuminPackRegisters.{asmSafe}"); sb.AppendLine("{"); }
+
+        sb.AppendLine("    public static class GeneratedMappersRegistry");
+        sb.AppendLine("    {");
+
+        if (isUnity)
+            sb.AppendLine("        [global::UnityEngine.RuntimeInitializeOnLoadMethod(global::UnityEngine.RuntimeInitializeLoadType.BeforeSceneLoad)]");
+        else
+        {
+            sb.AppendLine("#if NET5_0_OR_GREATER");
+            sb.AppendLine("        [System.Runtime.CompilerServices.ModuleInitializerAttribute]");
+            sb.AppendLine("#else");
+            sb.AppendLine("        // 需要手动调用初始化");
+            sb.AppendLine($"        // 请在程序入口调用 {registryFqn}.Initialize()");
+            sb.AppendLine("#endif");
+        }
+        sb.AppendLine("        public static void Initialize()");
+        sb.AppendLine("        {");
+
+        sb.AppendLine($"            global::LuminPack.LuminPackSerializer.Initialize({registryFqn}.ParserTypes);");
+        sb.AppendLine();
+
+        foreach (var info in autoInfos)
+        {
+            if (info == null || info.Pairs.Count == 0) continue;
+            sb.AppendLine($"            // Auto: {info.SourceFullName}");
+            sb.Append(LuminAutoMapCodeGenerator.GenerateAutoRegistrationLines(info));
+        }
+
+        foreach (var info in manualInfos)
+        {
+            if (info.Methods.Count == 0) continue;
+            sb.AppendLine($"            // Manual: {info.ClassFullName}");
+            sb.Append(LuminMapCodeGenerator.GenerateManualRegistrationLines(info));
+        }
+
+        sb.AppendLine("        }");
+        sb.AppendLine();
+
+        sb.Append(LuminPackExtensionGenerator.GenerateParserTypeList(compilation, asmSafe));
+
+        sb.AppendLine("    }");
+        if (hasNs) sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    private static bool HasLuminPackableTypes(Compilation compilation)
+    {
+        var attr = compilation.GetTypeByMetadataName(LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE);
+        if (attr == null) return false;
+        foreach (var tree in compilation.SyntaxTrees)
+        {
+            var model = compilation.GetSemanticModel(tree);
+            foreach (var decl in tree.GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>())
+            {
+                if (model.GetDeclaredSymbol(decl) is INamedTypeSymbol sym &&
+                    sym.GetAttributes().Any(a => SymbolEqualityComparer.Default.Equals(a.AttributeClass, attr)))
+                    return true;
+            }
+        }
+        return false;
+    }
+
+    private static string SafeFileName(string fqn)
+        => fqn.Replace("global::", "").Replace(".", "_").Replace("<", "_").Replace(">", "_");
+
+    private static string SanitizeId(string name)
+    {
+        if (string.IsNullOrEmpty(name)) return "Unknown";
+        var sb = new StringBuilder(name.Length);
+        for (int i = 0; i < name.Length; i++)
+        {
+            char c = name[i];
+            if (i == 0) sb.Append(char.IsLetter(c) || c == '_' ? c : char.IsDigit(c) ? '_' : '_');
+            else sb.Append(char.IsLetterOrDigit(c) || c == '_' ? c : '_');
+        }
+        return sb.ToString();
+    }
+    
+}
