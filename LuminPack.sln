@@ -1,12 +1,12 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPack", "LuminPack\LuminPack.csproj", "{FB5812F4-157A-4AFB-B2EC-44A4E043BAE0}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPack", "src\LuminPack\LuminPack.csproj", "{FB5812F4-157A-4AFB-B2EC-44A4E043BAE0}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPackGenerator", "LuminPackGenerator\LuminPackGenerator.csproj", "{EC99069B-FE47-4F4C-AB94-1E32FE161561}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPackGenerator", "src\LuminPackGenerator\LuminPackGenerator.csproj", "{EC99069B-FE47-4F4C-AB94-1E32FE161561}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPackBenchmark", "LuminPackBenchmark\LuminPackBenchmark.csproj", "{4BCB4DC8-6530-4837-98C5-CA6B4ADA5B1C}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPackBenchmark", "benchmarks\LuminPackBenchmark\LuminPackBenchmark.csproj", "{4BCB4DC8-6530-4837-98C5-CA6B4ADA5B1C}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPackUnitTest", "LuminPackUnitTest\LuminPackUnitTest.csproj", "{CD33731C-A4BE-40A9-9F15-5BB9D43E61F2}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPackUnitTest", "tests\LuminPackUnitTest\LuminPackUnitTest.csproj", "{CD33731C-A4BE-40A9-9F15-5BB9D43E61F2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

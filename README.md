@@ -6,7 +6,7 @@
 
 ### 📊 性能对比图表
 
-![LuminPack Performance Benchmark](benchmark_comparison.png)
+![LuminPack Performance Benchmark](docs/benchmark_comparison.png)
 
 ### 🎯 性能数据总结
 
