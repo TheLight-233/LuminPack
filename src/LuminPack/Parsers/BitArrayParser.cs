@@ -22,11 +22,19 @@ public sealed class BitArrayParser : LuminPackParser<BitArray>
             return;
         }
         
+#if NET10_0_OR_GREATER
         ref var view = ref LuminPackMarshal.As<BitArray, BitArrayView>(ref value);
-        
+
+        writer.WriteCollectionHeader(ref index, view._bitLength);
+
+        writer.WriteUnmanagedArrayWithOutHeader(ref index, view._array, view._array.Length, out var offset);
+#else
+        ref var view = ref LuminPackMarshal.As<BitArray, BitArrayView>(ref value);
+
         writer.WriteCollectionHeader(ref index, view.m_length);
-        
+
         writer.WriteUnmanagedArrayWithOutHeader(ref index, view.m_array, view.m_array.Length, out var offset);
+#endif
         
         writer.Advance(4 + offset);
         writer.CheckBuffer();
@@ -46,16 +54,22 @@ public sealed class BitArrayParser : LuminPackParser<BitArray>
             return;
         }
 
-        if (value is null)
+        if (value is null || value.Count != length)
         {
             value = new BitArray(length, false);
         }
         
         reader.Advance(4);
 
+#if NET10_0_OR_GREATER
         ref var view = ref LuminPackMarshal.As<BitArray, BitArrayView>(ref value);
-        
+
+        reader.ReadUnmanagedArray(ref index, ref view._array!, view._array.Length, out var offset);
+#else
+        ref var view = ref LuminPackMarshal.As<BitArray, BitArrayView>(ref value);
+
         reader.ReadUnmanagedArray(ref index, ref view.m_array!, view.m_array.Length, out var offset);
+#endif
 
         reader.Advance(offset);
     }
@@ -70,9 +84,15 @@ public sealed class BitArrayParser : LuminPackParser<BitArray>
             return;
         }
         
+#if NET10_0_OR_GREATER
         ref var view = ref LuminPackMarshal.As<BitArray, BitArrayView>(ref value);
-        
+
+        evaluator.CalculateArray(ref view._array);
+#else
+        ref var view = ref LuminPackMarshal.As<BitArray, BitArrayView>(ref value);
+
         evaluator.CalculateArray(ref view.m_array);
+#endif
     }
 
     [Preserve]
@@ -136,7 +156,12 @@ public sealed class BitArrayParser : LuminPackParser<BitArray>
 [Preserve]
 public sealed class BitArrayView
 {
+#if NET10_0_OR_GREATER
+    public byte[] _array;
+    public int _bitLength;
+#else
     public int[] m_array;
     public int m_length;
+#endif
     public int _version;
 }

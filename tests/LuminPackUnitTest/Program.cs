@@ -161,6 +161,7 @@ namespace LuminPackUnitTest
             TestVersion(testResults);
             TestBigInteger(testResults);
             TestBitArray(testResults);
+            TestBitArrayCodeGen(testResults);
             //TestCultureInfo(testResults);
             TestTimeZoneInfo(testResults);
             TestType(testResults);
@@ -229,6 +230,7 @@ namespace LuminPackUnitTest
             TestIImmutableStack(testResults);
             TestIImmutableDictionary(testResults);
             TestIImmutableSet(testResults);
+            ObjectPoolTests.RunAll(testResults);
             
             // Print summary
             Console.WriteLine("\n=========================================");

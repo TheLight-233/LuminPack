@@ -11,8 +11,20 @@ using LuminPackBenchmark;
 
 class Program
 {
-    static void Main()
+    static void Main(string[] args)
     {
+        if (args.Length > 0 && args[0].Equals("objectpool-quick", StringComparison.OrdinalIgnoreCase))
+        {
+            ObjectPoolBenchmark.RunQuick();
+            return;
+        }
+
+        if (args.Length > 0 && args[0].Equals("objectpool", StringComparison.OrdinalIgnoreCase))
+        {
+            BenchmarkRunner.Run<ObjectPoolBenchmark>();
+            return;
+        }
+
         BenchmarkRunner.Run<SerializeBenchmark>();
         LuminPackSerializerOption luminPackSerializerOption = new LuminPackSerializerOption()
         {

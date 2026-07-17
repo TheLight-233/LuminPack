@@ -82,30 +82,77 @@ namespace LuminPackUnitTest
         {
             try
             {
-                BitArray val = new BitArray(new bool[] { true, false, true, false, true });
-                
-                // Binary test
-                byte[] buf = LuminPackSerializer.Serialize(val);
-                BitArray result = LuminPackSerializer.Deserialize<BitArray>(buf);
-                
-                bool equal = true;
-                for (int i = 0; i < val.Count; i++)
+                int[] lengths = { 0, 1, 5, 31, 32, 33, 1000, 100_000 };
+
+                foreach (int length in lengths)
                 {
-                    if (val[i] != result[i])
+                    BitArray val = new BitArray(length);
+                    for (int i = 0; i < length; i += 7)
                     {
-                        equal = false;
-                        break;
+                        val[i] = true;
+                    }
+
+                    byte[] buf = LuminPackSerializer.Serialize(val);
+                    BitArray result = LuminPackSerializer.Deserialize<BitArray>(buf);
+
+                    if (result.Count != val.Count)
+                    {
+                        results.Add($"✗ TestBitArray - FAILED (length {length}, count mismatch)");
+                        return;
+                    }
+
+                    for (int i = 0; i < val.Count; i++)
+                    {
+                        if (val[i] != result[i])
+                        {
+                            results.Add($"✗ TestBitArray - FAILED (length {length}, bit {i} mismatch)");
+                            return;
+                        }
                     }
                 }
-                
-                if (equal)
-                    results.Add("✓ TestBitArray - PASSED");
-                else
-                    results.Add("✗ TestBitArray - FAILED");
+
+                results.Add("✓ TestBitArray - PASSED");
             }
             catch (Exception ex)
             {
                 results.Add($"✗ TestBitArray - ERROR: {ex.Message}");
+            }
+        }
+
+        public static void TestBitArrayCodeGen(List<string> results)
+        {
+            try
+            {
+                var bits = new BitArray(100_000);
+                for (int i = 0; i < bits.Count; i += 7)
+                {
+                    bits[i] = true;
+                }
+
+                var value = new BitArrayCodeGenModel { Bits = bits };
+                byte[] buf = LuminPackSerializer.Serialize(value);
+                BitArrayCodeGenModel result = LuminPackSerializer.Deserialize<BitArrayCodeGenModel>(buf);
+
+                if (result.Bits.Count != bits.Count)
+                {
+                    results.Add("✗ TestBitArrayCodeGen - FAILED (count mismatch)");
+                    return;
+                }
+
+                for (int i = 0; i < bits.Count; i++)
+                {
+                    if (bits[i] != result.Bits[i])
+                    {
+                        results.Add($"✗ TestBitArrayCodeGen - FAILED (bit {i} mismatch)");
+                        return;
+                    }
+                }
+
+                results.Add("✓ TestBitArrayCodeGen - PASSED");
+            }
+            catch (Exception ex)
+            {
+                results.Add($"✗ TestBitArrayCodeGen - ERROR: {ex.Message}");
             }
         }
 
