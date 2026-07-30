@@ -78,10 +78,7 @@ public sealed class LuminBufferWriter :
     {
         get
         {
-            if (_currentIndex == null) 
-                LuminPackExceptionHelper.ThrowBufferWriterNoInit();
-            
-            return *_currentIndex;
+            return _writtenCount != 0 || _currentIndex is null ? _writtenCount : *_currentIndex;
         }
     }
 
@@ -112,13 +109,16 @@ public sealed class LuminBufferWriter :
             _buffer = AllocatedBuffer();
         }
 
-        return new Memory<byte>(_buffer.WrittenBuffer.ToArray());
+        if ((uint)index > (uint)CurrentIndex)
+            throw new ArgumentOutOfRangeException(nameof(index));
+
+        return new Memory<byte>(GetSpan().Slice(index).ToArray());
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<byte> GetSpan()
     {
-        return _buffer.WrittenBuffer.Slice(0, _writtenCount);
+        return _buffer.WrittenBuffer.Slice(0, CurrentIndex);
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -135,11 +135,6 @@ public sealed class LuminBufferWriter :
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private unsafe BufferSegment AllocatedBuffer()
     {
-        if (_currentIndex is null)
-        {
-            LuminPackExceptionHelper.ThrowBufferWriterNoInit();
-        }
-        
         return new BufferSegment(InitialBufferSize);
     }
 
@@ -148,6 +143,24 @@ public sealed class LuminBufferWriter :
     {
         _currentIndex = (int*)Unsafe.AsPointer(ref index);
         _buffer.SetCurrentIndexPtr(_currentIndex);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal unsafe Span<byte> BeginWrite(ref int index)
+    {
+        index = 0;
+        _writtenCount = 0;
+        _currentIndex = (int*)Unsafe.AsPointer(ref index);
+        _buffer.SetCurrentIndexPtr(_currentIndex);
+        return GetFullSpan();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal unsafe void CompleteWrite(int count)
+    {
+        _writtenCount = count;
+        _currentIndex = null;
+        _buffer.Flush();
     }
     
     /// <summary>
@@ -168,14 +181,15 @@ public sealed class LuminBufferWriter :
 
     public unsafe byte[] ToArrayAndReset()
     {
-        if (_currentIndex is null || *_currentIndex == 0) return [];
+        var length = CurrentIndex;
+        if (length == 0) return [];
 
-        var result = AllocateUninitializedArray<byte>(CurrentIndex);
+        var result = AllocateUninitializedArray<byte>(length);
         var dest = result.AsSpan();
 
         if (UseFirstBuffer)
         {
-            _buffer.WrittenBuffer.CopyTo(dest);
+            _buffer.WrittenBuffer.Slice(0, length).CopyTo(dest);
         }
 
         ResetCore();
@@ -190,12 +204,13 @@ public sealed class LuminBufferWriter :
     public int Compress()
     {
         var span = GetSpan();
-        var dest = ArrayPool<byte>.Shared.Rent(LuminCompressor.GetMaxCompressedSize(_writtenCount));
+        var dest = ArrayPool<byte>.Shared.Rent(LuminCompressor.GetMaxCompressedSize(span.Length));
         try
         {
             int compressedSize = LuminCompressor.Compress(span, dest);
-            dest.AsSpan().CopyTo(_buffer.WrittenBuffer);
-            _writtenCount = compressedSize;
+            EnsureCapacity(compressedSize);
+            dest.AsSpan(0, compressedSize).CopyTo(_buffer.WrittenBuffer);
+            PublishLength(compressedSize);
             return compressedSize;
         }
         finally
@@ -211,12 +226,13 @@ public sealed class LuminBufferWriter :
     public int Decompress()
     {
         var span = GetSpan();
-        var dest = ArrayPool<byte>.Shared.Rent(LuminCompressor.GetDecompressedSize(_buffer.WrittenBuffer));
+        var dest = ArrayPool<byte>.Shared.Rent(LuminCompressor.GetDecompressedSize(span));
         try
         {
             int decompressedSize = LuminCompressor.Decompress(span, dest);
-            dest.AsSpan().CopyTo(_buffer.WrittenBuffer);
-            _writtenCount = decompressedSize;
+            EnsureCapacity(decompressedSize);
+            dest.AsSpan(0, decompressedSize).CopyTo(_buffer.WrittenBuffer);
+            PublishLength(decompressedSize);
             return decompressedSize;
         }
         finally
@@ -242,6 +258,8 @@ public sealed class LuminBufferWriter :
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int CompressToAndReset(LuminBufferWriter destination)
     {
+        if (ReferenceEquals(this, destination))
+            throw new ArgumentException("Source and destination writers must be different instances.", nameof(destination));
         try
         {
             return LuminCompressor.Compress(this, destination);
@@ -269,6 +287,8 @@ public sealed class LuminBufferWriter :
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int DecompressToAndReset(LuminBufferWriter destination)
     {
+        if (ReferenceEquals(this, destination))
+            throw new ArgumentException("Source and destination writers must be different instances.", nameof(destination));
         try
         {
             return LuminCompressor.Decompress(this, destination);
@@ -281,30 +301,34 @@ public sealed class LuminBufferWriter :
 
     public unsafe void WriteToAndReset(ref LuminPackWriter writer)
     {
-        if (_currentIndex is null || *_currentIndex == 0) return;
+        var length = CurrentIndex;
+        if (length == 0) return;
 
 #if NET8_0_OR_GREATER
-        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref writer._bufferStart, (nint)(uint)writer.CurrentIndex), ref _buffer.WrittenBuffer.Slice(0, CurrentIndex).GetPinnableReference(), (uint)CurrentIndex);
+        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref writer._bufferStart, (nint)(uint)writer.CurrentIndex), ref _buffer.WrittenBuffer.GetPinnableReference(), (uint)length);
 #else
-        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart), (nint)(uint)writer.CurrentIndex), ref _buffer.WrittenBuffer.Slice(0, CurrentIndex).GetPinnableReference(), (uint)CurrentIndex);
+        Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart), (nint)(uint)writer.CurrentIndex), ref _buffer.WrittenBuffer.GetPinnableReference(), (uint)length);
 #endif
 
-        writer.Advance(CurrentIndex);
+        writer.Advance(length);
         
         ResetCore();
     }
 
     public async ValueTask WriteToAndResetAsync(Stream stream, CancellationToken cancellationToken)
     {
-        unsafe
-        {
-            if (_currentIndex is null || CurrentIndex == 0) return;
-        }
-        
+        var length = CurrentIndex;
+        if (length == 0) return;
 
-        if (UseFirstBuffer)
+        var buffer = ArrayPool<byte>.Shared.Rent(length);
+        try
         {
-            await stream.WriteAsync(new Memory<byte>(_buffer.WrittenBuffer.Slice(0, CurrentIndex).ToArray()), cancellationToken).ConfigureAwait(false);
+            _buffer.WrittenBuffer.Slice(0, length).CopyTo(buffer);
+            await stream.WriteAsync(new ReadOnlyMemory<byte>(buffer, 0, length), cancellationToken).ConfigureAwait(false);
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
         }
 
         ResetCore();
@@ -314,14 +338,21 @@ public sealed class LuminBufferWriter :
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe void ResetCore()
     {
+        _writtenCount = 0;
         _buffer.Flush();
         _currentIndex = null;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private unsafe void PublishLength(int length)
+    {
+        _writtenCount = length;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe void Reset()
     {
-        if (_currentIndex is null || *_currentIndex == 0) return;
+        if (CurrentIndex == 0) return;
 
         _buffer.Clear();
         
@@ -349,7 +380,15 @@ public sealed class LuminBufferWriter :
         if (_buffer.IsNull)
             _buffer = new BufferSegment(Math.Max(minCapacity, InitialBufferSize));
         else if (_buffer.TotalLength < minCapacity)
-            _buffer.Resize(minCapacity);
+        {
+            // Variable-size values reserve once before their bulk write. Keep enough
+            // headroom that the normal 87.5% post-write check does not immediately
+            // resize the same buffer a second time.
+            long doubled = (long)_buffer.TotalLength << 1;
+            long requiredWithHeadroom = minCapacity + ((long)minCapacity >> 2);
+            int newCapacity = (int)Math.Min(int.MaxValue, Math.Max(doubled, requiredWithHeadroom));
+            _buffer.Resize(newCapacity);
+        }
     }
 
     /// <summary>
@@ -358,7 +397,7 @@ public sealed class LuminBufferWriter :
     /// </summary>
     [System.Runtime.CompilerServices.MethodImpl(
         System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-    internal void SetWrittenCount(int count) => _writtenCount = count;
+    internal void SetWrittenCount(int count) => PublishLength(count);
 
 #if NET8_0_OR_GREATER
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -388,10 +427,6 @@ internal unsafe struct BufferSegment : IDisposable
     int _totalLength;
     bool _disposed;
 
-#if !NET8_0_OR_GREATER
-    IntPtr _rawBuffer; // 未对齐的原始指针，用于 FreeHGlobal
-#endif
-    
     private const int Alignment = 16;
 
     public bool IsNull => _buffer == IntPtr.Zero;
@@ -410,9 +445,10 @@ internal unsafe struct BufferSegment : IDisposable
         _buffer = new IntPtr(NativeMemory.AlignedAlloc((nuint)size, Alignment));
         Unsafe.InitBlockUnaligned(_buffer.ToPointer(), 0, (uint)size);
 #else
-        var raw = Marshal.AllocHGlobal(size + Alignment - 1);
-        _rawBuffer = raw;
-        _buffer = new IntPtr(((long)raw + Alignment - 1) & ~(long)(Alignment - 1));
+        // Unity's HGlobal allocator already returns memory aligned for native data.
+        // Keep exactly one owning pointer so resize/free cannot disagree about which
+        // address belongs to the native heap.
+        _buffer = Marshal.AllocHGlobal(size);
         Unsafe.InitBlockUnaligned(_buffer.ToPointer(), 0, (uint)size);
 #endif
         _totalLength = size;
@@ -453,8 +489,7 @@ internal unsafe struct BufferSegment : IDisposable
 #if NET8_0_OR_GREATER
             NativeMemory.AlignedFree(_buffer.ToPointer());
 #else
-            Marshal.FreeHGlobal(_rawBuffer);
-            _rawBuffer = IntPtr.Zero;
+            Marshal.FreeHGlobal(_buffer);
 #endif
         }
         _buffer = IntPtr.Zero;
@@ -486,16 +521,11 @@ internal unsafe struct BufferSegment : IDisposable
 
 #if NET8_0_OR_GREATER
         _buffer = new IntPtr(NativeMemory.AlignedRealloc(_buffer.ToPointer(), (nuint)newSize, Alignment));
-        _totalLength = newSize;
 #else
-        var newRaw = Marshal.AllocHGlobal(newSize + Alignment - 1);
-        var newAligned = new IntPtr(((long)newRaw + Alignment - 1) & ~(long)(Alignment - 1));
-        Unsafe.CopyBlockUnaligned(newAligned.ToPointer(), _buffer.ToPointer(), (uint)_totalLength);
-        Marshal.FreeHGlobal(_rawBuffer);
-        _rawBuffer = newRaw;
-        _buffer = newAligned;
-        _totalLength = newSize;
+        _buffer = Marshal.ReAllocHGlobal(_buffer, (IntPtr)newSize);
 #endif
+        _totalLength = newSize;
+        _resizeThreshold = newSize - (newSize >> 3);
     }
     
     public void Dispose()

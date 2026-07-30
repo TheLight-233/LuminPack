@@ -530,16 +530,16 @@ public sealed class UnmanagedParsers<T> : LuminPackParser<T>
         
         while (reader.Read() && reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ObjectEnd)
         {
-            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.PropertyName)
+            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.String)
             {
-                var propertyName = reader.ReadStringUtf8();
+                int propertyName = reader.ReadStringChoice("Real"u8, "Real", "Imaginary"u8, "Imaginary");
                 reader.Read();
                 
-                if (propertyName.SequenceEqual("Real"u8))
+                if (propertyName == 1)
                 {
                     real = reader.ReadDouble();
                 }
-                else if (propertyName.SequenceEqual("Imaginary"u8))
+                else if (propertyName == 2)
                 {
                     imaginary = reader.ReadDouble();
                 }
@@ -563,16 +563,16 @@ public sealed class UnmanagedParsers<T> : LuminPackParser<T>
         
         while (reader.Read() && reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ObjectEnd)
         {
-            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.PropertyName)
+            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.String)
             {
-                var propertyName = reader.ReadStringUtf8();
+                int propertyName = reader.ReadStringChoice("Normal"u8, "Normal", "D"u8, "D");
                 reader.Read();
                 
-                if (propertyName.SequenceEqual("Normal"u8))
+                if (propertyName == 1)
                 {
                     DeserializeVector3(ref reader, ref normal);
                 }
-                else if (propertyName.SequenceEqual("D"u8))
+                else if (propertyName == 2)
                 {
                     d = reader.ReadFloat();
                 }
@@ -595,24 +595,24 @@ public sealed class UnmanagedParsers<T> : LuminPackParser<T>
         
         while (reader.Read() && reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ObjectEnd)
         {
-            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.PropertyName)
+            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.String)
             {
-                var propertyName = reader.ReadStringUtf8();
+                char propertyName = reader.ReadChar();
                 reader.Read();
                 
-                if (propertyName.SequenceEqual("X"u8))
+                if (propertyName == 'X')
                 {
                     x = reader.ReadFloat();
                 }
-                else if (propertyName.SequenceEqual("Y"u8))
+                else if (propertyName == 'Y')
                 {
                     y = reader.ReadFloat();
                 }
-                else if (propertyName.SequenceEqual("Z"u8))
+                else if (propertyName == 'Z')
                 {
                     z = reader.ReadFloat();
                 }
-                else if (propertyName.SequenceEqual("W"u8))
+                else if (propertyName == 'W')
                 {
                     w = reader.ReadFloat();
                 }
@@ -631,13 +631,13 @@ public sealed class UnmanagedParsers<T> : LuminPackParser<T>
     private static void DeserializeMatrix3x2(ref LuminPackJsonReader reader, scoped ref T value)
     {
         reader.TryConsumeArrayStart();
-        var m11 = reader.ReadFloat();
-        var m12 = reader.ReadFloat();
-        var m21 = reader.ReadFloat();
-        var m22 = reader.ReadFloat();
-        var m31 = reader.ReadFloat();
-        var m32 = reader.ReadFloat();
-        reader.Read();
+        var m11 = reader.ReadNextFloatValue();
+        var m12 = reader.ReadNextFloatValue();
+        var m21 = reader.ReadNextFloatValue();
+        var m22 = reader.ReadNextFloatValue();
+        var m31 = reader.ReadNextFloatValue();
+        var m32 = reader.ReadNextFloatValue();
+        reader.ConsumeArrayEnd();
         
         var result = new Matrix3x2(m11, m12, m21, m22, m31, m32);
         value = Unsafe.As<Matrix3x2, T>(ref result);
@@ -647,23 +647,23 @@ public sealed class UnmanagedParsers<T> : LuminPackParser<T>
     private static void DeserializeMatrix4x4(ref LuminPackJsonReader reader, scoped ref T value)
     {
         reader.TryConsumeArrayStart();
-        var m11 = reader.ReadFloat();
-        var m12 = reader.ReadFloat();
-        var m13 = reader.ReadFloat();
-        var m14 = reader.ReadFloat();
-        var m21 = reader.ReadFloat();
-        var m22 = reader.ReadFloat();
-        var m23 = reader.ReadFloat();
-        var m24 = reader.ReadFloat();
-        var m31 = reader.ReadFloat();
-        var m32 = reader.ReadFloat();
-        var m33 = reader.ReadFloat();
-        var m34 = reader.ReadFloat();
-        var m41 = reader.ReadFloat();
-        var m42 = reader.ReadFloat();
-        var m43 = reader.ReadFloat();
-        var m44 = reader.ReadFloat();
-        reader.Read();
+        var m11 = reader.ReadNextFloatValue();
+        var m12 = reader.ReadNextFloatValue();
+        var m13 = reader.ReadNextFloatValue();
+        var m14 = reader.ReadNextFloatValue();
+        var m21 = reader.ReadNextFloatValue();
+        var m22 = reader.ReadNextFloatValue();
+        var m23 = reader.ReadNextFloatValue();
+        var m24 = reader.ReadNextFloatValue();
+        var m31 = reader.ReadNextFloatValue();
+        var m32 = reader.ReadNextFloatValue();
+        var m33 = reader.ReadNextFloatValue();
+        var m34 = reader.ReadNextFloatValue();
+        var m41 = reader.ReadNextFloatValue();
+        var m42 = reader.ReadNextFloatValue();
+        var m43 = reader.ReadNextFloatValue();
+        var m44 = reader.ReadNextFloatValue();
+        reader.ConsumeArrayEnd();
         
         var result = new Matrix4x4(m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34, m41, m42, m43, m44);
         value = Unsafe.As<Matrix4x4, T>(ref result);
@@ -673,9 +673,9 @@ public sealed class UnmanagedParsers<T> : LuminPackParser<T>
     private static void DeserializeVector2(ref LuminPackJsonReader reader, scoped ref T value)
     {
         reader.TryConsumeArrayStart();
-        var x = reader.ReadFloat();
-        var y = reader.ReadFloat();
-        reader.Read();
+        var x = reader.ReadNextFloatValue();
+        var y = reader.ReadNextFloatValue();
+        reader.ConsumeArrayEnd();
         
         var result = new Vector2(x, y);
         value = Unsafe.As<Vector2, T>(ref result);
@@ -685,10 +685,10 @@ public sealed class UnmanagedParsers<T> : LuminPackParser<T>
     private static void DeserializeVector3(ref LuminPackJsonReader reader, scoped ref T value)
     {
         reader.TryConsumeArrayStart();
-        var x = reader.ReadFloat();
-        var y = reader.ReadFloat();
-        var z = reader.ReadFloat();
-        reader.Read();
+        var x = reader.ReadNextFloatValue();
+        var y = reader.ReadNextFloatValue();
+        var z = reader.ReadNextFloatValue();
+        reader.ConsumeArrayEnd();
         
         var result = new Vector3(x, y, z);
         value = Unsafe.As<Vector3, T>(ref result);
@@ -698,10 +698,10 @@ public sealed class UnmanagedParsers<T> : LuminPackParser<T>
     private static void DeserializeVector3(ref LuminPackJsonReader reader, scoped ref Vector3 value)
     {
         reader.TryConsumeArrayStart();
-        var x = reader.ReadFloat();
-        var y = reader.ReadFloat();
-        var z = reader.ReadFloat();
-        reader.Read();
+        var x = reader.ReadNextFloatValue();
+        var y = reader.ReadNextFloatValue();
+        var z = reader.ReadNextFloatValue();
+        reader.ConsumeArrayEnd();
         
         value = new Vector3(x, y, z);
     }
@@ -710,11 +710,11 @@ public sealed class UnmanagedParsers<T> : LuminPackParser<T>
     private static void DeserializeVector4(ref LuminPackJsonReader reader, scoped ref T value)
     {
         reader.TryConsumeArrayStart();
-        var x = reader.ReadFloat();
-        var y = reader.ReadFloat();
-        var z = reader.ReadFloat();
-        var w = reader.ReadFloat();
-        reader.Read();
+        var x = reader.ReadNextFloatValue();
+        var y = reader.ReadNextFloatValue();
+        var z = reader.ReadNextFloatValue();
+        var w = reader.ReadNextFloatValue();
+        reader.ConsumeArrayEnd();
         
         var result = new Vector4(x, y, z, w);
         value = Unsafe.As<Vector4, T>(ref result);
@@ -925,6 +925,7 @@ public sealed class UnmanagedParsers<T> : LuminPackParser<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override void Deserialize(ref LuminPackReader reader, scoped ref T value)
     {
+        reader.EnsureReadable(reader.GetCurrentSpanOffset(), Unsafe.SizeOf<T>());
         value = Unsafe.ReadUnaligned<T>(ref reader.GetCurrentSpanReference());
         reader.Advance(Unsafe.SizeOf<T>());
     }
@@ -1471,16 +1472,16 @@ public sealed class DangerousUnmanagedParsers<T> : LuminPackParser<T>
         
         while (reader.Read() && reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ObjectEnd)
         {
-            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.PropertyName)
+            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.String)
             {
-                var propertyName = reader.ReadStringUtf8();
+                int propertyName = reader.ReadStringChoice("Real"u8, "Real", "Imaginary"u8, "Imaginary");
                 reader.Read();
                 
-                if (propertyName.SequenceEqual("Real"u8))
+                if (propertyName == 1)
                 {
                     real = reader.ReadDouble();
                 }
-                else if (propertyName.SequenceEqual("Imaginary"u8))
+                else if (propertyName == 2)
                 {
                     imaginary = reader.ReadDouble();
                 }
@@ -1504,16 +1505,16 @@ public sealed class DangerousUnmanagedParsers<T> : LuminPackParser<T>
         
         while (reader.Read() && reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ObjectEnd)
         {
-            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.PropertyName)
+            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.String)
             {
-                var propertyName = reader.ReadStringUtf8();
+                int propertyName = reader.ReadStringChoice("Normal"u8, "Normal", "D"u8, "D");
                 reader.Read();
                 
-                if (propertyName.SequenceEqual("Normal"u8))
+                if (propertyName == 1)
                 {
                     DeserializeVector3(ref reader, ref normal);
                 }
-                else if (propertyName.SequenceEqual("D"u8))
+                else if (propertyName == 2)
                 {
                     d = reader.ReadFloat();
                 }
@@ -1536,24 +1537,24 @@ public sealed class DangerousUnmanagedParsers<T> : LuminPackParser<T>
         
         while (reader.Read() && reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.ObjectEnd)
         {
-            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.PropertyName)
+            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.String)
             {
-                var propertyName = reader.ReadStringUtf8();
+                char propertyName = reader.ReadChar();
                 reader.Read();
                 
-                if (propertyName.SequenceEqual("X"u8))
+                if (propertyName == 'X')
                 {
                     x = reader.ReadFloat();
                 }
-                else if (propertyName.SequenceEqual("Y"u8))
+                else if (propertyName == 'Y')
                 {
                     y = reader.ReadFloat();
                 }
-                else if (propertyName.SequenceEqual("Z"u8))
+                else if (propertyName == 'Z')
                 {
                     z = reader.ReadFloat();
                 }
-                else if (propertyName.SequenceEqual("W"u8))
+                else if (propertyName == 'W')
                 {
                     w = reader.ReadFloat();
                 }
@@ -1572,13 +1573,13 @@ public sealed class DangerousUnmanagedParsers<T> : LuminPackParser<T>
     private static void DeserializeMatrix3x2(ref LuminPackJsonReader reader, scoped ref T value)
     {
         reader.TryConsumeArrayStart();
-        var m11 = reader.ReadFloat();
-        var m12 = reader.ReadFloat();
-        var m21 = reader.ReadFloat();
-        var m22 = reader.ReadFloat();
-        var m31 = reader.ReadFloat();
-        var m32 = reader.ReadFloat();
-        reader.Read();
+        var m11 = reader.ReadNextFloatValue();
+        var m12 = reader.ReadNextFloatValue();
+        var m21 = reader.ReadNextFloatValue();
+        var m22 = reader.ReadNextFloatValue();
+        var m31 = reader.ReadNextFloatValue();
+        var m32 = reader.ReadNextFloatValue();
+        reader.ConsumeArrayEnd();
         
         var result = new Matrix3x2(m11, m12, m21, m22, m31, m32);
         value = Unsafe.As<Matrix3x2, T>(ref result);
@@ -1588,23 +1589,23 @@ public sealed class DangerousUnmanagedParsers<T> : LuminPackParser<T>
     private static void DeserializeMatrix4x4(ref LuminPackJsonReader reader, scoped ref T value)
     {
         reader.TryConsumeArrayStart();
-        var m11 = reader.ReadFloat();
-        var m12 = reader.ReadFloat();
-        var m13 = reader.ReadFloat();
-        var m14 = reader.ReadFloat();
-        var m21 = reader.ReadFloat();
-        var m22 = reader.ReadFloat();
-        var m23 = reader.ReadFloat();
-        var m24 = reader.ReadFloat();
-        var m31 = reader.ReadFloat();
-        var m32 = reader.ReadFloat();
-        var m33 = reader.ReadFloat();
-        var m34 = reader.ReadFloat();
-        var m41 = reader.ReadFloat();
-        var m42 = reader.ReadFloat();
-        var m43 = reader.ReadFloat();
-        var m44 = reader.ReadFloat();
-        reader.Read();
+        var m11 = reader.ReadNextFloatValue();
+        var m12 = reader.ReadNextFloatValue();
+        var m13 = reader.ReadNextFloatValue();
+        var m14 = reader.ReadNextFloatValue();
+        var m21 = reader.ReadNextFloatValue();
+        var m22 = reader.ReadNextFloatValue();
+        var m23 = reader.ReadNextFloatValue();
+        var m24 = reader.ReadNextFloatValue();
+        var m31 = reader.ReadNextFloatValue();
+        var m32 = reader.ReadNextFloatValue();
+        var m33 = reader.ReadNextFloatValue();
+        var m34 = reader.ReadNextFloatValue();
+        var m41 = reader.ReadNextFloatValue();
+        var m42 = reader.ReadNextFloatValue();
+        var m43 = reader.ReadNextFloatValue();
+        var m44 = reader.ReadNextFloatValue();
+        reader.ConsumeArrayEnd();
         
         var result = new Matrix4x4(m11, m12, m13, m14, m21, m22, m23, m24, m31, m32, m33, m34, m41, m42, m43, m44);
         value = Unsafe.As<Matrix4x4, T>(ref result);
@@ -1614,9 +1615,9 @@ public sealed class DangerousUnmanagedParsers<T> : LuminPackParser<T>
     private static void DeserializeVector2(ref LuminPackJsonReader reader, scoped ref T value)
     {
         reader.TryConsumeArrayStart();
-        var x = reader.ReadFloat();
-        var y = reader.ReadFloat();
-        reader.Read();
+        var x = reader.ReadNextFloatValue();
+        var y = reader.ReadNextFloatValue();
+        reader.ConsumeArrayEnd();
         
         var result = new Vector2(x, y);
         value = Unsafe.As<Vector2, T>(ref result);
@@ -1626,10 +1627,10 @@ public sealed class DangerousUnmanagedParsers<T> : LuminPackParser<T>
     private static void DeserializeVector3(ref LuminPackJsonReader reader, scoped ref T value)
     {
         reader.TryConsumeArrayStart();
-        var x = reader.ReadFloat();
-        var y = reader.ReadFloat();
-        var z = reader.ReadFloat();
-        reader.Read();
+        var x = reader.ReadNextFloatValue();
+        var y = reader.ReadNextFloatValue();
+        var z = reader.ReadNextFloatValue();
+        reader.ConsumeArrayEnd();
         
         var result = new Vector3(x, y, z);
         value = Unsafe.As<Vector3, T>(ref result);
@@ -1639,10 +1640,10 @@ public sealed class DangerousUnmanagedParsers<T> : LuminPackParser<T>
     private static void DeserializeVector3(ref LuminPackJsonReader reader, scoped ref Vector3 value)
     {
         reader.TryConsumeArrayStart();
-        var x = reader.ReadFloat();
-        var y = reader.ReadFloat();
-        var z = reader.ReadFloat();
-        reader.Read();
+        var x = reader.ReadNextFloatValue();
+        var y = reader.ReadNextFloatValue();
+        var z = reader.ReadNextFloatValue();
+        reader.ConsumeArrayEnd();
         
         value = new Vector3(x, y, z);
     }
@@ -1651,11 +1652,11 @@ public sealed class DangerousUnmanagedParsers<T> : LuminPackParser<T>
     private static void DeserializeVector4(ref LuminPackJsonReader reader, scoped ref T value)
     {
         reader.TryConsumeArrayStart();
-        var x = reader.ReadFloat();
-        var y = reader.ReadFloat();
-        var z = reader.ReadFloat();
-        var w = reader.ReadFloat();
-        reader.Read();
+        var x = reader.ReadNextFloatValue();
+        var y = reader.ReadNextFloatValue();
+        var z = reader.ReadNextFloatValue();
+        var w = reader.ReadNextFloatValue();
+        reader.ConsumeArrayEnd();
         
         var result = new Vector4(x, y, z, w);
         value = Unsafe.As<Vector4, T>(ref result);
@@ -1866,6 +1867,7 @@ public sealed class DangerousUnmanagedParsers<T> : LuminPackParser<T>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override void Deserialize(ref LuminPackReader reader, scoped ref T value)
     {
+        reader.EnsureReadable(reader.GetCurrentSpanOffset(), Unsafe.SizeOf<T>());
         value = Unsafe.ReadUnaligned<T>(ref reader.GetCurrentSpanReference());
         reader.Advance(Unsafe.SizeOf<T>());
     }

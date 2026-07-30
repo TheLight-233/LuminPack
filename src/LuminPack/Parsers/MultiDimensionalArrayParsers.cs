@@ -6,6 +6,105 @@ using System.Buffers;
 
 namespace LuminPack.Parsers;
 
+internal static class MultiDimensionalArrayParserHelper
+{
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetElementCount(int dimension0, int dimension1)
+    {
+        ValidateDimensions(dimension0 | dimension1);
+        return MultiplyDimensions(dimension0, dimension1);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetElementCount(int dimension0, int dimension1, int dimension2)
+    {
+        ValidateDimensions(dimension0 | dimension1 | dimension2);
+        return MultiplyDimensions(MultiplyDimensions(dimension0, dimension1), dimension2);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetElementCount(int dimension0, int dimension1, int dimension2, int dimension3)
+    {
+        ValidateDimensions(dimension0 | dimension1 | dimension2 | dimension3);
+        return MultiplyDimensions(MultiplyDimensions(MultiplyDimensions(dimension0, dimension1), dimension2), dimension3);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetElementCount(int dimension0, int dimension1, int dimension2, int dimension3, int dimension4)
+    {
+        ValidateDimensions(dimension0 | dimension1 | dimension2 | dimension3 | dimension4);
+        return MultiplyDimensions(
+            MultiplyDimensions(MultiplyDimensions(MultiplyDimensions(dimension0, dimension1), dimension2), dimension3),
+            dimension4);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetElementCount(int dimension0, int dimension1, int dimension2, int dimension3, int dimension4, int dimension5)
+    {
+        ValidateDimensions(dimension0 | dimension1 | dimension2 | dimension3 | dimension4 | dimension5);
+        return MultiplyDimensions(
+            MultiplyDimensions(
+                MultiplyDimensions(MultiplyDimensions(MultiplyDimensions(dimension0, dimension1), dimension2), dimension3),
+                dimension4),
+            dimension5);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetElementCount(int dimension0, int dimension1, int dimension2, int dimension3, int dimension4, int dimension5, int dimension6)
+    {
+        ValidateDimensions(dimension0 | dimension1 | dimension2 | dimension3 | dimension4 | dimension5 | dimension6);
+        return MultiplyDimensions(
+            MultiplyDimensions(
+                MultiplyDimensions(
+                    MultiplyDimensions(MultiplyDimensions(MultiplyDimensions(dimension0, dimension1), dimension2), dimension3),
+                    dimension4),
+                dimension5),
+            dimension6);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetElementCount(params int[] dimensions)
+    {
+        var count = 1;
+        foreach (var dimension in dimensions)
+        {
+            ValidateDimensions(dimension);
+            count = MultiplyDimensions(count, dimension);
+        }
+
+        return count;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ValidateDimensions(int dimensions)
+    {
+        if (dimensions < 0)
+            ThrowNegativeDimension();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int MultiplyDimensions(int left, int right)
+    {
+        var product = (long)left * right;
+        if (product > int.MaxValue)
+            ThrowDimensionsTooLarge();
+
+        return (int)product;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowNegativeDimension()
+    {
+        throw new FormatException("A multidimensional array dimension cannot be negative.");
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowDimensionsTooLarge()
+    {
+        throw new FormatException("The multidimensional array dimensions are too large.");
+    }
+}
+
 [Preserve]
 public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
 {
@@ -24,17 +123,21 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
         }
         
 
+        writer.WriteObjectHeader(ref index, 0);
+        writer.Advance(1);
+
         var i = value.GetLength(0);
         var j = value.GetLength(1);
         writer.WriteUnmanaged(ref index, i, j);
 
         writer.Advance(8);
         
-        var totalLength = i * j;
+        var totalLength = value.Length;
 
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            var byteCount = Unsafe.SizeOf<T>() * totalLength;
+            var byteCount = checked(Unsafe.SizeOf<T>() * totalLength);
+            writer.EnsureAdditionalCapacity(checked(byteCount + sizeof(int)));
             ref var src = ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value);
             ref var dest = ref writer.GetCurrentSpanReference();
 
@@ -76,6 +179,7 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
             return;
         }
 
+        reader.Advance(1);
         reader.ReadUnmanaged(ref index, out int iLength, out int jLength);
         
         reader.Advance(8);
@@ -86,7 +190,11 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
         }
 
         reader.Advance(4);
-        
+
+        var expectedLength = MultiDimensionalArrayParserHelper.GetElementCount(iLength, jLength);
+        if (length != expectedLength)
+            throw new FormatException("The multidimensional array element count does not match its dimensions.");
+
         if (value is not null && value.GetLength(0) == iLength && value.GetLength(1) == jLength && value.Length == length)
         {
         }
@@ -98,7 +206,8 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
 
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            var byteCount = Unsafe.SizeOf<T>() * iLength * jLength;
+            var byteCount = checked(Unsafe.SizeOf<T>() * expectedLength);
+            reader.EnsureReadable(index, byteCount);
             ref var dest = ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value);
             ref var src = ref reader.GetCurrentSpanReference();
             Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)byteCount);
@@ -110,7 +219,7 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
             var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
-            var span = LuminPackMarshal.CreateSpan(ref first, iLength * jLength);
+            var span = LuminPackMarshal.CreateSpan(ref first, expectedLength);
 
             foreach (ref var v in span)
             {
@@ -129,11 +238,11 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
             return;
         }
 
-        evaluator += 12;
+        evaluator += 13;
         
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            evaluator += Unsafe.SizeOf<T>() * value.Length;
+            evaluator += checked(Unsafe.SizeOf<T>() * value.Length);
         }
         else
         {
@@ -225,7 +334,6 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
 
                     if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ObjectEnd)
                         continue;
-                    break;
 
                     if (tempIndex >= tempCapacity)
                     {
@@ -246,14 +354,12 @@ public sealed class TwoDimensionalArrayParser<T> : LuminPackParser<T?[,]>
                     jCount = rowCount;
                     firstRow = false;
                 }
+                else if (rowCount != jCount)
+                {
+                    throw new FormatException("JSON rows must have equal lengths for a rectangular array");
+                }
 
                 iCount++;
-            }
-
-            if (iCount == 0 || jCount == 0)
-            {
-                value = new T[0, 0];
-                return;
             }
 
             value = new T[iCount, jCount];
@@ -291,6 +397,9 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
         }
         
 
+        writer.WriteObjectHeader(ref index, 0);
+        writer.Advance(1);
+
         var i = value.GetLength(0);
         var j = value.GetLength(1);
         var k = value.GetLength(2);
@@ -298,11 +407,12 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
         
         writer.Advance(12);
         
-        var totalLength = i * j * k;
+        var totalLength = value.Length;
         
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            var byteCount = Unsafe.SizeOf<T>() * totalLength;
+            var byteCount = checked(Unsafe.SizeOf<T>() * totalLength);
+            writer.EnsureAdditionalCapacity(checked(byteCount + sizeof(int)));
             ref var src = ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value);
             ref var dest = ref writer.GetCurrentSpanReference();
 
@@ -345,6 +455,7 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
         }
         
 
+        reader.Advance(1);
         reader.ReadUnmanaged(ref index, out int iLength, out int jLength, out int kLength);
         
         reader.Advance(12);
@@ -355,6 +466,10 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
         }
 
         reader.Advance(4);
+
+        var expectedLength = MultiDimensionalArrayParserHelper.GetElementCount(iLength, jLength, kLength);
+        if (length != expectedLength)
+            throw new FormatException("The multidimensional array element count does not match its dimensions.");
         
         if (value != null && value.GetLength(0) == iLength && value.GetLength(1) == jLength && value.GetLength(2) == kLength && value.Length == length)
         {
@@ -367,7 +482,8 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
 
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            var byteCount = Unsafe.SizeOf<T>() * iLength * jLength * kLength;
+            var byteCount = checked(Unsafe.SizeOf<T>() * expectedLength);
+            reader.EnsureReadable(index, byteCount);
             ref var dest = ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value);
             ref var src = ref reader.GetCurrentSpanReference();
             Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)byteCount);
@@ -379,7 +495,7 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
             var parser = LuminPackParseProvider.Cache<T?>.Parser!;
             
             ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
-            var span = LuminPackMarshal.CreateSpan(ref first, iLength * jLength * kLength);
+            var span = LuminPackMarshal.CreateSpan(ref first, expectedLength);
 
             foreach (ref var v in span)
             {
@@ -397,11 +513,11 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
             return;
         }
 
-        evaluator += 16;
+        evaluator += 17;
         
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            evaluator += Unsafe.SizeOf<T>() * value.Length;
+            evaluator += checked(Unsafe.SizeOf<T>() * value.Length);
         }
         else
         {
@@ -511,7 +627,6 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
 
                         if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ObjectEnd)
                             continue;
-                        break;
 
                         if (tempIndex >= tempCapacity)
                         {
@@ -532,6 +647,10 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
                         kCount = elemCount;
                         firstRow = false;
                     }
+                    else if (elemCount != kCount)
+                    {
+                        throw new FormatException("JSON rows must have equal lengths for a rectangular array");
+                    }
 
                     rowInPlaneCount++;
                 }
@@ -541,14 +660,12 @@ public sealed class ThreeDimensionalArrayParser<T> : LuminPackParser<T?[,,]>
                     jCount = rowInPlaneCount;
                     firstPlane = false;
                 }
+                else if (rowInPlaneCount != jCount)
+                {
+                    throw new FormatException("JSON planes must have equal dimensions for a rectangular array");
+                }
 
                 iCount++;
-            }
-
-            if (iCount == 0 || jCount == 0 || kCount == 0)
-            {
-                value = new T[0, 0, 0];
-                return;
             }
 
             value = new T[iCount, jCount, kCount];
@@ -586,6 +703,9 @@ public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
             return;
         }
 
+        writer.WriteObjectHeader(ref index, 0);
+        writer.Advance(1);
+
         var i = value.GetLength(0);
         var j = value.GetLength(1);
         var k = value.GetLength(2);
@@ -594,11 +714,12 @@ public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
 
         writer.Advance(16);
 
-        var totalLength = i * j * k * l;
+        var totalLength = value.Length;
         
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            var byteCount = Unsafe.SizeOf<T>() * totalLength;
+            var byteCount = checked(Unsafe.SizeOf<T>() * totalLength);
+            writer.EnsureAdditionalCapacity(checked(byteCount + sizeof(int)));
             ref var src = ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value);
             ref var dest = ref writer.GetCurrentSpanReference();
 
@@ -638,6 +759,7 @@ public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
             return;
         }
 
+        reader.Advance(1);
         reader.ReadUnmanaged(ref index, out int iLength, out int jLength, out int kLength, out int lLength);
         reader.Advance(16);
 
@@ -647,6 +769,10 @@ public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
         }
 
         reader.Advance(4);
+
+        var expectedLength = MultiDimensionalArrayParserHelper.GetElementCount(iLength, jLength, kLength, lLength);
+        if (length != expectedLength)
+            throw new FormatException("The multidimensional array element count does not match its dimensions.");
 
         if (value != null && value.GetLength(0) == iLength && value.GetLength(1) == jLength && value.GetLength(2) == kLength && value.GetLength(3) == lLength && value.Length == length)
         {
@@ -659,7 +785,8 @@ public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
 
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            var byteCount = Unsafe.SizeOf<T>() * iLength * jLength * kLength * lLength;
+            var byteCount = checked(Unsafe.SizeOf<T>() * expectedLength);
+            reader.EnsureReadable(index, byteCount);
             ref var dest = ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value);
             ref var src = ref reader.GetCurrentSpanReference();
             Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)byteCount);
@@ -670,7 +797,7 @@ public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
             var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
             ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
-            var span = LuminPackMarshal.CreateSpan(ref first, iLength * jLength * kLength * lLength);
+            var span = LuminPackMarshal.CreateSpan(ref first, expectedLength);
 
             foreach (ref var v in span)
             {
@@ -687,11 +814,11 @@ public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
             return;
         }
 
-        evaluator += 20;
+        evaluator += 21;
 
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            evaluator += Unsafe.SizeOf<T>() * value.Length;
+            evaluator += checked(Unsafe.SizeOf<T>() * value.Length);
         }
         else
         {
@@ -811,14 +938,17 @@ public sealed class FourDimensionalArrayParser<T> : LuminPackParser<T?[,,,]>
                         }
 
                         if (firstFlags[2]) { dimCounts[3] = d3Count; firstFlags[2] = false; }
+                        else if (dimCounts[3] != d3Count) throw new FormatException("JSON dimensions must be rectangular");
                         d2Count++;
                     }
 
                     if (firstFlags[1]) { dimCounts[2] = d2Count; firstFlags[1] = false; }
+                    else if (dimCounts[2] != d2Count) throw new FormatException("JSON dimensions must be rectangular");
                     d1Count++;
                 }
 
                 if (firstFlags[0]) { dimCounts[1] = d1Count; firstFlags[0] = false; }
+                else if (dimCounts[1] != d1Count) throw new FormatException("JSON dimensions must be rectangular");
                 d0Count++;
             }
 
@@ -860,6 +990,9 @@ public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
             return;
         }
 
+        writer.WriteObjectHeader(ref index, 0);
+        writer.Advance(1);
+
         var i = value.GetLength(0);
         var j = value.GetLength(1);
         var k = value.GetLength(2);
@@ -869,11 +1002,12 @@ public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
 
         writer.Advance(20);
 
-        var totalLength = i * j * k * l * m;
+        var totalLength = value.Length;
         
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            var byteCount = Unsafe.SizeOf<T>() * totalLength;
+            var byteCount = checked(Unsafe.SizeOf<T>() * totalLength);
+            writer.EnsureAdditionalCapacity(checked(byteCount + sizeof(int)));
             ref var src = ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value);
             ref var dest = ref writer.GetCurrentSpanReference();
 
@@ -913,6 +1047,7 @@ public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
             return;
         }
 
+        reader.Advance(1);
         reader.ReadUnmanaged(ref index, out int iLength, out int jLength, out int kLength, out int lLength, out int mLength);
         reader.Advance(20);
 
@@ -922,6 +1057,10 @@ public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
         }
 
         reader.Advance(4);
+
+        var expectedLength = MultiDimensionalArrayParserHelper.GetElementCount(iLength, jLength, kLength, lLength, mLength);
+        if (length != expectedLength)
+            throw new FormatException("The multidimensional array element count does not match its dimensions.");
 
         if (value != null && value.GetLength(0) == iLength && value.GetLength(1) == jLength && value.GetLength(2) == kLength && value.GetLength(3) == lLength && value.GetLength(4) == mLength && value.Length == length)
         {
@@ -934,7 +1073,8 @@ public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
 
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            var byteCount = Unsafe.SizeOf<T>() * iLength * jLength * kLength * lLength * mLength;
+            var byteCount = checked(Unsafe.SizeOf<T>() * expectedLength);
+            reader.EnsureReadable(index, byteCount);
             ref var dest = ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value);
             ref var src = ref reader.GetCurrentSpanReference();
             Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)byteCount);
@@ -945,7 +1085,7 @@ public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
             var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
             ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
-            var span = LuminPackMarshal.CreateSpan(ref first, iLength * jLength * kLength * lLength * mLength);
+            var span = LuminPackMarshal.CreateSpan(ref first, expectedLength);
 
             foreach (ref var v in span)
             {
@@ -962,11 +1102,11 @@ public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
             return;
         }
 
-        evaluator += 24;
+        evaluator += 25;
 
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            evaluator += Unsafe.SizeOf<T>() * value.Length;
+            evaluator += checked(Unsafe.SizeOf<T>() * value.Length);
         }
         else
         {
@@ -1097,18 +1237,22 @@ public sealed class FiveDimensionalArrayParser<T> : LuminPackParser<T?[,,,,]>
                             }
 
                             if (firstFlags[3]) { dimCounts[4] = d4; firstFlags[3] = false; }
+                            else if (dimCounts[4] != d4) throw new FormatException("JSON dimensions must be rectangular");
                             d3++;
                         }
 
                         if (firstFlags[2]) { dimCounts[3] = d3; firstFlags[2] = false; }
+                        else if (dimCounts[3] != d3) throw new FormatException("JSON dimensions must be rectangular");
                         d2++;
                     }
 
                     if (firstFlags[1]) { dimCounts[2] = d2; firstFlags[1] = false; }
+                    else if (dimCounts[2] != d2) throw new FormatException("JSON dimensions must be rectangular");
                     d1++;
                 }
 
                 if (firstFlags[0]) { dimCounts[1] = d1; firstFlags[0] = false; }
+                else if (dimCounts[1] != d1) throw new FormatException("JSON dimensions must be rectangular");
                 d0++;
             }
 
@@ -1151,6 +1295,9 @@ public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
             return;
         }
 
+        writer.WriteObjectHeader(ref index, 0);
+        writer.Advance(1);
+
         var i = value.GetLength(0);
         var j = value.GetLength(1);
         var k = value.GetLength(2);
@@ -1161,11 +1308,12 @@ public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
 
         writer.Advance(24);
 
-        var totalLength = i * j * k * l * m * n;
+        var totalLength = value.Length;
         
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            var byteCount = Unsafe.SizeOf<T>() * totalLength;
+            var byteCount = checked(Unsafe.SizeOf<T>() * totalLength);
+            writer.EnsureAdditionalCapacity(checked(byteCount + sizeof(int)));
             ref var src = ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value);
             ref var dest = ref writer.GetCurrentSpanReference();
 
@@ -1205,6 +1353,7 @@ public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
             return;
         }
 
+        reader.Advance(1);
         reader.ReadUnmanaged(ref index, out int iLength, out int jLength, out int kLength, out int lLength,
             out int mLength, out int nLength);
         reader.Advance(24);
@@ -1215,6 +1364,10 @@ public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
         }
 
         reader.Advance(4);
+
+        var expectedLength = MultiDimensionalArrayParserHelper.GetElementCount(iLength, jLength, kLength, lLength, mLength, nLength);
+        if (length != expectedLength)
+            throw new FormatException("The multidimensional array element count does not match its dimensions.");
 
         if (value != null && value.GetLength(0) == iLength && value.GetLength(1) == jLength &&
             value.GetLength(2) == kLength && value.GetLength(3) == lLength && value.GetLength(4) == mLength &&
@@ -1229,7 +1382,8 @@ public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
 
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            var byteCount = Unsafe.SizeOf<T>() * iLength * jLength * kLength * lLength * mLength * nLength;
+            var byteCount = checked(Unsafe.SizeOf<T>() * expectedLength);
+            reader.EnsureReadable(index, byteCount);
             ref var dest = ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value);
             ref var src = ref reader.GetCurrentSpanReference();
             Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)byteCount);
@@ -1240,7 +1394,7 @@ public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
             var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
             ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
-            var span = LuminPackMarshal.CreateSpan(ref first, iLength * jLength * kLength * lLength * mLength * nLength);
+            var span = LuminPackMarshal.CreateSpan(ref first, expectedLength);
 
             foreach (ref var v in span)
             {
@@ -1257,11 +1411,11 @@ public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
             return;
         }
 
-        evaluator += 28;
+        evaluator += 29;
 
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            evaluator += Unsafe.SizeOf<T>() * value.Length;
+            evaluator += checked(Unsafe.SizeOf<T>() * value.Length);
         }
         else
         {
@@ -1399,22 +1553,27 @@ public sealed class SixDimensionalArrayParser<T> : LuminPackParser<T?[,,,,,]>
                                 }
 
                                 if (firstFlags[4]) { dimCounts[5] = d5; firstFlags[4] = false; }
+                                else if (dimCounts[5] != d5) throw new FormatException("JSON dimensions must be rectangular");
                                 d4++;
                             }
 
                             if (firstFlags[3]) { dimCounts[4] = d4; firstFlags[3] = false; }
+                            else if (dimCounts[4] != d4) throw new FormatException("JSON dimensions must be rectangular");
                             d3++;
                         }
 
                         if (firstFlags[2]) { dimCounts[3] = d3; firstFlags[2] = false; }
+                        else if (dimCounts[3] != d3) throw new FormatException("JSON dimensions must be rectangular");
                         d2++;
                     }
 
                     if (firstFlags[1]) { dimCounts[2] = d2; firstFlags[1] = false; }
+                    else if (dimCounts[2] != d2) throw new FormatException("JSON dimensions must be rectangular");
                     d1++;
                 }
 
                 if (firstFlags[0]) { dimCounts[1] = d1; firstFlags[0] = false; }
+                else if (dimCounts[1] != d1) throw new FormatException("JSON dimensions must be rectangular");
                 d0++;
             }
 
@@ -1458,6 +1617,9 @@ public sealed unsafe class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,
             return;
         }
 
+        writer.WriteObjectHeader(ref index, 0);
+        writer.Advance(1);
+
         var i = value.GetLength(0);
         var j = value.GetLength(1);
         var k = value.GetLength(2);
@@ -1469,11 +1631,12 @@ public sealed unsafe class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,
 
         writer.Advance(28);
 
-        var totalLength = i * j * k * l * m * n * o;
+        var totalLength = value.Length;
         
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            var byteCount = Unsafe.SizeOf<T>() * totalLength;
+            var byteCount = checked(Unsafe.SizeOf<T>() * totalLength);
+            writer.EnsureAdditionalCapacity(checked(byteCount + sizeof(int)));
             ref var src = ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value);
             ref var dest = ref writer.GetCurrentSpanReference();
 
@@ -1513,6 +1676,7 @@ public sealed unsafe class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,
             return;
         }
 
+        reader.Advance(1);
         reader.ReadUnmanaged(ref index, out int iLength, out int jLength, out int kLength, out int lLength, out int mLength, out int nLength, out int oLength);
         reader.Advance(28);
 
@@ -1522,6 +1686,10 @@ public sealed unsafe class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,
         }
 
         reader.Advance(4);
+
+        var expectedLength = MultiDimensionalArrayParserHelper.GetElementCount(iLength, jLength, kLength, lLength, mLength, nLength, oLength);
+        if (length != expectedLength)
+            throw new FormatException("The multidimensional array element count does not match its dimensions.");
 
         if (value != null && value.GetLength(0) == iLength && value.GetLength(1) == jLength && value.GetLength(2) == kLength && value.GetLength(3) == lLength && value.GetLength(4) == mLength && value.GetLength(5) == nLength && value.GetLength(6) == oLength && value.Length == length)
         {
@@ -1534,7 +1702,8 @@ public sealed unsafe class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,
 
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            var byteCount = Unsafe.SizeOf<T>() * iLength * jLength * kLength * lLength * mLength * nLength * oLength;
+            var byteCount = checked(Unsafe.SizeOf<T>() * expectedLength);
+            reader.EnsureReadable(index, byteCount);
             ref var dest = ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value);
             ref var src = ref reader.GetCurrentSpanReference();
             Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)byteCount);
@@ -1546,7 +1715,7 @@ public sealed unsafe class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,
             var parser = LuminPackParseProvider.Cache<T?>.Parser!;
 
             ref var first = ref Unsafe.As<byte, T?>(ref LuminPackMarshal.DangerousGetArrayDataReference<T>(value));
-            var span = LuminPackMarshal.CreateSpan(ref first, iLength * jLength * kLength * lLength * mLength * nLength * oLength);
+            var span = LuminPackMarshal.CreateSpan(ref first, expectedLength);
 
             foreach (ref var v in span)
             {
@@ -1563,11 +1732,11 @@ public sealed unsafe class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,
             return;
         }
 
-        evaluator += 32;
+        evaluator += 33;
 
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
         {
-            evaluator += Unsafe.SizeOf<T>() * value.Length;
+            evaluator += checked(Unsafe.SizeOf<T>() * value.Length);
         }
         else
         {
@@ -1715,26 +1884,32 @@ public sealed unsafe class SevenDimensionalArrayParser<T> : LuminPackParser<T?[,
                                     }
 
                                     if (firstFlags[5]) { dimCounts[6] = d6; firstFlags[5] = false; }
+                                    else if (dimCounts[6] != d6) throw new FormatException("JSON dimensions must be rectangular");
                                     d5++;
                                 }
 
                                 if (firstFlags[4]) { dimCounts[5] = d5; firstFlags[4] = false; }
+                                else if (dimCounts[5] != d5) throw new FormatException("JSON dimensions must be rectangular");
                                 d4++;
                             }
 
                             if (firstFlags[3]) { dimCounts[4] = d4; firstFlags[3] = false; }
+                            else if (dimCounts[4] != d4) throw new FormatException("JSON dimensions must be rectangular");
                             d3++;
                         }
 
                         if (firstFlags[2]) { dimCounts[3] = d3; firstFlags[2] = false; }
+                        else if (dimCounts[3] != d3) throw new FormatException("JSON dimensions must be rectangular");
                         d2++;
                     }
 
                     if (firstFlags[1]) { dimCounts[2] = d2; firstFlags[1] = false; }
+                    else if (dimCounts[2] != d2) throw new FormatException("JSON dimensions must be rectangular");
                     d1++;
                 }
 
                 if (firstFlags[0]) { dimCounts[1] = d1; firstFlags[0] = false; }
+                else if (dimCounts[1] != d1) throw new FormatException("JSON dimensions must be rectangular");
                 d0++;
             }
 

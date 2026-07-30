@@ -23,6 +23,11 @@ namespace LuminPack.Code
         public List<LuminConstructorData> AllConstructors { get; set; } = new();
         public bool enableBurst;
 
+        // Diagnostics belong to this exact incremental-generator input. Keeping
+        // them with the generated model prevents parallel compilations/types from
+        // observing or clearing each other's reports.
+        internal Diagnostic[] Diagnostics = System.Array.Empty<Diagnostic>();
+
         public GeneratorType generatorType;
         
         //Union

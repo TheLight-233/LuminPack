@@ -24,6 +24,7 @@ namespace LuminPackUnitTest
             
             var testResults = new List<string>();
             // Run all tests
+            ParserRegistrationRegressionTest.Run(testResults);
             TestEmptyStruct(testResults);
             TestEnum(testResults);
             TestByte(testResults);
@@ -229,6 +230,18 @@ namespace LuminPackUnitTest
             TestIImmutableStack(testResults);
             TestIImmutableDictionary(testResults);
             TestIImmutableSet(testResults);
+            BufferWriterSerializationTest.Run(testResults);
+            JsonWriterSafetyTest.Run(testResults);
+            JsonReaderSafetyTest.Run(testResults);
+            CompressionSafetyPerfTest.Run(testResults);
+            ReaderBoundaryValidationTest.Run(testResults);
+            QueueStackRegressionTest.Run(testResults);
+            AsyncSerializerRegressionTest.Run(testResults);
+            SerializerReentrancyTest.Run(testResults);
+            BinaryUnionSafetyTest.Run(testResults);
+            ConfirmedCorrectnessRegressionTest.Run(testResults);
+            ObjectPoolRegressionTest.Run(testResults);
+            WriterReaderCorrectnessRegressionTest.Run(testResults);
             
             // Print summary
             Console.WriteLine("\n=========================================");

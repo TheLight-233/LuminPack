@@ -87,17 +87,19 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
     {
         return (SerializeStringAsUtf8, SerializeStringRecordAsToken) switch
         {
-            (true, true) => CalculateStringUtf8(ref value) + 1,
-            (true, false) => CalculateStringUtf8(ref value) + 8,
-            (false, true) => CalculateStringUtf16(ref value) + 1,
-            (false, false) => CalculateStringUtf16(ref value) + 4
+            (true, true) => checked(CalculateStringUtf8(ref value) + 1),
+            (true, false) => checked(CalculateStringUtf8(ref value) + sizeof(int) * 2),
+            (false, true) => checked(CalculateStringUtf16(ref value) + sizeof(ushort)),
+            (false, false) => checked(CalculateStringUtf16(ref value) + sizeof(int))
         };
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int StringRecordLength()
     {
-        return SerializeStringRecordAsToken ? 1 : SerializeStringAsUtf8 ? 8 : 4;;
+        return SerializeStringRecordAsToken
+            ? (SerializeStringAsUtf8 ? 1 : sizeof(ushort))
+            : (SerializeStringAsUtf8 ? sizeof(int) * 2 : sizeof(int));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -117,6 +119,13 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
     {
         var v = value;
         GetEvaluator<T>().CalculateOffset(ref this, ref v);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void CalculatePolymorphismValue<T>(scoped in T? value)
+    {
+        CalculateValue(in value);
+        Subtract(1); // Object polymorphism replaces the normal object header with the union header.
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

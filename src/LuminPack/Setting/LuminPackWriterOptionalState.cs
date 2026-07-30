@@ -40,7 +40,7 @@ namespace LuminPack.Option
         {
             ObjectToRef = new LuminCircleReferenceMap<object, uint>(ReferenceEqualityComparer.Instance);
             _nextId = 0;
-            Option = option ?? LuminPackSerializerOption.Default;
+            Option = option ?? LuminPackSerializerOption.InternalDefault;
             
         }
 
@@ -48,18 +48,18 @@ namespace LuminPack.Option
         {
             ObjectToRef = new LuminCircleReferenceMap<object, uint>(ReferenceEqualityComparer.Instance);
             _nextId = 0;
-            Option = LuminPackSerializerOption.Default;
+            Option = LuminPackSerializerOption.InternalDefault;
         }
         
         public void Init(LuminPackSerializerOption? options)
         {
-            Option = options ?? LuminPackSerializerOption.Default;
+            Option = options ?? LuminPackSerializerOption.InternalDefault;
         }
         
         public void Reset()
         {
             ObjectToRef.Clear();
-            Option = LuminPackSerializerOption.Default;
+            Option = LuminPackSerializerOption.InternalDefault;
             _nextId = 0;
         }
         

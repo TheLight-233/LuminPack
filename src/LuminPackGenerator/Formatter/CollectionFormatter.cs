@@ -360,9 +360,37 @@ public static class StackFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
+        sb.AppendLine("#if NET8_0_OR_GREATER");
         sb.AppendLine("            var span = LuminPackMarshal.GetStackSpan(Unsafe.AsRef(in value));");
-        sb.AppendLine();
         sb.AppendLine("            writer.WriteSpan(ref index, span);");
+        sb.AppendLine("#else");
+        sb.AppendLine("            var size = value.Count;");
+        sb.AppendLine($"            var payloadLength = global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{GetFirstGeneric(fieldData.TypeName)}>() ? 0 : checked(size * global::System.Runtime.CompilerServices.Unsafe.SizeOf<{GetFirstGeneric(fieldData.TypeName)}>());");
+        sb.AppendLine("            writer.EnsureAdditionalCapacity(checked(sizeof(int) + payloadLength));");
+        sb.AppendLine("            writer.WriteCollectionHeader(ref index, size);");
+        sb.AppendLine("            writer.Advance(sizeof(int));");
+        sb.AppendLine("            if (size == 0) return;");
+        sb.AppendLine($"            var buffer = global::System.Buffers.ArrayPool<{GetFirstGeneric(fieldData.TypeName)}>.Shared.Rent(size);");
+        sb.AppendLine("            try");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value.CopyTo(buffer, 0);");
+        sb.AppendLine($"                if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{GetFirstGeneric(fieldData.TypeName)}>())");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    global::System.Array.Reverse(buffer, 0, size);");
+        sb.AppendLine("                    ref var destination = ref writer.GetSpanReference(index);");
+        sb.AppendLine($"                    ref var source = ref global::System.Runtime.CompilerServices.Unsafe.As<{GetFirstGeneric(fieldData.TypeName)}, byte>(ref buffer[0]);");
+        sb.AppendLine("                    global::System.Runtime.CompilerServices.Unsafe.CopyBlockUnaligned(ref destination, ref source, (uint)payloadLength);");
+        sb.AppendLine("                    writer.Advance(payloadLength);");
+        sb.AppendLine("                    return;");
+        sb.AppendLine("                }");
+        sb.AppendLine("                for (var i = size - 1; i >= 0; i--) writer.WriteValue(buffer[i]);");
+        sb.AppendLine("                writer.CheckBuffer();");
+        sb.AppendLine("            }");
+        sb.AppendLine("            finally");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                global::System.Buffers.ArrayPool<{GetFirstGeneric(fieldData.TypeName)}>.Shared.Return(buffer, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{GetFirstGeneric(fieldData.TypeName)}>());");
+        sb.AppendLine("            }");
+        sb.AppendLine("#endif");
     }
 
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
@@ -389,9 +417,29 @@ public static class StackFormatter
         sb.AppendLine("                value.Clear();");
         sb.AppendLine("            }");
         sb.AppendLine();
+        sb.AppendLine("#if NET8_0_OR_GREATER");
         sb.AppendLine("            var span = LuminPackMarshal.GetStackSpan(value, length);");
-        sb.AppendLine();
         sb.AppendLine("            reader.ReadSpan(ref index, length, ref span);");
+        sb.AppendLine("#else");
+        sb.AppendLine($"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{GetFirstGeneric(fieldData.TypeName)}>())");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                var itemSize = global::System.Runtime.CompilerServices.Unsafe.SizeOf<{GetFirstGeneric(fieldData.TypeName)}>();");
+        sb.AppendLine("                for (var i = 0; i < length; i++)");
+        sb.AppendLine("                {");
+        sb.AppendLine($"                    {GetFirstGeneric(fieldData.TypeName)} item = default!;");
+        sb.AppendLine($"                    global::System.Runtime.CompilerServices.Unsafe.CopyBlockUnaligned(ref global::System.Runtime.CompilerServices.Unsafe.As<{GetFirstGeneric(fieldData.TypeName)}, byte>(ref item), ref reader.GetSpanReference(index), (uint)itemSize);");
+        sb.AppendLine("                    reader.Advance(itemSize);");
+        sb.AppendLine("                    value.Push(item);");
+        sb.AppendLine("                }");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            for (var i = 0; i < length; i++)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                {GetFirstGeneric(fieldData.TypeName)} item = default!;");
+        sb.AppendLine("                reader.ReadValue(ref item);");
+        sb.AppendLine("                value.Push(item);");
+        sb.AppendLine("            }");
+        sb.AppendLine("#endif");
     }
 }
 
@@ -410,6 +458,7 @@ public static class QueueFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
+        sb.AppendLine("#if NET8_0_OR_GREATER");
         sb.AppendLine("            var span = LuminPackMarshal.GetQueueSpan(Unsafe.AsRef(in value), value.Count);");
         sb.AppendLine();
         sb.AppendLine("            LuminPackMarshal.GetQueueSize(Unsafe.AsRef(in value), out var head, out var tail, out var size);");
@@ -486,6 +535,44 @@ public static class QueueFormatter
         sb.AppendLine("                writer.WriteValue(v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
+        sb.AppendLine("#else");
+        sb.AppendLine("            var size = value.Count;");
+        sb.AppendLine("            if (size == 0)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteCollectionHeader(ref index, 0);");
+        sb.AppendLine("                writer.Advance(sizeof(int));");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine($"            var payloadLength = global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{GetFirstGeneric(fieldData.TypeName)}>() ? 0 : checked(size * global::System.Runtime.CompilerServices.Unsafe.SizeOf<{GetFirstGeneric(fieldData.TypeName)}>());");
+        sb.AppendLine("            writer.EnsureAdditionalCapacity(checked(sizeof(int) * 4 + payloadLength));");
+        sb.AppendLine("            writer.WriteCollectionHeader(ref index, size);");
+        sb.AppendLine("            writer.Advance(sizeof(int));");
+        sb.AppendLine("            writer.WriteUnmanaged(0);");
+        sb.AppendLine("            writer.Advance(sizeof(int));");
+        sb.AppendLine("            writer.WriteUnmanaged(0);");
+        sb.AppendLine("            writer.Advance(sizeof(int));");
+        sb.AppendLine("            writer.WriteUnmanaged(size);");
+        sb.AppendLine("            writer.Advance(sizeof(int));");
+        sb.AppendLine($"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{GetFirstGeneric(fieldData.TypeName)}>())");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                var buffer = global::System.Buffers.ArrayPool<{GetFirstGeneric(fieldData.TypeName)}>.Shared.Rent(size);");
+        sb.AppendLine("                try");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    value.CopyTo(buffer, 0);");
+        sb.AppendLine("                    ref var destination = ref writer.GetSpanReference(index);");
+        sb.AppendLine($"                    ref var source = ref global::System.Runtime.CompilerServices.Unsafe.As<{GetFirstGeneric(fieldData.TypeName)}, byte>(ref buffer[0]);");
+        sb.AppendLine("                    global::System.Runtime.CompilerServices.Unsafe.CopyBlockUnaligned(ref destination, ref source, (uint)payloadLength);");
+        sb.AppendLine("                    writer.Advance(payloadLength);");
+        sb.AppendLine("                }");
+        sb.AppendLine("                finally");
+        sb.AppendLine("                {");
+        sb.AppendLine($"                    global::System.Buffers.ArrayPool<{GetFirstGeneric(fieldData.TypeName)}>.Shared.Return(buffer);");
+        sb.AppendLine("                }");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            foreach (var item in value) writer.WriteValue(item);");
+        sb.AppendLine("            writer.CheckBuffer();");
+        sb.AppendLine("#endif");
     }
 
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
@@ -515,6 +602,8 @@ public static class QueueFormatter
         sb.AppendLine("#endif");
         sb.AppendLine("            }");
         sb.AppendLine();
+        sb.AppendLine("            if (length == 0) return;");
+        sb.AppendLine("#if NET8_0_OR_GREATER");
         sb.AppendLine("            var span = LuminPackMarshal.GetQueueSpan(value, length);");
         sb.AppendLine();
         sb.AppendLine("            reader.ReadUnmanaged(out int head);");
@@ -558,6 +647,30 @@ public static class QueueFormatter
         sb.AppendLine("            {");
         sb.AppendLine("                reader.ReadValue(ref span[i]);");
         sb.AppendLine("            }");
+        sb.AppendLine("#else");
+        sb.AppendLine("            reader.Advance(reader.ReadUnmanaged(out int storedHead));");
+        sb.AppendLine("            reader.Advance(reader.ReadUnmanaged(out int storedTail));");
+        sb.AppendLine("            reader.Advance(reader.ReadUnmanaged(out int storedSize));");
+        sb.AppendLine("            if (storedSize != length || storedHead < 0 || storedTail < 0) throw new global::System.InvalidOperationException(\"Invalid Queue payload metadata.\");");
+        sb.AppendLine($"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{GetFirstGeneric(fieldData.TypeName)}>())");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                var itemSize = global::System.Runtime.CompilerServices.Unsafe.SizeOf<{GetFirstGeneric(fieldData.TypeName)}>();");
+        sb.AppendLine("                for (var i = 0; i < length; i++)");
+        sb.AppendLine("                {");
+        sb.AppendLine($"                    {GetFirstGeneric(fieldData.TypeName)} item = default!;");
+        sb.AppendLine($"                    global::System.Runtime.CompilerServices.Unsafe.CopyBlockUnaligned(ref global::System.Runtime.CompilerServices.Unsafe.As<{GetFirstGeneric(fieldData.TypeName)}, byte>(ref item), ref reader.GetSpanReference(index), (uint)itemSize);");
+        sb.AppendLine("                    reader.Advance(itemSize);");
+        sb.AppendLine("                    value.Enqueue(item);");
+        sb.AppendLine("                }");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            for (var i = 0; i < length; i++)");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                {GetFirstGeneric(fieldData.TypeName)} item = default!;");
+        sb.AppendLine("                reader.ReadValue(ref item);");
+        sb.AppendLine("                value.Enqueue(item);");
+        sb.AppendLine("            }");
+        sb.AppendLine("#endif");
     }
 }
 

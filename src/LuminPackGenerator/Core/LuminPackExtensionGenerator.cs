@@ -14,7 +14,6 @@ namespace LuminPack.Code.Core;
 public static class LuminPackExtensionGenerator
 {
     public static ConditionalWeakTable<Compilation, HashSet<string>> AnalyzedTypes = new();
-    private static object _sync = new();
     
     
     public static string CodeGenerator(LuminDataInfo data, MetaInfo metaInfo, Compilation compilation)
@@ -52,7 +51,7 @@ public static class LuminPackExtensionGenerator
         
             if (formatter.Item1 != null && 
                 formatter.Item2 != null &&
-                analyzedTypes.Add(v.TypeName) && 
+                TryAddAnalyzedType(analyzedTypes, v.TypeName) && 
                 currentGenerationTypes.Add(v.TypeName))
             {
                 sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
@@ -110,7 +109,7 @@ public static class LuminPackExtensionGenerator
                 // Generate WriteValue / ReadValue only if not already generated
                 if (elFormatter.Item1 != null &&
                     elFormatter.Item2 != null &&
-                    analyzedTypes.Add(typeName) &&
+                    TryAddAnalyzedType(analyzedTypes, typeName) &&
                     currentGenerationTypes.Add(typeName))
                 {
                     sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
@@ -167,7 +166,7 @@ public static class LuminPackExtensionGenerator
             classGlobalName = "global::" + data.classNameSpace + "." + data.classFullName;
         }
 
-        if (analyzedTypes.Add(classGlobalName) && 
+        if (TryAddAnalyzedType(analyzedTypes, classGlobalName) && 
             currentGenerationTypes.Add(classGlobalName))
         {
             sb.AppendLine($"        [global::LuminPack.Attribute.Preserve]");
@@ -393,56 +392,63 @@ public static class LuminPackExtensionGenerator
             #endregion
                 
             Local:
-            LuminPackCodeGenerator.GenerateLocalClassStructure(sb, data, analyzedTypes);
-                
-            foreach (var filed in data.fields.Where(x => x.ClassFields.Count > 0))
+            lock (analyzedTypes)
             {
-                LuminPackCodeGenerator.GeneratorUnsafeAccessorMethod(sb, filed, filed.ClassFields, analyzedTypes);
+                LuminPackCodeGenerator.GenerateLocalClassStructure(sb, data, analyzedTypes);
+
+                foreach (var filed in data.fields.Where(x => x.ClassFields.Count > 0))
+                {
+                    LuminPackCodeGenerator.GeneratorUnsafeAccessorMethod(sb, filed, filed.ClassFields, analyzedTypes);
+                }
             }
         }
 
         #endregion
         
-        return GenerateExtension(sb, compilation);
+        return GenerateExtension(sb);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool TryAddAnalyzedType(HashSet<string> analyzedTypes, string typeName)
+    {
+        lock (analyzedTypes)
+        {
+            return analyzedTypes.Add(typeName);
+        }
     }
     
-    private static string GenerateExtension(StringBuilder sb, Compilation compilation)
+    private static string GenerateExtension(StringBuilder sb)
     {
-        lock (_sync)
-        {
-            
-            
-            var extensionCode = sb.ToString();
+        var extensionCode = sb.ToString();
         
-            if (string.IsNullOrEmpty(extensionCode))
-                return string.Empty;
+        if (string.IsNullOrEmpty(extensionCode))
+            return string.Empty;
             
-            StringBuilder fullCode = new StringBuilder();
+        StringBuilder fullCode = new StringBuilder();
         
-            fullCode.AppendLine("using global::System;");
-            fullCode.AppendLine("using global::System.Collections.Generic;");
-            fullCode.AppendLine("using global::System.Runtime.CompilerServices;");
-            fullCode.AppendLine("using global::System.Runtime.InteropServices;");
-            fullCode.AppendLine("using global::System.Threading.Tasks;");
-            fullCode.AppendLine("using global::LuminPack;");
-            fullCode.AppendLine("using global::LuminPack.Code;");
-            fullCode.AppendLine("using global::LuminPack.Core;");
-            fullCode.AppendLine("using global::LuminPack.Parsers;");
-            fullCode.AppendLine("using global::LuminPack.Utility;");
-            fullCode.AppendLine("using global::LuminPack.Attribute;");
-            fullCode.AppendLine();
-            fullCode.AppendLine("#nullable enable");
-            fullCode.AppendLine($"namespace {LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}");
-            fullCode.AppendLine("{");
-            fullCode.AppendLine();
-            fullCode.AppendLine("    public static partial class LuminPackExtensions");
-            fullCode.AppendLine("    {");
-            fullCode.Append(extensionCode);
-            fullCode.AppendLine("    }");
-            fullCode.AppendLine("}");
+        fullCode.AppendLine("using global::System;");
+        fullCode.AppendLine("using global::System.Collections.Generic;");
+        fullCode.AppendLine("using global::System.Runtime.CompilerServices;");
+        fullCode.AppendLine("using global::System.Runtime.InteropServices;");
+        fullCode.AppendLine("using global::System.Threading.Tasks;");
+        fullCode.AppendLine("using global::LuminPack;");
+        fullCode.AppendLine("using global::LuminPack.Code;");
+        fullCode.AppendLine("using global::LuminPack.Core;");
+        fullCode.AppendLine("using global::LuminPack.Parsers;");
+        fullCode.AppendLine("using global::LuminPack.Utility;");
+        fullCode.AppendLine("using global::LuminPack.Attribute;");
+        fullCode.AppendLine();
+        fullCode.AppendLine("#nullable enable");
+        fullCode.AppendLine($"namespace {LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}");
+        fullCode.AppendLine("{");
+        fullCode.AppendLine();
+        fullCode.AppendLine("    public static partial class LuminPackExtensions");
+        fullCode.AppendLine("    {");
+        fullCode.Append(extensionCode);
+        fullCode.AppendLine("    }");
+        fullCode.AppendLine("}");
         
-            return fullCode.ToString();
-        }
+        return fullCode.ToString();
     }
     
     /// <summary>

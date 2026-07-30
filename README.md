@@ -1,42 +1,10 @@
 # **LuminPack**
 
-## ⚡ 性能基准测试
-
-> **测试环境**: Windows 11 (25H2) | Intel Core i7-13650HX @ 2.60GHz | .NET 10.0
-
-### 📊 性能对比图表
-
-![LuminPack Performance Benchmark](docs/benchmark_comparison.png)
-
-### 🎯 性能数据总结
-
-**二进制序列化性能对比**
-
-| 测试场景 | LuminPack | MemoryPack | MessagePack | 性能优势 |
-|---------|-----------|------------|-------------|---------|
-| **简单对象序列化** | 80.27 ns | 294.04 ns | 1,471.37 ns | **3.6x ~ 18.3x** ⚡ |
-| **简单对象反序列化** | 263.86 ns | 355.66 ns | 3,189.42 ns | **1.3x ~ 12.1x** ⚡ |
-| **多态对象序列化** | 4.638 μs | 15.591 μs | 77.121 μs | **3.4x ~ 16.6x** ⚡ |
-| **多态对象反序列化** | 10.008 μs | 17.099 μs | 114.295 μs | **1.7x ~ 11.4x** ⚡ |
-
-**JSON 序列化性能对比**
-
-| 测试场景 | LuminPack | System.Text.Json | Newtonsoft.Json | 性能优势 |
-|---------|-----------|------------------|-----------------|---------|
-| **JSON 序列化** | 18.12 μs | 22.63 μs | 47.11 μs | **1.2x ~ 2.6x** 🚀 |
-| **JSON 反序列化** | 16.47 μs | 25.82 μs | 62.43 μs | **1.6x ~ 3.8x** 🚀 |
-
----
-
 ## 📖 简介
 
-LuminPack是一款高性能序列化库，对于嵌套类，LuminPack比Memorypack，Messagepack快50%，200%。对于泛型类，LuminPack比Memorypack，Messagepack快400%。对于一些特殊集合，LuminPack甚至快上22倍。
+LuminPack 是一款面向 Unity 存档、网络传输等场景的高性能序列化库，同时支持二进制与 JSON 序列化。项目通过增量源代码生成器为具体类型生成专用解析代码，并针对 Unity、AOT 以及 .NET Standard 2.1 等使用环境进行适配。
 
-LuminPack最初是专门为Unity开发的，为Unity在存档，网络等高性能场景下提供接近手写特定类解析器的性能，LuminPack性能如何快的原因也是如此。对于LuminPack的基础类型，LuminPack会直接解析写入解析器，与此同时，LuminPack大量学习并借鉴了MemoryPack对于特定于C#的内存操纵，并通过指针反射，内存映射实现更高性能。
-
-本人没有写Readme的经验，因此本文借鉴了Memorypack的Readme写法。
-
-除了性能，LuminPack包含MemoryPack绝大部分特性，对于仅包含LuminPack基础类型的数据，二者甚至可以互相序列化（好像不行了，没测试）。
+LuminPack 在早期设计和实现过程中学习、借鉴了 MemoryPack 的优秀思路与实践，README 的组织方式也受到了其启发。随着功能持续迭代，LuminPack 已根据自身目标和使用场景进行独立设计与演进。
 
 ### ✨ 主要特性
 
@@ -55,8 +23,50 @@ LuminPack最初是专门为Unity开发的，为Unity在存档，网络等高性�
 
 ## 📦 Installation 安装
 
-1. Nuget搜索LuminPack安装
-2. 自行导入仓库的dll文件
+### .NET 项目
+
+LuminPack 支持 `netstandard2.1`、`net8.0`、`net9.0` 和 `net10.0`。推荐通过 NuGet 安装运行库和源代码生成器：
+
+```shell
+dotnet add package LuminPack
+dotnet add package LuminPackGenerator
+```
+
+也可以在 IDE 的 NuGet 包管理器中搜索 `LuminPack`，或直接在项目文件中添加：
+
+```xml
+<ItemGroup>
+  <PackageReference Include="LuminPack" Version="1.0.5" />
+  <PackageReference Include="LuminPackGenerator" Version="1.0.4"
+                    PrivateAssets="all"
+                    IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
+</ItemGroup>
+```
+
+`LuminPack` 是运行库，`LuminPackGenerator` 是编译期源代码生成器。部分包管理器会自动引入生成器，但显式安装可以避免不同 IDE 和构建环境对传递 Analyzer 的处理差异。两个包的版本请以 NuGet 上彼此匹配的最新发布版为准。
+
+### Unity 项目
+
+Unity 项目需启用 **.NET Standard 2.1** API 兼容级别。可以通过 NuGetForUnity 等 NuGet 工作流安装 `LuminPack`；如果手动导入，请确保：
+
+1. 将 `netstandard2.1` 版本的 `LuminPack.dll` 及其依赖放入 Unity 项目的 `Assets/Plugins` 目录。
+2. 将 `LuminPackGenerator.dll` 放入 `Assets/RoslynAnalyzers` 目录，并在 Unity Inspector 中为它添加 `RoslynAnalyzer` 标签。
+3. 完成导入后，用 `[LuminPackable]` 声明一个类型并确认项目能正常编译，以验证源代码生成器已被 Unity 识别。
+
+LuminPack 支持 Unity Mono 和 IL2CPP。建议在发布前至少执行一次目标平台的 IL2CPP Player 运行测试，不要仅以编译成功作为验证结果。
+
+### 从源码引用
+
+也可以将仓库中的两个项目加入解决方案，并按以下方式引用：
+
+```xml
+<ItemGroup>
+  <ProjectReference Include="path/to/LuminPack/src/LuminPack/LuminPack.csproj" />
+  <ProjectReference Include="path/to/LuminPack/src/LuminPackGenerator/LuminPackGenerator.csproj"
+                    OutputItemType="Analyzer"
+                    ReferenceOutputAssembly="false" />
+</ItemGroup>
+```
 
 ## 🔮 后续更新计划
 
@@ -88,10 +98,10 @@ public class Person
 ```csharp
 var item = new Person { Age = 18, Name = "Light" };
 
-var buffer = LuminPackPackSerializer.Serialize(item);
-var bufferJson = LuminPackPackSerializer.SerializeJson(item);
+var buffer = LuminPackSerializer.Serialize(item);
+var bufferJson = LuminPackSerializer.SerializeJson(item);
 var result = LuminPackSerializer.Deserialize<Person>(buffer);
-var resultJson = LuminPackSerializer.DeserializeJson<Person>(buffer);
+var resultJson = LuminPackSerializer.DeserializeJson<Person>(bufferJson);
 ```
 
 ## 📋 LuminPack基础类型
@@ -259,7 +269,7 @@ LuminPack支持最低程度的自动收集继承类，对于标记了\[LuminPack
 Id分配规则：从0开始递个递增，如果遇到[LuminPackUnion]显示注册过的Id，则跳过。
 ```
 
-对于不收集的类型，LuminPack支持手动注册。与MemoryPack的Union相同。只有接口和抽象类允许使用 `[LuminPackUnion]` 属性进行注释。需要唯一的联合标记。
+对于不会自动收集的类型，LuminPack 支持手动注册。只有接口和抽象类可以使用 `[LuminPackUnion]` 属性，每个派生类型需要配置唯一的 Union Tag。
 
 ```csharp
 // Annotate [LuminPackable] and inheritance types with [LuminPackUnion]
@@ -486,10 +496,68 @@ public static void Return(ReusableLinkedArrayBufferWriter writer) => _pool.Retur
 
 ## 🎮 Unity
 
-LuminPack对于Unity有特殊优化，以达到.Net8版本相同的性能。
+LuminPack 针对 Unity 和 .NET Standard 2.1 进行了专门适配与优化，并支持增量源代码生成。
 
-*   对于`List<>，Stack<>，Queue<>，Collection<>，ReadonlyCollection<>，ObserveableCollection<>，ReadonlyObserveableCollection<>，ReadOnlyCollectionBuilder<>` 的非托管泛型，LuminPack比MemoryPack快22倍 （1024数据量）
-*   Serialize API和Deserialize API的类型检查优化，提高处理特殊数据的性能。
+*   针对常用集合和非托管泛型提供 Unity 专用实现。
+*   支持 Mono 与 IL2CPP 运行环境。
+
+## 📜 JSON 格式规范
+
+LuminPack 按照以下规则生成 JSON 文本。默认使用 UTF-8 处理字符串，也可通过 `LuminPackSerializerOption.Utf16` 选择 UTF-16。序列化和反序列化必须使用一致的字符编码选项。
+
+### 基础值
+
+| C# 值 | JSON 形式 |
+| --- | --- |
+| `null` | `null` |
+| 整数、浮点数、`decimal` | JSON number |
+| `bool` | `true` / `false` |
+| `string`、`char` | JSON string，并按 JSON 规则转义 |
+| `Guid`、`DateTime`、`DateTimeOffset`、`TimeSpan` 等 | JSON string |
+
+JSON number 只能保证表示有限浮点值；`NaN`、`PositiveInfinity` 和 `NegativeInfinity` 不属于标准 JSON 数字，不应用于需要跨库交换的 JSON 数据。
+
+### 对象
+
+标记了 `[LuminPackable]` 的类和结构体序列化为 JSON object，属性名与生成器选中的 C# 成员名一致。例如：
+
+```json
+{
+  "Age": 18,
+  "Name": "Light"
+}
+```
+
+反序列化时，未知属性会被跳过；JSON 中缺失的成员保持其默认值。属性顺序不用于匹配，但名称和值类型应与目标模型一致。
+
+### 集合、字典与元组
+
+*   一维数组和顺序集合写为 JSON array：`[1, 2, 3]`。
+*   多维数组写为嵌套 JSON array：`[[1, 2], [3, 4]]`；反序列化时各维必须是规则的矩形结构。
+*   `KeyValuePair<TKey, TValue>` 和其他键值对写为两个元素的 JSON array：`[key, value]`。
+*   字典写为键值对数组：`[[key1, value1], [key2, value2]]`。这种表示允许键使用任意 LuminPack 支持的类型，不限于字符串。
+*   `Tuple`、`ValueTuple` 等固定长度组合值写为按成员顺序排列的 JSON array。
+
+### Union 多态
+
+Union 值使用包含 `$type` 和 `$value` 的对象表示。`$type` 是 `[LuminPackUnion]` 配置的 Tag，`$value` 是实际派生对象：
+
+```json
+{
+  "$type": 0,
+  "$value": {
+    "num": 114514
+  }
+}
+```
+
+Union 的 `null` 值直接写为 `null`。客户端与服务端交换 JSON 时，必须保持 Union Tag 和对应类型的映射一致。
+
+### 循环引用
+
+`GenerateType.CircularReference` 模式使用 `$id` 记录首次出现的对象，后续重复引用使用 `$ref` 指向该 ID。这两个名称是 LuminPack 保留的元数据属性，不应用作普通成员名。
+
+> JSON 格式与二进制格式是两套独立协议，不能将 `Serialize` 的二进制结果传给 `DeserializeJson`，反之亦然。
 
 ## 📐 二进制格式规范
 

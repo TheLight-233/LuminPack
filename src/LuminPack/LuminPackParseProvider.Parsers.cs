@@ -30,7 +30,7 @@ public static partial class LuminPackParseProvider
             { typeof(ValueTuple<,,,,,>), typeof(ValueTupleParser<,,,,,>) },
             { typeof(Tuple<,,,,,,>), typeof(TupleParser<,,,,,,>) },
             { typeof(ValueTuple<,,,,,,>), typeof(ValueTupleParser<,,,,,,>) },
-            { typeof(Tuple<,,,,,,,>), typeof(TupleParser<,,,,,,>) },
+            { typeof(Tuple<,,,,,,,>), typeof(TupleParser<,,,,,,,>) },
             { typeof(ValueTuple<,,,,,,,>), typeof(ValueTupleParser<,,,,,,,>) },
         
             //KnownGenericType

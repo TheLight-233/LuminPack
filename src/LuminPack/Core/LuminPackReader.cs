@@ -1,5 +1,7 @@
 using System;
 using System.Buffers;
+using System.Diagnostics;
+using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -85,8 +87,11 @@ namespace LuminPack.Core
         public LuminPackReader(ref ReadOnlySequence<byte> bufferReference, LuminPackReaderOptionalState? option = null)
         {
             _optionState = option ?? LuminPackReaderOptionalState.NullOption;
-            var span = bufferReference.FirstSpan;
-            _bufferReference = LuminPackMarshal.CreateSpan(ref GetNonNullPinnableReference(span), span.Length);
+            _bufferReference = bufferReference.IsSingleSegment
+                ? LuminPackMarshal.CreateSpan(
+                    ref GetNonNullPinnableReference(bufferReference.FirstSpan),
+                    bufferReference.FirstSpan.Length)
+                : bufferReference.ToArray();
 #if NET8_0_OR_GREATER
             _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
 #else
@@ -112,6 +117,15 @@ namespace LuminPack.Core
             ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
         
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [Conditional("DEBUG")]
+        internal void EnsureReadable(int index, int count)
+        {
+            if ((uint)index > (uint)_bufferReference.Length ||
+                (uint)count > (uint)(_bufferReference.Length - index))
+                LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + count));
+        }
+        
         /// <summary>
         /// 移动指针
         /// </summary>
@@ -119,11 +133,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance(int count)
         {
-#if DEBUG
-            if (_bufferReference.Length < count)
-                LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
-#endif
-            
+            EnsureReadable(_currentIndex, count);
             _currentIndex += count;
             
         }
@@ -235,11 +245,15 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadCollectionHead(ref int index, out int length)
         {
+            EnsureReadable(index, sizeof(int));
 #if NET8_0_OR_GREATER
             length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index));
 #else
             length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index));
 #endif
+
+            if (length < 0 && length != LuminPackCode.NullCollection)
+                throw new InvalidDataException($"Invalid collection length: {length}.");
 
             return length is not LuminPackCode.NullCollection;
         }
@@ -333,6 +347,26 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadStringLength(ref int index, out int length)
         {
+            if (SerializeStringRecordAsToken)
+            {
+                var remaining = _bufferReference.Slice(index);
+                if (SerializeStringAsUtf8)
+                {
+                    length = remaining.IndexOf((byte)0);
+                }
+                else
+                {
+                    var characters = MemoryMarshal.Cast<byte, ushort>(remaining.Slice(0, remaining.Length & ~1));
+                    var characterLength = characters.IndexOf((ushort)0);
+                    length = characterLength < 0 ? -1 : checked(characterLength * sizeof(ushort));
+                }
+
+                if (length < 0)
+                    throw new InvalidDataException("String token terminator was not found.");
+                return;
+            }
+
+            EnsureReadable(index, sizeof(int));
             if (SerializeStringRecordAsToken)
             {
 #if NET8_0_OR_GREATER
@@ -501,6 +535,8 @@ namespace LuminPack.Core
 #else
                 length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index));
 #endif
+                if (length == LuminPackCode.NullCollection)
+                    length = 0;
             }
 
         }
@@ -639,7 +675,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf8StringWithLength(int index, int length)
         {
-            if (length is 0) return null;
+            if (length <= 0) return null;
 
             int index1 = index + 4;
 #if NET8_0_OR_GREATER
@@ -649,6 +685,15 @@ namespace LuminPack.Core
 #endif
             
             var utf16Length = Unsafe.ReadUnaligned<int>(ref spanRef);
+
+#if NETSTANDARD2_1
+            // Unity Mono's implementation of the custom span decoder can report
+            // InvalidData for valid four-byte UTF-8 scalar values (for example emoji).
+            // The runtime decoder is correct on Unity and this branch is isolated to
+            // the Unity-targeted netstandard2.1 build.
+            return Encoding.UTF8.GetString(
+                LuminPackMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref spanRef, 4), length));
+#else
             
             if (utf16Length <= 0)
             {
@@ -677,6 +722,7 @@ namespace LuminPack.Core
                     }
                 }
             }
+#endif
 
         }
     
@@ -692,18 +738,17 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf16StringWithLength(int index, int length)
         {
-            if (length is 0) return null;
+            if (length <= 0) return null;
 
             int index1 = index + 4;
-            
             var utf16Length = length >> 1;
-            
+
 #if NET8_0_OR_GREATER
             ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index1);
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index1);
 #endif
-            
+
             fixed (byte* p = &spanRef)
             {
                 return string.Create(utf16Length, ((IntPtr)p, length), static (dest, state) =>
@@ -759,6 +804,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPeekUnionHeader(out ushort tag)
         {
+            EnsureReadable(_currentIndex, 1);
 #if NET8_0_OR_GREATER
             tag = Unsafe.Add(ref _bufferStart, (nint)(uint)_currentIndex);
 #else
@@ -771,10 +817,11 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPeekUnionHeader(ref int index, out ushort tag)
         {
+            EnsureReadable(index, 1);
 #if NET8_0_OR_GREATER
-            tag = Unsafe.Add(ref _bufferStart, (nint)(uint)_currentIndex);
+            tag = Unsafe.Add(ref _bufferStart, (nint)(uint)index);
 #else
-            tag = Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
+            tag = Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             index += 1;
             return tag is not LuminPackCode.NullObject;
@@ -783,6 +830,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPeekWideUnionHeader(out ushort tag)
         {
+            EnsureReadable(_currentIndex, 1);
 #if NET8_0_OR_GREATER
             ref var firstTag = ref Unsafe.Add(ref _bufferStart, (nint)(uint)_currentIndex);
 #else
@@ -796,6 +844,7 @@ namespace LuminPack.Core
             }
             else if (firstTag == LuminPackCode.WideTag)
             {
+                EnsureReadable(_currentIndex, 3);
                 tag = Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref firstTag, 1));
                 Advance(3);
                 return true;
@@ -811,6 +860,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPeekWideUnionHeader(ref int index, out ushort tag)
         {
+            EnsureReadable(index, 1);
 #if NET8_0_OR_GREATER
             ref var firstTag = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
 #else
@@ -824,6 +874,7 @@ namespace LuminPack.Core
             }
             else if (firstTag == LuminPackCode.WideTag)
             {
+                EnsureReadable(index, 3);
                 tag = Unsafe.ReadUnaligned<ushort>(ref Unsafe.Add(ref firstTag, 1));
                 index += 3;
                 return true;

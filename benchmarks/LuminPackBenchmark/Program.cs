@@ -13,7 +13,7 @@ class Program
 {
     static void Main()
     {
-        BenchmarkRunner.Run<SerializeBenchmark>();
+        BenchmarkRunner.Run<SimpleBenchmark>();
         LuminPackSerializerOption luminPackSerializerOption = new LuminPackSerializerOption()
         {
             StringEncoding = LuminPackStringEncoding.UTF16,

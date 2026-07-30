@@ -130,15 +130,19 @@ public sealed class UnmanagedArrayParser<T> : LuminPackParser<T[]?>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override void Serialize(ref LuminPackWriter writer, scoped ref T[]? value)
     {
+        int byteCount = value is null || value.Length == 0
+            ? sizeof(int)
+            : checked(sizeof(int) + value.Length * Unsafe.SizeOf<T>());
+        writer.EnsureAdditionalCapacity(byteCount);
         writer.WriteUnmanagedArray(ref value);
         
         if (value is null || value.Length is 0)
         {
-            writer.Advance(4);
+            writer.Advance(sizeof(int));
             return;
         }
         
-        writer.Advance(4 + value.Length * Unsafe.SizeOf<T>());
+        writer.Advance(byteCount);
         writer.CheckBuffer();
     }
 
@@ -256,15 +260,22 @@ public sealed class DangerousUnmanagedArrayParser<T> : LuminPackParser<T[]?>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override void Serialize(ref LuminPackWriter writer, scoped ref T[]? value)
     {
-        writer.DangerousWriteUnmanagedArray(ref value);
-        
         if (value is null || value.Length is 0)
         {
+            writer.EnsureAdditionalCapacity(sizeof(int));
+            ref var index = ref writer.GetCurrentSpanOffset();
+            if (value is null)
+                writer.WriteNullCollectionHeader(ref index);
+            else
+                writer.WriteCollectionHeader(ref index, 0);
             writer.Advance(4);
             return;
         }
-        
-        writer.Advance(4 + value.Length * Unsafe.SizeOf<T>());
+
+        var byteCount = checked(sizeof(int) + value.Length * Unsafe.SizeOf<T>());
+        writer.EnsureAdditionalCapacity(byteCount);
+        writer.DangerousWriteUnmanagedArray(ref value);
+        writer.Advance(byteCount);
         writer.CheckBuffer();
     }
 

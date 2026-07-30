@@ -35,6 +35,7 @@ public sealed class StringBuilderParser : LuminPackParser<StringBuilder>
         foreach (var chunk in value.GetChunks())
         {
             int length = checked(chunk.Length * 2);
+            writer.EnsureCapacity(index, length);
             ref var p = ref Unsafe.Add(ref writer._bufferStart, (nint)(uint)index);
             ref var src = ref MemoryMarshal.GetReference(MemoryMarshal.Cast<char, byte>(chunk.Span));
             Unsafe.CopyBlockUnaligned(ref p, ref src, (uint)length);
@@ -44,8 +45,19 @@ public sealed class StringBuilderParser : LuminPackParser<StringBuilder>
         writer.CheckBuffer();
 
 #else
-        // write as utf16
-        writer.WriteUtf16WithLength(index, value.ToString());
+        // StringBuilder always uses a fixed Int32 character count followed by raw UTF-16.
+        // Do not route this through the configurable string protocol: the reader below
+        // intentionally consumes a collection header, and Unity defaults may use tokens.
+        var text = value.ToString();
+        writer.WriteCollectionHeader(ref index, text.Length);
+        writer.Advance(sizeof(int));
+
+        var length = checked(text.Length * sizeof(char));
+        writer.EnsureCapacity(index, length);
+        ref var destination = ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart), (nint)(uint)index);
+        ref var source = ref MemoryMarshal.GetReference(MemoryMarshal.AsBytes(text.AsSpan()));
+        Unsafe.CopyBlockUnaligned(ref destination, ref source, (uint)length);
+        writer.Advance(length);
         writer.CheckBuffer();
 #endif
     }

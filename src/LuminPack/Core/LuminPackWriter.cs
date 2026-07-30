@@ -90,8 +90,7 @@ namespace LuminPack.Core
             _optionState = option ?? LuminPackWriterOptionalState.NullOption;
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
-            bufferWriter.SetCurrentIndexPtr(ref _currentIndex);
-            _bufferReference = bufferWriter.GetFullSpan();
+            _bufferReference = bufferWriter.BeginWrite(ref _currentIndex);
 #if NET8_0_OR_GREATER
             _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
 #else
@@ -116,6 +115,32 @@ namespace LuminPack.Core
             ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void EnsureAdditionalCapacity(int count) => EnsureCapacity(_currentIndex, count);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void EnsureCapacity(int index, int count)
+        {
+            if ((uint)index <= (uint)_bufferReference.Length &&
+                (uint)count <= (uint)(_bufferReference.Length - index))
+                return;
+
+            if (_writerBuffer is null)
+                LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + count));
+
+            _writerBuffer!.EnsureCapacity(checked(index + count));
+            FlushBuffer();
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [System.Diagnostics.Conditional("DEBUG")]
+        private void EnsureWritableAdvance(int index, int count)
+        {
+            if ((uint)index > (uint)_bufferReference.Length ||
+                (uint)count > (uint)(_bufferReference.Length - index))
+                LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + count));
+        }
+
         /// <summary>
         /// 移动指针
         /// </summary>
@@ -123,11 +148,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance(int count)
         {
-#if DEBUG
-             if (_bufferReference.Length < _currentIndex)
-                LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
-#endif
-            
+            EnsureWritableAdvance(_currentIndex, count);
             _currentIndex += count;
             
         }
@@ -141,11 +162,7 @@ namespace LuminPack.Core
         {
             
             _writerBuffer!.Check(ref this);
-#if DEBUG
-             if (_bufferReference.Length < _currentIndex)
-                LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
-#endif
-            
+            EnsureWritableAdvance(_currentIndex, count);
             _currentIndex += count;
             
         }
@@ -708,7 +725,10 @@ namespace LuminPack.Core
             
             if (status != OperationStatus.Done)
             {
-                LuminPackExceptionHelper.ThrowFailedEncoding(status);
+                if (status == OperationStatus.DestinationTooSmall)
+                    bytesWritten = RetryWriteUtf8WithToken(index, value);
+                else
+                    LuminPackExceptionHelper.ThrowFailedEncoding(status);
             }
             
             var tokenIndex = index + bytesWritten;
@@ -746,15 +766,19 @@ namespace LuminPack.Core
                 return 0;
             }
 
-            if (!MemoryMarshal.AsBytes(value).TryCopyTo(_bufferReference.Slice(index)))
+            var status = StringSerializer.Serialize(value, _bufferReference.Slice(index), out _, out var bytesWritten, replaceInvalidSequences: false);
+            if (status != OperationStatus.Done)
             {
-                LuminPackExceptionHelper.ThrowFailedEncodingUtf8();
+                if (status == OperationStatus.DestinationTooSmall)
+                    bytesWritten = RetryWriteUtf8WithToken(index, value);
+                else
+                    LuminPackExceptionHelper.ThrowFailedEncoding(status);
             }
             
-            var tokenIndex = index + checked(value.Length * sizeof(char));
+            var tokenIndex = index + bytesWritten;
             WriteStringRecordTokenHeader(ref tokenIndex);
             
-            return checked(value.Length * sizeof(char));
+            return bytesWritten;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -769,23 +793,28 @@ namespace LuminPack.Core
             var source = value.AsSpan();
             
             // UTF8.GetMaxByteCount -> (length + 1) * 3
-            var maxByteCount = (value.Length + 1) * 3;
+            var maxByteCount = checked((value.Length + 1) * 3);
             
+            var startIndex = checked(index + 8);
+            var dest = (uint)startIndex <= (uint)_bufferReference.Length
+                ? _bufferReference.Slice(startIndex)
+                : Span<byte>.Empty;
+
+            var status = StringSerializer.Serialize(source, dest, out _, out var bytesWritten, replaceInvalidSequences: false);
+
+            if (status != OperationStatus.Done)
+            {
+                if (status == OperationStatus.DestinationTooSmall)
+                    bytesWritten = RetryWriteUtf8WithLength(index, source, maxByteCount);
+                else
+                    LuminPackExceptionHelper.ThrowFailedEncoding(status);
+            }
+
 #if NET8_0_OR_GREATER
             ref var destPointer = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
 #else
             ref var destPointer = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-
-            var dest = CreateSpan(ref Unsafe.Add(ref destPointer, 8), maxByteCount);
-
-            var status = StringSerializer.Serialize(source, dest, out _, out var bytesWritten, replaceInvalidSequences: false);
-
-            if (status != OperationStatus.Done)
-            { 
-                LuminPackExceptionHelper.ThrowFailedEncoding(status);
-            }
-                
             As<byte, UnmanagedViewModel<int, int>>(ref destPointer) = new UnmanagedViewModel<int, int>(bytesWritten, value.Length);
 
             return bytesWritten;
@@ -830,18 +859,46 @@ namespace LuminPack.Core
                 return 0;
             }
             
-            var length = value.Length * sizeof(char);
-            
-            WriteStringRecordLengthHeader(ref index, length);
-            
             var startIndex = index + 8;
-            
-            if (!MemoryMarshal.AsBytes(value).TryCopyTo(_bufferReference.Slice(startIndex)))
+            var status = StringSerializer.Serialize(value, _bufferReference.Slice(startIndex), out _, out var bytesWritten, replaceInvalidSequences: false);
+            if (status != OperationStatus.Done)
             {
-                LuminPackExceptionHelper.ThrowFailedEncodingUtf8();
+                if (status == OperationStatus.DestinationTooSmall)
+                    bytesWritten = RetryWriteUtf8WithLength(index, value, checked((value.Length + 1) * 3));
+                else
+                    LuminPackExceptionHelper.ThrowFailedEncoding(status);
             }
+
+            WriteStringRecordLengthHeader(ref index, bytesWritten);
+#if NET8_0_OR_GREATER
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)(index + 4)), value.Length);
+#else
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)(index + 4)), value.Length);
+#endif
             
-            return length;
+            return bytesWritten;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private int RetryWriteUtf8WithToken(int index, ReadOnlySpan<char> value)
+        {
+            EnsureCapacity(index, checked((value.Length + 1) * 3 + 1));
+            var status = StringSerializer.Serialize(value, _bufferReference.Slice(index), out _, out var bytesWritten,
+                replaceInvalidSequences: false);
+            if (status != OperationStatus.Done)
+                LuminPackExceptionHelper.ThrowFailedEncoding(status);
+            return bytesWritten;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private int RetryWriteUtf8WithLength(int index, ReadOnlySpan<char> value, int maxByteCount)
+        {
+            EnsureCapacity(index, checked(maxByteCount + 8));
+            var status = StringSerializer.Serialize(value, _bufferReference.Slice(index + 8), out _, out var bytesWritten,
+                replaceInvalidSequences: false);
+            if (status != OperationStatus.Done)
+                LuminPackExceptionHelper.ThrowFailedEncoding(status);
+            return bytesWritten;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -978,9 +1035,17 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteArray<T>(T?[]? array)
         {
-            
+            if (array is null)
+            {
+                EnsureAdditionalCapacity(sizeof(int));
+                WriteNullCollectionHeader(ref _currentIndex);
+                Advance(sizeof(int));
+                return;
+            }
+
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
+                EnsureAdditionalCapacity(checked(sizeof(int) + array.Length * Unsafe.SizeOf<T>()));
                 DangerousWriteUnmanagedArray(ref _currentIndex, array, out var offset);
                 
                 Advance(offset);
@@ -990,15 +1055,6 @@ namespace LuminPack.Core
                 return;
             }
 
-            if (array is null)
-            {
-                WriteNullCollectionHeader(ref _currentIndex);
-                
-                Advance(4);
-                
-                return;
-            }
-            
             var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
             
@@ -1023,8 +1079,17 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteArray<T>(scoped ref int index, T?[]? array)
         {
+            if (array is null)
+            {
+                EnsureCapacity(index, sizeof(int));
+                WriteNullCollectionHeader(ref index);
+                Advance(sizeof(int));
+                return;
+            }
+
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
+                EnsureCapacity(index, checked(sizeof(int) + array.Length * Unsafe.SizeOf<T>()));
                 DangerousWriteUnmanagedArray(ref index, array, out var offset);
                 
                 Advance(offset);
@@ -1034,15 +1099,6 @@ namespace LuminPack.Core
                 return;
             }
 
-            if (array is null)
-            {
-                WriteNullCollectionHeader(ref index);
-                
-                Advance(4);
-                
-                return;
-            }
-            
             var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
             
@@ -1068,6 +1124,7 @@ namespace LuminPack.Core
             
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
+                EnsureAdditionalCapacity(checked(sizeof(int) + span.Length * Unsafe.SizeOf<T>()));
                 DangerousWriteUnmanagedSpan(ref _currentIndex, span, out var offset);
                 
                 Advance(offset);
@@ -1106,6 +1163,7 @@ namespace LuminPack.Core
             
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
+                EnsureAdditionalCapacity(checked(sizeof(int) + span.Length * Unsafe.SizeOf<T>()));
                 DangerousWriteUnmanagedSpan(ref index, span, out var offset);
                 
                 Advance(offset);
@@ -1153,7 +1211,8 @@ namespace LuminPack.Core
                     return;
                 }
             
-                var srcLength = Unsafe.SizeOf<T>() * span.Length;
+                var srcLength = checked(Unsafe.SizeOf<T>() * span.Length);
+                EnsureAdditionalCapacity(srcLength);
 
 #if NET8_0_OR_GREATER
                 ref var dest = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
@@ -1162,14 +1221,11 @@ namespace LuminPack.Core
 #endif
                 ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference());
             
-                Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+                Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)srcLength);
             
                 spanOffset = srcLength;
                 
                 Advance(spanOffset);
-                
-                CheckBuffer();
-                
                 return;
             }
 
@@ -1202,7 +1258,8 @@ namespace LuminPack.Core
                     return;
                 }
             
-                var srcLength = Unsafe.SizeOf<T>() * span.Length;
+                var srcLength = checked(Unsafe.SizeOf<T>() * span.Length);
+                EnsureAdditionalCapacity(srcLength);
 
 #if NET8_0_OR_GREATER
                 ref var dest = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
@@ -1211,14 +1268,11 @@ namespace LuminPack.Core
 #endif
                 ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
             
-                Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
+                Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)srcLength);
             
                 spanOffset = srcLength;
                 
                 Advance(spanOffset);
-                
-                CheckBuffer();
-                
                 return;
             }
 

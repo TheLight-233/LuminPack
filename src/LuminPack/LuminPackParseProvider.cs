@@ -37,10 +37,9 @@ namespace LuminPack
         {
             if (parser == null) throw new ArgumentNullException(nameof(parser));
 
-            Check<T>.Registered = true;
-            Check<T>.ParserType = ParserType.Parsers;
-
             Cache<T>.Parser = parser;
+            Check<T>.ParserType = ParserType.Parsers;
+            System.Threading.Volatile.Write(ref Check<T>.Registered, true);
         }
 
         /// <summary>
@@ -87,7 +86,11 @@ namespace LuminPack
                 var typeIsReferenceOrContainsReferences = RuntimeHelpers.IsReferenceOrContainsReferences<T>();
                 var f = CreateGenericParser(type, typeIsReferenceOrContainsReferences) as LuminPackParser<T>;
 
-                return f is null;
+                if (f is null)
+                    return false;
+
+                RegisterParsers(f);
+                return true;
             }
             catch (Exception)
             {
@@ -267,7 +270,8 @@ namespace LuminPack
             public static LuminPackParser<T>? Parser;
             
             static Cache()
-            { 
+            {
+                RuntimeHelpers.RunClassConstructor(typeof(LuminPackParseProvider).TypeHandle);
                 if (Check<T>.Registered) return;
 
                 try

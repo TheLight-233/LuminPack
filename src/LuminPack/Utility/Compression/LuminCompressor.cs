@@ -15,7 +15,7 @@
 //    • CLR zero-initialises on first creation  (one-time ~60 ns cost).
 //    • All subsequent calls reuse the same buffer with NO init.
 //    • Stale entries from previous calls are harmless:
-//        - dist check rejects candidates outside the 64 KB window
+//        - modular distance/current-position checks reject invalid candidates
 //        - ReadU32 confirm rejects fingerprint mismatches
 //        - For same-input benchmarks, stale entries ARE warm-started!
 //
@@ -27,9 +27,9 @@
 //  buffer, ReadU32(candidate) is an out-of-bounds read.
 //  The fix is ALWAYS:
 //    if (dist_check_passes && ReadU32(candidate) == v4)  ← SHORT-CIRCUIT
-//  The unsigned underflow trick `(uint)(ip - candidate) - 1u < MaxOffset`
-//  ensures 1 ≤ dist ≤ MaxOffset in a single branchless comparison,
-//  and ReadU32 is only called when candidate is a proven valid past position.
+//  The low 16-bit position is reconstructed into a modular distance.  The
+//  distance and current-position checks ensure 1 ≤ dist ≤ MaxOffset and that
+//  the candidate cannot precede the input; only then is ReadU32 evaluated.
 //
 //  Other optimisations
 //  ───────────────────
@@ -109,12 +109,13 @@ internal static class LuminCompressor
     // ──────────────────────────────────────────────────────────────
     //  Per-thread hash table — reused across calls, never re-zeroed
     // ──────────────────────────────────────────────────────────────
-    //  Entries store raw 16-bit source positions (0-based).
-    //  0 = empty sentinel (CLR zero-inits on first allocation).
+    //  Entries store the low 16 bits of source positions (0-based).
+    //  A candidate is reconstructed relative to the current position, so
+    //  inputs larger than 64 KiB keep using the immediately preceding window.
     //
     //  Stale entries from previous calls are safe because:
-    //    (a) (uint)(ip - candidate) - 1u < MaxOffset  — rejects any
-    //        candidate that is not a valid prior position within window
+    //    (a) modular distance + current-position checks — reject any
+    //        candidate that is not a valid prior position within the window
     //    (b) ReadU32(candidate) == v4                 — 4-byte confirm
     //  Both are checked (in that order — dist BEFORE ReadU32) so no
     //  out-of-bounds read ever occurs.
@@ -125,8 +126,20 @@ internal static class LuminCompressor
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetMaxCompressedSize(int sourceLength)
     {
-        if (sourceLength <= 0) return HeaderSize;
-        return HeaderSize + sourceLength + (sourceLength >> 8) + 32;
+        // Preserve the original shift-only hot path where that bound is proven
+        // to dominate source + source/255 + header + 16.
+        const int FastBoundMaxSourceLength = 1_109_504;
+        if (unchecked((uint)(sourceLength - 1)) < FastBoundMaxSourceLength)
+            return HeaderSize + sourceLength + (sourceLength >> 8) + 32;
+
+        if (sourceLength == 0) return HeaderSize;
+
+        // LZ-style literal-length continuation uses one byte per 255 bytes,
+        // not per 256.  The old sourceLength >> 8 bound could under-allocate
+        // for large incompressible inputs and let CompressCore write past dst.
+        const int MaxSourceLength = 2_139_095_016;
+        if ((uint)sourceLength > MaxSourceLength) ThrowSourceTooLarge();
+        return HeaderSize + sourceLength + (sourceLength / 255) + 16;
     }
 
     /// <summary>Original uncompressed size stored in a LuminZ header.</summary>
@@ -137,6 +150,7 @@ internal static class LuminCompressor
         if (Unsafe.ReadUnaligned<uint>(ref p) != Magic) ThrowInvalidData();
         int len = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref p, 4));
         if (len < 0) ThrowInvalidData();
+        ValidateDeclaredOutputSize(compressed.Length, len);
         return len;
     }
 
@@ -202,7 +216,11 @@ internal static class LuminCompressor
         if (Unsafe.ReadUnaligned<uint>(ref src) != Magic) ThrowInvalidData();
         int origLen = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref src, 4));
         if (origLen < 0) ThrowInvalidData();
-        if (origLen == 0) return 0;
+        if (origLen == 0)
+        {
+            ValidateEmptyFrame(source.Length);
+            return 0;
+        }
         if (destination.Length < origLen) ThrowInsufficientBuffer();
         return DecompressCore(ref Unsafe.Add(ref src, HeaderSize), source.Length - HeaderSize, ref dst, origLen);
     }
@@ -211,6 +229,12 @@ internal static class LuminCompressor
     {
         ReadOnlySpan<byte> srcSpan = source.GetSpan();
         int needed = GetMaxCompressedSize(srcSpan.Length);
+
+        // EnsureCapacity and the output write both invalidate/corrupt srcSpan
+        // when source and destination are the same unmanaged buffer.
+        if (ReferenceEquals(source, destination))
+            return CompressAliased(source, srcSpan, needed);
+
         destination.EnsureCapacity(needed);
         int written = Compress(srcSpan, destination.GetFullSpan());
         destination.SetWrittenCount(written);
@@ -221,11 +245,61 @@ internal static class LuminCompressor
     {
         ReadOnlySpan<byte> srcSpan = source.GetSpan();
         int origLen = GetDecompressedSize(srcSpan);
-        if (origLen == 0) { destination.SetWrittenCount(0); return 0; }
+        if (origLen == 0)
+        {
+            destination.SetWrittenCount(0);
+            return 0;
+        }
+
+        if (ReferenceEquals(source, destination))
+            return DecompressAliased(source, srcSpan, origLen);
+
         destination.EnsureCapacity(origLen);
         int written = Decompress(srcSpan, destination.GetFullSpan());
         destination.SetWrittenCount(written);
         return written;
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int CompressAliased(
+        LuminBufferWriter buffer,
+        ReadOnlySpan<byte> source,
+        int maxLength)
+    {
+        byte[] temp = ArrayPool<byte>.Shared.Rent(maxLength);
+        try
+        {
+            int written = Compress(source, temp.AsSpan(0, maxLength));
+            buffer.EnsureCapacity(written);
+            temp.AsSpan(0, written).CopyTo(buffer.GetFullSpan());
+            buffer.SetWrittenCount(written);
+            return written;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(temp);
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int DecompressAliased(
+        LuminBufferWriter buffer,
+        ReadOnlySpan<byte> source,
+        int decompressedLength)
+    {
+        byte[] temp = ArrayPool<byte>.Shared.Rent(decompressedLength);
+        try
+        {
+            int written = Decompress(source, temp.AsSpan(0, decompressedLength));
+            buffer.EnsureCapacity(written);
+            temp.AsSpan(0, written).CopyTo(buffer.GetFullSpan());
+            buffer.SetWrittenCount(written);
+            return written;
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(temp);
+        }
     }
 
     public static void CompressAndWriteTo(ReadOnlySpan<byte> source, ref LuminPackWriter writer)
@@ -236,6 +310,7 @@ internal static class LuminCompressor
         try
         {
             int compLen = Compress(source, rent.AsSpan(0, maxLen));
+            writer.EnsureAdditionalCapacity(compLen);
             ref byte p = ref LuminPackMarshal.GetArrayDataReference(rent);
 #if NET8_0_OR_GREATER
             Unsafe.CopyBlockUnaligned(
@@ -317,30 +392,23 @@ internal static class LuminCompressor
             for (;;)
             {
                 v4 = ReadU32(ref ip);
-                int    h = H4(v4, hashShift);
-                ushort s = Unsafe.Add(ref ht, h);                              // read OLD candidate position
-                Unsafe.Add(ref ht, h) = (ushort)(int)Unsafe.ByteOffset(ref src, ref ip); // write CURRENT (read-before-write)
+                int currentPosition = (int)Unsafe.ByteOffset(ref src, ref ip);
+                int h = H4(v4, hashShift);
+                ushort storedPosition = Unsafe.Add(ref ht, h); // read OLD candidate position
+                Unsafe.Add(ref ht, h) = unchecked((ushort)currentPosition); // write CURRENT (read-before-write)
 
-                candidate = ref Unsafe.Add(ref src, s);
-
-                // ╔══════════════════════════════════════════════════╗
-                // ║  CRITICAL: dist check BEFORE ReadU32             ║
-                // ║                                                  ║
-                // ║  (uint)(ip - candidate) - 1u < (uint)MaxOffset  ║
-                // ║                                                  ║
-                // ║  This single expression checks BOTH:             ║
-                // ║   • dist >= 1  (no self-match → offset ≠ 0)     ║
-                // ║   • dist <= MaxOffset  (within 64 KB window)    ║
-                // ║                                                  ║
-                // ║  For stale/garbage pos: if candidate > ip,       ║
-                // ║  ip-candidate is negative; as uint it is huge    ║
-                // ║  → subtraction underflows again → huge → false.  ║
-                // ║  Short-circuit: ReadU32 called ONLY when         ║
-                // ║  candidate is a proven valid prior position.     ║
-                // ╚══════════════════════════════════════════════════╝
-                if ((uint)(int)Unsafe.ByteOffset(ref candidate, ref ip) - 1u < (uint)MaxOffset
-                    && ReadU32(ref candidate) == v4)
-                    break;
+                // Reconstruct the nearest preceding position with the stored
+                // low 16 bits. This is the key to retaining matches beyond
+                // 64/128 KiB instead of treating wrapped positions as offsets
+                // into the first 64 KiB of the input.
+                int distance = unchecked((ushort)(currentPosition - storedPosition));
+                if ((uint)(distance - 1) < (uint)MaxOffset
+                    && (uint)distance <= (uint)currentPosition)
+                {
+                    candidate = ref Unsafe.Add(ref ip, -distance);
+                    if (ReadU32(ref candidate) == v4)
+                        break;
+                }
 
                 ip = ref Unsafe.Add(ref ip, (int)(skip >> 5));
                 skip++;
@@ -380,31 +448,39 @@ internal static class LuminCompressor
                 {
                     uint   lv4   = ReadU32(ref lip);
                     int    lh    = H4(lv4, hashShift);
-                    ushort ls    = Unsafe.Add(ref ht, lh);                                  // read OLD candidate
-                    Unsafe.Add(ref ht, lh) = (ushort)(int)Unsafe.ByteOffset(ref src, ref lip); // write lip (read-before-write)
-                    ref byte lcand = ref Unsafe.Add(ref src, ls);
+                    int lazyPosition = (int)Unsafe.ByteOffset(ref src, ref lip);
+                    ushort ls = Unsafe.Add(ref ht, lh); // read OLD candidate
+                    Unsafe.Add(ref ht, lh) = unchecked((ushort)lazyPosition); // write lip (read-before-write)
+                    int lazyDistance = unchecked((ushort)(lazyPosition - ls));
 
-                    if ((uint)(int)Unsafe.ByteOffset(ref lcand, ref lip) - 1u < (uint)MaxOffset
-                        && ReadU32(ref lcand) == lv4)
+                    if ((uint)(lazyDistance - 1) < (uint)MaxOffset
+                        && (uint)lazyDistance <= (uint)lazyPosition)
                     {
-                        int lazyLen = MinMatch + ExtendMatch(
-                            ref Unsafe.Add(ref lip,   MinMatch),
-                            ref Unsafe.Add(ref lcand, MinMatch),
-                            ref extLimit);
-                        if (lazyLen > matchLen)
+                        ref byte lcand = ref Unsafe.Add(ref lip, -lazyDistance);
+                        if (ReadU32(ref lcand) == lv4)
                         {
-                            // The lazy match wins: treat `ip` as one more literal,
-                            // shift the match start forward by 1.
-                            ip        = ref lip;
-                            candidate = ref lcand;
-                            matchLen  = lazyLen;
-                            // Re-run backward extension from the new (lazy) ip.
-                            while (Unsafe.IsAddressGreaterThan(ref ip, ref anchor)
-                                && Unsafe.IsAddressGreaterThan(ref candidate, ref src)
-                                && Unsafe.Add(ref ip, -1) == Unsafe.Add(ref candidate, -1))
+                            int lazyLen = MinMatch + ExtendMatch(
+                                ref Unsafe.Add(ref lip,   MinMatch),
+                                ref Unsafe.Add(ref lcand, MinMatch),
+                                ref extLimit);
+                            if (lazyLen > matchLen)
                             {
-                                ip        = ref Unsafe.Add(ref ip,        -1);
-                                candidate = ref Unsafe.Add(ref candidate, -1);
+                                // The lazy match wins: treat `ip` as one more literal,
+                                // shift the match start forward by 1.
+                                ip        = ref lip;
+                                candidate = ref lcand;
+                                matchLen  = lazyLen;
+                                // Re-run backward extension from the new (lazy) ip.
+                                int backwardLength = 0;
+                                while (Unsafe.IsAddressGreaterThan(ref ip, ref anchor)
+                                    && Unsafe.IsAddressGreaterThan(ref candidate, ref src)
+                                    && Unsafe.Add(ref ip, -1) == Unsafe.Add(ref candidate, -1))
+                                {
+                                    ip        = ref Unsafe.Add(ref ip,        -1);
+                                    candidate = ref Unsafe.Add(ref candidate, -1);
+                                    backwardLength++;
+                                }
+                                matchLen += backwardLength;
                             }
                         }
                     }
@@ -436,9 +512,9 @@ internal static class LuminCompressor
             // Refresh boundary positions ip-2 and ip-1.
             // Do NOT refresh ip itself — it is written at the top of the next for-loop.
             Unsafe.Add(ref ht, H4(ReadU32(ref Unsafe.Add(ref ip, -2)), hashShift))
-                = (ushort)(int)Unsafe.ByteOffset(ref src, ref Unsafe.Add(ref ip, -2));
+                = unchecked((ushort)(int)Unsafe.ByteOffset(ref src, ref Unsafe.Add(ref ip, -2)));
             Unsafe.Add(ref ht, H4(ReadU32(ref Unsafe.Add(ref ip, -1)), hashShift))
-                = (ushort)(int)Unsafe.ByteOffset(ref src, ref Unsafe.Add(ref ip, -1));
+                = unchecked((ushort)(int)Unsafe.ByteOffset(ref src, ref Unsafe.Add(ref ip, -1)));
         }
 
         EMIT_LAST:
@@ -496,23 +572,18 @@ internal static class LuminCompressor
             // ── Literal length ────────────────────────────────────
             int litLen = litNib;
             if (litNib == 15)
-            {
-                byte s;
-                do
-                {
-                    if (!Unsafe.IsAddressLessThan(ref ip, ref srcEnd)) ThrowInvalidData();
-                    s  = ip;
-                    ip = ref Unsafe.Add(ref ip, 1);
-                    litLen += s;
-                }
-                while (s == 255);
-            }
+                ip = ref ReadExtendedLength(
+                    ref ip,
+                    ref srcEnd,
+                    litLen,
+                    (int)Unsafe.ByteOffset(ref op, ref dstEnd),
+                    out litLen);
 
             // ── Copy literals ─────────────────────────────────────
             if (litLen > 0)
             {
-                if (Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref ip, litLen), ref srcEnd)
-                 || Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref op, litLen), ref dstEnd))
+                if ((uint)litLen > (uint)(int)Unsafe.ByteOffset(ref ip, ref srcEnd)
+                 || (uint)litLen > (uint)(int)Unsafe.ByteOffset(ref op, ref dstEnd))
                     ThrowInvalidData();
                 Unsafe.CopyBlockUnaligned(ref op, ref ip, (uint)litLen);
                 ip = ref Unsafe.Add(ref ip, litLen);
@@ -520,7 +591,19 @@ internal static class LuminCompressor
             }
 
             // ── End-of-stream ─────────────────────────────────────
-            if (Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref ip, OffsetBytes), ref srcEnd)) break;
+            if (Unsafe.AreSame(ref ip, ref srcEnd))
+            {
+                // A final sequence has literals only.  Requiring a zero match
+                // nibble makes a token whose offset/match body was truncated
+                // distinguishable from a valid final token.
+                if (matchNib != 0 || !Unsafe.AreSame(ref op, ref dstEnd))
+                    ThrowInvalidData();
+                return origLen;
+            }
+
+            // One trailing byte cannot contain the required 16-bit offset.
+            if ((uint)(int)Unsafe.ByteOffset(ref ip, ref srcEnd) < OffsetBytes)
+                ThrowInvalidData();
 
             // ── Match offset (2 bytes LE) ─────────────────────────
             int offset = ip | (Unsafe.Add(ref ip, 1) << 8);
@@ -531,26 +614,54 @@ internal static class LuminCompressor
             // ── Match length ──────────────────────────────────────
             int matchLen = matchNib + MinMatch;
             if (matchNib == 15)
-            {
-                byte s;
-                do
-                {
-                    if (!Unsafe.IsAddressLessThan(ref ip, ref srcEnd)) ThrowInvalidData();
-                    s  = ip;
-                    ip = ref Unsafe.Add(ref ip, 1);
-                    matchLen += s;
-                }
-                while (s == 255);
-            }
+                ip = ref ReadExtendedLength(
+                    ref ip,
+                    ref srcEnd,
+                    matchLen,
+                    (int)Unsafe.ByteOffset(ref op, ref dstEnd),
+                    out matchLen);
 
-            if (Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref op, matchLen), ref dstEnd)) ThrowInvalidData();
+            if ((uint)matchLen > (uint)(int)Unsafe.ByteOffset(ref op, ref dstEnd))
+                ThrowInvalidData();
 
             // ── Copy match ────────────────────────────────────────
             CopyMatch(ref op, ref Unsafe.Add(ref op, -offset), matchLen, offset);
             op = ref Unsafe.Add(ref op, matchLen);
         }
 
-        return (int)Unsafe.ByteOffset(ref dstBase, ref op);
+        // Every valid non-empty frame terminates in the literals-only branch
+        // above. Reaching the physical end immediately after a match means the
+        // final sequence was truncated, even if its match happened to fill dst.
+        ThrowInvalidData();
+        return 0;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ref byte ReadExtendedLength(
+        ref byte ip,
+        ref byte srcEnd,
+        int length,
+        int maxLength,
+        out int decodedLength)
+    {
+        if ((uint)length > (uint)maxLength) ThrowInvalidData();
+
+        byte next;
+        do
+        {
+            if (!Unsafe.IsAddressLessThan(ref ip, ref srcEnd)) ThrowInvalidData();
+            next = ip;
+            ip = ref Unsafe.Add(ref ip, 1);
+
+            // Bound before adding: prevents signed wrap and rejects malicious
+            // length chains as soon as they exceed the declared output size.
+            if (next > maxLength - length) ThrowInvalidData();
+            length += next;
+        }
+        while (next == byte.MaxValue);
+
+        decodedLength = length;
+        return ref ip;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -658,9 +769,38 @@ internal static class LuminCompressor
 #endif
     }
 
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ValidateEmptyFrame(int sourceLength)
+    {
+        if (sourceLength != HeaderSize) ThrowInvalidData();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void ValidateDeclaredOutputSize(int sourceLength, int decompressedLength)
+    {
+        if (decompressedLength == 0)
+        {
+            ValidateEmptyFrame(sourceLength);
+            return;
+        }
+
+        int bodyLength = sourceLength - HeaderSize;
+        // Every body byte can account for at most 255 output bytes through an
+        // LSIC continuation. This deliberately loose upper bound rejects tiny
+        // forged frames before callers rent/resize to a multi-gigabyte header.
+        if (bodyLength <= 0 || decompressedLength > (long)bodyLength * byte.MaxValue)
+            ThrowInvalidData();
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowInsufficientBuffer()
         => throw new ArgumentException("Destination buffer is too small for LuminZ operation.");
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ThrowSourceTooLarge()
+        => throw new ArgumentOutOfRangeException(
+            "sourceLength",
+            "Source is too large to represent a bounded LuminZ output in a single Span<byte>.");
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowInvalidData()

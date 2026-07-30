@@ -1034,9 +1034,45 @@ namespace LuminPack.Parsers
                 return;
             }
 
+#if NET8_0_OR_GREATER
             var span = LuminPackMarshal.GetStackSpan(value);
-            
             writer.WriteSpan(ref index, span);
+#else
+            var size = value.Count;
+            var payloadLength = RuntimeHelpers.IsReferenceOrContainsReferences<T>()
+                ? 0
+                : checked(size * Unsafe.SizeOf<T>());
+            writer.EnsureAdditionalCapacity(checked(sizeof(int) + payloadLength));
+            writer.WriteCollectionHeader(ref index, size);
+            writer.Advance(sizeof(int));
+
+            if (size == 0)
+                return;
+
+            var buffer = ArrayPool<T>.Shared.Rent(size);
+            try
+            {
+                value.CopyTo(buffer, 0); // public order is top-to-bottom
+                if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+                {
+                    Array.Reverse(buffer, 0, size); // wire order remains bottom-to-top
+                    ref var destination = ref writer.GetSpanReference(index);
+                    ref var source = ref Unsafe.As<T, byte>(ref buffer[0]);
+                    Unsafe.CopyBlockUnaligned(ref destination, ref source, (uint)payloadLength);
+                    writer.Advance(payloadLength);
+                    return;
+                }
+
+                var parser = LuminPackParseProvider.Cache<T>.Parser!;
+                for (var i = size - 1; i >= 0; i--)
+                    parser.Serialize(ref writer, ref buffer[i]);
+                writer.CheckBuffer();
+            }
+            finally
+            {
+                ArrayPool<T>.Shared.Return(buffer, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+            }
+#endif
         }
 
         [Preserve]
@@ -1064,9 +1100,34 @@ namespace LuminPack.Parsers
                 value.Clear();
             }
             
+#if NET8_0_OR_GREATER
             var span = LuminPackMarshal.GetStackSpan(value, length);
-            
             reader.ReadSpan(ref index, length, ref span);
+#else
+            if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+            {
+                var itemSize = Unsafe.SizeOf<T>();
+                for (var i = 0; i < length; i++)
+                {
+                    T item = default!;
+                    Unsafe.CopyBlockUnaligned(
+                        ref Unsafe.As<T, byte>(ref item),
+                        ref reader.GetSpanReference(index),
+                        (uint)itemSize);
+                    reader.Advance(itemSize);
+                    value.Push(item);
+                }
+                return;
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            for (var i = 0; i < length; i++)
+            {
+                T? item = default;
+                parser.Deserialize(ref reader, ref item);
+                value.Push(item);
+            }
+#endif
         }
 
         [Preserve]
@@ -1079,8 +1140,24 @@ namespace LuminPack.Parsers
                 return;
             }
             
+#if NET8_0_OR_GREATER
             var span = LuminPackMarshal.GetStackSpan(value);
             evaluator.CalculateSpan(ref span);
+#else
+            evaluator += sizeof(int);
+            if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+            {
+                evaluator += checked(value.Count * Unsafe.SizeOf<T>());
+                return;
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            foreach (var item in value)
+            {
+                var current = item;
+                parser.CalculateOffset(ref evaluator, ref current);
+            }
+#endif
         }
 
         [Preserve]
@@ -1102,15 +1179,14 @@ namespace LuminPack.Parsers
 
             var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
-            // 使用内部Span进行快速遍历
-            var span = LuminPackMarshal.GetStackSpan(value);
             bool isFirst = true;
-            foreach (ref var v in span)
+            foreach (var item in value)
             {
                 if (!isFirst) writer.WriteByteRaw((byte)',');
                 else isFirst = false;
                 writer.SetFirstElement(true);
-                parser.SerializeJson(ref writer, ref v);
+                var current = item;
+                parser.SerializeJson(ref writer, ref current);
             }
 
             writer.WriteArrayEnd();
@@ -1167,101 +1243,103 @@ namespace LuminPack.Parsers
         public override unsafe void Serialize(ref LuminPackWriter writer, scoped ref Queue<T?>? value)
         {
             ref var index = ref writer.GetCurrentSpanOffset();
-            
+
             if (value is null)
             {
+                writer.EnsureAdditionalCapacity(sizeof(int));
                 writer.WriteNullCollectionHeader(ref index);
-
-                index += 4;
-                
+                index += sizeof(int);
                 return;
             }
 
-            var span = LuminPackMarshal.GetQueueSpan(value, value.Count);
-            
-            LuminPackMarshal.GetQueueSize(value, out var head, out var tail, out var size);
-            
+            var size = value.Count;
+            if (size == 0)
+            {
+                writer.EnsureAdditionalCapacity(sizeof(int));
+                writer.WriteCollectionHeader(ref index, 0);
+                index += sizeof(int);
+                return;
+            }
+
+            var payloadLength = RuntimeHelpers.IsReferenceOrContainsReferences<T>()
+                ? 0
+                : checked(size * Unsafe.SizeOf<T>());
+
+            writer.EnsureAdditionalCapacity(checked(sizeof(int) * 4 + payloadLength));
+            writer.WriteCollectionHeader(ref index, size);
+            index += sizeof(int);
+            writer.WriteUnmanaged(0); // normalized head
+            index += sizeof(int);
+            writer.WriteUnmanaged(0); // normalized tail for a full ring
+            index += sizeof(int);
+            writer.WriteUnmanaged(size);
+            index += sizeof(int);
+
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
-                if (span.IsEmpty)
-                {
-                    writer.WriteCollectionHeader(ref index, 0);
-                    
-                    writer.Advance(4);
-                    
-                    return;
-                }
-            
-                writer.WriteCollectionHeader(ref index, span.Length);
-                
-                writer.Advance(4);
-                
-                writer.WriteUnmanaged(head);
-            
-                writer.Advance(4);
-
-                writer.WriteUnmanaged(tail);
-            
-                writer.Advance(4);
-            
-                writer.WriteUnmanaged(size);
-            
-                writer.Advance(4);
-            
-                var srcLength = Unsafe.SizeOf<T>() * span.Length;
+#if NET8_0_OR_GREATER
+                LuminPackMarshal.GetQueueSize(value, out _, out var head, out _);
+                var storage = LuminPackMarshal.GetQueueSpan(value);
+                var firstLength = Math.Min(size, storage.Length - head);
+                var firstSegment = storage.Slice(head, firstLength);
+                var secondSegment = storage.Slice(0, size - firstLength);
 
 #if NET8_0_OR_GREATER
-                ref var dest = ref Unsafe.Add(ref writer._bufferStart, (nint)(uint)index);
+                ref var destination = ref Unsafe.Add(ref writer._bufferStart, (nint)(uint)index);
 #else
-                ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart), (nint)(uint)index);
+                ref var destination = ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart), (nint)(uint)index);
 #endif
-                ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference()!);
-            
-                Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)srcLength);
-            
-                writer.Advance(srcLength);
-                
-                writer.CheckBuffer();
-                
+                var firstBytes = checked(firstSegment.Length * Unsafe.SizeOf<T>());
+                if (firstBytes != 0)
+                {
+                    ref var source = ref Unsafe.As<T, byte>(ref firstSegment.GetPinnableReference()!);
+                    Unsafe.CopyBlockUnaligned(ref destination, ref source, (uint)firstBytes);
+                }
+
+                var secondBytes = payloadLength - firstBytes;
+                if (secondBytes != 0)
+                {
+                    ref var source = ref Unsafe.As<T, byte>(ref secondSegment.GetPinnableReference()!);
+                    Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref destination, firstBytes), ref source, (uint)secondBytes);
+                }
+#else
+                var buffer = ArrayPool<T>.Shared.Rent(size);
+                try
+                {
+                    value.CopyTo(buffer, 0);
+                    ref var destination = ref Unsafe.Add(ref Unsafe.AsRef<byte>(writer._bufferStart), (nint)(uint)index);
+                    ref var source = ref Unsafe.As<T, byte>(ref buffer[0]);
+                    Unsafe.CopyBlockUnaligned(ref destination, ref source, (uint)payloadLength);
+                }
+                finally
+                {
+                    ArrayPool<T>.Shared.Return(buffer, RuntimeHelpers.IsReferenceOrContainsReferences<T>());
+                }
+#endif
+
+                index += payloadLength;
                 return;
             }
 
-            if (span.IsEmpty)
-            {
-                writer.WriteNullCollectionHeader(ref index);
-                
-                writer.Advance(4);
-                
-                return;
-            }
-            
             var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            
-            writer.WriteCollectionHeader(ref index, span.Length);
-            
-            writer.Advance(4);
-
-            writer.WriteUnmanaged(head);
-            
-            writer.Advance(4);
-
-            writer.WriteUnmanaged(tail);
-            
-            writer.Advance(4);
-            
-            writer.WriteUnmanaged(size);
-            
-            writer.Advance(4);
-            
-            foreach (var item in span)
+#if NET8_0_OR_GREATER
+            LuminPackMarshal.GetQueueSize(value, out _, out var referenceHead, out _);
+            var referenceStorage = LuminPackMarshal.GetQueueSpan(value);
+            var referenceFirstLength = Math.Min(size, referenceStorage.Length - referenceHead);
+            var first = referenceStorage.Slice(referenceHead, referenceFirstLength);
+            var second = referenceStorage.Slice(0, size - referenceFirstLength);
+            foreach (ref var item in first)
+                parser.Serialize(ref writer, ref item);
+            foreach (ref var item in second)
+                parser.Serialize(ref writer, ref item);
+#else
+            foreach (var item in value)
             {
-                var v = item;
-                parser.Serialize(ref writer, ref v);
+                var current = item;
+                parser.Serialize(ref writer, ref current);
             }
-            
+#endif
             writer.CheckBuffer();
-
         }
 
         [Preserve]
@@ -1292,43 +1370,42 @@ namespace LuminPack.Parsers
 #endif
             }
 
-
-            var span = LuminPackMarshal.GetQueueSpan(value, length);
-
-            reader.ReadUnmanaged(out int head);
-            
-            reader.Advance(4);
-
-            reader.ReadUnmanaged(out int tail);
-            
-            reader.Advance(4);
-            
-            reader.ReadUnmanaged(out int size);
-            
-            reader.Advance(4);
-            
-            LuminPackMarshal.SetQueueSize(value, head, tail, size);
-            
-            if (length is 0)
-            {
+            if (length == 0)
                 return;
-            }
+
+            reader.ReadUnmanaged(out int storedHead);
             
-            if (span.Length != length)
+            reader.Advance(4);
+
+            reader.ReadUnmanaged(out int storedTail);
+            
+            reader.Advance(4);
+            
+            reader.ReadUnmanaged(out int storedSize);
+            
+            reader.Advance(4);
+
+            if (storedSize != length || storedHead < 0 || storedTail < 0)
             {
-                span = LuminPackMarshal.AllocateUninitializedArray<T>(length);
+                LuminPackExceptionHelper.ThrowInvalidRange(storedSize, length);
             }
-            
+
+#if NET8_0_OR_GREATER
+            var span = LuminPackMarshal.GetQueueSpan(value, length);
+            var normalizedTail = LuminPackMarshal.GetQueueSpan(value).Length == length ? 0 : length;
+
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
                 ref var dest = ref LuminPackMarshal.GetReference(ref span.GetPinnableReference());
             
-                var srcLength = length * Unsafe.SizeOf<T>();
+                var srcLength = checked(length * Unsafe.SizeOf<T>());
 
+                reader.EnsureReadable(index, srcLength);
                 Unsafe.CopyBlockUnaligned(ref dest, ref reader.GetSpanReference(index), (uint)srcLength);
                 
                 reader.Advance(srcLength);
-                
+
+                LuminPackMarshal.SetQueueSize(value, normalizedTail, 0, length);
                 return;
             }
             
@@ -1341,8 +1418,33 @@ namespace LuminPack.Parsers
             {
                 parser.Deserialize(ref reader, ref span[i]);
             }
-            
-            
+
+            LuminPackMarshal.SetQueueSize(value, normalizedTail, 0, length);
+#else
+            if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+            {
+                var itemSize = Unsafe.SizeOf<T>();
+                for (var i = 0; i < length; i++)
+                {
+                    T item = default!;
+                    Unsafe.CopyBlockUnaligned(
+                        ref Unsafe.As<T, byte>(ref item),
+                        ref reader.GetSpanReference(index),
+                        (uint)itemSize);
+                    reader.Advance(itemSize);
+                    value.Enqueue(item);
+                }
+                return;
+            }
+
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            for (var i = 0; i < length; i++)
+            {
+                T? item = default;
+                parser.Deserialize(ref reader, ref item);
+                value.Enqueue(item);
+            }
+#endif
         }
 
         [Preserve]
@@ -1356,11 +1458,19 @@ namespace LuminPack.Parsers
             }
 
 
-            var span = LuminPackMarshal.GetQueueSpan(value);
-            evaluator.CalculateSpan(ref span);
+            evaluator += 16; // collection header + normalized head/tail/size
+            if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
+            {
+                evaluator += checked(value.Count * Unsafe.SizeOf<T>());
+                return;
+            }
 
-            //head, tail and size
-            evaluator += 12;
+            var parser = LuminPackParseProvider.Cache<T>.Parser!;
+            foreach (var item in value)
+            {
+                var current = item;
+                parser.CalculateOffset(ref evaluator, ref current);
+            }
         }
 
         [Preserve]
@@ -1382,15 +1492,14 @@ namespace LuminPack.Parsers
 
             var parser = LuminPackParseProvider.Cache<T>.Parser!;
             
-            // 使用内部Span进行快速遍历
-            var span = LuminPackMarshal.GetQueueSpan(value, value.Count);
             bool isFirst = true;
-            foreach (ref var v in span)
+            foreach (var item in value)
             {
                 if (!isFirst) writer.WriteByteRaw((byte)',');
                 else isFirst = false;
                 writer.SetFirstElement(true);
-                parser.SerializeJson(ref writer, ref v);
+                var current = item;
+                parser.SerializeJson(ref writer, ref current);
             }
 
             writer.WriteArrayEnd();

@@ -182,7 +182,9 @@ public static class LuminPackVersionTolerantCodeGenerator
                 var field = data.fields.FirstOrDefault(f => f.Order == order);
                 if (field is null)
                 {
-                    sb.AppendLine("            writer.WriteVarInt(0); writer.Advance(LuminPackEvaluator.CalculateVarInt(0));");
+                    // WriteVarInt advances the writer itself. Advancing a second time leaves
+                    // a one-byte hole and shifts every payload after a missing order.
+                    sb.AppendLine("            writer.WriteVarInt(0);");
                 }
                 else
                 {
@@ -463,7 +465,7 @@ public static class LuminPackVersionTolerantCodeGenerator
             // 设置所有字段
             foreach (var field in data.fields)
             {
-                sb.AppendLine($"            local.{field.Name} = {field.Name}Temp!;");
+                sb.AppendLine($"            local.{field.Identifier} = {field.Name}Temp!;");
             }
         }
         else
@@ -483,7 +485,7 @@ public static class LuminPackVersionTolerantCodeGenerator
                 sb.AppendLine("            {");
                 foreach (var field in initializerFields)
                 {
-                    sb.AppendLine($"                {field.Name} = {field.Name}Temp!,");
+                    sb.AppendLine($"                {field.Identifier} = {field.Name}Temp!,");
                 }
                 sb.AppendLine("            };");
             }
@@ -515,7 +517,7 @@ public static class LuminPackVersionTolerantCodeGenerator
     
                 foreach (var field in privateFields)
                 {
-                    sb.AppendLine($"            local.{field.Name} = {field.Name}Temp!;");
+                    sb.AppendLine($"            local.{field.Identifier} = {field.Name}Temp!;");
                 }
             }
         }

@@ -21,12 +21,10 @@ public static class LuminPackMarshal
         }
 
 #if NET8_0_OR_GREATER
-        CollectionsMarshal.SetCount(list, list.Count);
         return CollectionsMarshal.AsSpan(list);
 #else
-        SetListSize(list, list.Count);
         ref ListView<T?> local = ref As<List<T?>, ListView<T?>>(ref list);
-        return local._items.AsSpan(0, list.Count);
+        return local._items.AsSpan(0, local._size);
 #endif
     }
     
@@ -40,7 +38,7 @@ public static class LuminPackMarshal
 
         if (list.Capacity < length)
         {
-            length = list.Capacity;
+            list.Capacity = length;
         }
         
         
@@ -67,7 +65,13 @@ public static class LuminPackMarshal
         return;
 #else
         ref ListView<T?> local = ref As<List<T?>, ListView<T?>>(ref list);
+        if (local._size == size)
+            return;
+
+        if (size < local._size && RuntimeHelpers.IsReferenceOrContainsReferences<T?>())
+            Array.Clear(local._items, size, local._size - size);
         local._size = size;
+        local._version++;
 #endif
     }
     
@@ -104,6 +108,8 @@ public static class LuminPackMarshal
         if (stack is null) return;
         
         ref var view = ref As<Stack<T?>, StackView<T?>>(ref stack);
+        if (view._items.Length < size)
+            view._items = new T?[size];
         view._size = size;
     }
     
@@ -128,6 +134,8 @@ public static class LuminPackMarshal
         }
         
         ref QueueView<T?> local = ref As<Queue<T?>, QueueView<T?>>(ref queue);
+        if (local._items.Length < size)
+            local._items = new T?[size];
         return local._items.AsSpan(0, size);
     }
 
@@ -205,34 +213,20 @@ public static class LuminPackMarshal
     /// <typeparam name="T"></typeparam>
     /// <returns></returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe Span<byte> AsRawBytes<T>(this Span<T> span) where T : unmanaged
+    public static Span<byte> AsRawBytes<T>(this Span<T> span) where T : unmanaged
     {
-        if (span.IsEmpty)
-            return Span<byte>.Empty;
-
-        fixed (T* ptr = &MemoryMarshal.GetReference(span))
-        {
-            return new Span<byte>(ptr, span.Length * sizeof(T));
-        }
+        return MemoryMarshal.AsBytes(span);
     }
 
     /// <summary>
     /// 类型安全的内存重新解释
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe Span<TOut> ReinterpretCast<TIn, TOut>(this Span<TIn> span)
+    public static Span<TOut> ReinterpretCast<TIn, TOut>(this Span<TIn> span)
         where TIn : unmanaged
         where TOut : unmanaged
     {
-        if (span.IsEmpty)
-            return Span<TOut>.Empty;
-
-        fixed (TIn* srcPtr = &MemoryMarshal.GetReference(span))
-        {
-            byte* bytePtr = (byte*)srcPtr;
-            int newLength = (span.Length * sizeof(TIn)) / sizeof(TOut);
-            return new Span<TOut>(bytePtr, newLength);
-        }
+        return MemoryMarshal.Cast<TIn, TOut>(span);
     }
 
     /// <summary>
@@ -251,9 +245,9 @@ public static class LuminPackMarshal
     /// 从引用创建Span（无安全检查）
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe Span<T> CreateSpanFromRef<T>(ref T data, int length)
+    public static Span<T> CreateSpanFromRef<T>(ref T data, int length)
     {
-        return new Span<T>(Unsafe.AsPointer(ref data), length);
+        return MemoryMarshal.CreateSpan(ref data, length);
     }
 
     /// <summary>
@@ -380,6 +374,13 @@ public static class LuminPackMarshal
         int blockSize,
         Action<IntPtr, IntPtr, int> blockProcessor)
     {
+        if (byteLength < 0)
+            throw new ArgumentOutOfRangeException(nameof(byteLength));
+        if (blockSize <= 0)
+            throw new ArgumentOutOfRangeException(nameof(blockSize));
+        if (blockProcessor is null)
+            throw new ArgumentNullException(nameof(blockProcessor));
+
         byte* src = (byte*)source;
         byte* dest = (byte*)destination;
         int remaining = byteLength;
@@ -423,7 +424,7 @@ public static class LuminPackMarshal
             pb += longCount * sizeof(long);
             for (int i = 0; i < rem; i++)
             {
-                (pa[i], pb[i]) = (pb[i], pb[i]);
+                (pa[i], pb[i]) = (pb[i], pa[i]);
             }
         }
     }
@@ -1111,7 +1112,11 @@ public static class LuminPackMarshal
         for (int i = 0; i < count; i++)
         {
             ref var entry = ref Unsafe.Add(ref entriesRef, (nint)(uint)i);
+#if NETSTANDARD2_1
+            uint hashCode = (uint)(comparer.GetHashCode(entry.Key!) & 0x7FFFFFFF);
+#else
             uint hashCode = (uint)comparer.GetHashCode(entry.Key!);
+#endif
             entry.HashCode = hashCode;
 
             ref int bucket = ref Unsafe.Add(ref bucketsRef, (nint)(hashCode % bucketCount));
@@ -1138,7 +1143,11 @@ public static class LuminPackMarshal
         for (int i = 0; i < count; i++)
         {
             ref var entry = ref Unsafe.Add(ref entriesRef, (nint)(uint)i);
+#if NETSTANDARD2_1
+            uint hashCode = (uint)(comparer.GetHashCode(entry.Value!) & 0x7FFFFFFF);
+#else
             uint hashCode = (uint)comparer.GetHashCode(entry.Value!);
+#endif
             entry.HashCode = hashCode;
 
             ref int bucket = ref Unsafe.Add(ref bucketsRef, (nint)(hashCode % bucketCount));
@@ -1147,6 +1156,9 @@ public static class LuminPackMarshal
         }
 
         view._count = count;
+#if NETSTANDARD2_1
+        view._lastIndex = count;
+#endif
     }
 
     [Preserve]
@@ -1155,9 +1167,15 @@ public static class LuminPackMarshal
         public int[] _buckets;
         public Entry[] _entries;
         public int _count;
+#if NETSTANDARD2_1
+        public int _freeList;
+        public int _freeCount;
+        public int _version;
+#else
         public int _version;
         public int _freeList;
         public int _freeCount;
+#endif
         public IEqualityComparer<TKey> _comparer;
         public Dictionary<TKey, TValue>.KeyCollection _keys;
         public Dictionary<TKey, TValue>.ValueCollection _values;
@@ -1178,9 +1196,15 @@ public static class LuminPackMarshal
         public int[] _buckets;
         public Entry[] _entries;
         public int _count;
+#if NETSTANDARD2_1
+        public int _lastIndex;
+        public int _freeList;
+        public int _version;
+#else
         public int _version;
         public int _freeList;
         public int _freeCount;
+#endif
         public IEqualityComparer<T> _comparer;
         private object sync;
         

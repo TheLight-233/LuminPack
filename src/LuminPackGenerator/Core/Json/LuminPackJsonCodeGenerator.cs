@@ -170,18 +170,20 @@ namespace LuminPack.Code.Core
             for (int i = 0; i < data.fields.Count; i++)
             {
                 var field = data.fields[i];
+                var utf8Name = string.Join(", ", System.Text.Encoding.UTF8.GetBytes(field.Name).Select(static b => $"(byte){b}"));
+                var utf16Name = string.Join(", ", field.Name.Select(c => $"(char)'{EscapeChar(c)}'"));
                 
                 if (i == 0)
                 {
                     // 第一个字段：{"fieldName":
-                    sb.AppendLine($"        private static readonly byte[] _jsonPrefixUtf8_{field.Name} = new byte[] {{ (byte)'{{', (byte)'\"', {string.Join(", ", field.Name.Select(c => $"(byte)'{c}'"))}, (byte)'\"', (byte)':' }};");
-                    sb.AppendLine($"        private static readonly char[] _jsonPrefixUtf16_{field.Name} = new char[] {{ (char)'{{', (char)'\"', {string.Join(", ", field.Name.Select(c => $"(char)'{c}'"))}, (char)'\"', (char)':' }};");
+                    sb.AppendLine($"        private static readonly byte[] _jsonPrefixUtf8_{field.Name} = new byte[] {{ (byte)'{{', (byte)'\"', {utf8Name}, (byte)'\"', (byte)':' }};");
+                    sb.AppendLine($"        private static readonly char[] _jsonPrefixUtf16_{field.Name} = new char[] {{ (char)'{{', (char)'\"', {utf16Name}, (char)'\"', (char)':' }};");
                 }
                 else
                 {
                     // 后续字段：,"fieldName":
-                    sb.AppendLine($"        private static readonly byte[] _jsonSepUtf8_{field.Name} = new byte[] {{ (byte)',', (byte)'\"', {string.Join(", ", field.Name.Select(c => $"(byte)'{c}'"))}, (byte)'\"', (byte)':' }};");
-                    sb.AppendLine($"        private static readonly char[] _jsonSepUtf16_{field.Name} = new char[] {{ (char)',', (char)'\"', {string.Join(", ", field.Name.Select(c => $"(char)'{c}'"))}, (char)'\"', (char)':' }};");
+                    sb.AppendLine($"        private static readonly byte[] _jsonSepUtf8_{field.Name} = new byte[] {{ (byte)',', (byte)'\"', {utf8Name}, (byte)'\"', (byte)':' }};");
+                    sb.AppendLine($"        private static readonly char[] _jsonSepUtf16_{field.Name} = new char[] {{ (char)',', (char)'\"', {utf16Name}, (char)'\"', (char)':' }};");
                 }
             }
             sb.AppendLine();
@@ -255,7 +257,7 @@ namespace LuminPack.Code.Core
                 sb.AppendLine($"                writer.WriteRaw(_json{prefix}Utf16_{field.Name});");
                 sb.AppendLine($"            writer.SetFirstElement(true);");
                 
-                GenerateJsonSerializeField(sb, field, $"{access}.{field.Name}", "            ");
+                GenerateJsonSerializeField(sb, field, $"{access}.{field.Identifier}", "            ");
                 
                 sb.AppendLine();
             }
@@ -615,7 +617,7 @@ namespace LuminPack.Code.Core
                 // 设置所有字段
                 foreach (var field in data.fields)
                 {
-                    sb.AppendLine($"            local.{field.Name} = {field.Name}Temp!;");
+                    sb.AppendLine($"            local.{field.Identifier} = {field.Name}Temp!;");
                 }
             }
             else
@@ -635,7 +637,7 @@ namespace LuminPack.Code.Core
                     sb.AppendLine("            {");
                     foreach (var field in initializerFields)
                     {
-                        sb.AppendLine($"                {field.Name} = {field.Name}Temp!,");
+                        sb.AppendLine($"                {field.Identifier} = {field.Name}Temp!,");
                     }
                     sb.AppendLine("            };");
                 }
@@ -667,7 +669,7 @@ namespace LuminPack.Code.Core
         
                     foreach (var field in privateFields)
                     {
-                        sb.AppendLine($"            local.{field.Name} = {field.Name}Temp!;");
+                        sb.AppendLine($"            local.{field.Identifier} = {field.Name}Temp!;");
                     }
                 }
             }
@@ -843,7 +845,7 @@ namespace LuminPack.Code.Core
         private static void GenerateJsonSerializeFieldWithCircleReference(StringBuilder sb, LuminDataField field, string accessor, string indent)
         {
             bool isNullable = (field.FieldType == LuminDataType.Reference);
-            string fieldAccess = $"{accessor}.{field.Name}";
+            string fieldAccess = $"{accessor}.{field.Identifier}";
             
             if (isNullable)
             {
@@ -1084,7 +1086,7 @@ namespace LuminPack.Code.Core
                 
                 foreach (var field in data.fields)
                 {
-                    sb.AppendLine($"            local.{field.Name} = {field.Name}Temp!;");
+                    sb.AppendLine($"            local.{field.Identifier} = {field.Name}Temp!;");
                 }
             }
             else
@@ -1094,7 +1096,7 @@ namespace LuminPack.Code.Core
                 {
                     foreach (var field in publicFields)
                     {
-                        sb.AppendLine($"            value.{field.Name} = {field.Name}Temp!;");
+                        sb.AppendLine($"            value.{field.Identifier} = {field.Name}Temp!;");
                     }
                     sb.AppendLine();
                 }
@@ -1106,7 +1108,7 @@ namespace LuminPack.Code.Core
                     
                     foreach (var field in privatePropFields)
                     {
-                        sb.AppendLine($"            local.{field.Name} = {field.Name}Temp!;");
+                        sb.AppendLine($"            local.{field.Identifier} = {field.Name}Temp!;");
                     }
                 }
             }

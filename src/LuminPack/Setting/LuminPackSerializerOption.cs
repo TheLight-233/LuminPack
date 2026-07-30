@@ -5,14 +5,16 @@ namespace LuminPack.Option
 {
     public record LuminPackSerializerOption
     {
-        //Default is utf8
-        public static readonly LuminPackSerializerOption Default = 
+        internal static readonly LuminPackSerializerOption InternalDefault =
             new LuminPackSerializerOption
             {
-                StringEncoding =  LuminPackStringEncoding.UTF8,
+                StringEncoding = LuminPackStringEncoding.UTF8,
                 StringRecording = LuminPackStringRecording.Length,
                 StandardFormat = new StandardFormat('G'),
             };
+
+        //Default is utf8
+        public static readonly LuminPackSerializerOption Default = InternalDefault with { };
         
         public static readonly LuminPackSerializerOption Utf8 = Default with { StringEncoding = LuminPackStringEncoding.UTF8 };
         public static readonly LuminPackSerializerOption Utf16 =  Default with { StringEncoding = LuminPackStringEncoding.UTF16 };

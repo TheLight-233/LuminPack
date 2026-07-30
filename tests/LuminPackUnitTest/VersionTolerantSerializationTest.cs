@@ -29,6 +29,21 @@ public class VersionTolerantSerializationTest
         [LuminPackOrder(2)] public int Z { get; set; }
     }
 
+    [LuminPackable(GeneratorType.VersionTolerant)]
+    public class V3WithMissingMiddleMember
+    {
+        [LuminPackOrder(0)] public int X { get; set; }
+        [LuminPackOrder(2)] public int Z { get; set; }
+    }
+
+    [LuminPackable(GeneratorType.VersionTolerant)]
+    public class V4WithAddedMiddleMember
+    {
+        [LuminPackOrder(0)] public int X { get; set; }
+        [LuminPackOrder(1)] public int Y { get; set; }
+        [LuminPackOrder(2)] public int Z { get; set; }
+    }
+
     public static void TestVersionTolerantSerialization(List<string> output)
     {
         try
@@ -45,6 +60,22 @@ public class VersionTolerantSerializationTest
         catch (Exception ex)
         {
             output.Add($"✗ TestVersionTolerantSerialization - ERROR: {ex.Message}");
+        }
+
+        try
+        {
+            var oldValue = new V3WithMissingMiddleMember { X = 10, Z = 30 };
+            var payload = LuminPackSerializer.Serialize(oldValue);
+            var newValue = LuminPackSerializer.Deserialize<V4WithAddedMiddleMember>(payload);
+
+            if (newValue.X == 10 && newValue.Y == 0 && newValue.Z == 30)
+                output.Add("✓ TestVersionTolerantMissingMiddleMember - PASSED");
+            else
+                output.Add($"✗ TestVersionTolerantMissingMiddleMember - FAILED: X={newValue.X}, Y={newValue.Y}, Z={newValue.Z}, Payload={Convert.ToHexString(payload)}");
+        }
+        catch (Exception ex)
+        {
+            output.Add($"✗ TestVersionTolerantMissingMiddleMember - ERROR: {ex.Message}");
         }
         
         try

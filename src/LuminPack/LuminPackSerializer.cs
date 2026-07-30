@@ -83,7 +83,7 @@ namespace LuminPack
 
                 writer.WriteValue(value);
                 
-                writerBuffer._writtenCount = writer.CurrentIndex;
+                writerBuffer.CompleteWrite(writer.CurrentIndex);
             }
             finally
             {
@@ -115,6 +115,7 @@ namespace LuminPack
             }
             finally
             {
+                state.Reset();
                 LuminBufferWriterPool.Return(writerBuffer);
             }
         }
@@ -129,11 +130,18 @@ namespace LuminPack
                 
             state.Init(option);
             
-            var writer = new LuminPackJsonWriter(writerBuffer, state);
+            try
+            {
+                var writer = new LuminPackJsonWriter(writerBuffer, state);
 
-            LuminPackParseProvider.Cache<T>.Parser!.SerializeJson(ref writer, ref value);
-            
-            writerBuffer._writtenCount = writer.CurrentIndex;
+                LuminPackParseProvider.Cache<T>.Parser!.SerializeJson(ref writer, ref value);
+                
+                writerBuffer.CompleteWrite(writer.CurrentIndex);
+            }
+            finally
+            {
+                state.Reset();
+            }
         }
 
         /// <summary>
@@ -147,8 +155,8 @@ namespace LuminPack
             var tempWriter = LuminBufferWriterPool.Rent();
             try
             {
-                var buffer = Serialize(value, option);
-                await stream.WriteAsync(buffer, cancellationToken).ConfigureAwait(false);
+                Serialize(value, tempWriter, option);
+                await tempWriter.WriteToAndResetAsync(stream, cancellationToken).ConfigureAwait(false);
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
             finally
@@ -334,7 +342,10 @@ namespace LuminPack
             {
                 var span = MemoryMarshal.Cast<char, byte>(buffer);
                 var reader = new LuminPackJsonReader(ref span, state);
+                if (!reader.Read())
+                    throw new FormatException("JSON input does not contain a value");
                 LuminPackParseProvider.Cache<T>.Parser!.DeserializeJson(ref reader, ref value);
+                reader.EnsureEndOfDocument();
            
                 return reader.CurrentIndex;
             }
@@ -358,7 +369,10 @@ namespace LuminPack
             try
             {
                 var reader = new LuminPackJsonReader(ref buffer, state);
+                if (!reader.Read())
+                    throw new FormatException("JSON input does not contain a value");
                 LuminPackParseProvider.Cache<T>.Parser!.DeserializeJson(ref reader, ref value);
+                reader.EnsureEndOfDocument();
            
                 return reader.CurrentIndex;
             }
@@ -701,16 +715,25 @@ namespace LuminPack
                 return size;
             }
             
-            Span<byte> tempSpan = size <= 512 ? stackalloc byte[size] : new byte[size];
+            if (size <= 512)
+            {
+                Span<byte> tempSpan = stackalloc byte[size];
+                buffer.Slice(0, size).CopyTo(tempSpan);
+                value = Unsafe.ReadUnaligned<T>(ref MemoryMarshal.GetReference(tempSpan));
+                return size;
+            }
+
+            var rentedBuffer = ArrayPool<byte>.Shared.Rent(size);
             try
             {
+                var tempSpan = rentedBuffer.AsSpan(0, size);
                 buffer.Slice(0, size).CopyTo(tempSpan);
                 value = Unsafe.ReadUnaligned<T>(ref MemoryMarshal.GetReference(tempSpan));
                 return size;
             }
             finally
             {
-                if (size > 512) ArrayPool<byte>.Shared.Return(tempSpan.ToArray());
+                ArrayPool<byte>.Shared.Return(rentedBuffer);
             }
         }
         

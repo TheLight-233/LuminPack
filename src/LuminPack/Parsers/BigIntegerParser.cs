@@ -49,7 +49,8 @@ public sealed class BigIntegerParser : LuminPackParser<BigInteger>
         }
 
         reader.Advance(4);
-        
+
+        reader.EnsureReadable(index, length);
         ref var src = ref reader.GetSpanReference(index);
         value = new BigInteger(MemoryMarshal.CreateReadOnlySpan(ref src, length));
 
@@ -63,16 +64,7 @@ public sealed class BigIntegerParser : LuminPackParser<BigInteger>
         Span<byte> temp = stackalloc byte[255];
         if (value.TryWriteBytes(temp, out var written))
         {
-            var tempSpan = temp.Slice(written);
-
-            if (temp.IsEmpty)
-            {
-                evaluator += 4;
-                
-                return;
-            }
-        
-            evaluator += 4 + tempSpan.Length * Unsafe.SizeOf<byte>();
+            evaluator += checked(sizeof(int) + written);
             
             return;
         }

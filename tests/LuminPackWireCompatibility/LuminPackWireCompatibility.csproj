@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="LuminPack">
+      <HintPath>..\..\src\LuminPack\bin\Release\net8.0\LuminPack.dll</HintPath>
+    </Reference>
+    <Analyzer Include="..\..\src\LuminPackGenerator\bin\Release\netstandard2.0\LuminPackGenerator.dll" />
+  </ItemGroup>
+</Project>

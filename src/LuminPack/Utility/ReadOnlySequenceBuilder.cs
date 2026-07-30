@@ -7,12 +7,15 @@ namespace LuminPack.Utility;
 
 internal static class ReadOnlySequenceBuilderPool
 {
+    const int MaxPoolSize = 32;
     static readonly ConcurrentQueue<ReadOnlySequenceBuilder> queue = new();
+    static int count;
 
     public static ReadOnlySequenceBuilder Rent()
     {
         if (queue.TryDequeue(out var builder))
         {
+            Interlocked.Decrement(ref count);
             return builder;
         }
         return new ReadOnlySequenceBuilder();
@@ -21,7 +24,13 @@ internal static class ReadOnlySequenceBuilderPool
     public static void Return(ReadOnlySequenceBuilder builder)
     {
         builder.Reset();
-        queue.Enqueue(builder);
+        if (Interlocked.Increment(ref count) <= MaxPoolSize)
+        {
+            queue.Enqueue(builder);
+            return;
+        }
+
+        Interlocked.Decrement(ref count);
     }
 }
 

@@ -37,18 +37,18 @@ namespace LuminPack.Option
         public LuminPackReaderOptionalState(LuminPackSerializerOption? option = null)
         {
             refToObject = new LuminCircleReferenceMap<uint, object>();
-            Option = option ?? LuminPackSerializerOption.Default;
+            Option = option ?? LuminPackSerializerOption.InternalDefault;
         }
 
         private LuminPackReaderOptionalState(bool _)
         {
             refToObject = new LuminCircleReferenceMap<uint, object>();
-            Option = LuminPackSerializerOption.Default;
+            Option = LuminPackSerializerOption.InternalDefault;
         }
         
         public void Init(LuminPackSerializerOption? options)
         {
-            Option = options ?? LuminPackSerializerOption.Default;
+            Option = options ?? LuminPackSerializerOption.InternalDefault;
         }
         
         public void Reset()

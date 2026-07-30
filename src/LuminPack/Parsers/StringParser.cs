@@ -15,7 +15,9 @@ public sealed class StringParser : LuminPackParser<string?>
         
         int offset = writer.WriteString(value) + writer.StringRecordLength();
         
-        writer.AdvanceSafe(offset);
+        // WriteString reserves the complete payload (including its terminator/header)
+        // before encoding, so a second capacity check here is redundant.
+        writer.Advance(offset);
     }
 
     [Preserve]
@@ -54,7 +56,6 @@ public sealed class StringParser : LuminPackParser<string?>
         if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.Null)
         {
             value = null;
-            reader.Read(); // 消耗null标记
             return;
         }
 

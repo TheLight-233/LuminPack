@@ -508,7 +508,7 @@ public static class LuminPackCircleReferenceCodeGenerator
             // 设置所有字段
             foreach (var field in data.fields)
             {
-                sb.AppendLine($"            local.{field.Name} = {field.Name}Temp!;");
+                sb.AppendLine($"            local.{field.Identifier} = {field.Name}Temp!;");
             }
         }
         else
@@ -519,7 +519,7 @@ public static class LuminPackCircleReferenceCodeGenerator
                 sb.AppendLine("            // 设置public字段");
                 foreach (var field in initializerFields)
                 {
-                    sb.AppendLine($"            value.{field.Name} = {field.Name}Temp!;");
+                    sb.AppendLine($"            value.{field.Identifier} = {field.Name}Temp!;");
                 }
                 sb.AppendLine();
             }
@@ -539,7 +539,7 @@ public static class LuminPackCircleReferenceCodeGenerator
     
                 foreach (var field in privateFields)
                 {
-                    sb.AppendLine($"            local.{field.Name} = {field.Name}Temp!;");
+                    sb.AppendLine($"            local.{field.Identifier} = {field.Name}Temp!;");
                 }
             }
         }

@@ -27,22 +27,47 @@ public static class TypeMetaChecker
     private const string LUMIN_PACK_ONDESERIALIZED = "LuminPackOnDeserializedAttribute";
     
     
-    public static readonly List<Diagnostic> _reportContext = new List<Diagnostic>(10);
+    [ThreadStatic]
+    private static List<Diagnostic> _diagnosticContext;
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryReportContext(ref SourceProductionContext context)
+    [ThreadStatic]
+    private static List<Diagnostic> _cachedDiagnosticContext;
+
+    // All checker methods execute synchronously inside one syntax transform. A
+    // scoped thread-local bag keeps the hot Add path allocation-free after setup,
+    // while the completed bag is copied onto that transform's LuminDataInfo.
+    internal static List<Diagnostic> _reportContext =>
+        _diagnosticContext ?? throw new InvalidOperationException("No active generator diagnostic scope.");
+
+    internal static List<Diagnostic> CurrentDiagnostics => _reportContext;
+
+    internal static List<Diagnostic> PushDiagnosticScope()
     {
-        if (_reportContext.Count > 0)
+        var previous = _diagnosticContext;
+        var current = _cachedDiagnosticContext;
+        if (current is null)
         {
-            foreach (var report in _reportContext)
-            {
-                context.ReportDiagnostic(report);
-            }
-            _reportContext.Clear();
-            return true;
+            current = new List<Diagnostic>(10);
         }
-        
-        return false;
+        else
+        {
+            _cachedDiagnosticContext = null;
+            current.Clear();
+        }
+
+        _diagnosticContext = current;
+        return previous;
+    }
+
+    internal static void PopDiagnosticScope(List<Diagnostic> previous)
+    {
+        var completed = _diagnosticContext;
+        _diagnosticContext = previous;
+        if (previous is null && completed is not null)
+        {
+            completed.Clear();
+            _cachedDiagnosticContext = completed;
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace LuminPack.Code
 {
@@ -7,6 +8,12 @@ namespace LuminPack.Code
     {
         public LuminFiledType Type;
         public string Name = "NewField";
+
+        public string Identifier =>
+            SyntaxFacts.GetKeywordKind(Name) != SyntaxKind.None ||
+            SyntaxFacts.GetContextualKeywordKind(Name) != SyntaxKind.None
+                ? "@" + Name
+                : Name;
         
         public bool isProperty = false;
 

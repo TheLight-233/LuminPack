@@ -191,8 +191,7 @@ public sealed class InterfaceEnumerableParser<T> : LuminPackParser<IEnumerable<T
             var tempBuffer = LuminBufferWriterPool.Rent();
             try
             {
-                var tempWriter = new LuminPackWriter(writer.OptionState);
-                tempWriter.SetWriteBuffer(tempBuffer);
+                var tempWriter = new LuminPackWriter(tempBuffer, writer.OptionState);
 
                 count = 0;
                 var parser = LuminPackParseProvider.Cache<T?>.Parser!;
@@ -202,8 +201,6 @@ public sealed class InterfaceEnumerableParser<T> : LuminPackParser<IEnumerable<T
                     var v = item;
                     parser.Serialize(ref tempWriter, ref v);
                 }
-
-                tempWriter.Flush();
 
                 // write to parameter writer.
                 writer.WriteCollectionHeader(ref index, count);
@@ -1266,18 +1263,12 @@ public sealed class InterfaceGroupingParser<TKey, TElement> : LuminPackParser<IG
         var keyParser = LuminPackParseProvider.Cache<TKey>.Parser!;
         var elementsParser = LuminPackParseProvider.Cache<IEnumerable<TElement>>.Parser!;
 
-        writer.WriteByteRaw((byte)'"');
-        writer.WritePropertyName("Key"u8);
-        writer.WriteByteRaw((byte)'"');
-        writer.WriteByteRaw((byte)':');
+        writer.WritePropertyName("Key");
         var k = value.Key;
         keyParser.SerializeJson(ref writer, ref k);
 
 
-        writer.WriteByteRaw((byte)'"');
-        writer.WritePropertyName("Elements"u8);
-        writer.WriteByteRaw((byte)'"');
-        writer.WriteByteRaw((byte)':');
+        writer.WritePropertyName("Elements");
         IEnumerable<TElement> elements = value;
         elementsParser.SerializeJson(ref writer, ref elements);
 
@@ -1306,18 +1297,22 @@ public sealed class InterfaceGroupingParser<TKey, TElement> : LuminPackParser<IG
             if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.ObjectEnd)
                 break;
 
-            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.PropertyName)
+            if (reader.CurrentTokenType == LuminPackJsonReader.JsonTokenType.String)
             {
-                var propertyName = reader.ReadStringUtf8();
+                int propertyName = reader.ReadStringChoice("Key"u8, "Key", "Elements"u8, "Elements");
                 reader.Read();
 
-                if (propertyName.SequenceEqual("Key"u8))
+                if (propertyName == 1)
                 {
                     keyParser.DeserializeJson(ref reader, ref key);
                 }
-                else if (propertyName.SequenceEqual("Elements"u8))
+                else if (propertyName == 2)
                 {
                     elementsParser.DeserializeJson(ref reader, ref elements);
+                }
+                else
+                {
+                    reader.Skip();
                 }
             }
         }

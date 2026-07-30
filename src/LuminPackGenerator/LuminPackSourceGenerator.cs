@@ -18,12 +18,36 @@ namespace LuminPack.SourceGenerator
         public const string LUMIN_GENERATED_NAMESPACE = "LuminPack.Generated";
         public const string LUMIN_REGISTERS_NAMESPACE = "LuminPackRegisters";
         
-        private static ISymbol _currentSymbol;
-        private static ISymbol _mainSymbol;
-        private static Location _location;
-        private static MetaInfo _metadata;
+        [ThreadStatic]
+        private static AnalysisState _analysisState;
 
-        [ThreadStatic] private static HashSet<INamedTypeSymbol> ProcessedTypes;
+        private sealed class AnalysisState
+        {
+            internal AnalysisState(ISymbol mainSymbol, MetaInfo metadata)
+            {
+                MainSymbol = mainSymbol;
+                Location = mainSymbol.Locations.FirstOrDefault();
+                Metadata = metadata;
+            }
+
+            internal ISymbol CurrentSymbol;
+            internal readonly ISymbol MainSymbol;
+            internal readonly Location Location;
+            internal readonly MetaInfo Metadata;
+            internal readonly HashSet<INamedTypeSymbol> ProcessedTypes =
+                new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+        }
+
+        private static ISymbol _currentSymbol
+        {
+            get => _analysisState.CurrentSymbol;
+            set => _analysisState.CurrentSymbol = value;
+        }
+
+        private static ISymbol _mainSymbol => _analysisState.MainSymbol;
+        private static Location _location => _analysisState.Location;
+        private static MetaInfo _metadata => _analysisState.Metadata;
+        private static HashSet<INamedTypeSymbol> ProcessedTypes => _analysisState.ProcessedTypes;
         
         public void Initialize(IncrementalGeneratorInitializationContext context)
         {
@@ -49,8 +73,7 @@ namespace LuminPack.SourceGenerator
                             ? csharpOptions.AllowUnsafe 
                             : false;
                 
-                        _metadata = new MetaInfo(csOptions, langVersion, net8, allowUnsafe);
-                        return _metadata;
+                        return new MetaInfo(csOptions, langVersion, net8, allowUnsafe);
                     }).WithTrackingName("LuminPack.LuminPackable.0_MetaInfo");
 
         
@@ -65,8 +88,7 @@ namespace LuminPack.SourceGenerator
                     {
                         try
                         {
-                            ProcessedTypes = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
-                            return CreateLuminDataInfo(context.TargetSymbol, context.SemanticModel.Compilation);
+                            return context.TargetSymbol;
                         }
                         catch (Exception ex)
                         {
@@ -79,22 +101,33 @@ namespace LuminPack.SourceGenerator
 
                 var provider = typeDeclarations
                     .Combine(context.CompilationProvider)
-                    .WithComparer(Comparer.Instance)
                     .Combine(metaInfo)
+                    .Select((source, _) =>
+                    {
+                        var symbol = source.Left.Left;
+                        var compilation = source.Left.Right;
+                        var metadata = source.Right;
+                        var dataInfo = CreateLuminDataInfo(symbol, compilation, metadata);
+                        return ((dataInfo, compilation), metadata);
+                    })
                     .WithTrackingName("LuminPack.LuminPackable.2_LuminPackCombined");
         
                 context.RegisterSourceOutput(provider, static (context, source) =>
                 {
                     try
                     {
-                        if (TypeMetaChecker.TryReportContext(ref context))
+                        var dataInfo = source.Item1.Item1;
+                        if (dataInfo.Diagnostics.Length != 0)
                         {
+                            foreach (var diagnostic in dataInfo.Diagnostics)
+                            {
+                                context.ReportDiagnostic(diagnostic);
+                            }
                             return;
                         }
 
-                        var dataInfo = source.Left.Item1;
-                        var compilation = source.Left.Item2;
-                        var metaInfo = source.Right;
+                        var compilation = source.Item1.Item2;
+                        var metaInfo = source.Item2;
                 
                         var code = LuminPackCodeGenerator.CodeGenerator(dataInfo, metaInfo);
                         var extension = LuminPackExtensionGenerator.CodeGenerator(dataInfo, metaInfo, compilation);
@@ -140,18 +173,40 @@ namespace LuminPack.SourceGenerator
             }
         }
 
-        private static LuminDataInfo CreateLuminDataInfo(ISymbol symbol, Compilation compilation)
+        private static LuminDataInfo CreateLuminDataInfo(
+            ISymbol symbol,
+            Compilation compilation,
+            MetaInfo metadata)
         {
-            _mainSymbol = symbol;
+            var previousState = _analysisState;
+            var previousDiagnostics = TypeMetaChecker.PushDiagnosticScope();
+            try
+            {
+                _analysisState = new AnalysisState(symbol, metadata);
+                var dataInfo = CreateLuminDataInfoCore(symbol, compilation);
+                if (TypeMetaChecker.CurrentDiagnostics.Count != 0)
+                {
+                    dataInfo.Diagnostics = TypeMetaChecker.CurrentDiagnostics.ToArray();
+                }
+                return dataInfo;
+            }
+            finally
+            {
+                TypeMetaChecker.PopDiagnosticScope(previousDiagnostics);
+                _analysisState = previousState;
+            }
+        }
+
+        private static LuminDataInfo CreateLuminDataInfoCore(ISymbol symbol, Compilation compilation)
+        {
             var typeSymbol = (INamedTypeSymbol)symbol;
-            _location = symbol.Locations.FirstOrDefault();
 
             if (typeSymbol.ContainingType != null)
             {
                 CheckNestedClassAccessibility(typeSymbol);
             }
             
-            ProcessedTypes.Add(typeSymbol);
+            _analysisState.ProcessedTypes.Add(typeSymbol);
             
             var dataInfo = new LuminDataInfo
             {
@@ -594,7 +649,6 @@ namespace LuminPack.SourceGenerator
 
                         dataInfo.fields.Add(field);
                         parent?.fields.Add(field);
-                        ProcessedTypes.Clear();
                     }
                     else if (rawMember is IFieldSymbol fieldMember)
                     {
@@ -664,7 +718,6 @@ namespace LuminPack.SourceGenerator
 
                         dataInfo.fields.Add(field);
                         parent?.fields.Add(field);
-                        ProcessedTypes.Clear();
                     }
                 }
             }

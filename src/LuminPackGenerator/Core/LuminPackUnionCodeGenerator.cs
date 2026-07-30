@@ -172,20 +172,37 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("            lock (_registerLock)");
         sb.AppendLine("            {");
         sb.AppendLine("                var mt = LuminPackMarshal.GetMethodTable(type);");
+        sb.AppendLine("                var readKey = (nint)((uint)tag + 1u);");
         sb.AppendLine();
-        sb.AppendLine("                if (!_unionMap.TryRegister(mt, new HashEntry { Tag = tag }))");
+        if (data.UnionMembers.Count > 0)
+        {
+            var staticTagConflict = string.Join(" || ", data.UnionMembers.Select(member => $"tag == {member.Id}"));
+            sb.AppendLine($"                if ({staticTagConflict})");
+            sb.AppendLine("                    throw new System.ArgumentException($\"The tag is already assigned to a statically generated union member. Tag: {tag}\", nameof(tag));");
+            sb.AppendLine();
+        }
+        sb.AppendLine("                if (_unionMap.TryGetValue(mt, out _) || _externalWriteMap.TryGetValue(mt, out _))");
         sb.AppendLine("                    throw new System.ArgumentException($\"An entry with the same method table already exists. Type: {type}\");");
         sb.AppendLine();
-        sb.AppendLine("                _externalWriteMap.TryRegister(mt, new WriteEntry");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    WriteDelegate = writeDelegate,");
-        sb.AppendLine("                    WriteJsonDelegate = writeJsonDelegate,");
-        sb.AppendLine("                });");
-        sb.AppendLine("                _externalMap.TryRegister((nint)(uint)tag, new ReadEntry");
+        sb.AppendLine("                if (_externalMap.TryGetValue(readKey, out _))");
+        sb.AppendLine("                    throw new System.ArgumentException($\"An entry with the same tag already exists. Tag: {tag}\", nameof(tag));");
+        sb.AppendLine();
+        sb.AppendLine("                if (!_externalMap.TryRegister(readKey, new ReadEntry");
         sb.AppendLine("                {");
         sb.AppendLine("                    ReadDelegate = readDelegate,");
         sb.AppendLine("                    ReadJsonDelegate = readJsonDelegate,");
-        sb.AppendLine("                });");
+        sb.AppendLine("                }))");
+        sb.AppendLine("                    throw new System.InvalidOperationException(\"Failed to publish the dynamic union read entry.\");");
+        sb.AppendLine();
+        sb.AppendLine("                if (!_externalWriteMap.TryRegister(mt, new WriteEntry");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    WriteDelegate = writeDelegate,");
+        sb.AppendLine("                    WriteJsonDelegate = writeJsonDelegate,");
+        sb.AppendLine("                }))");
+        sb.AppendLine("                    throw new System.InvalidOperationException(\"Failed to publish the dynamic union write entry.\");");
+        sb.AppendLine();
+        sb.AppendLine("                if (!_unionMap.TryRegister(mt, new HashEntry { Tag = tag }))");
+        sb.AppendLine("                    throw new System.InvalidOperationException(\"Failed to publish the dynamic union type entry.\");");
         sb.AppendLine("            }");
         sb.AppendLine("        }");
         sb.AppendLine();
@@ -209,10 +226,18 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
             sb.AppendLine($"        public static void Write{methodName}(ref LuminPackWriter writer, ref {classGlobalName} value)");
             sb.AppendLine("        {");
-            sb.AppendLine(maxTag <= 255 && !data.IsWideTag
+            sb.AppendLine(maxTag < 250 && !data.IsWideTag
                 ? $"            writer.WriteUnionHeader({member.Id});"
                 : $"            writer.WriteWideUnionHeader({member.Id});");
-            sb.AppendLine($"            writer.WritePolymorphismValue(LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value));");
+            if (member.Type.IsValueType)
+            {
+                sb.AppendLine($"            var tempValue = ({memberType})(object)value!;");
+                sb.AppendLine("            writer.WritePolymorphismValue(tempValue);");
+            }
+            else
+            {
+                sb.AppendLine($"            writer.WritePolymorphismValue(LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value));");
+            }
             sb.AppendLine("        }");
             sb.AppendLine();
         }
@@ -234,7 +259,9 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine("        {");
             sb.AppendLine($"            {memberType} tempValue = default!;");
             sb.AppendLine($"            reader.ReadPolymorphismValue(ref tempValue);");
-            sb.AppendLine($"            value = LuminPackMarshal.As<{memberType}, {classGlobalName}>(ref tempValue!);");
+            sb.AppendLine(member.Type.IsValueType
+                ? $"            value = ({classGlobalName})(object)tempValue;"
+                : $"            value = LuminPackMarshal.As<{memberType}, {classGlobalName}>(ref tempValue!);");
             sb.AppendLine("        }");
             sb.AppendLine();
         }
@@ -345,7 +372,7 @@ public static class LuminPackUnionCodeGenerator
                 : $"            value?.{item.Item1}();");
         }
         
-        sb.AppendLine(maxTag <= 255 && !data.IsWideTag
+        sb.AppendLine(maxTag < 250 && !data.IsWideTag
             ? "            if (!reader.TryPeekUnionHeader(out var tag))"
             : "            if (!reader.TryPeekWideUnionHeader(out var tag))");
         sb.AppendLine("            {");
@@ -362,7 +389,7 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine($"                case {member.Id}: global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}.Read{methodName}(ref reader, ref value!); break;");
         }
         sb.AppendLine("                default:");
-        sb.AppendLine($"                    if (global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._externalMap.TryGetValue((nint)(uint)tag, out var extEntry))");
+        sb.AppendLine($"                    if (global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._externalMap.TryGetValue((nint)((uint)tag + 1u), out var extEntry))");
         sb.AppendLine("                        extEntry.ReadDelegate(ref reader, ref value!);");
         sb.AppendLine("                    else");
         sb.AppendLine($"                        LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof({classGlobalName}));");
@@ -402,10 +429,17 @@ public static class LuminPackUnionCodeGenerator
                 var member = data.UnionMembers[i];
                 string memberType = GetMemberType(data, member);
                 
+                string valueExpression = member.Type.IsValueType
+                    ? $"({memberType})(object)value!"
+                    : $"LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value)";
+                string calculateMethod = TypeMetaChecker.CheckGeneratorType(member.Type) == GeneratorType.Object
+                    ? "CalculatePolymorphismValue"
+                    : "CalculateValue";
+
                 if (i == 0)
-                    sb.AppendLine($"                if (entry.Tag == {member.Id}) evaluator.CalculateValue(LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value));");
+                    sb.AppendLine($"                if (entry.Tag == {member.Id}) evaluator.{calculateMethod}({valueExpression});");
                 else
-                    sb.AppendLine($"                else if (entry.Tag == {member.Id}) evaluator.CalculateValue(LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value));");
+                    sb.AppendLine($"                else if (entry.Tag == {member.Id}) evaluator.{calculateMethod}({valueExpression});");
             }
         }
         else
@@ -416,7 +450,13 @@ public static class LuminPackUnionCodeGenerator
             foreach (var member in data.UnionMembers)
             {
                 string memberType = GetMemberType(data, member);
-                sb.AppendLine($"                    case {member.Id}: evaluator.CalculateValue(LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value)); break;");
+                string valueExpression = member.Type.IsValueType
+                    ? $"({memberType})(object)value!"
+                    : $"LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value)";
+                string calculateMethod = TypeMetaChecker.CheckGeneratorType(member.Type) == GeneratorType.Object
+                    ? "CalculatePolymorphismValue"
+                    : "CalculateValue";
+                sb.AppendLine($"                    case {member.Id}: evaluator.{calculateMethod}({valueExpression}); break;");
             }
             
             sb.AppendLine("                }");
@@ -450,7 +490,8 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine("                writer.WritePropertyName(LuminPackConstUtf8.ValueU8);");
             sb.AppendLine("            else");
             sb.AppendLine("                writer.WritePropertyName(LuminPackConstUtf8.ValueU16);");
-            sb.AppendLine($"            writer.WriteValue(ref LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value)!);");
+            sb.AppendLine($"            var tempValue = ({memberType})(object)value;");
+            sb.AppendLine("            writer.WriteValue(ref tempValue!);");
             sb.AppendLine("            writer.WriteObjectEnd();");
             sb.AppendLine("        }");
             sb.AppendLine();
@@ -473,7 +514,7 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine("        {");
             sb.AppendLine($"            {memberType} tempValue = default!;");
             sb.AppendLine($"            reader.ReadValue(ref tempValue!);");
-            sb.AppendLine($"            value = LuminPackMarshal.As<{memberType}, {classGlobalName}>(ref tempValue!);");
+            sb.AppendLine($"            value = ({classGlobalName})(object)tempValue;");
             sb.AppendLine("        }");
             sb.AppendLine();
         }
@@ -604,14 +645,13 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine($"                                case {member.Id}: global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}.ReadJson{methodName}(ref reader, ref value!); break;");
         }
         sb.AppendLine("                                default:");
-        sb.AppendLine($"                                    if (global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._externalMap.TryGetValue((nint)(uint)tag, out var extEntry))");
+        sb.AppendLine($"                                    if (global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._externalMap.TryGetValue((nint)((uint)tag + 1u), out var extEntry))");
         sb.AppendLine("                                        extEntry.ReadJsonDelegate(ref reader, ref value!);");
         sb.AppendLine("                                    else");
         sb.AppendLine($"                                        LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof({classGlobalName}));");
         sb.AppendLine("                                    break;");
         sb.AppendLine("                            }");
         sb.AppendLine("                            foundValue = true;");
-        sb.AppendLine("                            break;");
         sb.AppendLine("                        }");
         sb.AppendLine("                    }");
         sb.AppendLine("                    else");
@@ -639,14 +679,13 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine($"                                case {member.Id}: global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}.ReadJson{methodName}(ref reader, ref value!); break;");
         }
         sb.AppendLine("                                default:");
-        sb.AppendLine($"                                    if (global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._externalMap.TryGetValue((nint)(uint)tag, out var extEntry2))");
+        sb.AppendLine($"                                    if (global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._externalMap.TryGetValue((nint)((uint)tag + 1u), out var extEntry2))");
         sb.AppendLine("                                        extEntry2.ReadJsonDelegate(ref reader, ref value!);");
         sb.AppendLine("                                    else");
         sb.AppendLine($"                                        LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof({classGlobalName}));");
         sb.AppendLine("                                    break;");
         sb.AppendLine("                            }");
         sb.AppendLine("                            foundValue = true;");
-        sb.AppendLine("                            break;");
         sb.AppendLine("                        }");
         sb.AppendLine("                    }");
         sb.AppendLine("                    else");

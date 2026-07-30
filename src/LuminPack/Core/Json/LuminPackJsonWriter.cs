@@ -72,8 +72,7 @@ namespace LuminPack.Core
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
             
-            bufferWriter.SetCurrentIndexPtr(ref _currentIndex);
-            _bufferReference = bufferWriter.GetFullSpan();
+            _bufferReference = bufferWriter.BeginWrite(ref _currentIndex);
 #if NET8_0_OR_GREATER
             _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
 #else
@@ -101,14 +100,27 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance(int count)
         {
-            _writerBuffer.Check(ref this);
-            
 #if DEBUG
-            if (_bufferReference.Length < _currentIndex + count)
+            if ((uint)count > (uint)(_bufferReference.Length - _currentIndex))
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
 #endif
-            
             _currentIndex += count;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void EnsureCapacity(int count)
+        {
+            if ((uint)count <= (uint)(_bufferReference.Length - _currentIndex))
+                return;
+
+            if (count < 0 || _currentIndex > int.MaxValue - count)
+                LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
+
+            if (_writerBuffer is null)
+                LuminPackExceptionHelper.ThrowSpanOutOfRange(_currentIndex + count);
+
+            _writerBuffer.EnsureCapacity(_currentIndex + count);
+            FlushBuffer();
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -188,11 +200,13 @@ namespace LuminPack.Core
         {
             if (SerializeStringAsUtf8)
             {
+                EnsureCapacity(1);
                 GetCurrentSpanReference() = value;
                 Advance(1);
             }
             else
             {
+                EnsureCapacity(2);
                 ref byte dst = ref GetCurrentSpanReference();
                 Unsafe.WriteUnaligned(ref dst, (char)value);
                 Advance(2);
@@ -202,6 +216,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteRaw(scoped ReadOnlySpan<byte> value)
         {
+            EnsureCapacity(value.Length);
             value.CopyTo(_bufferReference.Slice(_currentIndex, value.Length));
             Advance(value.Length);
         }
@@ -209,8 +224,10 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteRaw(scoped ReadOnlySpan<char> value)
         {
-            MemoryMarshal.Cast<char, byte>(value).CopyTo(_bufferReference.Slice(_currentIndex, value.Length << 1));
-            Advance(value.Length << 1);
+            var byteCount = checked(value.Length << 1);
+            EnsureCapacity(byteCount);
+            MemoryMarshal.Cast<char, byte>(value).CopyTo(_bufferReference.Slice(_currentIndex, byteCount));
+            Advance(byteCount);
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -289,11 +306,7 @@ namespace LuminPack.Core
             }
             else
             {
-                int byteCount = utf16PropertyName.Length * 2;
-                ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(utf16PropertyName));
-                ref byte dst = ref GetCurrentSpanReference();
-                Unsafe.CopyBlock(ref dst, ref src, (uint)byteCount);
-                Advance(byteCount);
+                WriteStringContentUtf16(utf16PropertyName);
             }
             
             WriteByteRaw(Quote);
@@ -306,29 +319,11 @@ namespace LuminPack.Core
         {
             WriteCommaIfNeeded();
             WriteByteRaw(Quote);
-            
-            bool isAscii = true;
-            for (int i = 0; i < propertyName.Length; i++)
-            {
-                char c = propertyName[i];
-                if (c > 0x7F || c < 0x20 || c == '"' || c == '\\')
-                {
-                    isAscii = false;
-                    break;
-                }
-            }
-            
-            if (isAscii)
-            {
-                for (int i = 0; i < propertyName.Length; i++)
-                {
-                    WriteByteRaw((byte)propertyName[i]);
-                }
-            }
+
+            if (SerializeStringAsUtf8)
+                WriteStringContentUtf8(propertyName.AsSpan());
             else
-            {
-                WriteStringContentSlow(propertyName.AsSpan());
-            }
+                WriteStringContentUtf16(propertyName.AsSpan());
             
             WriteByteRaw(Quote);
             WriteByteRaw(Colon);
@@ -342,13 +337,14 @@ namespace LuminPack.Core
         
         public void WriteString(string? value)
         {
+            WriteCommaIfNeeded();
+
             if (value == null)
             {
                 WriteNullInternal();
                 return;
             }
-            
-            WriteCommaIfNeeded();
+
             WriteByteRaw(Quote);
             
             if (SerializeStringAsUtf8)
@@ -379,6 +375,7 @@ namespace LuminPack.Core
             
             if (!needsEscape)
             {
+                EnsureCapacity(value.Length);
                 ref byte dst = ref GetCurrentSpanReference();
                 for (int i = 0; i < value.Length; i++)
                 {
@@ -408,7 +405,8 @@ namespace LuminPack.Core
             
             if (!needsEscape)
             {
-                int byteCount = value.Length * 2;
+                int byteCount = checked(value.Length * 2);
+                EnsureCapacity(byteCount);
                 ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value));
                 ref byte dst = ref GetCurrentSpanReference();
                 Unsafe.CopyBlock(ref dst, ref src, (uint)byteCount);
@@ -439,7 +437,8 @@ namespace LuminPack.Core
                     if (i > lastWritten)
                     {
                         var segment = value.Slice(lastWritten, i - lastWritten);
-                        int byteCount = segment.Length * 2;
+                        int byteCount = checked(segment.Length * 2);
+                        EnsureCapacity(byteCount);
                         ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(segment));
                         ref byte dst = ref GetCurrentSpanReference();
                         Unsafe.CopyBlock(ref dst, ref src, (uint)byteCount);
@@ -488,7 +487,8 @@ namespace LuminPack.Core
             if (lastWritten < value.Length)
             {
                 var segment = value.Slice(lastWritten);
-                int byteCount = segment.Length * 2;
+                int byteCount = checked(segment.Length * 2);
+                EnsureCapacity(byteCount);
                 ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(segment));
                 ref byte dst = ref GetCurrentSpanReference();
                 Unsafe.CopyBlock(ref dst, ref src, (uint)byteCount);
@@ -499,6 +499,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteUtf16CharDirect(char c)
         {
+            EnsureCapacity(2);
             ref byte dst = ref GetCurrentSpanReference();
             Unsafe.WriteUnaligned(ref dst, c);
             Advance(2);
@@ -513,7 +514,7 @@ namespace LuminPack.Core
         private void WriteStringContentSlow(ReadOnlySpan<char> value)
         {
             Span<byte> utf8Buf = stackalloc byte[4];
-            Span<char> charBuf = stackalloc char[1];
+            Span<char> charBuf = stackalloc char[2];
             
             for (int i = 0; i < value.Length; i++)
             {
@@ -560,7 +561,14 @@ namespace LuminPack.Core
                 else
                 {
                     charBuf[0] = c;
-                    int len = Encoding.UTF8.GetBytes(charBuf, utf8Buf);
+                    int charCount = 1;
+                    if (char.IsHighSurrogate(c) && i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
+                    {
+                        charBuf[1] = value[++i];
+                        charCount = 2;
+                    }
+
+                    int len = Encoding.UTF8.GetBytes(charBuf[..charCount], utf8Buf);
                     WriteRaw(utf8Buf[..len]);
                 }
             }
@@ -847,7 +855,7 @@ namespace LuminPack.Core
         public void WriteFloat(float value)
         {
             WriteCommaIfNeeded();
-            _writerBuffer.Check(ref this);
+            EnsureCapacity(SerializeStringAsUtf8 ? 24 : 64);
             if (SerializeStringAsUtf8)
             {
                 Span<byte> tmp = stackalloc byte[24];
@@ -889,7 +897,7 @@ namespace LuminPack.Core
         public void WriteDouble(double value)
         {
             WriteCommaIfNeeded();
-            _writerBuffer.Check(ref this);
+            EnsureCapacity(SerializeStringAsUtf8 ? 32 : 64);
             if (SerializeStringAsUtf8)
             {
                 Span<byte> tmp = stackalloc byte[32];
@@ -926,13 +934,13 @@ namespace LuminPack.Core
             WriteCommaIfNeeded();
             if (SerializeStringAsUtf8)
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(11);
                 Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
                 _currentIndex += written;
             }
             else
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(22);
                 var charSpan = MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex, 22));
                 value.TryFormat(charSpan, out int written);
                 _currentIndex += written << 1;
@@ -948,13 +956,13 @@ namespace LuminPack.Core
             WriteCommaIfNeeded();
             if (SerializeStringAsUtf8)
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(10);
                 Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
                 _currentIndex += written;
             }
             else
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(20);
                 var charSpan = MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex, 20));
                 value.TryFormat(charSpan, out int written);
                 _currentIndex += written << 1;
@@ -970,13 +978,13 @@ namespace LuminPack.Core
             WriteCommaIfNeeded();
             if (SerializeStringAsUtf8)
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(3);
                 Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
                 _currentIndex += written;
             }
             else
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(6);
                 var charSpan = MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex, 6));
                 value.TryFormat(charSpan, out int written);
                 _currentIndex += written << 1;
@@ -992,13 +1000,13 @@ namespace LuminPack.Core
             WriteCommaIfNeeded();
             if (SerializeStringAsUtf8)
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(4);
                 Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
                 _currentIndex += written;
             }
             else
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(8);
                 var charSpan = MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex, 8));
                 value.TryFormat(charSpan, out int written);
                 _currentIndex += written << 1;
@@ -1014,13 +1022,13 @@ namespace LuminPack.Core
             WriteCommaIfNeeded();
             if (SerializeStringAsUtf8)
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(6);
                 Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
                 _currentIndex += written;
             }
             else
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(12);
                 var charSpan = MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex, 12));
                 value.TryFormat(charSpan, out int written);
                 _currentIndex += written << 1;
@@ -1036,13 +1044,13 @@ namespace LuminPack.Core
             WriteCommaIfNeeded();
             if (SerializeStringAsUtf8)
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(5);
                 Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
                 _currentIndex += written;
             }
             else
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(10);
                 var charSpan = MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex, 10));
                 value.TryFormat(charSpan, out int written);
                 _currentIndex += written << 1;
@@ -1058,13 +1066,13 @@ namespace LuminPack.Core
             WriteCommaIfNeeded();
             if (SerializeStringAsUtf8)
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(20);
                 Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
                 _currentIndex += written;
             }
             else
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(40);
                 var charSpan = MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex, 40));
                 value.TryFormat(charSpan, out int written);
                 _currentIndex += written << 1;
@@ -1080,13 +1088,13 @@ namespace LuminPack.Core
             WriteCommaIfNeeded();
             if (SerializeStringAsUtf8)
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(20);
                 Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
                 _currentIndex += written;
             }
             else
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(40);
                 var charSpan = MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex, 40));
                 value.TryFormat(charSpan, out int written);
                 _currentIndex += written << 1;
@@ -1102,13 +1110,13 @@ namespace LuminPack.Core
             WriteCommaIfNeeded();
             if (SerializeStringAsUtf8)
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(31);
                 Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
                 _currentIndex += written;
             }
             else
             {
-                _writerBuffer.Check(ref this);
+                EnsureCapacity(62);
                 var charSpan = MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex, 62));
                 value.TryFormat(charSpan, out int written, default, System.Globalization.NumberFormatInfo.InvariantInfo);
                 _currentIndex += written << 1;
@@ -1118,7 +1126,8 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteUtf16Chars(scoped ReadOnlySpan<char> chars)
         {
-            int byteCount = chars.Length * 2;
+            int byteCount = checked(chars.Length * 2);
+            EnsureCapacity(byteCount);
             ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(chars));
             ref byte dst = ref GetCurrentSpanReference();
             Unsafe.CopyBlock(ref dst, ref src, (uint)byteCount);
@@ -1133,26 +1142,36 @@ namespace LuminPack.Core
         {
             WriteCommaIfNeeded();
             WriteByteRaw(Quote);
-            
-            if (value == '"')
+
+            if (value == '"' || value == '\\')
             {
                 WriteByteRaw(Backslash);
-                if (SerializeStringAsUtf8)
-                    WriteByteRaw((byte)'"');
-                else
-                    WriteUtf16CharDirect('"');
+                WriteByteRaw((byte)value);
             }
-            else if (value == '\\')
+            else if (value == '\b' || value == '\f' || value == '\n' || value == '\r' || value == '\t')
             {
                 WriteByteRaw(Backslash);
-                if (SerializeStringAsUtf8)
-                    WriteByteRaw((byte)'\\');
-                else
-                    WriteUtf16CharDirect('\\');
+                WriteByteRaw(value switch
+                {
+                    '\b' => (byte)'b',
+                    '\f' => (byte)'f',
+                    '\n' => (byte)'n',
+                    '\r' => (byte)'r',
+                    _ => (byte)'t'
+                });
+            }
+            else if (value < 0x20 || char.IsSurrogate(value))
+            {
+                WriteByteRaw(Backslash);
+                WriteByteRaw((byte)'u');
+                WriteByteRaw(HexChar((value >> 12) & 0xF));
+                WriteByteRaw(HexChar((value >> 8) & 0xF));
+                WriteByteRaw(HexChar((value >> 4) & 0xF));
+                WriteByteRaw(HexChar(value & 0xF));
             }
             else if (SerializeStringAsUtf8)
             {
-                if (value >= 0x20 && value <= 0x7F)
+                if (value <= 0x7F)
                 {
                     WriteByteRaw((byte)value);
                 }
