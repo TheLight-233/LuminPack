@@ -25,11 +25,10 @@ LuminPack 在早期设计和实现过程中学习、借鉴了 MemoryPack 的优�
 
 ### .NET 项目
 
-LuminPack 支持 `netstandard2.1`、`net8.0`、`net9.0` 和 `net10.0`。推荐通过 NuGet 安装运行库和源代码生成器：
+LuminPack 支持 `netstandard2.1`、`net8.0`、`net9.0` 和 `net10.0`。只需安装 `LuminPack`，NuGet 会自动安装匹配版本的 `LuminPackGenerator` 依赖：
 
 ```shell
 dotnet add package LuminPack
-dotnet add package LuminPackGenerator
 ```
 
 也可以在 IDE 的 NuGet 包管理器中搜索 `LuminPack`，或直接在项目文件中添加：
@@ -37,13 +36,10 @@ dotnet add package LuminPackGenerator
 ```xml
 <ItemGroup>
   <PackageReference Include="LuminPack" Version="1.0.8" />
-  <PackageReference Include="LuminPackGenerator" Version="1.0.8"
-                    PrivateAssets="all"
-                    IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
 </ItemGroup>
 ```
 
-`LuminPack` 是运行库，`LuminPackGenerator` 是编译期源代码生成器。部分包管理器会自动引入生成器，但显式安装可以避免不同 IDE 和构建环境对传递 Analyzer 的处理差异。两个包的版本请以 NuGet 上彼此匹配的最新发布版为准。
+`LuminPack` 和 `LuminPackGenerator` 是两个独立发布的 NuGet 包。`LuminPack` 通过公开依赖自动引入匹配版本的源代码生成器，生成器不会被打包进 `LuminPack` 本身。
 
 ### Unity 项目
 
