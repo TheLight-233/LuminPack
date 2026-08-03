@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace LuminPackUnitTest;
 
-public class GenericSerializationTest
+public partial class GenericSerializationTest
 {
     [LuminPackable]
     public class GenericClass<T>
@@ -26,7 +26,7 @@ public class GenericSerializationTest
     [LuminPackable]
     [LuminPackUnion(3, typeof(NumericGenericClass<double>))]
     [LuminPackUnion(4, typeof(NumericGenericClass<int>))]
-    public abstract class AbstractGenericBase<T>
+    public abstract partial class AbstractGenericBase<T>
     {
         [LuminPackOrder(0)]
         public T BaseValue { get; set; }
@@ -36,7 +36,7 @@ public class GenericSerializationTest
 
     // 可以被收集
     [LuminPackable]
-    public class ConcreteGenericClass<T> : AbstractGenericBase<T>
+    public partial class ConcreteGenericClass<T> : AbstractGenericBase<T>
     {
         [LuminPackOrder(2)]
         public T AdditionalValue { get; set; }
@@ -52,7 +52,7 @@ public class GenericSerializationTest
 
     // 可以被收集
     [LuminPackable]
-    public class ConcreteGenericClass2 : AbstractGenericBase<int>
+    public partial class ConcreteGenericClass2 : AbstractGenericBase<int>
     {
         
         public string Name { get; set; }
@@ -66,7 +66,7 @@ public class GenericSerializationTest
     // 具体实现类2 - 带约束的泛型
     // 不能被收集
     [LuminPackable]
-    public class NumericGenericClass<T> : AbstractGenericBase<T> where T : struct
+    public partial class NumericGenericClass<T> : AbstractGenericBase<T> where T : struct
     {
         [LuminPackOrder(2)]
         public T MinValue { get; set; }

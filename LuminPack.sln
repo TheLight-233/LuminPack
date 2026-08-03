@@ -8,6 +8,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPackBenchmark", "bench
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPackUnitTest", "tests\LuminPackUnitTest\LuminPackUnitTest.csproj", "{CD33731C-A4BE-40A9-9F15-5BB9D43E61F2}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LuminPackUnionContracts", "tests\LuminPackUnionContracts\LuminPackUnionContracts.csproj", "{9F3D43B8-2F7E-4E18-A8B0-75469E7D2361}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -30,5 +32,9 @@ Global
 		{CD33731C-A4BE-40A9-9F15-5BB9D43E61F2}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{CD33731C-A4BE-40A9-9F15-5BB9D43E61F2}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{CD33731C-A4BE-40A9-9F15-5BB9D43E61F2}.Release|Any CPU.Build.0 = Release|Any CPU
+		{9F3D43B8-2F7E-4E18-A8B0-75469E7D2361}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{9F3D43B8-2F7E-4E18-A8B0-75469E7D2361}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{9F3D43B8-2F7E-4E18-A8B0-75469E7D2361}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{9F3D43B8-2F7E-4E18-A8B0-75469E7D2361}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal

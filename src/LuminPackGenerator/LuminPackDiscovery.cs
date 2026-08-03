@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using LuminPack.Code;
+using LuminPack.Code.Core;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -32,7 +33,10 @@ internal static class LuminPackDiscovery
         foreach (var d in derivedList)
         {
             while (dataInfo.UnionMembers.Any(m => m.Id == tag)) tag++;
-            dataInfo.UnionMembers.Add(new LuminUnionMemberInfo(tag++, d));
+            dataInfo.UnionMembers.Add(new LuminUnionMemberInfo(
+                tag++,
+                d,
+                LuminPackUnionDispatchUtilities.CanGeneratePartial(d, compilation)));
             
             if (baseType.IsGenericType)
             {

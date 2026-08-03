@@ -74,7 +74,7 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine();
         
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-        sb.AppendLine($"        internal static readonly global::LuminPack.Utility.LuminUnionMap<ReadEntry> _externalMap = new global::LuminPack.Utility.LuminUnionMap<ReadEntry>(4);");
+        sb.AppendLine($"        internal static readonly global::LuminPack.Utility.LuminRawUnionMap<ReadEntry> _externalMap = new global::LuminPack.Utility.LuminRawUnionMap<ReadEntry>(4);");
         sb.AppendLine();
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine($"        static object _registerLock = new object();");
@@ -91,19 +91,18 @@ public static class LuminPackUnionCodeGenerator
 
         GenerateStaticJsonDeserializeMethods(data, sb, classGlobalName);
         sb.AppendLine();
+
+        GenerateStaticCalculateOffsetMethods(data, sb, classGlobalName);
+        sb.AppendLine();
+
+        GenerateUnionFallbackMethods(data, sb, classGlobalName);
+        sb.AppendLine();
         
         sb.AppendLine($"        static {parserName}()");
         sb.AppendLine("        {");
         sb.AppendLine($"            LuminPackParseProvider.RegisterParsers(new {classFullName}());");
         sb.AppendLine($"            LuminPackParseProvider.RegisterParsers(new ArrayParser<{classGlobalName}>());");
         sb.AppendLine();
-
-        for (int i = 0; i < data.UnionMembers.Count; i++)
-        {
-            var member = data.UnionMembers[i];
-            string fullName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            sb.AppendLine($"            _unionMap.TryRegister(LuminPackMarshal.GetMethodTable(typeof({fullName})), new HashEntry {{ Tag = {member.Id} }});");
-        }
 
         sb.AppendLine("        }");
         sb.AppendLine();
@@ -180,6 +179,12 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine($"                if ({staticTagConflict})");
             sb.AppendLine("                    throw new System.ArgumentException($\"The tag is already assigned to a statically generated union member. Tag: {tag}\", nameof(tag));");
             sb.AppendLine();
+
+            var staticTypeConflict = string.Join(" || ", data.UnionMembers.Select(member =>
+                $"type == typeof({GetMemberType(data, member)})"));
+            sb.AppendLine($"                if ({staticTypeConflict})");
+            sb.AppendLine("                    throw new System.ArgumentException($\"The type is already assigned to a statically generated union member. Type: {type}\", nameof(type));");
+            sb.AppendLine();
         }
         sb.AppendLine("                if (_unionMap.TryGetValue(mt, out _) || _externalWriteMap.TryGetValue(mt, out _))");
         sb.AppendLine("                    throw new System.ArgumentException($\"An entry with the same method table already exists. Type: {type}\");");
@@ -216,7 +221,7 @@ public static class LuminPackUnionCodeGenerator
         if (!data.UnionMembers.Any())
             return;
         
-        var maxTag = data.UnionMembers.Max(x => x.Id);
+        var maxTag = data.UnionMembers.Count == 0 ? 0 : data.UnionMembers.Max(x => x.Id);
         foreach (var member in data.UnionMembers)
         {
             string memberType = GetMemberType(data, member);
@@ -266,6 +271,59 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine();
         }
     }
+
+    static void GenerateStaticCalculateOffsetMethods(LuminDataInfo data, StringBuilder sb, string classGlobalName)
+    {
+        if (!data.UnionMembers.Any())
+            return;
+
+        foreach (var member in data.UnionMembers)
+        {
+            string memberType = GetMemberType(data, member);
+            string methodName = GetMethodName(member.Type);
+            string valueExpression = member.Type.IsValueType
+                ? $"({memberType})(object)value!"
+                : $"LuminPackMarshal.As<{classGlobalName}, {memberType}>(ref value)";
+            string calculateMethod = TypeMetaChecker.CheckGeneratorType(member.Type) == GeneratorType.Object
+                ? "CalculatePolymorphismValue"
+                : "CalculateValue";
+
+            sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+            sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            sb.AppendLine($"        public static void Calculate{methodName}(ref LuminPackEvaluator evaluator, ref {classGlobalName} value)");
+            sb.AppendLine("        {");
+            sb.AppendLine($"            evaluator.CalculateUnionHeader({member.Id});");
+            sb.AppendLine($"            evaluator.{calculateMethod}({valueExpression});");
+            sb.AppendLine("        }");
+            sb.AppendLine();
+        }
+    }
+
+    static void GenerateUnionFallbackMethods(LuminDataInfo data, StringBuilder sb, string classGlobalName)
+    {
+        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+        sb.AppendLine($"        internal static void SerializeUnionFallback(ref LuminPackWriter writer, ref {classGlobalName} value)");
+        sb.AppendLine("        {");
+        GenerateSerializeFallbackCode(data, sb);
+        sb.AppendLine("        }");
+        sb.AppendLine();
+
+        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+        sb.AppendLine($"        internal static void SerializeJsonUnionFallback(ref global::LuminPack.Core.LuminPackJsonWriter writer, ref {classGlobalName} value)");
+        sb.AppendLine("        {");
+        GenerateSerializeJsonFallbackCode(data, sb);
+        sb.AppendLine("        }");
+        sb.AppendLine();
+
+        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+        sb.AppendLine($"        internal static void CalculateOffsetUnionFallback(ref LuminPackEvaluator evaluator, ref {classGlobalName} value)");
+        sb.AppendLine("        {");
+        GenerateCalculateOffsetFallbackCode(data, sb, classGlobalName);
+        sb.AppendLine("        }");
+    }
     
     static string GetMemberType(LuminDataInfo data, LuminUnionMemberInfo member)
     {
@@ -291,7 +349,7 @@ public static class LuminPackUnionCodeGenerator
         }
     }
     
-    static string GetMethodName(ITypeSymbol type)
+    internal static string GetMethodName(ITypeSymbol type)
     {
         string name = type.ToDisplayString().Replace(".", "_").Replace("<", "_").Replace(">", "_").Replace(",", "_");
         return name;
@@ -299,10 +357,7 @@ public static class LuminPackUnionCodeGenerator
     
     public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb)
     {
-        string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = TypeMetaChecker.BuildParserClassName(data);
         string classGlobalName = data.classFullName;
-        string genericParameters = data.GenericParameters.Count == 0 ? string.Empty : "<" + string.Join(", ", data.GenericParameters) + ">";
         
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerializing))
         {
@@ -323,30 +378,8 @@ public static class LuminPackUnionCodeGenerator
         }
         
         sb.AppendLine();
-        sb.AppendLine("            var valueMT = LuminPackMarshal.GetMethodTable(value);");
-        sb.AppendLine($"            ref var entry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._unionMap.TryGetValueRef(valueMT);");
-        sb.AppendLine("            if (global::System.Runtime.CompilerServices.Unsafe.IsNullRef(ref entry))");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                LuminPackExceptionHelper.ThrowNotFoundInUnionType(value.GetType(), typeof({classGlobalName}));");
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine("            switch (entry.Tag)");
-        sb.AppendLine("            {");
-        foreach (var member in data.UnionMembers)
-        {
-            string methodName = GetMethodName(member.Type);
-            sb.AppendLine($"                case {member.Id}: global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}.Write{methodName}(ref writer, ref Unsafe.AsRef(in value!)); break;");
-        }
-        sb.AppendLine("                default:");
-        sb.AppendLine("                {");
-        sb.AppendLine($"                    ref var writeEntry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._externalWriteMap.TryGetValueRef(valueMT);");
-        sb.AppendLine("                    if (!global::System.Runtime.CompilerServices.Unsafe.IsNullRef(ref writeEntry))");
-        sb.AppendLine("                        writeEntry.WriteDelegate(ref writer, ref Unsafe.AsRef(in value!));");
-        sb.AppendLine("                    else");
-        sb.AppendLine($"                        LuminPackExceptionHelper.ThrowNotFoundInUnionType(value.GetType(), typeof({classGlobalName}));");
-        sb.AppendLine("                    break;");
-        sb.AppendLine("                }");
-        sb.AppendLine("            }");
+        var suffix = LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(data.TypeSymbol.OriginalDefinition);
+        sb.AppendLine($"            value.__LuminPackUnionSerialize_{suffix}(ref writer);");
         sb.AppendLine();
         
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerialized))
@@ -356,14 +389,27 @@ public static class LuminPackUnionCodeGenerator
                 : $"            value?.{item.Item1}();");
         }
     }
-    
-    public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb)
+
+    static void GenerateSerializeFallbackCode(LuminDataInfo data, StringBuilder sb)
     {
-        string paraNullable = data.isValueType ? string.Empty : "?";
         string classFullName = TypeMetaChecker.BuildParserClassName(data);
         string classGlobalName = data.classFullName;
         string genericParameters = data.GenericParameters.Count == 0 ? string.Empty : "<" + string.Join(", ", data.GenericParameters) + ">";
-        var maxTag = data.UnionMembers.Max(x => x.Id);
+
+        sb.AppendLine("            var valueMT = LuminPackMarshal.GetMethodTable(value);");
+        sb.AppendLine($"            ref var writeEntry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._externalWriteMap.TryGetValueRef(valueMT);");
+        sb.AppendLine("            if (!global::System.Runtime.CompilerServices.Unsafe.IsNullRef(ref writeEntry))");
+        sb.AppendLine("                writeEntry.WriteDelegate(ref writer, ref value);");
+        sb.AppendLine("            else");
+        sb.AppendLine($"                LuminPackExceptionHelper.ThrowNotFoundInUnionType(value.GetType(), typeof({classGlobalName}));");
+    }
+    
+    public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb)
+    {
+        string classFullName = TypeMetaChecker.BuildParserClassName(data);
+        string classGlobalName = data.classFullName;
+        string genericParameters = data.GenericParameters.Count == 0 ? string.Empty : "<" + string.Join(", ", data.GenericParameters) + ">";
+        var maxTag = data.UnionMembers.Count == 0 ? 0 : data.UnionMembers.Max(x => x.Id);
         
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserializing))
         {
@@ -415,13 +461,20 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine("            }");
         }
         sb.AppendLine();
-        
+
+        var suffix = LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(data.TypeSymbol.OriginalDefinition);
+        sb.AppendLine($"            value.__LuminPackUnionCalculateOffset_{suffix}(ref evaluator);");
+        sb.AppendLine();
+    }
+
+    static void GenerateCalculateOffsetFallbackCode(LuminDataInfo data, StringBuilder sb, string classGlobalName)
+    {
         sb.AppendLine("            var valueMT = LuminPackMarshal.GetMethodTable(value);");
         sb.AppendLine("            if (_unionMap.TryGetValue(valueMT, out var entry))");
         sb.AppendLine("            {");
         sb.AppendLine("                evaluator.CalculateUnionHeader(entry.Tag);");
         sb.AppendLine();
-        
+
         if (data.UnionMembers.Count <= 4)
         {
             for (int i = 0; i < data.UnionMembers.Count; i++)
@@ -463,7 +516,6 @@ public static class LuminPackUnionCodeGenerator
         }
         
         sb.AppendLine("            }");
-        sb.AppendLine();
     }
     
     static void GenerateStaticJsonSerializeMethods(LuminDataInfo data, StringBuilder sb, string classGlobalName)
@@ -522,10 +574,6 @@ public static class LuminPackUnionCodeGenerator
     
     public static void GenerateSerializeJsonCode(LuminDataInfo data, StringBuilder sb, string classGlobalName)
     {
-        string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = TypeMetaChecker.BuildParserClassName(data);
-        string genericParameters = data.GenericParameters.Count == 0 ? string.Empty : "<" + string.Join(", ", data.GenericParameters) + ">";
-        
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerializing))
         {
             sb.AppendLine(item.Item3
@@ -543,30 +591,8 @@ public static class LuminPackUnionCodeGenerator
         }
         
         sb.AppendLine();
-        sb.AppendLine("            var valueMT = LuminPackMarshal.GetMethodTable(value);");
-        sb.AppendLine($"            ref var entry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._unionMap.TryGetValueRef(valueMT);");
-        sb.AppendLine("            if (global::System.Runtime.CompilerServices.Unsafe.IsNullRef(ref entry))");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                LuminPackExceptionHelper.ThrowNotFoundInUnionType(value.GetType(), typeof({classGlobalName}));");
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine("            switch (entry.Tag)");
-        sb.AppendLine("            {");
-        foreach (var member in data.UnionMembers)
-        {
-            string methodName = GetMethodName(member.Type);
-            sb.AppendLine($"                case {member.Id}: global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}.WriteJson{methodName}(ref writer, ref Unsafe.AsRef(in value!)); break;");
-        }
-        sb.AppendLine("                default:");
-        sb.AppendLine("                {");
-        sb.AppendLine($"                    ref var writeEntry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._externalWriteMap.TryGetValueRef(valueMT);");
-        sb.AppendLine("                    if (!global::System.Runtime.CompilerServices.Unsafe.IsNullRef(ref writeEntry))");
-        sb.AppendLine("                        writeEntry.WriteJsonDelegate(ref writer, ref Unsafe.AsRef(in value!));");
-        sb.AppendLine("                    else");
-        sb.AppendLine($"                        LuminPackExceptionHelper.ThrowNotFoundInUnionType(value.GetType(), typeof({classGlobalName}));");
-        sb.AppendLine("                    break;");
-        sb.AppendLine("                }");
-        sb.AppendLine("            }");
+        var suffix = LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(data.TypeSymbol.OriginalDefinition);
+        sb.AppendLine($"            value.__LuminPackUnionSerializeJson_{suffix}(ref writer);");
         sb.AppendLine();
         
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerialized))
@@ -576,10 +602,23 @@ public static class LuminPackUnionCodeGenerator
                 : $"            value?.{item.Item1}();");
         }
     }
+
+    static void GenerateSerializeJsonFallbackCode(LuminDataInfo data, StringBuilder sb)
+    {
+        string classFullName = TypeMetaChecker.BuildParserClassName(data);
+        string classGlobalName = data.classFullName;
+        string genericParameters = data.GenericParameters.Count == 0 ? string.Empty : "<" + string.Join(", ", data.GenericParameters) + ">";
+
+        sb.AppendLine("            var valueMT = LuminPackMarshal.GetMethodTable(value);");
+        sb.AppendLine($"            ref var writeEntry = ref global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._externalWriteMap.TryGetValueRef(valueMT);");
+        sb.AppendLine("            if (!global::System.Runtime.CompilerServices.Unsafe.IsNullRef(ref writeEntry))");
+        sb.AppendLine("                writeEntry.WriteJsonDelegate(ref writer, ref value);");
+        sb.AppendLine("            else");
+        sb.AppendLine($"                LuminPackExceptionHelper.ThrowNotFoundInUnionType(value.GetType(), typeof({classGlobalName}));");
+    }
     
     public static void GenerateDeserializeJsonCode(LuminDataInfo data, StringBuilder sb, string classGlobalName)
     {
-        string paraNullable = data.isValueType ? string.Empty : "?";
         string classFullName = TypeMetaChecker.BuildParserClassName(data);
         string genericParameters = data.GenericParameters.Count == 0 ? string.Empty : "<" + string.Join(", ", data.GenericParameters) + ">";
         

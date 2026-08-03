@@ -22,7 +22,11 @@ internal static class ReaderBoundaryValidationTest
         RunCase(results, nameof(InvalidCompressedLengthIsRejectedBeforeAllocation),
             InvalidCompressedLengthIsRejectedBeforeAllocation);
         RunDebugOnlyCase(results, nameof(NegativeAdvanceIsRejected), NegativeAdvanceIsRejected);
+        RunCase(results, nameof(LengthStringsRoundTrip), LengthStringsRoundTrip);
         RunCase(results, nameof(NullLengthStringRoundTrips), NullLengthStringRoundTrips);
+        RunCase(results, nameof(LengthStringPayloadBoundsAreValidated), LengthStringPayloadBoundsAreValidated);
+        RunCase(results, nameof(NegativeStringLengthsAreRejected), NegativeStringLengthsAreRejected);
+        RunCase(results, nameof(OverflowingStringLengthIsRejected), OverflowingStringLengthIsRejected);
         RunCase(results, nameof(MultiSegmentSequenceIsReadCompletely), MultiSegmentSequenceIsReadCompletely);
         RunCase(results, nameof(MultiDimensionalArrayHeaderAndLengthsAreValidated),
             MultiDimensionalArrayHeaderAndLengthsAreValidated);
@@ -189,6 +193,63 @@ internal static class ReaderBoundaryValidationTest
             $"Null string consumed {reader.GetCurrentSpanIndex()} bytes; expected {bytes.Length}.");
     }
 
+    private static void LengthStringsRoundTrip()
+    {
+        const string value = "ASCII 中文 😀";
+
+        foreach (var option in new[] { LuminPackSerializerOption.Utf8, LuminPackSerializerOption.Utf16WithLength })
+        {
+            var payload = LuminPackSerializer.Serialize(value, option);
+            var result = LuminPackSerializer.Deserialize<string>(payload, option);
+            Assert(result == value, $"Length-prefixed {option.StringEncoding} string did not round-trip.");
+        }
+    }
+
+    private static void LengthStringPayloadBoundsAreValidated()
+    {
+        AssertThrows(() => ReadForgedStringLength(CreateLengthString(100, 0, utf8: true, prefix: 5),
+                LuminPackSerializerOption.Utf8, 5),
+            "A UTF-8 string length larger than the remaining payload was accepted.");
+
+        AssertThrows(() => ReadForgedStringLength(CreateLengthString(3, 2, utf8: false),
+                LuminPackSerializerOption.Utf16WithLength, 0),
+            "A UTF-16 string payload missing one byte was accepted.");
+    }
+
+    private static void NegativeStringLengthsAreRejected()
+    {
+        foreach (int length in new[] { -2, int.MinValue })
+        {
+            AssertInvalidData(() => ReadForgedStringLength(CreateLengthString(length, 0, utf8: true),
+                    LuminPackSerializerOption.Utf8, 0),
+                $"Invalid string length {length} was accepted.");
+        }
+    }
+
+    private static void OverflowingStringLengthIsRejected()
+    {
+        const int prefix = 16;
+        AssertThrows(() => ReadForgedStringLength(CreateLengthString(int.MaxValue, 0, utf8: true, prefix: prefix),
+                LuminPackSerializerOption.Utf8, prefix),
+            "A string length whose index/header/length sum overflows Int32 was accepted.");
+    }
+
+    private static byte[] CreateLengthString(int length, int payloadLength, bool utf8, int prefix = 0)
+    {
+        int headerSize = utf8 ? sizeof(int) * 2 : sizeof(int);
+        byte[] bytes = new byte[prefix + headerSize + payloadLength];
+        BitConverter.GetBytes(length).CopyTo(bytes, prefix);
+        return bytes;
+    }
+
+    private static void ReadForgedStringLength(byte[] bytes, LuminPackSerializerOption option, int index)
+    {
+        using var state = new LuminPackReaderOptionalState(option);
+        ReadOnlySpan<byte> span = bytes;
+        var reader = new LuminPackReader(ref span, state);
+        reader.ReadStringLength(ref index, out _);
+    }
+
     private static void MultiSegmentSequenceIsReadCompletely()
     {
         byte[] payload =
@@ -246,6 +307,20 @@ internal static class ReaderBoundaryValidationTest
             action();
         }
         catch
+        {
+            return;
+        }
+
+        throw new InvalidOperationException(message);
+    }
+
+    private static void AssertInvalidData(Action action, string message)
+    {
+        try
+        {
+            action();
+        }
+        catch (InvalidDataException)
         {
             return;
         }

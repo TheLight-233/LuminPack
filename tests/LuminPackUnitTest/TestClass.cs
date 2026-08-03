@@ -154,12 +154,12 @@ public class PrivateNestedCollection
 }
 
 [LuminPackable]
-public interface IListElementClass
+public partial interface IListElementClass
 {
 }
 
 [LuminPackable]
-public class ListElementClass : IListElementClass
+public partial class ListElementClass : IListElementClass
 {
     public int Id;
     public string Name;
@@ -168,7 +168,7 @@ public class ListElementClass : IListElementClass
 }
 
 [LuminPackable]
-public class ListElementClass2Renamed : IListElementClass
+public partial class ListElementClass2Renamed : IListElementClass
 {
     public int Id;
     public string Name;
@@ -246,9 +246,7 @@ public
 
 [LuminPackable]
 public
-#if !NET8_0_OR_GREATER
-        partial
-#endif
+    partial
     class
     TestPrivateMemberClass : Base
 {
@@ -329,12 +327,12 @@ public
 }
 
 [LuminPackable]
-public interface ISerializable
+public partial interface ISerializable
 {
 }
 
 [LuminPackable]
-public struct Struct1 : ISerializable
+public partial struct Struct1 : ISerializable
 {
     public int A;
     public DateTime B;
@@ -342,7 +340,7 @@ public struct Struct1 : ISerializable
 }
 
 [LuminPackable]
-public class Class1 : ISerializable
+public partial class Class1 : ISerializable
 {
     public int A;
     public DateTime B;
@@ -351,7 +349,7 @@ public class Class1 : ISerializable
 }
 
 [LuminPackable]
-public struct Struct2 : ISerializable
+public partial struct Struct2 : ISerializable
 {
     public int A;
     public DateTime B;
@@ -407,27 +405,27 @@ public class ComplexGeneric2<T>
 }
 
 [LuminPackable]
-public abstract class Base
+public abstract partial class Base
 {
     public int A;
 }
 
 [LuminPackable]
-public class Sub1 : Base
+public partial class Sub1 : Base
 {
     public int B;
 }
 
-public class Nested
+public partial class Nested
 {
     [LuminPackable]
-    public abstract class Sub2 : Base
+    public abstract partial class Sub2 : Base
     {
         public int C;
     }
 
     [LuminPackable]
-    public class Sub2Impl : Sub2
+    public partial class Sub2Impl : Sub2
     {
         public Sub4 D;
     }
@@ -439,7 +437,7 @@ public class Nested
 }
 
 [LuminPackable]
-public class Sub3 : Nested.Sub2Impl
+public partial class Sub3 : Nested.Sub2Impl
 {
     public int E;
 }

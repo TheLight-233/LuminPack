@@ -104,7 +104,7 @@ public static class StringSerializer
 #endif
     }
 
-    private static unsafe OperationStatus SerializeAsUtf8(
+    internal static unsafe OperationStatus SerializeAsUtf8(
         ReadOnlySpan<char> source,
         Span<byte> destination,
         out int charsRead,
@@ -117,53 +117,48 @@ public static class StringSerializer
         {
             char* pInput = pSource;
             byte* pOutput = pDest;
-            OperationStatus status = OperationStatus.Done;
-            int remaining = source.Length;
-                
-            while (remaining > 0)
+            char* inputEnd = pSource + source.Length;
+            byte* outputEnd = pDest + destination.Length;
+            OperationStatus status;
+
+            while (true)
             {
-                int chunkSize = Math.Min(remaining, destination.Length - (int)(pOutput - pDest));
-                if (chunkSize <= 0) break;
-                    
                 status = TranscodeToUtf8(
-                    pInput, chunkSize,
-                    pOutput, destination.Length - (int)(pOutput - pDest),
+                    pInput, (int)(inputEnd - pInput),
+                    pOutput, (int)(outputEnd - pOutput),
                     out char* pInputRemaining,
                     out byte* pOutputRemaining);
-                    
-                int processed = (int)(pInputRemaining - pInput);
-                remaining -= processed;
-                    
-                if (status > OperationStatus.DestinationTooSmall && 
-                    (status != OperationStatus.NeedMoreData || isFinalBlock))
+
+                pInput = pInputRemaining;
+                pOutput = pOutputRemaining;
+
+                if (status is OperationStatus.Done or OperationStatus.DestinationTooSmall)
+                    break;
+
+                if (status == OperationStatus.NeedMoreData && !isFinalBlock)
+                    break;
+
+                if (!replaceInvalidSequences)
                 {
-                    if (!replaceInvalidSequences)
-                    {
-                        status = OperationStatus.InvalidData;
-                        break;
-                    }
-                        
-                    // 跳过无效字符
-                    pInput++;
-                    remaining--;
-                    pOutput[0] = 0xEF;
-                    pOutput[1] = 0xBF;
-                    pOutput[2] = 0xBD;
-                    pOutput += 3;
+                    status = OperationStatus.InvalidData;
+                    break;
                 }
-                else
+
+                if (outputEnd - pOutput < 3)
                 {
-                    pInput = pInputRemaining;
-                    pOutput = pOutputRemaining;
-                        
-                    if (status == OperationStatus.DestinationTooSmall || 
-                        status == OperationStatus.NeedMoreData)
-                    {
-                        break;
-                    }
+                    status = OperationStatus.DestinationTooSmall;
+                    break;
                 }
+
+                // Invalid UTF-16 consumes one code unit. An incomplete final
+                // high surrogate consumes the entire remaining input.
+                pInput = status == OperationStatus.NeedMoreData ? inputEnd : pInput + 1;
+                pOutput[0] = 0xEF;
+                pOutput[1] = 0xBF;
+                pOutput[2] = 0xBD;
+                pOutput += 3;
             }
-                
+
             charsRead = (int)(pInput - pSource);
             bytesWritten = (int)(pOutput - pDest);
             return status;
@@ -212,7 +207,7 @@ public static class StringSerializer
         return OperationStatus.Done;
     }
 
-    private static unsafe OperationStatus DeserializeFromUtf8(
+    internal static unsafe OperationStatus DeserializeFromUtf8(
         ReadOnlySpan<byte> source,
         Span<char> destination,
         out int bytesRead,
@@ -225,51 +220,47 @@ public static class StringSerializer
         {
             byte* pInput = pSource;
             char* pOutput = pDest;
-            OperationStatus status = OperationStatus.Done;
-            int remaining = source.Length;
-            
-            while (remaining > 0)
+            byte* inputEnd = pSource + source.Length;
+            char* outputEnd = pDest + destination.Length;
+            OperationStatus status;
+
+            while (true)
             {
-                int chunkSize = Math.Min(remaining, destination.Length - (int)(pOutput - pDest));
-                if (chunkSize <= 0) break;
-                    
                 status = TranscodeToUtf16(
-                    pInput, chunkSize, 
-                    pOutput, destination.Length - (int)(pOutput - pDest),
-                    out byte* pInputRemaining, 
+                    pInput, (int)(inputEnd - pInput),
+                    pOutput, (int)(outputEnd - pOutput),
+                    out byte* pInputRemaining,
                     out char* pOutputRemaining);
-                    
-                int processed = (int)(pInputRemaining - pInput);
-                remaining -= processed;
-                    
-                if (status > OperationStatus.DestinationTooSmall && 
-                    (status != OperationStatus.NeedMoreData || isFinalBlock))
+
+                pInput = pInputRemaining;
+                pOutput = pOutputRemaining;
+
+                if (status is OperationStatus.Done or OperationStatus.DestinationTooSmall)
+                    break;
+
+                if (status == OperationStatus.NeedMoreData && !isFinalBlock)
+                    break;
+
+                if (!replaceInvalidSequences)
                 {
-                    if (!replaceInvalidSequences)
-                    {
-                        status = OperationStatus.InvalidData;
-                        break;
-                    }
-                        
-                    // 跳过无效字节
-                    pInput++;
-                    remaining--;
-                    *pOutput = '\uFFFD';
-                    pOutput++;
+                    status = OperationStatus.InvalidData;
+                    break;
                 }
-                else
+
+                if (pOutput == outputEnd)
                 {
-                    pInput = pInputRemaining;
-                    pOutput = pOutputRemaining;
-                        
-                    if (status == OperationStatus.DestinationTooSmall || 
-                        status == OperationStatus.NeedMoreData)
-                    {
-                        break;
-                    }
+                    status = OperationStatus.DestinationTooSmall;
+                    break;
                 }
+
+                int invalidLength = status == OperationStatus.NeedMoreData
+                    ? (int)(inputEnd - pInput)
+                    : GetInvalidUtf8SequenceLength(pInput, (int)(inputEnd - pInput));
+
+                pInput += invalidLength;
+                *pOutput++ = '\uFFFD';
             }
-                
+
             bytesRead = (int)(pInput - pSource);
             charsWritten = (int)(pOutput - pDest);
             return status;
@@ -338,146 +329,126 @@ public static class StringSerializer
     {
         byte* inputEnd = pInputBuffer + inputLength;
         char* outputEnd = pOutputBuffer + outputCharsRemaining;
-            
-        while (pInputBuffer < inputEnd && pOutputBuffer < outputEnd)
+
+        while (pInputBuffer < inputEnd)
         {
+            pInputBufferRemaining = pInputBuffer;
+            pOutputBufferRemaining = pOutputBuffer;
+
             uint firstByte = *pInputBuffer;
-                
-            // 1字节序列 (ASCII)
+
             if (firstByte < 0x80)
             {
+                if (pOutputBuffer == outputEnd)
+                    return Complete(OperationStatus.DestinationTooSmall);
+
                 *pOutputBuffer = (char)firstByte;
                 pInputBuffer++;
                 pOutputBuffer++;
                 continue;
             }
-                
-            // 2字节序列
-            if ((firstByte & 0xE0) == 0xC0)
+
+            // Only C2..DF are valid two-byte leaders. C0/C1 are overlong.
+            if (firstByte is >= 0xC2 and <= 0xDF)
             {
                 if (pInputBuffer + 2 > inputEnd)
-                {
-                    break; // 需要更多数据
-                }
-                    
+                    return Complete(OperationStatus.NeedMoreData);
+
                 uint secondByte = pInputBuffer[1];
-                if ((secondByte & 0xC0) != 0x80)
-                {
-                    pInputBufferRemaining = pInputBuffer;
-                    pOutputBufferRemaining = pOutputBuffer;
-                    return OperationStatus.InvalidData;
-                }
-                    
+                if (!IsUtf8ContinuationByte(secondByte))
+                    return Complete(OperationStatus.InvalidData);
+
+                if (pOutputBuffer == outputEnd)
+                    return Complete(OperationStatus.DestinationTooSmall);
+
                 uint codePoint = ((firstByte & 0x1F) << 6) | (secondByte & 0x3F);
-                if (codePoint < 0x80)
-                {
-                    pInputBufferRemaining = pInputBuffer;
-                    pOutputBufferRemaining = pOutputBuffer;
-                    return OperationStatus.InvalidData;
-                }
-                    
                 *pOutputBuffer = (char)codePoint;
                 pInputBuffer += 2;
                 pOutputBuffer++;
                 continue;
             }
-                
-            // 3字节序列
-            if ((firstByte & 0xF0) == 0xE0)
+
+            if (firstByte is >= 0xE0 and <= 0xEF)
             {
-                if (pInputBuffer + 3 > inputEnd)
-                {
-                    break; // 需要更多数据
-                }
-                    
+                if (pInputBuffer + 2 > inputEnd)
+                    return Complete(OperationStatus.NeedMoreData);
+
                 uint secondByte = pInputBuffer[1];
+                if (!IsUtf8ContinuationByte(secondByte) ||
+                    (firstByte == 0xE0 && secondByte < 0xA0) ||
+                    (firstByte == 0xED && secondByte >= 0xA0))
+                    return Complete(OperationStatus.InvalidData);
+
+                if (pInputBuffer + 3 > inputEnd)
+                    return Complete(OperationStatus.NeedMoreData);
+
                 uint thirdByte = pInputBuffer[2];
-                    
-                if ((secondByte & 0xC0) != 0x80 || (thirdByte & 0xC0) != 0x80)
-                {
-                    pInputBufferRemaining = pInputBuffer;
-                    pOutputBufferRemaining = pOutputBuffer;
-                    return OperationStatus.InvalidData;
-                }
-                    
+                if (!IsUtf8ContinuationByte(thirdByte))
+                    return Complete(OperationStatus.InvalidData);
+
+                if (pOutputBuffer == outputEnd)
+                    return Complete(OperationStatus.DestinationTooSmall);
+
                 uint codePoint = ((firstByte & 0x0F) << 12) | 
                                  ((secondByte & 0x3F) << 6) | 
                                  (thirdByte & 0x3F);
-                    
-                if (codePoint < 0x800 || (codePoint >= 0xD800 && codePoint <= 0xDFFF))
-                {
-                    pInputBufferRemaining = pInputBuffer;
-                    pOutputBufferRemaining = pOutputBuffer;
-                    return OperationStatus.InvalidData;
-                }
-                    
                 *pOutputBuffer = (char)codePoint;
                 pInputBuffer += 3;
                 pOutputBuffer++;
                 continue;
             }
-                
-            // 4字节序列 (代理对)
-            if ((firstByte & 0xF8) == 0xF0)
+
+            // F0..F4 are the only valid four-byte leaders.
+            if (firstByte is >= 0xF0 and <= 0xF4)
             {
-                if (pInputBuffer + 4 > inputEnd)
-                {
-                    break; // 需要更多数据
-                }
-                    
-                if (pOutputBuffer + 2 > outputEnd)
-                {
-                    pInputBufferRemaining = pInputBuffer;
-                    pOutputBufferRemaining = pOutputBuffer;
-                    return OperationStatus.DestinationTooSmall;
-                }
-                    
+                if (pInputBuffer + 2 > inputEnd)
+                    return Complete(OperationStatus.NeedMoreData);
+
                 uint secondByte = pInputBuffer[1];
+                if (!IsUtf8ContinuationByte(secondByte) ||
+                    (firstByte == 0xF0 && secondByte < 0x90) ||
+                    (firstByte == 0xF4 && secondByte > 0x8F))
+                    return Complete(OperationStatus.InvalidData);
+
+                if (pInputBuffer + 3 > inputEnd)
+                    return Complete(OperationStatus.NeedMoreData);
+
                 uint thirdByte = pInputBuffer[2];
+                if (!IsUtf8ContinuationByte(thirdByte))
+                    return Complete(OperationStatus.InvalidData);
+
+                if (pInputBuffer + 4 > inputEnd)
+                    return Complete(OperationStatus.NeedMoreData);
+
                 uint fourthByte = pInputBuffer[3];
-                    
-                if ((secondByte & 0xC0) != 0x80 || 
-                    (thirdByte & 0xC0) != 0x80 || 
-                    (fourthByte & 0xC0) != 0x80)
-                {
-                    pInputBufferRemaining = pInputBuffer;
-                    pOutputBufferRemaining = pOutputBuffer;
-                    return OperationStatus.InvalidData;
-                }
-                    
+                if (!IsUtf8ContinuationByte(fourthByte))
+                    return Complete(OperationStatus.InvalidData);
+
+                if (outputEnd - pOutputBuffer < 2)
+                    return Complete(OperationStatus.DestinationTooSmall);
+
                 uint codePoint = ((firstByte & 0x07) << 18) | 
                                  ((secondByte & 0x3F) << 12) | 
                                  ((thirdByte & 0x3F) << 6) | 
                                  (fourthByte & 0x3F);
-                    
-                if (codePoint < 0x10000 || codePoint > 0x10FFFF)
-                {
-                    pInputBufferRemaining = pInputBuffer;
-                    pOutputBufferRemaining = pOutputBuffer;
-                    return OperationStatus.InvalidData;
-                }
-                    
+
                 codePoint -= 0x10000;
                 pOutputBuffer[0] = (char)((codePoint >> 10) + 0xD800);
                 pOutputBuffer[1] = (char)((codePoint & 0x3FF) + 0xDC00);
-                    
+
                 pInputBuffer += 4;
                 pOutputBuffer += 2;
                 continue;
             }
-                
-            // 无效的首字节
-            pInputBufferRemaining = pInputBuffer;
-            pOutputBufferRemaining = pOutputBuffer;
-            return OperationStatus.InvalidData;
+
+            return Complete(OperationStatus.InvalidData);
         }
-            
+
         pInputBufferRemaining = pInputBuffer;
         pOutputBufferRemaining = pOutputBuffer;
-            
-        return pInputBuffer == inputEnd ? 
-            OperationStatus.Done : 
-            OperationStatus.NeedMoreData;
+        return OperationStatus.Done;
+
+        static OperationStatus Complete(OperationStatus status) => status;
     }
         
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -491,117 +462,117 @@ public static class StringSerializer
     {
         char* inputEnd = pInputBuffer + inputLength;
         byte* outputEnd = pOutputBuffer + outputBytesRemaining;
-            
-        while (pInputBuffer < inputEnd && pOutputBuffer < outputEnd)
+
+        while (pInputBuffer < inputEnd)
         {
+            pInputBufferRemaining = pInputBuffer;
+            pOutputBufferRemaining = pOutputBuffer;
+
             uint codePoint = *pInputBuffer;
-                
-            // ASCII字符 (1字节)
+
             if (codePoint < 0x80)
             {
+                if (pOutputBuffer == outputEnd)
+                    return Complete(OperationStatus.DestinationTooSmall);
+
                 *pOutputBuffer = (byte)codePoint;
                 pInputBuffer++;
                 pOutputBuffer++;
                 continue;
             }
-                
-            // 2字节序列
+
             if (codePoint < 0x800)
             {
                 if (pOutputBuffer + 2 > outputEnd)
-                {
-                    pInputBufferRemaining = pInputBuffer;
-                    pOutputBufferRemaining = pOutputBuffer;
-                    return OperationStatus.DestinationTooSmall;
-                }
-                    
+                    return Complete(OperationStatus.DestinationTooSmall);
+
                 pOutputBuffer[0] = (byte)(0xC0 | (codePoint >> 6));
                 pOutputBuffer[1] = (byte)(0x80 | (codePoint & 0x3F));
-                    
+
                 pInputBuffer++;
                 pOutputBuffer += 2;
                 continue;
             }
-                
-            // 代理对处理
-            if (codePoint >= 0xD800 && codePoint <= 0xDFFF)
+
+            if (codePoint is >= 0xD800 and <= 0xDBFF)
             {
-                // 高代理项
-                if (codePoint <= 0xDBFF)
-                {
-                    if (pInputBuffer + 2 > inputEnd)
-                    {
-                        break; // 需要更多数据
-                    }
-                        
-                    uint lowSurrogate = pInputBuffer[1];
-                    if (lowSurrogate < 0xDC00 || lowSurrogate > 0xDFFF)
-                    {
-                        pInputBufferRemaining = pInputBuffer;
-                        pOutputBufferRemaining = pOutputBuffer;
-                        return OperationStatus.InvalidData;
-                    }
-                        
-                    codePoint = 0x10000 + ((codePoint - 0xD800) << 10) + (lowSurrogate - 0xDC00);
-                }
-                else // 无效的低代理项
-                {
-                    pInputBufferRemaining = pInputBuffer;
-                    pOutputBufferRemaining = pOutputBuffer;
-                    return OperationStatus.InvalidData;
-                }
-            }
-                
-            // 3字节序列
-            if (codePoint < 0x10000)
-            {
-                if (pOutputBuffer + 3 > outputEnd)
-                {
-                    pInputBufferRemaining = pInputBuffer;
-                    pOutputBufferRemaining = pOutputBuffer;
-                    return OperationStatus.DestinationTooSmall;
-                }
-                    
-                pOutputBuffer[0] = (byte)(0xE0 | (codePoint >> 12));
-                pOutputBuffer[1] = (byte)(0x80 | ((codePoint >> 6) & 0x3F));
-                pOutputBuffer[2] = (byte)(0x80 | (codePoint & 0x3F));
-                    
-                pInputBuffer += (codePoint > 0xFFFF) ? 2 : 1;
-                pOutputBuffer += 3;
-                continue;
-            }
-                
-            // 4字节序列
-            if (codePoint <= 0x10FFFF)
-            {
+                if (pInputBuffer + 2 > inputEnd)
+                    return Complete(OperationStatus.NeedMoreData);
+
+                uint lowSurrogate = pInputBuffer[1];
+                if (lowSurrogate is < 0xDC00 or > 0xDFFF)
+                    return Complete(OperationStatus.InvalidData);
+
                 if (pOutputBuffer + 4 > outputEnd)
-                {
-                    pInputBufferRemaining = pInputBuffer;
-                    pOutputBufferRemaining = pOutputBuffer;
-                    return OperationStatus.DestinationTooSmall;
-                }
-                    
+                    return Complete(OperationStatus.DestinationTooSmall);
+
+                codePoint = 0x10000 + ((codePoint - 0xD800) << 10) + (lowSurrogate - 0xDC00);
                 pOutputBuffer[0] = (byte)(0xF0 | (codePoint >> 18));
                 pOutputBuffer[1] = (byte)(0x80 | ((codePoint >> 12) & 0x3F));
                 pOutputBuffer[2] = (byte)(0x80 | ((codePoint >> 6) & 0x3F));
                 pOutputBuffer[3] = (byte)(0x80 | (codePoint & 0x3F));
-                    
-                pInputBuffer += (codePoint > 0xFFFF) ? 2 : 1;
+
+                pInputBuffer += 2;
                 pOutputBuffer += 4;
                 continue;
             }
-                
-            // 无效的Unicode码点
-            pInputBufferRemaining = pInputBuffer;
-            pOutputBufferRemaining = pOutputBuffer;
-            return OperationStatus.InvalidData;
+
+            if (codePoint is >= 0xDC00 and <= 0xDFFF)
+                return Complete(OperationStatus.InvalidData);
+
+            if (pOutputBuffer + 3 > outputEnd)
+                return Complete(OperationStatus.DestinationTooSmall);
+
+            pOutputBuffer[0] = (byte)(0xE0 | (codePoint >> 12));
+            pOutputBuffer[1] = (byte)(0x80 | ((codePoint >> 6) & 0x3F));
+            pOutputBuffer[2] = (byte)(0x80 | (codePoint & 0x3F));
+
+            pInputBuffer++;
+            pOutputBuffer += 3;
         }
-            
+
         pInputBufferRemaining = pInputBuffer;
         pOutputBufferRemaining = pOutputBuffer;
-            
-        return pInputBuffer == inputEnd ? 
-            OperationStatus.Done : 
-            OperationStatus.NeedMoreData;
+        return OperationStatus.Done;
+
+        static OperationStatus Complete(OperationStatus status) => status;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsUtf8ContinuationByte(uint value) => (value & 0xC0) == 0x80;
+
+    private static unsafe int GetInvalidUtf8SequenceLength(byte* input, int remaining)
+    {
+        if (remaining <= 1)
+            return 1;
+
+        uint firstByte = input[0];
+        uint secondByte = input[1];
+
+        if (firstByte is >= 0xE0 and <= 0xEF)
+        {
+            if (!IsUtf8ContinuationByte(secondByte) ||
+                (firstByte == 0xE0 && secondByte < 0xA0) ||
+                (firstByte == 0xED && secondByte >= 0xA0))
+                return 1;
+
+            return remaining > 2 && !IsUtf8ContinuationByte(input[2]) ? 2 : 1;
+        }
+
+        if (firstByte is >= 0xF0 and <= 0xF4)
+        {
+            if (!IsUtf8ContinuationByte(secondByte) ||
+                (firstByte == 0xF0 && secondByte < 0x90) ||
+                (firstByte == 0xF4 && secondByte > 0x8F))
+                return 1;
+
+            if (remaining > 2 && !IsUtf8ContinuationByte(input[2]))
+                return 2;
+
+            if (remaining > 3 && !IsUtf8ContinuationByte(input[3]))
+                return 3;
+        }
+
+        return 1;
     }
 }

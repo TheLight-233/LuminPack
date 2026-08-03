@@ -2853,7 +2853,8 @@ namespace LuminPack.Code.Core
             // 为每个父类生成 Local
             foreach (var classInfo in allClassInfos)
             {
-                if (set.Add(dataInfo.classFullName + "LocalForLuminPackExtension1782819")) 
+                if (classInfo.TypeSymbol?.DeclaringSyntaxReferences.Length == 0 &&
+                    set.Add(classInfo.classFullName + "LocalForLuminPackExtension1782819"))
                     GenerateParentClass(sb, classInfo, dataInfo.localFields);
             }
         }

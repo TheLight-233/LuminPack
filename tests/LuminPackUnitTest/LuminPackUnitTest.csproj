@@ -21,6 +21,7 @@
         <ProjectReference Include="..\..\src\LuminPackGenerator\LuminPackGenerator.csproj"
                           OutputItemType="Analyzer"/>
         <ProjectReference Include="..\..\src\LuminPack\LuminPack.csproj" />
+        <ProjectReference Include="..\LuminPackUnionContracts\LuminPackUnionContracts.csproj" />
     </ItemGroup>
 
 </Project>

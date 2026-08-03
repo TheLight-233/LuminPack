@@ -154,6 +154,10 @@ public sealed partial class PolymorphismClass : PolymorphismClassBase, Ifoo
 public abstract partial class IFoo
 {
     [Key(0)] public int Id;
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    internal virtual void __BenchmarkLegacyUnionSerialize(ref LuminPackWriter writer)
+        => throw new NotSupportedException();
 }
 
 [NinoType]
@@ -164,6 +168,13 @@ public partial class FooA : IFoo
 {
     [Key(1)] 
     public Transform Card;
+
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    internal override void __BenchmarkLegacyUnionSerialize(ref LuminPackWriter writer)
+    {
+        IFoo value = this;
+        LuminPackBenchmark_IFooParser.WriteLuminPackBenchmark_FooA(ref writer, ref value);
+    }
     
 
     public static FooA Create()
@@ -551,10 +562,11 @@ public interface Ifoo
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MinColumn, MaxColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
-[ShortRunJob(RuntimeMoniker.Net90)]
+[SimpleJob(RuntimeMoniker.Net90, launchCount: 1, warmupCount: 5, iterationCount: 10)]
 [MemoryDiagnoser]
 [GcServer]
 [MarkdownExporterAttribute.GitHub]
+[DisassemblyDiagnoser(maxDepth: 8, printSource: true, printInstructionAddresses: true)]
 public class PolymorphismBenchmark
 {
     private PolymorphismClassBase myClass = PolymorphismClass.Create();
@@ -582,26 +594,26 @@ public class PolymorphismBenchmark
         {
             switch (i % 20)
             {
-                case 1 : ((PolymorphismClass)myClass).Numbers2.Add(FooA.Create()); break;
-                case 2 : ((PolymorphismClass)myClass).Numbers2.Add(FooB.Create()); break;
-                case 3 : ((PolymorphismClass)myClass).Numbers2.Add(FooC.Create()); break;
-                case 4 : ((PolymorphismClass)myClass).Numbers2.Add(FooD.Create()); break;
-                case 5 : ((PolymorphismClass)myClass).Numbers2.Add(FooE.Create()); break;
-                case 6 : ((PolymorphismClass)myClass).Numbers2.Add(FooF.Create()); break;
-                case 7 : ((PolymorphismClass)myClass).Numbers2.Add(FooG.Create()); break;
-                case 8 : ((PolymorphismClass)myClass).Numbers2.Add(FooH.Create()); break;
-                case 9 : ((PolymorphismClass)myClass).Numbers2.Add(FooI.Create()); break;
-                case 10 : ((PolymorphismClass)myClass).Numbers2.Add(FooJ.Create()); break;
-                case 11 : ((PolymorphismClass)myClass).Numbers2.Add(FooK.Create()); break;
-                case 12 : ((PolymorphismClass)myClass).Numbers2.Add(FooL.Create()); break;
-                case 13 : ((PolymorphismClass)myClass).Numbers2.Add(FooM.Create()); break;
-                case 14 : ((PolymorphismClass)myClass).Numbers2.Add(FooN.Create()); break;
-                case 15 : ((PolymorphismClass)myClass).Numbers2.Add(FooO.Create()); break;
-                case 16 : ((PolymorphismClass)myClass).Numbers2.Add(FooP.Create()); break;
-                case 17 : ((PolymorphismClass)myClass).Numbers2.Add(FooQ.Create()); break;
-                case 18 : ((PolymorphismClass)myClass).Numbers2.Add(FooR.Create()); break;
-                case 19 : ((PolymorphismClass)myClass).Numbers2.Add(FooS.Create()); break;
-                case 20 : ((PolymorphismClass)myClass).Numbers2.Add(FooZ.Create()); break;
+                case 0 : ((PolymorphismClass)myClass).Numbers2.Add(FooA.Create()); break;
+                case 1 : ((PolymorphismClass)myClass).Numbers2.Add(FooB.Create()); break;
+                case 2 : ((PolymorphismClass)myClass).Numbers2.Add(FooC.Create()); break;
+                case 3 : ((PolymorphismClass)myClass).Numbers2.Add(FooD.Create()); break;
+                case 4 : ((PolymorphismClass)myClass).Numbers2.Add(FooE.Create()); break;
+                case 5 : ((PolymorphismClass)myClass).Numbers2.Add(FooF.Create()); break;
+                case 6 : ((PolymorphismClass)myClass).Numbers2.Add(FooG.Create()); break;
+                case 7 : ((PolymorphismClass)myClass).Numbers2.Add(FooH.Create()); break;
+                case 8 : ((PolymorphismClass)myClass).Numbers2.Add(FooI.Create()); break;
+                case 9 : ((PolymorphismClass)myClass).Numbers2.Add(FooJ.Create()); break;
+                case 10 : ((PolymorphismClass)myClass).Numbers2.Add(FooK.Create()); break;
+                case 11 : ((PolymorphismClass)myClass).Numbers2.Add(FooL.Create()); break;
+                case 12 : ((PolymorphismClass)myClass).Numbers2.Add(FooM.Create()); break;
+                case 13 : ((PolymorphismClass)myClass).Numbers2.Add(FooN.Create()); break;
+                case 14 : ((PolymorphismClass)myClass).Numbers2.Add(FooO.Create()); break;
+                case 15 : ((PolymorphismClass)myClass).Numbers2.Add(FooP.Create()); break;
+                case 16 : ((PolymorphismClass)myClass).Numbers2.Add(FooQ.Create()); break;
+                case 17 : ((PolymorphismClass)myClass).Numbers2.Add(FooR.Create()); break;
+                case 18 : ((PolymorphismClass)myClass).Numbers2.Add(FooS.Create()); break;
+                case 19 : ((PolymorphismClass)myClass).Numbers2.Add(FooZ.Create()); break;
             }
         }
         

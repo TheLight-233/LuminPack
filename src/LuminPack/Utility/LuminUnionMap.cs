@@ -63,7 +63,7 @@ public sealed class LuminUnionMap<TValue>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryGetValue(in nint key, out TValue value)
     {
-        ref Entry entry = ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), key & _capacityMask);
+        ref Entry entry = ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), GetIndex(key));
         if (entry.Key != key)
         {
             value = default!;
@@ -75,12 +75,12 @@ public sealed class LuminUnionMap<TValue>
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref TValue GetValueRef(in nint key)
-        => ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), key & _capacityMask).Value;
+        => ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), GetIndex(key)).Value;
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref TValue TryGetValueRef(in nint key)
     {
-        ref Entry entry = ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), key & _capacityMask);
+        ref Entry entry = ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), GetIndex(key));
         if (entry.Key != key)
             return ref Unsafe.NullRef<TValue>();
         return ref entry.Value;
@@ -96,7 +96,7 @@ public sealed class LuminUnionMap<TValue>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryRegister(in nint key, TValue value)
     {
-        ref Entry entry = ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), key & _capacityMask);
+        ref Entry entry = ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), GetIndex(key));
         if (entry.Key == default)
         {
             entry.Key = key;
@@ -120,7 +120,7 @@ public sealed class LuminUnionMap<TValue>
 
         for (int i = 0; i < _capacity; i++)
         {
-            ref Entry entry = ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), currentKey & _capacityMask);
+            ref Entry entry = ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), GetIndex(currentKey));
             if (entry.Key == default)
             {
                 entry.Key = currentKey;
@@ -138,6 +138,16 @@ public sealed class LuminUnionMap<TValue>
         // 超过最大踢出次数，扩容
         Resize();
         return TryRegister(currentKey, currentValue);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private nint GetIndex(nint key)
+    {
+        // CoreCLR MethodTables are pointer-aligned. Drop only the guaranteed
+        // alignment bits so the low bits of a power-of-two table carry entropy.
+        // Keep the 32-bit path conservative for Mono/Unity and netstandard users.
+        nuint hash = (nuint)key >> (IntPtr.Size == 8 ? 3 : 2);
+        return (nint)(hash & (nuint)_capacityMask);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -170,6 +180,136 @@ public sealed class LuminUnionMap<TValue>
                 }
             }
         }
+    }
+}
+
+/// <summary>
+/// Single-slot union map for non-pointer keys such as encoded union tags.
+/// MethodTable-keyed maps should use <see cref="LuminUnionMap{TValue}"/>,
+/// which drops guaranteed pointer-alignment bits before indexing.
+/// </summary>
+public sealed class LuminRawUnionMap<TValue>
+{
+    private const int MIN_CAPACITY = 8;
+
+    private struct Entry
+    {
+        public nint Key;
+        public TValue Value;
+    }
+
+    private Entry[] _table;
+    private int _capacity;
+    private int _count;
+    private nint _capacityMask;
+
+    public int Count => _count;
+    public int Capacity => _capacity;
+
+    public LuminRawUnionMap(int capacity)
+    {
+        if (capacity < 0) throw new ArgumentOutOfRangeException(nameof(capacity));
+        _capacity = CalculateCapacity(capacity);
+        InitializeTable();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryGetValue(in nint key, out TValue value)
+    {
+        ref Entry entry = ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), key & _capacityMask);
+        if (entry.Key != key)
+        {
+            value = default!;
+            return false;
+        }
+
+        value = entry.Value;
+        return true;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public bool TryRegister(in nint key, TValue value)
+    {
+        ref Entry entry = ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), key & _capacityMask);
+        if (entry.Key == default)
+        {
+            entry.Key = key;
+            entry.Value = value;
+            _count++;
+            return true;
+        }
+
+        if (entry.Key == key)
+            return false;
+
+        return CuckooInsert(key, value);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private bool CuckooInsert(in nint key, TValue value)
+    {
+        nint currentKey = key;
+        TValue currentValue = value;
+
+        for (int i = 0; i < _capacity; i++)
+        {
+            ref Entry entry = ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), currentKey & _capacityMask);
+            if (entry.Key == default)
+            {
+                entry.Key = currentKey;
+                entry.Value = currentValue;
+                _count++;
+                return true;
+            }
+
+            (currentKey, entry.Key) = (entry.Key, currentKey);
+            (currentValue, entry.Value) = (entry.Value, currentValue);
+        }
+
+        Resize();
+        return TryRegister(currentKey, currentValue);
+    }
+
+    private void Resize()
+    {
+        Entry[] oldTable = _table;
+        int oldCapacity = _capacity;
+        _capacity *= 2;
+        _count = 0;
+        InitializeTable();
+
+        for (int i = 0; i < oldCapacity; i++)
+        {
+#if NET5_0_OR_GREATER
+            ref Entry oldEntry = ref Unsafe.Add(ref MemoryMarshal.GetArrayDataReference(oldTable), i);
+#else
+            ref Entry oldEntry = ref oldTable[i];
+#endif
+            if (oldEntry.Key != default && !TryRegister(oldEntry.Key, oldEntry.Value))
+                throw new InvalidOperationException("Failed to rehash raw union map during resize");
+        }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void InitializeTable()
+    {
+        _capacityMask = _capacity - 1;
+        _table = new Entry[_capacity];
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int CalculateCapacity(int capacity)
+    {
+        if (capacity < MIN_CAPACITY)
+            return MIN_CAPACITY;
+
+        capacity--;
+        capacity |= capacity >> 1;
+        capacity |= capacity >> 2;
+        capacity |= capacity >> 4;
+        capacity |= capacity >> 8;
+        capacity |= capacity >> 16;
+        return capacity + 1;
     }
 }
 

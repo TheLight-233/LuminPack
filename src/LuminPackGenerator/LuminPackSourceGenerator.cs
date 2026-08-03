@@ -131,6 +131,7 @@ namespace LuminPack.SourceGenerator
                 
                         var code = LuminPackCodeGenerator.CodeGenerator(dataInfo, metaInfo);
                         var extension = LuminPackExtensionGenerator.CodeGenerator(dataInfo, metaInfo, compilation);
+                        var unionDispatch = LuminPackUnionDispatchCodeGenerator.Generate(dataInfo);
                         if (string.IsNullOrEmpty(code)) return;
                 
                         var name = dataInfo.classFullName;
@@ -142,6 +143,8 @@ namespace LuminPack.SourceGenerator
                         
                         context.AddSource($"{name}Parser.g.cs", code);
                         context.AddSource($"{name}Parser.Extension.g.cs", extension);
+                        if (!string.IsNullOrEmpty(unionDispatch))
+                            context.AddSource($"{name}.UnionDispatch.g.cs", unionDispatch);
                         
                         
                     }
@@ -216,6 +219,8 @@ namespace LuminPack.SourceGenerator
                 classNameSpace = typeSymbol.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                 isGeneric = typeSymbol.IsGenericType,
                 isValueType = typeSymbol.TypeKind == TypeKind.Struct,
+                TypeSymbol = typeSymbol,
+                CanGenerateUnionDispatch = LuminPackUnionDispatchUtilities.CanGeneratePartial(typeSymbol, compilation),
                 enableBurst = false,
                 generatorType = TypeMetaChecker.CheckGeneratorType(typeSymbol),
             };
@@ -252,6 +257,15 @@ namespace LuminPack.SourceGenerator
             
             if (TypeMetaChecker.TryCheckUnionAttribute(typeSymbol) || symbol.IsAbstract)
             {
+                if (!dataInfo.CanGenerateUnionDispatch)
+                {
+                    TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                        DiagnosticDescriptors.UnionParticipantMustBePartial,
+                        typeSymbol.Locations.FirstOrDefault(),
+                        typeSymbol.Name,
+                        typeSymbol.Name));
+                }
+
                 if (symbol.IsSealed)
                 {
                     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
@@ -289,7 +303,10 @@ namespace LuminPack.SourceGenerator
         
                     var id = (ushort)attr.ConstructorArguments[0].Value!;
                     var memberType = (INamedTypeSymbol)attr.ConstructorArguments[1].Value;
-                    dataInfo.UnionMembers.Add(new LuminUnionMemberInfo(id, memberType));
+                    dataInfo.UnionMembers.Add(new LuminUnionMemberInfo(
+                        id,
+                        memberType,
+                        LuminPackUnionDispatchUtilities.CanGeneratePartial(memberType, compilation)));
                 }
                 
                 foreach (var member in dataInfo.UnionMembers)
@@ -393,6 +410,21 @@ namespace LuminPack.SourceGenerator
                 }
                 
                 DiscoverAndRegisterDerivedTypes(typeSymbol, dataInfo, compilation);
+
+                foreach (var member in dataInfo.UnionMembers)
+                {
+                    if (!LuminPackUnionDispatchUtilities.IsCurrentCompilation(member.Type, compilation))
+                        continue;
+
+                    if (!member.CanGenerateDispatch)
+                    {
+                        TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                            DiagnosticDescriptors.UnionParticipantMustBePartial,
+                            member.Type.OriginalDefinition.Locations.FirstOrDefault(),
+                            member.Type.Name,
+                            typeSymbol.Name));
+                    }
+                }
             }
 
             if (dataInfo.generatorType is GeneratorType.CircleReference or GeneratorType.VersionTolerant)
@@ -511,6 +543,7 @@ namespace LuminPack.SourceGenerator
                     classNameSpace = baseClassSymbol.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     isGeneric = baseClassSymbol.IsGenericType,
                     isValueType = baseClassSymbol.TypeKind == TypeKind.Struct,
+                    TypeSymbol = baseClassSymbol,
                     enableBurst = false,
                     generatorType = TypeMetaChecker.CheckGeneratorType(baseClassSymbol),
                 };

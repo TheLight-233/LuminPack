@@ -11,17 +11,15 @@ using LuminPackBenchmark;
 
 class Program
 {
-    static void Main()
+    static void Main(string[] args)
     {
-        BenchmarkRunner.Run<SimpleBenchmark>();
-        LuminPackSerializerOption luminPackSerializerOption = new LuminPackSerializerOption()
+        if (args.Length == 1 && args[0] == "--union-jit-probe")
         {
-            StringEncoding = LuminPackStringEncoding.UTF16,
-            StringRecording = LuminPackStringRecording.Token
-        };
-        Console.WriteLine(LuminPackSerializer.Sizeof(CharacterSaveData.Create()));
-        var buffer = LuminPackSerializer.Serialize(CharacterSaveData.Create(), luminPackSerializerOption);
-        var result = LuminPackSerializer.Deserialize<CharacterSaveData>(buffer, luminPackSerializerOption);
+            UnionSerializationDispatchBenchmark.RunJitProbe();
+            return;
+        }
+
+        BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
     }
     
 }

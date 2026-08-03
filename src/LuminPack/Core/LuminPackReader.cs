@@ -333,10 +333,22 @@ namespace LuminPack.Core
             length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index));
 #endif
 
-            if (length > _bufferReference.Length)
-                LuminPackExceptionHelper.ThrowInSufficientBuffer(length);
+            ValidateStringLength(index, length);
 
             return length is not LuminPackCode.NullCollection;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ValidateStringLength(int index, int length)
+        {
+            if (length < 0 && length != LuminPackCode.NullCollection)
+                throw new InvalidDataException($"Invalid string length: {length}.");
+
+            int headerSize = SerializeStringAsUtf8 ? sizeof(int) * 2 : sizeof(int);
+            if ((uint)index > (uint)_bufferReference.Length ||
+                (uint)headerSize > (uint)(_bufferReference.Length - index) ||
+                (length >= 0 && (uint)length > (uint)(_bufferReference.Length - index - headerSize)))
+                LuminPackExceptionHelper.ThrowInSufficientBuffer(length);
         }
 
         /// <summary>
@@ -535,6 +547,8 @@ namespace LuminPack.Core
 #else
                 length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index));
 #endif
+                ValidateStringLength(index, length);
+
                 if (length == LuminPackCode.NullCollection)
                     length = 0;
             }

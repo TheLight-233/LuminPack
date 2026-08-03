@@ -334,4 +334,13 @@ internal static class DiagnosticDescriptors
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,
         isEnabledByDefault: true);
+
+    public static readonly DiagnosticDescriptor UnionParticipantMustBePartial = new(
+        id: "LuminPack041",
+        title: "Union participants and containing types must be partial",
+        messageFormat: "Union participant '{0}' and each of its containing types must be declared partial so CLR union dispatch can be generated for '{1}'",
+        category: "LuminPack.Union",
+        defaultSeverity: DiagnosticSeverity.Error,
+        isEnabledByDefault: true);
+
 }

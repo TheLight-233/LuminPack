@@ -8,7 +8,7 @@
         <IsRoslynComponent>true</IsRoslynComponent>
 
         <PackageId>LuminPackGenerator</PackageId>
-        <Version>1.0.6</Version>
+        <Version>1.0.8</Version>
         <Authors>TheLight233</Authors>
         <Description>LuminPack Source Generator</Description>
 
@@ -21,7 +21,7 @@
         <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.3.0" PrivateAssets="all"/>
     </ItemGroup>
 
-    <Target Name="IncludeAnalyzerInPackage" BeforeTargets="_GetPackageFiles" DependsOnTargets="Build">
+    <Target Name="IncludeAnalyzerInPackage" BeforeTargets="_GetPackageFiles">
         <ItemGroup>
             <None Include="$(OutputPath)$(AssemblyName).dll"
                   Pack="true"

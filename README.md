@@ -36,8 +36,8 @@ dotnet add package LuminPackGenerator
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="LuminPack" Version="1.0.5" />
-  <PackageReference Include="LuminPackGenerator" Version="1.0.4"
+  <PackageReference Include="LuminPack" Version="1.0.8" />
+  <PackageReference Include="LuminPackGenerator" Version="1.0.8"
                     PrivateAssets="all"
                     IncludeAssets="runtime; build; native; contentfiles; analyzers; buildtransitive" />
 </ItemGroup>

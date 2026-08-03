@@ -77,9 +77,60 @@ if (!failures.IsEmpty)
     throw new InvalidOperationException(string.Join(Environment.NewLine, failures));
 }
 
+VerifyUnionPartialDiagnostic(references);
+
 Console.WriteLine(
     $"Passed {CompilationCount} parallel compilations and " +
     $"{CompilationCount * ValidTypesPerCompilation} valid generated types.");
+
+static void VerifyUnionPartialDiagnostic(MetadataReference[] references)
+{
+    const string source = """
+        using System;
+
+        namespace LuminPack.Attribute
+        {
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
+            public sealed class LuminPackableAttribute : Attribute
+            {
+            }
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public interface INonPartialUnion
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public sealed class NonPartialUnionMember : INonPartialUnion
+        {
+        }
+        """;
+
+    var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+    var compilation = CSharpCompilation.Create(
+        "UnionPartialDiagnostic",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        parseOptions: parseOptions);
+    var diagnostics = driver.RunGenerators(compilation)
+        .GetRunResult()
+        .Results.Single()
+        .Diagnostics
+        .Where(static diagnostic => diagnostic.Id == "LuminPack041")
+        .ToArray();
+
+    if (diagnostics.Length != 2 ||
+        !diagnostics.Any(diagnostic => diagnostic.GetMessage().Contains("INonPartialUnion", StringComparison.Ordinal)) ||
+        !diagnostics.Any(diagnostic => diagnostic.GetMessage().Contains("NonPartialUnionMember", StringComparison.Ordinal)))
+    {
+        throw new InvalidOperationException(
+            "Expected LuminPack041 for both a non-partial Union root and its non-partial local member.");
+    }
+}
 
 static string BuildSource(int compilationIndex)
 {

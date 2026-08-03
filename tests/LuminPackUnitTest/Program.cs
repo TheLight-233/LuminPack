@@ -242,6 +242,7 @@ namespace LuminPackUnitTest
             ConfirmedCorrectnessRegressionTest.Run(testResults);
             ObjectPoolRegressionTest.Run(testResults);
             WriterReaderCorrectnessRegressionTest.Run(testResults);
+            StringSerializerFallbackTest.Run(testResults);
             
             // Print summary
             Console.WriteLine("\n=========================================");

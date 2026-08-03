@@ -14,6 +14,8 @@ namespace LuminPack.Code
         public List<string> GenericParameters =  new ();
         public List<GenericParameterConstraint> GenericConstraints = new ();
         public bool isValueType;
+        public INamedTypeSymbol TypeSymbol { get; set; }
+        public bool CanGenerateUnionDispatch { get; set; }
         public readonly List<LuminDataField> fields = new ();
         public LuminDataInfo Parent;
         public readonly List<LuminLocalFieldData> localFields = new ();
