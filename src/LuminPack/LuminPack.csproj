@@ -37,7 +37,9 @@
             不加 PrivateAssets="all"        : 作为传递依赖，用户安装 LuminPack 时自动带入
         -->
         <PackageReference Include="LuminPackGenerator" Version="1.0.8"
-                          ReferenceOutputAssembly="false" />
+                          ReferenceOutputAssembly="false"
+                          IncludeAssets="all"
+                          PrivateAssets="none" />
 
         <None Include="../../README.md" Pack="true" PackagePath="\" />
         <None Update="Core\LuminPackWriter.Unmanaged.tt">
