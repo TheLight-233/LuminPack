@@ -1,5 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using LuminPack.Code;
+using System.Runtime.CompilerServices;
 using LuminPack.Utility;
 
 namespace LuminPack.Option
@@ -53,8 +54,14 @@ namespace LuminPack.Option
         
         public void Reset()
         {
+            ResetOperationState();
+            Option = LuminPackSerializerOption.InternalDefault;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal void ResetOperationState()
+        {
             refToObject.Clear();
-            Option = null!;
         }
         
         public object GetObjectReference(uint id)

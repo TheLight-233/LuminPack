@@ -241,6 +241,8 @@ namespace LuminPackUnitTest
             BinaryUnionSafetyTest.Run(testResults);
             ConfirmedCorrectnessRegressionTest.Run(testResults);
             ObjectPoolRegressionTest.Run(testResults);
+            LuminBufferWriterPoolRegressionTest.Run(testResults);
+            BufferWriterOperationContextTest.Run(testResults);
             WriterReaderCorrectnessRegressionTest.Run(testResults);
             StringSerializerFallbackTest.Run(testResults);
             

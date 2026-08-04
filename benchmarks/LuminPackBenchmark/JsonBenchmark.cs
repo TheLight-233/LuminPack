@@ -74,6 +74,9 @@ public class JsonBenchmark
     [GlobalSetup]
     public void SetUp()
     {
+        _bufferWriter.Option.StringEncoding = _luminOptions.StringEncoding;
+        _bufferWriter.Option.StringRecording = _luminOptions.StringRecording;
+        _bufferWriter.Option.StandardFormat = _luminOptions.StandardFormat;
         _luminPackJson  = LuminPackSerializer.SerializeJson(_data, _luminOptions);
         _systemTextJson = System.Text.Json.JsonSerializer.Serialize(_data, StjOptions);
         _newtonsoftJson = JsonConvert.SerializeObject(_data, NjSettings);
@@ -87,7 +90,7 @@ public class JsonBenchmark
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Serialize")]
     public void LuminPackSerializeToJson()
-        => LuminPackSerializer.SerializeJson(_data, _bufferWriter, _luminOptions);
+        => LuminPackSerializer.SerializeJson(_data, _bufferWriter);
 
     [Benchmark]
     [BenchmarkCategory("Serialize")]

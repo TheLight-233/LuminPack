@@ -700,6 +700,9 @@ public class SerializeBenchmark
 [GlobalSetup]
     public void SetUp()
     {
+        _luminWriter.Option.StringEncoding = luminPackSerializerOption.StringEncoding;
+        _luminWriter.Option.StringRecording = luminPackSerializerOption.StringRecording;
+        _luminWriter.Option.StandardFormat = luminPackSerializerOption.StandardFormat;
         _luminBuffer   = LuminPackSerializer.Serialize(_data, luminPackSerializerOption);
         _memoryBuffer  = MemoryPackSerializer.Serialize(_data, memoryPackSerializerOption);
         _msgpackBuffer = MessagePackSerializer.Serialize(_data);
@@ -711,7 +714,7 @@ public class SerializeBenchmark
 
     [Benchmark(Baseline = true)]
     public void LuminPackSerialize()
-        => LuminPackSerializer.Serialize(_data, _luminWriter, luminPackSerializerOption); 
+        => LuminPackSerializer.Serialize(_data, _luminWriter); 
 
     [Benchmark]
     public void MemoryPackSerialize()

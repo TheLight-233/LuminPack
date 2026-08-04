@@ -102,6 +102,22 @@ namespace LuminPack.Core
             SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
         }
 
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal LuminPackWriter(LuminBufferWriter bufferWriter)
+        {
+            _optionState = bufferWriter.WriterState;
+            _bufferReference = bufferWriter.BeginWrite(ref _currentIndex);
+#if NET8_0_OR_GREATER
+            _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
+#else
+            _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
+#endif
+            _writerBuffer = bufferWriter;
+            _currentIndex = 0;
+            SerializeStringAsUtf8 = bufferWriter.Option.StringEncoding is LuminPackStringEncoding.UTF8;
+            SerializeStringRecordAsToken = bufferWriter.Option.StringRecording is LuminPackStringRecording.Token;
+        }
+
         /// <summary>
         /// 获取Span数组指针
         /// </summary>

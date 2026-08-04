@@ -20,6 +20,9 @@ using static LuminPack.Code.LuminPackMarshal;
 
 namespace LuminPack
 {
+    /// <summary>Provides convenience and reusable-buffer APIs for LuminPack binary and JSON serialization.</summary>
+    /// <remarks>Convenience overloads accept per-call options. Overloads accepting <see cref="LuminBufferWriter"/> use
+    /// the option and operation state owned by that writer for a ThreadStatic-free high-performance path.</remarks>
     public static class LuminPackSerializer
     {
         [ThreadStatic]
@@ -31,6 +34,9 @@ namespace LuminPack
 
         internal static bool NeedInitParserFactory = true;
         
+        /// <summary>Initializes the parser factory with explicit target-to-parser registrations.</summary>
+        /// <param name="registryType">The target types and parser types to register.</param>
+        /// <remarks>This application-level initialization should complete before concurrent serialization begins.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void Initialize(List<(Type TargetType, Type ParserType)> registryType)
         {
@@ -40,9 +46,16 @@ namespace LuminPack
         
         #region Serialize
 
-        /// <summary>
-        /// 序列化主方法
-        /// </summary>
+        /// <summary>Serializes <paramref name="value"/> to a newly allocated LuminPack binary payload.</summary>
+        /// <typeparam name="T">The value type to serialize.</typeparam>
+        /// <param name="value">The value to serialize.</param>
+        /// <param name="option">The configuration for this call, or <see langword="null"/> for LuminPack defaults.</param>
+        /// <returns>A new byte array containing the complete serialized payload.</returns>
+        /// <remarks>
+        /// This convenience overload allocates the returned array and may use thread-static operation state.
+        /// Use <see cref="Serialize{T}(in T, LuminBufferWriter)"/> to reuse a buffer and avoid the serializer's
+        /// thread-static optional-state path.
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static byte[] Serialize<T>(in T? value, LuminPackSerializerOption? option = null)
         {
@@ -68,32 +81,46 @@ namespace LuminPack
             }
         }
         
-        /// <summary>
-        /// 序列化主方法
-        /// </summary>
+        /// <summary>Serializes <paramref name="value"/> into a reusable <see cref="LuminBufferWriter"/>.</summary>
+        /// <typeparam name="T">The value type to serialize.</typeparam>
+        /// <param name="value">The value to serialize.</param>
+        /// <param name="writerBuffer">The exclusive buffer and operation context that receives the payload.</param>
+        /// <remarks>
+        /// <para>This high-performance overload obtains its configuration from <see cref="LuminBufferWriter.Option"/>.</para>
+        /// <para>Configure <paramref name="writerBuffer"/> before this call. Its option remains unchanged for the current
+        /// Rent-to-Return lifetime and is restored to defaults by <see cref="LuminBufferWriterPool.Return"/>.</para>
+        /// <para>The method uses the writer state owned by <paramref name="writerBuffer"/> and does not access the
+        /// serializer's thread-static optional state. The caller must exclusively own the buffer until it is returned.</para>
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void Serialize<T>(in T? value, LuminBufferWriter writerBuffer, LuminPackSerializerOption? option = null)
+        public static void Serialize<T>(in T? value, LuminBufferWriter writerBuffer)
         {
-            var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();
-            state.Init(option);
-            
+            var state = writerBuffer.WriterState;
             try
             {
-                var writer = new LuminPackWriter(writerBuffer, state);
+                var writer = new LuminPackWriter(writerBuffer);
 
                 writer.WriteValue(value);
                 
                 writerBuffer.CompleteWrite(writer.CurrentIndex);
             }
+            catch
+            {
+                writerBuffer.ResetCore();
+                throw;
+            }
             finally
             {
-                state.Reset();
+                state.ResetOperationState();
             }
         }
         
-        /// <summary>
-        /// 序列化主方法
-        /// </summary>
+        /// <summary>Serializes <paramref name="value"/> to a newly allocated JSON string.</summary>
+        /// <typeparam name="T">The value type to serialize.</typeparam>
+        /// <param name="value">The value to serialize.</param>
+        /// <param name="option">The configuration for this call, or <see langword="null"/> for LuminPack defaults.</param>
+        /// <returns>A new string containing the complete JSON document.</returns>
+        /// <remarks>This convenience overload allocates the returned string and may use thread-static operation state.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static string SerializeJson<T>(T? value, LuminPackSerializerOption? option = null)
         {
@@ -120,47 +147,68 @@ namespace LuminPack
             }
         }
         
-        /// <summary>
-        /// 序列化主方法
-        /// </summary>
+        /// <summary>Serializes <paramref name="value"/> as JSON into a reusable <see cref="LuminBufferWriter"/>.</summary>
+        /// <typeparam name="T">The value type to serialize.</typeparam>
+        /// <param name="value">The value to serialize.</param>
+        /// <param name="writerBuffer">The exclusive buffer and operation context that receives the JSON bytes.</param>
+        /// <remarks>
+        /// <para>The JSON encoding and other settings come from <see cref="LuminBufferWriter.Option"/>; this overload
+        /// intentionally has no separate option parameter.</para>
+        /// <para>The option remains configured throughout the current Rent-to-Return lifetime and is restored to defaults
+        /// by <see cref="LuminBufferWriterPool.Return"/>. Writer and reader temporary state are cleared as part of Return.</para>
+        /// <para>This high-performance path does not access serializer thread-static optional state. Do not use the same
+        /// buffer concurrently or reenter this method with that buffer.</para>
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void SerializeJson<T>(T? value, LuminBufferWriter writerBuffer, LuminPackSerializerOption? option = null)
+        public static void SerializeJson<T>(T? value, LuminBufferWriter writerBuffer)
         {
-            var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();
-                
-            state.Init(option);
-            
+            var state = writerBuffer.WriterState;
             try
             {
-                var writer = new LuminPackJsonWriter(writerBuffer, state);
+                var writer = new LuminPackJsonWriter(writerBuffer);
 
                 LuminPackParseProvider.Cache<T>.Parser!.SerializeJson(ref writer, ref value);
                 
                 writerBuffer.CompleteWrite(writer.CurrentIndex);
             }
+            catch
+            {
+                writerBuffer.ResetCore();
+                throw;
+            }
             finally
             {
-                state.Reset();
+                state.ResetOperationState();
             }
         }
 
-        /// <summary>
-        /// 异步序列化
-        /// </summary>
+        /// <summary>Asynchronously serializes <paramref name="value"/> and writes the binary payload to a stream.</summary>
+        /// <typeparam name="T">The value type to serialize.</typeparam>
+        /// <param name="stream">The destination stream.</param>
+        /// <param name="value">The value to serialize.</param>
+        /// <param name="option">The configuration for this operation, or <see langword="null"/> for defaults.</param>
+        /// <param name="cancellationToken">A token that can cancel stream writes and flushing.</param>
+        /// <returns>A task-like value that completes after the stream has been flushed.</returns>
+        /// <remarks>This convenience API internally rents and returns a buffer; the caller does not manage that buffer.</remarks>
         public static async ValueTask SerializeAsync<T>(
             Stream stream, T? value, 
             LuminPackSerializerOption? option = null, 
             CancellationToken cancellationToken = default)
         {
             var tempWriter = LuminBufferWriterPool.Rent();
+            var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();
+            state.Init(option);
             try
             {
-                Serialize(value, tempWriter, option);
+                var writer = new LuminPackWriter(tempWriter, state);
+                writer.WriteValue(value);
+                tempWriter.CompleteWrite(writer.CurrentIndex);
                 await tempWriter.WriteToAndResetAsync(stream, cancellationToken).ConfigureAwait(false);
                 await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
             }
             finally
             {
+                state.Reset();
                 LuminBufferWriterPool.Return(tempWriter);
             }
         }
@@ -168,7 +216,13 @@ namespace LuminPack
         #endregion
         
         #region Deserialize
-        
+
+        /// <summary>Deserializes a <typeparamref name="T"/> from a binary span.</summary>
+        /// <typeparam name="T">The target value type.</typeparam>
+        /// <param name="buffer">The span containing a complete or leading LuminPack payload.</param>
+        /// <param name="options">The configuration for this call, or <see langword="null"/> for defaults.</param>
+        /// <returns>The deserialized value.</returns>
+        /// <remarks>This convenience overload may use thread-static reader operation state.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T? Deserialize<
 #if NET8_0_OR_GREATER
@@ -181,18 +235,64 @@ namespace LuminPack
             return value;
         }
         
+        /// <summary>Deserializes a <typeparamref name="T"/> from a reusable <see cref="LuminBufferWriter"/>.</summary>
+        /// <typeparam name="T">The target value type.</typeparam>
+        /// <param name="bufferWriter">The buffer containing binary data and the reader operation context.</param>
+        /// <returns>The deserialized value.</returns>
+        /// <remarks>
+        /// <para>Configuration comes exclusively from <see cref="LuminBufferWriter.Option"/>. The option remains valid
+        /// for the current Rent-to-Return lifetime and is restored to defaults by <see cref="LuminBufferWriterPool.Return"/>.</para>
+        /// <para>This high-performance overload uses the reader state owned by <paramref name="bufferWriter"/> and does not
+        /// access serializer thread-static optional state. The buffer must not be used concurrently or reentrantly.</para>
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T? Deserialize<
 #if NET8_0_OR_GREATER
             [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 #endif
-            T>(LuminBufferWriter bufferWriter, LuminPackSerializerOption? options = null)
+            T>(LuminBufferWriter bufferWriter)
         {
             T? value = default;
-            Deserialize(bufferWriter.GetSpan(), ref value, options);
+            Deserialize(bufferWriter, ref value);
             return value;
         }
+
+        /// <summary>Deserializes into <paramref name="value"/> from a reusable <see cref="LuminBufferWriter"/>.</summary>
+        /// <typeparam name="T">The target value type.</typeparam>
+        /// <param name="bufferWriter">The buffer containing binary data and the reader operation context.</param>
+        /// <param name="value">Receives the deserialized value.</param>
+        /// <returns>The number of bytes consumed from the buffer.</returns>
+        /// <remarks>
+        /// Configuration comes from <see cref="LuminBufferWriter.Option"/> and persists until the buffer is returned.
+        /// <see cref="LuminBufferWriterPool.Return"/> restores defaults and clears both operation states. This method does
+        /// not use thread-static optional state and requires exclusive ownership of <paramref name="bufferWriter"/>.
+        /// </remarks>
+        public static int Deserialize<
+#if NET8_0_OR_GREATER
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+#endif
+            T>(LuminBufferWriter bufferWriter, ref T? value)
+        {
+            var state = bufferWriter.ReaderState;
+            try
+            {
+                var reader = new LuminPackReader(bufferWriter);
+                reader.ReadValue(ref value);
+                return reader.GetCurrentSpanIndex();
+            }
+            finally
+            {
+                state.ResetOperationState();
+            }
+        }
         
+        /// <summary>Deserializes a binary span into <paramref name="value"/>.</summary>
+        /// <typeparam name="T">The target value type.</typeparam>
+        /// <param name="buffer">The span containing a complete or leading LuminPack payload.</param>
+        /// <param name="value">Receives the deserialized value.</param>
+        /// <param name="options">The configuration for this call, or <see langword="null"/> for defaults.</param>
+        /// <returns>The number of bytes consumed.</returns>
+        /// <remarks>This convenience overload may use thread-static reader operation state.</remarks>
         public static int Deserialize<
 #if NET8_0_OR_GREATER
             [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
@@ -220,6 +320,12 @@ namespace LuminPack
             }
         }
         
+        /// <summary>Deserializes a <typeparamref name="T"/> from a possibly multi-segment sequence.</summary>
+        /// <typeparam name="T">The target value type.</typeparam>
+        /// <param name="buffer">The sequence containing a LuminPack payload.</param>
+        /// <param name="options">The configuration for this call, or <see langword="null"/> for defaults.</param>
+        /// <returns>The deserialized value.</returns>
+        /// <remarks>This convenience overload may use thread-static reader operation state.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T? Deserialize<
 #if NET8_0_OR_GREATER
@@ -232,6 +338,13 @@ namespace LuminPack
             return value;
         }
         
+        /// <summary>Deserializes a possibly multi-segment sequence into <paramref name="value"/>.</summary>
+        /// <typeparam name="T">The target value type.</typeparam>
+        /// <param name="buffer">The sequence containing a LuminPack payload.</param>
+        /// <param name="value">Receives the deserialized value.</param>
+        /// <param name="options">The configuration for this call, or <see langword="null"/> for defaults.</param>
+        /// <returns>The number of bytes consumed.</returns>
+        /// <remarks>This convenience overload may use thread-static reader operation state.</remarks>
         public static int Deserialize<
 #if NET8_0_OR_GREATER
             [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
@@ -260,6 +373,12 @@ namespace LuminPack
             }
         }
         
+        /// <summary>Deserializes a <typeparamref name="T"/> from a JSON string.</summary>
+        /// <typeparam name="T">The target value type.</typeparam>
+        /// <param name="buffer">The JSON document.</param>
+        /// <param name="options">The configuration for this call, or <see langword="null"/> for defaults.</param>
+        /// <returns>The deserialized value.</returns>
+        /// <remarks>This convenience overload performs any required text transcoding and may use pooled temporary storage.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET8_0_OR_GREATER
         [SkipLocalsInit]
@@ -303,6 +422,12 @@ namespace LuminPack
             return value;
         }
 
+        /// <summary>Deserializes a <typeparamref name="T"/> from a UTF-16 JSON character span.</summary>
+        /// <typeparam name="T">The target value type.</typeparam>
+        /// <param name="buffer">The JSON character span.</param>
+        /// <param name="options">The configuration for this call, or <see langword="null"/> for defaults.</param>
+        /// <returns>The deserialized value.</returns>
+        /// <remarks>This convenience overload may use thread-static reader operation state.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T? DeserializeJson<
 #if NET8_0_OR_GREATER
@@ -315,16 +440,48 @@ namespace LuminPack
             return value;
         }
         
+        /// <summary>Deserializes a <typeparamref name="T"/> from JSON bytes in a reusable <see cref="LuminBufferWriter"/>.</summary>
+        /// <typeparam name="T">The target value type.</typeparam>
+        /// <param name="bufferWriter">The buffer containing JSON bytes and the reader operation context.</param>
+        /// <returns>The deserialized value.</returns>
+        /// <remarks>
+        /// <para>JSON encoding and all other settings come from <see cref="LuminBufferWriter.Option"/>. The option remains
+        /// configured for the current Rent-to-Return lifetime and is reset by <see cref="LuminBufferWriterPool.Return"/>.</para>
+        /// <para>This high-performance overload uses the buffer-owned reader state and never accesses serializer
+        /// thread-static optional state. The buffer must be exclusively owned and cannot be used for same-instance reentry.</para>
+        /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static T? DeserializeJson<
 #if NET8_0_OR_GREATER
             [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
 #endif
-            T>(LuminBufferWriter bufferWriter, LuminPackSerializerOption? options = null)
+            T>(LuminBufferWriter bufferWriter)
         {
             T? value = default;
-            DeserializeJson(bufferWriter.GetSpan(), ref value, options);
+            DeserializeJson(bufferWriter, ref value);
             return value;
+        }
+
+        private static int DeserializeJson<
+#if NET8_0_OR_GREATER
+            [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
+#endif
+            T>(LuminBufferWriter bufferWriter, ref T? value)
+        {
+            var state = bufferWriter.ReaderState;
+            try
+            {
+                var reader = new LuminPackJsonReader(bufferWriter);
+                if (!reader.Read())
+                    throw new FormatException("JSON input does not contain a value");
+                LuminPackParseProvider.Cache<T>.Parser!.DeserializeJson(ref reader, ref value);
+                reader.EnsureEndOfDocument();
+                return reader.CurrentIndex;
+            }
+            finally
+            {
+                state.ResetOperationState();
+            }
         }
 
         private static int DeserializeJson<
@@ -382,6 +539,13 @@ namespace LuminPack
             }
         }
 
+        /// <summary>Asynchronously reads a stream to completion and deserializes one <typeparamref name="T"/>.</summary>
+        /// <typeparam name="T">The target value type.</typeparam>
+        /// <param name="stream">The source stream.</param>
+        /// <param name="options">The configuration for this operation, or <see langword="null"/> for defaults.</param>
+        /// <param name="cancellationToken">A token that can cancel stream reads.</param>
+        /// <returns>A task-like value containing the deserialized value.</returns>
+        /// <remarks>This convenience API manages its own pooled read buffers; no BufferWriter must be returned by the caller.</remarks>
         public static async ValueTask<T?> DeserializeAsync<
 #if NET8_0_OR_GREATER
             [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
@@ -454,6 +618,14 @@ namespace LuminPack
             }
         }
         
+        /// <summary>Asynchronously reads a stream and deserializes into an existing or default <paramref name="value"/>.</summary>
+        /// <typeparam name="T">The target value type.</typeparam>
+        /// <param name="stream">The source stream.</param>
+        /// <param name="value">The initial value supplied to parsers that can reuse instances.</param>
+        /// <param name="options">The configuration for this operation, or <see langword="null"/> for defaults.</param>
+        /// <param name="cancellationToken">A token that can cancel stream reads.</param>
+        /// <returns>A task-like value containing the deserialized value.</returns>
+        /// <remarks>This convenience API manages its own pooled read buffers; no BufferWriter must be returned by the caller.</remarks>
         public static async ValueTask<T?> DeserializeAsync<
 #if NET8_0_OR_GREATER
             [DynamicallyAccessedMembers(DynamicallyAccessedMemberTypes.All)]
@@ -531,9 +703,12 @@ namespace LuminPack
         
         #region Helper Methods
 
-        /// <summary>
-        /// 计算对象大小
-        /// </summary>
+        /// <summary>Calculates the binary payload size for <paramref name="data"/> without producing the payload.</summary>
+        /// <typeparam name="T">The value type to evaluate.</typeparam>
+        /// <param name="data">The value whose serialized size is calculated.</param>
+        /// <param name="option">The configuration for this calculation, or <see langword="null"/> for defaults.</param>
+        /// <returns>The number of bytes required by binary serialization.</returns>
+        /// <remarks>This convenience API may use thread-static evaluator state and does not modify a BufferWriter.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int Sizeof<T>(T? data, LuminPackSerializerOption? option = null)
         {

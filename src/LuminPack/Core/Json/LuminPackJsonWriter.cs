@@ -84,6 +84,23 @@ namespace LuminPack.Core
             _isFirstElement = true;
             SerializeStringAsUtf8 = _state.Option.StringEncoding is LuminPackStringEncoding.UTF8;
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal LuminPackJsonWriter(LuminBufferWriter bufferWriter)
+        {
+            _state = bufferWriter.WriterState;
+            _bufferReference = bufferWriter.BeginWrite(ref _currentIndex);
+#if NET8_0_OR_GREATER
+            _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
+#else
+            _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
+#endif
+            _writerBuffer = bufferWriter;
+            _currentIndex = 0;
+            _depth = 0;
+            _isFirstElement = true;
+            SerializeStringAsUtf8 = bufferWriter.Option.StringEncoding is LuminPackStringEncoding.UTF8;
+        }
         
         #endregion
         

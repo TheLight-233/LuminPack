@@ -1997,7 +1997,7 @@ namespace LuminPack.Code.Core
                     foreach (var subField in field.ClassFields)
                     {
                         var nullable = subField.FieldType == LuminDataType.Reference ? "?" : "";
-                        sb.AppendLine($"{indentStr}{subField.TypeName}{nullable} {parentName}{field.Name}{subField.Name}Temp{depthSuffix} = default!;");
+                        sb.AppendLine($"{indentStr}{GetFieldLocalVariableType(subField)}{nullable} {parentName}{field.Name}{subField.Name}Temp{depthSuffix} = default!;");
                     }
                     sb.AppendLine();
             
@@ -2243,6 +2243,32 @@ namespace LuminPack.Code.Core
                 return sb.ToString();
             }
             return field.Type.ToString();
+        }
+
+        /// <summary>
+        /// 为嵌套类字段的内联局部变量生成一个"干净"的 C# 类型名：
+        /// 不含 nullable 注解（?），且对数组类型返回正确的完整类型名。
+        /// 返回的类型名供调用方自行追加可空标记。
+        /// </summary>
+        private static string GetFieldLocalVariableType(LuminDataField field)
+        {
+            var typeName = field.TypeName;
+            if (string.IsNullOrEmpty(typeName) || typeName.EndsWith("?"))
+            {
+                // TypeName 可能缺失（如数组类型）或已带可空注解（ToDisplayString 默认格式），
+                // 回退到 FullyQualifiedFormat 的 FullTypeName（不含 nullable 注解，且对数组正确）。
+                if (!string.IsNullOrEmpty(field.FullTypeName))
+                {
+                    typeName = field.FullTypeName;
+                }
+                else
+                {
+                    typeName = typeName?.TrimEnd('?') ?? "object";
+                }
+            }
+
+            // 防御：剥离任何残留的可空注解（避免 string?? 类错误）。
+            return typeName.TrimEnd('?');
         }
 
         private static LuminFiledType ConvertGenericsToFieldType(LuminGenericsType genericType)

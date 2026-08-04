@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using LuminPack.Code;
 using LuminPack.Option;
+using LuminPack.Utility;
 
 namespace LuminPack.Core
 {
@@ -114,6 +115,24 @@ namespace LuminPack.Core
             _depth = 0;
             CurrentTokenType = JsonTokenType.None;
             SerializeStringAsUtf8 = _state.Option.StringEncoding is LuminPackStringEncoding.UTF8;
+            _utf8StringScratch = null;
+            _utf16StringScratch = null;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal LuminPackJsonReader(LuminBufferWriter bufferWriter)
+        {
+            _state = bufferWriter.ReaderState;
+            _bufferReference = bufferWriter.GetSpan();
+#if NET8_0_OR_GREATER
+            _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
+#else
+            _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
+#endif
+            _currentIndex = 0;
+            _depth = 0;
+            CurrentTokenType = JsonTokenType.None;
+            SerializeStringAsUtf8 = bufferWriter.Option.StringEncoding is LuminPackStringEncoding.UTF8;
             _utf8StringScratch = null;
             _utf16StringScratch = null;
         }

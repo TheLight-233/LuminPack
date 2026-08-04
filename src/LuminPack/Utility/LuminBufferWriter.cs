@@ -7,61 +7,142 @@ using System.Threading;
 using System.Threading.Tasks;
 using LuminPack.Code;
 using LuminPack.Core;
+using LuminPack.Option;
 using static LuminPack.Code.LuminPackMarshal;
 
 namespace LuminPack.Utility;
 
 
 
+/// <summary>Provides a thread-safe pool of reusable <see cref="LuminBufferWriter"/> operation contexts.</summary>
+/// <remarks>The pool is thread-safe. A writer rented from it is not thread-safe and must remain exclusively owned.</remarks>
 public static class LuminBufferWriterPool
 {
+    /// <summary>Gets the largest native buffer retained by the pool.</summary>
     public const int MaxPooledBufferSize = 4 * 1024 * 1024; // 4MB
+    /// <summary>Gets the maximum number of writers retained in the shared central slots.</summary>
     public const int MaxPoolSize = 32;
-    
-#if NET8_0_OR_GREATER
-    private static readonly ObjectPool<LuminBufferWriter> _pool = 
-        new(MaxPoolSize);
-#else
-    private static readonly ObjectPool<LuminBufferWriter> _pool = 
-        new(new BufferWriterPolicy(), MaxPoolSize);
-#endif
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static LuminBufferWriter Rent() => _pool.Rent();
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void Return(LuminBufferWriter writer) => 
-        _pool.Return(writer);
 
-#if !NET8_0_OR_GREATER
-    private sealed class BufferWriterPolicy : IPooledObjectPolicy<LuminBufferWriter>
-    {
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public LuminBufferWriter Create() => new(true);
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public bool Return(LuminBufferWriter writer)
-        {
-            if (writer.TotalLength < MaxPooledBufferSize)
-            {
-                writer.ResetCore();
-                return true; // 可回收
-            }
-            writer.Dispose();
-            return false; // 不可回收
-        }
-    }
+    [ThreadStatic]
+    private static LuminBufferWriter? t_first;
+
+#if LUMINPACK_BUFFERWRITER_SECOND_TLS
+    [ThreadStatic]
+    private static LuminBufferWriter? t_second;
 #endif
-    
+
+    private static readonly AtomicSlotPool<LuminBufferWriter> s_centralPool = new(MaxPoolSize);
+
+    /// <summary>Rents a clean operation context for high-performance serialization or deserialization.</summary>
+    /// <returns>A writer whose payload is empty, whose <see cref="LuminBufferWriter.Option"/> has default values,
+    /// and whose writer and reader operation states contain no references from earlier uses.</returns>
+    /// <remarks>The caller exclusively owns the result and must pass it to <see cref="Return"/> when finished.</remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static LuminBufferWriter Rent()
+    {
+        var writer = t_first;
+        if (writer is not null)
+        {
+            t_first = null;
+            return writer;
+        }
+
+        return RentSlow();
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static LuminBufferWriter RentSlow()
+    {
+#if LUMINPACK_BUFFERWRITER_SECOND_TLS
+        var second = t_second;
+        if (second is not null)
+        {
+            t_second = null;
+            return second;
+        }
+#endif
+
+        return s_centralPool.TryTake() ?? new LuminBufferWriter(true);
+    }
+
+    /// <summary>Returns an exclusively owned writer to the pool.</summary>
+    /// <param name="writer">The writer to reset and return.</param>
+    /// <remarks>
+    /// Return clears the published payload, writer reference tracking, reader reference tracking, and restores
+    /// <see cref="LuminBufferWriter.Option"/> to LuminPack defaults. Oversized native buffers are disposed instead of cached.
+    /// The instance must not be accessed after this call unless it is rented again.
+    /// </remarks>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void Return(LuminBufferWriter writer)
+    {
+        writer.ResetForPool();
+
+        if (writer.TotalLength >= MaxPooledBufferSize)
+        {
+            writer.Dispose();
+            return;
+        }
+
+        if (t_first is null)
+        {
+            t_first = writer;
+            return;
+        }
+
+        ReturnSlow(writer);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void ReturnSlow(LuminBufferWriter writer)
+    {
+#if LUMINPACK_BUFFERWRITER_SECOND_TLS
+        if (t_second is null)
+        {
+            t_second = writer;
+            return;
+        }
+#endif
+
+        if (!s_centralPool.TryStore(writer))
+            writer.Dispose();
+    }
+
+    /// <summary>Gets an approximate diagnostic count of writers currently held in central slots.</summary>
+    public static int ApproximateCentralCount => s_centralPool.ApproximateCount;
+
+    /// <summary>Disposes writers cached by the current thread and clears its local pool slots.</summary>
+    /// <remarks>This diagnostic/maintenance API does not drain central slots owned by the process.</remarks>
+    public static void ClearThreadLocalCache()
+    {
+        var first = t_first;
+        t_first = null;
+
+#if LUMINPACK_BUFFERWRITER_SECOND_TLS
+        var second = t_second;
+        t_second = null;
+#endif
+
+        first?.Dispose();
+#if LUMINPACK_BUFFERWRITER_SECOND_TLS
+        second?.Dispose();
+#endif
+    }
+
+    internal static void ClearCentralCache() => s_centralPool.Drain(static writer => writer.Dispose());
 }
 
-// This class has large buffer so should cache [ThreadStatic] or Pool.
-public sealed class LuminBufferWriter :
-#if NET8_0_OR_GREATER
-    IDisposable, IPooledObjectPolicy<LuminBufferWriter>
-#else
-    IDisposable
-#endif
+/// <summary>
+/// Owns a reusable native byte buffer together with the option, writer state, and reader state used by
+/// high-performance LuminPack operations.
+/// </summary>
+/// <remarks>
+/// <para>A single instance is not thread-safe. From Rent until Return it must be owned by one call flow.</para>
+/// <para>Do not concurrently serialize and deserialize with the same instance, and do not use it for same-instance
+/// nested serialization. Rent a second writer for nested operations.</para>
+/// <para><see cref="Option"/> remains configured for the entire Rent-to-Return lifetime. Returning the writer restores
+/// default options and clears both operation states.</para>
+/// </remarks>
+public sealed class LuminBufferWriter : IDisposable
 {
     
     const int InitialBufferSize = 262144; // 256K(32768, 65536, 131072, 262144)
@@ -74,6 +155,17 @@ public sealed class LuminBufferWriter :
     
     private bool _disposed;
 
+    internal readonly LuminPackWriterOptionalState WriterState;
+    internal readonly LuminPackReaderOptionalState ReaderState;
+
+    /// <summary>Gets the mutable configuration used by BufferWriter-based Serialize, Deserialize, and JSON APIs.</summary>
+    /// <remarks>
+    /// The instance is owned by this writer and cannot be replaced. Its values persist until
+    /// <see cref="LuminBufferWriterPool.Return"/> restores defaults; they must not be expected to survive another Rent.
+    /// </remarks>
+    public LuminPackSerializerOption Option { get; }
+
+    /// <summary>Gets the number of bytes currently published as the writer's payload.</summary>
     public unsafe int CurrentIndex
     {
         get
@@ -82,13 +174,20 @@ public sealed class LuminBufferWriter :
         }
     }
 
+    /// <summary>Gets the capacity of the native buffer in bytes.</summary>
     public int TotalLength => _buffer.TotalLength;
     
+    /// <summary>Gets whether this writer currently owns an allocated native buffer.</summary>
     public bool UseFirstBuffer => !_buffer.IsNull;
 
+    /// <summary>Creates a reusable writer and operation context.</summary>
+    /// <param name="useFirstBuffer">Whether to allocate the initial native buffer immediately.</param>
+    /// <remarks>Directly constructed instances must be disposed. Pool users should call <see cref="LuminBufferWriterPool.Return"/>.</remarks>
     public LuminBufferWriter(bool useFirstBuffer)
     {
-        
+        Option = new LuminPackSerializerOption();
+        WriterState = new LuminPackWriterOptionalState(Option);
+        ReaderState = new LuminPackReaderOptionalState(Option);
         this._buffer = useFirstBuffer
             ? new BufferSegment(InitialBufferSize)
             : default;
@@ -99,8 +198,15 @@ public sealed class LuminBufferWriter :
         Dispose();
     }
 
+    /// <summary>Gets the complete writable native buffer without limiting the span to the published payload.</summary>
+    /// <returns>A span over the current native allocation.</returns>
+    /// <remarks>The span is invalidated by resize, reset that frees storage, Return, or Dispose. Callers must publish a
+    /// valid length separately and must not retain the span.</remarks>
     public Span<byte> DangerousGetBuffer() => _buffer.WrittenBuffer;
 
+    /// <summary>Copies the published payload from <paramref name="index"/> into newly allocated managed memory.</summary>
+    /// <param name="index">The zero-based payload offset at which copying begins.</param>
+    /// <returns>A new memory block containing the requested payload suffix.</returns>
     [Obsolete("This method causes GC allocations. Avoid calling it frequently; consider using GetSpan instead.")]
     public Memory<byte> GetMemory(int index = 0)
     {
@@ -115,12 +221,18 @@ public sealed class LuminBufferWriter :
         return new Memory<byte>(GetSpan().Slice(index).ToArray());
     }
 
+    /// <summary>Gets the currently published payload without allocation.</summary>
+    /// <returns>A span whose length is <see cref="CurrentIndex"/>.</returns>
+    /// <remarks>The span is borrowed and is invalidated by subsequent writes, resize, Return, or Dispose.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<byte> GetSpan()
     {
         return _buffer.WrittenBuffer.Slice(0, CurrentIndex);
     }
     
+    /// <summary>Gets the complete writable native buffer, allocating the initial segment if necessary.</summary>
+    /// <returns>A span over the full current capacity.</returns>
+    /// <remarks>This is a low-level borrowed span and is invalidated by resize, Return, or Dispose.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<byte> GetFullSpan()
     {
@@ -138,6 +250,9 @@ public sealed class LuminBufferWriter :
         return new BufferSegment(InitialBufferSize);
     }
 
+    /// <summary>Associates the native buffer with an externally managed write index.</summary>
+    /// <param name="index">The index whose address remains valid while the writer uses the buffer.</param>
+    /// <remarks>This low-level API is intended for LuminPack writer implementations. The reference must not outlive its scope.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe void SetCurrentIndexPtr(ref int index)
     {
@@ -163,22 +278,19 @@ public sealed class LuminBufferWriter :
         _buffer.Flush();
     }
     
-    /// <summary>
-    /// 不进行偏移，仅检测边界。
-    /// 偏移完全交由LuminPackWriter
-    /// </summary>
-    /// <param name="writer"></param>
+    /// <summary>Ensures capacity for the current binary writer position without advancing it.</summary>
+    /// <param name="writer">The binary writer whose buffer reference is refreshed after a resize.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Check(ref LuminPackWriter writer) => _buffer.Check(ref writer);
     
-    /// <summary>
-    /// 不进行偏移，仅检测边界。
-    /// 偏移完全交由LuminPackJsonWriter
-    /// </summary>
-    /// <param name="writer"></param>
+    /// <summary>Ensures capacity for the current JSON writer position without advancing it.</summary>
+    /// <param name="writer">The JSON writer whose buffer reference is refreshed after a resize.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Check(ref LuminPackJsonWriter writer) => _buffer.Check(ref writer);
 
+    /// <summary>Copies the published payload to a new byte array and resets the published buffer length.</summary>
+    /// <returns>A newly allocated array, or an empty array when no bytes are published.</returns>
+    /// <remarks>This method produces result GC allocation. It resets bytes but does not end the Option Rent-to-Return lifetime.</remarks>
     public unsafe byte[] ToArrayAndReset()
     {
         var length = CurrentIndex;
@@ -196,10 +308,8 @@ public sealed class LuminBufferWriter :
         return result;
     }
 
-    /// <summary>
-    /// 原地压缩
-    /// </summary>
-    /// <returns>压缩后的长度</returns>
+    /// <summary>Compresses the published payload in place.</summary>
+    /// <returns>The compressed payload length now published by this writer.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int Compress()
     {
@@ -219,10 +329,8 @@ public sealed class LuminBufferWriter :
         }
     }
 
-    /// <summary>
-    /// 原地解压缩
-    /// </summary>
-    /// <returns></returns>
+    /// <summary>Decompresses the published payload in place.</summary>
+    /// <returns>The decompressed payload length now published by this writer.</returns>
     public int Decompress()
     {
         var span = GetSpan();
@@ -241,20 +349,18 @@ public sealed class LuminBufferWriter :
         }
     }
     
-    /// <summary>
-    /// 压缩到目标位置
-    /// </summary>
-    /// <param name="destination"></param>
+    /// <summary>Compresses this writer's payload into another writer.</summary>
+    /// <param name="destination">The distinct writer that receives the compressed payload.</param>
+    /// <returns>The compressed byte count.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int CompressTo(LuminBufferWriter destination)
     {
         return LuminCompressor.Compress(this, destination);
     }
     
-    /// <summary>
-    /// 压缩并重置
-    /// </summary>
-    /// <param name="destination"></param>
+    /// <summary>Compresses into another writer and resets this writer's published payload afterward.</summary>
+    /// <param name="destination">The distinct writer that receives the compressed payload.</param>
+    /// <returns>The compressed byte count.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int CompressToAndReset(LuminBufferWriter destination)
     {
@@ -270,20 +376,18 @@ public sealed class LuminBufferWriter :
         }
     }
     
-    /// <summary>
-    /// 解压缩到目标位置
-    /// </summary>
-    /// <param name="destination"></param>
+    /// <summary>Decompresses this writer's payload into another writer.</summary>
+    /// <param name="destination">The distinct writer that receives the decompressed payload.</param>
+    /// <returns>The decompressed byte count.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int DecompressTo(LuminBufferWriter destination)
     {
         return LuminCompressor.Decompress(this, destination);
     }
     
-    /// <summary>
-    /// 解压缩
-    /// </summary>
-    /// <param name="destination"></param>
+    /// <summary>Decompresses into another writer and resets this writer's published payload afterward.</summary>
+    /// <param name="destination">The distinct writer that receives the decompressed payload.</param>
+    /// <returns>The decompressed byte count.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int DecompressToAndReset(LuminBufferWriter destination)
     {
@@ -299,6 +403,8 @@ public sealed class LuminBufferWriter :
         }
     }
 
+    /// <summary>Copies the published payload to a binary writer and then resets this buffer's payload.</summary>
+    /// <param name="writer">The destination binary writer.</param>
     public unsafe void WriteToAndReset(ref LuminPackWriter writer)
     {
         var length = CurrentIndex;
@@ -315,6 +421,10 @@ public sealed class LuminBufferWriter :
         ResetCore();
     }
 
+    /// <summary>Asynchronously copies the published payload to a stream and then resets this buffer's payload.</summary>
+    /// <param name="stream">The destination stream.</param>
+    /// <param name="cancellationToken">A token that can cancel the stream write.</param>
+    /// <returns>A task-like value that completes after the write.</returns>
     public async ValueTask WriteToAndResetAsync(Stream stream, CancellationToken cancellationToken)
     {
         var length = CurrentIndex;
@@ -334,7 +444,9 @@ public sealed class LuminBufferWriter :
         ResetCore();
     }
 
-    // reset without dispose BufferSegment memory
+    /// <summary>Resets the published byte count without freeing the native buffer or changing <see cref="Option"/>.</summary>
+    /// <remarks>This low-level reset does not clear operation state. Pool users should call
+    /// <see cref="LuminBufferWriterPool.Return"/> to reset the complete context.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe void ResetCore()
     {
@@ -344,11 +456,22 @@ public sealed class LuminBufferWriter :
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void ResetForPool()
+    {
+        ResetCore();
+        WriterState.ResetOperationState();
+        ReaderState.ResetOperationState();
+        Option.ResetToDefault();
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private unsafe void PublishLength(int length)
     {
         _writtenCount = length;
     }
 
+    /// <summary>When bytes are published, clears and releases the native payload buffer while preserving the context object.</summary>
+    /// <remarks>This does not return the instance to the pool and does not reset <see cref="Option"/>.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe void Reset()
     {
@@ -359,10 +482,13 @@ public sealed class LuminBufferWriter :
         ResetCore();
     }
 
+    /// <summary>Releases the native buffer and clears the option and operation state owned by this instance.</summary>
+    /// <remarks>Pool-rented instances should normally be returned through <see cref="LuminBufferWriterPool.Return"/>.</remarks>
     public void Dispose()
     {
         if (_disposed) return;
-        
+
+        ResetForPool();
         _buffer.Dispose();
         
         GC.SuppressFinalize(this);
@@ -399,24 +525,6 @@ public sealed class LuminBufferWriter :
         System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     internal void SetWrittenCount(int count) => PublishLength(count);
 
-#if NET8_0_OR_GREATER
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    static LuminBufferWriter IPooledObjectPolicy<LuminBufferWriter>.Create() 
-        => new(true);
-        
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    static bool IPooledObjectPolicy<LuminBufferWriter>.Return(LuminBufferWriter writer)
-    {
-        if (writer.TotalLength < LuminBufferWriterPool.MaxPooledBufferSize)
-        {
-            writer.ResetCore();
-            return true; // 可回收
-        }
-        
-        return false; // 不可回收
-    }
-#endif
-    
 }
 
 internal unsafe struct BufferSegment : IDisposable

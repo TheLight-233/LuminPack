@@ -618,6 +618,9 @@ public class PolymorphismBenchmark
         }
         
         buffer1 = LuminPackSerializer.Serialize(myClass, _option);
+        luminBufferWriter.Option.StringEncoding = _option.StringEncoding;
+        luminBufferWriter.Option.StringRecording = _option.StringRecording;
+        luminBufferWriter.Option.StandardFormat = _option.StandardFormat;
         buffer2 = MemoryPackSerializer.Serialize(myClass);
         buffer3 = MessagePackSerializer.Serialize(myClass);
         buffer4 = NinoSerializer.Serialize(myClass);
@@ -632,7 +635,7 @@ public class PolymorphismBenchmark
     [Benchmark]
     public void LuminPackSerialize()
     {
-        LuminPackSerializer.Serialize(myClass, luminBufferWriter, _option);
+        LuminPackSerializer.Serialize(myClass, luminBufferWriter);
     }
     
     [Benchmark]

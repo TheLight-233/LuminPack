@@ -135,12 +135,15 @@ internal static class ConfirmedCorrectnessRegressionTest
 
         var jsonOption = new LuminPackSerializerOption { StringEncoding = LuminPackStringEncoding.UTF8 };
         using var jsonBuffer = new LuminBufferWriter(true);
-        LuminPackSerializer.SerializeJson(value, jsonBuffer, jsonOption);
+        jsonBuffer.Option.StringEncoding = jsonOption.StringEncoding;
+        jsonBuffer.Option.StringRecording = jsonOption.StringRecording;
+        jsonBuffer.Option.StandardFormat = jsonOption.StandardFormat;
+        LuminPackSerializer.SerializeJson(value, jsonBuffer);
         var json = System.Text.Encoding.UTF8.GetString(jsonBuffer.GetSpan());
         Assert(json.Contains("\"中文字段\"", StringComparison.Ordinal),
             "Generated UTF-8 JSON property bytes corrupted a Unicode member name.");
 
-        var jsonRoundTrip = LuminPackSerializer.DeserializeJson<GeneratorIdentifierModel>(jsonBuffer, jsonOption);
+        var jsonRoundTrip = LuminPackSerializer.DeserializeJson<GeneratorIdentifierModel>(jsonBuffer);
         Assert(jsonRoundTrip is not null && jsonRoundTrip.@event == value.@event &&
                jsonRoundTrip.@class == value.@class && jsonRoundTrip.中文字段 == value.中文字段,
             "Generated JSON code did not handle escaped identifiers or Unicode names.");
