@@ -302,6 +302,17 @@ public static class LuminPackUnionCodeGenerator
     static void GenerateUnionFallbackMethods(LuminDataInfo data, StringBuilder sb, string classGlobalName)
     {
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]");
+        sb.AppendLine($"        internal static void DeserializeUnionFallback(ref LuminPackReader reader, ref {classGlobalName} value, ushort tag)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (_externalMap.TryGetValue((nint)((uint)tag + 1u), out var extEntry))");
+        sb.AppendLine("                extEntry.ReadDelegate(ref reader, ref value);");
+        sb.AppendLine("            else");
+        sb.AppendLine($"                LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof({classGlobalName}));");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+
+        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
         sb.AppendLine($"        internal static void SerializeUnionFallback(ref LuminPackWriter writer, ref {classGlobalName} value)");
         sb.AppendLine("        {");
@@ -435,10 +446,7 @@ public static class LuminPackUnionCodeGenerator
             sb.AppendLine($"                case {member.Id}: global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}.Read{methodName}(ref reader, ref value!); break;");
         }
         sb.AppendLine("                default:");
-        sb.AppendLine($"                    if (global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}._externalMap.TryGetValue((nint)((uint)tag + 1u), out var extEntry))");
-        sb.AppendLine("                        extEntry.ReadDelegate(ref reader, ref value!);");
-        sb.AppendLine("                    else");
-        sb.AppendLine($"                        LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof({classGlobalName}));");
+        sb.AppendLine($"                    global::{LuminPackSourceGenerator.LUMIN_GENERATED_NAMESPACE}.{classFullName}{genericParameters}.DeserializeUnionFallback(ref reader, ref value!, tag);");
         sb.AppendLine("                    break;");
         sb.AppendLine("            }");
         

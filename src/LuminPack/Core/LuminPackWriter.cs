@@ -429,6 +429,48 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index), length);
 #endif
         }
+
+        /// <summary>
+        /// Generator fast path for a non-null list: obtains its backing span and writes the matching
+        /// collection header in one call boundary.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Span<T?> WriteListHeaderAndGetSpan<T>(ref int index, List<T?> list)
+        {
+            var listSpan = LuminPackMarshal.GetListSpan(list);
+            WriteCollectionHeader(ref index, listSpan.Length);
+            return listSpan;
+        }
+
+        /// <summary>
+        /// Generator fast path for an object whose first three fields form one unmanaged block.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void WriteObjectHeaderAndUnmanaged<T1, T2, T3>(
+            ref int index, byte memberCount, in T1 value1, in T2 value2, in T3 value3)
+            where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged
+        {
+            WriteObjectHeader(ref index, memberCount);
+            index++;
+            index += WriteUnmanaged(ref index, value1, value2, value3);
+        }
+
+        /// <summary>
+        /// Generator fast path for an isolated Boolean inside a composite payload. Passing the
+        /// value instead of a managed byref keeps the caller from materializing another field
+        /// address after the containing object has already been proven non-null.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteBooleanAndAdvance(ref int index, bool value)
+        {
+#if NET8_0_OR_GREATER
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index), value);
+#else
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index), value);
+#endif
+            index++;
+        }
+
         
         /// <summary>
         /// 序列化空集合字节

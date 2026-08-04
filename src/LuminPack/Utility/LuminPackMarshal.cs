@@ -52,6 +52,18 @@ public static class LuminPackMarshal
 #endif
     }
 
+    /// <summary>
+    /// Sets the logical size and exposes the backing storage of a newly constructed list.
+    /// The caller must own a fresh list whose capacity is at least <paramref name="length"/>.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static T[] DangerousGetFreshListArray<T>(List<T> list, int length)
+    {
+        ref ListView<T> local = ref As<List<T>, ListView<T>>(ref list);
+        local._size = length;
+        return local._items;
+    }
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void SetListSize<T>(List<T?>? list, int size)
     {
@@ -1094,32 +1106,152 @@ public static class LuminPackMarshal
         
     }
     
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ulong GetFastModMultiplier(uint divisor)
+    {
+        return ulong.MaxValue / divisor + 1;
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static uint FastMod(uint value, uint divisor, ulong multiplier)
+    {
+        // 等价于 value % divisor。
+        // divisor 在整个 Rebuild 循环中保持不变，因此 multiplier 只计算一次。
+        return (uint)(((((multiplier * value) >> 32) + 1) * divisor) >> 32);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static uint GetBucketIndex(
+        uint hashCode,
+        uint bucketCount,
+        ulong fastModMultiplier)
+    {
+        // IntPtr.Size 对 JIT/AOT 来说是平台常量，
+        // 正常会直接折叠，不会在循环中留下真实分支。
+        if (IntPtr.Size == 8)
+            return FastMod(hashCode, bucketCount, fastModMultiplier);
+
+        return hashCode % bucketCount;
+    }
+
     /// <summary>
-    /// 反序列化专用：在直接写入 _entries 后，重建 _buckets 链和 _count。
-    /// 绕开 Dictionary.Add 的 hash 计算 + 重复 key 检查，仅适用于已知无重复的干净数据。
+    /// 反序列化专用：在直接写入 _entries 后，重建 Dictionary 的 _buckets 链和 _count。
+    /// 绕过 Dictionary.Add 的重复 Hash、重复 Key 检查以及扩容逻辑。
+    /// 仅适用于已经完成数据校验且确认不存在重复 Key 的反序列化路径。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void RebuildDictionaryBuckets<TKey, TValue>(DictionaryView<TKey, TValue?> view, int count)
+    public static void RebuildDictionaryBuckets<TKey, TValue>(
+        DictionaryView<TKey, TValue?> view,
+        int count)
         where TKey : notnull
     {
-        // _comparer 为 null 时 Dictionary 内部用默认比较器
-        var comparer = view._comparer ?? EqualityComparer<TKey>.Default;
-
         ref var entriesRef = ref GetArrayReference(view._entries);
         ref var bucketsRef = ref GetArrayReference(view._buckets);
+
         uint bucketCount = (uint)view._buckets.Length;
+
+        // 64 位平台使用 FastMod。
+        // 只在循环外进行一次整数除法。
+        ulong fastModMultiplier =
+            IntPtr.Size == 8
+                ? GetFastModMultiplier(bucketCount)
+                : 0;
+
+        /*
+         * Dictionary 对默认 comparer 的值类型可以直接调用
+         * TKey.GetHashCode()。
+         *
+         * 对闭合值类型泛型：
+         *
+         * Dictionary<int, ...>
+         * Dictionary<long, ...>
+         * Dictionary<float, ...>
+         * Dictionary<MyEnum, ...>
+         *
+         * JIT 可以将 typeof(TKey).IsValueType 折叠，并将
+         * constrained GetHashCode 去虚拟化 / inline。
+         *
+         * 比 IEqualityComparer<TKey>.GetHashCode 接口调用更适合热循环。
+         */
+        if (typeof(TKey).IsValueType && view._comparer is null)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                ref var entry =
+                    ref Unsafe.Add(
+                        ref entriesRef,
+                        (nint)(uint)i);
+
+                uint hashCode =
+                    unchecked((uint)entry.Key.GetHashCode());
+
+#if NETSTANDARD2_1
+            // 保持现有 NETSTANDARD2_1 / Unity 行为。
+            hashCode &= 0x7FFFFFFF;
+#endif
+
+                entry.HashCode = hashCode;
+
+                uint bucketIndex =
+                    GetBucketIndex(
+                        hashCode,
+                        bucketCount,
+                        fastModMultiplier);
+
+                ref int bucket =
+                    ref Unsafe.Add(
+                        ref bucketsRef,
+                        (nint)bucketIndex);
+
+                entry.Next = bucket - 1;
+                bucket = i + 1;
+            }
+
+            view._count = count;
+            return;
+        }
+
+        /*
+         * 引用类型以及用户自定义 comparer 必须保持 comparer 语义。
+         *
+         * 尤其不能对 string 等引用类型擅自绕过 comparer。
+         */
+        var comparer =
+            view._comparer ??
+            EqualityComparer<TKey>.Default;
 
         for (int i = 0; i < count; i++)
         {
-            ref var entry = ref Unsafe.Add(ref entriesRef, (nint)(uint)i);
+            ref var entry =
+                ref Unsafe.Add(
+                    ref entriesRef,
+                    (nint)(uint)i);
+
 #if NETSTANDARD2_1
-            uint hashCode = (uint)(comparer.GetHashCode(entry.Key!) & 0x7FFFFFFF);
+        uint hashCode =
+            unchecked(
+                (uint)(
+                    comparer.GetHashCode(entry.Key) &
+                    0x7FFFFFFF));
 #else
-            uint hashCode = (uint)comparer.GetHashCode(entry.Key!);
+            uint hashCode =
+                unchecked(
+                    (uint)comparer.GetHashCode(entry.Key));
 #endif
+
             entry.HashCode = hashCode;
 
-            ref int bucket = ref Unsafe.Add(ref bucketsRef, (nint)(hashCode % bucketCount));
+            uint bucketIndex =
+                GetBucketIndex(
+                    hashCode,
+                    bucketCount,
+                    fastModMultiplier);
+
+            ref int bucket =
+                ref Unsafe.Add(
+                    ref bucketsRef,
+                    (nint)bucketIndex);
+
             entry.Next = bucket - 1;
             bucket = i + 1;
         }
@@ -1129,35 +1261,118 @@ public static class LuminPackMarshal
 
     /// <summary>
     /// 反序列化专用：在直接写入 _entries 后，重建 HashSet 的 _buckets 链和 _count。
-    /// 绕开 HashSet.Add 的 hash 计算 + 重复值检查，仅适用于已知无重复的干净数据。
+    /// 绕过 HashSet.Add 的重复 Hash、重复 Value 检查以及扩容逻辑。
+    /// 仅适用于已经完成数据校验且确认不存在重复 Value 的反序列化路径。
     /// </summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void RebuildHashSetBuckets<T>(HashSetView<T?> view, int count)
+    public static void RebuildHashSetBuckets<T>(
+        HashSetView<T?> view,
+        int count)
     {
-        var comparer = view._comparer ?? EqualityComparer<T?>.Default;
-
         ref var entriesRef = ref GetArrayReference(view._entries);
         ref var bucketsRef = ref GetArrayReference(view._buckets);
+
         uint bucketCount = (uint)view._buckets.Length;
-        
+
+        ulong fastModMultiplier =
+            IntPtr.Size == 8
+                ? GetFastModMultiplier(bucketCount)
+                : 0;
+
+        /*
+         * 与 Dictionary 一致：
+         * 默认 comparer + 值类型直接走 constrained T.GetHashCode()。
+         *
+         * 避免每个元素通过 IEqualityComparer<T>.GetHashCode
+         * 进行接口调用。
+         */
+        if (typeof(T).IsValueType && view._comparer is null)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                ref var entry =
+                    ref Unsafe.Add(
+                        ref entriesRef,
+                        (nint)(uint)i);
+
+                uint hashCode =
+                    unchecked(
+                        (uint)entry.Value!.GetHashCode());
+
+#if NETSTANDARD2_1
+            hashCode &= 0x7FFFFFFF;
+#endif
+
+                entry.HashCode = hashCode;
+
+                uint bucketIndex =
+                    GetBucketIndex(
+                        hashCode,
+                        bucketCount,
+                        fastModMultiplier);
+
+                ref int bucket =
+                    ref Unsafe.Add(
+                        ref bucketsRef,
+                        (nint)bucketIndex);
+
+                entry.Next = bucket - 1;
+                bucket = i + 1;
+            }
+
+            view._count = count;
+
+#if NETSTANDARD2_1
+        view._lastIndex = count;
+#endif
+
+            return;
+        }
+
+        var comparer =
+            view._comparer ??
+            EqualityComparer<T?>.Default;
+
         for (int i = 0; i < count; i++)
         {
-            ref var entry = ref Unsafe.Add(ref entriesRef, (nint)(uint)i);
+            ref var entry =
+                ref Unsafe.Add(
+                    ref entriesRef,
+                    (nint)(uint)i);
+
 #if NETSTANDARD2_1
-            uint hashCode = (uint)(comparer.GetHashCode(entry.Value!) & 0x7FFFFFFF);
+        uint hashCode =
+            unchecked(
+                (uint)(
+                    comparer.GetHashCode(entry.Value!) &
+                    0x7FFFFFFF));
 #else
-            uint hashCode = (uint)comparer.GetHashCode(entry.Value!);
+            uint hashCode =
+                unchecked(
+                    (uint)comparer.GetHashCode(entry.Value!));
 #endif
+
             entry.HashCode = hashCode;
 
-            ref int bucket = ref Unsafe.Add(ref bucketsRef, (nint)(hashCode % bucketCount));
+            uint bucketIndex =
+                GetBucketIndex(
+                    hashCode,
+                    bucketCount,
+                    fastModMultiplier);
+
+            ref int bucket =
+                ref Unsafe.Add(
+                    ref bucketsRef,
+                    (nint)bucketIndex);
+
             entry.Next = bucket - 1;
             bucket = i + 1;
         }
 
         view._count = count;
+
 #if NETSTANDARD2_1
-        view._lastIndex = count;
+    view._lastIndex = count;
 #endif
     }
 

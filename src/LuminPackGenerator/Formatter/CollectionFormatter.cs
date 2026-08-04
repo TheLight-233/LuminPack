@@ -65,6 +65,17 @@ public static class ListFormatter
 
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        GenerateDeserializeCodeCore(fieldData, sb, freshValue: false);
+    }
+
+    public static void GenerateFreshDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        GenerateDeserializeCodeCore(fieldData, sb, freshValue: true);
+    }
+
+    private static void GenerateDeserializeCodeCore(
+        LuminLocalFieldData fieldData, StringBuilder sb, bool freshValue)
+    {
         var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
@@ -77,21 +88,30 @@ public static class ListFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            if (value is null)");
-        sb.AppendLine("            {");
-        sb.AppendLine($"                value = new global::System.Collections.Generic.List<{elementType}>(length);");
-        sb.AppendLine("            }");
-        sb.AppendLine("            else if (value.Count == length)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                value.Clear();");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value), length);");
+        if (freshValue)
+        {
+            sb.AppendLine($"            var items = reader.CreateFreshListArray<{elementType}>(length, out value);");
+        }
+        else
+        {
+            sb.AppendLine("            if (value is null)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                value = new global::System.Collections.Generic.List<{elementType}>(length);");
+            sb.AppendLine("            }");
+            sb.AppendLine("            else if (value.Count == length)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                value.Clear();");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+            sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value), length);");
+        }
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(4);");
         sb.AppendLine();
         if (KnownValueTypes.Contains(elementType))
         {
+            if (freshValue)
+                sb.AppendLine("            var span = items.AsSpan();");
             sb.AppendLine("            reader.DangerousReadUnmanagedSpan(ref index, ref span, out var spanOffset);");
             sb.AppendLine("            reader.Advance(spanOffset);");
             return;
@@ -101,6 +121,8 @@ public static class ListFormatter
         {
             sb.AppendLine($"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
             sb.AppendLine("            {");
+            if (freshValue)
+                sb.AppendLine("                var span = items.AsSpan();");
             sb.AppendLine("                reader.DangerousReadUnmanagedSpan(ref index, ref span, out var spanOffset);");
             sb.AppendLine("                reader.Advance(spanOffset);");
             sb.AppendLine("                return;");
@@ -111,22 +133,35 @@ public static class ListFormatter
         {
             sb.AppendLine($"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
             sb.AppendLine("            {");
+            if (freshValue)
+                sb.AppendLine("                var span = items.AsSpan();");
             sb.AppendLine("                reader.ReadSpan(ref index, length, ref span);");
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
             sb.AppendLine();
         }
         
-        sb.AppendLine("            if (span.IsEmpty)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            ref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(span);");
-        sb.AppendLine("            for (nint i = 0; i < span.Length; i++)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
-        sb.AppendLine("            }");
+        if (freshValue)
+        {
+            sb.AppendLine("            ref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(items.AsSpan());");
+            sb.AppendLine("            for (nint i = 0; i < length; i++)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
+            sb.AppendLine("            }");
+        }
+        else
+        {
+            sb.AppendLine("            if (span.IsEmpty)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+            sb.AppendLine();
+            sb.AppendLine("            ref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(span);");
+            sb.AppendLine("            for (nint i = 0; i < span.Length; i++)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
+            sb.AppendLine("            }");
+        }
     }
 
     // ── Compress variants ────────────────────────────────────────────────────
@@ -305,6 +340,17 @@ public static class DictionaryFormatter
 
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        GenerateDeserializeCodeCore(fieldData, sb, freshValue: false);
+    }
+
+    public static void GenerateFreshDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        GenerateDeserializeCodeCore(fieldData, sb, freshValue: true);
+    }
+
+    private static void GenerateDeserializeCodeCore(
+        LuminLocalFieldData fieldData, StringBuilder sb, bool freshValue)
+    {
         string keyType = GetFirstGeneric(fieldData.TypeName);
         string valueType = GetSecondGeneric(fieldData.TypeName);
 
@@ -323,8 +369,15 @@ public static class DictionaryFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length == 0)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                value ??= new global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>(0);");
-        sb.AppendLine("                value.Clear();");
+        if (freshValue)
+        {
+            sb.AppendLine($"                value = new global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>(0);");
+        }
+        else
+        {
+            sb.AppendLine($"                value ??= new global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>(0);");
+            sb.AppendLine("                value.Clear();");
+        }
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();

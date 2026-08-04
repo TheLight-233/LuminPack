@@ -25,6 +25,18 @@ class Program
             return;
         }
 
+        if (args.Length == 1 && args[0] == "--character-jit-probe")
+        {
+            CharacterSaveDataJitProbe.Run();
+            return;
+        }
+
+        if (args.Length == 1 && args[0] == "--character-concrete-jit-probe")
+        {
+            CharacterSaveDataConcreteJitProbe.Run();
+            return;
+        }
+
         BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
     }
     

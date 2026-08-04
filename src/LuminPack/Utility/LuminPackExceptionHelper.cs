@@ -1,6 +1,8 @@
 ﻿using System;
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
+using System.Runtime.CompilerServices;
 using LuminPack.Attribute;
 
 namespace LuminPack.Code
@@ -79,6 +81,20 @@ namespace LuminPack.Code
         public static void ThrowInSufficientBuffer(int length)
         {
             throw new LuminPackException($"Length header size is larger than buffer size, length: {length}.");
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void ThrowInvalidStringLength(int length)
+        {
+            throw new InvalidDataException($"Invalid string length: {length}.");
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        internal static void ThrowInvalidCollectionLength(int length)
+        {
+            throw new InvalidDataException($"Invalid collection length: {length}.");
         }
 
         [DoesNotReturn]

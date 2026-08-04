@@ -74,6 +74,11 @@ public static class LuminPackExtensionGenerator
                 sb.AppendLine("        }");
                 sb.AppendLine();
 
+                if (IsExactListType(v.TypeName))
+                    GenerateFreshListDeserializeExtension(sb, v.TypeName, v, metaInfo);
+                else if (IsExactDictionaryType(v.TypeName))
+                    GenerateFreshDictionaryDeserializeExtension(sb, v.TypeName, v, metaInfo);
+
                 // ── Always generate WithCompress variants when the type supports it ──
                 var compressFormatter = FormatterDiscovery.GetCompressFormatter(v.TypeName);
                 if (compressFormatter.Item1 != null)
@@ -131,6 +136,11 @@ public static class LuminPackExtensionGenerator
                     elFormatter.Item2(fakeLocal, sb);
                     sb.AppendLine("        }");
                     sb.AppendLine();
+
+                    if (IsExactListType(typeName))
+                        GenerateFreshListDeserializeExtension(sb, typeName, fakeLocal, metaInfo);
+                    else if (IsExactDictionaryType(typeName))
+                        GenerateFreshDictionaryDeserializeExtension(sb, typeName, fakeLocal, metaInfo);
                 }
 
                 // Generate WithCompress if supported and not already generated
@@ -480,6 +490,54 @@ public static class LuminPackExtensionGenerator
         compress.deser(localData, sb);
         sb.AppendLine("        }");
         sb.AppendLine();
+    }
+
+    private static void GenerateFreshListDeserializeExtension(
+        StringBuilder sb,
+        string typeName,
+        LuminLocalFieldData localData,
+        MetaInfo metaInfo)
+    {
+        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+        sb.AppendLine(metaInfo.IsNet8
+            ? $"        public static void ReadFreshValue(ref this LuminPackReader reader, scoped ref {typeName} value)"
+            : $"        public static void ReadFreshValue(ref this LuminPackReader reader, ref {typeName} value)");
+        sb.AppendLine("        {");
+        ListFormatter.GenerateFreshDeserializeCode(localData, sb);
+        sb.AppendLine("        }");
+        sb.AppendLine();
+    }
+
+    private static bool IsExactListType(string typeName)
+    {
+        return typeName.EndsWith(">", StringComparison.Ordinal) &&
+               (typeName.StartsWith("global::System.Collections.Generic.List<", StringComparison.Ordinal) ||
+                typeName.StartsWith("System.Collections.Generic.List<", StringComparison.Ordinal));
+    }
+
+    private static void GenerateFreshDictionaryDeserializeExtension(
+        StringBuilder sb,
+        string typeName,
+        LuminLocalFieldData localData,
+        MetaInfo metaInfo)
+    {
+        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+        sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+        sb.AppendLine(metaInfo.IsNet8
+            ? $"        public static void ReadFreshValue(ref this LuminPackReader reader, scoped ref {typeName} value)"
+            : $"        public static void ReadFreshValue(ref this LuminPackReader reader, ref {typeName} value)");
+        sb.AppendLine("        {");
+        DictionaryFormatter.GenerateFreshDeserializeCode(localData, sb);
+        sb.AppendLine("        }");
+        sb.AppendLine();
+    }
+
+    private static bool IsExactDictionaryType(string typeName)
+    {
+        return typeName.EndsWith(">", StringComparison.Ordinal) &&
+               (typeName.StartsWith("global::System.Collections.Generic.Dictionary<", StringComparison.Ordinal) ||
+                typeName.StartsWith("System.Collections.Generic.Dictionary<", StringComparison.Ordinal));
     }
 
     /// <summary>

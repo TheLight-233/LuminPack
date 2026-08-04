@@ -1,5 +1,6 @@
 using System;
 using System.Buffers;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Reflection;
@@ -228,7 +229,7 @@ namespace LuminPack.Core
         {
             return _currentIndex;
         }
-        
+
         /// <summary>
         /// 刷新当前SpanOffset
         /// </summary>
@@ -267,8 +268,8 @@ namespace LuminPack.Core
             length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index));
 #endif
 
-            if (length < 0 && length != LuminPackCode.NullCollection)
-                throw new InvalidDataException($"Invalid collection length: {length}.");
+            if (length < LuminPackCode.NullCollection)
+                LuminPackExceptionHelper.ThrowInvalidCollectionLength(length);
 
             return length is not LuminPackCode.NullCollection;
         }
@@ -357,7 +358,7 @@ namespace LuminPack.Core
         private void ValidateStringLength(int index, int length)
         {
             if (length < 0 && length != LuminPackCode.NullCollection)
-                throw new InvalidDataException($"Invalid string length: {length}.");
+                LuminPackExceptionHelper.ThrowInvalidStringLength(length);
 
             int headerSize = SerializeStringAsUtf8 ? sizeof(int) * 2 : sizeof(int);
             if ((uint)index > (uint)_bufferReference.Length ||
@@ -578,6 +579,121 @@ namespace LuminPack.Core
         }
 
         /// <summary>
+        /// Reads one string record and advances the supplied absolute offset.
+        /// Intended for source-generated parsers so the JIT sees a single call and
+        /// does not have to keep the offset live across four string helpers.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public string? ReadStringAndAdvance(ref int index)
+        {
+            bool isUtf8 = SerializeStringAsUtf8;
+            if (SerializeStringRecordAsToken)
+            {
+                return ReadTokenStringAndAdvance(ref index, isUtf8);
+            }
+
+            int recordLength = isUtf8 ? sizeof(int) * 2 : sizeof(int);
+            int bufferLength = _bufferReference.Length;
+            if ((uint)index > (uint)bufferLength ||
+                (uint)recordLength > (uint)(bufferLength - index))
+            {
+                LuminPackExceptionHelper.ThrowInSufficientBuffer(recordLength);
+            }
+
+#if NET8_0_OR_GREATER
+            int length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index));
+#else
+            int length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index));
+#endif
+
+            if (length < 0)
+            {
+                if (length != LuminPackCode.NullCollection)
+                    LuminPackExceptionHelper.ThrowInvalidStringLength(length);
+                length = 0;
+            }
+            else if ((uint)length > (uint)(bufferLength - index - recordLength))
+            {
+                LuminPackExceptionHelper.ThrowInSufficientBuffer(length);
+            }
+
+            var value = length == 0
+                ? null
+                : isUtf8
+                    ? ReadUtf8StringWithLengthOutlined(index, length)
+                    : ReadUtf16StringWithLength(index, length);
+            index += length + recordLength;
+            return value;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private string? ReadTokenStringAndAdvance(ref int index, bool isUtf8)
+        {
+            ReadStringLength(ref index, out var length);
+            var value = length == 0
+                ? null
+                : isUtf8
+                    ? ReadUtf8StringWithToken(index, length)
+                    : ReadUtf16StringWithToken(index, length);
+            index += length + (isUtf8 ? 1 : 2);
+            return value;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private string? ReadUtf8StringWithLengthOutlined(int index, int length)
+        {
+            return ReadUtf8StringWithLength(index, length);
+        }
+
+        /// <summary>
+        /// Generator-only fast path for a list that is known to be newly allocated. It publishes
+        /// the final count without running the reusable-list capacity and clearing logic.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Span<T?> CreateFreshListSpan<T>(int count, out List<T?> value)
+        {
+            value = new List<T?>(count);
+            return LuminPackMarshal.DangerousGetFreshListArray(value, count).AsSpan(0, count);
+        }
+
+        /// <summary>
+        /// Array-returning variant for generated reference-element loops. Keeping the backing
+        /// array as one managed reference shortens the live range compared with Span&lt;T&gt;.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public T?[] CreateFreshListArray<T>(int count, out List<T?> value)
+        {
+            value = new List<T?>(count);
+            return LuminPackMarshal.DangerousGetFreshListArray(value, count);
+        }
+
+        /// <summary>
+        /// Reads a complete length-prefixed list of strings and advances an absolute offset.
+        /// This is a generated-parser fast path that keeps collection bookkeeping out of
+        /// very large parser methods after their JIT inline budget has been exhausted.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public List<string>? ReadStringListAndAdvance(ref int index)
+        {
+            if (!TryReadCollectionHead(ref index, out int count))
+            {
+                index += sizeof(int);
+                return null;
+            }
+
+            var value = new List<string>(count);
+            int itemOffset = index + sizeof(int);
+            var items = LuminPackMarshal.DangerousGetFreshListArray(value, count);
+            for (int i = 0; i < items.Length; i++)
+            {
+                items[i] = ReadStringAndAdvance(ref itemOffset)!;
+            }
+
+            index = itemOffset;
+            return value;
+        }
+
+        /// <summary>
         /// 反序列化字符串
         /// </summary>
         /// <returns></returns>
@@ -769,6 +885,11 @@ namespace LuminPack.Core
         {
             if (length <= 0) return null;
 
+            if ((length & 1) != 0)
+            {
+                LuminPackExceptionHelper.ThrowFailedEncoding(OperationStatus.InvalidData);
+            }
+
             int index1 = index + 4;
             var utf16Length = length >> 1;
 
@@ -780,16 +901,7 @@ namespace LuminPack.Core
 
             fixed (byte* p = &spanRef)
             {
-                return string.Create(utf16Length, ((IntPtr)p, length), static (dest, state) =>
-                {
-                    var src = LuminPackMarshal.CreateSpan(ref Unsafe.AsRef<byte>((byte*)state.Item1), state.Item2);
-                    var status = StringSerializer.Deserialize(src, dest, out var bytesRead, out var charsWritten,
-                        replaceInvalidSequences: false, mode : SerializeMode.Utf16);
-                    if (status != OperationStatus.Done)
-                    {
-                        LuminPackExceptionHelper.ThrowFailedEncoding(status);
-                    }
-                });
+                return new string((char*)p, 0, utf16Length);
             }
         }
         

@@ -804,7 +804,10 @@ namespace LuminPack.Code.Core
         }
 
 
-        private static void GenerateSerializeCode(StringBuilder sb, LuminDataField field, string fieldPath, string span, string offset, int indent, int depth, bool isMultClass = false)
+        private static void GenerateSerializeCode(
+            StringBuilder sb, LuminDataField field, string fieldPath, string span, string offset,
+            int indent, int depth, bool isMultClass = false,
+            string stringRecordLength = "writer.StringRecordLength()")
         {
             string indentStr = new string(' ', indent * 4);
             string depthSuffix = $"_{depth}";
@@ -817,9 +820,10 @@ namespace LuminPack.Code.Core
                         sb.AppendLine($"{indentStr}{offset} += 1;");
                     break;
                 case LuminFiledType.Bool:
-                    sb.AppendLine($"{indentStr}writer.WriteUnmanagedWithoutSizeReturn(ref {offset}, {fieldPath});");
                     if (isMultClass)
-                        sb.AppendLine($"{indentStr}{offset} += 1;");
+                        sb.AppendLine($"{indentStr}writer.WriteBooleanAndAdvance(ref {offset}, {fieldPath});");
+                    else
+                        sb.AppendLine($"{indentStr}writer.WriteUnmanagedWithoutSizeReturn(ref {offset}, {fieldPath});");
                     break;
                 case LuminFiledType.Short or LuminFiledType.UShort or LuminFiledType.Char:
                     sb.AppendLine($"{indentStr}writer.WriteUnmanagedWithoutSizeReturn(ref {offset}, {fieldPath});");
@@ -847,7 +851,7 @@ namespace LuminPack.Code.Core
                     //if (depth < 1) sb.AppendLine($"{indentStr}var {field.Name}Length = writer.GetStringLength({fieldPath});");
                     sb.AppendLine($"{indentStr}var {field.Name}Length = writer.WriteString(ref {offset}, {fieldPath});");
                     if (isMultClass)
-                        sb.AppendLine($"{indentStr}{offset} += {field.Name}Length + writer.StringRecordLength();");
+                        sb.AppendLine($"{indentStr}{offset} += {field.Name}Length + {stringRecordLength};");
                     //sb.AppendLine($"{indentStr}System.Text.Encoding.UTF8.GetBytes({fieldPath}, {span}.Slice({offset}, {field.Name}Length));");
                     //sb.AppendLine($"{indentStr}{span}[{offset} + {field.Name}Length] = 0; // 终止符");
                     break;
@@ -873,18 +877,16 @@ namespace LuminPack.Code.Core
                         return;
                     }
                     
-                    sb.AppendLine($"{indentStr}int {field.Name}Count{depthSuffix} = {fieldPath}.Count;");
-                    //sb.AppendLine($"{indentStr}Unsafe.WriteUnaligned(ref {span}[{offset}], {field.Name}Count{depthSuffix});");
-                    sb.AppendLine($"{indentStr}writer.WriteCollectionHeader(ref {offset}, {field.Name}Count{depthSuffix});");
-                    sb.AppendLine($"{indentStr}int {field.Name}ListOffset{depthSuffix} = {offset} + 4;");
-
                     if (depth > 0)
                     {
                         sb.AppendLine($"{indentStr}var {field.Name}v{depthSuffix} = {fieldPath};");
-                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({field.Name}v{depthSuffix}!);");
+                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = writer.WriteListHeaderAndGetSpan(ref {offset}, {field.Name}v{depthSuffix}!);");
                     }
                     else 
-                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({fieldPath}!);");
+                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = writer.WriteListHeaderAndGetSpan(ref {offset}, {fieldPath}!);");
+
+                    sb.AppendLine($"{indentStr}int {field.Name}Count{depthSuffix} = {field.Name}TempSpan{depthSuffix}.Length;");
+                    sb.AppendLine($"{indentStr}int {field.Name}ListOffset{depthSuffix} = {offset} + 4;");
                     
                     
                     var elementField = new LuminDataField
@@ -915,9 +917,9 @@ namespace LuminPack.Code.Core
                         // sb.AppendLine($"{indentStr}    writer.WriteUnmanagedSpanWithOutHeader(ref {offset}, {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
                         // sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
                         // sb.AppendLine($"{indentStr}}}");
-                        // sb.AppendLine($"{indentStr}else");
+                            // sb.AppendLine($"{indentStr}else");
                     }
-                    
+
                     //sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.Name}Count{depthSuffix}; i{depthSuffix}++)");
                     sb.AppendLine($"{indentStr}foreach (ref var v{depthSuffix} in {field.Name}TempSpan{depthSuffix})");
                     sb.AppendLine($"{indentStr}{{");
@@ -929,7 +931,7 @@ namespace LuminPack.Code.Core
                         sb.AppendLine($"{indentStr}    if (v{depthSuffix} == null)");
                         sb.AppendLine($"{indentStr}    {{");
                         sb.AppendLine($"{indentStr}        writer.WriteNullStringHeader(ref {field.Name}ListOffset{depthSuffix});");
-                        sb.AppendLine($"{indentStr}        {field.Name}ListOffset{depthSuffix} += writer.StringRecordLength();");
+                        sb.AppendLine($"{indentStr}        {field.Name}ListOffset{depthSuffix} += {stringRecordLength};");
                         sb.AppendLine($"{indentStr}        continue;");
                         sb.AppendLine($"{indentStr}    }}");
                         
@@ -939,7 +941,7 @@ namespace LuminPack.Code.Core
                         //sb.AppendLine($"{indentStr}    {span}[{field.Name}ListOffset{depthSuffix} + strLen_{depthSuffix}] = 0;");
                         //sb.AppendLine($"{indentStr}    int strLen_{depthSuffix} = writer.GetStringLength({fieldPath}[i{depthSuffix}]);");
                         sb.AppendLine($"{indentStr}    int strLen_{depthSuffix} = writer.WriteString(ref {field.Name}ListOffset{depthSuffix}, v{depthSuffix});");
-                        sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += strLen_{depthSuffix} + writer.StringRecordLength();");
+                        sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += strLen_{depthSuffix} + {stringRecordLength};");
                         
                         if (isMultClass)
                             sb.AppendLine($"{indentStr}    {offset} = {field.Name}ListOffset{depthSuffix};");
@@ -954,7 +956,10 @@ namespace LuminPack.Code.Core
                             break;
                         }
                         
-                        sb.AppendLine($"{indentStr}    ref var element = ref v{depthSuffix};");
+                        if (elementField.Type is LuminFiledType.Class)
+                            sb.AppendLine($"{indentStr}    var element = v{depthSuffix};");
+                        else
+                            sb.AppendLine($"{indentStr}    ref var element = ref v{depthSuffix};");
 
                         if (elementField.Type is LuminFiledType.Class)
                         {
@@ -976,20 +981,15 @@ namespace LuminPack.Code.Core
                             
                             if (subField.FieldType is LuminDataType.Reference)
                             {
+                                var serializeSubFieldName = $"serialize{subField.Name}Field{depthSuffix}";
                                 if (subField.IsPrivate)
-                                    sb.AppendLine($"{indentStr}    if (Get{field.Name}{subField.Name}(element) != null)");
+                                    sb.AppendLine($"{indentStr}    if (Get{field.Name}{subField.Name}(element) is {{ }} {serializeSubFieldName})");
                                 else 
-                                    sb.AppendLine($"{indentStr}    if (element.{subField.Identifier} != null)");
+                                    sb.AppendLine($"{indentStr}    if (element.{subField.Identifier} is {{ }} {serializeSubFieldName})");
                                 sb.AppendLine($"{indentStr}    {{");
-
-                                if (subField.IsPrivate)
-                                {
-                                    GenerateSerializeCode(sb, subField, $"Get{field.Name}{subField.Name}(element)", span, $"{field.Name}ListOffset{depthSuffix}", indent + 2, depth + 1, true);
-                                }
-                                else
-                                {
-                                    GenerateSerializeCode(sb, subField, $"element.{subField.Identifier}", span, $"{field.Name}ListOffset{depthSuffix}", indent + 2, depth + 1, true);
-                                }
+                                GenerateSerializeCode(sb, subField, serializeSubFieldName, span,
+                                    $"{field.Name}ListOffset{depthSuffix}", indent + 2, depth + 1, true,
+                                    stringRecordLength);
                                 
                                 //sb.AppendLine($"{indentStr}        {field.Name}ListOffset{depthSuffix} += {GetFieldLength(subField, depth + 1)};");
                                 
@@ -1004,7 +1004,7 @@ namespace LuminPack.Code.Core
                                         break;
                                     case LuminFiledType.String:
                                         sb.AppendLine($"{indentStr}        writer.WriteNullStringHeader(ref {field.Name}ListOffset{depthSuffix});");
-                                        sb.AppendLine($"{indentStr}        {field.Name}ListOffset{depthSuffix} += writer.StringRecordLength();");
+                                        sb.AppendLine($"{indentStr}        {field.Name}ListOffset{depthSuffix} += {stringRecordLength};");
                                         break;
                                     default:
                                         sb.AppendLine($"{indentStr}        writer.WriteNullObjectHeader(ref {field.Name}ListOffset{depthSuffix});");
@@ -1047,10 +1047,10 @@ namespace LuminPack.Code.Core
                                 
                                 if (subField.IsPrivate)
                                 {
-                                    GenerateSerializeCode(sb, subField, $"Get{field.Name}{subField.Name}(element)", span, $"{field.Name}ListOffset{depthSuffix}", indent + 2, depth + 1, true);
+                                    GenerateSerializeCode(sb, subField, $"Get{field.Name}{subField.Name}(element)", span, $"{field.Name}ListOffset{depthSuffix}", indent + 2, depth + 1, true, stringRecordLength);
                                 }
                                 else
-                                    GenerateSerializeCode(sb, subField, $"element.{subField.Identifier}", span, $"{field.Name}ListOffset{depthSuffix}", indent + 1, depth + 1, true);
+                                    GenerateSerializeCode(sb, subField, $"element.{subField.Identifier}", span, $"{field.Name}ListOffset{depthSuffix}", indent + 1, depth + 1, true, stringRecordLength);
                                 //sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {GetFieldLength(subField, depth + 1, pattern: "writer")};");
                             }
                             
@@ -1075,13 +1075,14 @@ namespace LuminPack.Code.Core
                             span,
                             $"{field.Name}ListOffset{depthSuffix}",
                             indent + 1,
-                            depth + 1
+                            depth + 1,
+                            stringRecordLength: stringRecordLength
                         );
                         if(elementField.Type is LuminFiledType.List or LuminFiledType.Array) 
-                            sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} = {GetFieldLength(elementField, depth + 1, pattern: "writer")};");
+                            sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} = {GetSerializeFieldLength(elementField, depth + 1, stringRecordLength)};");
                         else
                         {
-                            sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {GetFieldLength(elementField, depth + 1, pattern: "writer")};");
+                            sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {GetSerializeFieldLength(elementField, depth + 1, stringRecordLength)};");
                         }
                     }
                     //sb.AppendLine($"{indentStr}    writer.FlushCurrentIndex({field.Name}ListOffset{depthSuffix});");
@@ -1122,8 +1123,6 @@ namespace LuminPack.Code.Core
                     //sb.AppendLine($"{indentStr}Unsafe.WriteUnaligned(ref {span}[{offset}], {field.Name}Count{depthSuffix});");
                     sb.AppendLine($"{indentStr}writer.WriteCollectionHeader(ref {offset}, {field.Name}Count{depthSuffix});");
                     sb.AppendLine($"{indentStr}int {field.Name}ListOffset{depthSuffix} = {offset} + 4;");
-                    if (!IsPureValueTypeStruct(arrayElementField)) 
-                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = {fieldPath}.AsSpan();");
                     
                     if (IsPureValueTypeStruct(arrayElementField))
                     {
@@ -1143,13 +1142,13 @@ namespace LuminPack.Code.Core
                         // sb.AppendLine($"{indentStr}    writer.WriteUnmanagedArrayWithOutHeader(ref {offset}, tempArray{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
                         // sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {field.Name}TempLength{depthSuffix};");
                         // sb.AppendLine($"{indentStr}}}");
-                        // sb.AppendLine($"{indentStr}else");
+                            // sb.AppendLine($"{indentStr}else");
                     }
+
                     
-                    
-                    //sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.Name}Count{depthSuffix}; i{depthSuffix}++)");
-                    sb.AppendLine($"{indentStr}foreach (ref var v{depthSuffix} in {field.Name}TempSpan{depthSuffix})");
+                    sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.Name}Count{depthSuffix}; i{depthSuffix}++)");
                     sb.AppendLine($"{indentStr}{{");
+                    sb.AppendLine($"{indentStr}    ref var v{depthSuffix} = ref {fieldPath}[i{depthSuffix}];");
     
                     
     
@@ -1159,7 +1158,7 @@ namespace LuminPack.Code.Core
                         sb.AppendLine($"{indentStr}    if (v{depthSuffix} == null)");
                         sb.AppendLine($"{indentStr}    {{");
                         sb.AppendLine($"{indentStr}        writer.WriteNullStringHeader(ref {field.Name}ListOffset{depthSuffix});");
-                        sb.AppendLine($"{indentStr}        {field.Name}ListOffset{depthSuffix} += writer.StringRecordLength();");
+                        sb.AppendLine($"{indentStr}        {field.Name}ListOffset{depthSuffix} += {stringRecordLength};");
                         sb.AppendLine($"{indentStr}        continue;");
                         sb.AppendLine($"{indentStr}    }}");
                         
@@ -1169,7 +1168,7 @@ namespace LuminPack.Code.Core
                         //sb.AppendLine($"{indentStr}    {span}[{field.Name}ListOffset{depthSuffix} + strLen_{depthSuffix}] = 0;");
                         //sb.AppendLine($"{indentStr}    int strLen_{depthSuffix} = writer.GetStringLength({fieldPath}[i{depthSuffix}]);");
                         sb.AppendLine($"{indentStr}    int strLen_{depthSuffix} = writer.WriteString(ref {field.Name}ListOffset{depthSuffix}, v{depthSuffix});");
-                        sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += strLen_{depthSuffix} + writer.StringRecordLength();");
+                        sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += strLen_{depthSuffix} + {stringRecordLength};");
                         
                         if (isMultClass)
                             sb.AppendLine($"{indentStr}    {offset} = {field.Name}ListOffset{depthSuffix};");
@@ -1185,9 +1184,13 @@ namespace LuminPack.Code.Core
                             break;
                         }
                         
+                        var serializedArrayElementPath = $"v{depthSuffix}";
                         if (arrayElementField.Type is LuminFiledType.Class)
                         {
-                            sb.AppendLine($"{indentStr}    if (v{depthSuffix} == null)");
+                            var serializedArrayElementName = $"element{depthSuffix}";
+                            sb.AppendLine($"{indentStr}    var {serializedArrayElementName} = v{depthSuffix};");
+                            serializedArrayElementPath = serializedArrayElementName;
+                            sb.AppendLine($"{indentStr}    if ({serializedArrayElementPath} == null)");
                             sb.AppendLine($"{indentStr}    {{");
                             sb.AppendLine($"{indentStr}        writer.WriteNullObjectHeader(ref {field.Name}ListOffset{depthSuffix});");
                             sb.AppendLine($"{indentStr}        {field.Name}ListOffset{depthSuffix} += 1;");
@@ -1195,30 +1198,47 @@ namespace LuminPack.Code.Core
                             sb.AppendLine($"{indentStr}    }}");
                         }
                         
-                        sb.AppendLine($"{indentStr}    writer.WriteObjectHeader(ref {field.Name}ListOffset{depthSuffix}, {arrayElementField.ClassFields.Count});");
-                        sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += 1;");
+                        var arrayElementStartField = 0;
+                        var firstMergedArrayField = arrayElementField.ClassFields.Count > 0 &&
+                                                    IsMergeableField(arrayElementField.ClassFields[0])
+                            ? FindNextMergeableField(arrayElementField.ClassFields, 0)
+                            : 0;
+                        if (firstMergedArrayField == 2)
+                        {
+                            sb.Append($"{indentStr}    writer.WriteObjectHeaderAndUnmanaged(ref {field.Name}ListOffset{depthSuffix}, {arrayElementField.ClassFields.Count}");
+                            for (var j = 0; j <= firstMergedArrayField; j++)
+                            {
+                                var mergedField = arrayElementField.ClassFields[j];
+                                if (mergedField.IsPrivate)
+                                    sb.Append($", Get{field.Name}{mergedField.Name}({serializedArrayElementPath})");
+                                else
+                                    sb.Append($", {serializedArrayElementPath}.{mergedField.Name}");
+                            }
+                            sb.AppendLine(");");
+                            arrayElementStartField = firstMergedArrayField + 1;
+                        }
+                        else
+                        {
+                            sb.AppendLine($"{indentStr}    writer.WriteObjectHeader(ref {field.Name}ListOffset{depthSuffix}, {arrayElementField.ClassFields.Count});");
+                            sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += 1;");
+                        }
                         sb.AppendLine();
                         
-                        for (var i = 0; i < arrayElementField.ClassFields.Count; i++)
+                        for (var i = arrayElementStartField; i < arrayElementField.ClassFields.Count; i++)
                         {
                             var subField = arrayElementField.ClassFields[i];
                             
                             if (subField.FieldType is LuminDataType.Reference)
                             {
+                                var serializeSubFieldName = $"serialize{subField.Name}Field{depthSuffix}";
                                 if (subField.IsPrivate)
-                                    sb.AppendLine($"{indentStr}    if (Get{field.Name}{subField.Name}(v{depthSuffix}) != null)");
+                                    sb.AppendLine($"{indentStr}    if (Get{field.Name}{subField.Name}({serializedArrayElementPath}) is {{ }} {serializeSubFieldName})");
                                 else 
-                                    sb.AppendLine($"{indentStr}    if (v{depthSuffix}.{subField.Identifier} != null)");
+                                    sb.AppendLine($"{indentStr}    if ({serializedArrayElementPath}.{subField.Identifier} is {{ }} {serializeSubFieldName})");
                                 sb.AppendLine($"{indentStr}    {{");
-                                
-                                if (subField.IsPrivate)
-                                {
-                                    GenerateSerializeCode(sb, subField, $"Get{field.Name}{subField.Name}(v{depthSuffix})", span, $"{field.Name}ListOffset{depthSuffix}", indent + 2, depth + 1, true);
-                                }
-                                else
-                                {
-                                    GenerateSerializeCode(sb, subField, $"v{depthSuffix}.{subField.Identifier}", span, $"{field.Name}ListOffset{depthSuffix}", indent + 2, depth + 1, true);
-                                }
+                                GenerateSerializeCode(sb, subField, serializeSubFieldName, span,
+                                    $"{field.Name}ListOffset{depthSuffix}", indent + 2, depth + 1, true,
+                                    stringRecordLength);
                                 
                                 //sb.AppendLine($"{indentStr}        {field.Name}ListOffset{depthSuffix} += {GetFieldLength(subField, depth + 1)};");
                                 
@@ -1233,7 +1253,7 @@ namespace LuminPack.Code.Core
                                         break;
                                     case LuminFiledType.String:
                                         sb.AppendLine($"{indentStr}        writer.WriteNullStringHeader(ref {field.Name}ListOffset{depthSuffix});");
-                                        sb.AppendLine($"{indentStr}        {field.Name}ListOffset{depthSuffix} += writer.StringRecordLength();");
+                                        sb.AppendLine($"{indentStr}        {field.Name}ListOffset{depthSuffix} += {stringRecordLength};");
                                         break;
                                     default:
                                         sb.AppendLine($"{indentStr}        writer.WriteNullObjectHeader(ref {field.Name}ListOffset{depthSuffix});");
@@ -1262,9 +1282,9 @@ namespace LuminPack.Code.Core
                                         for (var j = i; j <= num; j++)
                                         {
                                             if (arrayElementField.ClassFields[j].IsPrivate)
-                                                sb.Append($", Get{field.Name}{arrayElementField.ClassFields[j].Name}(v{depthSuffix})");
+                                                sb.Append($", Get{field.Name}{arrayElementField.ClassFields[j].Name}({serializedArrayElementPath})");
                                             else
-                                                sb.Append($", v{depthSuffix}.{arrayElementField.ClassFields[j].Name}");
+                                                sb.Append($", {serializedArrayElementPath}.{arrayElementField.ClassFields[j].Name}");
                                         }
                                         sb.Append(");");
                                         sb.AppendLine();
@@ -1276,11 +1296,11 @@ namespace LuminPack.Code.Core
                                 
                                 if (subField.IsPrivate)
                                 {
-                                    GenerateSerializeCode(sb, subField, $"Get{field.Name}{subField.Name}(v{depthSuffix})", span, $"{field.Name}ListOffset{depthSuffix}", indent + 1, depth + 1, true);
+                                    GenerateSerializeCode(sb, subField, $"Get{field.Name}{subField.Name}({serializedArrayElementPath})", span, $"{field.Name}ListOffset{depthSuffix}", indent + 1, depth + 1, true, stringRecordLength);
                                 }
                                 else
                                 {
-                                    GenerateSerializeCode(sb, subField, $"v{depthSuffix}.{subField.Identifier}", span, $"{field.Name}ListOffset{depthSuffix}", indent + 1, depth + 1, true);
+                                    GenerateSerializeCode(sb, subField, $"{serializedArrayElementPath}.{subField.Identifier}", span, $"{field.Name}ListOffset{depthSuffix}", indent + 1, depth + 1, true, stringRecordLength);
                                 }
                                 
                                 //sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {GetFieldLength(subField, depth + 1, pattern: "writer")};");
@@ -1309,13 +1329,14 @@ namespace LuminPack.Code.Core
                             span,
                             $"{field.Name}ListOffset{depthSuffix}",
                             indent + 1,
-                            depth + 1
+                            depth + 1,
+                            stringRecordLength: stringRecordLength
                         );
                         if(arrayElementField.Type is LuminFiledType.List or LuminFiledType.Array) 
-                            sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} = {GetFieldLength(arrayElementField, depth + 1, pattern: "writer")};");
+                            sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} = {GetSerializeFieldLength(arrayElementField, depth + 1, stringRecordLength)};");
                         else
                         {
-                            sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {GetFieldLength(arrayElementField, depth + 1, pattern: "writer")};");
+                            sb.AppendLine($"{indentStr}    {field.Name}ListOffset{depthSuffix} += {GetSerializeFieldLength(arrayElementField, depth + 1, stringRecordLength)};");
                         }
                     }
                     //sb.AppendLine($"{indentStr}    writer.FlushCurrentIndex({field.Name}ListOffset{depthSuffix});");
@@ -1330,6 +1351,13 @@ namespace LuminPack.Code.Core
                         break;
                     }
                     sb.AppendLine($"{indentStr}// 序列化{field.ClassName}");
+                    var serializedObjectPath = fieldPath;
+                    if (field.Type is LuminFiledType.Class && field.ClassFields.Count > 1)
+                    {
+                        var serializedObjectName = $"serialize{field.Name}Value{depthSuffix}";
+                        sb.AppendLine($"{indentStr}var {serializedObjectName} = {fieldPath};");
+                        serializedObjectPath = serializedObjectName;
+                    }
                     sb.AppendLine($"{indentStr}writer.WriteObjectHeader(ref {offset}, {field.ClassFields.Count});");
                     sb.AppendLine($"{indentStr}{offset} += 1;");
                     sb.AppendLine();
@@ -1339,16 +1367,14 @@ namespace LuminPack.Code.Core
                         
                         if (subField.FieldType is LuminDataType.Reference)
                         {
+                            var serializeSubFieldName = $"serialize{subField.Name}Field{depthSuffix}";
                             if (subField.IsPrivate)
-                                sb.AppendLine($"{indentStr}if (Get{field.Name}{subField.Name}({fieldPath}) != null)");
+                                sb.AppendLine($"{indentStr}if (Get{field.Name}{subField.Name}({serializedObjectPath}) is {{ }} {serializeSubFieldName})");
                             else 
-                                sb.AppendLine($"{indentStr}if ({fieldPath}.{subField.Identifier} != null)");
+                                sb.AppendLine($"{indentStr}if ({serializedObjectPath}.{subField.Identifier} is {{ }} {serializeSubFieldName})");
                             sb.AppendLine($"{indentStr}{{");
                             
-                            if (subField.IsPrivate)
-                                GenerateSerializeCode(sb, subField, $"Get{field.Name}{subField.Name}({fieldPath})", span, offset, indent + 1, depth + 1, true);
-                            else
-                                GenerateSerializeCode(sb, subField, $"{fieldPath}.{subField.Identifier}", span, offset, indent + 1, depth + 1, true);
+                            GenerateSerializeCode(sb, subField, serializeSubFieldName, span, offset, indent + 1, depth + 1, true, stringRecordLength);
                             if (subField.Type is LuminFiledType.Array or LuminFiledType.List)
                             {
                                 var newDepthSuffix = $"_{depth + 1}";
@@ -1367,7 +1393,7 @@ namespace LuminPack.Code.Core
                                     sb.AppendLine($"{indentStr}else");
                                     sb.AppendLine($"{indentStr}{{");
                                     sb.AppendLine($"{indentStr}    writer.WriteNullStringHeader(ref {offset});");
-                                    sb.AppendLine($"{indentStr}    {offset} += writer.StringRecordLength();");
+                                    sb.AppendLine($"{indentStr}    {offset} += {stringRecordLength};");
                                     sb.AppendLine($"{indentStr}}}"); break;
                                 default:
                                     sb.AppendLine($"{indentStr}else");
@@ -1396,9 +1422,9 @@ namespace LuminPack.Code.Core
                                     for (var j = i; j <= num; j++)
                                     {
                                         if (field.ClassFields[j].IsPrivate) 
-                                            sb.Append($", Get{field.Name}{field.ClassFields[j].Name}({fieldPath})");
+                                            sb.Append($", Get{field.Name}{field.ClassFields[j].Name}({serializedObjectPath})");
                                         else 
-                                            sb.Append($", {fieldPath}.{field.ClassFields[j].Name}");
+                                            sb.Append($", {serializedObjectPath}.{field.ClassFields[j].Name}");
                                     }
                                     sb.Append("));");
                                     sb.AppendLine();
@@ -1409,9 +1435,9 @@ namespace LuminPack.Code.Core
                             #endregion
                             
                             if (subField.IsPrivate)
-                                GenerateSerializeCode(sb, subField, $"Get{field.Name}{subField.Name}({fieldPath})", span, offset, indent, depth + 1, true);
+                                GenerateSerializeCode(sb, subField, $"Get{field.Name}{subField.Name}({serializedObjectPath})", span, offset, indent, depth + 1, true, stringRecordLength);
                             else 
-                                GenerateSerializeCode(sb, subField, $"{fieldPath}.{subField.Identifier}", span, offset, indent, depth + 1, true);
+                                GenerateSerializeCode(sb, subField, $"{serializedObjectPath}.{subField.Identifier}", span, offset, indent, depth + 1, true, stringRecordLength);
                         }
                         
                     }
@@ -1438,7 +1464,8 @@ namespace LuminPack.Code.Core
             string targetObj, string span,
             string offset, int indent, int depth,
             bool isFirst = true, string fieldPath = "", bool isArray = false, bool isList = false,
-            string multList = "_", bool isPrivateFiled = false, string parentName = "")
+            string multList = "_", bool isPrivateFiled = false, string parentName = "",
+            bool collectionHeadAlreadyRead = false, bool targetIsKnownFresh = false)
         {
             string indentStr = new string(' ', indent * 4);
             string depthSuffix = $"{multList}{depth}";
@@ -1589,24 +1616,10 @@ namespace LuminPack.Code.Core
                     }
                     break;
                 case LuminFiledType.String:
-                    string cleanedBelongClassName = field.belongClassName ?? "StringField";
-                    if (cleanedBelongClassName.StartsWith("global::"))
-                    {
-                        cleanedBelongClassName = cleanedBelongClassName.Substring(8);
-                    }
-                    cleanedBelongClassName = cleanedBelongClassName.Replace('<', '_').Replace('>', '_');
-                    var classNameParts = cleanedBelongClassName.Split('.');
-                    string belongClassShortName = classNameParts.LastOrDefault() ?? "StringField";
-    
-                    // 构造安全的变量名，避免重复或非法字符
-                    string lengthVarName = $"{belongClassShortName}{(string.IsNullOrEmpty(field.belongClassFieldName) ? "" : field.belongClassFieldName)}{field.Name}{depthSuffix}Length";
-    
-                    sb.AppendLine($"{indentStr}reader.ReadStringLength(ref {offset}, out var {lengthVarName});");
-                    sb.AppendLine($"{indentStr}{targetObj} = reader.ReadString({offset}, {lengthVarName})!;");
-                    sb.AppendLine($"{indentStr}{offset} += ({lengthVarName} + reader.StringRecordLength());");
+                    sb.AppendLine($"{indentStr}{targetObj} = reader.ReadStringAndAdvance(ref {offset})!;");
                     break;
                 case LuminFiledType.List:
-                    if (isFirst && depth is 0) 
+                    if (isFirst && depth is 0 && !collectionHeadAlreadyRead) 
                         sb.AppendLine($"{indentStr}reader.TryReadCollectionHead(ref {offset}, out int {field.Name}Count{depthSuffix});");
             
                     var elementField = new LuminDataField
@@ -1622,7 +1635,10 @@ namespace LuminPack.Code.Core
                     };
             
                     string genericType = GetFullGenericTypeName(field.GenericType, elementField.ClassName, elementField.ClassGenericType);
-                    if (isFirst) 
+                    bool useFreshTopLevelList = isFirst && depth is 0;
+                    if (useFreshTopLevelList)
+                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = reader.CreateFreshListSpan<{genericType}>({field.Name}Count{depthSuffix}, out {targetObj});");
+                    else if (isFirst) 
                         sb.AppendLine($"{indentStr}{targetObj} = new List<{genericType}>({field.Name}Count{depthSuffix});");
             
                     sb.AppendLine($"{indentStr}int {field.Name}ListOffset{depthSuffix} = {offset} + 4;");
@@ -1648,7 +1664,8 @@ namespace LuminPack.Code.Core
                         }
                         else
                         {
-                            sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({targetObj}!, {field.Name}Count{depthSuffix});");
+                            if (!useFreshTopLevelList)
+                                sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({targetObj}!, {field.Name}Count{depthSuffix});");
                             if (field.IsCompress)
                             {
                                 // 压缩路径：从 offset 起读取 [count:4][compressedLen:4][data]
@@ -1680,7 +1697,8 @@ namespace LuminPack.Code.Core
                             }
                             else
                             {
-                                sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({targetObj}!, {field.Name}Count{depthSuffix});");
+                                if (!useFreshTopLevelList)
+                                    sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({targetObj}!, {field.Name}Count{depthSuffix});");
                                 sb.AppendLine($"{indentStr}reader.DangerousReadUnmanagedSpanWithOutHeaderWithCompress(ref {field.Name}ListOffset{depthSuffix}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
                                 sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize({targetObj}, {field.Name}Count{depthSuffix});");
                             }
@@ -1695,7 +1713,8 @@ namespace LuminPack.Code.Core
                             }
                             else
                             {
-                                sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({targetObj}!, {field.Name}Count{depthSuffix});");
+                                if (!useFreshTopLevelList)
+                                    sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({targetObj}!, {field.Name}Count{depthSuffix});");
                                 sb.AppendLine($"{indentStr}reader.ReadUnmanagedSpan(ref {offset}, ref {field.Name}TempSpan{depthSuffix}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
                                 sb.AppendLine($"{indentStr}LuminPackMarshal.SetListSize({targetObj}, {field.Name}Count{depthSuffix});");
                             }
@@ -1727,7 +1746,7 @@ namespace LuminPack.Code.Core
                     {
                         sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({fieldPath}!, {field.Name}Count{depthSuffix});");
                     }
-                    else 
+                    else if (!useFreshTopLevelList)
                         sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan({targetObj}!, {field.Name}Count{depthSuffix});");
 
                     
@@ -1818,7 +1837,9 @@ namespace LuminPack.Code.Core
                 case LuminFiledType.Array:
                     // 压缩路径：DangerousReadUnmanagedArrayWithCompress 内部自己读取 count+compressedLen，
                     // 不需要也不能在外部先调用 TryReadCollectionHead（否则指针会错位导致 Decompress 崩溃）
-                    if (isFirst && !(!IsReferenceGenericType(field.GenericType.FirstOrDefault()) && field.IsCompress))
+                    if (isFirst &&
+                        !collectionHeadAlreadyRead &&
+                        !(!IsReferenceGenericType(field.GenericType.FirstOrDefault()) && field.IsCompress))
                         sb.AppendLine($"{indentStr}reader.TryReadCollectionHead(ref {offset}, out int {field.Name}Count{depthSuffix});");
             
                     var arrayElementField = new LuminDataField
@@ -1902,14 +1923,22 @@ namespace LuminPack.Code.Core
                         break;
                     }
             
+                    string arrayLoopLength;
                     if (depth > 0)
                     {
                         sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = {fieldPath}.AsSpan();");
+                        arrayLoopLength = $"{field.Name}Count{depthSuffix}";
                     }
-                    else 
-                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = {targetObj}.AsSpan();");
-                    
-                    sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.Name}Count{depthSuffix}; i{depthSuffix}++)");
+                    else
+                    {
+                        // The top-level array was allocated immediately above with the decoded
+                        // length. Keeping it as an array lets the JIT use the cheaper array write
+                        // barrier instead of the checked barrier required by a Span<T> byref.
+                        sb.AppendLine($"{indentStr}var {field.Name}TempSpan{depthSuffix} = {targetObj}!;");
+                        arrayLoopLength = $"{field.Name}Count{depthSuffix}";
+                    }
+
+                    sb.AppendLine($"{indentStr}for (int i{depthSuffix} = 0; i{depthSuffix} < {arrayLoopLength}; i{depthSuffix}++)");
                     sb.AppendLine($"{indentStr}{{");
             
                     if (arrayElementField.Type is LuminFiledType.List)
@@ -1991,20 +2020,43 @@ namespace LuminPack.Code.Core
                     }
                     sb.AppendLine($"{indentStr}// 反序列化{field.ClassName}");
                     sb.AppendLine($"{indentStr}{offset} += 1;");
+
+                    var deserializeDirectlyIntoNestedObject = CanDeserializeDirectlyIntoNestedObject(field);
+                    var nestedResultName = $"{parentName}{field.Name}Result{depthSuffix}";
+                    if (deserializeDirectlyIntoNestedObject)
+                    {
+                        // Give the JIT one strongly typed object reference to keep live and avoid a
+                        // large set of field temps. Named field types stay unpublished until complete;
+                        // collection elements use target-typed new because their full name is absent.
+                        if (string.IsNullOrWhiteSpace(field.FullTypeName))
+                        {
+                            sb.AppendLine($"{indentStr}var {nestedResultName} = {targetObj} = new();");
+                        }
+                        else
+                        {
+                            sb.AppendLine($"{indentStr}var {nestedResultName} = new {field.FullTypeName}();");
+                        }
+                    }
             
                     // 为嵌套类的每个字段定义局部变量
-                    sb.AppendLine($"{indentStr}// 定义嵌套类字段的局部变量");
-                    foreach (var subField in field.ClassFields)
+                    if (!deserializeDirectlyIntoNestedObject)
                     {
-                        var nullable = subField.FieldType == LuminDataType.Reference ? "?" : "";
-                        sb.AppendLine($"{indentStr}{GetFieldLocalVariableType(subField)}{nullable} {parentName}{field.Name}{subField.Name}Temp{depthSuffix} = default!;");
+                        sb.AppendLine($"{indentStr}// 定义嵌套类字段的局部变量");
+                        foreach (var subField in field.ClassFields)
+                        {
+                            var nullable = subField.FieldType == LuminDataType.Reference ? "?" : "";
+                            sb.AppendLine($"{indentStr}{GetFieldLocalVariableType(subField)}{nullable} {parentName}{field.Name}{subField.Name}Temp{depthSuffix} = default!;");
+                        }
+                        sb.AppendLine();
                     }
-                    sb.AppendLine();
             
                     // 反序列化嵌套类字段到局部变量
                     for (int i = 0; i < field.ClassFields.Count; i++)
                     {
                         var subField = field.ClassFields[i];
+                        var subFieldTarget = deserializeDirectlyIntoNestedObject
+                            ? $"{nestedResultName}.{subField.Identifier}"
+                            : $"{parentName}{field.Name}{subField.Name}Temp{depthSuffix}";
                         subField.belongClassFieldName = field.Name;
                         var indentTemp = indent;
                         
@@ -2022,7 +2074,11 @@ namespace LuminPack.Code.Core
                                 sb.Append($"{indentStr}{offset} += reader.ReadUnmanaged(ref {offset}");
                                 for (var j = i; j <= num; j++)
                                 {
-                                    sb.Append($", out {parentName}{field.Name}{field.ClassFields[j].Name}Temp{depthSuffix}");
+                                    var mergedSubField = field.ClassFields[j];
+                                    var mergedTarget = deserializeDirectlyIntoNestedObject
+                                        ? $"{nestedResultName}.{mergedSubField.Identifier}"
+                                        : $"{parentName}{field.Name}{mergedSubField.Name}Temp{depthSuffix}";
+                                    sb.Append($", out {mergedTarget}");
                                 }
                                 sb.Append(");");
                                 sb.AppendLine();
@@ -2038,7 +2094,7 @@ namespace LuminPack.Code.Core
                                 sb.AppendLine($"{indentStr}if (reader.PeekIsNullCollection(ref {offset}))");
                                 sb.AppendLine($"{indentStr}{{");
                                 sb.AppendLine($"{indentStr}    {offset} += 4;");
-                                sb.AppendLine($"{indentStr}    {parentName}{field.Name}{subField.Name}Temp{depthSuffix} = default;");
+                                sb.AppendLine($"{indentStr}    {subFieldTarget} = default;");
                                 sb.AppendLine($"{indentStr}}}"); 
                                 sb.AppendLine($"{indentStr}else");
                                 indentTemp += 1; break;
@@ -2046,7 +2102,7 @@ namespace LuminPack.Code.Core
                                 sb.AppendLine($"{indentStr}if (reader.PeekIsNullObject(ref {offset}))");
                                 sb.AppendLine($"{indentStr}{{");
                                 sb.AppendLine($"{indentStr}    {offset} += 1;");
-                                sb.AppendLine($"{indentStr}    {parentName}{field.Name}{subField.Name}Temp{depthSuffix} = default;");
+                                sb.AppendLine($"{indentStr}    {subFieldTarget} = default;");
                                 sb.AppendLine($"{indentStr}}}");
                                 sb.AppendLine($"{indentStr}else"); 
                                 indentTemp += 1; break;
@@ -2057,7 +2113,7 @@ namespace LuminPack.Code.Core
                 
                         var classDepth = subField.Type is LuminFiledType.List or LuminFiledType.Array ? 0 : depth + 1;
                 
-                        GenerateDeserializeCode(sb, subField, $"{parentName}{field.Name}{subField.Name}Temp{depthSuffix}", 
+                        GenerateDeserializeCode(sb, subField, subFieldTarget, 
                             span, offset, indentTemp, classDepth, multList: multList + "_", 
                             isPrivateFiled: true, parentName: parentName + field.Name + "_");
 
@@ -2073,6 +2129,13 @@ namespace LuminPack.Code.Core
                     
                         if (indentTemp != indent) 
                             sb.AppendLine($"{indentStr}}}");
+                    }
+
+                    if (deserializeDirectlyIntoNestedObject)
+                    {
+                        if (!string.IsNullOrWhiteSpace(field.FullTypeName))
+                            sb.AppendLine($"{indentStr}{targetObj} = {nestedResultName};");
+                        break;
                     }
             
                     // 收集嵌套类构造函数参数
@@ -2192,9 +2255,9 @@ namespace LuminPack.Code.Core
                 case LuminFiledType.Enum:
                     if (isFirst) 
                     {
-                        sb.AppendLine(isPrivateFiled 
-                            ? $"{indentStr}reader.ReadUnmanagedWithoutSizeReturn<{field.TypeName}>(ref {offset}, out {targetObj});"
-                            : $"{indentStr}reader.ReadUnmanagedWithoutSizeReturn<{field.TypeName}>(ref {offset}, out {targetObj}.{field.Identifier});");
+                        // Every first-level caller now passes the exact destination (field or temp).
+                        // Appending the identifier again turns an isolated enum into e.g. SlotTemp.Slot.
+                        sb.AppendLine($"{indentStr}reader.ReadUnmanagedWithoutSizeReturn<{field.TypeName}>(ref {offset}, out {targetObj});");
                     }
                     else
                     {
@@ -2206,6 +2269,8 @@ namespace LuminPack.Code.Core
                 default:
                     if (field.IsCompress)
                         sb.AppendLine($"{indentStr}reader.ReadValueWithCompress(ref {targetObj});");
+                    else if (targetIsKnownFresh && IsExactFreshCollectionType(field))
+                        sb.AppendLine($"{indentStr}reader.ReadFreshValue(ref {targetObj});");
                     else
                         sb.AppendLine($"{indentStr}reader.ReadValue(ref {targetObj});");
                     break;
@@ -2371,6 +2436,13 @@ namespace LuminPack.Code.Core
                 LuminEnumFieldType.Float => "float",
                 LuminEnumFieldType.Double => "double",
             };
+        }
+
+        private static string GetSerializeFieldLength(
+            LuminDataField field, int depth, string stringRecordLength, string multList = "_")
+        {
+            return GetFieldLength(field, depth, multList, pattern: "writer")
+                .Replace("writer.StringRecordLength()", stringRecordLength);
         }
 
         private static string GetFieldLength(LuminDataField field, int depth, string multList = "_", string pattern = "null")
@@ -3071,7 +3143,22 @@ namespace LuminPack.Code.Core
                 sb.AppendLine("                return;");
                 sb.AppendLine("            }");
             }
-            
+
+            bool cacheSerializeRoot =
+                !data.isValueType &&
+                !polymorphism &&
+                data.fields.Count > 16;
+            if (cacheSerializeRoot)
+                sb.AppendLine("            var serializeValue = value;");
+
+            bool cacheSerializeStringRecordLength =
+                data.fields.Count(ContainsSerializedStringRecord) > 1;
+            string serializeStringRecordLength = cacheSerializeStringRecordLength
+                ? "serializeStringRecordLength"
+                : "writer.StringRecordLength()";
+            if (cacheSerializeStringRecordLength)
+                sb.AppendLine("            int serializeStringRecordLength = writer.StringRecordLength();");
+
             if (data.fields.Count(x => x.IsPrivate || x.isProperty) > 0)
             {
                 sb.AppendLine(extension 
@@ -3093,7 +3180,7 @@ namespace LuminPack.Code.Core
                     break;
                 }
             }
-            
+
             if (!polymorphism || !allunmanaged || data.fields.Count == 1) 
                 sb.AppendLine("            ref int offset = ref writer.GetCurrentSpanOffset();");
             
@@ -3108,21 +3195,24 @@ namespace LuminPack.Code.Core
 
             for (var i = 0; i < data.fields.Count; i++)
             {
-                var access = data.fields[i].IsPrivate || data.fields[i].isProperty ? "local" : "value";
+                var access = data.fields[i].IsPrivate || data.fields[i].isProperty
+                    ? "local"
+                    : cacheSerializeRoot ? "serializeValue" : "value";
                 
                 if (data.fields[i].FieldType is LuminDataType.Reference && data.fields[i].Type is not LuminFiledType.Other)
                 {
-                    sb.AppendLine($"            if ({access}.{data.fields[i].Identifier} is not null)");
+                    var serializeFieldName = $"serialize{data.fields[i].Name}Field";
+                    sb.AppendLine($"            if ({access}.{data.fields[i].Identifier} is {{ }} {serializeFieldName})");
                     sb.AppendLine("            {");
-                    GenerateSerializeCode(sb, data.fields[i], $"{access}." + data.fields[i].Identifier, "span", "offset", 4, 0);
+                    GenerateSerializeCode(sb, data.fields[i], serializeFieldName, "span", "offset", 4, 0,
+                        stringRecordLength: serializeStringRecordLength);
                     if (data.fields[i].Type is not LuminFiledType.Class)
                     {
+                        var fieldLength = GetSerializeFieldLength(data.fields[i], 0, serializeStringRecordLength);
                         if (data.fields[i].Type is LuminFiledType.Array or LuminFiledType.List)
-                            //sb.AppendLine($"                offset = {GetFieldLength(data.fields[i], 0, pattern: "writer")};");
-                            sb.AppendLine($"                writer.FlushCurrentIndex({GetFieldLength(data.fields[i], 0, pattern: "writer")});");
+                            sb.AppendLine($"                writer.FlushCurrentIndex({fieldLength});");
                         else 
-                            //sb.AppendLine($"                offset += {GetFieldLength(data.fields[i], 0, pattern: "writer")};");
-                            sb.AppendLine($"                writer.AdvanceSafe({GetFieldLength(data.fields[i], 0, pattern: "writer")});");
+                            sb.AppendLine($"                writer.AdvanceSafe({fieldLength});");
                     }
                         
                     sb.AppendLine("            }");
@@ -3141,7 +3231,7 @@ namespace LuminPack.Code.Core
                             sb.AppendLine("            {");
                             sb.AppendLine("                writer.WriteNullStringHeader(ref offset);");
                             
-                            sb.AppendLine("                offset += writer.StringRecordLength();");
+                            sb.AppendLine($"                offset += {serializeStringRecordLength};");
                             sb.AppendLine("            }"); break;
                         default:
                             sb.AppendLine("            else");
@@ -3171,7 +3261,9 @@ namespace LuminPack.Code.Core
                             sb.Append("            writer.Advance(writer.WriteUnmanaged(");
                             for (var j = i; j <= num; j++)
                             {
-                                access = data.fields[j].IsPrivate ? "local" : "value";
+                                access = data.fields[j].IsPrivate
+                                    ? "local"
+                                    : cacheSerializeRoot ? "serializeValue" : "value";
                                 if (j == i)
                                     sb.Append($"{access}.{data.fields[j].Name}");
                                 else
@@ -3186,12 +3278,12 @@ namespace LuminPack.Code.Core
 
                     #endregion
                     
-                    GenerateSerializeCode(sb, data.fields[i], $"{access}." + data.fields[i].Identifier, "span", "offset", 3, 0);
+                    GenerateSerializeCode(sb, data.fields[i], $"{access}." + data.fields[i].Identifier, "span", "offset", 3, 0,
+                        stringRecordLength: serializeStringRecordLength);
                     
                     
                     if (data.fields[i].Type is not LuminFiledType.Struct and not LuminFiledType.Other) 
-                        //sb.AppendLine($"            offset += {GetFieldLength(data.fields[i], 0, pattern: "writer")};");
-                        sb.AppendLine($"            writer.Advance({GetFieldLength(data.fields[i], 0, pattern: "writer")});");
+                        sb.AppendLine($"            writer.Advance({GetSerializeFieldLength(data.fields[i], 0, serializeStringRecordLength)});");
                     
                 }
                     
@@ -3234,72 +3326,111 @@ namespace LuminPack.Code.Core
                     : $"            value?.{item.Item1}();");
             }
     
+            bool deserializeDirectlyIntoResult =
+                !polymorphism &&
+                !data.isValueType &&
+                data.fields.Count > 16 &&
+                data.Parent == null &&
+                data.RentPoolMethod == null &&
+                (data.SelectedConstructor == null || data.SelectedConstructor.Parameters.Count == 0) &&
+                data.fields.All(field => !field.IsPrivate && !field.isProperty);
+
+            bool useLocalDeserializeOffset =
+                deserializeDirectlyIntoResult &&
+                data.fields.All(field =>
+                    field.Type is LuminFiledType.Other || !ContainsNestedParserCall(field));
+
             sb.AppendLine();
-            sb.AppendLine("            ref int offset = ref reader.GetCurrentSpanOffset();");
+            sb.AppendLine(useLocalDeserializeOffset
+                ? "            int offset = reader.GetCurrentSpanIndex();"
+                : "            ref int offset = ref reader.GetCurrentSpanOffset();");
     
             // 为所有字段定义局部变量
-            sb.AppendLine("            // 定义局部变量存储字段值");
-            foreach (var field in data.localFields)
+            if (!deserializeDirectlyIntoResult)
             {
-                var nullable = field.IsValue ? "" : "?";
-                sb.AppendLine($"            {field.TypeName}{nullable} {field.Name}Temp = default!;");
+                sb.AppendLine("            // 定义局部变量存储字段值");
+                foreach (var field in data.localFields)
+                {
+                    var nullable = field.IsValue ? "" : "?";
+                    sb.AppendLine($"            {field.TypeName}{nullable} {field.Name}Temp = default!;");
+                }
+                sb.AppendLine();
             }
-            sb.AppendLine();
 
             if (!polymorphism)
             {
                 sb.AppendLine($"            if (reader.PeekIsNullObject(ref offset))");
                 sb.AppendLine($"            {{");
                 sb.AppendLine($"                offset += 1;");
+                if (useLocalDeserializeOffset)
+                    sb.AppendLine("                reader.FlushCurrentIndex(offset);");
                 sb.AppendLine($"                return;");
                 sb.AppendLine($"            }}");
                 sb.AppendLine($"            offset += 1;");
                 sb.AppendLine();
             }
+
+            if (deserializeDirectlyIntoResult)
+                sb.AppendLine($"            var result = new {classGlobalName}();");
             
             // 反序列化到局部变量
             for (var i = 0; i < data.fields.Count; i++)
             {
                 var field = data.fields[i];
+                var fieldTarget = deserializeDirectlyIntoResult
+                    ? $"result.{field.Identifier}"
+                    : $"{field.Name}Temp";
         
                 if (field.FieldType is LuminDataType.Reference && field.Type is not LuminFiledType.Other)
                 {
                     switch (field.Type)
                     {
                         case LuminFiledType.Array or LuminFiledType.List:
-                            sb.AppendLine("            if (reader.PeekIsNullCollection(ref offset))");
+                            if (IsStringList(field))
+                            {
+                                sb.AppendLine($"            {fieldTarget} = reader.ReadStringListAndAdvance(ref offset)!;");
+                                break;
+                            }
+
+                            bool readCollectionHeadOnce =
+                                field.Type is LuminFiledType.List ||
+                                IsReferenceGenericType(field.GenericType.FirstOrDefault()) ||
+                                !field.IsCompress;
+                            if (readCollectionHeadOnce)
+                            {
+                                sb.AppendLine($"            if (!reader.TryReadCollectionHead(ref offset, out int {field.Name}Count_0))");
+                            }
+                            else
+                            {
+                                sb.AppendLine("            if (reader.PeekIsNullCollection(ref offset))");
+                            }
                             sb.AppendLine("            {");
                             sb.AppendLine("                offset += 4;");
-                            sb.AppendLine($"                {field.Name}Temp = default;");
+                            sb.AppendLine($"                {fieldTarget} = default;");
                             sb.AppendLine("            }");
                             sb.AppendLine("            else");
                             sb.AppendLine("            {");
-                            GenerateDeserializeCode(sb, field, $"{field.Name}Temp", "span", "offset", 4, 0, isFirst: true, isPrivateFiled: false, parentName: "");
+                            GenerateDeserializeCode(sb, field, fieldTarget, "span", "offset", 4, 0,
+                                isFirst: true,
+                                isPrivateFiled: false,
+                                parentName: "",
+                                collectionHeadAlreadyRead: readCollectionHeadOnce);
                             if(field.Type is not LuminFiledType.String)  
                                 sb.AppendLine($"                offset = {GetFieldLength(field, 0, pattern: "reader")};");
                             sb.AppendLine("            }");
                             break;
                         case LuminFiledType.String:
-                            sb.AppendLine("            if (reader.PeekIsNullString(ref offset))");
-                            sb.AppendLine("            {");
-                            sb.AppendLine("                offset += reader.StringRecordLength();");
-                            sb.AppendLine($"                {field.Name}Temp = default;");
-                            sb.AppendLine("            }");
-                            sb.AppendLine("            else");
-                            sb.AppendLine("            {");
-                            GenerateDeserializeCode(sb, field, $"{field.Name}Temp", "span", "offset", 4, 0, isFirst: true, isPrivateFiled: false, parentName: "");
-                            //sb.AppendLine($"                offset += {GetFieldLength(field, 0, pattern: "reader")};");
-                            sb.AppendLine("            }");
+                            GenerateDeserializeCode(sb, field, fieldTarget, "span", "offset", 4, 0, isFirst: true, isPrivateFiled: false, parentName: "");
                             break;
                         default:
                             sb.AppendLine("            if (reader.PeekIsNullObject(ref offset))");
                             sb.AppendLine("            {");
                             sb.AppendLine("                offset += 1;");
-                            sb.AppendLine($"                {field.Name}Temp = default;");
+                            sb.AppendLine($"                {fieldTarget} = default;");
                             sb.AppendLine("            }");
                             sb.AppendLine("            else");
                             sb.AppendLine("            {");
-                            GenerateDeserializeCode(sb, field, $"{field.Name}Temp", "span", "offset", 4, 0, isFirst: true, isPrivateFiled: false, parentName: "");
+                            GenerateDeserializeCode(sb, field, fieldTarget, "span", "offset", 4, 0, isFirst: true, isPrivateFiled: false, parentName: "");
                             if(field.Type is not LuminFiledType.String and not LuminFiledType.Class) 
                                 sb.AppendLine($"                offset += {GetFieldLength(field, 0, pattern: "reader")};");
                             sb.AppendLine("            }");
@@ -3324,10 +3455,14 @@ namespace LuminPack.Code.Core
                             sb.Append("            offset += reader.ReadUnmanaged(");
                             for (var j = i; j <= num; j++)
                             {
+                                var mergedField = data.fields[j];
+                                var mergedTarget = deserializeDirectlyIntoResult
+                                    ? $"result.{mergedField.Identifier}"
+                                    : $"{mergedField.Name}Temp";
                                 if (j == i) 
-                                    sb.Append($"out {data.fields[j].Name}Temp");
+                                    sb.Append($"out {mergedTarget}");
                                 else
-                                    sb.Append($", out {data.fields[j].Name}Temp");
+                                    sb.Append($", out {mergedTarget}");
                             }
                             sb.Append(");");
                             sb.AppendLine();
@@ -3338,7 +3473,27 @@ namespace LuminPack.Code.Core
 
                     #endregion
             
-                    GenerateDeserializeCode(sb, field, $"{field.Name}Temp", "span", "offset", 3, 0, isFirst: true, isPrivateFiled: false, parentName: "");
+                    bool previousFieldUsesReaderIndex =
+                        i > 0 && data.fields[i - 1].Type is LuminFiledType.Other;
+                    if (useLocalDeserializeOffset &&
+                        field.Type is LuminFiledType.Other &&
+                        !previousFieldUsesReaderIndex)
+                        sb.AppendLine("            reader.FlushCurrentIndex(offset);");
+
+                    GenerateDeserializeCode(
+                        sb, field, fieldTarget, "span", "offset", 3, 0,
+                        isFirst: true,
+                        isPrivateFiled: false,
+                        parentName: "",
+                        targetIsKnownFresh: deserializeDirectlyIntoResult);
+
+                    bool nextFieldUsesReaderIndex =
+                        i + 1 < data.fields.Count && data.fields[i + 1].Type is LuminFiledType.Other;
+                    if (useLocalDeserializeOffset &&
+                        field.Type is LuminFiledType.Other &&
+                        !nextFieldUsesReaderIndex &&
+                        i + 1 < data.fields.Count)
+                        sb.AppendLine("            offset = reader.GetCurrentSpanIndex();");
             
                     if (field.Type is not LuminFiledType.String and not LuminFiledType.Struct and not LuminFiledType.Other) 
                         sb.AppendLine($"            offset += {GetFieldLength(field, 0, pattern: "reader")};");
@@ -3347,43 +3502,53 @@ namespace LuminPack.Code.Core
     
             sb.AppendLine();
             sb.AppendLine("            // 构造对象并设置字段");
-    
-            // 收集构造函数参数
-            var constructorParams = new List<string>();
-            if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
+
+            if (useLocalDeserializeOffset &&
+                (data.fields.Count == 0 || data.fields[data.fields.Count - 1].Type is not LuminFiledType.Other))
+                sb.AppendLine("            reader.FlushCurrentIndex(offset);");
+
+            if (deserializeDirectlyIntoResult)
             {
-                foreach (var param in data.SelectedConstructor.Parameters)
+                sb.AppendLine("            value = result;");
+            }
+            else
+            {
+                // 收集构造函数参数
+                var constructorParams = new List<string>();
+                if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
                 {
-                    var matchingField = data.fields.FirstOrDefault(f => f.Name == param.MatchingFieldName);
-                    if (matchingField != null)
+                    foreach (var param in data.SelectedConstructor.Parameters)
                     {
-                        constructorParams.Add($"{matchingField.Name}Temp!");
-                    }
-                    else
-                    {
-                        constructorParams.Add("default");
+                        var matchingField = data.fields.FirstOrDefault(f => f.Name == param.MatchingFieldName);
+                        if (matchingField != null)
+                        {
+                            constructorParams.Add($"{matchingField.Name}Temp!");
+                        }
+                        else
+                        {
+                            constructorParams.Add("default");
+                        }
                     }
                 }
-            }
 
-            string constructorArgs = string.Join(", ", constructorParams);
+                string constructorArgs = string.Join(", ", constructorParams);
 
             // 收集需要对象初始化器赋值的public字段
-            var initializerFields = data.fields.Where(f => 
+                var initializerFields = data.fields.Where(f => 
                 (data.SelectedConstructor == null || 
                  !data.SelectedConstructor.Parameters.Any(p => p.MatchingFieldName == f.Name)) &&
                 !f.IsPrivate && !f.isProperty
             ).ToList();
 
             // 收集需要单独设置的private字段
-            var privateFields = data.fields.Where(f => 
+                var privateFields = data.fields.Where(f => 
                 (data.SelectedConstructor == null || 
                  !data.SelectedConstructor.Parameters.Any(p => p.MatchingFieldName == f.Name)) &&
                 (f.IsPrivate || f.isProperty)
             ).ToList();
 
-            if (data.RentPoolMethod != null)
-            {
+                if (data.RentPoolMethod != null)
+                {
                 // 使用对象池分配
                 if (data.RentPoolMethod.ReturnsByRef)
                     sb.AppendLine($"            value = ref {classGlobalName}.{data.RentPoolMethod.Name}()!;");
@@ -3410,9 +3575,9 @@ namespace LuminPack.Code.Core
                 {
                     sb.AppendLine($"            local.{field.Identifier} = {field.Name}Temp!;");
                 }
-            }
-            else
-            {
+                }
+                else
+                {
                 // 使用对象初始化器创建对象
                 if (initializerFields.Count > 0)
                 {
@@ -3463,6 +3628,7 @@ namespace LuminPack.Code.Core
                         sb.AppendLine($"            local.{field.Identifier} = {field.Name}Temp!;");
                     }
                 }
+                }
             }
             
             foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserialized))
@@ -3473,7 +3639,54 @@ namespace LuminPack.Code.Core
             }
             sb.AppendLine();
         }
-        
+
+        private static bool ContainsNestedParserCall(LuminDataField field)
+        {
+            foreach (var nestedField in field.ClassFields)
+            {
+                if (nestedField.Type is LuminFiledType.Other || ContainsNestedParserCall(nestedField))
+                    return true;
+            }
+
+            return false;
+        }
+
+        private static bool ContainsSerializedStringRecord(LuminDataField field)
+        {
+            return field.Type is LuminFiledType.String ||
+                   field.GenericType.Any(type => type is LuminGenericsType.String) ||
+                   field.ClassFields.Any(ContainsSerializedStringRecord);
+        }
+
+        private static bool CanDeserializeDirectlyIntoNestedObject(LuminDataField field)
+        {
+            return field.Type is LuminFiledType.Class &&
+                   field.GenericType.Count == 0 &&
+                   field.ClassFields.Count > 0 &&
+                   field.RentPoolMethod == null &&
+                   (field.SelectedConstructor == null || field.SelectedConstructor.Parameters.Count == 0) &&
+                   field.ClassFields.All(subField => !subField.IsPrivate && !subField.isProperty);
+        }
+
+        private static bool IsStringList(LuminDataField field)
+        {
+            return field.Type is LuminFiledType.List &&
+                   field.GenericType.Count == 1 &&
+                   field.GenericType[0] is LuminGenericsType.String;
+        }
+
+        private static bool IsExactFreshCollectionType(LuminDataField field)
+        {
+            var typeName = field.FullTypeName ?? field.TypeName ?? string.Empty;
+            if (!typeName.EndsWith(">", StringComparison.Ordinal))
+                return false;
+
+            return typeName.StartsWith("global::System.Collections.Generic.List<", StringComparison.Ordinal) ||
+                   typeName.StartsWith("System.Collections.Generic.List<", StringComparison.Ordinal) ||
+                   typeName.StartsWith("global::System.Collections.Generic.Dictionary<", StringComparison.Ordinal) ||
+                   typeName.StartsWith("System.Collections.Generic.Dictionary<", StringComparison.Ordinal);
+        }
+         
     }
     
 }
