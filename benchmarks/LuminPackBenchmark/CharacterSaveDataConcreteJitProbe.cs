@@ -3,12 +3,14 @@ using LuminPack.Core;
 using LuminPack.Generated;
 using LuminPack.Utility;
 
+
 namespace LuminPackBenchmark;
 
 /// <summary>
 /// Gives every concrete union payload a unique JIT method name. The generated
 /// extension overloads otherwise all appear as LuminPackExtensions:(byref,byref)
 /// in diffable disassembly, which makes recursive call-chain attribution
+
 /// ambiguous.
 /// </summary>
 internal static class CharacterSaveDataConcreteJitProbe
@@ -60,6 +62,12 @@ internal static class CharacterSaveDataConcreteJitProbe
                 crafting = RoundTripCraftingEvent(buffer, crafting);
                 trade = RoundTripTradeEvent(buffer, trade);
                 achievement = RoundTripAchievementEvent(buffer, achievement);
+
+                SerializeItemList(buffer, data.Bag);
+                SerializeSkillList(buffer, data.Skills);
+                SerializeEventList(buffer, data.RecentEvents);
+                SerializeIntDictionary(buffer, data.SkillLevels);
+                SerializeStringDictionary(buffer, data.Records);
             }
 
             Console.WriteLine($"Concrete JIT probe complete: {weapon.ItemId}/{active.SkillId}/{combat.TargetId}");
@@ -250,6 +258,41 @@ internal static class CharacterSaveDataConcreteJitProbe
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeCraftingEvent(ref LuminPackWriter writer, CraftingEventLog value) => writer.WritePolymorphismValue(value);
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeTradeEvent(ref LuminPackWriter writer, TradeEventLog value) => writer.WritePolymorphismValue(value);
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeAchievementEvent(ref LuminPackWriter writer, AchievementEventLog value) => writer.WritePolymorphismValue(value);
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void SerializeItemList(LuminBufferWriter buffer, List<ItemBase> value)
+    {
+        var writer = new LuminPackWriter(buffer);
+        writer.WriteValue(value);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void SerializeSkillList(LuminBufferWriter buffer, List<SkillBase> value)
+    {
+        var writer = new LuminPackWriter(buffer);
+        writer.WriteValue(value);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void SerializeEventList(LuminBufferWriter buffer, List<EventLogBase> value)
+    {
+        var writer = new LuminPackWriter(buffer);
+        writer.WriteValue(value);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void SerializeIntDictionary(LuminBufferWriter buffer, Dictionary<int, int> value)
+    {
+        var writer = new LuminPackWriter(buffer);
+        writer.WriteValue(value);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void SerializeStringDictionary(LuminBufferWriter buffer, Dictionary<string, long> value)
+    {
+        var writer = new LuminPackWriter(buffer);
+        writer.WriteValue(value);
+    }
 
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeWeapon(ref LuminPackReader reader, ref WeaponItem value) => reader.ReadPolymorphismValue(ref value);
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeArmor(ref LuminPackReader reader, ref ArmorItem value) => reader.ReadPolymorphismValue(ref value);

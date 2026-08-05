@@ -25,14 +25,7 @@ public sealed class StringParser : LuminPackParser<string?>
     public override void Deserialize(ref LuminPackReader reader, scoped ref string? value)
     {
         ref var index = ref reader.GetCurrentSpanOffset();
-        
-        reader.ReadStringLength(ref index, out var length);
-        
-        value  = reader.ReadString(length);
-        
-        var symbol = reader.StringRecordLength();
-        
-        reader.Advance(length + symbol);
+        value = reader.ReadStringAndAdvance(ref index);
     }
 
     [Preserve]

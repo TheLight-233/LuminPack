@@ -1,11 +1,13 @@
 using System.Text;
 using LuminPack.Code;
 
+
 namespace LuminPack.SourceGenerator.Formatter;
 
 using static FormatterDiscovery;
 
 public static class ListFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -143,7 +145,18 @@ public static class ListFormatter
         
         if (freshValue)
         {
-            sb.AppendLine("            ref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(items.AsSpan());");
+            sb.AppendLine("            ref var first = ref LuminPackMarshal.DangerousGetArrayDataReference(items);");
+            sb.AppendLine($"            if (!typeof({elementType}).IsValueType)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                for (nint i = 0; i < length; i++)");
+            sb.AppendLine("                {");
+            sb.AppendLine($"                    {elementType} item = default!;");
+            sb.AppendLine("                    reader.ReadValue(ref item);");
+            sb.AppendLine("                    global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i) = item;");
+            sb.AppendLine("                }");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+            sb.AppendLine();
             sb.AppendLine("            for (nint i = 0; i < length; i++)");
             sb.AppendLine("            {");
             sb.AppendLine("                reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
@@ -164,7 +177,7 @@ public static class ListFormatter
         }
     }
 
-    // ── Compress variants ────────────────────────────────────────────────────
+    // 鈹€鈹€ Compress variants 鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€鈹€
 
     public static void GenerateSerializeCodeWithCompress(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -253,7 +266,8 @@ public static class ListFormatter
 
         if (KnownValueTypes.Contains(elementType))
         {
-            // index still points at [count:4] — DangerousRead reads count internally, spanOffset = 8+compressedLen
+            // index still points at [count:4] 鈥?DangerousRead reads count interally, spanOffset = 8+compressedLe
+
             sb.AppendLine("            reader.DangerousReadUnmanagedSpanWithCompress(ref index, ref span, out var spanOffset);");
             sb.AppendLine("            LuminPackMarshal.SetListSize(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value), length);");
             sb.AppendLine("            reader.Advance(spanOffset);");
@@ -264,7 +278,7 @@ public static class ListFormatter
         {
             sb.AppendLine($"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
             sb.AppendLine("            {");
-            // index still at [count:4] — correct starting position for DangerousRead
+            // index still at [count:4] 鈥?corect starting position for DangerousRead
             sb.AppendLine("                reader.DangerousReadUnmanagedSpanWithCompress(ref index, ref span, out var spanOffset);");
             sb.AppendLine("                LuminPackMarshal.SetListSize(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value), length);");
             sb.AppendLine("                reader.Advance(spanOffset);");
@@ -283,6 +297,7 @@ public static class ListFormatter
         }
 
         // Reference path only: now advance past the count header
+
         sb.AppendLine("            reader.Advance(4);");
         sb.AppendLine();
 
@@ -304,6 +319,7 @@ public static class ListFormatter
 }
 
 public static class DictionaryFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -399,6 +415,7 @@ public static class DictionaryFormatter
 }
 
 public static class StackFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -497,6 +514,7 @@ public static class StackFormatter
 }
 
 public static class QueueFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -728,6 +746,7 @@ public static class QueueFormatter
 }
 
 public static class HashSetFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -800,6 +819,7 @@ public static class HashSetFormatter
 }
 
 public static class ConcurrentDictionaryFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -869,6 +889,7 @@ public static class ConcurrentDictionaryFormatter
 }
 
 public static class SortedDictionaryFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -930,6 +951,7 @@ public static class SortedDictionaryFormatter
 }
 
 public static class LinkedListFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -990,6 +1012,7 @@ public static class LinkedListFormatter
 }
 
 public static class SortedSetFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -1050,6 +1073,7 @@ public static class SortedSetFormatter
 }
 
 public static class SortedListFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -1112,6 +1136,7 @@ public static class SortedListFormatter
 }
 
 public static class BlockingCollectionFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -1169,6 +1194,7 @@ public static class BlockingCollectionFormatter
 }
 
 public static class ConcurrentBagFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -1241,6 +1267,7 @@ public static class ConcurrentBagFormatter
 }
 
 public static class ConcurrentQueueFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -1313,6 +1340,7 @@ public static class ConcurrentQueueFormatter
 }
 
 public static class ConcurrentStackFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -1395,6 +1423,7 @@ public static class ConcurrentStackFormatter
 }
 
 public static class CollectionFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -1470,6 +1499,7 @@ public static class CollectionFormatter
 }
 
 public static class ObservableCollectionFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -1547,6 +1577,7 @@ public static class ObservableCollectionFormatter
 }
 
 public static class ReadOnlyCollectionFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -1605,6 +1636,7 @@ public static class ReadOnlyCollectionFormatter
 }
 
 public static class ReadOnlyObservableCollectionFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -1663,6 +1695,7 @@ public static class ReadOnlyObservableCollectionFormatter
 }
 
 public static class ReadOnlyCollectionBuilderFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
@@ -1718,6 +1751,7 @@ public static class ReadOnlyCollectionBuilderFormatter
 }
 
 public static class PriorityQueueFormatter
+
 {
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {

@@ -630,11 +630,11 @@ namespace LuminPack.Core
         private string? ReadTokenStringAndAdvance(ref int index, bool isUtf8)
         {
             ReadStringLength(ref index, out var length);
-            var value = length == 0
-                ? null
-                : isUtf8
-                    ? ReadUtf8StringWithToken(index, length)
-                    : ReadUtf16StringWithToken(index, length);
+            // Token mode has no null marker: null and empty are both encoded as an empty
+            // token and must therefore deserialize to string.Empty.
+            var value = isUtf8
+                ? ReadUtf8StringWithToken(index, length)
+                : ReadUtf16StringWithToken(index, length);
             index += length + (isUtf8 ? 1 : 2);
             return value;
         }
@@ -1347,6 +1347,27 @@ namespace LuminPack.Core
             where T : struct
         {
             DangerousReadUnmanagedArray(ref index, ref array!, length, out spanOffset);
+        }
+
+        /// <summary>
+        /// Generator-only path for an unmanaged array that was allocated from the already
+        /// validated collection length. The reusable-array null/length/allocation checks are
+        /// intentionally omitted because the generated caller owns the fresh destination.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void ReadFreshUnmanagedArray<T>(scoped ref int index, T[] array, int length, out int spanOffset)
+            where T : struct
+        {
+            ref var dest = ref LuminPackMarshal.GetArrayDataReference(array);
+            var byteLength = length * Unsafe.SizeOf<T>();
+
+#if NET8_0_OR_GREATER
+            Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref _bufferStart, (nint)(uint)index), (uint)byteLength);
+#else
+            Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index), (uint)byteLength);
+#endif
+
+            spanOffset = byteLength;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

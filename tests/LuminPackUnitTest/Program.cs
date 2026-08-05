@@ -239,6 +239,7 @@ namespace LuminPackUnitTest
             AsyncSerializerRegressionTest.Run(testResults);
             SerializerReentrancyTest.Run(testResults);
             BinaryUnionSafetyTest.Run(testResults);
+            BinaryDirectResultRegressionTest.Run(testResults);
             ConfirmedCorrectnessRegressionTest.Run(testResults);
             ObjectPoolRegressionTest.Run(testResults);
             LuminBufferWriterPoolRegressionTest.Run(testResults);

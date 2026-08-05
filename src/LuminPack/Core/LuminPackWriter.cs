@@ -32,8 +32,10 @@ namespace LuminPack.Core
         
         private readonly LuminPackWriterOptionalState _optionState;
 
-        private readonly bool SerializeStringAsUtf8;
-        private readonly bool SerializeStringRecordAsToken;
+        // 0: UTF8+Token, 1: UTF8+Length, 2: UTF16+Token, 3: UTF16+Length.
+        private readonly byte _stringSerializationMode;
+        private bool SerializeStringAsUtf8 => (_stringSerializationMode & 2) == 0;
+        private bool SerializeStringRecordAsToken => (_stringSerializationMode & 1) == 0;
         
         public LuminPackWriterOptionalState OptionState => _optionState;
         public LuminPackSerializerOption Option => _optionState.Option;
@@ -50,8 +52,7 @@ namespace LuminPack.Core
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
             _currentIndex = 0;
-            SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
-            SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
+            _stringSerializationMode = GetStringSerializationMode(_optionState.Option);
         }
         
         public LuminPackWriter(ref Span<byte> bufferReference, LuminPackWriterOptionalState? option = null)
@@ -65,8 +66,7 @@ namespace LuminPack.Core
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
             _currentIndex = 0;
-            SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
-            SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
+            _stringSerializationMode = GetStringSerializationMode(_optionState.Option);
         }
         
         public LuminPackWriter(ref ReadOnlySpan<byte> bufferReference, LuminPackWriterOptionalState? option = null)
@@ -81,8 +81,7 @@ namespace LuminPack.Core
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
             _currentIndex = 0;
-            SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
-            SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
+            _stringSerializationMode = GetStringSerializationMode(_optionState.Option);
         }
         
         public LuminPackWriter(LuminBufferWriter? bufferWriter, LuminPackWriterOptionalState? option = null)
@@ -98,8 +97,7 @@ namespace LuminPack.Core
 #endif
             _writerBuffer = bufferWriter;
             _currentIndex = 0;
-            SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
-            SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
+            _stringSerializationMode = GetStringSerializationMode(_optionState.Option);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -114,9 +112,13 @@ namespace LuminPack.Core
 #endif
             _writerBuffer = bufferWriter;
             _currentIndex = 0;
-            SerializeStringAsUtf8 = bufferWriter.Option.StringEncoding is LuminPackStringEncoding.UTF8;
-            SerializeStringRecordAsToken = bufferWriter.Option.StringRecording is LuminPackStringRecording.Token;
+            _stringSerializationMode = GetStringSerializationMode(bufferWriter.Option);
         }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static byte GetStringSerializationMode(LuminPackSerializerOption option) =>
+            (byte)((option.StringEncoding is LuminPackStringEncoding.UTF16 ? 2 : 0) |
+                   (option.StringRecording is LuminPackStringRecording.Length ? 1 : 0));
 
         /// <summary>
         /// 获取Span数组指针
@@ -443,36 +445,6 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// Generator fast path for an object whose first three fields form one unmanaged block.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        public void WriteObjectHeaderAndUnmanaged<T1, T2, T3>(
-            ref int index, byte memberCount, in T1 value1, in T2 value2, in T3 value3)
-            where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged
-        {
-            WriteObjectHeader(ref index, memberCount);
-            index++;
-            index += WriteUnmanaged(ref index, value1, value2, value3);
-        }
-
-        /// <summary>
-        /// Generator fast path for an isolated Boolean inside a composite payload. Passing the
-        /// value instead of a managed byref keeps the caller from materializing another field
-        /// address after the containing object has already been proven non-null.
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteBooleanAndAdvance(ref int index, bool value)
-        {
-#if NET8_0_OR_GREATER
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index), value);
-#else
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index), value);
-#endif
-            index++;
-        }
-
-        
-        /// <summary>
         /// 序列化空集合字节
         /// </summary>
         /// <param name="index"></param>
@@ -682,13 +654,14 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteString(string? value)
         {
-            if (SerializeStringAsUtf8)
-                return SerializeStringRecordAsToken
-                    ? WriteUtf8WithToken(_currentIndex, value)
-                    : WriteUtf8WithLength(_currentIndex, value);
-            return SerializeStringRecordAsToken
-                ? WriteUtf16WithToken(_currentIndex, value)
-                : WriteUtf16WithLength(_currentIndex, value);
+            var mode = _stringSerializationMode;
+            if (mode == 3)
+                return WriteUtf16WithLength(_currentIndex, value);
+            if (mode == 1)
+                return WriteUtf8WithLength(_currentIndex, value);
+            return mode == 0
+                ? WriteUtf8WithToken(_currentIndex, value)
+                : WriteUtf16WithToken(_currentIndex, value);
         }
         
         /// <summary>
@@ -700,16 +673,15 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteString(string? value, int length)
         {
-            if (SerializeStringAsUtf8)
-            {
-                if (SerializeStringRecordAsToken) WriteUtf8WithToken(_currentIndex, value, length);
-                else WriteUtf8WithLength(_currentIndex, value, length);
-            }
+            var mode = _stringSerializationMode;
+            if (mode == 3)
+                WriteUtf16WithLength(_currentIndex, value, length);
+            else if (mode == 1)
+                WriteUtf8WithLength(_currentIndex, value, length);
+            else if (mode == 0)
+                WriteUtf8WithToken(_currentIndex, value, length);
             else
-            {
-                if (SerializeStringRecordAsToken) WriteUtf16WithToken(_currentIndex, value, length);
-                else WriteUtf16WithLength(_currentIndex, value, length);
-            }
+                WriteUtf16WithToken(_currentIndex, value, length);
         }
         
         /// <summary>
@@ -721,13 +693,14 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteString(ref int index, string? value)
         {
-            if (SerializeStringAsUtf8)
-                return SerializeStringRecordAsToken
-                    ? WriteUtf8WithToken(index, value)
-                    : WriteUtf8WithLength(index, value);
-            return SerializeStringRecordAsToken
-                ? WriteUtf16WithToken(index, value)
-                : WriteUtf16WithLength(index, value);
+            var mode = _stringSerializationMode;
+            if (mode == 3)
+                return WriteUtf16WithLength(index, value);
+            if (mode == 1)
+                return WriteUtf8WithLength(index, value);
+            return mode == 0
+                ? WriteUtf8WithToken(index, value)
+                : WriteUtf16WithToken(index, value);
         }
         
         /// <summary>
@@ -740,16 +713,15 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteString(ref int index, string? value, int length)
         {
-            if (SerializeStringAsUtf8)
-            {
-                if (SerializeStringRecordAsToken) WriteUtf8WithToken(index, value, length);
-                else WriteUtf8WithLength(index, value, length);
-            }
+            var mode = _stringSerializationMode;
+            if (mode == 3)
+                WriteUtf16WithLength(index, value, length);
+            else if (mode == 1)
+                WriteUtf8WithLength(index, value, length);
+            else if (mode == 0)
+                WriteUtf8WithToken(index, value, length);
             else
-            {
-                if (SerializeStringRecordAsToken) WriteUtf16WithToken(index, value, length);
-                else WriteUtf16WithLength(index, value, length);
-            }
+                WriteUtf16WithToken(index, value, length);
         }
 
         /// <summary>
@@ -761,13 +733,14 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteString(ref int index, ReadOnlySpan<char> value)
         {
-            if (SerializeStringAsUtf8)
-                return SerializeStringRecordAsToken
-                    ? WriteUtf8WithToken(index, value)
-                    : WriteUtf8WithLength(index, value);
-            return SerializeStringRecordAsToken
-                ? WriteUtf16WithToken(index, value)
-                : WriteUtf16WithLength(index, value);
+            var mode = _stringSerializationMode;
+            if (mode == 3)
+                return WriteUtf16WithLength(index, value);
+            if (mode == 1)
+                return WriteUtf8WithLength(index, value);
+            return mode == 0
+                ? WriteUtf8WithToken(index, value)
+                : WriteUtf16WithToken(index, value);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

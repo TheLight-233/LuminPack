@@ -4,6 +4,8 @@ using LuminPack.Core;
 using LuminPack.Utility;
 using LuminPack.Attribute;
 using LuminPack.Option;
+using System.Text;
+
 
 namespace LuminPackUnitTest;
 
@@ -13,6 +15,71 @@ public partial class GeneratorIdentifierModel
     public int @event;
     public string @class = string.Empty;
     public string 中文字段 = string.Empty;
+}
+
+[LuminPackable]
+public partial class JsonFreshNestedModel
+{
+    public int Value = 91;
+    public string? Name = "constructor-nested";
+}
+
+[LuminPackable]
+public partial class JsonFreshScalarModel
+{
+    public int MissingNumber = 73;
+    public long Value = 91;
+}
+
+[LuminPackable]
+public partial class JsonFreshSmallModel
+{
+    public int MissingNumber = 73;
+    public JsonFreshNestedModel? Nested = new();
+}
+
+[LuminPackable]
+public partial class JsonFreshManagedNestedModel
+{
+    public int Value;
+    public string? Name;
+}
+
+public class JsonFreshManagedBaseModel
+{
+    public string? Label;
+    public List<int>? Numbers;
+}
+
+[LuminPackable]
+public partial class JsonFreshManagedDerivedModel : JsonFreshManagedBaseModel
+{
+    public JsonFreshManagedNestedModel? Nested;
+    public Dictionary<string, long>? Values;
+}
+
+public class JsonFreshInitializerBaseModel
+{
+    public string? BaseText = "base-initializer";
+}
+
+[LuminPackable]
+public partial class JsonFreshInitializerDerivedModel : JsonFreshInitializerBaseModel
+{
+    public string? Text;
+}
+
+[LuminPackable]
+public partial class JsonFreshExplicitConstructorModel
+{
+    public static int ConstructorCalls;
+    public string? Text;
+
+    public JsonFreshExplicitConstructorModel()
+    {
+        ConstructorCalls++;
+        Text = "constructor";
+    }
 }
 
 internal static class ConfirmedCorrectnessRegressionTest
@@ -25,6 +92,9 @@ internal static class ConfirmedCorrectnessRegressionTest
         RunCase(results, nameof(MarshalMemoryHelpersPreserveData), MarshalMemoryHelpersPreserveData);
         RunCase(results, nameof(BufferWriterGetMemoryHonorsWrittenRange), BufferWriterGetMemoryHonorsWrittenRange);
         RunCase(results, nameof(GeneratorHandlesKeywordsAndUnicodeNames), GeneratorHandlesKeywordsAndUnicodeNames);
+        RunCase(results, nameof(JsonFreshResultPreservesMissingFieldSemantics), JsonFreshResultPreservesMissingFieldSemantics);
+        RunCase(results, nameof(JsonFreshResultPublishesOnlyAfterSuccess), JsonFreshResultPublishesOnlyAfterSuccess);
+        RunCase(results, nameof(JsonFreshResultHonorsConstructorProof), JsonFreshResultHonorsConstructorProof);
     }
 
     private static void ReusedCollectionsGrowBeforeDirectFill()
@@ -147,6 +217,101 @@ internal static class ConfirmedCorrectnessRegressionTest
         Assert(jsonRoundTrip is not null && jsonRoundTrip.@event == value.@event &&
                jsonRoundTrip.@class == value.@class && jsonRoundTrip.中文字段 == value.中文字段,
             "Generated JSON code did not handle escaped identifiers or Unicode names.");
+    }
+
+    private static void JsonFreshResultPreservesMissingFieldSemantics()
+    {
+        const string json = "{\"Nested\":{\"Value\":17}}";
+        const string scalarJson = "{\"Value\":17}";
+
+        var utf8 = LuminPackSerializer.DeserializeJson<JsonFreshSmallModel>(json);
+        var utf16 = LuminPackSerializer.DeserializeJson<JsonFreshSmallModel>(json,
+            new LuminPackSerializerOption { StringEncoding = LuminPackStringEncoding.UTF16 });
+        var scalar = LuminPackSerializer.DeserializeJson<JsonFreshScalarModel>(scalarJson);
+
+        Assert(utf8 is not null && utf8.MissingNumber == 0 && utf8.Nested is not null &&
+               utf8.Nested.Value == 17 && utf8.Nested.Name is null,
+            "UTF-8 direct-result JSON changed missing-field or nested-parser semantics.");
+        Assert(utf16 is not null && utf16.MissingNumber == 0 && utf16.Nested is not null &&
+               utf16.Nested.Value == 17 && utf16.Nested.Name is null,
+            "UTF-16 direct-result JSON changed missing-field or nested-parser semantics.");
+        Assert(scalar is not null && scalar.MissingNumber == 0 && scalar.Value == 17,
+            "Scalar direct-result JSON changed missing-field semantics.");
+    }
+
+    private static void JsonFreshResultPublishesOnlyAfterSuccess()
+    {
+        ReadOnlySpan<byte> json = Encoding.UTF8.GetBytes("{\"Value\":true}");
+        using var state = new LuminPackReaderOptionalState();
+        var reader = new LuminPackJsonReader(ref json, state);
+        Assert(reader.Read(), "JSON direct-result publication test could not read its first token.");
+
+        var original = new JsonFreshManagedNestedModel { Value = 1234 };
+        JsonFreshManagedNestedModel? value = original;
+        var threw = false;
+        try
+        {
+            LuminPackParseProvider.Cache<JsonFreshManagedNestedModel>.Parser!.DeserializeJson(
+                ref reader, ref value);
+        }
+        catch (FormatException)
+        {
+            threw = true;
+        }
+        catch (InvalidOperationException)
+        {
+            threw = true;
+        }
+
+        Assert(threw, "Malformed JSON unexpectedly completed direct-result parsing.");
+        Assert(ReferenceEquals(value, original) && original.Value == 1234,
+            "Direct-result JSON published a partially initialized instance after an exception.");
+    }
+
+    private static void JsonFreshResultHonorsConstructorProof()
+    {
+        const string managedJson =
+            "{\"Label\":\"safe\",\"Numbers\":[1,2,3],\"Nested\":{\"Value\":17,\"Name\":\"Nested\"},\"Values\":[[\"score\",99]]}";
+        var managed = LuminPackSerializer.DeserializeJson<JsonFreshManagedDerivedModel>(managedJson);
+        Assert(managed is not null && managed.Label == "safe" &&
+               managed.Numbers is not null && managed.Numbers.SequenceEqual([1, 2, 3]) &&
+               managed.Nested is not null && managed.Nested.Value == 17 && managed.Nested.Name == "Nested" &&
+               managed.Values is not null && managed.Values["score"] == 99,
+            "Managed-reference direct-result JSON did not preserve inherited/nested/collection fields.");
+
+        var missingManaged = LuminPackSerializer.DeserializeJson<JsonFreshManagedDerivedModel>("{}");
+        Assert(missingManaged is not null && missingManaged.Label is null && missingManaged.Numbers is null &&
+               missingManaged.Nested is null && missingManaged.Values is null,
+            "Managed-reference direct-result JSON changed missing-property defaults.");
+
+        var initialized = LuminPackSerializer.DeserializeJson<JsonFreshInitializerDerivedModel>("{}");
+        Assert(initialized is not null && initialized.BaseText is null && initialized.Text is null,
+            "Base initializer control escaped the temp-first JSON path.");
+
+        JsonFreshExplicitConstructorModel.ConstructorCalls = 0;
+        ReadOnlySpan<byte> malformedJson = Encoding.UTF8.GetBytes("{\"Text\":true}");
+        using var state = new LuminPackReaderOptionalState();
+        var reader = new LuminPackJsonReader(ref malformedJson, state);
+        Assert(reader.Read(), "Explicit-constructor JSON control could not read its first token.");
+        JsonFreshExplicitConstructorModel? explicitValue = null;
+        try
+        {
+            LuminPackParseProvider.Cache<JsonFreshExplicitConstructorModel>.Parser!
+                .DeserializeJson(ref reader, ref explicitValue);
+        }
+        catch (FormatException)
+        {
+        }
+        catch (InvalidOperationException)
+        {
+        }
+
+        Assert(JsonFreshExplicitConstructorModel.ConstructorCalls == 0 && explicitValue is null,
+            "Explicit constructor ran before malformed JSON parsing completed.");
+        explicitValue = LuminPackSerializer.DeserializeJson<JsonFreshExplicitConstructorModel>("{}");
+        Assert(JsonFreshExplicitConstructorModel.ConstructorCalls == 1 &&
+               explicitValue is not null && explicitValue.Text is null,
+            "Explicit-constructor temp-first JSON changed missing-property semantics.");
     }
 
     private static void RunCase(List<string> results, string name, Action test)

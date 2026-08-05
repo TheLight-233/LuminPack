@@ -1,0 +1,10 @@
+# Keep the repository's existing line endings intact.  The rules below only
+# suppress generated artifacts and do not normalize the source tree.
+
+# Generated disassembly and source should not dominate code review diffs.
+*.g.cs linguist-generated=true
+*.asm linguist-generated=true -diff
+BenchmarkDotNet.Artifacts/** linguist-generated=true -diff
+
+# Archives are opaque binary user artifacts.
+*.zip binary
