@@ -64,7 +64,7 @@ internal static class DiagnosticDescriptors
 
     public static readonly DiagnosticDescriptor OnMethodInUnamannagedType = new(
         id: "LuminPack008",
-        title: "LuminPackObject's On*** methods can't annotate in unamnaged struct",
+        title: "LuminPackObject's On*** methods can't annotate in unmanaged struct",
         messageFormat: "The LuminPackable object '{0}' is unmanaged struct that can't annotate On***Attribute however '{1}' method annotaed",
         category: Category,
         defaultSeverity: DiagnosticSeverity.Error,

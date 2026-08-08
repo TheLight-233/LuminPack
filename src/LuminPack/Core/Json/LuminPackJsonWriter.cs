@@ -875,21 +875,33 @@ namespace LuminPack.Core
             EnsureCapacity(SerializeStringAsUtf8 ? 24 : 64);
             if (SerializeStringAsUtf8)
             {
-                Span<byte> tmp = stackalloc byte[24];
-                int len = TryFloatToUtf8(value, tmp);
-                if (len > 0)
+                // Final benchmark winner: exponent-guarded speculative direct write.
+                // Only ordinary exponent range enters Lumin's fast path; unusual values
+                // fall through to Utf8Formatter without paying the expensive 1..9 loop.
+                uint bits = Unsafe.As<float, uint>(ref value);
+                uint absBits = bits & 0x7FFF_FFFFu;
+                uint exp = (absBits >> 23) & 0xFFu;
+
+                if (absBits == 0 || (uint)(exp - 95u) <= 64u)
                 {
-                    tmp.Slice(0, len).CopyTo(_bufferReference.Slice(_currentIndex));
-                    _currentIndex += len;
+                    int len = TryFloatToUtf8(value, _bufferReference.Slice(_currentIndex));
+                    if (len > 0)
+                    {
+                        _currentIndex += len;
+                        return;
+                    }
                 }
-                else
-                {
-                    Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int fb, s_floatFormatG);
-                    _currentIndex += fb;
-                }
+
+                Utf8Formatter.TryFormat(
+                    value,
+                    _bufferReference.Slice(_currentIndex),
+                    out int written,
+                    s_floatFormatG);
+                _currentIndex += written;
             }
             else
             {
+                // UTF-16 was not part of the benchmark campaign: preserve existing path.
                 Span<char> tmp = stackalloc char[24];
                 int len = TryFloatToUtf16(value, tmp);
                 if (len > 0)
@@ -917,18 +929,29 @@ namespace LuminPack.Core
             EnsureCapacity(SerializeStringAsUtf8 ? 32 : 64);
             if (SerializeStringAsUtf8)
             {
-                Span<byte> tmp = stackalloc byte[32];
-                int len = TryDoubleToUtf8(value, tmp);
-                if (len > 0)
+                // Final benchmark winner for the general-purpose writer:
+                // Guard32 + DirectCurrent. It keeps GameLike ~3x faster than DotNet,
+                // wins RandomFinite, and remains faster on true adversarial values.
+                ulong bits = Unsafe.As<double, ulong>(ref value);
+                ulong absBits = bits & 0x7FFF_FFFF_FFFF_FFFFUL;
+                ulong exp = (absBits >> 52) & 0x7FFUL;
+
+                if (absBits == 0 || (ulong)(exp - 991UL) <= 64UL)
                 {
-                    tmp.Slice(0, len).CopyTo(_bufferReference.Slice(_currentIndex));
-                    _currentIndex += len;
+                    int len = TryDoubleToUtf8(value, _bufferReference.Slice(_currentIndex));
+                    if (len > 0)
+                    {
+                        _currentIndex += len;
+                        return;
+                    }
                 }
-                else
-                {
-                    Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int fb, s_doubleFormatG);
-                    _currentIndex += fb;
-                }
+
+                Utf8Formatter.TryFormat(
+                    value,
+                    _bufferReference.Slice(_currentIndex),
+                    out int written,
+                    s_doubleFormatG);
+                _currentIndex += written;
             }
             else
             {
@@ -995,9 +1018,9 @@ namespace LuminPack.Core
             WriteCommaIfNeeded();
             if (SerializeStringAsUtf8)
             {
-                EnsureCapacity(3);
-                Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
-                _currentIndex += written;
+                EnsureCapacity(4); // packed store intentionally writes 4 bytes
+                _currentIndex += LuminPackJsonNumberFormatter.WriteByte(
+                    _bufferReference.Slice(_currentIndex), value);
             }
             else
             {
@@ -1017,9 +1040,9 @@ namespace LuminPack.Core
             WriteCommaIfNeeded();
             if (SerializeStringAsUtf8)
             {
-                EnsureCapacity(4);
-                Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
-                _currentIndex += written;
+                EnsureCapacity(5); // sign + packed 4-byte store
+                _currentIndex += LuminPackJsonNumberFormatter.WriteSByte(
+                    _bufferReference.Slice(_currentIndex), value);
             }
             else
             {
@@ -1040,8 +1063,8 @@ namespace LuminPack.Core
             if (SerializeStringAsUtf8)
             {
                 EnsureCapacity(6);
-                Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
-                _currentIndex += written;
+                _currentIndex += LuminPackJsonNumberFormatter.WriteShort(
+                    _bufferReference.Slice(_currentIndex), value);
             }
             else
             {
@@ -1062,8 +1085,8 @@ namespace LuminPack.Core
             if (SerializeStringAsUtf8)
             {
                 EnsureCapacity(5);
-                Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
-                _currentIndex += written;
+                _currentIndex += LuminPackJsonNumberFormatter.WriteUShort(
+                    _bufferReference.Slice(_currentIndex), value);
             }
             else
             {
@@ -1084,8 +1107,8 @@ namespace LuminPack.Core
             if (SerializeStringAsUtf8)
             {
                 EnsureCapacity(20);
-                Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
-                _currentIndex += written;
+                _currentIndex += LuminPackJsonNumberFormatter.WriteLong(
+                    _bufferReference.Slice(_currentIndex), value);
             }
             else
             {
@@ -1128,8 +1151,8 @@ namespace LuminPack.Core
             if (SerializeStringAsUtf8)
             {
                 EnsureCapacity(31);
-                Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
-                _currentIndex += written;
+                _currentIndex += LuminPackJsonNumberFormatter.WriteDecimal(
+                    _bufferReference.Slice(_currentIndex), value);
             }
             else
             {
@@ -1212,6 +1235,28 @@ namespace LuminPack.Core
         public void WriteBool(bool value)
         {
             WriteCommaIfNeeded();
+
+            if (SerializeStringAsUtf8)
+            {
+                if (value)
+                {
+                    EnsureCapacity(4);
+                    ref byte dst = ref GetCurrentSpanReference();
+                    Unsafe.WriteUnaligned(ref dst, 0x65757274u); // "true"
+                    _currentIndex += 4;
+                }
+                else
+                {
+                    EnsureCapacity(5);
+                    ref byte dst = ref GetCurrentSpanReference();
+                    Unsafe.WriteUnaligned(ref dst, 0x736C6166u); // "fals"
+                    Unsafe.Add(ref dst, 4) = (byte)'e';
+                    _currentIndex += 5;
+                }
+                return;
+            }
+
+            // UTF-16 path was not benchmarked.
             if (value)
             {
                 WriteByteRaw((byte)'t');
@@ -1243,6 +1288,15 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteNullInternal()
         {
+            if (SerializeStringAsUtf8)
+            {
+                EnsureCapacity(4);
+                ref byte dst = ref GetCurrentSpanReference();
+                Unsafe.WriteUnaligned(ref dst, 0x6C6C756Eu); // "null"
+                _currentIndex += 4;
+                return;
+            }
+
             WriteByteRaw((byte)'n');
             WriteByteRaw((byte)'u');
             WriteByteRaw((byte)'l');
