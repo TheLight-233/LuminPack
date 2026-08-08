@@ -59,7 +59,8 @@ namespace LuminPack.Option
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void ResetOperationState()
+    /// <summary>Clears transient reader operation state while preserving the configured option.</summary>
+    public void ResetOperationState()
         {
             refToObject.Clear();
         }

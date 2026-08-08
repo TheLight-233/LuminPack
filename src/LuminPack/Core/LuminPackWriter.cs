@@ -10,7 +10,6 @@ using LuminPack.Interface;
 using LuminPack.Option;
 using LuminPack.Code;
 using LuminPack.Internal;
-using LuminPack.Parsers;
 using LuminPack.Utility;
 using LuminPack.Utility.ViewModel;
 using static LuminPack.Code.LuminPackMarshal;
@@ -237,12 +236,6 @@ namespace LuminPack.Core
             }
         }
         
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public LuminPackParser<T> GetParser<T>()
-        {
-            return LuminPackParseProvider.Cache<T>.Parser!;
-        }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsReferenceOrContainsReferences<T>()
         {
@@ -1045,19 +1038,6 @@ namespace LuminPack.Core
         }
 
         
-        // [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        // public void WriteValue<T>(scoped in T? value)
-        // {
-        //     LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref this, ref Unsafe.AsRef(in value));
-        // }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteValueWithParser<TParser, T>(TParser parser, scoped in T? value)
-            where TParser : ILuminPackableParser<T>
-        {
-            parser.Serialize(ref this, ref Unsafe.AsRef(in value));
-        }
-        
         /// <summary>
         /// 序列化数组
         /// </summary>
@@ -1086,19 +1066,7 @@ namespace LuminPack.Core
                 return;
             }
 
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            
-            WriteCollectionHeader(ref _currentIndex, array.Length);
-            
-            Advance(4);
-            
-            foreach (ref var value in array.AsSpan())
-            {
-                parser.Serialize(ref this, ref value);
-            }
-            
-            CheckBuffer();
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
         
         /// <summary>
@@ -1130,18 +1098,7 @@ namespace LuminPack.Core
                 return;
             }
 
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            
-            WriteCollectionHeader(ref index, array.Length);
-            Advance(4);
-            
-            foreach (ref var value in array.AsSpan())
-            {
-                parser.Serialize(ref this, ref value);
-            }
-            
-            CheckBuffer();
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
         
         /// <summary>
@@ -1174,17 +1131,7 @@ namespace LuminPack.Core
                 return;
             }
             
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            WriteCollectionHeader(ref _currentIndex, span.Length);
-            Advance(4);
-            
-            foreach (ref var value in span)
-            {
-                parser.Serialize(ref this, ref value!);
-            }
-            
-            CheckBuffer();
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1213,19 +1160,7 @@ namespace LuminPack.Core
                 return;
             }
             
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            
-            WriteCollectionHeader(ref index, span.Length);
-            Advance(4);
-
-            foreach (var value in span)
-            {
-                var v = value;
-                parser.Serialize(ref this, ref v);
-            }
-            
-            CheckBuffer();
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1265,14 +1200,7 @@ namespace LuminPack.Core
                 return;
             }
             
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            foreach (ref var value in span)
-            {
-                parser.Serialize(ref this, ref value!);
-            }
-            
-            CheckBuffer();
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1312,15 +1240,7 @@ namespace LuminPack.Core
                 return;
             }
             
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            foreach (var value in span)
-            {
-                var v = value;
-                parser.Serialize(ref this, ref v);
-            }
-            
-            CheckBuffer();
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
         
         /// <summary>
@@ -1352,17 +1272,7 @@ namespace LuminPack.Core
                 return;
             }
             
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            
-            WriteCollectionHeader(ref index, span.Length);
-            Advance(4);
-            foreach (ref var value in span)
-            {
-                parser.Serialize(ref this, ref value!);
-            }
-            
-            CheckBuffer();
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1388,18 +1298,7 @@ namespace LuminPack.Core
                 return;
             }
             
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            
-            WriteCollectionHeader(ref index, span.Length);
-            Advance(4);
-            foreach (var value in span)
-            {
-                var v = value;
-                parser.Serialize(ref this, ref v);
-            }
-            
-            CheckBuffer();
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
         
 

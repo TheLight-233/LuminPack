@@ -1,8 +1,6 @@
 ﻿using System.Collections.Concurrent;
 using System.Text;
 using LuminPack;
-using LuminPack.Generated;
-using LuminPack.Internal;
 using static LuminPackUnitTest.PrimitivesSerializationTest;
 using static LuminPackUnitTest.MultiThreadSerializationTest;
 using static LuminPackUnitTest.ComplexSerializationTest;
@@ -24,7 +22,6 @@ namespace LuminPackUnitTest
             
             var testResults = new List<string>();
             // Run all tests
-            ParserRegistrationRegressionTest.Run(testResults);
             TestEmptyStruct(testResults);
             TestEnum(testResults);
             TestByte(testResults);

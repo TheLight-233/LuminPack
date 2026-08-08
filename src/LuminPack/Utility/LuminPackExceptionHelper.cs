@@ -98,9 +98,9 @@ namespace LuminPack.Code
         }
 
         [DoesNotReturn]
-        public static void ThrowNoParserRegistered(Type type)
+        public static void ThrowNoSourceGeneratedFormatter(Type type)
         {
-            throw new LuminPackException($"There are no this type of parser Registered, type: {type}.");
+            throw new LuminPackException($"No source-generated formatter exists for type '{type}'.");
         }
         
         [DoesNotReturn]

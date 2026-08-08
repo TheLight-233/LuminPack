@@ -82,4 +82,36 @@ public static class StringBuilderFormatter
         sb.AppendLine("            ");
         sb.AppendLine("            reader.Advance(size);");
     }
+
+    public static void GenerateJsonSerializeCode(LuminLocalFieldData data, StringBuilder sb)
+    {
+        sb.AppendLine("            if (value == null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNull();");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteString(value.ToString());");
+    }
+
+    public static void GenerateJsonDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
+    {
+        sb.AppendLine("            if (reader.IsNull())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            var str = reader.ReadString();");
+        sb.AppendLine();
+        sb.AppendLine("            if (value == null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = new global::System.Text.StringBuilder(str);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            else");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value.Clear();");
+        sb.AppendLine("                value.Append(str);");
+        sb.AppendLine("            }");
+    }
 }

@@ -9,234 +9,242 @@ namespace LuminPack.SourceGenerator
 {
     public static class FormatterDiscovery
     {
-        public static readonly Dictionary<string, (Action<LuminLocalFieldData, StringBuilder>, Action<LuminLocalFieldData, StringBuilder>)> Formatters = 
+        public static readonly Dictionary<string, (Action<LuminLocalFieldData, StringBuilder> Write, Action<LuminLocalFieldData, StringBuilder> Read, Action<LuminLocalFieldData, StringBuilder> WriteJson, Action<LuminLocalFieldData, StringBuilder> ReadJson)> Formatters =
             new (StringComparer.Ordinal)
             {
                 // 基本类型和别名
-                ["sbyte"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.SByte"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["sbyte[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.SByte[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["sbyte"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.SByte"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["sbyte[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.SByte[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["byte"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Byte"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["byte[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.Byte[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["byte"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Byte"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["byte[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Byte[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["short"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Int16"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["short[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.Int16[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["short"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Int16"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["short[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Int16[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["ushort"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.UInt16"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["ushort[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.UInt16[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["ushort"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.UInt16"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["ushort[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.UInt16[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["int"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Int32"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["int[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.Int32[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["int"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Int32"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["int[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Int32[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["uint"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.UInt32"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["uint[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.UInt32[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["uint"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.UInt32"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["uint[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.UInt32[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["long"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Int64"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["long[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.Int64[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["long"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Int64"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["long[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Int64[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["ulong"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.UInt64"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["ulong[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.UInt64[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["ulong"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.UInt64"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["ulong[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.UInt64[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["float"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Single"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["float[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.Single[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["float"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Single"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["float[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Single[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["double"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Double"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["double[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.Double[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["double"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Double"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["double[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Double[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["decimal"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Decimal"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["decimal[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.Decimal[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["decimal"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Decimal"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["decimal[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Decimal[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["bool"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Boolean"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["bool[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.Boolean[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["bool"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Boolean"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["bool[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Boolean[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["char"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Char"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["char[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.Char[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["char"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Char"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["char[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Char[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["nint"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.IntPtr"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["nint[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.IntPtr[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["nint"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.IntPtr"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["nint[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.IntPtr[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["nuint"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.UIntPtr"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["nuint[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
-                ["global::System.UIntPtr[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["nuint"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.UIntPtr"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["nuint[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
+                ["global::System.UIntPtr[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
                 // 其他系统类型
-                ["global::System.Guid"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Guid[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.Guid"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Guid[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.DateTime"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.DateTime[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.DateTime"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.DateTime[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.DateTimeOffset"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.DateTimeOffset[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.DateTimeOffset"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.DateTimeOffset[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.TimeSpan"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.TimeSpan[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.TimeSpan"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.TimeSpan[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
                 // 数值类型
-                ["global::System.Numerics.BigInteger"] = (BigIntegerFormatter.GenerateSerializeCode, BigIntegerFormatter.GenerateDeserializeCode),
-                ["global::System.Numerics.Complex"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Numerics.Complex[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.Numerics.BigInteger"] = (BigIntegerFormatter.GenerateSerializeCode, BigIntegerFormatter.GenerateDeserializeCode, BigIntegerFormatter.GenerateJsonSerializeCode, BigIntegerFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Numerics.Complex"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Numerics.Complex[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.Numerics.Plane"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Numerics.Plane[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.Numerics.Plane"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Numerics.Plane[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.Numerics.Quaternion"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Numerics.Quaternion[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.Numerics.Quaternion"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Numerics.Quaternion[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.Numerics.Matrix3x2"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Numerics.Matrix3x2[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.Numerics.Matrix3x2"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Numerics.Matrix3x2[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.Numerics.Matrix4x4"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Numerics.Matrix4x4[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.Numerics.Matrix4x4"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Numerics.Matrix4x4[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.Numerics.Vector2"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Numerics.Vector2[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.Numerics.Vector2"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Numerics.Vector2[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.Numerics.Vector3"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Numerics.Vector3[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.Numerics.Vector3"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Numerics.Vector3[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.Numerics.Vector4"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Numerics.Vector4[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.Numerics.Vector4"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Numerics.Vector4[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
                 // .NET 8+ 类型
-                ["global::System.Half"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Half[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.Half"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Half[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.Int128"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Int128[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.Int128"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Int128[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.UInt128"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.UInt128[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.UInt128"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.UInt128[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.DateOnly"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.DateOnly[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.DateOnly"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.DateOnly[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.TimeOnly"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.TimeOnly[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.TimeOnly"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.TimeOnly[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
-                ["global::System.Text.Rune"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode),
-                ["global::System.Text.Rune[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
+                ["global::System.Text.Rune"] = (UnmanagedFormatter.GenerateSerializeCode, UnmanagedFormatter.GenerateDeserializeCode, UnmanagedFormatter.GenerateJsonSerializeCode, UnmanagedFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Text.Rune[]"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode, ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode),
 
                 // 字符串类型
-                ["string"] = (StringFormatter.GenerateSerializeCode, StringFormatter.GenerateDeserializeCode),
-                ["global::System.String"] = (StringFormatter.GenerateSerializeCode, StringFormatter.GenerateDeserializeCode),
+                ["string"] = (StringFormatter.GenerateSerializeCode, StringFormatter.GenerateDeserializeCode, StringFormatter.GenerateJsonSerializeCode, StringFormatter.GenerateJsonDeserializeCode),
+                ["global::System.String"] = (StringFormatter.GenerateSerializeCode, StringFormatter.GenerateDeserializeCode, StringFormatter.GenerateJsonSerializeCode, StringFormatter.GenerateJsonDeserializeCode),
 
                 // URI类型
-                ["global::System.Uri"] = (UriFormatter.GenerateSerializeCode, UriFormatter.GenerateDeserializeCode),
+                ["global::System.Uri"] = (UriFormatter.GenerateSerializeCode, UriFormatter.GenerateDeserializeCode, UriFormatter.GenerateJsonSerializeCode, UriFormatter.GenerateJsonDeserializeCode),
 
                 // 版本类型
-                ["global::System.Version"] = (VersionFormatter.GenerateSerializeCode, VersionFormatter.GenerateDeserializeCode),
+                ["global::System.Version"] = (VersionFormatter.GenerateSerializeCode, VersionFormatter.GenerateDeserializeCode, VersionFormatter.GenerateJsonSerializeCode, VersionFormatter.GenerateJsonDeserializeCode),
 
                 // 位数组类型
-                ["global::System.Collections.BitArray"] = (BitArrayFormatter.GenerateSerializeCode, BitArrayFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.BitArray"] = (BitArrayFormatter.GenerateSerializeCode, BitArrayFormatter.GenerateDeserializeCode, BitArrayFormatter.GenerateJsonSerializeCode, BitArrayFormatter.GenerateJsonDeserializeCode),
 
                 // 可空类型
-                ["global::System.Nullable"] = (NullableFormatter.GenerateSerializeCode, NullableFormatter.GenerateDeserializeCode),
+                ["global::System.Nullable"] = (NullableFormatter.GenerateSerializeCode, NullableFormatter.GenerateDeserializeCode, NullableFormatter.GenerateJsonSerializeCode, NullableFormatter.GenerateJsonDeserializeCode),
 
                 // StringBuilder类型
-                ["global::System.Text.StringBuilder"] = (StringBuilderFormatter.GenerateSerializeCode, StringBuilderFormatter.GenerateDeserializeCode),
+                ["global::System.Text.StringBuilder"] = (StringBuilderFormatter.GenerateSerializeCode, StringBuilderFormatter.GenerateDeserializeCode, StringBuilderFormatter.GenerateJsonSerializeCode, StringBuilderFormatter.GenerateJsonDeserializeCode),
 
                 // 文化信息类型
-                ["global::System.Globalization.CultureInfo"] = (CultureInfoFormatter.GenerateSerializeCode, CultureInfoFormatter.GenerateDeserializeCode),
+                ["global::System.Globalization.CultureInfo"] = (CultureInfoFormatter.GenerateSerializeCode, CultureInfoFormatter.GenerateDeserializeCode, CultureInfoFormatter.GenerateJsonSerializeCode, CultureInfoFormatter.GenerateJsonDeserializeCode),
 
                 // 时区信息类型
-                ["global::System.TimeZoneInfo"] = (TimeZoneInfoFormatter.GenerateSerializeCode, TimeZoneInfoFormatter.GenerateDeserializeCode),
+                ["global::System.TimeZoneInfo"] = (TimeZoneInfoFormatter.GenerateSerializeCode, TimeZoneInfoFormatter.GenerateDeserializeCode, TimeZoneInfoFormatter.GenerateJsonSerializeCode, TimeZoneInfoFormatter.GenerateJsonDeserializeCode),
 
                 // 类型信息
-                ["global::System.Type"] = (TypeFormatter.GenerateSerializeCode, TypeFormatter.GenerateDeserializeCode),
+                ["global::System.Type"] = (TypeFormatter.GenerateSerializeCode, TypeFormatter.GenerateDeserializeCode, TypeFormatter.GenerateJsonSerializeCode, TypeFormatter.GenerateJsonDeserializeCode),
+
+                ["global::System.Lazy"] = (LazyFormatter.GenerateSerializeCode, LazyFormatter.GenerateDeserializeCode, LazyFormatter.GenerateJsonSerializeCode, LazyFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Generic.KeyValuePair"] = (KeyValuePairFormatter.GenerateSerializeCode, KeyValuePairFormatter.GenerateDeserializeCode, KeyValuePairFormatter.GenerateJsonSerializeCode, KeyValuePairFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Tuple"] = (TupleFormatter.GenerateSerializeCode, TupleFormatter.GenerateDeserializeCode, TupleFormatter.GenerateJsonSerializeCode, TupleFormatter.GenerateJsonDeserializeCode),
+                ["global::System.ValueTuple"] = (TupleFormatter.GenerateSerializeCode, TupleFormatter.GenerateDeserializeCode, TupleFormatter.GenerateJsonSerializeCode, TupleFormatter.GenerateJsonDeserializeCode),
+                ["global::System.ArraySegment"] = (MemoryFormatter.GenerateSerializeCode, MemoryFormatter.GenerateDeserializeCode, MemoryFormatter.GenerateJsonSerializeCode, MemoryFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Memory"] = (MemoryFormatter.GenerateSerializeCode, MemoryFormatter.GenerateDeserializeCode, MemoryFormatter.GenerateJsonSerializeCode, MemoryFormatter.GenerateJsonDeserializeCode),
+                ["global::System.ReadOnlyMemory"] = (MemoryFormatter.GenerateSerializeCode, MemoryFormatter.GenerateDeserializeCode, MemoryFormatter.GenerateJsonSerializeCode, MemoryFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Buffers.ReadOnlySequence"] = (MemoryFormatter.GenerateSerializeCode, MemoryFormatter.GenerateDeserializeCode, MemoryFormatter.GenerateJsonSerializeCode, MemoryFormatter.GenerateJsonDeserializeCode),
 
                 // 集合类型
-                ["global::System.Collections.Generic.List"] = (ListFormatter.GenerateSerializeCode, ListFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.Dictionary"] = (DictionaryFormatter.GenerateSerializeCode, DictionaryFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Concurrent.ConcurrentDictionary"] = (ConcurrentDictionaryFormatter.GenerateSerializeCode, ConcurrentDictionaryFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.SortedDictionary"] = (SortedDictionaryFormatter.GenerateSerializeCode, SortedDictionaryFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.Stack"] = (StackFormatter.GenerateSerializeCode, StackFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.Queue"] = (QueueFormatter.GenerateSerializeCode, QueueFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.LinkedList"] = (LinkedListFormatter.GenerateSerializeCode, LinkedListFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.HashSet"] = (HashSetFormatter.GenerateSerializeCode, HashSetFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.SortedSet"] = (SortedSetFormatter.GenerateSerializeCode, SortedSetFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.SortedList"] = (SortedListFormatter.GenerateSerializeCode, SortedListFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.Generic.List"] = (ListFormatter.GenerateSerializeCode, ListFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonSerializeCode, ListFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Generic.Dictionary"] = (DictionaryFormatter.GenerateSerializeCode, DictionaryFormatter.GenerateDeserializeCode, DictionaryFormatter.GenerateJsonSerializeCode, DictionaryFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Concurrent.ConcurrentDictionary"] = (ConcurrentDictionaryFormatter.GenerateSerializeCode, ConcurrentDictionaryFormatter.GenerateDeserializeCode, DictionaryFormatter.GenerateJsonDictionarySerializeCode, DictionaryFormatter.GenerateJsonDictionaryDeserializeCode),
+                ["global::System.Collections.Generic.SortedDictionary"] = (SortedDictionaryFormatter.GenerateSerializeCode, SortedDictionaryFormatter.GenerateDeserializeCode, DictionaryFormatter.GenerateJsonDictionarySerializeCode, DictionaryFormatter.GenerateJsonDictionaryDeserializeCode),
+                ["global::System.Collections.Generic.Stack"] = (StackFormatter.GenerateSerializeCode, StackFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Generic.Queue"] = (QueueFormatter.GenerateSerializeCode, QueueFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Generic.LinkedList"] = (LinkedListFormatter.GenerateSerializeCode, LinkedListFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Generic.HashSet"] = (HashSetFormatter.GenerateSerializeCode, HashSetFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Generic.SortedSet"] = (SortedSetFormatter.GenerateSerializeCode, SortedSetFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Generic.SortedList"] = (SortedListFormatter.GenerateSerializeCode, SortedListFormatter.GenerateDeserializeCode, DictionaryFormatter.GenerateJsonDictionarySerializeCode, DictionaryFormatter.GenerateJsonDictionaryDeserializeCode),
+                ["global::System.Collections.ObjectModel.ReadOnlyDictionary"] = (ReadOnlyDictionaryFormatter.GenerateSerializeCode, ReadOnlyDictionaryFormatter.GenerateDeserializeCode, ReadOnlyDictionaryFormatter.GenerateJsonSerializeCode, ReadOnlyDictionaryFormatter.GenerateJsonDeserializeCode),
     
                 // 并发集合
-                ["global::System.Collections.Concurrent.BlockingCollection"] = (BlockingCollectionFormatter.GenerateSerializeCode, BlockingCollectionFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Concurrent.ConcurrentBag"] = (ConcurrentBagFormatter.GenerateSerializeCode, ConcurrentBagFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Concurrent.ConcurrentQueue"] = (ConcurrentQueueFormatter.GenerateSerializeCode, ConcurrentQueueFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Concurrent.ConcurrentStack"] = (ConcurrentStackFormatter.GenerateSerializeCode, ConcurrentStackFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.Concurrent.BlockingCollection"] = (BlockingCollectionFormatter.GenerateSerializeCode, BlockingCollectionFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Concurrent.ConcurrentBag"] = (ConcurrentBagFormatter.GenerateSerializeCode, ConcurrentBagFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Concurrent.ConcurrentQueue"] = (ConcurrentQueueFormatter.GenerateSerializeCode, ConcurrentQueueFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Concurrent.ConcurrentStack"] = (ConcurrentStackFormatter.GenerateSerializeCode, ConcurrentStackFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
     
                 // 只读集合
-                ["global::System.Collections.ObjectModel.Collection"] = (CollectionFormatter.GenerateSerializeCode, CollectionFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.ObjectModel.ObservableCollection"] = (ObservableCollectionFormatter.GenerateSerializeCode, ObservableCollectionFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.ObjectModel.ReadOnlyCollection"] = (ReadOnlyCollectionFormatter.GenerateSerializeCode, ReadOnlyCollectionFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.ObjectModel.ReadOnlyObservableCollection"] = (ReadOnlyObservableCollectionFormatter.GenerateSerializeCode, ReadOnlyObservableCollectionFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.ObjectModel.Collection"] = (CollectionFormatter.GenerateSerializeCode, CollectionFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.ObjectModel.ObservableCollection"] = (ObservableCollectionFormatter.GenerateSerializeCode, ObservableCollectionFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.ObjectModel.ReadOnlyCollection"] = (ReadOnlyCollectionFormatter.GenerateSerializeCode, ReadOnlyCollectionFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.ObjectModel.ReadOnlyObservableCollection"] = (ReadOnlyObservableCollectionFormatter.GenerateSerializeCode, ReadOnlyObservableCollectionFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
     
                 // 优先级队列
-                ["global::System.Collections.Generic.PriorityQueue"] = (PriorityQueueFormatter.GenerateSerializeCode, PriorityQueueFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.Generic.PriorityQueue"] = (PriorityQueueFormatter.GenerateSerializeCode, PriorityQueueFormatter.GenerateDeserializeCode, PriorityQueueFormatter.GenerateJsonSerializeCode, PriorityQueueFormatter.GenerateJsonDeserializeCode),
     
                 // 不可变集合类型
-                ["global::System.Collections.Immutable.ImmutableArray"] = (ImmutableArrayFormatter.GenerateSerializeCode, ImmutableArrayFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.ImmutableList"] = (ImmutableListFormatter.GenerateSerializeCode, ImmutableListFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.ImmutableQueue"] = (ImmutableQueueFormatter.GenerateSerializeCode, ImmutableQueueFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.ImmutableStack"] = (ImmutableStackFormatter.GenerateSerializeCode, ImmutableStackFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.ImmutableDictionary"] = (ImmutableDictionaryFormatter.GenerateSerializeCode, ImmutableDictionaryFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.ImmutableHashSet"] = (ImmutableHashSetFormatter.GenerateSerializeCode, ImmutableHashSetFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.ImmutableSortedDictionary"] = (ImmutableSortedDictionaryFormatter.GenerateSerializeCode, ImmutableSortedDictionaryFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.ImmutableSortedSet"] = (ImmutableSortedSetFormatter.GenerateSerializeCode, ImmutableSortedSetFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.Immutable.ImmutableArray"] = (ImmutableArrayFormatter.GenerateSerializeCode, ImmutableArrayFormatter.GenerateDeserializeCode, ImmutableCollectionFormatterHelper.GenerateJsonSerializeCode, ImmutableCollectionFormatterHelper.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Immutable.ImmutableList"] = (ImmutableListFormatter.GenerateSerializeCode, ImmutableListFormatter.GenerateDeserializeCode, ImmutableCollectionFormatterHelper.GenerateJsonSerializeCode, ImmutableCollectionFormatterHelper.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Immutable.ImmutableQueue"] = (ImmutableQueueFormatter.GenerateSerializeCode, ImmutableQueueFormatter.GenerateDeserializeCode, ImmutableCollectionFormatterHelper.GenerateJsonSerializeCode, ImmutableCollectionFormatterHelper.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Immutable.ImmutableStack"] = (ImmutableStackFormatter.GenerateSerializeCode, ImmutableStackFormatter.GenerateDeserializeCode, ImmutableCollectionFormatterHelper.GenerateJsonSerializeCode, ImmutableCollectionFormatterHelper.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Immutable.ImmutableDictionary"] = (ImmutableDictionaryFormatter.GenerateSerializeCode, ImmutableDictionaryFormatter.GenerateDeserializeCode, ImmutableCollectionFormatterHelper.GenerateJsonSerializeCode, ImmutableCollectionFormatterHelper.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Immutable.ImmutableHashSet"] = (ImmutableHashSetFormatter.GenerateSerializeCode, ImmutableHashSetFormatter.GenerateDeserializeCode, ImmutableCollectionFormatterHelper.GenerateJsonSerializeCode, ImmutableCollectionFormatterHelper.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Immutable.ImmutableSortedDictionary"] = (ImmutableSortedDictionaryFormatter.GenerateSerializeCode, ImmutableSortedDictionaryFormatter.GenerateDeserializeCode, ImmutableCollectionFormatterHelper.GenerateJsonSerializeCode, ImmutableCollectionFormatterHelper.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Immutable.ImmutableSortedSet"] = (ImmutableSortedSetFormatter.GenerateSerializeCode, ImmutableSortedSetFormatter.GenerateDeserializeCode, ImmutableCollectionFormatterHelper.GenerateJsonSerializeCode, ImmutableCollectionFormatterHelper.GenerateJsonDeserializeCode),
 
                 // 冻结集合类型 (.NET 8+)
-                ["global::System.Collections.Frozen.FrozenDictionary"] = (FrozenDictionaryFormatter.GenerateSerializeCode, FrozenDictionaryFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Frozen.FrozenSet"] = (FrozenSetFormatter.GenerateSerializeCode, FrozenSetFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.Frozen.FrozenDictionary"] = (FrozenDictionaryFormatter.GenerateSerializeCode, FrozenDictionaryFormatter.GenerateDeserializeCode, FrozenDictionaryFormatter.GenerateJsonSerializeCode, FrozenDictionaryFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Frozen.FrozenSet"] = (FrozenSetFormatter.GenerateSerializeCode, FrozenSetFormatter.GenerateDeserializeCode, FrozenSetFormatter.GenerateJsonSerializeCode, FrozenSetFormatter.GenerateJsonDeserializeCode),
 
                 // 接口类型
-                ["global::System.Collections.Generic.IEnumerable"] = (InterfaceEnumerableFormatter.GenerateSerializeCode, InterfaceEnumerableFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.ICollection"] = (InterfaceCollectionFormatter.GenerateSerializeCode, InterfaceCollectionFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.IReadOnlyCollection"] = (InterfaceReadOnlyCollectionFormatter.GenerateSerializeCode, InterfaceReadOnlyCollectionFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.IList"] = (InterfaceListFormatter.GenerateSerializeCode, InterfaceListFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.IReadOnlyList"] = (InterfaceReadOnlyListFormatter.GenerateSerializeCode, InterfaceReadOnlyListFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.IDictionary"] = (InterfaceDictionaryFormatter.GenerateSerializeCode, InterfaceDictionaryFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.IReadOnlyDictionary"] = (InterfaceReadOnlyDictionaryFormatter.GenerateSerializeCode, InterfaceReadOnlyDictionaryFormatter.GenerateDeserializeCode),
-                ["global::System.Linq.ILookup"] = (InterfaceLookupFormatter.GenerateSerializeCode, InterfaceLookupFormatter.GenerateDeserializeCode),
-                ["global::System.Linq.IGrouping"] = (InterfaceGroupingFormatter.GenerateSerializeCode, InterfaceGroupingFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.ISet"] = (InterfaceSetFormatter.GenerateSerializeCode, InterfaceSetFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Generic.IReadOnlySet"] = (InterfaceReadOnlySetFormatter.GenerateSerializeCode, InterfaceReadOnlySetFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.Generic.IEnumerable"] = (InterfaceEnumerableFormatter.GenerateSerializeCode, InterfaceEnumerableFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Generic.ICollection"] = (InterfaceCollectionFormatter.GenerateSerializeCode, InterfaceCollectionFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Generic.IReadOnlyCollection"] = (InterfaceReadOnlyCollectionFormatter.GenerateSerializeCode, InterfaceReadOnlyCollectionFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Generic.IList"] = (InterfaceListFormatter.GenerateSerializeCode, InterfaceListFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Generic.IReadOnlyList"] = (InterfaceReadOnlyListFormatter.GenerateSerializeCode, InterfaceReadOnlyListFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Generic.IDictionary"] = (InterfaceDictionaryFormatter.GenerateSerializeCode, InterfaceDictionaryFormatter.GenerateDeserializeCode, DictionaryFormatter.GenerateJsonDictionarySerializeCode, DictionaryFormatter.GenerateJsonDictionaryDeserializeCode),
+                ["global::System.Collections.Generic.IReadOnlyDictionary"] = (InterfaceReadOnlyDictionaryFormatter.GenerateSerializeCode, InterfaceReadOnlyDictionaryFormatter.GenerateDeserializeCode, DictionaryFormatter.GenerateJsonDictionarySerializeCode, DictionaryFormatter.GenerateJsonDictionaryDeserializeCode),
+                ["global::System.Linq.ILookup"] = (InterfaceLookupFormatter.GenerateSerializeCode, InterfaceLookupFormatter.GenerateDeserializeCode, InterfaceLookupFormatter.GenerateJsonSerializeCode, InterfaceLookupFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Linq.IGrouping"] = (InterfaceGroupingFormatter.GenerateSerializeCode, InterfaceGroupingFormatter.GenerateDeserializeCode, InterfaceGroupingFormatter.GenerateJsonSerializeCode, InterfaceGroupingFormatter.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Generic.ISet"] = (InterfaceSetFormatter.GenerateSerializeCode, InterfaceSetFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
+                ["global::System.Collections.Generic.IReadOnlySet"] = (InterfaceReadOnlySetFormatter.GenerateSerializeCode, InterfaceReadOnlySetFormatter.GenerateDeserializeCode, ListFormatter.GenerateJsonEnumerableSerializeCode, ListFormatter.GenerateJsonEnumerableDeserializeCode),
 
                 // 不可变集合接口
-                ["global::System.Collections.Immutable.IImmutableList"] = (InterfaceImmutableListFormatter.GenerateSerializeCode, InterfaceImmutableListFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.IImmutableQueue"] = (InterfaceImmutableQueueFormatter.GenerateSerializeCode, InterfaceImmutableQueueFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.IImmutableStack"] = (InterfaceImmutableStackFormatter.GenerateSerializeCode, InterfaceImmutableStackFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.IImmutableDictionary"] = (InterfaceImmutableDictionaryFormatter.GenerateSerializeCode, InterfaceImmutableDictionaryFormatter.GenerateDeserializeCode),
-                ["global::System.Collections.Immutable.IImmutableSet"] = (InterfaceImmutableSetFormatter.GenerateSerializeCode, InterfaceImmutableSetFormatter.GenerateDeserializeCode),
+                ["global::System.Collections.Immutable.IImmutableList"] = (InterfaceImmutableListFormatter.GenerateSerializeCode, InterfaceImmutableListFormatter.GenerateDeserializeCode, ImmutableCollectionFormatterHelper.GenerateJsonSerializeCode, ImmutableCollectionFormatterHelper.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Immutable.IImmutableQueue"] = (InterfaceImmutableQueueFormatter.GenerateSerializeCode, InterfaceImmutableQueueFormatter.GenerateDeserializeCode, ImmutableCollectionFormatterHelper.GenerateJsonSerializeCode, ImmutableCollectionFormatterHelper.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Immutable.IImmutableStack"] = (InterfaceImmutableStackFormatter.GenerateSerializeCode, InterfaceImmutableStackFormatter.GenerateDeserializeCode, ImmutableCollectionFormatterHelper.GenerateJsonSerializeCode, ImmutableCollectionFormatterHelper.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Immutable.IImmutableDictionary"] = (InterfaceImmutableDictionaryFormatter.GenerateSerializeCode, InterfaceImmutableDictionaryFormatter.GenerateDeserializeCode, ImmutableCollectionFormatterHelper.GenerateJsonSerializeCode, ImmutableCollectionFormatterHelper.GenerateJsonDeserializeCode),
+                ["global::System.Collections.Immutable.IImmutableSet"] = (InterfaceImmutableSetFormatter.GenerateSerializeCode, InterfaceImmutableSetFormatter.GenerateDeserializeCode, ImmutableCollectionFormatterHelper.GenerateJsonSerializeCode, ImmutableCollectionFormatterHelper.GenerateJsonDeserializeCode),
                 
-                // 数组类型
-                ["global::System.Array"] = (UnmanagedArrayFormatter.GenerateSerializeCode, UnmanagedArrayFormatter.GenerateDeserializeCode),
             };
 
         // KnownType信息
@@ -276,12 +284,19 @@ namespace LuminPack.SourceGenerator
         };
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static (Action<LuminLocalFieldData, StringBuilder>, Action<LuminLocalFieldData, StringBuilder>) GetFormatter(string typeName)
+        public static (Action<LuminLocalFieldData, StringBuilder> Write, Action<LuminLocalFieldData, StringBuilder> Read, Action<LuminLocalFieldData, StringBuilder> WriteJson, Action<LuminLocalFieldData, StringBuilder> ReadJson) GetFormatter(string typeName)
         {
             
             if (typeName.EndsWith("[]"))
             {
-                return (ArrayFormatter.GenerateSerializeCode, ArrayFormatter.GenerateDeserializeCode);
+                return (ArrayFormatter.GenerateSerializeCode, ArrayFormatter.GenerateDeserializeCode,
+                    ArrayFormatter.GenerateJsonSerializeCode, ArrayFormatter.GenerateJsonDeserializeCode);
+            }
+
+            if (MultiDimensionalArrayFormatter.IsMultiDimensionalArray(typeName))
+            {
+                return (MultiDimensionalArrayFormatter.GenerateSerializeCode, MultiDimensionalArrayFormatter.GenerateDeserializeCode,
+                    MultiDimensionalArrayFormatter.GenerateJsonSerializeCode, MultiDimensionalArrayFormatter.GenerateJsonDeserializeCode);
             }
             
             string baseTypeName = GetBaseTypeName(typeName);
@@ -293,7 +308,7 @@ namespace LuminPack.SourceGenerator
             
             
 
-            return (null, null);
+            return (null, null, null, null);
         }
 
         /// <summary>
@@ -409,6 +424,19 @@ namespace LuminPack.SourceGenerator
                 return genericArgs[1].Trim();
     
             return string.Empty;
+        }
+
+        public static string[] GetGenericArguments(string typeString)
+        {
+            if (string.IsNullOrEmpty(typeString))
+                return Array.Empty<string>();
+
+            int startIndex = typeString.IndexOf('<');
+            int endIndex = typeString.LastIndexOf('>');
+            if (startIndex < 0 || endIndex <= startIndex)
+                return Array.Empty<string>();
+
+            return SplitGenericParameters(typeString.Substring(startIndex + 1, endIndex - startIndex - 1));
         }
 
         private static string[] SplitGenericParameters(string genericPart)

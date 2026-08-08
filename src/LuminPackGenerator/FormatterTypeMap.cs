@@ -2,9 +2,9 @@ using System.Collections.Generic;
 
 namespace LuminPack.SourceGenerator;
 
-internal static class ParserMap
+internal static class FormatterTypeMap
 {
-    public static readonly HashSet<string> Parsers = new HashSet<string>()
+    public static readonly HashSet<string> StaticFormatterTypes = new HashSet<string>()
     {
         // 基础类型
         "nint",

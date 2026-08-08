@@ -13,12 +13,6 @@ class Program
 {
     static void Main(string[] args)
     {
-        if (args.Length == 1 && args[0] == "--union-jit-probe")
-        {
-            UnionSerializationDispatchBenchmark.RunJitProbe();
-            return;
-        }
-
         if (args.Length == 1 && args[0] == "--buffer-pool-jit-probe")
         {
             BufferWriterPoolJitProbe.Run();

@@ -94,8 +94,8 @@ internal static class BinaryDirectResultRegressionTest
         var threw = false;
         try
         {
-            LuminPackParseProvider.Cache<BinaryDirectRootModel>.Parser!
-                .Deserialize(ref reader, ref target);
+            global::LuminPack.Generated.LuminPackExtensions_LuminPackUnitTest
+                .ReadValue(ref reader, ref target);
         }
         catch (Exception)
         {

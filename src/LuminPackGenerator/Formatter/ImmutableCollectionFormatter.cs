@@ -45,7 +45,7 @@ public static class ImmutableArrayFormatter
         sb.AppendLine($"            value = global::System.Runtime.InteropServices.ImmutableCollectionsMarshal.AsImmutableArray(array);");
         sb.AppendLine("#else");
         sb.AppendLine($"            value = global::System.Collections.Immutable.ImmutableArray.Create<{elementType}>();");
-        sb.AppendLine($"            ref var view = ref LuminPackMarshal.As<global::System.Collections.Immutable.ImmutableArray<{elementType}>, ImmutableArrayView<{elementType}>>(ref value);");
+        sb.AppendLine($"            ref var view = ref global::LuminPack.Code.LuminPackMarshal.As<global::System.Collections.Immutable.ImmutableArray<{elementType}>, global::LuminPack.Code.ImmutableArrayView<{elementType}>>(ref value);");
         sb.AppendLine("            view.array = array;");
         sb.AppendLine("#endif");
     }
@@ -67,8 +67,6 @@ public static class ImmutableListFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var parser = writer.GetParser<{elementType}>();");
-        sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(4);");
@@ -76,7 +74,7 @@ public static class ImmutableListFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                parser.Serialize(ref writer, ref v);");
+        sb.AppendLine("                writer.WriteValue(v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -110,13 +108,11 @@ public static class ImmutableListFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableList.CreateBuilder<{elementType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
         sb.AppendLine($"                {elementType} item = default;");
-        sb.AppendLine("                parser.Deserialize(ref reader, ref item);");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine("                builder.Add(item);");
         sb.AppendLine("            }");
         sb.AppendLine();
@@ -146,12 +142,11 @@ public static class ImmutableQueueFormatter
         sb.AppendLine("                var tempWriter = new LuminPackWriter(tempBuffer, writer.OptionState);");
         sb.AppendLine();
         sb.AppendLine("                var count = 0;");
-        sb.AppendLine($"                var parser = writer.GetParser<{elementType}>();");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
         sb.AppendLine("                    count++;");
         sb.AppendLine("                    var v = item;");
-        sb.AppendLine("                    parser.Serialize(ref tempWriter, ref v);");
+        sb.AppendLine("                    tempWriter.WriteValue(v);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.WriteCollectionHeader(ref index, count);");
@@ -199,10 +194,9 @@ public static class ImmutableQueueFormatter
         sb.AppendLine($"            var rentArray = global::System.Buffers.ArrayPool<{elementType}>.Shared.Rent(length);");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine($"                var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
         sb.AppendLine("                for (int i = 0; i < length; i++)");
         sb.AppendLine("                {");
-        sb.AppendLine($"                    parser.Deserialize(ref reader, ref rentArray[i]);");
+        sb.AppendLine($"                    reader.ReadValue(ref rentArray[i]);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                if (rentArray.Length == length)");
@@ -243,12 +237,11 @@ public static class ImmutableStackFormatter
         sb.AppendLine("                var tempWriter = new LuminPackWriter(tempBuffer, writer.OptionState);");
         sb.AppendLine();
         sb.AppendLine("                var count = 0;");
-        sb.AppendLine($"                var parser = writer.GetParser<{elementType}>();");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
         sb.AppendLine("                    count++;");
         sb.AppendLine("                    var v = item;");
-        sb.AppendLine("                    parser.Serialize(ref tempWriter, ref v);");
+        sb.AppendLine("                    tempWriter.WriteValue(v);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.WriteCollectionHeader(ref index, count);");
@@ -296,10 +289,9 @@ public static class ImmutableStackFormatter
         sb.AppendLine($"            var rentArray = global::System.Buffers.ArrayPool<{elementType}>.Shared.Rent(length);");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine($"                var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
         sb.AppendLine("                for (int i = length - 1; i >= 0; i--)");
         sb.AppendLine("                {");
-        sb.AppendLine($"                    parser.Deserialize(ref reader, ref rentArray[i]);");
+        sb.AppendLine($"                    reader.ReadValue(ref rentArray[i]);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                if (rentArray.Length == length)");
@@ -335,14 +327,14 @@ public static class ImmutableDictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var keyFormatter = writer.GetParser<{keyType}>();");
-        sb.AppendLine($"            var valueFormatter = writer.GetParser<{valueType}>();");
-        sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item!);");
+        sb.AppendLine("                var key = item.Key;");
+        sb.AppendLine("                writer.WriteValue(key);");
+        sb.AppendLine("                var itemValue = item.Value;");
+        sb.AppendLine("                writer.WriteValue(itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -370,13 +362,13 @@ public static class ImmutableDictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var keyParser = LuminPackParseProvider.Cache<{keyType}>.Parser!;");
-        sb.AppendLine($"            var valueParser = LuminPackParseProvider.Cache<{valueType}>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableDictionary.CreateBuilder<{keyType}, {valueType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);");
+        sb.AppendLine($"                {keyType} k = default!;");
+        sb.AppendLine($"                {valueType} v = default!;");
+        sb.AppendLine("                reader.ReadValue(ref k);");
+        sb.AppendLine("                reader.ReadValue(ref v);");
         sb.AppendLine("                builder.Add(k!, v);");
         sb.AppendLine("            }");
         sb.AppendLine();
@@ -400,8 +392,6 @@ public static class ImmutableHashSetFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var parser = writer.GetParser<{elementType}>();");
-        sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(4);");
@@ -409,7 +399,7 @@ public static class ImmutableHashSetFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                parser.Serialize(ref writer, ref v);");
+        sb.AppendLine("                writer.WriteValue(v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -443,13 +433,11 @@ public static class ImmutableHashSetFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableHashSet.CreateBuilder<{elementType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
         sb.AppendLine($"                {elementType} item = default;");
-        sb.AppendLine("                parser.Deserialize(ref reader, ref item);");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine("                builder.Add(item);");
         sb.AppendLine("            }");
         sb.AppendLine();
@@ -474,14 +462,14 @@ public static class ImmutableSortedDictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var keyFormatter = writer.GetParser<{keyType}>();");
-        sb.AppendLine($"            var valueFormatter = writer.GetParser<{valueType}>();");
-        sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                KeyValuePairParser.Serialize(keyFormatter, valueFormatter, ref writer, item!);");
+        sb.AppendLine("                var key = item.Key;");
+        sb.AppendLine("                writer.WriteValue(key);");
+        sb.AppendLine("                var itemValue = item.Value;");
+        sb.AppendLine("                writer.WriteValue(itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -509,13 +497,13 @@ public static class ImmutableSortedDictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var keyParser = LuminPackParseProvider.Cache<{keyType}>.Parser!;");
-        sb.AppendLine($"            var valueParser = LuminPackParseProvider.Cache<{valueType}>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableSortedDictionary.CreateBuilder<{keyType}, {valueType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);");
+        sb.AppendLine($"                {keyType} k = default!;");
+        sb.AppendLine($"                {valueType} v = default!;");
+        sb.AppendLine("                reader.ReadValue(ref k);");
+        sb.AppendLine("                reader.ReadValue(ref v);");
         sb.AppendLine("                builder.Add(k!, v);");
         sb.AppendLine("            }");
         sb.AppendLine();
@@ -539,8 +527,6 @@ public static class ImmutableSortedSetFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var parser = writer.GetParser<{elementType}>();");
-        sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(4);");
@@ -548,7 +534,7 @@ public static class ImmutableSortedSetFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                parser.Serialize(ref writer, ref v);");
+        sb.AppendLine("                writer.WriteValue(v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -556,6 +542,7 @@ public static class ImmutableSortedSetFormatter
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
+        sb.AppendLine($"            global::System.Collections.Generic.IComparer<{elementType}>? keyComparer = null;");
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -586,13 +573,11 @@ public static class ImmutableSortedSetFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableSortedSet.CreateBuilder<{elementType}>(keyComparer);");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
         sb.AppendLine($"                {elementType} item = default;");
-        sb.AppendLine("                parser.Deserialize(ref reader, ref item);");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine("                builder.Add(item);");
         sb.AppendLine("            }");
         sb.AppendLine();
@@ -616,8 +601,6 @@ public static class InterfaceImmutableListFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var parser = writer.GetParser<{elementType}>();");
-        sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(4);");
@@ -625,7 +608,7 @@ public static class InterfaceImmutableListFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                parser.Serialize(ref writer, ref v);");
+        sb.AppendLine("                writer.WriteValue(v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -659,13 +642,11 @@ public static class InterfaceImmutableListFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableList.CreateBuilder<{elementType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
         sb.AppendLine($"                {elementType} item = default;");
-        sb.AppendLine("                parser.Deserialize(ref reader, ref item);");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine("                builder.Add(item);");
         sb.AppendLine("            }");
         sb.AppendLine();
@@ -695,12 +676,11 @@ public static class InterfaceImmutableQueueFormatter
         sb.AppendLine("                var tempWriter = new LuminPackWriter(tempBuffer, writer.OptionState);");
         sb.AppendLine();
         sb.AppendLine("                var count = 0;");
-        sb.AppendLine($"                var parser = writer.GetParser<{elementType}>();");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
         sb.AppendLine("                    count++;");
         sb.AppendLine("                    var v = item;");
-        sb.AppendLine("                    parser.Serialize(ref tempWriter, ref v);");
+        sb.AppendLine("                    tempWriter.WriteValue(v);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.WriteCollectionHeader(ref index, count);");
@@ -748,10 +728,9 @@ public static class InterfaceImmutableQueueFormatter
         sb.AppendLine($"            var rentArray = global::System.Buffers.ArrayPool<{elementType}>.Shared.Rent(length);");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine($"                var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
         sb.AppendLine("                for (int i = 0; i < length; i++)");
         sb.AppendLine("                {");
-        sb.AppendLine($"                    parser.Deserialize(ref reader, ref rentArray[i]);");
+        sb.AppendLine($"                    reader.ReadValue(ref rentArray[i]);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                if (rentArray.Length == length)");
@@ -792,12 +771,11 @@ public static class InterfaceImmutableStackFormatter
         sb.AppendLine("                var tempWriter = new LuminPackWriter(tempBuffer, writer.OptionState);");
         sb.AppendLine();
         sb.AppendLine("                var count = 0;");
-        sb.AppendLine($"                var parser = writer.GetParser<{elementType}>();");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
         sb.AppendLine("                    count++;");
         sb.AppendLine("                    var v = item;");
-        sb.AppendLine("                    parser.Serialize(ref tempWriter, ref v);");
+        sb.AppendLine("                    tempWriter.WriteValue(v);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.WriteCollectionHeader(ref index, count);");
@@ -845,10 +823,9 @@ public static class InterfaceImmutableStackFormatter
         sb.AppendLine($"            var rentArray = global::System.Buffers.ArrayPool<{elementType}>.Shared.Rent(length);");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine($"                var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
         sb.AppendLine("                for (int i = length - 1; i >= 0; i--)");
         sb.AppendLine("                {");
-        sb.AppendLine($"                    parser.Deserialize(ref reader, ref rentArray[i]);");
+        sb.AppendLine($"                    reader.ReadValue(ref rentArray[i]);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                if (rentArray.Length == length)");
@@ -884,16 +861,16 @@ public static class InterfaceImmutableDictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var keyParser = writer.GetParser<{keyType}>();");
-        sb.AppendLine($"            var valueParser = writer.GetParser<{valueType}>();");
-        sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                KeyValuePairParser.Serialize(keyParser, valueParser, ref writer, item!);");
+        sb.AppendLine("                var key = item.Key;");
+        sb.AppendLine("                writer.WriteValue(key);");
+        sb.AppendLine("                var itemValue = item.Value;");
+        sb.AppendLine("                writer.WriteValue(itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -921,13 +898,13 @@ public static class InterfaceImmutableDictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var keyParser = LuminPackParseProvider.Cache<{keyType}>.Parser!;");
-        sb.AppendLine($"            var valueParser = LuminPackParseProvider.Cache<{valueType}>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableDictionary.CreateBuilder<{keyType}, {valueType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                KeyValuePairParser.Deserialize(keyParser, valueParser, ref reader, out var k, out var v);");
+        sb.AppendLine($"                {keyType} k = default!;");
+        sb.AppendLine($"                {valueType} v = default!;");
+        sb.AppendLine("                reader.ReadValue(ref k);");
+        sb.AppendLine("                reader.ReadValue(ref v);");
         sb.AppendLine("                builder.Add(k!, v);");
         sb.AppendLine("            }");
         sb.AppendLine();
@@ -951,8 +928,6 @@ public static class InterfaceImmutableSetFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var parser = writer.GetParser<{elementType}>();");
-        sb.AppendLine();
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(4);");
@@ -960,7 +935,7 @@ public static class InterfaceImmutableSetFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                parser.Serialize(ref writer, ref v);");
+        sb.AppendLine("                writer.WriteValue(v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -994,16 +969,256 @@ public static class InterfaceImmutableSetFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            var parser = LuminPackParseProvider.Cache<{elementType}>.Parser!;");
-        sb.AppendLine();
         sb.AppendLine($"            var builder = global::System.Collections.Immutable.ImmutableHashSet.CreateBuilder<{elementType}>();");
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
         sb.AppendLine($"                {elementType} item = default;");
-        sb.AppendLine("                parser.Deserialize(ref reader, ref item);");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine("                builder.Add(item);");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            value = builder.ToImmutable();");
+    }
+}
+
+/// <summary>
+/// JSON counterparts of the immutable collection parsers.  The generated code
+/// keeps their token loops and pooled-buffer construction, while every element
+/// is handled by a generated extension without runtime instances.
+/// </summary>
+internal static class ImmutableCollectionFormatterHelper
+{
+    public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        string baseType = GetBaseTypeName(fieldData.TypeName);
+        if (IsDictionary(baseType))
+        {
+            AppendDictionarySerialize(sb);
+            return;
+        }
+
+        string elementType = GetFirstGeneric(fieldData.TypeName);
+        if (baseType == "global::System.Collections.Immutable.ImmutableArray")
+        {
+            sb.AppendLine("            if (value.IsDefault)");
+        }
+        else
+        {
+            sb.AppendLine("            if (value == null)");
+        }
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNull();");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            writer.WriteArrayStart();");
+        if (baseType == "global::System.Collections.Immutable.ImmutableArray")
+        {
+            sb.AppendLine("            if (value.Length == 0)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                writer.WriteArrayEnd();");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+        }
+        else if (baseType is not ("global::System.Collections.Immutable.ImmutableQueue" or
+                     "global::System.Collections.Immutable.IImmutableQueue" or
+                     "global::System.Collections.Immutable.ImmutableStack" or
+                     "global::System.Collections.Immutable.IImmutableStack"))
+        {
+            sb.AppendLine("            if (value.Count == 0)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                writer.WriteArrayEnd();");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+        }
+        sb.AppendLine("            bool isFirst = true;");
+        sb.AppendLine("            foreach (var item in value)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                if (!isFirst) writer.WriteByteRaw((byte)',');");
+        sb.AppendLine("                else isFirst = false;");
+        sb.AppendLine("                writer.SetFirstElement(true);");
+        sb.AppendLine("                var temp = item;");
+        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in temp);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            writer.WriteArrayEnd();");
+    }
+
+    public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        string baseType = GetBaseTypeName(fieldData.TypeName);
+        if (IsDictionary(baseType))
+        {
+            AppendDictionaryDeserialize(fieldData, sb, baseType);
+            return;
+        }
+
+        AppendSequenceDeserialize(fieldData, sb, baseType);
+    }
+
+    private static void AppendSequenceDeserialize(LuminLocalFieldData fieldData, StringBuilder sb, string baseType)
+    {
+        string elementType = GetFirstGeneric(fieldData.TypeName);
+        bool immutableArray = baseType == "global::System.Collections.Immutable.ImmutableArray";
+        sb.AppendLine("            if (reader.IsNull())");
+        sb.AppendLine("            {");
+        sb.AppendLine(immutableArray ? "                value = default;" : "                value = null;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            reader.TryConsumeArrayStart();");
+        sb.AppendLine("            const int initialCapacity = 16;");
+        sb.AppendLine("            var buffer = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(initialCapacity);");
+        sb.AppendLine("            var count = 0;");
+        sb.AppendLine("            try");
+        sb.AppendLine("            {");
+        sb.AppendLine("                while (reader.Read())");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
+        sb.AppendLine("                        break;");
+        sb.AppendLine("                    if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd)");
+        sb.AppendLine("                        continue;");
+        sb.AppendLine("                    if (count >= buffer.Length)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        var newBuffer = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(buffer.Length * 2);");
+        sb.AppendLine("                        global::System.Array.Copy(buffer, newBuffer, count);");
+        sb.AppendLine("                        global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(buffer, clearArray: global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">());");
+        sb.AppendLine("                        buffer = newBuffer;");
+        sb.AppendLine("                    }");
+        sb.AppendLine("                    " + elementType + " item = default!;");
+        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item);");
+        sb.AppendLine("                    buffer[count++] = item;");
+        sb.AppendLine("                }");
+        AppendSequenceConstruction(sb, elementType, baseType);
+        sb.AppendLine("            }");
+        sb.AppendLine("            finally");
+        sb.AppendLine("            {");
+        sb.AppendLine("                global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(buffer, clearArray: global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">());");
+        sb.AppendLine("            }");
+    }
+
+    private static void AppendSequenceConstruction(StringBuilder sb, string elementType, string baseType)
+    {
+        if (baseType == "global::System.Collections.Immutable.ImmutableArray")
+        {
+            sb.AppendLine("                if (count == 0)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    value = global::System.Collections.Immutable.ImmutableArray<" + elementType + ">.Empty;");
+            sb.AppendLine("                    return;");
+            sb.AppendLine("                }");
+            sb.AppendLine("                var finalArray = new " + elementType + "[count];");
+            sb.AppendLine("                global::System.Array.Copy(buffer, finalArray, count);");
+            sb.AppendLine("#if NET8_0_OR_GREATER");
+            sb.AppendLine("                value = global::System.Runtime.InteropServices.ImmutableCollectionsMarshal.AsImmutableArray(finalArray);");
+            sb.AppendLine("#else");
+            sb.AppendLine("                value = global::System.Collections.Immutable.ImmutableArray.Create<" + elementType + ">();");
+            sb.AppendLine("                ref var view = ref global::LuminPack.Code.LuminPackMarshal.As<global::System.Collections.Immutable.ImmutableArray<" + elementType + ">, global::LuminPack.Code.ImmutableArrayView<" + elementType + ">>(ref value);");
+            sb.AppendLine("                view.array = finalArray;");
+            sb.AppendLine("#endif");
+            return;
+        }
+
+        string target = baseType switch
+        {
+            "global::System.Collections.Immutable.ImmutableList" or "global::System.Collections.Immutable.IImmutableList" => "ImmutableList",
+            "global::System.Collections.Immutable.ImmutableHashSet" or "global::System.Collections.Immutable.IImmutableSet" => "ImmutableHashSet",
+            "global::System.Collections.Immutable.ImmutableSortedSet" => "ImmutableSortedSet",
+            "global::System.Collections.Immutable.ImmutableQueue" or "global::System.Collections.Immutable.IImmutableQueue" => "ImmutableQueue",
+            "global::System.Collections.Immutable.ImmutableStack" or "global::System.Collections.Immutable.IImmutableStack" => "ImmutableStack",
+            _ => throw new global::System.InvalidOperationException("Unsupported immutable collection: " + baseType)
+        };
+
+        sb.AppendLine("                if (count == 0)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    value = global::System.Collections.Immutable." + target + "<" + elementType + ">.Empty;");
+        sb.AppendLine("                    return;");
+        sb.AppendLine("                }");
+        if (target == "ImmutableStack")
+        {
+            sb.AppendLine("                global::System.Array.Reverse(buffer, 0, count);");
+        }
+        if (target is "ImmutableQueue" or "ImmutableStack")
+        {
+            sb.AppendLine("                value = global::System.Collections.Immutable." + target + ".CreateRange((new global::System.ArraySegment<" + elementType + ">(buffer, 0, count)).AsEnumerable());");
+            return;
+        }
+        sb.AppendLine("                var builder = global::System.Collections.Immutable." + target + ".CreateBuilder<" + elementType + ">();");
+        sb.AppendLine("                for (int i = 0; i < count; i++)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    builder.Add(buffer[i]);");
+        sb.AppendLine("                }");
+        sb.AppendLine("                value = builder.ToImmutable();");
+    }
+
+    private static void AppendDictionarySerialize(StringBuilder sb)
+    {
+        sb.AppendLine("            if (value == null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNull();");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            writer.WriteArrayStart();");
+        sb.AppendLine("            if (value.Count == 0)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteArrayEnd();");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            foreach (var item in value)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteArrayStart();");
+        sb.AppendLine("                var key = item.Key;");
+        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in key);");
+        sb.AppendLine("                var itemValue = item.Value;");
+        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in itemValue);");
+        sb.AppendLine("                writer.WriteArrayEnd();");
+        sb.AppendLine("            }");
+        sb.AppendLine("            writer.WriteArrayEnd();");
+    }
+
+    private static void AppendDictionaryDeserialize(LuminLocalFieldData fieldData, StringBuilder sb, string baseType)
+    {
+        string keyType = GetFirstGeneric(fieldData.TypeName);
+        string valueType = GetSecondGeneric(fieldData.TypeName);
+        string target = baseType == "global::System.Collections.Immutable.ImmutableSortedDictionary"
+            ? "ImmutableSortedDictionary"
+            : "ImmutableDictionary";
+        sb.AppendLine("            if (reader.IsNull())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            var builder = global::System.Collections.Immutable." + target + ".CreateBuilder<" + keyType + ", " + valueType + ">();");
+        sb.AppendLine("            reader.TryConsumeArrayStart();");
+        sb.AppendLine("            while (reader.Read())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
+        sb.AppendLine("                    break;");
+        sb.AppendLine("                if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayStart)");
+        sb.AppendLine("                    continue;");
+        sb.AppendLine("                reader.TryConsumeArrayStart();");
+        sb.AppendLine("                " + keyType + " key = default!;");
+        sb.AppendLine("                " + valueType + " itemValue = default!;");
+        sb.AppendLine("                if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref key);");
+        sb.AppendLine("                    if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
+        sb.AppendLine("                        global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref itemValue);");
+        sb.AppendLine("                }");
+        sb.AppendLine("                while (reader.Read())");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
+        sb.AppendLine("                        break;");
+        sb.AppendLine("                }");
+        sb.AppendLine("                builder.Add(key!, itemValue);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            value = builder.ToImmutable();");
+    }
+
+    private static bool IsDictionary(string baseType) => baseType is
+        "global::System.Collections.Immutable.ImmutableDictionary" or
+        "global::System.Collections.Immutable.ImmutableSortedDictionary" or
+        "global::System.Collections.Immutable.IImmutableDictionary";
+
+    private static string GetBaseTypeName(string typeName)
+    {
+        int separator = typeName.IndexOf('<');
+        return separator < 0 ? typeName : typeName.Substring(0, separator);
     }
 }

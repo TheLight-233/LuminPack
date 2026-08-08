@@ -201,12 +201,6 @@ namespace LuminPack.Core
         #region JSON Basic Methods
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteValue<T>(ref T? value)
-        {
-            LuminPackParseProvider.Cache<T>.Parser!.SerializeJson(ref this, ref value);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetFirstElement(bool value)
         {
             _isFirstElement = value;

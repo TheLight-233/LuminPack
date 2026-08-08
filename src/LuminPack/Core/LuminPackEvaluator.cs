@@ -73,7 +73,8 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ILuminPackEvaluator<T> GetEvaluator<T>()
     {
-        return LuminPackParseProvider.GetParserEvaluator<T>();
+        LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+        return default!;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -117,8 +118,8 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void CalculateValue<T>(scoped in T? value)
     {
-        var v = value;
-        GetEvaluator<T>().CalculateOffset(ref this, ref v);
+        var writableValue = value;
+        LuminPackFormatterCache.Cache<T>.CalculateOffset(ref this, ref writableValue);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -159,17 +160,7 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
             return;
         }
         
-        var evaluator = LuminPackParseProvider.GetParserEvaluator<T>();
-
-        Add(4);
-        
-        if (array is null)
-            return;
-        
-        for (int i = 0; i < array.Length; i++)
-        {
-            evaluator.CalculateOffset(ref this, ref array[i]);
-        }
+        LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -182,17 +173,7 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
             return;
         }
 
-        Add(4);
-        
-        if (span.IsEmpty)
-            return;
-        
-        var evaluator = LuminPackParseProvider.GetParserEvaluator<T>();
-        
-        for (int i = 0; i < span.Length; i++)
-        {
-            evaluator.CalculateOffset(ref this, ref span[i]);
-        }
+        LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -205,18 +186,7 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
             return;
         }
         
-        var evaluator = LuminPackParseProvider.GetParserEvaluator<T>();
-
-        Add(4);
-        
-        if (span.IsEmpty)
-            return;
-        
-        for (int i = 0; i < span.Length; i++)
-        {
-            var v = span[i];
-            evaluator.CalculateOffset(ref this, ref v);
-        }
+        LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

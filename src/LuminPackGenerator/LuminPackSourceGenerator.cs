@@ -77,8 +77,7 @@ namespace LuminPack.SourceGenerator
                     }).WithTrackingName("LuminPack.LuminPackable.0_MetaInfo");
 
         
-                var typeDeclarations = context.SyntaxProvider.ForAttributeWithMetadataName(
-                    LUMIN_PACKABLE_ATTRIBUTE,
+                var typeDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
                     static (node, _) => node 
                         is ClassDeclarationSyntax 
                         or StructDeclarationSyntax 
@@ -88,16 +87,19 @@ namespace LuminPack.SourceGenerator
                     {
                         try
                         {
-                            return context.TargetSymbol;
+                            return GetTypeWithAttribute(context, LUMIN_PACKABLE_ATTRIBUTE);
                         }
-                        catch (Exception ex)
+                        catch
                         {
                             // // 捕获创建LuminDataInfo时的异常
                             // var errorMsg = $"{DateTime.Now}: CreateLuminDataInfo failed for {context.TargetSymbol?.Name}\n{ex}\nStack: {ex.StackTrace}";
                             // File.WriteAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "LuminPack_CreateLuminDataInfo_error.txt"), errorMsg);
                             throw;
                         }
-                    }).WithTrackingName("LuminPack.LuminPackable.1_ForAttributeLuminPackableAttribute");
+                    })
+                    .Where(static symbol => symbol != null)
+                    .Select(static (symbol, _) => symbol!)
+                    .WithTrackingName("LuminPack.LuminPackable.1_ForAttributeLuminPackableAttribute");
 
                 var provider = typeDeclarations
                     .Combine(context.CompilationProvider)
@@ -129,10 +131,11 @@ namespace LuminPack.SourceGenerator
                         var compilation = source.Item1.Item2;
                         var metaInfo = source.Item2;
                 
-                        var code = LuminPackCodeGenerator.CodeGenerator(dataInfo, metaInfo);
                         var extension = LuminPackExtensionGenerator.CodeGenerator(dataInfo, metaInfo, compilation);
-                        var unionDispatch = LuminPackUnionDispatchCodeGenerator.Generate(dataInfo);
-                        if (string.IsNullOrEmpty(code)) return;
+                        var unionDispatch = dataInfo.isUnion
+                            ? LuminPackUnionDispatchCodeGenerator.Generate(dataInfo, compilation)
+                            : string.Empty;
+                        if (string.IsNullOrEmpty(extension)) return;
                 
                         var name = dataInfo.classFullName;
                         if (name.StartsWith("global::"))
@@ -141,8 +144,7 @@ namespace LuminPack.SourceGenerator
                         }
                         name = name.Replace("<", "_").Replace('>', '_');
                         
-                        context.AddSource($"{name}Parser.g.cs", code);
-                        context.AddSource($"{name}Parser.Extension.g.cs", extension);
+                        context.AddSource($"{name}.Extension.g.cs", extension);
                         if (!string.IsNullOrEmpty(unionDispatch))
                             context.AddSource($"{name}.UnionDispatch.g.cs", unionDispatch);
                         
@@ -150,6 +152,10 @@ namespace LuminPack.SourceGenerator
                     }
                     catch (Exception ex)
                     {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            DiagnosticDescriptors.GeneratorFailure,
+                            Location.None,
+                            ex.GetType().FullName + ": " + ex.Message));
                         // // 捕获代码生成时的异常
                         // System.Diagnostics.StackTrace trace = new System.Diagnostics.StackTrace(ex, true);
                         // var errorMsg = $"{DateTime.Now}: Code generation failed\n{ex}\nStack: {trace}";
@@ -168,8 +174,11 @@ namespace LuminPack.SourceGenerator
                     }
                 });
             }
-            catch (Exception ex)
+            catch
             {
+                // Initialize has no SourceProductionContext. Let Roslyn report the
+                // analyzer failure instead of silently emitting an incomplete formatter set.
+                throw;
                 // 捕获初始化过程中的异常
                 // var errorMsg = $"{DateTime.Now}: Generator initialization failed\n{ex}\nStack: {ex.StackTrace}";
                 // File.WriteAllText(Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), "LuminPack_Init_error.txt"), errorMsg);
@@ -270,7 +279,7 @@ namespace LuminPack.SourceGenerator
                 {
                     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                         DiagnosticDescriptors.SealedTypeCantBeUnion,
-                        _location,
+                        typeSymbol.Locations.FirstOrDefault() ?? _location,
                         symbol.Name
                     ));
                 }
@@ -279,7 +288,7 @@ namespace LuminPack.SourceGenerator
                 {
                     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                         DiagnosticDescriptors.UnionMemberNotAllowStruct,
-                        _location,
+                        typeSymbol.Locations.FirstOrDefault() ?? _location,
                         symbol.Name
                     ));
                 }
@@ -288,7 +297,7 @@ namespace LuminPack.SourceGenerator
                 {
                     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                         DiagnosticDescriptors.ConcreteTypeCantBeUnion,
-                        _location,
+                        typeSymbol.Locations.FirstOrDefault() ?? _location,
                         symbol.Name
                     ));
                 }
@@ -318,7 +327,7 @@ namespace LuminPack.SourceGenerator
                     {
                         TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                             DiagnosticDescriptors.UnionMemberGenericCountExceed,
-                            _location,
+                            member.Type.Locations.FirstOrDefault() ?? typeSymbol.Locations.FirstOrDefault() ?? _location,
                             member.Type.Name,
                             typeSymbol.TypeParameters.Length,
                             memberGenericCount
@@ -330,7 +339,7 @@ namespace LuminPack.SourceGenerator
                     {
                         TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                             DiagnosticDescriptors.UnionTagDuplicate,
-                            _location,
+                            typeSymbol.Locations.FirstOrDefault() ?? _location,
                             member.Id,
                             symbol.Name
                         ));
@@ -341,7 +350,7 @@ namespace LuminPack.SourceGenerator
                     {
                         TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                             DiagnosticDescriptors.UnionMemberMustBeLuminPackable,
-                            _location,
+                            member.Type.Locations.FirstOrDefault() ?? typeSymbol.Locations.FirstOrDefault() ?? _location,
                             member.Type.Name
                         ));
                     }
@@ -373,7 +382,7 @@ namespace LuminPack.SourceGenerator
                         {
                             TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                                 DiagnosticDescriptors.UnionMemberTypeNotDerivedBaseType,
-                                _location,
+                                member.Type.Locations.FirstOrDefault() ?? typeSymbol.Locations.FirstOrDefault() ?? _location,
                                 member.Type.Name,
                                 typeSymbol.Name
                             ));
@@ -400,7 +409,7 @@ namespace LuminPack.SourceGenerator
                         {
                             TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                                 DiagnosticDescriptors.UnionMemberTypeNotImplementBaseType,
-                                _location,
+                                member.Type.Locations.FirstOrDefault() ?? typeSymbol.Locations.FirstOrDefault() ?? _location,
                                 member.Type.Name,
                                 typeSymbol.Name
                             ));
@@ -425,6 +434,7 @@ namespace LuminPack.SourceGenerator
                             typeSymbol.Name));
                     }
                 }
+
             }
 
             if (dataInfo.generatorType is GeneratorType.CircleReference or GeneratorType.VersionTolerant)
@@ -436,7 +446,7 @@ namespace LuminPack.SourceGenerator
             {
                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                     DiagnosticDescriptors.StaticClass,
-                    _location,
+                    typeSymbol.Locations.FirstOrDefault() ?? _location,
                     symbol.Name
                 ));
             }
@@ -445,7 +455,7 @@ namespace LuminPack.SourceGenerator
             {
                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                     DiagnosticDescriptors.TypeIsRefStruct,
-                    _location,
+                    typeSymbol.Locations.FirstOrDefault() ?? _location,
                     symbol.Name));
             }
 
@@ -630,6 +640,7 @@ namespace LuminPack.SourceGenerator
                         {
                             Name = member.Name,
                             FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                            TypeSymbol = member.Type,
                             NameSpace = member.Type.ContainingNamespace?.ToString() ??
                                         member.ContainingNamespace?.ToString() ??
                                         "Your.Data.Namespace",
@@ -700,6 +711,7 @@ namespace LuminPack.SourceGenerator
                         {
                             Name = fieldMember.Name,
                             FullTypeName = fieldMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                            TypeSymbol = fieldMember.Type,
                             NameSpace = fieldMember.Type.ContainingNamespace?.ToString() ??
                                         fieldMember.ContainingNamespace?.ToString() ??
                                         "Your.Data.Namespace",
@@ -761,12 +773,15 @@ namespace LuminPack.SourceGenerator
 
         private static void ProcessFieldType(ITypeSymbol type, LuminDataField field, List<string> genericParameters = null)
         {
+            field.TypeSymbol = type;
             if (TypeMetaChecker.TryCheckIsNotRefLike(type))
             {
                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                     DiagnosticDescriptors.MemberIsRefStruct,
-                    type.Locations.FirstOrDefault(),
-                    type.Name
+                    _currentSymbol?.Locations.FirstOrDefault() ?? type.Locations.FirstOrDefault(),
+                    _mainSymbol?.Name ?? field.belongClassName,
+                    field.Name,
+                    type.ToDisplayString()
                 ));
             }
             
@@ -788,7 +803,7 @@ namespace LuminPack.SourceGenerator
                 INamedTypeSymbol originalSymbol = namedType.OriginalDefinition;
                 string metadataName = $"{originalSymbol.ContainingNamespace}.{originalSymbol.MetadataName}";
                 
-                if (ParserMap.Parsers.Contains(metadataName))
+                if (FormatterTypeMap.StaticFormatterTypes.Contains(metadataName))
                 {
                     field.Type = LuminFiledType.Other;
                     return; 
@@ -856,8 +871,8 @@ namespace LuminPack.SourceGenerator
                             {
                                 field.Type = LuminFiledType.List;
                                 ProcessGenericArguments(namedType.TypeArguments, field, genericParameters);
-                            }
-                            else if (ParserMap.Parsers.Contains(metadataName))
+                            } 
+                            else if (FormatterTypeMap.StaticFormatterTypes.Contains(metadataName))
                             {
                                 field.Type = LuminFiledType.Other;
                             }
@@ -912,8 +927,8 @@ namespace LuminPack.SourceGenerator
                     
                     INamedTypeSymbol originalSymbol = namedTypeArg.OriginalDefinition;
                     string metadataName = $"{originalSymbol.ContainingNamespace}.{originalSymbol.MetadataName}";
-
-                    if (ParserMap.Parsers.Contains(metadataName))
+                    
+                    if (FormatterTypeMap.StaticFormatterTypes.Contains(metadataName))
                     {
                         field.Type = LuminFiledType.Other;
                         
@@ -975,8 +990,8 @@ namespace LuminPack.SourceGenerator
                 
                 INamedTypeSymbol originalSymbol = elementNamedType.OriginalDefinition;
                 string metadataName = $"{originalSymbol.ContainingNamespace}.{originalSymbol.MetadataName}";
-
-                if (ParserMap.Parsers.Contains(metadataName))
+                
+                if (FormatterTypeMap.StaticFormatterTypes.Contains(metadataName))
                 {
                     field.Type = LuminFiledType.Other;
                     
@@ -1013,6 +1028,27 @@ namespace LuminPack.SourceGenerator
             }
             
             
+        }
+
+        private static INamedTypeSymbol? GetTypeWithAttribute(
+            GeneratorSyntaxContext context,
+            string metadataName)
+        {
+            if (context.Node is not TypeDeclarationSyntax typeDeclaration)
+                return null;
+
+            var symbol = context.SemanticModel.GetDeclaredSymbol(typeDeclaration) as INamedTypeSymbol;
+            if (symbol == null)
+                return null;
+
+            foreach (var attribute in symbol.GetAttributes())
+            {
+                if (attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                    == "global::" + metadataName)
+                    return symbol;
+            }
+
+            return null;
         }
 
         /// <summary>
@@ -1144,7 +1180,7 @@ namespace LuminPack.SourceGenerator
                             {
                                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                                     DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                                    _location,
+                                    member.Locations.FirstOrDefault() ?? _location,
                                     _mainSymbol.Name, namedTypeArg.Name
                                 ));
                                 continue;
@@ -1207,7 +1243,7 @@ namespace LuminPack.SourceGenerator
                             {
                                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                                     DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                                    _location,
+                                    nestedMember.Locations.FirstOrDefault() ?? _location,
                                     _mainSymbol.Name, namedTypeArg.Name
                                 ));
                                 continue;
@@ -1301,7 +1337,7 @@ namespace LuminPack.SourceGenerator
                             {
                                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                                     DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                                    _location,
+                                    member.Locations.FirstOrDefault() ?? _location,
                                     _mainSymbol.Name, namedTypeArg.Name
                                 ));
                                 continue;
@@ -1368,7 +1404,7 @@ namespace LuminPack.SourceGenerator
                             {
                                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                                     DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                                    _location,
+                                    nestedMember.Locations.FirstOrDefault() ?? _location,
                                     _mainSymbol.Name, namedTypeArg.Name
                                 ));
                                 continue;
@@ -1575,7 +1611,7 @@ namespace LuminPack.SourceGenerator
                 {
                     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                         DiagnosticDescriptors.ContainsDuplicateNameField,
-                        typeSymbol.Locations.FirstOrDefault(),
+                        member.Locations.FirstOrDefault() ?? typeSymbol.Locations.FirstOrDefault(),
                         member.Name
                     ));
                 }
@@ -1585,6 +1621,12 @@ namespace LuminPack.SourceGenerator
                 localFields.Add(new LuminLocalFieldData
                 {
                     TypeName = typeName,
+                    TypeSymbol = member switch
+                    {
+                        IPropertySymbol propertySymbol => propertySymbol.Type,
+                        IFieldSymbol fieldSymbol => fieldSymbol.Type,
+                        _ => null
+                    },
                     Name = member.Name,
                     filedOffset = offset,
                     IsValue = isValue,
@@ -1739,7 +1781,7 @@ namespace LuminPack.SourceGenerator
                     {
                         TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                             DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                            _location,
+                            member.Locations.FirstOrDefault() ?? _location,
                             _mainSymbol.Name, classSymbol.Name
                         ));
                         continue;
@@ -1763,6 +1805,7 @@ namespace LuminPack.SourceGenerator
                 {
                     Name = member.Name,
                     FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    TypeSymbol = member.Type,
                     NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = member.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : member.Type.Name,
                     IsPrivate = member.DeclaredAccessibility is 
@@ -1799,7 +1842,7 @@ namespace LuminPack.SourceGenerator
                     {
                         TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                             DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                            _location,
+                            nestedMember.Locations.FirstOrDefault() ?? _location,
                             _mainSymbol.Name, classSymbol.Name
                         ));
                         continue;
@@ -1824,6 +1867,7 @@ namespace LuminPack.SourceGenerator
                 {
                     Name = nestedMember.Name,
                     FullTypeName = nestedMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
+                    TypeSymbol = nestedMember.Type,
                     NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
                     IsPrivate = nestedMember.DeclaredAccessibility is 
@@ -1870,7 +1914,7 @@ namespace LuminPack.SourceGenerator
                 {
                     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                         DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                        _location,
+                        member.Locations.FirstOrDefault() ?? _location,
                         _mainSymbol.Name, namedType.Name
                     ));
                     continue;
@@ -1933,7 +1977,7 @@ namespace LuminPack.SourceGenerator
                 {
                     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                         DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                        _location,
+                        nestedMember.Locations.FirstOrDefault() ?? _location,
                         _mainSymbol.Name, namedType.Name
                     ));
                     continue;
@@ -2225,13 +2269,13 @@ namespace LuminPack.SourceGenerator
             {
                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                     DiagnosticDescriptors.NestedClassMustBePublicOrInternal,
-                    _location,
+                    nestedType.Locations.FirstOrDefault() ?? _location,
                     nestedType.Name
                 ));
                 
                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                     DiagnosticDescriptors.NestedClassAccessibilityError,
-                    _location,
+                    nestedType.Locations.FirstOrDefault() ?? _location,
                     nestedType.Name,
                     nestedType.DeclaredAccessibility.ToString()
                 ));

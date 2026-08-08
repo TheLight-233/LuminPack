@@ -14,7 +14,6 @@ using LuminPack.Code;
 using LuminPack.Core;
 using LuminPack.Interface;
 using LuminPack.Option;
-using LuminPack.Parsers;
 using LuminPack.Utility;
 using static LuminPack.Code.LuminPackMarshal;
 
@@ -32,18 +31,6 @@ namespace LuminPack
         [ThreadStatic]
         private static LuminPackEvaluatorOptionState? _threadStaticEvaluatorOptionalState;
 
-        internal static bool NeedInitParserFactory = true;
-        
-        /// <summary>Initializes the parser factory with explicit target-to-parser registrations.</summary>
-        /// <param name="registryType">The target types and parser types to register.</param>
-        /// <remarks>This application-level initialization should complete before concurrent serialization begins.</remarks>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void Initialize(List<(Type TargetType, Type ParserType)> registryType)
-        {
-            NeedInitParserFactory = false;
-            ParserFactory.Initialize(registryType);
-        }
-        
         #region Serialize
 
         /// <summary>Serializes <paramref name="value"/> to a newly allocated LuminPack binary payload.</summary>
@@ -134,7 +121,7 @@ namespace LuminPack
             {
                 var writer = new LuminPackJsonWriter(writerBuffer, state);
 
-                LuminPackParseProvider.Cache<T>.Parser!.SerializeJson(ref writer, ref value);
+                writer.WriteValue(in value);
                 
                 return writer.Option.StringEncoding is LuminPackStringEncoding.UTF8 
                     ? Encoding.UTF8.GetString(writer.GetSpan())
@@ -167,7 +154,7 @@ namespace LuminPack
             {
                 var writer = new LuminPackJsonWriter(writerBuffer);
 
-                LuminPackParseProvider.Cache<T>.Parser!.SerializeJson(ref writer, ref value);
+                writer.WriteValue(in value);
                 
                 writerBuffer.CompleteWrite(writer.CurrentIndex);
             }
@@ -302,7 +289,6 @@ namespace LuminPack
             LuminPackSerializerOption? options = null)
         {
             
-            //if (LuminPackParseProvider.GetParserType<T>() is LuminPackParseProvider.ParserType.Data) goto Read;
             
             //Read:
             var state = _threadStaticReaderOptionalState ??= new LuminPackReaderOptionalState();
@@ -474,7 +460,7 @@ namespace LuminPack
                 var reader = new LuminPackJsonReader(bufferWriter);
                 if (!reader.Read())
                     throw new FormatException("JSON input does not contain a value");
-                LuminPackParseProvider.Cache<T>.Parser!.DeserializeJson(ref reader, ref value);
+                reader.ReadValue(ref value);
                 reader.EnsureEndOfDocument();
                 return reader.CurrentIndex;
             }
@@ -501,7 +487,7 @@ namespace LuminPack
                 var reader = new LuminPackJsonReader(ref span, state);
                 if (!reader.Read())
                     throw new FormatException("JSON input does not contain a value");
-                LuminPackParseProvider.Cache<T>.Parser!.DeserializeJson(ref reader, ref value);
+                reader.ReadValue(ref value);
                 reader.EnsureEndOfDocument();
            
                 return reader.CurrentIndex;
@@ -528,7 +514,7 @@ namespace LuminPack
                 var reader = new LuminPackJsonReader(ref buffer, state);
                 if (!reader.Read())
                     throw new FormatException("JSON input does not contain a value");
-                LuminPackParseProvider.Cache<T>.Parser!.DeserializeJson(ref reader, ref value);
+                reader.ReadValue(ref value);
                 reader.EnsureEndOfDocument();
            
                 return reader.CurrentIndex;
@@ -716,13 +702,11 @@ namespace LuminPack
             state.Init(option);
             try
             {
-                var eval = LuminPackParseProvider.GetParserEvaluator<T>();
-            
                 var totalLength = 0;
             
                 var evaluator = new LuminPackEvaluator(ref totalLength, state);
             
-                eval.CalculateOffset(ref evaluator, ref data);
+                LuminPackFormatterCache.Cache<T>.CalculateOffset(ref evaluator, ref data);
             
                 return totalLength;
             }
@@ -806,74 +790,9 @@ namespace LuminPack
         }
 
         
-        /// <summary>
-        /// 获取指定类型的解析器名称
-        /// </summary>
-        /// <param name="type">目标类型</param>
-        /// <returns>预期生成的解析器名称</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static string GetParserName(Type type)
-        {
-            if (type is null) throw new ArgumentNullException(nameof(type));
-            
-            return GenerateExpectedParserName(type);
-        }
-
-        /// <summary>
-        /// 获取指定类型的解析器名称
-        /// </summary>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static string GetParserName<T>()
-        {
-            return GetParserName(typeof(T));
-        }
-        
         #endregion
         
         #region Private Helper Methods
-        
-        private static string GenerateExpectedParserName(Type originalType)
-        {
-            const string parserNamespace = "LuminPack.Generated";
-            bool isGeneric = originalType.IsGenericType;
-
-            // 移除可能的 global:: 前缀
-            static string RemoveGlobalPrefix(string typeName)
-            {
-                const string globalPrefix = "global::";
-                return typeName.StartsWith(globalPrefix, StringComparison.Ordinal) 
-                    ? typeName.Substring(globalPrefix.Length) 
-                    : typeName;
-            }
-    
-            string originalFullName = RemoveGlobalPrefix(originalType.FullName ?? originalType.Name);
-    
-            string normalizedName = originalFullName.Replace('.', '_').Replace('+', '_');
-
-            string fullTypeName;
-            if (isGeneric)
-            {
-                string baseName = normalizedName.Split('`')[0];
-                int argCount = originalType.GetGenericArguments().Length;
-                fullTypeName = $"{parserNamespace}.{baseName}Parser`{argCount}";
-            }
-            else
-            {
-                fullTypeName = $"{parserNamespace}.{normalizedName}Parser";
-            }
-
-            return fullTypeName;
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void EnsureParserRegistered<T>()
-        {
-            if (!LuminPackParseProvider.IsRegistered<T>() && 
-                !LuminPackParseProvider.TryRegisterParser<T>())
-            {
-                LuminPackExceptionHelper.ThrowNoParserRegistered(typeof(T));
-            }
-        }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int DeserializeUnmanagedSequence<T>(ReadOnlySequence<byte> buffer, ref T? value)

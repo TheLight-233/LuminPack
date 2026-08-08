@@ -165,13 +165,14 @@ public static class LuminPackJsonCodeGenerator
 		sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
 		if (data.isValueType)
 		{
-			sb.AppendLine(metaInfo.IsNet8 ? ("        public override void SerializeJson(ref global::LuminPack.Core.LuminPackJsonWriter writer, scoped ref " + classGlobalName + " value)") : ("        public override void SerializeJson(ref global::LuminPack.Core.LuminPackJsonWriter writer, ref " + classGlobalName + " value)"));
+			sb.AppendLine(metaInfo.IsNet8 ? ("        public static void WriteValue(ref global::LuminPack.Core.LuminPackJsonWriter writer, scoped in " + classGlobalName + " input)") : ("        public static void WriteValue(ref global::LuminPack.Core.LuminPackJsonWriter writer, in " + classGlobalName + " input)"));
 		}
 		else
 		{
-			sb.AppendLine(metaInfo.IsNet8 ? ("        public override void SerializeJson(ref global::LuminPack.Core.LuminPackJsonWriter writer, scoped ref " + classGlobalName + "? value)") : ("        public override void SerializeJson(ref global::LuminPack.Core.LuminPackJsonWriter writer, ref " + classGlobalName + "? value)"));
+			sb.AppendLine(metaInfo.IsNet8 ? ("        public static void WriteValue(ref global::LuminPack.Core.LuminPackJsonWriter writer, scoped in " + classGlobalName + "? input)") : ("        public static void WriteValue(ref global::LuminPack.Core.LuminPackJsonWriter writer, in " + classGlobalName + "? input)"));
 		}
 		sb.AppendLine("        {");
+		sb.AppendLine("            var value = input;");
 		if (!data.isValueType)
 		{
 			sb.AppendLine("            if (value == null)");
@@ -217,7 +218,9 @@ public static class LuminPackJsonCodeGenerator
 			GenerateJsonSerializeField(sb, luminDataField2, text3 + "." + luminDataField2.Identifier, "            ");
 			sb.AppendLine();
 		}
-		sb.AppendLine("            writer.WriteByteRaw((byte)'}');");
+		// WriteObjectEnd preserves the selected JSON encoding. A raw byte leaves an
+		// incomplete UTF-16 token and makes the top-level end check fail.
+		sb.AppendLine("            writer.WriteObjectEnd();");
 		sb.AppendLine("        }");
 	}
 
@@ -298,7 +301,7 @@ public static class LuminPackJsonCodeGenerator
 			string text = field.FullTypeName ?? field.Name;
 			sb.AppendLine(indent + "{");
 			sb.AppendLine(indent + "    var temp = " + valueExpr + ";");
-			sb.AppendLine(indent + "    global::LuminPack.LuminPackParseProvider.Cache<" + text + ">.Parser?.SerializeJson(ref writer, ref temp);");
+			sb.AppendLine(indent + "    global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in temp);");
 			sb.AppendLine(indent + "}");
 			break;
 		}
@@ -314,11 +317,11 @@ public static class LuminPackJsonCodeGenerator
 		sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
 		if (data.isValueType)
 		{
-			sb.AppendLine(metaInfo.IsNet8 ? ("        public override void DeserializeJson(ref global::LuminPack.Core.LuminPackJsonReader reader, scoped ref " + classGlobalName + " value)") : ("        public override void DeserializeJson(ref global::LuminPack.Core.LuminPackJsonReader reader, ref " + classGlobalName + " value)"));
+			sb.AppendLine(metaInfo.IsNet8 ? ("        public static void ReadValue(ref global::LuminPack.Core.LuminPackJsonReader reader, scoped ref " + classGlobalName + " value)") : ("        public static void ReadValue(ref global::LuminPack.Core.LuminPackJsonReader reader, ref " + classGlobalName + " value)"));
 		}
 		else
 		{
-			sb.AppendLine(metaInfo.IsNet8 ? ("        public override void DeserializeJson(ref global::LuminPack.Core.LuminPackJsonReader reader, scoped ref " + classGlobalName + "? value)") : ("        public override void DeserializeJson(ref global::LuminPack.Core.LuminPackJsonReader reader, ref " + classGlobalName + "? value)"));
+			sb.AppendLine(metaInfo.IsNet8 ? ("        public static void ReadValue(ref global::LuminPack.Core.LuminPackJsonReader reader, scoped ref " + classGlobalName + "? value)") : ("        public static void ReadValue(ref global::LuminPack.Core.LuminPackJsonReader reader, ref " + classGlobalName + "? value)"));
 		}
 		sb.AppendLine("        {");
 		if (!data.isValueType)
@@ -334,11 +337,15 @@ public static class LuminPackJsonCodeGenerator
 		{
 			sb.AppendLine("            var result = new " + classGlobalName + "();");
 		}
-		else
+		if (!flag || data.fields.Any(static field => !CanDeserializeDirectlyIntoConstructedObject(field)))
 		{
 			sb.AppendLine("            // Temp vars");
 			foreach (LuminDataField field in data.fields)
 			{
+				if (flag && CanDeserializeDirectlyIntoConstructedObject(field))
+				{
+					continue;
+				}
 				string text = field.FullTypeName ?? field.Name;
 				string text2 = ((field.FieldType == LuminDataType.Reference) ? "?" : "");
 				sb.AppendLine("            " + text + text2 + " " + field.Name + "Temp = default;");
@@ -380,7 +387,7 @@ public static class LuminPackJsonCodeGenerator
 		{
 			sb.AppendLine("                        case _utf8Hash_" + field2.Name + ":");
 			sb.AppendLine("                        {");
-			GenerateJsonDeserializeField(sb, field2, flag ? ("result." + field2.Identifier) : (field2.Name + "Temp"), "                            ");
+			GenerateJsonDeserializeField(sb, field2, flag && CanDeserializeDirectlyIntoConstructedObject(field2) ? ("result." + field2.Identifier) : (field2.Name + "Temp"), "                            ");
 			sb.AppendLine("                            break;");
 			sb.AppendLine("                        }");
 		}
@@ -399,7 +406,7 @@ public static class LuminPackJsonCodeGenerator
 		{
 			sb.AppendLine("                        case _utf16Hash_" + field3.Name + ":");
 			sb.AppendLine("                        {");
-			GenerateJsonDeserializeField(sb, field3, flag ? ("result." + field3.Identifier) : (field3.Name + "Temp"), "                            ");
+			GenerateJsonDeserializeField(sb, field3, flag && CanDeserializeDirectlyIntoConstructedObject(field3) ? ("result." + field3.Identifier) : (field3.Name + "Temp"), "                            ");
 			sb.AppendLine("                            break;");
 			sb.AppendLine("                        }");
 		}
@@ -415,6 +422,21 @@ public static class LuminPackJsonCodeGenerator
 		if (flag)
 		{
 			sb.AppendLine("            value = result;");
+			if (data.fields.Any(static field => !CanDeserializeDirectlyIntoConstructedObject(field)))
+			{
+				if (data.isValueType)
+				{
+					sb.AppendLine("            ref var local = ref global::LuminPack.Code.LuminPackMarshal.As<" + classGlobalName + ", " + TypeMetaChecker.BuildLocalClassName(data) + ">(ref value);");
+				}
+				else
+				{
+					sb.AppendLine("            ref var local = ref global::LuminPack.Code.LuminPackMarshal.As<" + classGlobalName + ", " + TypeMetaChecker.BuildLocalClassName(data) + ">(ref value!);");
+				}
+				foreach (LuminDataField field in data.fields.Where(static field => !CanDeserializeDirectlyIntoConstructedObject(field)))
+				{
+					sb.AppendLine("            local." + field.Identifier + " = " + field.Name + "Temp!;");
+				}
+			}
 		}
 		else
 		{
@@ -425,53 +447,62 @@ public static class LuminPackJsonCodeGenerator
 
 	private static bool CanDeserializeDirectlyIntoFreshResult(LuminDataInfo data)
 	{
-		//IL_015a: Unknown result type (might be due to invalid IL or missing references)
-		//IL_0160: Invalid comparison between Unknown and I4
-		//IL_0060: Unknown result type (might be due to invalid IL or missing references)
-		//IL_0066: Invalid comparison between Unknown and I4
-		if (data.isValueType || data.fields.Count == 0 || data.RentPoolMethod != null || data.TypeSymbol == null || data.fields.Any((LuminDataField field) => field.IsPrivate || field.isProperty))
+		// JSON can omit members. Classes therefore retain the existing constructor and
+		// initializer proof; otherwise assigning delayed private members would overwrite
+		// values intentionally left by the constructor. Value types have no null/default
+		// object state to preserve and can use the binary generator's direct path.
+		if (data.isValueType)
+		{
+			return data.RentPoolMethod == null &&
+				(data.SelectedConstructor == null || data.SelectedConstructor.Parameters.Count == 0);
+		}
+
+		if (data.fields.Count == 0 || data.RentPoolMethod != null || data.TypeSymbol == null || data.fields.Any(static field => field.IsPrivate || field.isProperty))
 		{
 			return false;
 		}
-		INamedTypeSymbol val = data.TypeSymbol;
-		while (val != null && (int)((ITypeSymbol)val).SpecialType != 1)
+
+		INamedTypeSymbol type = data.TypeSymbol;
+		while (type != null && type.SpecialType != SpecialType.System_Object)
 		{
-			if ((int)((ITypeSymbol)val).TypeKind != 2 || ((ISymbol)val).DeclaringSyntaxReferences.Length == 0)
+			if (type.TypeKind != TypeKind.Class || type.DeclaringSyntaxReferences.Length == 0)
 			{
 				return false;
 			}
-			ImmutableArray<IMethodSymbol> instanceConstructors = val.InstanceConstructors;
-			if (instanceConstructors.Length != 1 || !((ISymbol)instanceConstructors[0]).IsImplicitlyDeclared || instanceConstructors[0].Parameters.Length != 0)
+
+			ImmutableArray<IMethodSymbol> constructors = type.InstanceConstructors;
+			if (constructors.Length != 1 || !constructors[0].IsImplicitlyDeclared || constructors[0].Parameters.Length != 0)
 			{
 				return false;
 			}
-			ImmutableArray<ISymbol>.Enumerator enumerator = ((INamespaceOrTypeSymbol)val).GetMembers().GetEnumerator();
-			while (enumerator.MoveNext())
+
+			foreach (ISymbol member in type.GetMembers())
 			{
-				ISymbol current = enumerator.Current;
-				if (current.IsStatic || current.IsImplicitlyDeclared)
+				if (member.IsStatic || member.IsImplicitlyDeclared)
 				{
 					continue;
 				}
-				ImmutableArray<SyntaxReference>.Enumerator enumerator2 = current.DeclaringSyntaxReferences.GetEnumerator();
-				while (enumerator2.MoveNext())
+
+				foreach (SyntaxReference syntaxReference in member.DeclaringSyntaxReferences)
 				{
-					SyntaxNode syntax = enumerator2.Current.GetSyntax(default(CancellationToken));
-					VariableDeclaratorSyntax val2 = (VariableDeclaratorSyntax)(object)((syntax is VariableDeclaratorSyntax) ? syntax : null);
-					if (val2 == null || val2.Initializer == null)
+					SyntaxNode syntax = syntaxReference.GetSyntax(default(CancellationToken));
+					if (syntax is VariableDeclaratorSyntax { Initializer: not null } ||
+						syntax is PropertyDeclarationSyntax { Initializer: not null })
 					{
-						PropertyDeclarationSyntax val3 = (PropertyDeclarationSyntax)(object)((syntax is PropertyDeclarationSyntax) ? syntax : null);
-						if (val3 == null || val3.Initializer == null)
-						{
-							continue;
-						}
+						return false;
 					}
-					return false;
 				}
 			}
-			val = ((ITypeSymbol)val).BaseType;
+
+			type = type.BaseType;
 		}
+
 		return true;
+	}
+
+	private static bool CanDeserializeDirectlyIntoConstructedObject(LuminDataField field)
+	{
+		return !field.IsPrivate && !field.isProperty;
 	}
 
 	private static void GenerateJsonDeserializeField(StringBuilder sb, LuminDataField field, string targetVar, string indent)
@@ -552,7 +583,7 @@ public static class LuminPackJsonCodeGenerator
 		case LuminFiledType.Other:
 		{
 			string text = field.FullTypeName ?? field.Name;
-			sb.AppendLine(indent + "global::LuminPack.LuminPackParseProvider.Cache<" + text + ">.Parser?.DeserializeJson(ref reader, ref " + targetVar + ");");
+			sb.AppendLine(indent + "global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref " + targetVar + ");");
 			break;
 		}
 		default:
@@ -847,7 +878,7 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
 			string text2 = field.FullTypeName ?? field.Name;
 			sb.AppendLine(indent + "{");
 			sb.AppendLine(indent + "    var temp = " + text + ";");
-			sb.AppendLine(indent + "    global::LuminPack.LuminPackParseProvider.Cache<" + text2 + ">.Parser!.SerializeJson(ref writer, ref temp);");
+			sb.AppendLine(indent + "    global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in temp);");
 			sb.AppendLine(indent + "}");
 			break;
 		}
@@ -1137,7 +1168,7 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
 			sb.AppendLine(indent + "}");
 			sb.AppendLine(indent + "else");
 			sb.AppendLine(indent + "{");
-			sb.AppendLine(indent + "    global::LuminPack.LuminPackParseProvider.Cache<" + text + ">.Parser!.DeserializeJson(ref reader, ref " + targetVar + ");");
+			sb.AppendLine(indent + "    global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref " + targetVar + ");");
 			sb.AppendLine(indent + "}");
 			break;
 		}
@@ -1147,11 +1178,4 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
 		}
 	}
 
-	private static string GetParserClassName(string typeFullName)
-	{
-		return typeFullName.Replace("global::", "").Replace(".", "_").Replace("<", "_")
-			.Replace(">", "")
-			.Replace(",", "")
-			.Replace(" ", "") + "Parser";
-	}
 }

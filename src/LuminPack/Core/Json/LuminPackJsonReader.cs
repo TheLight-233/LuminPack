@@ -207,15 +207,6 @@ namespace LuminPack.Core
         #region JSON Basic Methods
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void ReadValue<T>(ref T? value)
-        {
-            if (CurrentTokenType == JsonTokenType.None && !Read())
-                throw new FormatException("JSON input does not contain a value");
-
-            LuminPackParseProvider.Cache<T>.Parser!.DeserializeJson(ref this, ref value);
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void SkipWhitespace()
         {
             if (SerializeStringAsUtf8)
@@ -375,7 +366,8 @@ namespace LuminPack.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void EnsureEndOfDocument()
+        /// <summary>Verifies that no non-whitespace JSON remains after the current top-level value.</summary>
+        public void EnsureEndOfDocument()
         {
             SkipWhitespace();
             if (_currentIndex != _bufferReference.Length)

@@ -1,6 +1,6 @@
 namespace LuminPack.Internal;
 
-internal static class EnumerableEx
+public static class EnumerableEx
 {
     public static bool TryGetNonEnumeratedCountEx<T>(this IEnumerable<T> value, out int count)
     {

@@ -338,7 +338,7 @@ public static class TypeMetaChecker
         {
             _reportContext.Add(Diagnostic.Create(
                 DiagnosticDescriptors.CircularReferenceAndVersionTolerantRequiredOrder,
-                location,
+                member.Locations.FirstOrDefault() ?? location,
                 member.Name
             ));
         }
@@ -351,7 +351,7 @@ public static class TypeMetaChecker
                 var memberNames = string.Join(", ", kvp.Value.Select(m => m.Name));
                 _reportContext.Add(Diagnostic.Create(
                     DiagnosticDescriptors.CircularReferenceAndVersionTolerantDuplicateOrder,
-                    location,
+                    kvp.Value[0].Locations.FirstOrDefault() ?? location,
                     kvp.Key, memberNames
                 ));
             }
@@ -659,8 +659,8 @@ public static class TypeMetaChecker
             or Accessibility.ProtectedAndInternal)
         {
             _reportContext.Add(Diagnostic.Create(
-                DiagnosticDescriptors.OnMethodIsPrivate, 
-                symbol.Locations.FirstOrDefault(), 
+                DiagnosticDescriptors.OnMethodIsPrivate,
+                method.Locations.FirstOrDefault() ?? symbol.Locations.FirstOrDefault(),
                 symbol.Name, 
                 method.Name));
             
@@ -670,8 +670,8 @@ public static class TypeMetaChecker
         if (method.Parameters.Length > 0)
         {
             _reportContext.Add(Diagnostic.Create(
-                DiagnosticDescriptors.OnMethodHasParameter, 
-                symbol.Locations.FirstOrDefault(), 
+                DiagnosticDescriptors.OnMethodHasParameter,
+                method.Locations.FirstOrDefault() ?? symbol.Locations.FirstOrDefault(),
                 symbol.Name, 
                 method.Name));
             
@@ -714,7 +714,7 @@ public static class TypeMetaChecker
         return "Local" + classFullName;
     }
     
-    public static string BuildParserClassName(LuminDataInfo data)
+    public static string BuildFormatterClassName(LuminDataInfo data)
     {
         string classFullName = data.classFullName;
 
@@ -730,10 +730,10 @@ public static class TypeMetaChecker
             classFullName = classFullName.Split('<').FirstOrDefault();
         }
     
-        return classFullName + "Parser";
+        return classFullName + "Formatter";
     }
     
-    public static string BuildParserClassName(string fullName)
+    public static string BuildFormatterClassName(string fullName)
     {
         string classFullName = fullName;
 
@@ -749,7 +749,7 @@ public static class TypeMetaChecker
             classFullName = classFullName.Split('<').FirstOrDefault();
         }
     
-        return classFullName + "Parser";
+        return classFullName + "Formatter";
     }
     
     /// <summary>
@@ -785,7 +785,7 @@ public static class TypeMetaChecker
         {
             TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                 DiagnosticDescriptors.RentPoolMethodIsStatic,
-                location,
+                rentMethod.Locations.FirstOrDefault() ?? location,
                 rentMethod.Name, typeSymbol.Name
             ));
             return null;
@@ -796,7 +796,7 @@ public static class TypeMetaChecker
         {
             TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                 DiagnosticDescriptors.RentPoolMethodHasParameters,
-                location,
+                rentMethod.Locations.FirstOrDefault() ?? location,
                 rentMethod.Name, typeSymbol.Name
             ));
             return null;
@@ -807,7 +807,7 @@ public static class TypeMetaChecker
         {
             TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                 DiagnosticDescriptors.RentPoolMethodReturnTypeMismatch,
-                location,
+                rentMethod.Locations.FirstOrDefault() ?? location,
                 rentMethod.Name, typeSymbol.Name
             ));
             return null;

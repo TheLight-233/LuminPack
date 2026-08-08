@@ -3,7 +3,6 @@ using System.Linq;
 using LuminPack.Code;
 using LuminPack.Code.Core;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator;
 
@@ -21,7 +20,8 @@ internal static class LuminPackDiscovery
         var baseArity = baseDef.Arity;
 
         // 获取所有可能的派生类型
-        var derivedList = GetAllTypesInCompilation(compilation)
+        var derivedList = CompilationTypeAnalysisCache.GetOrCreate(compilation).DeclaredTypes
+            .Select(static data => data.Symbol)
             .Where(t => !t.IsAbstract && !t.IsStatic)
             .Where(t => t.GetAttributes().Any(a => a.AttributeClass?.Name == LuminPackableAttributeName))
             .Where(t => !dataInfo.UnionMembers.Any(m => SymbolEqualityComparer.Default.Equals(m.Type, t)))
@@ -41,22 +41,6 @@ internal static class LuminPackDiscovery
             if (baseType.IsGenericType)
             {
                 RecordGenericTypeInfo(d, baseType, dataInfo);
-            }
-        }
-    }
-
-    private static IEnumerable<INamedTypeSymbol> GetAllTypesInCompilation(Compilation comp)
-    {
-        foreach (var tree in comp.SyntaxTrees)
-        {
-            var sem = comp.GetSemanticModel(tree);
-            foreach (var node in tree.GetRoot().DescendantNodes())
-            {
-                if (node is ClassDeclarationSyntax or StructDeclarationSyntax or RecordDeclarationSyntax)
-                {
-                    var sym = sem.GetDeclaredSymbol(node) as INamedTypeSymbol;
-                    if (sym != null) yield return sym;
-                }
             }
         }
     }

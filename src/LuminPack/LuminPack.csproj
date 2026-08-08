@@ -10,7 +10,7 @@
 
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>LuminPack</PackageId>
-        <Version>1.0.9</Version>
+        <Version>1.0.10</Version>
         <Authors>TheLight233</Authors>
         <Description>Ultra-performance binary and json serializer with source generator support</Description>
         <PackageTags>serialization;binary;json;high-performance;luminpack;sourcegenerator</PackageTags>
@@ -32,15 +32,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <!--
-            ReferenceOutputAssembly="false" : 不把生成器当普通程序集引用
-            不加 PrivateAssets="all"        : 作为传递依赖，用户安装 LuminPack 时自动带入
-        -->
-        <PackageReference Include="LuminPackGenerator" Version="1.0.9"
-                          ReferenceOutputAssembly="false"
-                          IncludeAssets="all"
-                          PrivateAssets="none" />
-
         <None Include="../../README.md" Pack="true" PackagePath="\" />
         <None Update="Core\LuminPackWriter.Unmanaged.tt">
           <Generator>TextTemplatingFileGenerator</Generator>

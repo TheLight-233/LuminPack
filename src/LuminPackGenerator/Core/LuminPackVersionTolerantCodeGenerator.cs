@@ -9,75 +9,9 @@ namespace LuminPack.Code.Core;
 public static class LuminPackVersionTolerantCodeGenerator
 {
     const int MaxParametersPerCall = 15;
-    
-    public static void VersionTolerantCodeGenerator(StringBuilder sb, LuminDataInfo data, MetaInfo metaInfo)
+
+    public static void GenerateCalculateOffsetCode(LuminDataInfo data, StringBuilder sb, string classGlobalName)
     {
-        string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = TypeMetaChecker.BuildParserClassName(data);
-        string classGlobalName = data.classFullName;
-        string parserName = classFullName;
-        bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
-        uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
-        
-        if (data.isGeneric)
-        {
-            classFullName += $"<{data.GenericParameters.FirstOrDefault()}";
-            for(var i = 1; i < data.GenericParameters.Count; i++)
-            {
-                classFullName += "," + data.GenericParameters[i];
-            }
-            classFullName += ">";
-        }
-        
-        if (!classGlobalName.Contains(".") && data.classNameSpace != "<global namespace>")
-        {
-            classGlobalName = "global::" + data.classNameSpace + "." + data.classFullName;
-        }
-        
-        sb.AppendLine($"        static {parserName}()");
-        sb.AppendLine("        {");
-        sb.AppendLine($"            LuminPackParseProvider.RegisterParsers(new {classFullName}());");
-        sb.AppendLine($"            LuminPackParseProvider.RegisterParsers(new ArrayParser<{classGlobalName}>());");
-        sb.AppendLine("        }");
-        sb.AppendLine();
-        
-        // Serialize实现
-        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-        if (data.fields.Count <= 5) 
-            sb.AppendLine("        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
-        if (metaInfo.IsNet8) 
-            sb.AppendLine("        [global::System.Runtime.CompilerServices.SkipLocalsInit]");
-        sb.AppendLine(metaInfo.IsNet8 
-            ? $"        public override void Serialize(ref LuminPackWriter writer, scoped ref {classGlobalName}{paraNullable} value)"
-            : $"        public override void Serialize(ref LuminPackWriter writer, ref {classGlobalName}{paraNullable} value)");
-        sb.AppendLine("        {");
-        
-        GenerateSerializeCode(data, sb);
-        
-        sb.AppendLine("        }");
-        
-        // Deserialize实现
-        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-        if (data.fields.Count <= 5) 
-            sb.AppendLine("        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
-        if (metaInfo.IsNet8) 
-            sb.AppendLine("        [global::System.Runtime.CompilerServices.SkipLocalsInit]");
-        sb.AppendLine(metaInfo.IsNet8 
-            ? $"        public override void Deserialize(ref LuminPackReader reader, scoped ref {data.classFullName}{paraNullable} value)"
-            : $"        public override void Deserialize(ref LuminPackReader reader, ref {data.classFullName}{paraNullable} value)");
-        sb.AppendLine("        {");
-        
-        GenerateDeserializeCode(data, sb);
-        
-        sb.AppendLine("        }");
-        
-        sb.AppendLine();
-        
-        sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-        sb.AppendLine(metaInfo.IsNet8 
-            ? $"        public override void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref {classGlobalName}{paraNullable} value)"
-            : $"        public override void CalculateOffset(ref LuminPackEvaluator evaluator, ref {classGlobalName}{paraNullable} value)");
-        sb.AppendLine("        {");
         if (!data.isValueType)
         {
             sb.AppendLine("            if (value is null)");
@@ -102,36 +36,15 @@ public static class LuminPackVersionTolerantCodeGenerator
                 sb.AppendLine($"            evaluator.CalculateValue(local.@{field.Name});");
                 sb.AppendLine($"            size += LuminPackEvaluator.CalculateVarInt(evaluator.Value - {field.Name}TempLength);");
             }
-            
         }
         sb.AppendLine();
         sb.AppendLine("            evaluator += size;");
-        sb.AppendLine("        }");
-        
-        sb.AppendLine();
-            
-        LuminPackJsonCodeGenerator.GenerateStaticUtf8Fields(sb, data);
-
-        sb.AppendLine();
-                
-        LuminPackJsonCodeGenerator.GenerateJsonSerialize(sb, data, classGlobalName, metaInfo);
-
-        sb.AppendLine();
-                
-        LuminPackJsonCodeGenerator.GenerateJsonDeserialize(sb, data, classGlobalName, metaInfo); 
-        sb.AppendLine();
-        
-        LuminPackCodeGenerator.GenerateLocalClassStructure(sb, data);
-            
-        sb.AppendLine();
-        sb.AppendLine("    }");
-        sb.AppendLine("}");
     }
     
     public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb)
     {
         string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = TypeMetaChecker.BuildParserClassName(data);
+        string classFullName = TypeMetaChecker.BuildFormatterClassName(data);
         string classGlobalName = data.classFullName;
         bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
         uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
@@ -314,7 +227,7 @@ public static class LuminPackVersionTolerantCodeGenerator
     public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb)
     {
         string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = TypeMetaChecker.BuildParserClassName(data);
+        string classFullName = TypeMetaChecker.BuildFormatterClassName(data);
         string classGlobalName = data.classFullName;
         bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
         uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero

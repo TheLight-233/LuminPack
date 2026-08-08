@@ -251,8 +251,8 @@ internal static class ConfirmedCorrectnessRegressionTest
         var threw = false;
         try
         {
-            LuminPackParseProvider.Cache<JsonFreshManagedNestedModel>.Parser!.DeserializeJson(
-                ref reader, ref value);
+            global::LuminPack.Generated.LuminPackExtensions_LuminPackUnitTest
+                .ReadValue(ref reader, ref value);
         }
         catch (FormatException)
         {
@@ -296,8 +296,8 @@ internal static class ConfirmedCorrectnessRegressionTest
         JsonFreshExplicitConstructorModel? explicitValue = null;
         try
         {
-            LuminPackParseProvider.Cache<JsonFreshExplicitConstructorModel>.Parser!
-                .DeserializeJson(ref reader, ref explicitValue);
+            global::LuminPack.Generated.LuminPackExtensions_LuminPackUnitTest
+                .ReadValue(ref reader, ref explicitValue);
         }
         catch (FormatException)
         {

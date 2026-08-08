@@ -4,343 +4,72 @@ namespace LuminPack.SourceGenerator;
 
 internal static class DiagnosticDescriptors
 {
-    const string Category = "GenerateLuminPack";
+    private const string Category = "LuminPack.SourceGeneration";
+    private const string UnionCategory = "LuminPack.SourceGeneration.Union";
 
-    public static readonly DiagnosticDescriptor StaticClass = new(
-        id: "LuminPack001",
-        title: "LuminPackable object can't be Static",
-        messageFormat: "LuminPackable object '{0}' can't be Static",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-    public static readonly DiagnosticDescriptor AbstractMustUnion = new(
-        id: "LuminPack002",
-        title: "abstract/interface type of LuminPackable object must annotate with Union",
-        messageFormat: "abstract/interface type of LuminPackable object '{0}' must annotate with Union",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-    public static readonly DiagnosticDescriptor ConstructorNoPublic = new(
-        id: "LuminPack003",
-        title: "LuminPackPackObject's constructor must have public",
-        messageFormat: "The LuminPackable object field '{0}' has no public constructor",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-    public static readonly DiagnosticDescriptor FieldMustBeLuminPackable = new(
-        id: "LuminPack004",
-        title: "LuminPackPackObject's field must be LuminPackable",
-        messageFormat: "The LuminPackable object field '{0}' must be LuminPackable",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-    public static readonly DiagnosticDescriptor ContainsDuplicateNameField = new(
-        id: "LuminPack005",
-        title: "LuminPackPackObject's Contains duplicate name field",
-        messageFormat: "The LuminPackable object field '{0}' contains duplicate name in base class",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-    public static readonly DiagnosticDescriptor OnMethodHasParameter = new(
-        id: "LuminPack006",
-        title: "LuminPackObject's On*** methods must has no parameter",
-        messageFormat: "The LuminPackable object '{0}''s '{1}' method must has no parameter",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-    public static readonly DiagnosticDescriptor OnMethodIsPrivate = new(
-        id: "LuminPack007",
-        title: "LuminPackObject's On*** methods must public",
-        messageFormat: "The LuminPackable object '{0}''s '{1}' method must public",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+    // Packable type and member validation.
+    public static readonly DiagnosticDescriptor StaticClass = Error("LuminPack001", "Static type is not serializable", "Type '{0}' is static and cannot be annotated with [LuminPackable].");
+    public static readonly DiagnosticDescriptor AbstractMustUnion = UnionError("LuminPack002", "Abstract type requires union metadata", "Abstract or interface type '{0}' must declare [LuminPackUnion].");
+    public static readonly DiagnosticDescriptor ConstructorNoPublic = Error("LuminPack003", "No public constructor", "Member '{0}' belongs to a LuminPackable type without a public constructor.");
+    public static readonly DiagnosticDescriptor FieldMustBeLuminPackable = Error("LuminPack004", "Nested type is not serializable", "Type '{0}' must be annotated with [LuminPackable] before it can be serialized as a nested object.");
+    public static readonly DiagnosticDescriptor ContainsDuplicateNameField = Error("LuminPack005", "Duplicate serialized member name", "Member '{0}' duplicates a serialized member name declared by a base type.");
+    public static readonly DiagnosticDescriptor OnMethodHasParameter = Error("LuminPack006", "Serialization callback has parameters", "Serialization callback '{1}' on '{0}' must not declare parameters.");
+    public static readonly DiagnosticDescriptor OnMethodIsPrivate = Error("LuminPack007", "Serialization callback is inaccessible", "Serialization callback '{1}' on '{0}' must be public or internal.");
+    public static readonly DiagnosticDescriptor OnMethodInUnamannagedType = Error("LuminPack008", "Serialization callback on unmanaged struct", "Unmanaged struct '{0}' cannot declare serialization callback '{1}'.");
+    public static readonly DiagnosticDescriptor OverrideMemberCantAddAnnotation = Error("LuminPack009", "Attribute is invalid on an override", "Overridden member '{1}' on '{0}' cannot use [{2}].");
 
-    public static readonly DiagnosticDescriptor OnMethodInUnamannagedType = new(
-        id: "LuminPack008",
-        title: "LuminPackObject's On*** methods can't annotate in unmanaged struct",
-        messageFormat: "The LuminPackable object '{0}' is unmanaged struct that can't annotate On***Attribute however '{1}' method annotaed",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+    // Union validation.
+    public static readonly DiagnosticDescriptor SealedTypeCantBeUnion = UnionError("LuminPack010", "Sealed type cannot be a union root", "Union root '{0}' is sealed. Union roots must be abstract classes or interfaces.");
+    public static readonly DiagnosticDescriptor ConcreteTypeCantBeUnion = UnionError("LuminPack011", "Concrete type cannot be a union root", "Union root '{0}' must be an abstract class or an interface.");
+    public static readonly DiagnosticDescriptor UnionTagDuplicate = UnionError("LuminPack012", "Duplicate union tag", "Union root '{1}' declares tag '{0}' more than once.");
+    public static readonly DiagnosticDescriptor UnionMemberTypeNotImplementBaseType = UnionError("LuminPack013", "Union member does not implement the root interface", "Union member '{0}' does not implement union interface '{1}'.");
+    public static readonly DiagnosticDescriptor UnionMemberTypeNotDerivedBaseType = UnionError("LuminPack014", "Union member does not derive from the root type", "Union member '{0}' does not derive from union root '{1}'.");
+    public static readonly DiagnosticDescriptor UnionMemberNotAllowStruct = UnionError("LuminPack015", "Struct cannot be a union root", "Union root '{0}' is a struct. Union roots must be abstract classes or interfaces.");
+    public static readonly DiagnosticDescriptor UnionMemberMustBeLuminPackable = UnionError("LuminPack016", "Union member is not serializable", "Union member '{0}' must be annotated with [LuminPackable].");
+    public static readonly DiagnosticDescriptor UnionMemberGenericCountExceed = UnionError("LuminPack017", "Union member has too many generic parameters", "Union member '{0}' has {2} generic parameters; the union root supports at most {1}.");
 
-    public static readonly DiagnosticDescriptor OverrideMemberCantAddAnnotation = new(
-        id: "LuminPack009",
-        title: "Override member can't annotate Ignore/Include attribute",
-        messageFormat: "The LuminPackable object '{0}' override member '{1}' can't annotate {2} attribute",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+    // Serialized shape validation.
+    public static readonly DiagnosticDescriptor MembersCountOver250 = Error("LuminPack018", "Too many serialized members", "Type '{0}' has {1} serialized members; the binary object format supports at most 249.");
+    public static readonly DiagnosticDescriptor MemberCantSerializeType = Error("LuminPack019", "Member type is not supported", "Member '{1}' on '{0}' has unsupported type '{2}'.");
+    public static readonly DiagnosticDescriptor MemberIsNotLuminPackable = Error("LuminPack020", "Member type requires serialization metadata", "Member '{1}' on '{0}' uses '{2}', which must be [LuminPackable] or explicitly allowed for serialization.");
+    public static readonly DiagnosticDescriptor TypeIsRefStruct = Error("LuminPack021", "ref struct is not serializable", "Type '{0}' is a ref struct and cannot be serialized.");
+    public static readonly DiagnosticDescriptor MemberIsRefStruct = Error("LuminPack022", "ref struct member is not serializable", "Member '{1}' on '{0}' has ref struct type '{2}', which cannot be serialized.");
+    public static readonly DiagnosticDescriptor NetStandardClassOrStructMemberFieldCantInclude = Warning("LuminPack023", "[LuminPackInclude] requires a runtime accessor", "Member '{1}' on '{0}' uses [LuminPackInclude], which is unavailable for this target framework.");
+    public static readonly DiagnosticDescriptor CircularReferenceAndVersionTolerantRequiredOrder = Error("LuminPack024", "[LuminPackOrder] is required", "Member '{0}' must be marked with [LuminPackOrder] in circular-reference or version-tolerant types.");
+    public static readonly DiagnosticDescriptor CircularReferenceAndVersionTolerantDuplicateOrder = Error("LuminPack025", "Duplicate [LuminPackOrder] value", "Order value '{0}' is assigned to multiple members: {1}.");
+    public static readonly DiagnosticDescriptor UnamangedStructWithLayoutAutoField = Error("LuminPack026", "Unmanaged layout is not stable", "Unmanaged struct '{0}' contains auto-layout field '{1}'. Specify an explicit layout to preserve binary compatibility.");
+    public static readonly DiagnosticDescriptor InheritTypeCanNotIncludeParentPrivateMember = Error("LuminPack027", "Inherited private member cannot be included", "Type '{0}' cannot include private member '{1}' declared by a base type.");
+    public static readonly DiagnosticDescriptor UndefinedGenericParameterError = Error("LuminPack028", "Undefined generic parameter", "LuminPackable type contains an undefined generic parameter.");
 
-    public static readonly DiagnosticDescriptor SealedTypeCantBeUnion = new(
-        id: "LuminPack010",
-        title: "Sealed type can't be union",
-        messageFormat: "The LuminPackable object '{0}' is sealed type so can't be Union",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+    // Union discovery.
+    public static readonly DiagnosticDescriptor UnionMemberAutoDiscovered = UnionInfo("LuminPack029", "Union member was auto-discovered", "Type '{0}' was automatically registered as a union member of '{1}' with tag {2}.");
+    public static readonly DiagnosticDescriptor TooManyUnionMembers = UnionError("LuminPack030", "Too many union members", "Union type '{0}' has {1} derived types, exceeding the 256-member limit.");
 
+    // Construction and accessibility validation.
+    public static readonly DiagnosticDescriptor MultipleConstructorsRequireAttribute = Error("LuminPack031", "Constructor selection is ambiguous", "Type '{0}' has multiple constructors; mark one with [LuminPackConstructor].");
+    public static readonly DiagnosticDescriptor ConstructorParameterNameMismatch = Error("LuminPack032", "Constructor parameter has no matching member", "Constructor parameter '{0}' on '{1}' does not match a serializable member (case-insensitive).");
+    public static readonly DiagnosticDescriptor NoPublicConstructor = Error("LuminPack033", "No public constructor", "Type '{0}' has no public constructor.");
+    public static readonly DiagnosticDescriptor NestedClassMustBePublicOrInternal = Error("LuminPack034", "Nested type is inaccessible to generated code", "Nested [LuminPackable] type '{0}' must be public or internal.");
+    public static readonly DiagnosticDescriptor NestedClassAccessibilityError = Error("LuminPack035", "Unsupported nested-type accessibility", "Nested type '{0}' has accessibility '{1}'. Only public and internal are supported.");
+    public static readonly DiagnosticDescriptor MultipleRentPoolMethods = Error("LuminPack036", "Multiple pool-rent methods", "Type '{0}' has multiple methods marked with [LuminPackPoolRent]. Only one is allowed.");
+    public static readonly DiagnosticDescriptor RentPoolMethodHasParameters = Error("LuminPack037", "Pool-rent method has parameters", "Pool-rent method '{0}' on '{1}' must not declare parameters.");
+    public static readonly DiagnosticDescriptor RentPoolMethodReturnTypeMismatch = Error("LuminPack038", "Pool-rent method returns the wrong type", "Pool-rent method '{0}' on '{1}' must return '{1}'.");
+    public static readonly DiagnosticDescriptor RentPoolMethodIsStatic = Error("LuminPack039", "Pool-rent method is not static", "Pool-rent method '{0}' on '{1}' must be static.");
+    public static readonly DiagnosticDescriptor ManagedArrayDataCompress = Error("LuminPack040", "Managed arrays cannot use [LuminPackCompress]", "Member '{1}' on '{0}' is an array of managed type '{2}' and cannot use [LuminPackCompress].");
+    public static readonly DiagnosticDescriptor UnionParticipantMustBePartial = UnionError("LuminPack041", "Union participant must be partial", "Union participant '{0}' and every containing type must be partial so virtual union dispatch can be generated for '{1}'.");
 
-    public static readonly DiagnosticDescriptor ConcreteTypeCantBeUnion = new(
-        id: "LuminPack011",
-        title: "Concrete type can't be union",
-        messageFormat: "The LuminPackable object '{0}' can be Union, only allow abstract or interface",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+    // Generator failures.
+    public static readonly DiagnosticDescriptor GeneratorFailure = Error("LuminPack099", "Source generation failed", "LuminPack source generation failed: {0}");
 
+    private static DiagnosticDescriptor Error(string id, string title, string message) =>
+        new(id, title, message, Category, DiagnosticSeverity.Error, isEnabledByDefault: true);
 
-    public static readonly DiagnosticDescriptor UnionTagDuplicate = new(
-        id: "LuminPack012",
-        title: "Union tag is duplicate",
-        messageFormat: "The LuminPackable object '{0}' union tag value is duplicate",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
+    private static DiagnosticDescriptor Warning(string id, string title, string message) =>
+        new(id, title, message, Category, DiagnosticSeverity.Warning, isEnabledByDefault: true);
 
+    private static DiagnosticDescriptor UnionError(string id, string title, string message) =>
+        new(id, title, message, UnionCategory, DiagnosticSeverity.Error, isEnabledByDefault: true);
 
-    public static readonly DiagnosticDescriptor UnionMemberTypeNotImplementBaseType = new(
-        id: "LuminPack013",
-        title: "Union member not implement union interface",
-        messageFormat: "The LuminPackable object '{0}' union member '{1}' not implement union interface",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-
-    public static readonly DiagnosticDescriptor UnionMemberTypeNotDerivedBaseType = new(
-        id: "LuminPack014",
-        title: "Union member not dervided union base type",
-        messageFormat: "The LuminPackable object '{0}' union member '{1}' not derived union type",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor UnionMemberNotAllowStruct = new(
-        id: "LuminPack015",
-        title: "Union member can't be struct",
-        messageFormat: "The LuminPackable object '{0}' union member '{1}' can't be member, not allows struct",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor UnionMemberMustBeLuminPackable = new(
-        id: "LuminPack016",
-        title: "Union member must be LuminPackable",
-        messageFormat: "The LuminPackable object '{0}' union member '{1}' must be LuminPackable",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-    public static readonly DiagnosticDescriptor UnionMemberGenericCountExceed = new (
-        id: "LuminPack017",
-        title: "Union member generic parameter count exceeds base type",
-        messageFormat: "Union member '{0}' has more generic parameters ({2}) than base type '{1}' (max allowed: {1})",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-
-    public static readonly DiagnosticDescriptor MembersCountOver250 = new(
-        id: "LuminPack018",
-        title: "Members count limit",
-        messageFormat: "The LuminPackable object '{0}' member count is '{1}', however limit size is 249",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor MemberCantSerializeType = new(
-        id: "LuminPack019",
-        title: "Member can't serialize type",
-        messageFormat: "The LuminPackable object '{0}' member '{1}' type is '{2}' that can't serialize",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor MemberIsNotLuminPackable = new(
-        id: "LuminPack020",
-        title: "Member is not LuminPackable object",
-        messageFormat: "The LuminPackable object '{0}' member '{1}' type '{2}' is not LuminPackable. Annotate [LuminPackable] to '{2}' or if external type that can serialize, annotate `[LuminPackAllowSerialize]` to member",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor TypeIsRefStruct = new(
-        id: "LuminPack021",
-        title: "Type is ref struct",
-        messageFormat: "The LuminPackable object '{0}' is ref struct, it can not serialize",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor MemberIsRefStruct = new(
-        id: "LuminPack022",
-        title: "Member is ref struct",
-        messageFormat: "The LuminPackable object '{0}' member '{1}' type '{2}' is ref struct, it can not serialize",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-    public static readonly DiagnosticDescriptor NetStandardClassOrStructMemberFieldCantInclude = new(
-        id: "LuminPack023",
-        title: "The LuminPackInclude attribute will not work in NetStandard 2.1",
-        messageFormat: "The LuminPackable object '{0}' member '{1}' contains LuminPackInclude attribute, which is used in the . NetStandard 2.1 will not work, please use LuminPackObject instead",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Warning,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor CircularReferenceAndVersionTolerantRequiredOrder = new(
-        id: "LuminPack024",
-        title: "CircularReference And VersionTolerant LuminPack Object member must require LuminPackOrder attribute",
-        messageFormat: "Member '{0}' must be marked with [LuminPackOrder] for CircleReference/VersionTolerant types.",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-    public static readonly DiagnosticDescriptor CircularReferenceAndVersionTolerantDuplicateOrder = new (
-        id: "LuminPack025",
-        title: "Duplicate LuminPackOrder value",
-        messageFormat: "Order value '{0}' is used by multiple members: {1}",
-        category: "LuminPack",
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor UnamangedStructWithLayoutAutoField = new(
-        id: "LuminPack026",
-        title: "Before .NET 7 unmanaged struct must annotate LayoutKind.Auto or Explicit",
-        messageFormat: "The unmanaged struct '{0}' has LayoutKind.Auto field('{1}'). Before .NET 7, if field contains Auto then automatically promote to LayoutKind.Auto but .NET 7 is Sequential so breaking binary compatibility when runtime upgraded. To safety, you have to annotate [StructLayout(LayoutKind.Auto)] or LayoutKind.Explicit to type.",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor InheritTypeCanNotIncludeParentPrivateMember = new(
-        id: "LuminPack027",
-        title: "Inherit type can not include private member",
-        messageFormat: "Type '{0}' can not include parent type's private member '{1}'",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-    public static readonly DiagnosticDescriptor UndefinedGenericParameterError = new(
-        id: "LuminPack028",
-        title: "LuminPackPackObject's Contains UndefinedGenericParameter",
-        messageFormat: "The LuminPackable Object Contains UndefinedGenericParameter",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-    public static readonly DiagnosticDescriptor UnionMemberAutoDiscovered = new (
-        id: "LuminPack029",
-        title: "Union member automatically discovered",
-        messageFormat: "Type '{0}' was automatically registered as union member of '{1}' with tag {2}",
-        category: "LuminPack.Union",
-        DiagnosticSeverity.Info,
-        isEnabledByDefault: true,
-        description: "This type was automatically discovered and assigned a deterministic tag for polymorphic serialization."
-    );
-
-    public static readonly DiagnosticDescriptor TooManyUnionMembers = new (
-        id: "LuminPack030",
-        title: "Too many union members",
-        messageFormat: "Union type '{0}' has {1} derived types, which exceeds the maximum of 256",
-        category: "LuminPack.Union",
-        DiagnosticSeverity.Error,
-        isEnabledByDefault: true,
-        description: "Union types can have at most 256 derived types (tags 0-255)."
-    );
-    
-    public static readonly DiagnosticDescriptor MultipleConstructorsRequireAttribute = new(
-        id: "LuminPack031",
-        title: "Multiple constructors require LuminPackConstructor attribute",
-        messageFormat: "Type '{0}' has multiple constructors, one must be marked with [LuminPackConstructor]",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor ConstructorParameterNameMismatch = new(
-        id: "LuminPack032",
-        title: "Constructor parameter name does not match field name",
-        messageFormat: "Constructor parameter '{0}' in type '{1}' does not match any field name (case-insensitive comparison)",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor NoPublicConstructor = new(
-        id: "LuminPack033",
-        title: "No public constructor found",
-        messageFormat: "Type '{0}' has no public constructor",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-    public static readonly DiagnosticDescriptor NestedClassMustBePublicOrInternal = new(
-        id: "LuminPack034",
-        title: "Nested class must be public or internal",
-        messageFormat: "The LuminPackable nested class '{0}' must be public or internal to be serializable",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor NestedClassAccessibilityError = new(
-        id: "LuminPack035", 
-        title: "Nested class accessibility error",
-        messageFormat: "Nested class '{0}' has invalid accessibility '{1}'. Only public and internal are supported for serialization",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-    
-    public static readonly DiagnosticDescriptor MultipleRentPoolMethods = new(
-        id: "LuminPack036",
-        title: "Multiple RentPool methods",
-        messageFormat: "Type '{0}' has multiple methods marked with LuminPackPoolRentAttribute. Only one is allowed.",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor RentPoolMethodHasParameters = new(
-        id: "LuminPack037",
-        title: "RentPool method must have no parameters",
-        messageFormat: "RentPool method '{0}' in type '{1}' must have no parameters",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor RentPoolMethodReturnTypeMismatch = new(
-        id: "LuminPack038",
-        title: "RentPool method return type mismatch",
-        messageFormat: "RentPool method '{0}' in type '{1}' must return the same type as the containing type.",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor RentPoolMethodIsStatic = new(
-        id: "LuminPack039",
-        title: "RentPool method must be static",
-        messageFormat: "RentPool method '{0}' in type '{1}' must be static",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor ManagedArrayDataCompress = new(
-        id: "LuminPack040",
-        title: "Array of managed type can't be compressed",
-        messageFormat: "The LuminPackable object '{0}' member '{1}' is array of managed type '{2}', which can't be compressed.",
-        category: Category,
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
-    public static readonly DiagnosticDescriptor UnionParticipantMustBePartial = new(
-        id: "LuminPack041",
-        title: "Union participants and containing types must be partial",
-        messageFormat: "Union participant '{0}' and each of its containing types must be declared partial so CLR union dispatch can be generated for '{1}'",
-        category: "LuminPack.Union",
-        defaultSeverity: DiagnosticSeverity.Error,
-        isEnabledByDefault: true);
-
+    private static DiagnosticDescriptor UnionInfo(string id, string title, string message) =>
+        new(id, title, message, UnionCategory, DiagnosticSeverity.Info, isEnabledByDefault: true);
 }

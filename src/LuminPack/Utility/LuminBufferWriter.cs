@@ -155,8 +155,11 @@ public sealed class LuminBufferWriter : IDisposable
     
     private bool _disposed;
 
-    internal readonly LuminPackWriterOptionalState WriterState;
-    internal readonly LuminPackReaderOptionalState ReaderState;
+    /// <summary>Gets the writer operation state owned by this buffer.</summary>
+    public readonly LuminPackWriterOptionalState WriterState;
+
+    /// <summary>Gets the reader operation state owned by this buffer.</summary>
+    public readonly LuminPackReaderOptionalState ReaderState;
 
     /// <summary>Gets the mutable configuration used by BufferWriter-based Serialize, Deserialize, and JSON APIs.</summary>
     /// <remarks>
@@ -271,7 +274,8 @@ public sealed class LuminBufferWriter : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal unsafe void CompleteWrite(int count)
+    /// <summary>Publishes <paramref name="count"/> bytes written by a LuminPack writer.</summary>
+    public unsafe void CompleteWrite(int count)
     {
         _writtenCount = count;
         _currentIndex = null;

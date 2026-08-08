@@ -18,6 +18,9 @@ namespace LuminPack.Code
         public bool isProperty = false;
 
         public string FullTypeName { get; set; }
+
+        /// <summary>The Roslyn symbol for this exact constructed field type.</summary>
+        public ITypeSymbol TypeSymbol { get; set; }
         
         public string TypeName { get; set; }
 

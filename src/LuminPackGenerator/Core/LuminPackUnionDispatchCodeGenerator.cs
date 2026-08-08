@@ -10,7 +10,7 @@ namespace LuminPack.Code.Core;
 
 internal static class LuminPackUnionDispatchCodeGenerator
 {
-    public static string Generate(LuminDataInfo data)
+    public static string Generate(LuminDataInfo data, Compilation compilation)
     {
         if (!data.isUnion || !data.CanGenerateUnionDispatch || data.TypeSymbol == null)
             return string.Empty;
@@ -22,8 +22,10 @@ internal static class LuminPackUnionDispatchCodeGenerator
 
         var root = data.TypeSymbol.OriginalDefinition;
         var suffix = GetSlotSuffix(root);
+        var extensionType = "global::LuminPack.Generated.LuminPackExtensions_" +
+            SanitizeAssemblyName(compilation.AssemblyName ?? "Assembly");
         AppendPartialType(sb, root, (builder, indent) =>
-            AppendRootMethods(builder, indent, data, root, suffix));
+            AppendRootMethods(builder, indent, root, suffix));
 
         foreach (var group in data.UnionMembers
                      .Where(member => IsFastPathMember(data, member))
@@ -36,7 +38,7 @@ internal static class LuminPackUnionDispatchCodeGenerator
                 continue;
 
             AppendPartialType(sb, definition, (builder, indent) =>
-                AppendMemberMethods(builder, indent, data, root, matchedRoot, members, suffix));
+                AppendMemberMethods(builder, indent, data, root, matchedRoot, members, suffix, extensionType));
         }
 
         return sb.ToString();
@@ -53,37 +55,31 @@ internal static class LuminPackUnionDispatchCodeGenerator
     private static void AppendRootMethods(
         StringBuilder sb,
         int indent,
-        LuminDataInfo data,
         INamedTypeSymbol root,
         string suffix)
     {
         var padding = new string(' ', indent * 4);
-        var bodyPadding = new string(' ', (indent + 1) * 4);
         var rootType = root.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        var parserType = GetParserType(data, root);
         var modifier = root.TypeKind == TypeKind.Interface ? string.Empty : "internal virtual ";
 
         AppendMethodAttribute(sb, padding);
         sb.AppendLine($"{padding}{modifier}void __LuminPackUnionSerialize_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer)");
         sb.AppendLine($"{padding}{{");
-        sb.AppendLine($"{bodyPadding}{rootType} value = this;");
-        sb.AppendLine($"{bodyPadding}{parserType}.SerializeUnionFallback(ref writer, ref value);");
+        sb.AppendLine($"{padding}    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(((object)this).GetType(), typeof({rootType}));");
         sb.AppendLine($"{padding}}}");
         sb.AppendLine();
 
         AppendMethodAttribute(sb, padding);
         sb.AppendLine($"{padding}{modifier}void __LuminPackUnionSerializeJson_{suffix}(ref global::LuminPack.Core.LuminPackJsonWriter writer)");
         sb.AppendLine($"{padding}{{");
-        sb.AppendLine($"{bodyPadding}{rootType} value = this;");
-        sb.AppendLine($"{bodyPadding}{parserType}.SerializeJsonUnionFallback(ref writer, ref value);");
+        sb.AppendLine($"{padding}    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(((object)this).GetType(), typeof({rootType}));");
         sb.AppendLine($"{padding}}}");
         sb.AppendLine();
 
         AppendMethodAttribute(sb, padding);
         sb.AppendLine($"{padding}{modifier}void __LuminPackUnionCalculateOffset_{suffix}(ref global::LuminPack.Core.LuminPackEvaluator evaluator)");
         sb.AppendLine($"{padding}{{");
-        sb.AppendLine($"{bodyPadding}{rootType} value = this;");
-        sb.AppendLine($"{bodyPadding}{parserType}.CalculateOffsetUnionFallback(ref evaluator, ref value);");
+        sb.AppendLine($"{padding}    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(((object)this).GetType(), typeof({rootType}));");
         sb.AppendLine($"{padding}}}");
     }
 
@@ -94,7 +90,8 @@ internal static class LuminPackUnionDispatchCodeGenerator
         INamedTypeSymbol root,
         INamedTypeSymbol matchedRoot,
         IReadOnlyList<LuminUnionMemberInfo> members,
-        string suffix)
+        string suffix,
+        string extensionType)
     {
         var padding = new string(' ', indent * 4);
         var bodyPadding = new string(' ', (indent + 1) * 4);
@@ -105,21 +102,21 @@ internal static class LuminPackUnionDispatchCodeGenerator
         AppendMethodAttribute(sb, padding);
         sb.AppendLine($"{padding}{prefix}__LuminPackUnionSerialize_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer)");
         sb.AppendLine($"{padding}{{");
-        AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.Binary);
+        AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.Binary, extensionType);
         sb.AppendLine($"{padding}}}");
         sb.AppendLine();
 
         AppendMethodAttribute(sb, padding);
         sb.AppendLine($"{padding}{prefix}__LuminPackUnionSerializeJson_{suffix}(ref global::LuminPack.Core.LuminPackJsonWriter writer)");
         sb.AppendLine($"{padding}{{");
-        AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.Json);
+        AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.Json, extensionType);
         sb.AppendLine($"{padding}}}");
         sb.AppendLine();
 
         AppendMethodAttribute(sb, padding);
         sb.AppendLine($"{padding}{prefix}__LuminPackUnionCalculateOffset_{suffix}(ref global::LuminPack.Core.LuminPackEvaluator evaluator)");
         sb.AppendLine($"{padding}{{");
-        AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.CalculateOffset);
+        AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.CalculateOffset, extensionType);
         sb.AppendLine($"{padding}}}");
     }
 
@@ -129,7 +126,8 @@ internal static class LuminPackUnionDispatchCodeGenerator
         LuminDataInfo data,
         IReadOnlyList<LuminUnionMemberInfo> members,
         string rootType,
-        DispatchOperation operation)
+        DispatchOperation operation,
+        string extensionType)
     {
         var definition = members[0].Type.OriginalDefinition;
         var constructedMembers = members
@@ -144,14 +142,14 @@ internal static class LuminPackUnionDispatchCodeGenerator
             var condition = GetConstructedTypeCondition(definition, member.Type);
             sb.AppendLine($"{padding}if ({condition})");
             sb.AppendLine($"{padding}{{");
-            AppendConcreteOperation(sb, padding + "    ", data, member, operation);
+            AppendConcreteOperation(sb, padding + "    ", data, member, operation, extensionType);
             sb.AppendLine($"{padding}    return;");
             sb.AppendLine($"{padding}}}");
         }
 
         if (openMember.Type != null)
         {
-            AppendConcreteOperation(sb, padding, data, openMember, operation);
+            AppendConcreteOperation(sb, padding, data, openMember, operation, extensionType);
             return;
         }
 
@@ -163,7 +161,8 @@ internal static class LuminPackUnionDispatchCodeGenerator
         string padding,
         LuminDataInfo data,
         LuminUnionMemberInfo member,
-        DispatchOperation operation)
+        DispatchOperation operation,
+        string extensionType)
     {
         switch (operation)
         {
@@ -173,7 +172,7 @@ internal static class LuminPackUnionDispatchCodeGenerator
                     ? $"{padding}writer.WriteUnionHeader({member.Id});"
                     : $"{padding}writer.WriteWideUnionHeader({member.Id});");
                 sb.AppendLine($"{padding}var concreteValue = this;");
-                sb.AppendLine($"{padding}global::LuminPack.Generated.LuminPackExtensions.WritePolymorphismValue(ref writer, concreteValue);");
+                sb.AppendLine($"{padding}{extensionType}.WritePolymorphismValue(ref writer, in concreteValue);");
                 break;
 
             case DispatchOperation.Json:
@@ -188,13 +187,23 @@ internal static class LuminPackUnionDispatchCodeGenerator
                 sb.AppendLine($"{padding}else");
                 sb.AppendLine($"{padding}    writer.WritePropertyName(global::LuminPack.LuminPackConstUtf8.ValueU16);");
                 sb.AppendLine($"{padding}var concreteValue = this;");
-                sb.AppendLine($"{padding}writer.WriteValue(ref concreteValue);");
+                sb.AppendLine($"{padding}{extensionType}.WriteValue(ref writer, in concreteValue);");
                 sb.AppendLine($"{padding}writer.WriteObjectEnd();");
                 break;
 
             case DispatchOperation.CalculateOffset:
                 sb.AppendLine($"{padding}evaluator.CalculateUnionHeader({member.Id});");
-                sb.AppendLine($"{padding}evaluator.CalculatePolymorphismValue(this);");
+                if (member.Type.IsUnmanagedType)
+                {
+                    // A pure unmanaged struct has no normal object header for a union to
+                    // replace. Calculate it directly so the union header is retained.
+                    sb.AppendLine($"{padding}var concreteValue = this;");
+                    sb.AppendLine($"{padding}{extensionType}.CalculateOffset(ref evaluator, ref concreteValue);");
+                }
+                else
+                {
+                    sb.AppendLine($"{padding}evaluator.CalculatePolymorphismValue(this);");
+                }
                 break;
         }
     }
@@ -215,18 +224,6 @@ internal static class LuminPackUnionDispatchCodeGenerator
     private static void AppendMethodAttribute(StringBuilder sb, string padding)
     {
         sb.AppendLine($"{padding}[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
-    }
-
-    private static string GetParserType(LuminDataInfo data, INamedTypeSymbol constructedRoot)
-    {
-        var parserType = $"global::LuminPack.Generated.{TypeMetaChecker.BuildParserClassName(data)}";
-        if (constructedRoot.TypeArguments.Length != 0)
-        {
-            parserType += "<" + string.Join(", ", constructedRoot.TypeArguments.Select(argument =>
-                argument.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))) + ">";
-        }
-
-        return parserType;
     }
 
     private static INamedTypeSymbol FindMatchedRoot(INamedTypeSymbol member, INamedTypeSymbol root)
@@ -268,6 +265,21 @@ internal static class LuminPackUnionDispatchCodeGenerator
             .Where(character => char.IsLetterOrDigit(character) || character == '_')
             .ToArray());
         return $"{readableName}_{hash:x8}";
+    }
+
+    private static string SanitizeAssemblyName(string assemblyName)
+    {
+        var builder = new StringBuilder(assemblyName.Length);
+        for (var i = 0; i < assemblyName.Length; i++)
+        {
+            var character = assemblyName[i];
+            if (i == 0 && char.IsDigit(character))
+            {
+                builder.Append('_');
+            }
+            builder.Append(char.IsLetterOrDigit(character) || character == '_' ? character : '_');
+        }
+        return builder.Length == 0 ? "Assembly" : builder.ToString();
     }
 
     private static void AppendPartialType(

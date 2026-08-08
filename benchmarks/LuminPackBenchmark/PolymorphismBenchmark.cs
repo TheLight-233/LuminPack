@@ -169,14 +169,6 @@ public partial class FooA : IFoo
     [Key(1)] 
     public Transform Card;
 
-    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-    internal override void __BenchmarkLegacyUnionSerialize(ref LuminPackWriter writer)
-    {
-        IFoo value = this;
-        LuminPackBenchmark_IFooParser.WriteLuminPackBenchmark_FooA(ref writer, ref value);
-    }
-    
-
     public static FooA Create()
     {
         return new FooA()

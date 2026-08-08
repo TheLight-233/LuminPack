@@ -7,13 +7,25 @@ public static class LuminPackLocalExtension
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteValue<T>(ref this LuminPackWriter writer, scoped in T value)
     {
-        LuminPackParseProvider.Cache<T>.Parser!.Serialize(ref writer, ref Unsafe.AsRef(in value)!);
+        LuminPackFormatterCache.Cache<T>.Serialize(ref writer, in value);
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void ReadValue<T>(ref this LuminPackReader reader, scoped ref T value)
     {
-        LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref reader, ref value!);
+        LuminPackFormatterCache.Cache<T>.Deserialize(ref reader, ref value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void WriteValue<T>(ref this LuminPackJsonWriter writer, scoped in T value)
+    {
+        LuminPackFormatterCache.Cache<T>.SerializeJson(ref writer, in value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void ReadValue<T>(ref this LuminPackJsonReader reader, scoped ref T value)
+    {
+        LuminPackFormatterCache.Cache<T>.DeserializeJson(ref reader, ref value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

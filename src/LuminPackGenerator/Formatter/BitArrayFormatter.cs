@@ -20,7 +20,7 @@ public static class BitArrayFormatter
         sb.AppendLine("            ");
         sb.AppendLine("            int offset;");
         sb.AppendLine("#if NET8_0_OR_GREATER");
-        sb.AppendLine("            ref var view = ref global::LuminPack.LuminPackMarshal.As<global::System.Collections.BitArray, global::LuminPack.Parsers.BitArrayView>(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in value));");
+        sb.AppendLine("            ref var view = ref global::LuminPack.Code.LuminPackMarshal.As<global::System.Collections.BitArray, global::LuminPack.Code.BitArrayView>(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in value));");
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, view.m_length);");
         sb.AppendLine("            writer.WriteUnmanagedArrayWithOutHeader(ref index, view.m_array, view.m_array.Length, out offset);");
         sb.AppendLine("#else");
@@ -60,7 +60,7 @@ public static class BitArrayFormatter
         sb.AppendLine("            ");
         sb.AppendLine("#if NET8_0_OR_GREATER");
         sb.AppendLine("            if (value is null || value.Length != length) value = new global::System.Collections.BitArray(length, false);");
-        sb.AppendLine("            ref var view = ref global::LuminPack.LuminPackMarshal.As<global::System.Collections.BitArray, global::LuminPack.Parsers.BitArrayView>(ref value);");
+        sb.AppendLine("            ref var view = ref global::LuminPack.Code.LuminPackMarshal.As<global::System.Collections.BitArray, global::LuminPack.Code.BitArrayView>(ref value);");
         sb.AppendLine("            reader.ReadUnmanagedArray(ref index, ref view.m_array!, view.m_array.Length, out var offset);");
         sb.AppendLine("            reader.Advance(offset);");
         sb.AppendLine("#else");
@@ -70,5 +70,60 @@ public static class BitArrayFormatter
         sb.AppendLine("            reader.Advance(offset);");
         sb.AppendLine("            value = new global::System.Collections.BitArray(words) { Length = length };");
         sb.AppendLine("#endif");
+    }
+
+    public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        sb.AppendLine("            if (value == null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNull();");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteArrayStart();");
+        sb.AppendLine();
+        sb.AppendLine("            if (value.Count > 0)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                for (int i = 0; i < value.Count; i++)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    writer.WriteBool(value[i]);");
+        sb.AppendLine("                }");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteArrayEnd();");
+    }
+
+    public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        sb.AppendLine("            if (reader.IsNull())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            reader.TryConsumeArrayStart();");
+        sb.AppendLine();
+        sb.AppendLine("            var tempList = new global::System.Collections.Generic.List<bool>();");
+        sb.AppendLine();
+        sb.AppendLine("            while (reader.Read())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
+        sb.AppendLine("                    break;");
+        sb.AppendLine();
+        sb.AppendLine("                tempList.Add(reader.GetBoolean());");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            if (tempList.Count > 0)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = new global::System.Collections.BitArray(tempList.Count);");
+        sb.AppendLine("                for (int i = 0; i < tempList.Count; i++)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    value[i] = tempList[i];");
+        sb.AppendLine("                }");
+        sb.AppendLine("            }");
+        sb.AppendLine("            else");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = new global::System.Collections.BitArray(0);");
+        sb.AppendLine("            }");
     }
 }

@@ -28,14 +28,17 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                 return new MetaInfo(cs, cs.LanguageVersion, net8, false);
             });
 
-        var autoMapDeclarations = context.SyntaxProvider.ForAttributeWithMetadataName(
-            LuminMapToAttr,
-            static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax,
-            static (ctx, _) =>
-                LuminAutoMapAnalyzer.Analyze(
-                    (INamedTypeSymbol)ctx.TargetSymbol,
-                    ctx.SemanticModel.Compilation)
-        ).Where(x => x != null)!;
+        var autoMapDeclarations = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax,
+                static (ctx, _) =>
+                {
+                    var symbol = GetTypeWithAttribute(ctx, LuminMapToAttr);
+                    return symbol == null
+                        ? null
+                        : LuminAutoMapAnalyzer.Analyze(symbol, ctx.SemanticModel.Compilation);
+                })
+            .Where(static x => x != null)!;
 
         
         context.RegisterSourceOutput(
@@ -50,20 +53,30 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                     if (string.IsNullOrEmpty(code)) return;
                     spc.AddSource($"{SafeFileName(info.SourceFullName)}Mapper.g.cs", code);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        DiagnosticDescriptors.GeneratorFailure,
+                        Location.None,
+                        ex.GetType().FullName + ": " + ex.Message + " | " +
+                        (ex.StackTrace ?? string.Empty).Replace("\r", " ").Replace("\n", " ")));
+                }
             });
 
-        var manualMapDeclarations = context.SyntaxProvider.ForAttributeWithMetadataName(
-            LuminMapperAttr,
-            static (node, _) =>
-                node is ClassDeclarationSyntax cls
-                && cls.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword))
-                && cls.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)),
-            static (ctx, _) =>
-                LuminMapAnalyzer.Analyze(
-                    (INamedTypeSymbol)ctx.TargetSymbol,
-                    ctx.SemanticModel.Compilation)
-        );
+        var manualMapDeclarations = context.SyntaxProvider
+            .CreateSyntaxProvider(
+                static (node, _) =>
+                    node is ClassDeclarationSyntax cls
+                    && cls.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword))
+                    && cls.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)),
+                static (ctx, _) =>
+                {
+                    var symbol = GetTypeWithAttribute(ctx, LuminMapperAttr);
+                    return symbol == null
+                        ? null
+                        : LuminMapAnalyzer.Analyze(symbol, ctx.SemanticModel.Compilation);
+                })
+            .Where(static x => x != null)!;
 
         context.RegisterSourceOutput(
             manualMapDeclarations.Combine(metaProvider),
@@ -77,7 +90,13 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                     if (string.IsNullOrEmpty(code)) return;
                     spc.AddSource($"{SafeFileName(info.ClassFullName)}.Mapper.g.cs", code);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        DiagnosticDescriptors.GeneratorFailure,
+                        Location.None,
+                        ex.ToString()));
+                }
             });
 
         var allAuto   = autoMapDeclarations.Collect();
@@ -92,17 +111,33 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                 var (((autoInfos, manualInfos), compilation), meta) = pair;
 
                 // 没有 [LuminPackable] 类型且没有任何 Mapper 声明，不生成
-                bool hasPackable = HasLuminPackableTypes(compilation);
                 bool hasMappers  = !autoInfos.IsEmpty || !manualInfos.IsEmpty;
-                if (!hasPackable && !hasMappers) return;
 
                 try
                 {
-                    var code = GenerateMappersRegistry(autoInfos!, manualInfos, compilation, meta);
-                    if (!string.IsNullOrEmpty(code))
-                        spc.AddSource("GeneratedMappersRegistry.g.cs", code);
+                    if (hasMappers)
+                    {
+                        var code = GenerateMappersRegistry(autoInfos!, manualInfos, compilation, meta);
+                        if (!string.IsNullOrEmpty(code))
+                            spc.AddSource("GeneratedMappersRegistry.g.cs", code);
+                    }
+
+                    var formatterSupport = LuminPackExtensionGenerator.GenerateSerializerInvocationSupport(compilation, meta);
+                    if (!string.IsNullOrEmpty(formatterSupport))
+                        spc.AddSource("LuminPack.SerializerInvocation.Extension.g.cs", formatterSupport);
+
+                    var formatterRegistry = LuminPackExtensionGenerator.GenerateFormatterCacheRegistrations(compilation, meta);
+                    if (!string.IsNullOrEmpty(formatterRegistry))
+                        spc.AddSource("GeneratedFormattersRegistry.g.cs", formatterRegistry);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    spc.ReportDiagnostic(Diagnostic.Create(
+                        DiagnosticDescriptors.GeneratorFailure,
+                        Location.None,
+                        ex.GetType().FullName + ": " + ex.Message + " | " +
+                        (ex.StackTrace ?? string.Empty).Replace("\r", " ").Replace("\n", " ")));
+                }
             });
     }
 
@@ -152,9 +187,6 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
         sb.AppendLine("        public static void Initialize()");
         sb.AppendLine("        {");
 
-        sb.AppendLine($"            global::LuminPack.LuminPackSerializer.Initialize({registryFqn}.ParserTypes);");
-        sb.AppendLine();
-
         foreach (var info in autoInfos)
         {
             if (info == null || info.Pairs.Count == 0) continue;
@@ -172,28 +204,30 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
         sb.AppendLine("        }");
         sb.AppendLine();
 
-        sb.Append(LuminPackExtensionGenerator.GenerateParserTypeList(compilation, asmSafe));
-
         sb.AppendLine("    }");
         if (hasNs) sb.AppendLine("}");
         return sb.ToString();
     }
 
-    private static bool HasLuminPackableTypes(Compilation compilation)
+    private static INamedTypeSymbol? GetTypeWithAttribute(
+        GeneratorSyntaxContext context,
+        string metadataName)
     {
-        var attr = compilation.GetTypeByMetadataName(LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE);
-        if (attr == null) return false;
-        foreach (var tree in compilation.SyntaxTrees)
+        if (context.Node is not TypeDeclarationSyntax typeDeclaration)
+            return null;
+
+        var symbol = context.SemanticModel.GetDeclaredSymbol(typeDeclaration) as INamedTypeSymbol;
+        if (symbol == null)
+            return null;
+
+        foreach (var attribute in symbol.GetAttributes())
         {
-            var model = compilation.GetSemanticModel(tree);
-            foreach (var decl in tree.GetRoot().DescendantNodes().OfType<TypeDeclarationSyntax>())
-            {
-                if (model.GetDeclaredSymbol(decl) is INamedTypeSymbol sym &&
-                    sym.GetAttributes().Any(a => SymbolEqualityComparer.Default.Equals(a.AttributeClass, attr)))
-                    return true;
-            }
+            if (attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                == "global::" + metadataName)
+                return symbol;
         }
-        return false;
+
+        return null;
     }
 
     private static string SafeFileName(string fqn)

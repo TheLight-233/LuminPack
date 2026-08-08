@@ -13,12 +13,6 @@ public sealed class LuminPackableAttribute : System.Attribute
     }
 }
 
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, AllowMultiple = false, Inherited = false)]
-public sealed class LuminPackParserAttribute : System.Attribute
-{
-    
-}
-
 [AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
 public sealed class LuminPackOrderAttribute : System.Attribute
 {

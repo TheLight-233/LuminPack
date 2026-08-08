@@ -1,6 +1,4 @@
-﻿using System.Diagnostics;
-using System.Linq;
-using LuminPack.CodeGen;
+﻿
 using LuminPack.Enum;
 
 namespace LuminPack.Editor
@@ -131,14 +129,6 @@ namespace LuminPack.Editor
                 _dataInfo.fields.Add(new LuminDataFiled());
             }
 
-            // Generate Button
-            EditorGUILayout.Space();
-            if (GUILayout.Button("Generate Parser Class", GUILayout.Height(40)))
-            {
-                if (GenerateCodeBeforeCheck())
-                    LuminCodeGenerator.CodeGenerator(_dataInfo);
-            }
-    
             EditorGUILayout.EndVertical();
         }
 
@@ -159,26 +149,6 @@ namespace LuminPack.Editor
             GUI.backgroundColor = new Color(0.9f, 0.9f, 1f);
         }
         
-        [DebuggerStepThrough]
-        private bool GenerateCodeBeforeCheck()
-        {
-            if (_dataInfo.fields.Count == 0)
-            {
-                Debug.LogError("字段数量为0！数据解析器生成失败！");
-                
-                return false;
-            }
-
-            if (_dataInfo.fields.GroupBy(x => x.Name).Any(x => x.Count() > 1))
-            {
-                Debug.LogError("含有相同名字字段！数据解析器生成失败！");
-                
-                return false;
-            }
-            
-            return true;
-        }
-
         private void CheckFieldType(LuminFiledType type, int index)
         {
             switch (type)

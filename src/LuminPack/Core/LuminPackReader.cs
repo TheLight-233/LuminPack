@@ -18,7 +18,6 @@ using LuminPack.Interface;
 using LuminPack.Option;
 using LuminPack.Code;
 using LuminPack.Internal;
-using LuminPack.Parsers;
 using LuminPack.Utility;
 using static LuminPack.Code.LuminPackMarshal;
 
@@ -135,7 +134,7 @@ namespace LuminPack.Core
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [Conditional("DEBUG")]
-        internal void EnsureReadable(int index, int count)
+        public void EnsureReadable(int index, int count)
         {
             if ((uint)index > (uint)_bufferReference.Length ||
                 (uint)count > (uint)(_bufferReference.Length - index))
@@ -180,12 +179,6 @@ namespace LuminPack.Core
             _currentIndex = 0;
         }
         
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public LuminPackParser<T> GetParser<T>()
-        {
-            return LuminPackParseProvider.Cache<T>.Parser!;
-        }
-
         /// <summary>
         /// 获取当前数组指针
         /// </summary>
@@ -905,37 +898,15 @@ namespace LuminPack.Core
             }
         }
         
-        // [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        // public void ReadValue<T>(scoped ref T? value)
-        // {
-        //     LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref value);
-        // }
-
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T? ReadValue<T>()
         {
             T? value = default;
-            LuminPackParseProvider.Cache<T>.Parser!.Deserialize(ref this, ref value);
+            LuminPackFormatterCache.Cache<T>.Deserialize(ref this, ref value);
             return value;
         }
         
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void ReadValueWithParser<TParser, T>(TParser parser, scoped ref T? value)
-            where TParser : ILuminPackableParser<T>
-        {
-            parser.Deserialize(ref this, ref value);
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public T? ReadValueWithParser<TParser, T>(TParser parser)
-            where TParser : ILuminPackableParser<T>
-        {
-            T? value = default;
-            parser.Deserialize(ref this, ref value);
-            return value;
-        }
-        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadObjectHeader(ref int index, out byte memberCount)
         {
@@ -1073,13 +1044,7 @@ namespace LuminPack.Core
                 array = AllocateUninitializedArray<T>(length);
             }
 
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            ref T first = ref LuminPackMarshal.GetArrayReference(array);
-            for (nint i = 0; i < length; i++)
-            {
-                parser.Deserialize(ref this, ref Unsafe.Add(ref first, i)!);
-            }
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
 
         }
 
@@ -1118,13 +1083,7 @@ namespace LuminPack.Core
                 array = AllocateUninitializedArray<T>(length);
             }
 
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            ref T first = ref LuminPackMarshal.GetArrayReference(array);
-            for (nint i = 0; i < length; i++)
-            {
-                parser.Deserialize(ref this, ref Unsafe.Add(ref first, i)!);
-            }
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
 
         }
 
@@ -1165,14 +1124,7 @@ namespace LuminPack.Core
                 span = AllocateUninitializedArray<T>(length);
             }
 
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-
-
-            ref var first = ref MemoryMarshal.GetReference(span);
-            for (nint i = 0; i < length; i++)
-            {
-                parser.Deserialize(ref this, ref Unsafe.Add(ref first, i)!);
-            }
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
 
         }
 
@@ -1212,14 +1164,7 @@ namespace LuminPack.Core
                 span = AllocateUninitializedArray<T>(length);
             }
 
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-
-            ref var first = ref MemoryMarshal.GetReference(span);
-            for (nint i = 0; i < length; i++)
-            {
-                parser.Deserialize(ref this, ref Unsafe.Add(ref first, i)!);
-            }
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
 
         }
 
@@ -1247,13 +1192,7 @@ namespace LuminPack.Core
                 array = AllocateUninitializedArray<T>(length);
             }
 
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            ref T first = ref LuminPackMarshal.GetArrayReference(array);
-            for (nint i = 0; i < length; i++)
-            {
-                parser.Deserialize(ref this, ref Unsafe.Add(ref first, i)!);
-            }
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
 
         }
 
@@ -1281,13 +1220,7 @@ namespace LuminPack.Core
                 span = AllocateUninitializedArray<T>(length);
             }
 
-            var parser = LuminPackParseProvider.Cache<T>.Parser!;
-            
-            ref var first = ref MemoryMarshal.GetReference(span);
-            for (nint i = 0; i < length; i++)
-            {
-                parser.Deserialize(ref this, ref Unsafe.Add(ref first, i)!);
-            }
+            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
 
         }
 

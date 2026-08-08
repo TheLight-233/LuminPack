@@ -47,4 +47,27 @@ public static class TimeZoneInfoFormatter
         sb.AppendLine("            ");
         sb.AppendLine("            value = global::System.TimeZoneInfo.FromSerializedString(source);");
     }
+
+    public static void GenerateJsonSerializeCode(LuminLocalFieldData data, StringBuilder sb)
+    {
+        sb.AppendLine("            if (value == null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNull();");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteString(value.ToSerializedString());");
+    }
+
+    public static void GenerateJsonDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
+    {
+        sb.AppendLine("            if (reader.IsNull())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            var source = reader.ReadString();");
+        sb.AppendLine("            value = global::System.TimeZoneInfo.FromSerializedString(source);");
+    }
 }

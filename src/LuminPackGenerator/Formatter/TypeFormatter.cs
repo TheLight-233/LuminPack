@@ -27,7 +27,7 @@ public static class TypeFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            ");
-        sb.AppendLine("            var shortName = global::LuminPack.Parsers.TypeParser.ShortTypeNameRegex().Replace(full, \"\");");
+        sb.AppendLine("            var shortName = global::System.Text.RegularExpressions.Regex.Replace(full, @\", Version=\\d+.\\d+.\\d+.\\d+, Culture=[\\w-]+, PublicKeyToken=(?:null|[a-f0-9]{16})\", \"\");");
         sb.AppendLine("            ");
         sb.AppendLine("            int offset = writer.WriteString(shortName) + writer.StringRecordLength();");
         sb.AppendLine("            ");
@@ -61,6 +61,38 @@ public static class TypeFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            ");
+        sb.AppendLine("            value = global::System.Type.GetType(typeName, throwOnError: true);");
+    }
+
+    public static void GenerateJsonSerializeCode(LuminLocalFieldData data, StringBuilder sb)
+    {
+        sb.AppendLine("            if (value == null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNull();");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            var full = value.AssemblyQualifiedName;");
+        sb.AppendLine();
+        sb.AppendLine("            if (full is null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNull();");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            var shortName = global::System.Text.RegularExpressions.Regex.Replace(full, @\", Version=\\d+.\\d+.\\d+.\\d+, Culture=[\\w-]+, PublicKeyToken=(?:null|[a-f0-9]{16})\", \"\");");
+        sb.AppendLine("            writer.WriteString(shortName);");
+    }
+
+    public static void GenerateJsonDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
+    {
+        sb.AppendLine("            if (reader.IsNull())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            var typeName = reader.ReadString();");
         sb.AppendLine("            value = global::System.Type.GetType(typeName, throwOnError: true);");
     }
 }

@@ -92,47 +92,36 @@ internal static class BinaryUnionSafetyTest
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(BoxedStructUnionRoundTripsAndSizeMatches), BoxedStructUnionRoundTripsAndSizeMatches);
-        RunCase(results, nameof(ClassUnionFastPathDoesNotPopulateUnionMap), ClassUnionFastPathDoesNotPopulateUnionMap);
-        RunCase(results, nameof(InterfaceUnionFastPathDoesNotPopulateUnionMap), InterfaceUnionFastPathDoesNotPopulateUnionMap);
+        RunCase(results, nameof(ClassUnionUsesStaticTagDispatch), ClassUnionUsesStaticTagDispatch);
+        RunCase(results, nameof(InterfaceUnionUsesStaticTagDispatch), InterfaceUnionUsesStaticTagDispatch);
         RunCase(results, nameof(KnownTagUsesStaticDeserializeSwitch), KnownTagUsesStaticDeserializeSwitch);
-        RunCase(results, nameof(InterfaceDefaultMethodUsesRegisteredFallback), InterfaceDefaultMethodUsesRegisteredFallback);
-        RunCase(results, nameof(CrossAssemblyRegistrationUsesRootDefaultFallback), CrossAssemblyRegistrationUsesRootDefaultFallback);
+        RunCase(results, nameof(UnlistedUnionMemberIsRejected), UnlistedUnionMemberIsRejected);
+        RunCase(results, nameof(CrossAssemblyUnlistedMemberIsRejected), CrossAssemblyUnlistedMemberIsRejected);
         RunCase(results, nameof(NullWideGenericAndMultipleRootsRoundTrip), NullWideGenericAndMultipleRootsRoundTrip);
-        RunCase(results, nameof(DynamicUnionTagZeroAndConflictsAreHandledAtomically), DynamicUnionTagZeroAndConflictsAreHandledAtomically);
-        RunCase(results, nameof(DynamicUnionRejectsStaticTagWithoutPublishingType), DynamicUnionRejectsStaticTagWithoutPublishingType);
+        RunCase(results, nameof(DynamicUnionRegistrationIsNotAvailable), DynamicUnionRegistrationIsNotAvailable);
     }
 
-    private static void ClassUnionFastPathDoesNotPopulateUnionMap()
+    private static void ClassUnionUsesStaticTagDispatch()
     {
         DynamicUnionBase value = new StaticDynamicUnionMember { Value = 123 };
         var payload = LuminPackSerializer.Serialize(value);
-        var methodTable = LuminPackMarshal.GetMethodTable(value);
-
-        Assert(!global::LuminPack.Generated.LuminPackUnitTest_DynamicUnionBaseParser._unionMap
-                .TryGetValue(methodTable, out _),
-            "A local class union member was inserted into UnionMap.");
         Assert(payload[0] == 1, "The class union fast path wrote the wrong constant tag.");
         Assert(LuminPackSerializer.Sizeof(value) == payload.Length,
-            "The class union virtual CalculateOffset path disagrees with Serialize.");
+            "The class union static Sizeof path disagrees with Serialize.");
 
         var result = LuminPackSerializer.Deserialize<DynamicUnionBase>(payload);
         Assert(result is StaticDynamicUnionMember { Value: 123 },
             "The class union fast path did not round-trip through the static tag switch.");
     }
 
-    private static void InterfaceUnionFastPathDoesNotPopulateUnionMap()
+    private static void InterfaceUnionUsesStaticTagDispatch()
     {
         IFastInterfaceUnion value = new FastInterfaceUnionMember { Value = 456 };
         var payload = LuminPackSerializer.Serialize(value);
         var json = LuminPackSerializer.SerializeJson(value);
-        var methodTable = LuminPackMarshal.GetMethodTable(value);
-
-        Assert(!global::LuminPack.Generated.LuminPackUnitTest_IFastInterfaceUnionParser._unionMap
-                .TryGetValue(methodTable, out _),
-            "A local interface union member was inserted into UnionMap.");
         Assert(payload[0] == 7, "The interface union fast path wrote the wrong constant tag.");
         Assert(LuminPackSerializer.Sizeof(value) == payload.Length,
-            "The interface union explicit CalculateOffset path disagrees with Serialize.");
+            "The interface union static Sizeof path disagrees with Serialize.");
         Assert(LuminPackSerializer.Deserialize<IFastInterfaceUnion>(payload) is FastInterfaceUnionMember { Value: 456 },
             "The interface union binary fast path did not round-trip.");
         Assert(LuminPackSerializer.DeserializeJson<IFastInterfaceUnion>(json) is FastInterfaceUnionMember { Value: 456 },
@@ -144,32 +133,17 @@ internal static class BinaryUnionSafetyTest
         IFastInterfaceUnion value = new FastInterfaceUnionMember { Value = 789 };
         var payload = LuminPackSerializer.Serialize(value);
 
-        Assert(!global::LuminPack.Generated.LuminPackUnitTest_IFastInterfaceUnionParser._externalMap
-                .TryGetValue((nint)8, out _),
-            "A local tag was unexpectedly published to the registered-reader map.");
         Assert(LuminPackSerializer.Deserialize<IFastInterfaceUnion>(payload) is FastInterfaceUnionMember { Value: 789 },
             "A known local tag did not deserialize through the generated switch.");
     }
 
-    private static void InterfaceDefaultMethodUsesRegisteredFallback()
+    private static void UnlistedUnionMemberIsRejected()
     {
-        global::LuminPack.Generated.LuminPackUnitTest_IFastInterfaceUnionParser.Register(
-            typeof(RegisteredInterfaceUnionMember),
-            99,
-            WriteRegisteredInterfaceUnion,
-            ReadRegisteredInterfaceUnion,
-            WriteJsonRegisteredInterfaceUnion,
-            ReadJsonRegisteredInterfaceUnion);
-
         IFastInterfaceUnion value = new RegisteredInterfaceUnionMember { Value = 321 };
-        var payload = LuminPackSerializer.Serialize(value);
-        var json = LuminPackSerializer.SerializeJson(value);
-
-        Assert(payload[0] == 99, "The interface default method did not use the registered writer.");
-        Assert(LuminPackSerializer.Deserialize<IFastInterfaceUnion>(payload) is RegisteredInterfaceUnionMember { Value: 321 },
-            "An unknown/local-default binary tag did not use the registered reader fallback.");
-        Assert(LuminPackSerializer.DeserializeJson<IFastInterfaceUnion>(json) is RegisteredInterfaceUnionMember { Value: 321 },
-            "An unknown/local-default JSON tag did not use the registered reader fallback.");
+        AssertThrows(() => LuminPackSerializer.Serialize(value),
+            "An unlisted union member was accepted without a generated tag.");
+        AssertThrows(() => LuminPackSerializer.SerializeJson(value),
+            "An unlisted JSON union member was accepted without a generated tag.");
     }
 
     private static void NullWideGenericAndMultipleRootsRoundTrip()
@@ -202,41 +176,14 @@ internal static class BinaryUnionSafetyTest
             "The second independent class-union virtual slot failed.");
     }
 
-    private static void CrossAssemblyRegistrationUsesRootDefaultFallback()
+    private static void CrossAssemblyUnlistedMemberIsRejected()
     {
-        global::LuminPack.Generated.LuminPackUnionContracts_IExternalUnionParser.Register(
-            typeof(CrossAssemblyUnionMember),
-            123,
-            WriteCrossAssemblyUnion,
-            ReadCrossAssemblyUnion,
-            WriteJsonCrossAssemblyUnion,
-            ReadJsonCrossAssemblyUnion);
-        global::LuminPack.Generated.LuminPackUnionContracts_ExternalClassUnionRootParser.Register(
-            typeof(CrossAssemblyClassUnionMember),
-            124,
-            WriteCrossAssemblyClassUnion,
-            ReadCrossAssemblyClassUnion,
-            WriteJsonCrossAssemblyClassUnion,
-            ReadJsonCrossAssemblyClassUnion);
-
         IExternalUnion value = new CrossAssemblyUnionMember { Value = 654 };
-        var payload = LuminPackSerializer.Serialize(value);
-        var json = LuminPackSerializer.SerializeJson(value);
-
-        Assert(payload[0] == 123, "The cross-assembly default interface method did not use the registered writer.");
-        Assert(LuminPackSerializer.Deserialize<IExternalUnion>(payload) is CrossAssemblyUnionMember { Value: 654 },
-            "The cross-assembly registered binary reader did not run from switch default.");
-        Assert(LuminPackSerializer.DeserializeJson<IExternalUnion>(json) is CrossAssemblyUnionMember { Value: 654 },
-            "The cross-assembly registered JSON reader did not run from switch default.");
-
         ExternalClassUnionRoot classValue = new CrossAssemblyClassUnionMember { Value = 655 };
-        var classPayload = LuminPackSerializer.Serialize(classValue);
-        var classJson = LuminPackSerializer.SerializeJson(classValue);
-        Assert(classPayload[0] == 124, "The cross-assembly class virtual default did not use the registered writer.");
-        Assert(LuminPackSerializer.Deserialize<ExternalClassUnionRoot>(classPayload) is CrossAssemblyClassUnionMember { Value: 655 },
-            "The cross-assembly class registered binary reader did not run from switch default.");
-        Assert(LuminPackSerializer.DeserializeJson<ExternalClassUnionRoot>(classJson) is CrossAssemblyClassUnionMember { Value: 655 },
-            "The cross-assembly class registered JSON reader did not run from switch default.");
+        AssertThrows(() => LuminPackSerializer.Serialize(value),
+            "An external interface union member without a generated contract tag was accepted.");
+        AssertThrows(() => LuminPackSerializer.Serialize(classValue),
+            "An external class union member without a generated contract tag was accepted.");
     }
 
     private static void BoxedStructUnionRoundTripsAndSizeMatches()
@@ -265,164 +212,25 @@ internal static class BinaryUnionSafetyTest
             "A boxed struct union did not survive binary round-trip.");
     }
 
-    private static void DynamicUnionTagZeroAndConflictsAreHandledAtomically()
+    private static void DynamicUnionRegistrationIsNotAvailable()
     {
-        global::LuminPack.Generated.LuminPackUnitTest_DynamicUnionBaseParser.Register(
-            typeof(string), 0, WriteEmptyUnion, ReadEmptyUnion, WriteJsonEmptyUnion, ReadJsonEmptyUnion);
-
-        var stringMethodTable = LuminPackMarshal.GetMethodTable(typeof(string));
-        Assert(global::LuminPack.Generated.LuminPackUnitTest_DynamicUnionBaseParser._unionMap
-                   .TryGetValue(stringMethodTable, out var stringEntry) && stringEntry.Tag == 0,
-            "Dynamic union tag 0 was not published to the type map.");
-        Assert(global::LuminPack.Generated.LuminPackUnitTest_DynamicUnionBaseParser._externalMap
-                   .TryGetValue((nint)1, out _),
-            "Dynamic union tag 0 was not encoded to a non-zero read-map key.");
-
-        AssertThrowsArgumentException(() =>
-            global::LuminPack.Generated.LuminPackUnitTest_DynamicUnionBaseParser.Register(
-                typeof(object), 0, WriteEmptyUnion, ReadEmptyUnion, WriteJsonEmptyUnion, ReadJsonEmptyUnion));
-
-        global::LuminPack.Generated.LuminPackUnitTest_DynamicUnionBaseParser.Register(
-            typeof(object), 2, WriteEmptyUnion, ReadEmptyUnion, WriteJsonEmptyUnion, ReadJsonEmptyUnion);
-
-        var objectMethodTable = LuminPackMarshal.GetMethodTable(typeof(object));
-        Assert(global::LuminPack.Generated.LuminPackUnitTest_DynamicUnionBaseParser._unionMap
-                   .TryGetValue(objectMethodTable, out var objectEntry) && objectEntry.Tag == 2,
-            "A rejected duplicate tag partially published its type mapping.");
+        DynamicUnionBase value = new StaticDynamicUnionMember { Value = 1 };
+        Assert(LuminPackSerializer.Deserialize<DynamicUnionBase>(LuminPackSerializer.Serialize(value)) is StaticDynamicUnionMember,
+            "A statically declared union tag did not round-trip without registration.");
     }
 
-    private static void DynamicUnionRejectsStaticTagWithoutPublishingType()
-    {
-        AssertThrowsArgumentException(() =>
-            global::LuminPack.Generated.LuminPackUnitTest_ISerializableParser.Register(
-                typeof(Uri), 0, WriteSerializable, ReadSerializable, WriteJsonSerializable, ReadJsonSerializable));
-
-        global::LuminPack.Generated.LuminPackUnitTest_ISerializableParser.Register(
-            typeof(Uri), 60_000, WriteSerializable, ReadSerializable, WriteJsonSerializable, ReadJsonSerializable);
-
-        var methodTable = LuminPackMarshal.GetMethodTable(typeof(Uri));
-        Assert(global::LuminPack.Generated.LuminPackUnitTest_ISerializableParser._unionMap
-                   .TryGetValue(methodTable, out var entry) && entry.Tag == 60_000,
-            "A rejected static-tag collision partially published its type mapping.");
-    }
-
-    private static void WriteEmptyUnion(ref LuminPackWriter writer, ref DynamicUnionBase value) { }
-    private static void ReadEmptyUnion(ref LuminPackReader reader, ref DynamicUnionBase value) { }
-    private static void WriteJsonEmptyUnion(ref LuminPackJsonWriter writer, ref DynamicUnionBase value) { }
-    private static void ReadJsonEmptyUnion(ref LuminPackJsonReader reader, ref DynamicUnionBase value) { }
-    private static void WriteSerializable(ref LuminPackWriter writer, ref ISerializable value) { }
-    private static void ReadSerializable(ref LuminPackReader reader, ref ISerializable value) { }
-    private static void WriteJsonSerializable(ref LuminPackJsonWriter writer, ref ISerializable value) { }
-    private static void ReadJsonSerializable(ref LuminPackJsonReader reader, ref ISerializable value) { }
-
-    private static void WriteRegisteredInterfaceUnion(ref LuminPackWriter writer, ref IFastInterfaceUnion value)
-    {
-        writer.WriteUnionHeader(99);
-        var memberValue = ((RegisteredInterfaceUnionMember)value).Value;
-        writer.WriteValue(memberValue);
-    }
-
-    private static void ReadRegisteredInterfaceUnion(ref LuminPackReader reader, ref IFastInterfaceUnion value)
-    {
-        var memberValue = 0;
-        reader.ReadValue(ref memberValue);
-        value = new RegisteredInterfaceUnionMember { Value = memberValue };
-    }
-
-    private static void WriteJsonRegisteredInterfaceUnion(ref LuminPackJsonWriter writer, ref IFastInterfaceUnion value)
-    {
-        writer.WriteObjectStart();
-        writer.WritePropertyName("$type");
-        writer.WriteInt(99);
-        writer.WritePropertyName("$value");
-        var memberValue = ((RegisteredInterfaceUnionMember)value).Value;
-        writer.WriteValue(ref memberValue);
-        writer.WriteObjectEnd();
-    }
-
-    private static void ReadJsonRegisteredInterfaceUnion(ref LuminPackJsonReader reader, ref IFastInterfaceUnion value)
-    {
-        var memberValue = 0;
-        reader.ReadValue(ref memberValue);
-        value = new RegisteredInterfaceUnionMember { Value = memberValue };
-    }
-
-    private static void WriteCrossAssemblyUnion(ref LuminPackWriter writer, ref IExternalUnion value)
-    {
-        writer.WriteUnionHeader(123);
-        var memberValue = (CrossAssemblyUnionMember)value;
-        writer.WritePolymorphismValue(memberValue);
-    }
-
-    private static void ReadCrossAssemblyUnion(ref LuminPackReader reader, ref IExternalUnion value)
-    {
-        CrossAssemblyUnionMember memberValue = null!;
-        reader.ReadPolymorphismValue(ref memberValue);
-        value = memberValue;
-    }
-
-    private static void WriteJsonCrossAssemblyUnion(ref LuminPackJsonWriter writer, ref IExternalUnion value)
-    {
-        writer.WriteObjectStart();
-        writer.WritePropertyName("$type");
-        writer.WriteInt(123);
-        writer.WritePropertyName("$value");
-        var memberValue = (CrossAssemblyUnionMember)value;
-        writer.WriteValue(ref memberValue);
-        writer.WriteObjectEnd();
-    }
-
-    private static void ReadJsonCrossAssemblyUnion(ref LuminPackJsonReader reader, ref IExternalUnion value)
-    {
-        CrossAssemblyUnionMember memberValue = null!;
-        reader.ReadValue(ref memberValue);
-        value = memberValue;
-    }
-
-    private static void WriteCrossAssemblyClassUnion(ref LuminPackWriter writer, ref ExternalClassUnionRoot value)
-    {
-        writer.WriteUnionHeader(124);
-        var memberValue = (CrossAssemblyClassUnionMember)value;
-        writer.WritePolymorphismValue(memberValue);
-    }
-
-    private static void ReadCrossAssemblyClassUnion(ref LuminPackReader reader, ref ExternalClassUnionRoot value)
-    {
-        CrossAssemblyClassUnionMember memberValue = null!;
-        reader.ReadPolymorphismValue(ref memberValue);
-        value = memberValue;
-    }
-
-    private static void WriteJsonCrossAssemblyClassUnion(ref LuminPackJsonWriter writer, ref ExternalClassUnionRoot value)
-    {
-        writer.WriteObjectStart();
-        writer.WritePropertyName("$type");
-        writer.WriteInt(124);
-        writer.WritePropertyName("$value");
-        var memberValue = (CrossAssemblyClassUnionMember)value;
-        writer.WriteValue(ref memberValue);
-        writer.WriteObjectEnd();
-    }
-
-    private static void ReadJsonCrossAssemblyClassUnion(ref LuminPackJsonReader reader, ref ExternalClassUnionRoot value)
-    {
-        CrossAssemblyClassUnionMember memberValue = null!;
-        reader.ReadValue(ref memberValue);
-        value = memberValue;
-    }
-
-    private static void AssertThrowsArgumentException(Action action)
+    private static void AssertThrows(Action action, string message)
     {
         try
         {
             action();
         }
-        catch (ArgumentException)
+        catch (Exception)
         {
             return;
         }
 
-        throw new InvalidOperationException("Expected an ArgumentException.");
+        throw new InvalidOperationException(message);
     }
 
     private static void RunCase(List<string> results, string name, Action test)

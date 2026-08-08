@@ -90,7 +90,7 @@ namespace LuminPack.Utility;
 /// <summary>
 /// LuminZ: a high-performance in-memory compression algorithm for LuminPack binary payloads.
 /// </summary>
-internal static class LuminCompressor
+public static class LuminCompressor
 {
     private const uint Magic = 0x5A4D554C; // "LUMZ" LE
     private const int  HeaderSize = 8;

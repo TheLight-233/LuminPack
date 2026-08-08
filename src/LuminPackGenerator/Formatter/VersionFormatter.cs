@@ -52,4 +52,26 @@ public static class VersionFormatter
         sb.AppendLine("                value = new Version(major, minor, build, revision);");
         sb.AppendLine("            }");
     }
+
+    public static void GenerateJsonSerializeCode(LuminLocalFieldData data, StringBuilder sb)
+    {
+        sb.AppendLine("            if (value == null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNull();");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteString(value.ToString());");
+    }
+
+    public static void GenerateJsonDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
+    {
+        sb.AppendLine("            if (reader.IsNull())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            value = global::System.Version.Parse(reader.ReadString());");
+    }
 }

@@ -17,6 +17,7 @@ public static class ArrayFormatter
         
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.EnsureAdditionalCapacity(sizeof(int));");
         sb.AppendLine("                writer.WriteNullCollectionHeader(ref index);");
         sb.AppendLine("                writer.Advance(4);");
         sb.AppendLine("                return;");
@@ -24,6 +25,7 @@ public static class ArrayFormatter
         sb.AppendLine();
         if (KnownValueTypes.Contains(baseTypeName))
         {
+            sb.AppendLine("            writer.EnsureAdditionalCapacity(checked(sizeof(int) + value.Length * global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + baseTypeName + ">()));");
             sb.AppendLine("            writer.DangerousWriteUnmanagedArray(ref index, value, out var offset);");
             sb.AppendLine("            writer.Advance(offset);");
             sb.AppendLine("            writer.CheckBuffer();");
@@ -34,6 +36,7 @@ public static class ArrayFormatter
         {
             sb.AppendLine("            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + baseTypeName + ">())");
             sb.AppendLine("            {");
+            sb.AppendLine("                writer.EnsureAdditionalCapacity(checked(sizeof(int) + value.Length * global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + baseTypeName + ">()));");
             sb.AppendLine("                writer.DangerousWriteUnmanagedArray(ref index, value, out var offset);");
             sb.AppendLine("                writer.Advance(offset);");
             sb.AppendLine("                writer.CheckBuffer();");
@@ -50,6 +53,7 @@ public static class ArrayFormatter
         }
         
         sb.AppendLine();
+        sb.AppendLine("            writer.EnsureAdditionalCapacity(sizeof(int));");
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Length);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
@@ -126,6 +130,80 @@ public static class ArrayFormatter
         sb.AppendLine(@"            }");
     }
 
+    public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        string elementType = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
+        sb.AppendLine("            if (value == null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNull();");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteArrayStart();");
+        sb.AppendLine("            bool isFirst = true;");
+        sb.AppendLine("            foreach (ref var item in value.AsSpan())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                if (!isFirst) writer.WriteByteRaw((byte)',');");
+        sb.AppendLine("                else isFirst = false;");
+        sb.AppendLine("                writer.SetFirstElement(true);");
+        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in item);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            writer.WriteArrayEnd();");
+    }
+
+    public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        string elementType = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
+        sb.AppendLine("            if (reader.IsNull())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            reader.TryConsumeArrayStart();");
+        sb.AppendLine("            " + elementType + "[]? buffer = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(4);");
+        sb.AppendLine("            int count = 0;");
+        sb.AppendLine("            int capacity = buffer.Length;");
+        sb.AppendLine("            try");
+        sb.AppendLine("            {");
+        sb.AppendLine("                while (true)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    if (!reader.Read())");
+        sb.AppendLine("                        break;");
+        sb.AppendLine();
+        sb.AppendLine("                    if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
+        sb.AppendLine("                        break;");
+        sb.AppendLine();
+        sb.AppendLine("                    if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd)");
+        sb.AppendLine("                        continue;");
+        sb.AppendLine();
+        sb.AppendLine("                    if (count >= capacity)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        int newCapacity = capacity * 2;");
+        sb.AppendLine("                        " + elementType + "[] newBuffer = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(newCapacity);");
+        sb.AppendLine("                        buffer.AsSpan(0, count).CopyTo(newBuffer);");
+        sb.AppendLine("                        global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(buffer, clearArray: global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">());");
+        sb.AppendLine("                        buffer = newBuffer;");
+        sb.AppendLine("                        capacity = newBuffer.Length;");
+        sb.AppendLine("                    }");
+        sb.AppendLine();
+        sb.AppendLine("                    " + elementType + " item = default!;");
+        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item);");
+        sb.AppendLine("                    buffer[count++] = item;");
+        sb.AppendLine("                }");
+        sb.AppendLine();
+        // `new Element[count]` is not valid when Element itself is an array
+        // (`new int[][count]`).  The parser's generic `new T[count]` maps to
+        // Span<T>.ToArray() for the concrete generated element type.
+        sb.AppendLine("                value = buffer.AsSpan(0, count).ToArray();");
+        sb.AppendLine("            }");
+        sb.AppendLine("            finally");
+        sb.AppendLine("            {");
+        sb.AppendLine("                if (buffer != null)");
+        sb.AppendLine("                    global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(buffer, clearArray: global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">());");
+        sb.AppendLine("            }");
+    }
+
     // ── Compress variants ────────────────────────────────────────────────────
     // For unmanaged element types: use DangerousWriteUnmanagedArrayWithCompress /
     // DangerousReadUnmanagedArrayWithCompress.
@@ -141,6 +219,7 @@ public static class ArrayFormatter
 
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.EnsureAdditionalCapacity(sizeof(int));");
         sb.AppendLine("                writer.WriteNullCollectionHeader(ref index);");
         sb.AppendLine("                writer.Advance(4);");
         sb.AppendLine("                return;");
@@ -149,6 +228,7 @@ public static class ArrayFormatter
 
         if (KnownValueTypes.Contains(baseTypeName))
         {
+            sb.AppendLine("            writer.EnsureAdditionalCapacity(checked(sizeof(int) + value.Length * global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + baseTypeName + ">()));");
             sb.AppendLine("            writer.DangerousWriteUnmanagedArrayWithCompress(ref index, value, out var offset);");
             sb.AppendLine("            writer.Advance(offset);");
             sb.AppendLine("            writer.CheckBuffer();");
@@ -159,6 +239,7 @@ public static class ArrayFormatter
         {
             sb.AppendLine("            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + baseTypeName + ">())");
             sb.AppendLine("            {");
+            sb.AppendLine("                writer.EnsureAdditionalCapacity(checked(sizeof(int) + value.Length * global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + baseTypeName + ">()));");
             sb.AppendLine("                writer.DangerousWriteUnmanagedArrayWithCompress(ref index, value, out var offset);");
             sb.AppendLine("                writer.Advance(offset);");
             sb.AppendLine("                writer.CheckBuffer();");
@@ -182,6 +263,7 @@ public static class ArrayFormatter
             ? "writer.WriteValueWithCompress(item);"
             : "writer.WriteValue(item);";
         sb.AppendLine();
+        sb.AppendLine("            writer.EnsureAdditionalCapacity(sizeof(int));");
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Length);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();

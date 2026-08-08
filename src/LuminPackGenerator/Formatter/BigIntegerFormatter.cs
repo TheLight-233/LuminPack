@@ -53,4 +53,15 @@ public static class BigIntegerFormatter
         sb.AppendLine("            ");
         sb.AppendLine("            reader.Advance(length);");
     }
+
+    public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        sb.AppendLine("            writer.WriteString(value.ToString());");
+    }
+
+    public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        sb.AppendLine("            var str = reader.ReadString();");
+        sb.AppendLine("            value = global::System.Numerics.BigInteger.Parse(str);");
+    }
 }

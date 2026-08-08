@@ -3,6 +3,7 @@ namespace LuminPack.Code;
 public sealed class LuminLocalFieldData
 {
     public string TypeName;
+    public Microsoft.CodeAnalysis.ITypeSymbol TypeSymbol;
     public string Name;
     public string Identifier =>
         Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(Name) != Microsoft.CodeAnalysis.CSharp.SyntaxKind.None ||
