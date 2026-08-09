@@ -33,6 +33,9 @@ public static class TypeMetaChecker
     [ThreadStatic]
     private static List<Diagnostic> _cachedDiagnosticContext;
 
+    [ThreadStatic]
+    private static HashSet<ISymbol> _reportedOverrideAnnotations;
+
     // All checker methods execute synchronously inside one syntax transform. A
     // scoped thread-local bag keeps the hot Add path allocation-free after setup,
     // while the completed bag is copied onto that transform's LuminDataInfo.
@@ -56,6 +59,7 @@ public static class TypeMetaChecker
         }
 
         _diagnosticContext = current;
+        _reportedOverrideAnnotations?.Clear();
         return previous;
     }
 
@@ -122,6 +126,9 @@ public static class TypeMetaChecker
     {
         var attributeData = property.GetAttributes();
 
+        if (TryReportOverrideAnnotation(property, attributeData))
+            return true;
+
         return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_IGNORE);
     }
     
@@ -137,8 +144,41 @@ public static class TypeMetaChecker
     public static bool TryCheckIncludeAttribute(IPropertySymbol property)
     {
         var attributeData = property.GetAttributes();
+
+        if (TryReportOverrideAnnotation(property, attributeData))
+            return false;
         
         return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_INCLUDE);
+    }
+
+    private static bool TryReportOverrideAnnotation(
+        IPropertySymbol property,
+        System.Collections.Immutable.ImmutableArray<AttributeData> attributes)
+    {
+        if (property.OverriddenProperty is null)
+            return false;
+
+        var attribute = attributes.FirstOrDefault(static attr =>
+            attr.AttributeClass?.Name is LUMIN_PACK_IGNORE or LUMIN_PACK_INCLUDE);
+        if (attribute is null)
+            return false;
+
+        _reportedOverrideAnnotations ??= new HashSet<ISymbol>(SymbolEqualityComparer.Default);
+        if (_reportedOverrideAnnotations.Add(property))
+        {
+            var attributeName = attribute.AttributeClass!.Name;
+            if (attributeName.EndsWith("Attribute", StringComparison.Ordinal))
+                attributeName = attributeName.Substring(0, attributeName.Length - 9);
+
+            _reportContext.Add(Diagnostic.Create(
+                DiagnosticDescriptors.OverrideMemberCantAddAnnotation,
+                property.Locations.FirstOrDefault(),
+                property.ContainingType.Name,
+                property.Name,
+                attributeName));
+        }
+
+        return true;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -652,6 +692,17 @@ public static class TypeMetaChecker
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool TryCheckCallBackMethod(INamedTypeSymbol symbol, IMethodSymbol method)
     {
+        if (symbol.TypeKind == TypeKind.Struct && symbol.IsUnmanagedType)
+        {
+            _reportContext.Add(Diagnostic.Create(
+                DiagnosticDescriptors.OnMethodInUnmanagedType,
+                method.Locations.FirstOrDefault() ?? symbol.Locations.FirstOrDefault(),
+                symbol.Name,
+                method.Name));
+
+            return false;
+        }
+
         if (method.DeclaredAccessibility
             is Accessibility.NotApplicable
             or Accessibility.Private
@@ -784,7 +835,7 @@ public static class TypeMetaChecker
         if (!rentMethod.IsStatic)
         {
             TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                DiagnosticDescriptors.RentPoolMethodIsStatic,
+                DiagnosticDescriptors.RentPoolMethodMustBeStatic,
                 rentMethod.Locations.FirstOrDefault() ?? location,
                 rentMethod.Name, typeSymbol.Name
             ));
@@ -808,7 +859,9 @@ public static class TypeMetaChecker
             TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                 DiagnosticDescriptors.RentPoolMethodReturnTypeMismatch,
                 rentMethod.Locations.FirstOrDefault() ?? location,
-                rentMethod.Name, typeSymbol.Name
+                rentMethod.Name,
+                typeSymbol.Name,
+                typeSymbol.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)
             ));
             return null;
         }

@@ -30,14 +30,38 @@ internal static class LuminPackDiscovery
             .OrderBy(d => d.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
             .ToList();
 
+        var totalMemberCount = dataInfo.UnionMembers.Count + derivedList.Count;
+        if (totalMemberCount > 256)
+        {
+            TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                DiagnosticDescriptors.TooManyUnionMembers,
+                baseType.Locations.FirstOrDefault(),
+                baseType.Name,
+                totalMemberCount));
+
+            var remainingSlots = 256 - dataInfo.UnionMembers.Count;
+            if (remainingSlots <= 0)
+                return;
+
+            derivedList = derivedList.Take(remainingSlots).ToList();
+        }
+
         ushort tag = 0;
         foreach (var d in derivedList)
         {
             while (dataInfo.UnionMembers.Any(m => m.Id == tag)) tag++;
+            var assignedTag = tag++;
             dataInfo.UnionMembers.Add(new LuminUnionMemberInfo(
-                tag++,
+                assignedTag,
                 d,
                 LuminPackUnionDispatchUtilities.CanGeneratePartial(d, compilation)));
+
+            TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                DiagnosticDescriptors.UnionMemberAutoDiscovered,
+                d.Locations.FirstOrDefault() ?? baseType.Locations.FirstOrDefault(),
+                d.Name,
+                baseType.Name,
+                assignedTag));
             
             if (baseType.IsGenericType)
             {

@@ -125,7 +125,12 @@ namespace LuminPack.SourceGenerator
                             {
                                 context.ReportDiagnostic(diagnostic);
                             }
-                            return;
+
+                            if (dataInfo.Diagnostics.Any(static diagnostic =>
+                                    diagnostic.Severity == DiagnosticSeverity.Error))
+                            {
+                                return;
+                            }
                         }
 
                         var compilation = source.Item1.Item2;
@@ -250,15 +255,6 @@ namespace LuminPack.SourceGenerator
             
             if (symbol.IsAbstract)
             {
-                // if (!TypeMetaChecker.TryCheckUnionAttribute(typeSymbol))
-                // {
-                //     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                //         DiagnosticDescriptors.AbstractMustUnion,
-                //         _location,
-                //         symbol.Name
-                //     ));
-                // }
-                
                 dataInfo.isUnion = true;
 
                 dataInfo.IsWideTag = TypeMetaChecker.TryCheckWideTagAttribute(typeSymbol);
@@ -516,7 +512,8 @@ namespace LuminPack.SourceGenerator
                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                     DiagnosticDescriptors.MembersCountOver250,
                     _location,
-                    symbol.Name
+                    symbol.Name,
+                    dataInfo.fields.Count
                 ));
             }
             
@@ -628,6 +625,17 @@ namespace LuminPack.SourceGenerator
                         if (member.IsStatic) continue;
                         if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
                         if (!IsAutoProperty(member)) continue;
+                        if (parent != null &&
+                            member.DeclaredAccessibility == Accessibility.Private &&
+                            TypeMetaChecker.TryCheckIncludeAttribute(member))
+                        {
+                            TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                                DiagnosticDescriptors.InheritTypeCanNotIncludeParentPrivateMember,
+                                member.Locations.FirstOrDefault() ?? _location,
+                                _mainSymbol.Name,
+                                member.Name));
+                            continue;
+                        }
                         if (!TypeMetaChecker.TryCheckIncludeAttribute(member))
                         {
                             if (member.DeclaredAccessibility is
@@ -698,6 +706,17 @@ namespace LuminPack.SourceGenerator
                     {
                         if (fieldMember.IsStatic) continue;
                         if (TypeMetaChecker.TryCheckIgnoreAttribute(fieldMember)) continue;
+                        if (parent != null &&
+                            fieldMember.DeclaredAccessibility == Accessibility.Private &&
+                            TypeMetaChecker.TryCheckIncludeAttribute(fieldMember))
+                        {
+                            TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                                DiagnosticDescriptors.InheritTypeCanNotIncludeParentPrivateMember,
+                                fieldMember.Locations.FirstOrDefault() ?? _location,
+                                _mainSymbol.Name,
+                                fieldMember.Name));
+                            continue;
+                        }
                         if (!TypeMetaChecker.TryCheckIncludeAttribute(fieldMember))
                         {
                             if (fieldMember.IsImplicitlyDeclared ||
@@ -1181,7 +1200,7 @@ namespace LuminPack.SourceGenerator
                                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                                     DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
                                     member.Locations.FirstOrDefault() ?? _location,
-                                    _mainSymbol.Name, namedTypeArg.Name
+                                    namedTypeArg.Name, member.Name
                                 ));
                                 continue;
                             }
@@ -1244,7 +1263,7 @@ namespace LuminPack.SourceGenerator
                                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                                     DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
                                     nestedMember.Locations.FirstOrDefault() ?? _location,
-                                    _mainSymbol.Name, namedTypeArg.Name
+                                    namedTypeArg.Name, nestedMember.Name
                                 ));
                                 continue;
                             }
@@ -1338,7 +1357,7 @@ namespace LuminPack.SourceGenerator
                                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                                     DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
                                     member.Locations.FirstOrDefault() ?? _location,
-                                    _mainSymbol.Name, namedTypeArg.Name
+                                    namedTypeArg.Name, member.Name
                                 ));
                                 continue;
                             }
@@ -1405,7 +1424,7 @@ namespace LuminPack.SourceGenerator
                                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                                     DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
                                     nestedMember.Locations.FirstOrDefault() ?? _location,
-                                    _mainSymbol.Name, namedTypeArg.Name
+                                    namedTypeArg.Name, nestedMember.Name
                                 ));
                                 continue;
                             }
@@ -1774,6 +1793,17 @@ namespace LuminPack.SourceGenerator
                 if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
 
                 if (!IsAutoProperty(member)) continue;
+
+                if (member.DeclaredAccessibility == Accessibility.Private &&
+                    TypeMetaChecker.TryCheckIncludeAttribute(member))
+                {
+                    TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                        DiagnosticDescriptors.InheritTypeCanNotIncludeParentPrivateMember,
+                        member.Locations.FirstOrDefault() ?? _location,
+                        _mainSymbol.Name,
+                        member.Name));
+                    continue;
+                }
                 
                 if (TypeMetaChecker.TryCheckIncludeAttribute(member))
                 {
@@ -1782,7 +1812,7 @@ namespace LuminPack.SourceGenerator
                         TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                             DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
                             member.Locations.FirstOrDefault() ?? _location,
-                            _mainSymbol.Name, classSymbol.Name
+                            classSymbol.Name, member.Name
                         ));
                         continue;
                     }
@@ -1836,6 +1866,17 @@ namespace LuminPack.SourceGenerator
 
                 if (TypeMetaChecker.TryCheckIgnoreAttribute(nestedMember)) continue;
 
+                if (nestedMember.DeclaredAccessibility == Accessibility.Private &&
+                    TypeMetaChecker.TryCheckIncludeAttribute(nestedMember))
+                {
+                    TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                        DiagnosticDescriptors.InheritTypeCanNotIncludeParentPrivateMember,
+                        nestedMember.Locations.FirstOrDefault() ?? _location,
+                        _mainSymbol.Name,
+                        nestedMember.Name));
+                    continue;
+                }
+
                 if (TypeMetaChecker.TryCheckIncludeAttribute(nestedMember))
                 {
                     if (_metadata is not null && !_metadata.IsNet8)
@@ -1843,7 +1884,7 @@ namespace LuminPack.SourceGenerator
                         TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                             DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
                             nestedMember.Locations.FirstOrDefault() ?? _location,
-                            _mainSymbol.Name, classSymbol.Name
+                            classSymbol.Name, nestedMember.Name
                         ));
                         continue;
                     }
@@ -1915,7 +1956,7 @@ namespace LuminPack.SourceGenerator
                     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                         DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
                         member.Locations.FirstOrDefault() ?? _location,
-                        _mainSymbol.Name, namedType.Name
+                        namedType.Name, member.Name
                     ));
                     continue;
                 }
@@ -1978,7 +2019,7 @@ namespace LuminPack.SourceGenerator
                     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                         DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
                         nestedMember.Locations.FirstOrDefault() ?? _location,
-                        _mainSymbol.Name, namedType.Name
+                        namedType.Name, nestedMember.Name
                     ));
                     continue;
                 }
@@ -2027,6 +2068,10 @@ namespace LuminPack.SourceGenerator
             Location location,
             bool isNestedClass = false)
         {
+            var instanceConstructors = typeSymbol.Constructors
+                .Where(c => !c.IsStatic)
+                .ToList();
+
             // 获取所有显式定义的公共非静态构造函数
             var explicitConstructors = typeSymbol.Constructors
                 .Where(c => c.DeclaredAccessibility == Accessibility.Public && 
@@ -2051,6 +2096,15 @@ namespace LuminPack.SourceGenerator
                 // 对于类，如果没有显式构造函数，使用隐式无参构造函数
                 if (typeSymbol.TypeKind == TypeKind.Class)
                 {
+                    if (instanceConstructors.Any(c => !c.IsImplicitlyDeclared))
+                    {
+                        TypeMetaChecker._reportContext.Add(Diagnostic.Create(
+                            DiagnosticDescriptors.NoPublicConstructor,
+                            location,
+                            typeSymbol.Name));
+                        return null;
+                    }
+
                     return new LuminConstructorData
                     {
                         Accessibility = Accessibility.Public,

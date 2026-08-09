@@ -11,8 +11,6 @@ namespace LuminPack.Code.Core;
 
 public static class LuminPackJsonCodeGenerator
 {
-	private static LuminDataInfo? _dataInfo;
-
 	internal unsafe static ulong ComputeUtf8Hash(string str)
 	{
 		byte[] bytes = Encoding.UTF8.GetBytes(str);
@@ -136,7 +134,6 @@ public static class LuminPackJsonCodeGenerator
 
 	public static void GenerateJsonMethods(StringBuilder sb, LuminDataInfo data, string classGlobalName, MetaInfo metaInfo)
 	{
-		_dataInfo = data;
 		GenerateJsonSerialize(sb, data, classGlobalName, metaInfo);
 		sb.AppendLine();
 		GenerateJsonDeserialize(sb, data, classGlobalName, metaInfo);

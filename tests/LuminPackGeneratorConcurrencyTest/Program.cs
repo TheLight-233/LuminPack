@@ -93,7 +93,7 @@ Parallel.For(0, CompilationCount, compilationIndex =>
         .ToHashSet(StringComparer.Ordinal);
     for (var typeIndex = 0; typeIndex < ValidTypesPerCompilation; typeIndex++)
     {
-        var expectedHint = $"Case_{compilationIndex}.Model_{typeIndex}Parser.g.cs";
+        var expectedHint = $"Case_{compilationIndex}.Model_{typeIndex}.Extension.g.cs";
         if (!generatedHints.Contains(expectedHint))
         {
             failures.Enqueue($"Compilation {compilationIndex} is missing {expectedHint}.");
@@ -157,7 +157,7 @@ static void VerifyUnionPartialDiagnostic(MetadataReference[] references)
         .GetRunResult()
         .Results.Single()
         .Diagnostics
-        .Where(static diagnostic => diagnostic.Id == "LuminPack041")
+        .Where(static diagnostic => diagnostic.Id == "LuminPack035")
         .ToArray();
 
     if (diagnostics.Length != 2 ||
@@ -165,7 +165,7 @@ static void VerifyUnionPartialDiagnostic(MetadataReference[] references)
         !diagnostics.Any(diagnostic => diagnostic.GetMessage().Contains("NonPartialUnionMember", StringComparison.Ordinal)))
     {
         throw new InvalidOperationException(
-            "Expected LuminPack041 for both a non-partial Union root and its non-partial local member.");
+            "Expected LuminPack035 for both a non-partial Union root and its non-partial local member.");
     }
 }
 

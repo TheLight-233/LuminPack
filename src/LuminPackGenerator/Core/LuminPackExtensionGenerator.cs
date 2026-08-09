@@ -1477,8 +1477,13 @@ namespace LuminPack
 
 	private static void GenerateFreshListDeserializeExtension(StringBuilder sb, string typeName, LuminLocalFieldData localData, MetaInfo metaInfo)
 	{
+		bool inlineBulkRead = localData.TypeSymbol is Microsoft.CodeAnalysis.INamedTypeSymbol listType &&
+		                      listType.TypeArguments.Length == 1 &&
+		                      listType.TypeArguments[0].IsUnmanagedType;
 		sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-		sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+		sb.AppendLine(inlineBulkRead
+			? "        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]"
+			: "        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]");
 		sb.AppendLine(metaInfo.IsNet8 ? ("        public static void ReadFreshValue(ref this LuminPackReader reader, scoped ref " + typeName + " value)") : ("        public static void ReadFreshValue(ref this LuminPackReader reader, ref " + typeName + " value)"));
 		sb.AppendLine("        {");
 		ListFormatter.GenerateFreshDeserializeCode(localData, sb);
@@ -1502,7 +1507,7 @@ namespace LuminPack
 	private static void GenerateFreshDictionaryDeserializeExtension(StringBuilder sb, string typeName, LuminLocalFieldData localData, MetaInfo metaInfo)
 	{
 		sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-		sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+		sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]");
 		sb.AppendLine(metaInfo.IsNet8 ? ("        public static void ReadFreshValue(ref this LuminPackReader reader, scoped ref " + typeName + " value)") : ("        public static void ReadFreshValue(ref this LuminPackReader reader, ref " + typeName + " value)"));
 		sb.AppendLine("        {");
 		DictionaryFormatter.GenerateFreshDeserializeCode(localData, sb);

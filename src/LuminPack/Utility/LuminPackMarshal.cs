@@ -1262,6 +1262,102 @@ public static class LuminPackMarshal
     }
 
     /// <summary>
+    /// Builds the buckets of a newly allocated dictionary whose entries were populated sequentially.
+    /// Returns <see langword="false"/> when the normal <see cref="Dictionary{TKey,TValue}.Add"/>
+    /// path is required to preserve null-key, duplicate-key, or collision-randomization behavior.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static bool TryRebuildFreshDictionaryBuckets<TKey, TValue>(
+        DictionaryView<TKey, TValue?> view,
+        int count)
+        where TKey : notnull
+    {
+        ref var entriesRef = ref GetArrayReference(view._entries);
+        ref var bucketsRef = ref GetArrayReference(view._buckets);
+        uint bucketCount = (uint)view._buckets.Length;
+        ulong fastModMultiplier = IntPtr.Size == 8
+            ? GetFastModMultiplier(bucketCount)
+            : 0;
+
+        // Generated callers construct the dictionary with the default comparer.
+        // Value-type keys can therefore use their constrained hash/equality path even
+        // on runtimes that materialize EqualityComparer<TKey>.Default in _comparer.
+        if (typeof(TKey).IsValueType)
+        {
+            var comparer = EqualityComparer<TKey>.Default;
+            for (int i = 0; i < count; i++)
+            {
+                ref var entry = ref Unsafe.Add(ref entriesRef, (nint)(uint)i);
+                if (entry.Key is null)
+                    return false;
+
+                uint hashCode = unchecked((uint)entry.Key.GetHashCode());
+#if NETSTANDARD2_1
+                hashCode &= 0x7FFFFFFF;
+#endif
+                uint bucketIndex = GetBucketIndex(hashCode, bucketCount, fastModMultiplier);
+                ref int bucket = ref Unsafe.Add(ref bucketsRef, (nint)bucketIndex);
+                int previous = bucket - 1;
+                int collisionCount = 0;
+
+                while ((uint)previous < (uint)i)
+                {
+                    ref var candidate = ref Unsafe.Add(ref entriesRef, (nint)(uint)previous);
+                    if (candidate.HashCode == hashCode && comparer.Equals(candidate.Key, entry.Key))
+                        return false;
+
+                    previous = candidate.Next;
+                    if (++collisionCount > 100)
+                        return false;
+                }
+
+                entry.HashCode = hashCode;
+                entry.Next = bucket - 1;
+                bucket = i + 1;
+            }
+        }
+        else
+        {
+            var comparer = view._comparer ?? EqualityComparer<TKey>.Default;
+            for (int i = 0; i < count; i++)
+            {
+                ref var entry = ref Unsafe.Add(ref entriesRef, (nint)(uint)i);
+                if (entry.Key is null)
+                    return false;
+
+#if NETSTANDARD2_1
+                uint hashCode = unchecked((uint)(comparer.GetHashCode(entry.Key) & 0x7FFFFFFF));
+#else
+                uint hashCode = unchecked((uint)comparer.GetHashCode(entry.Key));
+#endif
+                uint bucketIndex = GetBucketIndex(hashCode, bucketCount, fastModMultiplier);
+                ref int bucket = ref Unsafe.Add(ref bucketsRef, (nint)bucketIndex);
+                int previous = bucket - 1;
+                int collisionCount = 0;
+
+                while ((uint)previous < (uint)i)
+                {
+                    ref var candidate = ref Unsafe.Add(ref entriesRef, (nint)(uint)previous);
+                    if (candidate.HashCode == hashCode && comparer.Equals(candidate.Key, entry.Key))
+                        return false;
+
+                    previous = candidate.Next;
+                    if (++collisionCount > 100)
+                        return false;
+                }
+
+                entry.HashCode = hashCode;
+                entry.Next = bucket - 1;
+                bucket = i + 1;
+            }
+        }
+
+        view._count = count;
+        view._version = count;
+        return true;
+    }
+
+    /// <summary>
     /// 反序列化专用：在直接写入 _entries 后，重建 HashSet 的 _buckets 链和 _count。
     /// 绕过 HashSet.Add 的重复 Hash、重复 Value 检查以及扩容逻辑。
     /// 仅适用于已经完成数据校验且确认不存在重复 Value 的反序列化路径。

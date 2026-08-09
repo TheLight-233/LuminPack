@@ -1330,6 +1330,7 @@ public static class LuminPackCodeGenerator
 			{
 				sb.AppendLine(text + "    if (reader.PeekIsNullObject(ref " + field.Name + "ListOffset" + text2 + "))");
 				sb.AppendLine(text + "    {");
+				sb.AppendLine(text + "        " + field.Name + "ListOffset" + text2 + " += 1;");
 				sb.AppendLine(text + "        " + field.Name + "TempSpan" + text2 + "[i" + text2 + "] = default!;");
 				sb.AppendLine(text + "        continue;");
 				sb.AppendLine(text + "    }");
@@ -1493,6 +1494,7 @@ public static class LuminPackCodeGenerator
 			{
 				sb.AppendLine(text + "    if (reader.PeekIsNullObject(ref " + field.Name + "ListOffset" + text2 + "))");
 				sb.AppendLine(text + "    {");
+				sb.AppendLine(text + "        " + field.Name + "ListOffset" + text2 + " += 1;");
 				sb.AppendLine(text + "        continue;");
 				sb.AppendLine(text + "    }");
 			}

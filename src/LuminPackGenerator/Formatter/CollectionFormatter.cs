@@ -639,6 +639,10 @@ public static class DictionaryFormatter
     {
         string keyType = GetFirstGeneric(fieldData.TypeName);
         string valueType = GetSecondGeneric(fieldData.TypeName);
+        bool unmanagedPair = fieldData.TypeSymbol is Microsoft.CodeAnalysis.INamedTypeSymbol dictionaryType &&
+                             dictionaryType.TypeArguments.Length == 2 &&
+                             dictionaryType.TypeArguments[0].IsUnmanagedType &&
+                             dictionaryType.TypeArguments[1].IsUnmanagedType;
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
@@ -646,16 +650,54 @@ public static class DictionaryFormatter
         sb.AppendLine("                writer.Advance(4);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Count);");
+        sb.AppendLine("            int count = value.Count;");
+        if (unmanagedPair)
+        {
+            sb.AppendLine($"            writer.EnsureAdditionalCapacity(checked(sizeof(int) + count * (global::System.Runtime.CompilerServices.Unsafe.SizeOf<{keyType}>() + global::System.Runtime.CompilerServices.Unsafe.SizeOf<{valueType}>())));");
+        }
+        sb.AppendLine("            writer.WriteCollectionHeader(ref index, count);");
         sb.AppendLine("            writer.Advance(4);");
+        if (unmanagedPair)
+        {
+            sb.AppendLine("            var dictionaryView = LuminPackMarshal.GetDictionaryView(value);");
+            sb.AppendLine("            if (dictionaryView._count == count)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                int version = dictionaryView._version;");
+            sb.AppendLine("                ref var entryRef = ref LuminPackMarshal.GetArrayReference(dictionaryView._entries);");
+            sb.AppendLine("                for (nint i = 0; i < count; i++)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryRef, i);");
+            sb.AppendLine("                    int entryOffset = index;");
+            sb.AppendLine("                    entryOffset += writer.WriteUnmanaged(ref entryOffset, entry.Key);");
+            sb.AppendLine("                    entryOffset += writer.WriteUnmanaged(ref entryOffset, entry.Value);");
+            sb.AppendLine("                    writer.Advance(entryOffset - index);");
+            sb.AppendLine("                }");
+            sb.AppendLine("                if (dictionaryView._version != version)");
+            sb.AppendLine("                    throw new global::System.InvalidOperationException(\"Collection was modified during serialization.\");");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+        }
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
-        sb.AppendLine("                " + keyType + " key = item.Key;");
-        sb.AppendLine("                writer.WriteValue(in key);");
-        sb.AppendLine("                " + valueType + " itemValue = item.Value;");
-        sb.AppendLine("                writer.WriteValue(in itemValue);");
+        if (unmanagedPair)
+        {
+            sb.AppendLine("                int entryOffset = index;");
+            sb.AppendLine("                entryOffset += writer.WriteUnmanaged(ref entryOffset, item.Key);");
+            sb.AppendLine("                entryOffset += writer.WriteUnmanaged(ref entryOffset, item.Value);");
+            sb.AppendLine("                writer.Advance(entryOffset - index);");
+        }
+        else
+        {
+            sb.AppendLine("                " + keyType + " key = item.Key;");
+            sb.AppendLine("                writer.WriteValue(in key);");
+            sb.AppendLine("                " + valueType + " itemValue = item.Value;");
+            sb.AppendLine("                writer.WriteValue(in itemValue);");
+        }
         sb.AppendLine("            }");
-        sb.AppendLine("            writer.CheckBuffer();");
+        if (!unmanagedPair)
+        {
+            sb.AppendLine("            writer.CheckBuffer();");
+        }
     }
 
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
@@ -673,6 +715,10 @@ public static class DictionaryFormatter
     {
         string keyType = GetFirstGeneric(fieldData.TypeName);
         string valueType = GetSecondGeneric(fieldData.TypeName);
+        bool unmanagedPair = fieldData.TypeSymbol is Microsoft.CodeAnalysis.INamedTypeSymbol dictionaryType &&
+                             dictionaryType.TypeArguments.Length == 2 &&
+                             dictionaryType.TypeArguments[0].IsUnmanagedType &&
+                             dictionaryType.TypeArguments[1].IsUnmanagedType;
 
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
@@ -701,16 +747,38 @@ public static class DictionaryFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine($"            value = new global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>(length);");
+        sb.AppendLine($"            var result = new global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>(length);");
+        sb.AppendLine("            var dictionaryView = LuminPackMarshal.GetDictionaryView(result);");
+        sb.AppendLine("            ref var entryRef = ref LuminPackMarshal.GetArrayReference(dictionaryView._entries);");
         sb.AppendLine();
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                " + keyType + " key = default!;");
-        sb.AppendLine("                " + valueType + " itemValue = default!;");
-        sb.AppendLine("                reader.ReadValue(ref key);");
-        sb.AppendLine("                reader.ReadValue(ref itemValue);");
-        sb.AppendLine("                value.Add(key, itemValue);");
+        sb.AppendLine("                ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryRef, (nint)(uint)i);");
+        if (unmanagedPair)
+        {
+            sb.AppendLine("                int entryOffset = index;");
+            sb.AppendLine("                entryOffset += reader.ReadUnmanaged(ref entryOffset, out entry.Key);");
+            sb.AppendLine("                entryOffset += reader.ReadUnmanaged(ref entryOffset, out entry.Value);");
+            sb.AppendLine("                reader.Advance(entryOffset - index);");
+        }
+        else
+        {
+            sb.AppendLine("                reader.ReadValue(ref entry.Key!);");
+            sb.AppendLine("                reader.ReadValue(ref entry.Value!);");
+        }
         sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            if (!LuminPackMarshal.TryRebuildFreshDictionaryBuckets(dictionaryView, length))");
+        sb.AppendLine("            {");
+        sb.AppendLine($"                var fallback = new global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>(length);");
+        sb.AppendLine("                for (int i = 0; i < length; i++)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryRef, (nint)(uint)i);");
+        sb.AppendLine("                    fallback.Add(entry.Key, entry.Value);");
+        sb.AppendLine("                }");
+        sb.AppendLine("                result = fallback;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            value = result;");
     }
 
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
