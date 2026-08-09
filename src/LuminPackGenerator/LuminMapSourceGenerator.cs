@@ -40,7 +40,6 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                 })
             .Where(static x => x != null)!;
 
-        
         context.RegisterSourceOutput(
             autoMapDeclarations.Combine(metaProvider),
             static (spc, pair) =>
@@ -110,6 +109,13 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
             {
                 var (((autoInfos, manualInfos), compilation), meta) = pair;
 
+                // Unity auto-references managed plug-ins from every compilation. Merely
+                // finding LuminPack in metadata therefore is not evidence that the target
+                // assembly uses it; emitting support there pollutes dependent assemblies
+                // with duplicate extension overloads.
+                if (!CompilationTypeAnalysisCache.GetOrCreate(compilation).UsesLuminPack)
+                    return;
+
                 // 没有 [LuminPackable] 类型且没有任何 Mapper 声明，不生成
                 bool hasMappers  = !autoInfos.IsEmpty || !manualInfos.IsEmpty;
 
@@ -174,7 +180,12 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
         sb.AppendLine("    {");
 
         if (isUnity)
+        {
+            sb.AppendLine("#if UNITY_EDITOR");
+            sb.AppendLine("        [global::UnityEditor.InitializeOnLoadMethod]");
+            sb.AppendLine("#endif");
             sb.AppendLine("        [global::UnityEngine.RuntimeInitializeOnLoadMethod(global::UnityEngine.RuntimeInitializeLoadType.BeforeSceneLoad)]");
+        }
         else
         {
             sb.AppendLine("#if NET5_0_OR_GREATER");
@@ -245,5 +256,5 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
         }
         return sb.ToString();
     }
-    
+
 }

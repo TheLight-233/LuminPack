@@ -22,17 +22,21 @@ internal sealed class CompilationTypeAnalysis
         ImmutableArray<ITypeSymbol> formatterTypes,
         ImmutableArray<ProjectTypeData> declaredTypes,
         Dictionary<ITypeSymbol, INamedTypeSymbol> formatterOwners,
-        Dictionary<ITypeSymbol, INamedTypeSymbol> layoutOwners)
+        Dictionary<ITypeSymbol, INamedTypeSymbol> layoutOwners,
+        bool usesLuminPack)
     {
         FormatterTypes = formatterTypes;
         DeclaredTypes = declaredTypes;
         _formatterOwners = formatterOwners;
         _layoutOwners = layoutOwners;
+        UsesLuminPack = usesLuminPack;
     }
 
     internal ImmutableArray<ITypeSymbol> FormatterTypes { get; }
 
     internal ImmutableArray<ProjectTypeData> DeclaredTypes { get; }
+
+    internal bool UsesLuminPack { get; }
 
     internal bool IsOwnedBy(ITypeSymbol type, INamedTypeSymbol owner)
         => _formatterOwners.TryGetValue(type, out INamedTypeSymbol actual) &&
@@ -95,6 +99,7 @@ internal static class CompilationTypeAnalysisCache
         var formatterTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
         var declaredTypes = new List<ProjectTypeData>();
         var packableTypes = new List<INamedTypeSymbol>();
+        bool usesLuminPack = false;
 
         CollectDeclaredTypes(compilation.Assembly.GlobalNamespace, declaredTypes, packableTypes);
 
@@ -109,11 +114,15 @@ internal static class CompilationTypeAnalysisCache
             {
                 if (node is TypeSyntax syntax)
                 {
-                    AddTypeGraph(model.GetTypeInfo(syntax).Type, formatterTypes);
+                    ITypeSymbol type = model.GetTypeInfo(syntax).Type;
+                    usesLuminPack |= IsLuminPackRelevantType(type);
+                    AddTypeGraph(type, formatterTypes);
                 }
                 else if (node is ExpressionSyntax expression)
                 {
                     TypeInfo typeInfo = model.GetTypeInfo(expression);
+                    usesLuminPack |= IsLuminPackRelevantType(typeInfo.Type) ||
+                                     IsLuminPackRelevantType(typeInfo.ConvertedType);
                     AddTypeGraph(typeInfo.Type, formatterTypes);
                     AddTypeGraph(typeInfo.ConvertedType, formatterTypes);
                 }
@@ -171,7 +180,23 @@ internal static class CompilationTypeAnalysisCache
                 .OrderBy(static data => data.Symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
                 .ToImmutableArray(),
             owners,
-            layoutOwners);
+            layoutOwners,
+            usesLuminPack);
+    }
+
+    private static bool IsLuminPackRelevantType(ITypeSymbol type)
+    {
+        if (type is null) return false;
+        if (type.ContainingAssembly?.Identity.Name == "LuminPack") return true;
+
+        return type switch
+        {
+            IArrayTypeSymbol array => IsLuminPackRelevantType(array.ElementType),
+            IPointerTypeSymbol pointer => IsLuminPackRelevantType(pointer.PointedAtType),
+            INamedTypeSymbol named => HasPackableAttribute(named) ||
+                                      named.TypeArguments.Any(IsLuminPackRelevantType),
+            _ => false
+        };
     }
 
     private static void CollectDeclaredTypes(

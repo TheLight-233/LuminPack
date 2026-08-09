@@ -11,7 +11,7 @@ public static class UnmanagedFormatter
         sb.AppendLine("            Unsafe.WriteUnaligned(ref writer.GetCurrentSpanReference(), value);");
         sb.AppendLine($"            writer.Advance(Unsafe.SizeOf<{data.TypeName}>());");
     }
-    
+
     public static void GenerateDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         sb.AppendLine($"            value = Unsafe.ReadUnaligned<{data.TypeName}>(ref reader.GetCurrentSpanReference());");
@@ -190,10 +190,10 @@ public static class UnmanagedFormatter
                 sb.AppendLine("            {");
                 sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
                 sb.AppendLine("                {");
-                sb.AppendLine("                    int propertyName = reader.ReadStringChoice(\"Real\"u8, \"Real\", \"Imaginary\"u8, \"Imaginary\");");
+                sb.AppendLine("                    string propertyName = reader.ReadString();");
                 sb.AppendLine("                    reader.Read();");
-                sb.AppendLine("                    if (propertyName == 1) real = reader.ReadDouble();");
-                sb.AppendLine("                    else if (propertyName == 2) imaginary = reader.ReadDouble();");
+                sb.AppendLine("                    if (propertyName == \"Real\") real = reader.ReadDouble();");
+                sb.AppendLine("                    else if (propertyName == \"Imaginary\") imaginary = reader.ReadDouble();");
                 sb.AppendLine("                    else reader.Skip();");
                 sb.AppendLine("                }");
                 sb.AppendLine("            }");
@@ -207,15 +207,15 @@ public static class UnmanagedFormatter
                 sb.AppendLine("            {");
                 sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
                 sb.AppendLine("                {");
-                sb.AppendLine("                    int propertyName = reader.ReadStringChoice(\"Normal\"u8, \"Normal\", \"D\"u8, \"D\");");
+                sb.AppendLine("                    string propertyName = reader.ReadString();");
                 sb.AppendLine("                    reader.Read();");
-                sb.AppendLine("                    if (propertyName == 1)");
+                sb.AppendLine("                    if (propertyName == \"Normal\")");
                 sb.AppendLine("                    {");
                 sb.AppendLine("                        reader.TryConsumeArrayStart();");
                 sb.AppendLine("                        normal = new global::System.Numerics.Vector3(reader.ReadNextFloatValue(), reader.ReadNextFloatValue(), reader.ReadNextFloatValue());");
                 sb.AppendLine("                        reader.ConsumeArrayEnd();");
                 sb.AppendLine("                    }");
-                sb.AppendLine("                    else if (propertyName == 2) d = reader.ReadFloat();");
+                sb.AppendLine("                    else if (propertyName == \"D\") d = reader.ReadFloat();");
                 sb.AppendLine("                    else reader.Skip();");
                 sb.AppendLine("                }");
                 sb.AppendLine("            }");

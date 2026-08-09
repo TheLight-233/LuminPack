@@ -99,6 +99,12 @@ internal static class LuminPackUnionDispatchCodeGenerator
         var isInterface = root.TypeKind == TypeKind.Interface;
         var prefix = isInterface ? $"void {rootType}." : "internal override void ";
 
+        if (RequiresClosedGenericDispatch(members))
+        {
+            AppendClosedGenericDispatchCache(sb, padding, data, members, suffix);
+            sb.AppendLine();
+        }
+
         AppendMethodAttribute(sb, padding);
         sb.AppendLine($"{padding}{prefix}__LuminPackUnionSerialize_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer)");
         sb.AppendLine($"{padding}{{");
@@ -129,31 +135,105 @@ internal static class LuminPackUnionDispatchCodeGenerator
         DispatchOperation operation,
         string extensionType)
     {
-        var definition = members[0].Type.OriginalDefinition;
-        var constructedMembers = members
-            .Where(member => !SymbolEqualityComparer.Default.Equals(member.Type, definition) &&
-                             !member.Type.IsUnboundGenericType)
-            .ToList();
-        var openMember = members.FirstOrDefault(member =>
-            SymbolEqualityComparer.Default.Equals(member.Type, definition) || member.Type.IsUnboundGenericType);
-
-        foreach (var member in constructedMembers)
+        if (!RequiresClosedGenericDispatch(members))
         {
-            var condition = GetConstructedTypeCondition(definition, member.Type);
-            sb.AppendLine($"{padding}if ({condition})");
-            sb.AppendLine($"{padding}{{");
-            AppendConcreteOperation(sb, padding + "    ", data, member, operation, extensionType);
-            sb.AppendLine($"{padding}    return;");
-            sb.AppendLine($"{padding}}}");
-        }
-
-        if (openMember.Type != null)
-        {
-            AppendConcreteOperation(sb, padding, data, openMember, operation, extensionType);
+            AppendConcreteOperation(sb, padding, data, members[0], operation, extensionType);
             return;
         }
 
-        sb.AppendLine($"{padding}global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(GetType(), typeof({rootType}));");
+        var suffix = GetSlotSuffix(data.TypeSymbol.OriginalDefinition);
+        sb.AppendLine($"{padding}switch (__LuminPackUnionDispatchSlot_{suffix})");
+        sb.AppendLine($"{padding}{{");
+        foreach (var member in members)
+        {
+            sb.AppendLine($"{padding}    case {GetDispatchSlot(data, member)}:");
+            sb.AppendLine($"{padding}    {{");
+            AppendConcreteOperation(sb, padding + "        ", data, member, operation, extensionType);
+            sb.AppendLine($"{padding}        return;");
+            sb.AppendLine($"{padding}    }}");
+        }
+        sb.AppendLine($"{padding}    default:");
+        sb.AppendLine($"{padding}        global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(GetType(), typeof({rootType}));");
+        sb.AppendLine($"{padding}        return;");
+        sb.AppendLine($"{padding}}}");
+    }
+
+    private static void AppendClosedGenericDispatchCache(
+        StringBuilder sb,
+        string padding,
+        LuminDataInfo data,
+        IReadOnlyList<LuminUnionMemberInfo> members,
+        string suffix)
+    {
+        var definition = members[0].Type.OriginalDefinition;
+        var currentType = definition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var fieldName = $"__LuminPackUnionDispatchSlot_{suffix}";
+        var resolverName = $"__ResolveLuminPackUnionDispatchSlot_{suffix}";
+
+        sb.AppendLine($"{padding}private static readonly int {fieldName} = {resolverName}();");
+        sb.AppendLine();
+        sb.AppendLine($"{padding}[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        sb.AppendLine($"{padding}private static int {resolverName}()");
+        sb.AppendLine($"{padding}{{");
+        sb.AppendLine($"{padding}    var map = new global::LuminPack.Utility.LuminUnionMap<int>({members.Count});");
+
+        // Closed registrations must win over an open-generic fallback when the current
+        // instantiation happens to describe the same runtime type.
+        foreach (var member in members.Where(member => IsConstructedMember(definition, member)))
+        {
+            AppendDispatchRegistration(sb, padding + "    ", data, definition, member);
+        }
+
+        foreach (var member in members.Where(member => !IsConstructedMember(definition, member)))
+        {
+            AppendDispatchRegistration(sb, padding + "    ", data, definition, member);
+        }
+
+        sb.AppendLine($"{padding}    var methodTable = global::LuminPack.Code.LuminPackMarshal.GetMethodTable(typeof({currentType}));");
+        sb.AppendLine($"{padding}    return map.TryGetValue(methodTable, out var slot) ? slot : -1;");
+        sb.AppendLine($"{padding}}}");
+    }
+
+    private static void AppendDispatchRegistration(
+        StringBuilder sb,
+        string padding,
+        LuminDataInfo data,
+        INamedTypeSymbol definition,
+        LuminUnionMemberInfo member)
+    {
+        // The resolver is emitted inside the member definition, so an open fallback
+        // must use that definition's in-scope type parameters (which need not have the
+        // same names as the union root's parameters).
+        var memberType = IsConstructedMember(definition, member)
+            ? member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+            : definition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        sb.AppendLine($"{padding}map.TryRegister(" +
+            $"global::LuminPack.Code.LuminPackMarshal.GetMethodTable(typeof({memberType})), " +
+            $"{GetDispatchSlot(data, member)});");
+    }
+
+    private static bool RequiresClosedGenericDispatch(IReadOnlyList<LuminUnionMemberInfo> members)
+    {
+        var definition = members[0].Type.OriginalDefinition;
+        return members.Any(member => IsConstructedMember(definition, member));
+    }
+
+    private static bool IsConstructedMember(INamedTypeSymbol definition, LuminUnionMemberInfo member) =>
+        !SymbolEqualityComparer.Default.Equals(member.Type, definition) && !member.Type.IsUnboundGenericType;
+
+    private static int GetDispatchSlot(LuminDataInfo data, LuminUnionMemberInfo member)
+    {
+        for (var index = 0; index < data.UnionMembers.Count; index++)
+        {
+            var candidate = data.UnionMembers[index];
+            if (candidate.Id == member.Id &&
+                SymbolEqualityComparer.Default.Equals(candidate.Type, member.Type))
+            {
+                return index;
+            }
+        }
+
+        return -1;
     }
 
     private static void AppendConcreteOperation(
@@ -171,7 +251,7 @@ internal static class LuminPackUnionDispatchCodeGenerator
                 sb.AppendLine(maxTag < 250 && !data.IsWideTag
                     ? $"{padding}writer.WriteUnionHeader({member.Id});"
                     : $"{padding}writer.WriteWideUnionHeader({member.Id});");
-                sb.AppendLine($"{padding}var concreteValue = this;");
+                AppendConcreteValueLocal(sb, padding, member);
                 sb.AppendLine($"{padding}{extensionType}.WritePolymorphismValue(ref writer, in concreteValue);");
                 break;
 
@@ -186,14 +266,26 @@ internal static class LuminPackUnionDispatchCodeGenerator
                 sb.AppendLine($"{padding}    writer.WritePropertyName(global::LuminPack.LuminPackConstUtf8.ValueU8);");
                 sb.AppendLine($"{padding}else");
                 sb.AppendLine($"{padding}    writer.WritePropertyName(global::LuminPack.LuminPackConstUtf8.ValueU16);");
-                sb.AppendLine($"{padding}var concreteValue = this;");
+                AppendConcreteValueLocal(sb, padding, member);
                 sb.AppendLine($"{padding}{extensionType}.WriteValue(ref writer, in concreteValue);");
                 sb.AppendLine($"{padding}writer.WriteObjectEnd();");
                 break;
 
             case DispatchOperation.CalculateOffset:
                 sb.AppendLine($"{padding}evaluator.CalculateUnionHeader({member.Id});");
-                if (member.Type.IsUnmanagedType)
+                if (IsConstructedMember(member.Type.OriginalDefinition, member))
+                {
+                    // The compact slot proves the exact closed type. Reinterpret the local
+                    // reference and bind the generated concrete overload statically; this
+                    // keeps Cache<T> delegates out of the closed-generic hot path.
+                    AppendConcreteValueLocal(sb, padding, member);
+                    sb.AppendLine($"{padding}{extensionType}.CalculateOffset(ref evaluator, ref concreteValue);");
+                    if (!member.Type.IsValueType)
+                    {
+                        sb.AppendLine($"{padding}evaluator.Subtract(1);");
+                    }
+                }
+                else if (member.Type.IsUnmanagedType)
                 {
                     // A pure unmanaged struct has no normal object header for a union to
                     // replace. Calculate it directly so the union header is retained.
@@ -208,17 +300,22 @@ internal static class LuminPackUnionDispatchCodeGenerator
         }
     }
 
-    private static string GetConstructedTypeCondition(INamedTypeSymbol definition, INamedTypeSymbol constructed)
+    private static void AppendConcreteValueLocal(
+        StringBuilder sb,
+        string padding,
+        LuminUnionMemberInfo member)
     {
-        var conditions = new List<string>();
-        for (var i = 0; i < definition.TypeParameters.Length; i++)
+        var definition = member.Type.OriginalDefinition;
+        if (!IsConstructedMember(definition, member))
         {
-            var parameter = EscapeIdentifier(definition.TypeParameters[i].Name);
-            var argument = constructed.TypeArguments[i].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-            conditions.Add($"typeof({parameter}) == typeof({argument})");
+            sb.AppendLine($"{padding}var concreteValue = this;");
+            return;
         }
 
-        return conditions.Count == 0 ? "true" : string.Join(" && ", conditions);
+        var currentType = definition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        var memberType = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+        sb.AppendLine($"{padding}var genericValue = this;");
+        sb.AppendLine($"{padding}ref var concreteValue = ref global::LuminPack.Code.LuminPackMarshal.As<{currentType}, {memberType}>(ref genericValue);");
     }
 
     private static void AppendMethodAttribute(StringBuilder sb, string padding)

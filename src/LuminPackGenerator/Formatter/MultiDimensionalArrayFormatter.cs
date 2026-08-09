@@ -43,7 +43,7 @@ public static class MultiDimensionalArrayFormatter
         sb.AppendLine("            for (nint i = 0; i < value.Length; i++)");
         sb.AppendLine("            {");
         sb.AppendLine("                ref " + elementType + " item = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i);");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in item);");
+        sb.AppendLine("                writer.WriteValue(in item);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -78,7 +78,7 @@ public static class MultiDimensionalArrayFormatter
         sb.AppendLine("            for (nint i = 0; i < length; i++)");
         sb.AppendLine("            {");
         sb.AppendLine("                ref " + elementType + " item = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i);");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item);");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine("            }");
     }
 
@@ -134,7 +134,7 @@ public static class MultiDimensionalArrayFormatter
             sb.AppendLine(indent + "    else isFirst = false;");
             sb.AppendLine(indent + "    writer.SetFirstElement(true);");
             sb.AppendLine(indent + "    " + elementType + " item = value[" + JoinIndexes(rank) + "];" );
-            sb.AppendLine(indent + "    global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in item);");
+            sb.AppendLine(indent + "    writer.WriteValue(in item);");
             sb.AppendLine(indent + "}");
         }
         else
@@ -159,7 +159,7 @@ public static class MultiDimensionalArrayFormatter
         if (level == rank - 1)
         {
             sb.AppendLine(indent + "    " + elementType + " item = default!;");
-            sb.AppendLine(indent + "    global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item);");
+            sb.AppendLine(indent + "    reader.ReadValue(ref item);");
             sb.AppendLine(indent + "    items.Add(item);");
         }
         else

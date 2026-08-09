@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\LuminPackGenerator\LuminPackGenerator.csproj" />
+    <ProjectReference Include="..\..\src\LuminPack\LuminPack.csproj" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.3.0" />
   </ItemGroup>
 </Project>

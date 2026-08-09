@@ -14,7 +14,7 @@ public static class ArrayFormatter
         string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
-        
+
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.EnsureAdditionalCapacity(sizeof(int));");
@@ -51,7 +51,7 @@ public static class ArrayFormatter
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
         }
-        
+
         sb.AppendLine();
         sb.AppendLine("            writer.EnsureAdditionalCapacity(sizeof(int));");
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Length);");
@@ -59,11 +59,11 @@ public static class ArrayFormatter
         sb.AppendLine();
         sb.AppendLine("            foreach (ref var item in value.AsSpan())");
         sb.AppendLine("            {");
-        sb.AppendLine("                writer.WriteValue(item);");
+        sb.AppendLine("                writer.WriteValue(in item);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
-    
+
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
@@ -99,7 +99,7 @@ public static class ArrayFormatter
             sb.AppendLine(@"            }");
             sb.AppendLine();
         }
-        
+
         sb.AppendLine(@"            if (!reader.TryReadCollectionHead(ref index, out var length))");
         sb.AppendLine(@"            {");
         sb.AppendLine(@"                value = null;");
@@ -146,7 +146,7 @@ public static class ArrayFormatter
         sb.AppendLine("                if (!isFirst) writer.WriteByteRaw((byte)',');");
         sb.AppendLine("                else isFirst = false;");
         sb.AppendLine("                writer.SetFirstElement(true);");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in item);");
+        sb.AppendLine("                writer.WriteValue(in item);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.WriteArrayEnd();");
     }
@@ -188,7 +188,7 @@ public static class ArrayFormatter
         sb.AppendLine("                    }");
         sb.AppendLine();
         sb.AppendLine("                    " + elementType + " item = default!;");
-        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item);");
+        sb.AppendLine("                    reader.ReadValue(ref item);");
         sb.AppendLine("                    buffer[count++] = item;");
         sb.AppendLine("                }");
         sb.AppendLine();
@@ -261,7 +261,7 @@ public static class ArrayFormatter
         //      Transform[][] → leaf=Transform (user-defined, unknown) → WriteValue(Transform[])
         string elementCallSerialize = KnownValueTypes.Contains(baseTypeName) || IsLeafTypeKnownValueType(baseTypeName)
             ? "writer.WriteValueWithCompress(item);"
-            : "writer.WriteValue(item);";
+            : "writer.WriteValue(in item);";
         sb.AppendLine();
         sb.AppendLine("            writer.EnsureAdditionalCapacity(sizeof(int));");
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Length);");

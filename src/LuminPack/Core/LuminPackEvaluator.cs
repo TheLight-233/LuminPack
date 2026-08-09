@@ -73,8 +73,7 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ILuminPackEvaluator<T> GetEvaluator<T>()
     {
-        LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
-        return default!;
+        return FormatterCacheEvaluator<T>.Instance;
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -160,7 +159,15 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
             return;
         }
         
-        LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+        Add(sizeof(int));
+
+        if (array is null)
+            return;
+
+        for (int i = 0; i < array.Length; i++)
+        {
+            LuminPackFormatterCache.Cache<T>.CalculateOffset(ref this, ref array[i]!);
+        }
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -173,7 +180,12 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
             return;
         }
 
-        LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+        Add(sizeof(int));
+
+        for (int i = 0; i < span.Length; i++)
+        {
+            LuminPackFormatterCache.Cache<T>.CalculateOffset(ref this, ref span[i]!);
+        }
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -186,7 +198,28 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
             return;
         }
         
-        LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+        Add(sizeof(int));
+
+        for (int i = 0; i < span.Length; i++)
+        {
+            var value = span[i];
+            LuminPackFormatterCache.Cache<T>.CalculateOffset(ref this, ref value!);
+        }
+    }
+
+    private sealed class FormatterCacheEvaluator<T> : ILuminPackEvaluator<T>
+    {
+        internal static readonly FormatterCacheEvaluator<T> Instance = new();
+
+        private FormatterCacheEvaluator()
+        {
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref T? value)
+        {
+            LuminPackFormatterCache.Cache<T>.CalculateOffset(ref evaluator, ref value!);
+        }
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

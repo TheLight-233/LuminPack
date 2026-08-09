@@ -27,9 +27,9 @@ public static class NullableFormatter
         sb.AppendLine($"            }}");
         sb.AppendLine($"");
         sb.AppendLine($"            {elementType} valRef = value.Value;");
-        sb.AppendLine($"            writer.WriteValue(valRef);");
+        sb.AppendLine($"            writer.WriteValue(in valRef);");
     }
-    
+
     public static void GenerateDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         string elementType = GetElementType(data);
@@ -54,7 +54,7 @@ public static class NullableFormatter
         sb.AppendLine($"            reader.ReadValue(ref valRef);");
         sb.AppendLine($"            value = valRef;");
     }
-    
+
     public static void GenerateCalculateOffsetCode(LuminLocalFieldData data, StringBuilder sb)
     {
 		string elementType = GetElementType(data);
@@ -71,7 +71,7 @@ public static class NullableFormatter
         sb.AppendLine($"            }}");
         sb.AppendLine($"");
 		sb.AppendLine($"            {elementType} val = value.Value;");
-		sb.AppendLine("            evaluator.CalculateValue(in val);");
+		sb.AppendLine("            evaluator.CalculateOffset(ref val);");
     }
 
     public static void GenerateJsonSerializeCode(LuminLocalFieldData data, StringBuilder sb)
@@ -84,7 +84,7 @@ public static class NullableFormatter
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            var item = value.Value;");
-        sb.AppendLine("            global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in item);");
+        sb.AppendLine("            writer.WriteValue(in item);");
     }
 
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
@@ -97,7 +97,7 @@ public static class NullableFormatter
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            " + elementType + " item = default;");
-        sb.AppendLine("            global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item);");
+        sb.AppendLine("            reader.ReadValue(ref item);");
         sb.AppendLine("            value = item;");
     }
 

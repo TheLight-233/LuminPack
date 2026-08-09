@@ -74,7 +74,7 @@ public static class ImmutableListFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                writer.WriteValue(v);");
+        sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -103,7 +103,8 @@ public static class ImmutableListFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length == 1)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                {elementType} item = default!;");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableList.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
@@ -146,7 +147,7 @@ public static class ImmutableQueueFormatter
         sb.AppendLine("                {");
         sb.AppendLine("                    count++;");
         sb.AppendLine("                    var v = item;");
-        sb.AppendLine("                    tempWriter.WriteValue(v);");
+        sb.AppendLine("                    tempWriter.WriteValue(in v);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.WriteCollectionHeader(ref index, count);");
@@ -186,7 +187,8 @@ public static class ImmutableQueueFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 1)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                {elementType} item = default!;");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableQueue.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
@@ -241,7 +243,7 @@ public static class ImmutableStackFormatter
         sb.AppendLine("                {");
         sb.AppendLine("                    count++;");
         sb.AppendLine("                    var v = item;");
-        sb.AppendLine("                    tempWriter.WriteValue(v);");
+        sb.AppendLine("                    tempWriter.WriteValue(in v);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.WriteCollectionHeader(ref index, count);");
@@ -281,7 +283,8 @@ public static class ImmutableStackFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 1)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                {elementType} item = default!;");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableStack.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
@@ -332,9 +335,9 @@ public static class ImmutableDictionaryFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var key = item.Key;");
-        sb.AppendLine("                writer.WriteValue(key);");
+        sb.AppendLine("                writer.WriteValue(in key);");
         sb.AppendLine("                var itemValue = item.Value;");
-        sb.AppendLine("                writer.WriteValue(itemValue);");
+        sb.AppendLine("                writer.WriteValue(in itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -399,7 +402,7 @@ public static class ImmutableHashSetFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                writer.WriteValue(v);");
+        sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -428,7 +431,8 @@ public static class ImmutableHashSetFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length == 1)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                {elementType} item = default!;");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableHashSet.Create<{elementType}>(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
@@ -467,9 +471,9 @@ public static class ImmutableSortedDictionaryFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var key = item.Key;");
-        sb.AppendLine("                writer.WriteValue(key);");
+        sb.AppendLine("                writer.WriteValue(in key);");
         sb.AppendLine("                var itemValue = item.Value;");
-        sb.AppendLine("                writer.WriteValue(itemValue);");
+        sb.AppendLine("                writer.WriteValue(in itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -534,7 +538,7 @@ public static class ImmutableSortedSetFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                writer.WriteValue(v);");
+        sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -568,7 +572,8 @@ public static class ImmutableSortedSetFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length == 1)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                {elementType} item = default!;");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableSortedSet.Create(keyComparer, item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
@@ -608,7 +613,7 @@ public static class InterfaceImmutableListFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                writer.WriteValue(v);");
+        sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -637,7 +642,8 @@ public static class InterfaceImmutableListFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length == 1)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                {elementType} item = default!;");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableList.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
@@ -680,7 +686,7 @@ public static class InterfaceImmutableQueueFormatter
         sb.AppendLine("                {");
         sb.AppendLine("                    count++;");
         sb.AppendLine("                    var v = item;");
-        sb.AppendLine("                    tempWriter.WriteValue(v);");
+        sb.AppendLine("                    tempWriter.WriteValue(in v);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.WriteCollectionHeader(ref index, count);");
@@ -720,7 +726,8 @@ public static class InterfaceImmutableQueueFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 1)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                {elementType} item = default!;");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableQueue.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
@@ -775,7 +782,7 @@ public static class InterfaceImmutableStackFormatter
         sb.AppendLine("                {");
         sb.AppendLine("                    count++;");
         sb.AppendLine("                    var v = item;");
-        sb.AppendLine("                    tempWriter.WriteValue(v);");
+        sb.AppendLine("                    tempWriter.WriteValue(in v);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.WriteCollectionHeader(ref index, count);");
@@ -815,7 +822,8 @@ public static class InterfaceImmutableStackFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length is 1)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                {elementType} item = default!;");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableStack.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
@@ -868,9 +876,9 @@ public static class InterfaceImmutableDictionaryFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var key = item.Key;");
-        sb.AppendLine("                writer.WriteValue(key);");
+        sb.AppendLine("                writer.WriteValue(in key);");
         sb.AppendLine("                var itemValue = item.Value;");
-        sb.AppendLine("                writer.WriteValue(itemValue);");
+        sb.AppendLine("                writer.WriteValue(in itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -935,7 +943,7 @@ public static class InterfaceImmutableSetFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                writer.WriteValue(v);");
+        sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -964,7 +972,8 @@ public static class InterfaceImmutableSetFormatter
         sb.AppendLine();
         sb.AppendLine("            if (length == 1)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                var item = reader.ReadValue<{elementType}>();");
+        sb.AppendLine($"                {elementType} item = default!;");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine($"                value = global::System.Collections.Immutable.ImmutableHashSet.Create(item);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
@@ -1037,7 +1046,7 @@ internal static class ImmutableCollectionFormatterHelper
         sb.AppendLine("                else isFirst = false;");
         sb.AppendLine("                writer.SetFirstElement(true);");
         sb.AppendLine("                var temp = item;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in temp);");
+        sb.AppendLine("                writer.WriteValue(in temp);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.WriteArrayEnd();");
     }
@@ -1083,7 +1092,7 @@ internal static class ImmutableCollectionFormatterHelper
         sb.AppendLine("                        buffer = newBuffer;");
         sb.AppendLine("                    }");
         sb.AppendLine("                    " + elementType + " item = default!;");
-        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item);");
+        sb.AppendLine("                    reader.ReadValue(ref item);");
         sb.AppendLine("                    buffer[count++] = item;");
         sb.AppendLine("                }");
         AppendSequenceConstruction(sb, elementType, baseType);
@@ -1164,9 +1173,9 @@ internal static class ImmutableCollectionFormatterHelper
         sb.AppendLine("            {");
         sb.AppendLine("                writer.WriteArrayStart();");
         sb.AppendLine("                var key = item.Key;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in key);");
+        sb.AppendLine("                writer.WriteValue(in key);");
         sb.AppendLine("                var itemValue = item.Value;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in itemValue);");
+        sb.AppendLine("                writer.WriteValue(in itemValue);");
         sb.AppendLine("                writer.WriteArrayEnd();");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.WriteArrayEnd();");
@@ -1197,9 +1206,9 @@ internal static class ImmutableCollectionFormatterHelper
         sb.AppendLine("                " + valueType + " itemValue = default!;");
         sb.AppendLine("                if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref key);");
+        sb.AppendLine("                    reader.ReadValue(ref key);");
         sb.AppendLine("                    if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
-        sb.AppendLine("                        global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref itemValue);");
+        sb.AppendLine("                        reader.ReadValue(ref itemValue);");
         sb.AppendLine("                }");
         sb.AppendLine("                while (reader.Read())");
         sb.AppendLine("                {");

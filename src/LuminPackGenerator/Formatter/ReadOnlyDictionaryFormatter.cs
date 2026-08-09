@@ -21,9 +21,9 @@ public static class ReadOnlyDictionaryFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var key = item.Key;");
-        sb.AppendLine("                writer.WriteValue(key);");
+        sb.AppendLine("                writer.WriteValue(in key);");
         sb.AppendLine("                var itemValue = item.Value;");
-        sb.AppendLine("                writer.WriteValue(itemValue);");
+        sb.AppendLine("                writer.WriteValue(in itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -77,9 +77,9 @@ public static class ReadOnlyDictionaryFormatter
         sb.AppendLine("                " + valueType + " itemValue = default!;");
         sb.AppendLine("                if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref key);");
+        sb.AppendLine("                    reader.ReadValue(ref key);");
         sb.AppendLine("                    if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
-        sb.AppendLine("                        global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref itemValue);");
+        sb.AppendLine("                        reader.ReadValue(ref itemValue);");
         sb.AppendLine("                }");
         sb.AppendLine("                while (reader.Read())");
         sb.AppendLine("                {");

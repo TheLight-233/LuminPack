@@ -34,7 +34,7 @@ public static class MemoryFormatter
             sb.AppendLine("                foreach (var item in memory.Span)");
             sb.AppendLine("                {");
             sb.AppendLine("                    var temp = item;");
-            sb.AppendLine("                    writer.WriteValue(temp);");
+            sb.AppendLine("                    writer.WriteValue(in temp);");
             sb.AppendLine("                }");
             sb.AppendLine("            }");
         }
@@ -43,7 +43,7 @@ public static class MemoryFormatter
             sb.AppendLine("            foreach (ref var item in value.Span)");
             sb.AppendLine("            {");
             sb.AppendLine("                var temp = item;");
-            sb.AppendLine("                writer.WriteValue(temp);");
+            sb.AppendLine("                writer.WriteValue(in temp);");
             sb.AppendLine("            }");
         }
         else if (baseType == "global::System.ReadOnlyMemory")
@@ -51,7 +51,7 @@ public static class MemoryFormatter
             sb.AppendLine("            foreach (var item in value.Span)");
             sb.AppendLine("            {");
             sb.AppendLine("                var temp = item;");
-            sb.AppendLine("                writer.WriteValue(temp);");
+            sb.AppendLine("                writer.WriteValue(in temp);");
             sb.AppendLine("            }");
         }
         else
@@ -59,7 +59,7 @@ public static class MemoryFormatter
             sb.AppendLine("            foreach (var item in value)");
             sb.AppendLine("            {");
             sb.AppendLine("                var temp = item;");
-            sb.AppendLine("                writer.WriteValue(temp);");
+            sb.AppendLine("                writer.WriteValue(in temp);");
             sb.AppendLine("            }");
         }
         sb.AppendLine("            writer.CheckBuffer();");
@@ -150,7 +150,7 @@ public static class MemoryFormatter
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd)");
         sb.AppendLine("                    continue;");
         sb.AppendLine("                " + elementType + " item = default!;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item);");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine("                items.Add(item);");
         sb.AppendLine("            }");
         sb.AppendLine("            var array = items.ToArray();");
@@ -163,7 +163,7 @@ public static class MemoryFormatter
         sb.AppendLine(indent + "else isFirst = false;");
         sb.AppendLine(indent + "writer.SetFirstElement(true);");
         sb.AppendLine(indent + "var temp = item;");
-        sb.AppendLine(indent + "global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in temp);");
+        sb.AppendLine(indent + "writer.WriteValue(in temp);");
     }
 
     private static void AppendNullAssignment(StringBuilder sb, string baseType)

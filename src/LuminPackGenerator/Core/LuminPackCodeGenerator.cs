@@ -393,7 +393,14 @@ public static class LuminPackCodeGenerator
 			sb.AppendLine(text + "totalLength += " + GetEnumFieldLength(field.EnumType) + ";");
 			break;
 		default:
-			sb.AppendLine(text + "evaluator.CalculateValue(in " + fieldPath + ");");
+			// Materialize member/indexer expressions into a writable local. Overload
+			// resolution can then select an exact source-generated CalculateOffset
+			// overload for closed types, while open generic fields retain the runtime
+			// CalculateOffset<T> fallback.
+			sb.AppendLine(text + "{");
+			sb.AppendLine(text + "    var __luminPackOffsetValue = " + fieldPath + ";");
+			sb.AppendLine(text + "    evaluator.CalculateOffset(ref __luminPackOffsetValue);");
+			sb.AppendLine(text + "}");
 			break;
 		}
 	}
@@ -1513,7 +1520,7 @@ public static class LuminPackCodeGenerator
 			if (IsPureValueTypeStruct(field))
 			{
 				sb.AppendLine(text + "// 纯值类型结构体");
-				sb.AppendLine(text + "reader.Advance(reader.ReadUnmanaged(ref " + offset + ", out " + targetObj + "));");
+				sb.AppendLine(text + offset + " += reader.ReadUnmanaged(ref " + offset + ", out " + targetObj + ");");
 				break;
 			}
 			sb.AppendLine(text + "// 反序列化" + field.ClassName);
@@ -1723,7 +1730,8 @@ public static class LuminPackCodeGenerator
 			{
 				sb.AppendLine(text + "reader.ReadValueWithCompress(ref " + targetObj + ");");
 			}
-			else if (targetIsKnownFresh && IsExactFreshCollectionType(field))
+			else if (targetIsKnownFresh && IsExactFreshCollectionType(field) &&
+			         field.TypeSymbol is not null && !ContainsTypeParameter(field.TypeSymbol))
 			{
 				sb.AppendLine(text + "reader.ReadFreshValue(ref " + targetObj + ");");
 			}
@@ -3349,5 +3357,19 @@ public static class LuminPackCodeGenerator
 			return text.StartsWith("System.Collections.Generic.Dictionary<", StringComparison.Ordinal);
 		}
 		return true;
+	}
+
+	private static bool ContainsTypeParameter(ITypeSymbol type)
+	{
+		return type switch
+		{
+			ITypeParameterSymbol => true,
+			IArrayTypeSymbol array => ContainsTypeParameter(array.ElementType),
+			IPointerTypeSymbol pointer => ContainsTypeParameter(pointer.PointedAtType),
+			INamedTypeSymbol named =>
+				(named.ContainingType is not null && ContainsTypeParameter(named.ContainingType)) ||
+				named.TypeArguments.Any(ContainsTypeParameter),
+			_ => false
+		};
 	}
 }

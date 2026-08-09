@@ -70,7 +70,7 @@ public static class TupleFormatter
             if (i > 1) sb.AppendLine("            writer.WriteByteRaw((byte)',');");
             sb.AppendLine("            writer.SetFirstElement(true);");
             sb.AppendLine("            var item" + i + " = value.Item" + i + ";");
-            sb.AppendLine("            global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in item" + i + ");");
+            sb.AppendLine("            writer.WriteValue(in item" + i + ");");
         }
         sb.AppendLine("            writer.WriteArrayEnd();");
     }
@@ -92,7 +92,7 @@ public static class TupleFormatter
         {
             sb.AppendLine("            reader.Read();");
             sb.AppendLine("            " + args[i] + " item" + i + " = default!;");
-            sb.AppendLine("            global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item" + i + ");");
+            sb.AppendLine("            reader.ReadValue(ref item" + i + ");");
         }
         sb.AppendLine("            reader.Read();");
         sb.AppendLine("            value = new " + fieldData.TypeName + "(" + JoinItems(args.Length) + ");");

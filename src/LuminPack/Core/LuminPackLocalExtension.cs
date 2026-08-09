@@ -9,7 +9,7 @@ public static class LuminPackLocalExtension
     {
         LuminPackFormatterCache.Cache<T>.Serialize(ref writer, in value);
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void ReadValue<T>(ref this LuminPackReader reader, scoped ref T value)
     {
@@ -26,6 +26,12 @@ public static class LuminPackLocalExtension
     public static void ReadValue<T>(ref this LuminPackJsonReader reader, scoped ref T value)
     {
         LuminPackFormatterCache.Cache<T>.DeserializeJson(ref reader, ref value);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static void CalculateOffset<T>(ref this LuminPackEvaluator evaluator, scoped ref T value)
+    {
+        LuminPackFormatterCache.Cache<T>.CalculateOffset(ref evaluator, ref value);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

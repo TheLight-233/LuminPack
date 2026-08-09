@@ -806,7 +806,7 @@ namespace LuminPack.Core
         #region Primitive Types
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal float ReadNextFloatValue()
+        public float ReadNextFloatValue()
         {
             if (!Read() || CurrentTokenType != JsonTokenType.Number)
                 throw new FormatException("Expected a number in JSON array");
@@ -814,7 +814,7 @@ namespace LuminPack.Core
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal void ConsumeArrayEnd()
+        public void ConsumeArrayEnd()
         {
             if (!Read() || CurrentTokenType != JsonTokenType.ArrayEnd)
                 throw new FormatException("Expected the end of a JSON array");

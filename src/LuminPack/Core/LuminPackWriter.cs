@@ -1066,7 +1066,15 @@ namespace LuminPack.Core
                 return;
             }
 
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            WriteCollectionHeader(ref _currentIndex, array.Length);
+            Advance(sizeof(int));
+
+            foreach (ref var value in array.AsSpan())
+            {
+                this.WriteValue(in value);
+            }
+
+            CheckBuffer();
         }
         
         /// <summary>
@@ -1098,7 +1106,15 @@ namespace LuminPack.Core
                 return;
             }
 
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            WriteCollectionHeader(ref index, array.Length);
+            Advance(sizeof(int));
+
+            foreach (ref var value in array.AsSpan())
+            {
+                this.WriteValue(in value);
+            }
+
+            CheckBuffer();
         }
         
         /// <summary>
@@ -1131,7 +1147,15 @@ namespace LuminPack.Core
                 return;
             }
             
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            WriteCollectionHeader(ref _currentIndex, span.Length);
+            Advance(sizeof(int));
+
+            foreach (ref var value in span)
+            {
+                this.WriteValue(in value);
+            }
+
+            CheckBuffer();
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1160,7 +1184,15 @@ namespace LuminPack.Core
                 return;
             }
             
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            WriteCollectionHeader(ref index, span.Length);
+            Advance(sizeof(int));
+
+            foreach (var value in span)
+            {
+                this.WriteValue(in value);
+            }
+
+            CheckBuffer();
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1200,7 +1232,12 @@ namespace LuminPack.Core
                 return;
             }
             
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            foreach (ref var value in span)
+            {
+                this.WriteValue(in value);
+            }
+
+            CheckBuffer();
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1240,7 +1277,12 @@ namespace LuminPack.Core
                 return;
             }
             
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            foreach (var value in span)
+            {
+                this.WriteValue(in value);
+            }
+
+            CheckBuffer();
         }
         
         /// <summary>
@@ -1272,7 +1314,15 @@ namespace LuminPack.Core
                 return;
             }
             
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            WriteCollectionHeader(ref index, span.Length);
+            Advance(sizeof(int));
+
+            foreach (ref var value in span)
+            {
+                this.WriteValue(in value);
+            }
+
+            CheckBuffer();
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1298,7 +1348,15 @@ namespace LuminPack.Core
                 return;
             }
             
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            WriteCollectionHeader(ref index, span.Length);
+            Advance(sizeof(int));
+
+            foreach (var value in span)
+            {
+                this.WriteValue(in value);
+            }
+
+            CheckBuffer();
         }
         
 

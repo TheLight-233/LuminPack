@@ -41,8 +41,8 @@ public static class StringBuilderFormatter
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, text.Length);");
         sb.AppendLine("            writer.Advance(sizeof(int));");
         sb.AppendLine("            var length = checked(text.Length * sizeof(char));");
-        sb.AppendLine("            writer.EnsureCapacity(index, length);");
-        sb.AppendLine("            ref var destination = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref global::System.Runtime.CompilerServices.Unsafe.AsRef<byte>(writer._bufferStart), (nint)(uint)index);");
+        sb.AppendLine("            writer.EnsureAdditionalCapacity(length);");
+        sb.AppendLine("            ref var destination = ref writer.GetSpanReference(index);");
         sb.AppendLine("            ref var source = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(text.AsSpan()));");
         sb.AppendLine("            global::System.Runtime.CompilerServices.Unsafe.CopyBlockUnaligned(ref destination, ref source, (uint)length);");
         sb.AppendLine("            writer.Advance(length);");

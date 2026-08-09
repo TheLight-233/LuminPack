@@ -14,6 +14,16 @@ internal static class FormatterTypeName
 {
 	internal static string Get(ITypeSymbol type)
 	{
+		// Roslyn represents the native aliases as distinct symbols even though C#
+		// considers nint/IntPtr and nuint/UIntPtr identical method signatures.
+		// Canonicalize them before string-based formatter de-duplication.
+		if (type is INamedTypeSymbol { IsNativeIntegerType: true } nativeInteger)
+		{
+			return nativeInteger.SpecialType == SpecialType.System_UIntPtr
+				? "global::System.UIntPtr"
+				: "global::System.IntPtr";
+		}
+
 		return ContainsTuple(type)
 			? Build(type)
 			: type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);

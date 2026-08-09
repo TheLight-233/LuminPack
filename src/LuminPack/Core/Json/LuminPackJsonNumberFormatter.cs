@@ -9,8 +9,7 @@ using System.Numerics;
 namespace LuminPack.Core
 {
     /// <summary>
-    /// JSON UTF-8 numeric fast paths selected by benchmark.
-    /// Only contains paths that won the final decision benchmark for their target primitive.
+    /// JSON UTF-8 numeric fast paths
     /// </summary>
     internal static class LuminPackJsonNumberFormatter
     {

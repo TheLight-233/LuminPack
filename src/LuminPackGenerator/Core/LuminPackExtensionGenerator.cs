@@ -413,6 +413,9 @@ namespace LuminPack
 		sb.AppendLine("    {");
 		if (TypeMetaChecker.IsUnityProject(compilation))
 		{
+			sb.AppendLine("#if UNITY_EDITOR");
+			sb.AppendLine("        [global::UnityEditor.InitializeOnLoadMethod]");
+			sb.AppendLine("#endif");
 			sb.AppendLine("        [global::UnityEngine.RuntimeInitializeOnLoadMethod(global::UnityEngine.RuntimeInitializeLoadType.BeforeSceneLoad)]");
 		}
 		else
@@ -723,6 +726,23 @@ namespace LuminPack
 					yield return argumentField;
 				}
 			}
+
+			// These LINQ formatters serialize through concrete interface views which may
+			// never appear explicitly in user syntax. Keep their exact closed helper types
+			// in the formatter dependency graph so nested calls can bind statically.
+			string definitionName = named.OriginalDefinition.ToDisplayString();
+			if (definitionName == "System.Linq.ILookup<TKey, TElement>" ||
+				definitionName == "System.Linq.IGrouping<TKey, TElement>")
+			{
+				foreach (INamedTypeSymbol enumerable in named.AllInterfaces.Where(static candidate =>
+					candidate.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T))
+				{
+					foreach (LuminLocalFieldData dependency in EnumerateFormatterFields(enumerable, visited))
+					{
+						yield return dependency;
+					}
+				}
+			}
 		}
 
 		yield return new LuminLocalFieldData
@@ -779,9 +799,26 @@ namespace LuminPack
 
 	private static bool IsStaticFormatterCandidate(ITypeSymbol type)
 	{
-		if (type.TypeKind == TypeKind.Enum || type is IArrayTypeSymbol)
+		if (type.TypeKind == TypeKind.Enum)
 		{
 			return true;
+		}
+
+		if (type is INamedTypeSymbol
+			{
+				OriginalDefinition.SpecialType: SpecialType.System_Nullable_T,
+				TypeArguments.Length: 1
+			} nullable)
+		{
+			return IsStaticFormatterCandidate(nullable.TypeArguments[0]);
+		}
+
+		// Arrays are only known when their leaf graph is known. Treating every
+		// source-mentioned array as serializable made Unity package types such as
+		// InputControl[] leak into generated formatter sets.
+		if (type is IArrayTypeSymbol array)
+		{
+			return IsStaticFormatterCandidate(array.ElementType);
 		}
 
 		if (type is not INamedTypeSymbol named)
@@ -798,16 +835,30 @@ namespace LuminPack
 			return false;
 		}
 
-		if (named.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T || HasPackableAttribute(named))
+		if (HasPackableAttribute(named))
 		{
 			return true;
 		}
 
 		var formatter = FormatterDiscovery.GetFormatter(FormatterTypeName.Get(type));
-		return formatter.Write is not null || formatter.Read is not null || formatter.WriteJson is not null || formatter.ReadJson is not null;
+		bool registered = formatter.Write is not null || formatter.Read is not null ||
+			formatter.WriteJson is not null || formatter.ReadJson is not null;
+		if (!registered)
+		{
+			return false;
+		}
+
+		// Registered generic formatters are templates. Emit an extension only for
+		// a closed construction whose entire argument graph is itself known or
+		// [LuminPackable].
+		return !named.IsUnboundGenericType && named.TypeArguments.All(IsStaticFormatterCandidate);
 	}
 
-	private static void GenerateFormatterExtensions(StringBuilder sb, LuminLocalFieldData field, MetaInfo metaInfo, HashSet<string> analyzedTypes)
+	private static void GenerateFormatterExtensions(
+		StringBuilder sb,
+		LuminLocalFieldData field,
+		MetaInfo metaInfo,
+		HashSet<string> analyzedTypes)
 	{
 		string typeName = field.TypeName;
 		bool isEnum = field.TypeSymbol?.TypeKind == TypeKind.Enum;

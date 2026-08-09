@@ -4,11 +4,15 @@
 
 #endregion
 
+using System;
 using System.Buffers;
 using System.Diagnostics.CodeAnalysis;
+using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using LuminPack.Attribute;
 using LuminPack.Code;
 using LuminPack.Core;
@@ -56,7 +60,7 @@ namespace LuminPack
                 var writer = new LuminPackWriter(writerBuffer, state);
 
                 writer.WriteValue(value);
-                
+
                 var buffer = AllocateUninitializedArray<byte>(writer.CurrentIndex);
                 writer.GetSpan().CopyTo(buffer.AsSpan());
                 return buffer;
@@ -88,7 +92,7 @@ namespace LuminPack
                 var writer = new LuminPackWriter(writerBuffer);
 
                 writer.WriteValue(value);
-                
+
                 writerBuffer.CompleteWrite(writer.CurrentIndex);
             }
             catch
@@ -122,7 +126,7 @@ namespace LuminPack
                 var writer = new LuminPackJsonWriter(writerBuffer, state);
 
                 writer.WriteValue(in value);
-                
+
                 return writer.Option.StringEncoding is LuminPackStringEncoding.UTF8 
                     ? Encoding.UTF8.GetString(writer.GetSpan())
                     : Encoding.Unicode.GetString(writer.GetSpan());
@@ -155,7 +159,7 @@ namespace LuminPack
                 var writer = new LuminPackJsonWriter(writerBuffer);
 
                 writer.WriteValue(in value);
-                
+
                 writerBuffer.CompleteWrite(writer.CurrentIndex);
             }
             catch

@@ -60,6 +60,19 @@ public sealed partial class GenericFastUnionMember<T> : IGenericFastUnion<T>
 }
 
 [LuminPackable]
+[LuminPackUnion(11, typeof(MixedGenericUnionMember<int>))]
+[LuminPackUnion(12, typeof(MixedGenericUnionMember<string>))]
+public partial interface IMixedGenericUnion<T>
+{
+}
+
+[LuminPackable]
+public sealed partial class MixedGenericUnionMember<T> : IMixedGenericUnion<T>
+{
+    public T Value = default!;
+}
+
+[LuminPackable]
 public abstract partial class FirstClassUnionRoot
 {
 }
@@ -98,6 +111,7 @@ internal static class BinaryUnionSafetyTest
         RunCase(results, nameof(UnlistedUnionMemberIsRejected), UnlistedUnionMemberIsRejected);
         RunCase(results, nameof(CrossAssemblyUnlistedMemberIsRejected), CrossAssemblyUnlistedMemberIsRejected);
         RunCase(results, nameof(NullWideGenericAndMultipleRootsRoundTrip), NullWideGenericAndMultipleRootsRoundTrip);
+        RunCase(results, nameof(ClosedGenericTagsUseConstantTimeDispatch), ClosedGenericTagsUseConstantTimeDispatch);
         RunCase(results, nameof(DynamicUnionRegistrationIsNotAvailable), DynamicUnionRegistrationIsNotAvailable);
     }
 
@@ -184,6 +198,30 @@ internal static class BinaryUnionSafetyTest
             "An external interface union member without a generated contract tag was accepted.");
         AssertThrows(() => LuminPackSerializer.Serialize(classValue),
             "An external class union member without a generated contract tag was accepted.");
+    }
+
+    private static void ClosedGenericTagsUseConstantTimeDispatch()
+    {
+        IMixedGenericUnion<int> closed = new MixedGenericUnionMember<int> { Value = 91 };
+        IMixedGenericUnion<string> second = new MixedGenericUnionMember<string> { Value = "second" };
+
+        var closedPayload = LuminPackSerializer.Serialize(closed);
+        var secondPayload = LuminPackSerializer.Serialize(second);
+
+        Assert(closedPayload[0] == 11,
+            "The first explicit closed-generic union member wrote the wrong wire tag.");
+        Assert(secondPayload[0] == 12,
+            "The second explicit closed-generic union member wrote the wrong wire tag.");
+        Assert(LuminPackSerializer.Sizeof(closed) == closedPayload.Length,
+            "The first closed-generic union member size did not match its payload.");
+        Assert(LuminPackSerializer.Sizeof(second) == secondPayload.Length,
+            "The second closed-generic union member size did not match its payload.");
+        Assert(LuminPackSerializer.Deserialize<IMixedGenericUnion<int>>(closedPayload) is
+                MixedGenericUnionMember<int> { Value: 91 },
+            "The first explicit closed-generic union member did not round-trip.");
+        Assert(LuminPackSerializer.Deserialize<IMixedGenericUnion<string>>(secondPayload) is
+                MixedGenericUnionMember<string> { Value: "second" },
+            "The second explicit closed-generic union member did not round-trip.");
     }
 
     private static void BoxedStructUnionRoundTripsAndSizeMatches()

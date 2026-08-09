@@ -41,7 +41,7 @@ public static class ListFormatter
         sb.AppendLine("                else isFirst = false;");
         sb.AppendLine("                writer.SetFirstElement(true);");
         sb.AppendLine("                var temp = item;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in temp);");
+        sb.AppendLine("                writer.WriteValue(in temp);");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteArrayEnd();");
@@ -101,7 +101,7 @@ public static class ListFormatter
         sb.AppendLine("                    continue;");
         sb.AppendLine();
         sb.AppendLine("                " + elementType + " item = default!;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item);");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         if (stack || readOnly || interfaceType || setInterface)
         {
             sb.AppendLine("                tempList.Add(item);");
@@ -205,13 +205,13 @@ public static class ListFormatter
             sb.AppendLine("            }");
             sb.AppendLine();
         }
-        
+
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, span.Length);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
         sb.AppendLine("            foreach (ref var item in span)");
         sb.AppendLine("            {");
-        sb.AppendLine("                writer.WriteValue(item!);");
+        sb.AppendLine("                writer.WriteValue(in item!);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -380,7 +380,7 @@ public static class ListFormatter
         // Reference elements: propagate WithCompress only when leaf element is a KnownValueType.
         string elementCallSerialize = KnownValueTypes.Contains(elementType) || IsLeafTypeKnownValueType(elementType)
             ? "writer.WriteValueWithCompress(item!);"
-            : "writer.WriteValue(item!);";
+            : "writer.WriteValue(in item!);";
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, span.Length);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
@@ -494,7 +494,7 @@ public static class ListFormatter
         sb.AppendLine("                if (!isFirst) writer.WriteByteRaw((byte)',');");
         sb.AppendLine("                else isFirst = false;");
         sb.AppendLine("                writer.SetFirstElement(true);");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in item);");
+        sb.AppendLine("                writer.WriteValue(in item);");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteArrayEnd();");
@@ -529,7 +529,7 @@ public static class ListFormatter
         sb.AppendLine("                    continue;");
         sb.AppendLine();
         sb.AppendLine("                " + elementType + " item = default!;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item);");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine("                value.Add(item);");
         sb.AppendLine("            }");
     }
@@ -553,9 +553,9 @@ public static class DictionaryFormatter
         sb.AppendLine("                {");
         sb.AppendLine("                    writer.WriteArrayStart();");
         sb.AppendLine("                    var key = item.Key;");
-        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in key);");
+        sb.AppendLine("                    writer.WriteValue(in key);");
         sb.AppendLine("                    var itemValue = item.Value;");
-        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in itemValue);");
+        sb.AppendLine("                    writer.WriteValue(in itemValue);");
         sb.AppendLine("                    writer.WriteArrayEnd();");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
@@ -601,9 +601,9 @@ public static class DictionaryFormatter
         sb.AppendLine("                " + valueType + " itemValue = default!;");
         sb.AppendLine("                if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref key);");
+        sb.AppendLine("                    reader.ReadValue(ref key);");
         sb.AppendLine("                    if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
-        sb.AppendLine("                        global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref itemValue);");
+        sb.AppendLine("                        reader.ReadValue(ref itemValue);");
         sb.AppendLine("                }");
         sb.AppendLine("                while (reader.Read())");
         sb.AppendLine("                {");
@@ -651,9 +651,9 @@ public static class DictionaryFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                " + keyType + " key = item.Key;");
-        sb.AppendLine("                writer.WriteValue(key);");
+        sb.AppendLine("                writer.WriteValue(in key);");
         sb.AppendLine("                " + valueType + " itemValue = item.Value;");
-        sb.AppendLine("                writer.WriteValue(itemValue);");
+        sb.AppendLine("                writer.WriteValue(in itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -736,9 +736,9 @@ public static class DictionaryFormatter
         sb.AppendLine("                    {");
         sb.AppendLine("                        writer.WriteArrayStart();");
         sb.AppendLine("                        var key = entry.Key;");
-        sb.AppendLine("                        global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in key);");
+        sb.AppendLine("                        writer.WriteValue(in key);");
         sb.AppendLine("                        var itemValue = entry.Value;");
-        sb.AppendLine("                        global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in itemValue);");
+        sb.AppendLine("                        writer.WriteValue(in itemValue);");
         sb.AppendLine("                        writer.WriteArrayEnd();");
         sb.AppendLine("                    }");
         sb.AppendLine("                }");
@@ -774,9 +774,9 @@ public static class DictionaryFormatter
         sb.AppendLine("                " + valueType + " itemValue = default!;");
         sb.AppendLine("                if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref key);");
+        sb.AppendLine("                    reader.ReadValue(ref key);");
         sb.AppendLine("                    if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
-        sb.AppendLine("                        global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref itemValue);");
+        sb.AppendLine("                        reader.ReadValue(ref itemValue);");
         sb.AppendLine("                }");
         sb.AppendLine("                while (reader.Read())");
         sb.AppendLine("                {");
@@ -1180,9 +1180,9 @@ public static class ConcurrentDictionaryFormatter
         sb.AppendLine("            {");
         sb.AppendLine("                i++;");
         sb.AppendLine("                var key = item.Key;");
-        sb.AppendLine("                writer.WriteValue(key);");
+        sb.AppendLine("                writer.WriteValue(in key);");
         sb.AppendLine("                var itemValue = item.Value;");
-        sb.AppendLine("                writer.WriteValue(itemValue);");
+        sb.AppendLine("                writer.WriteValue(in itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            writer.CheckBuffer();");
@@ -1311,7 +1311,7 @@ public static class LinkedListFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                writer.WriteValue(v);");
+        sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -1372,7 +1372,7 @@ public static class SortedSetFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                writer.WriteValue(v);");
+        sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -1479,7 +1479,7 @@ public static class BlockingCollectionFormatter
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -1498,7 +1498,7 @@ public static class BlockingCollectionFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                writer.WriteValue(v);");
+        sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -1506,7 +1506,7 @@ public static class BlockingCollectionFormatter
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -1537,7 +1537,7 @@ public static class ConcurrentBagFormatter
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -1560,7 +1560,7 @@ public static class ConcurrentBagFormatter
         sb.AppendLine("            {");
         sb.AppendLine("                i++;");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                writer.WriteValue(v);");
+        sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            writer.CheckBuffer();");
@@ -1572,7 +1572,7 @@ public static class ConcurrentBagFormatter
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -1610,7 +1610,7 @@ public static class ConcurrentQueueFormatter
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -1633,7 +1633,7 @@ public static class ConcurrentQueueFormatter
         sb.AppendLine("            {");
         sb.AppendLine("                i++;");
         sb.AppendLine("                var v = item;");
-        sb.AppendLine("                writer.WriteValue(v);");
+        sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            writer.CheckBuffer();");
@@ -1645,7 +1645,7 @@ public static class ConcurrentQueueFormatter
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -1683,7 +1683,7 @@ public static class ConcurrentStackFormatter
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -1714,7 +1714,7 @@ public static class ConcurrentStackFormatter
         sb.AppendLine("                for (i = i - 1; i >= 0; i--)");
         sb.AppendLine("                {");
         sb.AppendLine("                    var v = rentArray[i];");
-        sb.AppendLine("                    writer.WriteValue(v);");
+        sb.AppendLine("                    writer.WriteValue(in v);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.CheckBuffer();");
@@ -1728,7 +1728,7 @@ public static class ConcurrentStackFormatter
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -1766,7 +1766,7 @@ public static class CollectionFormatter
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -1795,7 +1795,7 @@ public static class CollectionFormatter
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
         sb.AppendLine("                    var temp = item;");
-        sb.AppendLine("                    writer.WriteValue(temp);");
+        sb.AppendLine("                    writer.WriteValue(in temp);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.CheckBuffer();");
@@ -1805,7 +1805,7 @@ public static class CollectionFormatter
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -1842,7 +1842,7 @@ public static class ObservableCollectionFormatter
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -1871,7 +1871,7 @@ public static class ObservableCollectionFormatter
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
         sb.AppendLine("                    var temp = item;");
-        sb.AppendLine("                    writer.WriteValue(temp);");
+        sb.AppendLine("                    writer.WriteValue(in temp);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.CheckBuffer();");
@@ -1881,7 +1881,7 @@ public static class ObservableCollectionFormatter
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -1920,7 +1920,7 @@ public static class ReadOnlyCollectionFormatter
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -1949,7 +1949,7 @@ public static class ReadOnlyCollectionFormatter
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
         sb.AppendLine("                    var temp = item;");
-        sb.AppendLine("                    writer.WriteValue(temp);");
+        sb.AppendLine("                    writer.WriteValue(in temp);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.CheckBuffer();");
@@ -1959,7 +1959,7 @@ public static class ReadOnlyCollectionFormatter
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine($"            var array = reader.ReadArray<{elementType}>();");
         sb.AppendLine();
         sb.AppendLine("            if (array is null)");
@@ -1979,7 +1979,7 @@ public static class ReadOnlyObservableCollectionFormatter
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -2008,7 +2008,7 @@ public static class ReadOnlyObservableCollectionFormatter
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
         sb.AppendLine("                    var temp = item;");
-        sb.AppendLine("                    writer.WriteValue(temp);");
+        sb.AppendLine("                    writer.WriteValue(in temp);");
         sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.CheckBuffer();");
@@ -2018,7 +2018,7 @@ public static class ReadOnlyObservableCollectionFormatter
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine($"            var array = reader.ReadArray<{elementType}>();");
         sb.AppendLine();
         sb.AppendLine("            if (array is null)");
@@ -2038,7 +2038,7 @@ public static class ReadOnlyCollectionBuilderFormatter
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
         sb.AppendLine("                var index = writer.CurrentIndex;");
@@ -2058,7 +2058,7 @@ public static class ReadOnlyCollectionBuilderFormatter
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -2109,7 +2109,7 @@ public static class ReadOnlyCollectionBuilderFormatter
         sb.AppendLine("                if (!isFirst) writer.WriteByteRaw((byte)',');");
         sb.AppendLine("                else isFirst = false;");
         sb.AppendLine("                writer.SetFirstElement(true);");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in item);");
+        sb.AppendLine("                writer.WriteValue(in item);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.WriteArrayEnd();");
     }
@@ -2138,7 +2138,7 @@ public static class ReadOnlyCollectionBuilderFormatter
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd)");
         sb.AppendLine("                    continue;");
         sb.AppendLine("                " + elementType + " item = default!;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item);");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine("                value.Add(item);");
         sb.AppendLine("            }");
     }
@@ -2151,7 +2151,7 @@ public static class PriorityQueueFormatter
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
         var priorityType = GetSecondGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -2179,7 +2179,7 @@ public static class PriorityQueueFormatter
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
         var priorityType = GetSecondGeneric(fieldData.TypeName);
-        
+
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -2229,10 +2229,10 @@ public static class PriorityQueueFormatter
         sb.AppendLine("            {");
         sb.AppendLine("                writer.WriteArrayStart();");
         sb.AppendLine("                var element = item.Element;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in element);");
+        sb.AppendLine("                writer.WriteValue(in element);");
         sb.AppendLine("                writer.WriteByteRaw((byte)',');");
         sb.AppendLine("                var priority = item.Priority;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in priority);");
+        sb.AppendLine("                writer.WriteValue(in priority);");
         sb.AppendLine("                writer.WriteArrayEnd();");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.WriteArrayEnd();");
@@ -2264,11 +2264,11 @@ public static class PriorityQueueFormatter
         sb.AppendLine("                    continue;");
         sb.AppendLine("                reader.Read();");
         sb.AppendLine("                " + elementType + " element = default!;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref element);");
+        sb.AppendLine("                reader.ReadValue(ref element);");
         sb.AppendLine("                reader.Read();");
         sb.AppendLine("                reader.Read();");
         sb.AppendLine("                " + priorityType + " priority = default!;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref priority);");
+        sb.AppendLine("                reader.ReadValue(ref priority);");
         sb.AppendLine("                reader.Read();");
         sb.AppendLine("                value.Enqueue(element, priority);");
         sb.AppendLine("            }");
@@ -2285,7 +2285,7 @@ internal static class CollectionFormatterHelper
         sb.AppendLine("                writer.Advance(4);");
         sb.AppendLine("                foreach (ref var item in span)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    writer.WriteValue(item!);");
+        sb.AppendLine("                    writer.WriteValue(in item!);");
         sb.AppendLine("                }");
         sb.AppendLine("                writer.CheckBuffer();");
     }

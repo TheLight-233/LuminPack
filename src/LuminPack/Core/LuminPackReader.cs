@@ -1044,7 +1044,11 @@ namespace LuminPack.Core
                 array = AllocateUninitializedArray<T>(length);
             }
 
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            ref T first = ref LuminPackMarshal.GetArrayReference(array);
+            for (nint i = 0; i < length; i++)
+            {
+                this.ReadValue(ref Unsafe.Add(ref first, i));
+            }
 
         }
 
@@ -1083,7 +1087,11 @@ namespace LuminPack.Core
                 array = AllocateUninitializedArray<T>(length);
             }
 
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            ref T first = ref LuminPackMarshal.GetArrayReference(array);
+            for (nint i = 0; i < length; i++)
+            {
+                this.ReadValue(ref Unsafe.Add(ref first, i));
+            }
 
         }
 
@@ -1124,7 +1132,11 @@ namespace LuminPack.Core
                 span = AllocateUninitializedArray<T>(length);
             }
 
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            ref var first = ref MemoryMarshal.GetReference(span);
+            for (nint i = 0; i < length; i++)
+            {
+                this.ReadValue(ref Unsafe.Add(ref first, i));
+            }
 
         }
 
@@ -1164,7 +1176,11 @@ namespace LuminPack.Core
                 span = AllocateUninitializedArray<T>(length);
             }
 
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            ref var first = ref MemoryMarshal.GetReference(span);
+            for (nint i = 0; i < length; i++)
+            {
+                this.ReadValue(ref Unsafe.Add(ref first, i));
+            }
 
         }
 
@@ -1192,7 +1208,11 @@ namespace LuminPack.Core
                 array = AllocateUninitializedArray<T>(length);
             }
 
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            ref T first = ref LuminPackMarshal.GetArrayReference(array);
+            for (nint i = 0; i < length; i++)
+            {
+                this.ReadValue(ref Unsafe.Add(ref first, i));
+            }
 
         }
 
@@ -1220,7 +1240,11 @@ namespace LuminPack.Core
                 span = AllocateUninitializedArray<T>(length);
             }
 
-            LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
+            ref var first = ref MemoryMarshal.GetReference(span);
+            for (nint i = 0; i < length; i++)
+            {
+                this.ReadValue(ref Unsafe.Add(ref first, i));
+            }
 
         }
 

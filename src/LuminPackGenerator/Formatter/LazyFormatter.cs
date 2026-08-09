@@ -17,7 +17,7 @@ public static class LazyFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
 		sb.AppendLine("            var item = value.Value;");
-		sb.AppendLine("            writer.WriteValue(item);");
+		sb.AppendLine("            writer.WriteValue(in item);");
     }
 
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
@@ -43,7 +43,7 @@ public static class LazyFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            var item = value.Value;");
-        sb.AppendLine("            global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in item);");
+        sb.AppendLine("            writer.WriteValue(in item);");
     }
 
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
@@ -55,7 +55,7 @@ public static class LazyFormatter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            " + elementType + " item = default!;");
-        sb.AppendLine("            global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item);");
+        sb.AppendLine("            reader.ReadValue(ref item);");
         sb.AppendLine("            value = new global::System.Lazy<" + elementType + ">(item);");
     }
 }

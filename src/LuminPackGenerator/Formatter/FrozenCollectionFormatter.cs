@@ -31,9 +31,9 @@ public static class FrozenDictionaryFormatter
         sb.AppendLine("            {");
         sb.AppendLine("                i++;");
 		sb.AppendLine("                var key = item.Key;");
-		sb.AppendLine("                writer.WriteValue(key);");
+		sb.AppendLine("                writer.WriteValue(in key);");
 		sb.AppendLine("                var itemValue = item.Value;");
-		sb.AppendLine("                writer.WriteValue(itemValue);");
+		sb.AppendLine("                writer.WriteValue(in itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            writer.CheckBuffer();");
@@ -86,9 +86,9 @@ public static class FrozenDictionaryFormatter
         sb.AppendLine("                {");
         sb.AppendLine("                    writer.WriteArrayStart();");
         sb.AppendLine("                    var key = item.Key;");
-        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in key);");
+        sb.AppendLine("                    writer.WriteValue(in key);");
         sb.AppendLine("                    var itemValue = item.Value;");
-        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in itemValue);");
+        sb.AppendLine("                    writer.WriteValue(in itemValue);");
         sb.AppendLine("                    writer.WriteArrayEnd();");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
@@ -114,9 +114,9 @@ public static class FrozenDictionaryFormatter
         sb.AppendLine("                    continue;");
         sb.AppendLine("                reader.TryConsumeArrayStart();");
         sb.AppendLine("                " + keyType + " key = default!;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref key);");
+        sb.AppendLine("                reader.ReadValue(ref key);");
         sb.AppendLine("                " + valueType + " itemValue = default!;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref itemValue);");
+        sb.AppendLine("                reader.ReadValue(ref itemValue);");
         sb.AppendLine("                dict.Add(key!, itemValue);");
         sb.AppendLine("            }");
 		sb.AppendLine("            value = global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(dict);");
@@ -146,7 +146,7 @@ public static class FrozenSetFormatter
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
 		sb.AppendLine("                " + elementType + " v = item;");
-		sb.AppendLine("                writer.WriteValue(v);");
+		sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
@@ -196,7 +196,7 @@ public static class FrozenSetFormatter
         sb.AppendLine("                    else isFirst = false;");
         sb.AppendLine("                    writer.SetFirstElement(true);");
         sb.AppendLine("                    var temp = item;");
-        sb.AppendLine("                    global::LuminPack.Generated.LuminPackExtensions.WriteValue(ref writer, in temp);");
+        sb.AppendLine("                    writer.WriteValue(in temp);");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.WriteArrayEnd();");
@@ -219,7 +219,7 @@ public static class FrozenSetFormatter
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd)");
         sb.AppendLine("                    continue;");
         sb.AppendLine("                " + elementType + " item = default!;");
-        sb.AppendLine("                global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref item);");
+        sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine("                set.Add(item);");
         sb.AppendLine("            }");
 		sb.AppendLine("            value = global::System.Collections.Frozen.FrozenSet.ToFrozenSet(set);");

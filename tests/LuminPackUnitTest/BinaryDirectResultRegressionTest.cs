@@ -38,6 +38,8 @@ internal static class BinaryDirectResultRegressionTest
             SmallNestedGenericAndFreshCollectionsRoundTrip);
         RunCase(results, nameof(PartiallyReadFreshResultIsNotPublished),
             PartiallyReadFreshResultIsNotPublished);
+        RunCase(results, nameof(ArraySizeofMatchesSerializedLength),
+            ArraySizeofMatchesSerializedLength);
     }
 
     private static void SmallNestedGenericAndFreshCollectionsRoundTrip()
@@ -105,6 +107,17 @@ internal static class BinaryDirectResultRegressionTest
         Assert(threw, "Truncated direct-result payload unexpectedly completed.");
         Assert(ReferenceEquals(target, original) && original.Id == 1234 && original.Tail == "original",
             "Binary direct-result parsing published a partially initialized object after failure.");
+    }
+
+    private static void ArraySizeofMatchesSerializedLength()
+    {
+        int[] unmanaged = [1, 2, 3, 5, 8];
+        string?[] managed = ["alpha", null, "gamma"];
+
+        Assert(LuminPackSerializer.Sizeof(unmanaged) == LuminPackSerializer.Serialize(unmanaged).Length,
+            "Unmanaged array CalculateOffset did not match serialized length.");
+        Assert(LuminPackSerializer.Sizeof(managed) == LuminPackSerializer.Serialize(managed).Length,
+            "Reference array CalculateOffset did not match serialized length.");
     }
 
     private static void RunCase(List<string> results, string name, Action test)

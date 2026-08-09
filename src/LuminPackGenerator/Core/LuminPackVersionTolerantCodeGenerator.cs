@@ -33,7 +33,10 @@ public static class LuminPackVersionTolerantCodeGenerator
             else
             {
                 sb.AppendLine($"            var {field.Name}TempLength = evaluator.Value;");
-                sb.AppendLine($"            evaluator.CalculateValue(local.@{field.Name});");
+                sb.AppendLine("            {");
+                sb.AppendLine($"                var __luminPackOffsetValue = local.@{field.Name};");
+                sb.AppendLine("                evaluator.CalculateOffset(ref __luminPackOffsetValue);");
+                sb.AppendLine("            }");
                 sb.AppendLine($"            size += LuminPackEvaluator.CalculateVarInt(evaluator.Value - {field.Name}TempLength);");
             }
         }

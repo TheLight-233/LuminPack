@@ -19,12 +19,13 @@ internal static class LuminPackDiscovery
         var baseName = baseDef.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat);
         var baseArity = baseDef.Arity;
 
-        // 获取所有可能的派生类型
-        var derivedList = CompilationTypeAnalysisCache.GetOrCreate(compilation).DeclaredTypes
-            .Select(static data => data.Symbol)
+        // Merge source declarations with the concrete types observed by the compilation-wide
+        // semantic pass.  The latter is important for GenericMember<int>: the declaration index
+        // only contains GenericMember<T>, while the syntax walk records every closed construction
+        // which is actually used by this project.
+        var derivedList = GetProjectPackableCandidates(compilation)
             .Where(t => !t.IsAbstract && !t.IsStatic)
-            .Where(t => t.GetAttributes().Any(a => a.AttributeClass?.Name == LuminPackableAttributeName))
-            .Where(t => !dataInfo.UnionMembers.Any(m => SymbolEqualityComparer.Default.Equals(m.Type, t)))
+            .Where(t => !IsExplicitlyRegistered(dataInfo, t))
             .Where(t => IsValidDerivedType(t, baseDef, baseName, baseArity))
             .OrderBy(d => d.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
             .ToList();
@@ -44,6 +45,104 @@ internal static class LuminPackDiscovery
             }
         }
     }
+
+    private static IEnumerable<INamedTypeSymbol> GetProjectPackableCandidates(Compilation compilation)
+    {
+        var analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
+        var candidatesByDefinition = new Dictionary<INamedTypeSymbol, HashSet<INamedTypeSymbol>>(
+            SymbolEqualityComparer.Default);
+
+        // FormatterTypes contains both every declared [LuminPackable] type (the legacy discovery
+        // domain) and the concrete type graph observed in source.  Keep discovery local to this
+        // compilation: generated virtual dispatch can only be injected into local partial types.
+        foreach (INamedTypeSymbol candidate in analysis.FormatterTypes.OfType<INamedTypeSymbol>())
+        {
+            if (!LuminPackUnionDispatchUtilities.IsCurrentCompilation(candidate, compilation) ||
+                !HasLuminPackableAttribute(candidate))
+            {
+                continue;
+            }
+
+            INamedTypeSymbol definition = candidate.OriginalDefinition;
+            if (!candidatesByDefinition.TryGetValue(definition, out HashSet<INamedTypeSymbol> candidates))
+            {
+                candidates = new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
+                candidatesByDefinition.Add(definition, candidates);
+            }
+
+            candidates.Add(candidate);
+        }
+
+        foreach (KeyValuePair<INamedTypeSymbol, HashSet<INamedTypeSymbol>> pair in candidatesByDefinition)
+        {
+            INamedTypeSymbol definition = pair.Key;
+            if (definition.Arity == 0)
+            {
+                yield return definition;
+                continue;
+            }
+
+            // Prefer the closed constructions actually seen in source.  Falling back to the open
+            // definition preserves the pre-existing behaviour for a generic packable which has
+            // not yet been constructed anywhere in this compilation.
+            INamedTypeSymbol[] closedTypes = pair.Value
+                .Where(static type => IsFullyClosed(type) &&
+                                      !SymbolEqualityComparer.Default.Equals(type, type.OriginalDefinition))
+                .OrderBy(static type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat))
+                .ToArray();
+            if (closedTypes.Length != 0)
+            {
+                foreach (INamedTypeSymbol closedType in closedTypes)
+                {
+                    yield return closedType;
+                }
+            }
+            else
+            {
+                yield return definition;
+            }
+        }
+    }
+
+    private static bool IsExplicitlyRegistered(LuminDataInfo dataInfo, INamedTypeSymbol candidate)
+    {
+        foreach (LuminUnionMemberInfo member in dataInfo.UnionMembers)
+        {
+            if (SymbolEqualityComparer.Default.Equals(member.Type, candidate))
+                return true;
+
+            // An explicit open registration is the user's customization for the whole generic
+            // family and must not be shadowed by automatically allocated closed-type tags.
+            if ((member.Type.IsUnboundGenericType || !IsFullyClosed(member.Type)) &&
+                SymbolEqualityComparer.Default.Equals(
+                    member.Type.OriginalDefinition,
+                    candidate.OriginalDefinition))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool IsFullyClosed(ITypeSymbol type)
+    {
+        switch (type)
+        {
+            case ITypeParameterSymbol:
+                return false;
+            case IArrayTypeSymbol array:
+                return IsFullyClosed(array.ElementType);
+            case INamedTypeSymbol named:
+                return !named.IsUnboundGenericType && named.TypeArguments.All(IsFullyClosed);
+            default:
+                return true;
+        }
+    }
+
+    private static bool HasLuminPackableAttribute(INamedTypeSymbol type) =>
+        type.GetAttributes().Any(static attribute =>
+            attribute.AttributeClass?.Name == LuminPackableAttributeName);
 
     /// <summary>
     /// 验证派生类型是否符合收集条件
@@ -73,10 +172,9 @@ internal static class LuminPackDiscovery
         if (baseIsFullyConcrete)
         {
             // 基类被完全具象化（如 AbstractGenericBase<int>）
-            // 这种情况下，子类不能有任何泛型参数
-            // 允许: ConcreteClass : AbstractGenericBase<int>
-            // 拒绝: ConcreteClass<T> : AbstractGenericBase<int>
-            return derivedType.TypeParameters.Length == 0;
+            // 允许非泛型派生类，也允许语法树中实际使用过的完全闭合泛型实例。
+            // 拒绝仍含类型参数的开放/部分开放类型。
+            return IsFullyClosed(derivedType);
         }
         
         // 基类使用了类型参数（如 AbstractGenericBase<T>）
