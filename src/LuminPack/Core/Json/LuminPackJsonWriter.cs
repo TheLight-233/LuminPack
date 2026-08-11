@@ -131,6 +131,12 @@ namespace LuminPack.Core
             if ((uint)count <= (uint)(_bufferReference.Length - _currentIndex))
                 return;
 
+            EnsureCapacitySlow(count);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void EnsureCapacitySlow(int count)
+        {
             if (count < 0 || _currentIndex > int.MaxValue - count)
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
 

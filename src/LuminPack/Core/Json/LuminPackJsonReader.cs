@@ -314,7 +314,8 @@ namespace LuminPack.Core
             if (Read() && CurrentTokenType == JsonTokenType.ArrayStart)
                 return true;
     
-            throw new InvalidOperationException("Expected JSON array");
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected JSON array");
+            return false;
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -343,7 +344,8 @@ namespace LuminPack.Core
                         SkipScalarToken();
                     }
 
-                    throw new FormatException("Unterminated JSON object or array");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON object or array");
+                    break;
                 }
                     
                 case JsonTokenType.String:
@@ -371,7 +373,7 @@ namespace LuminPack.Core
         {
             SkipWhitespace();
             if (_currentIndex != _bufferReference.Length)
-                throw new FormatException("Unexpected data after the top-level JSON value");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unexpected data after the top-level JSON value");
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -405,10 +407,10 @@ namespace LuminPack.Core
         public ReadOnlySpan<byte> ReadStringUtf8()
         {
             if (CurrentTokenType != JsonTokenType.String && CurrentTokenType != JsonTokenType.PropertyName)
-                throw new InvalidOperationException("Expected string");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected string");
 
             if (!SerializeStringAsUtf8)
-                throw new InvalidOperationException("The reader is configured for UTF-16 JSON");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("The reader is configured for UTF-16 JSON");
             
             _currentIndex++;
             int start = _currentIndex;
@@ -423,7 +425,7 @@ namespace LuminPack.Core
             }
 
             if (special < 0)
-                throw new FormatException("Unterminated JSON string");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
 #endif
 
             int scan = _currentIndex;
@@ -443,18 +445,19 @@ namespace LuminPack.Core
                     hasEscape = true;
                     scan++;
                     if (scan >= _bufferReference.Length)
-                        throw new FormatException("Unterminated JSON escape sequence");
+                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
                     scan++;
                 }
                 else
                 {
                     if (b < 0x20)
-                        throw new FormatException("Unescaped control character in JSON string");
+                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                     scan++;
                 }
             }
             
-            throw new FormatException("Unterminated JSON string");
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
+            return default;
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -476,10 +479,10 @@ namespace LuminPack.Core
         public ReadOnlySpan<char> ReadStringUtf16()
         {
             if (CurrentTokenType != JsonTokenType.String && CurrentTokenType != JsonTokenType.PropertyName)
-                throw new InvalidOperationException("Expected string");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected string");
 
             if (SerializeStringAsUtf8)
-                throw new InvalidOperationException("The reader is configured for UTF-8 JSON");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("The reader is configured for UTF-8 JSON");
             
             _currentIndex += 2;
             int start = _currentIndex;
@@ -497,7 +500,7 @@ namespace LuminPack.Core
             }
 
             if (special < 0)
-                throw new FormatException("Unterminated JSON string");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
 #endif
 
             int scan = _currentIndex;
@@ -519,18 +522,19 @@ namespace LuminPack.Core
                     hasEscape = true;
                     scan += 2;
                     if (scan + 1 >= _bufferReference.Length)
-                        throw new FormatException("Unterminated JSON escape sequence");
+                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
                     scan += 2;
                 }
                 else
                 {
                     if (c < 0x20)
-                        throw new FormatException("Unescaped control character in JSON string");
+                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                     scan += 2;
                 }
             }
 
-            throw new FormatException("Unterminated JSON string");
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
+            return default;
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -560,13 +564,13 @@ namespace LuminPack.Core
                 if (value != '\\')
                 {
                     if (value < 0x20)
-                        throw new FormatException("Unescaped control character in JSON string");
+                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                     destination[destinationIndex++] = value;
                     continue;
                 }
 
                 if (sourceIndex >= source.Length)
-                    throw new FormatException("Unterminated JSON escape sequence");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
 
                 byte escape = source[sourceIndex++];
                 switch (escape)
@@ -589,26 +593,27 @@ namespace LuminPack.Core
                             if (sourceIndex + 6 > source.Length ||
                                 source[sourceIndex] != '\\' || source[sourceIndex + 1] != 'u')
                             {
-                                throw new FormatException("A high surrogate must be followed by a low surrogate");
+                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
                             }
 
                             int low = ParseHex4(source, sourceIndex + 2);
                             if ((uint)(low - 0xDC00) > 0x3FFu)
-                                throw new FormatException("Invalid low surrogate in JSON string");
+                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
 
                             sourceIndex += 6;
                             scalar = 0x10000 + ((scalar - 0xD800) << 10) + (low - 0xDC00);
                         }
                         else if ((uint)(scalar - 0xDC00) <= 0x3FFu)
                         {
-                            throw new FormatException("Unexpected low surrogate in JSON string");
+                            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
                         }
 
                         WriteUtf8Scalar(destination, ref destinationIndex, scalar);
                         break;
                     }
                     default:
-                        throw new FormatException("Invalid JSON escape sequence");
+                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON escape sequence");
+                        break;
                 }
             }
 
@@ -630,13 +635,13 @@ namespace LuminPack.Core
                 if (value != '\\')
                 {
                     if (value < 0x20)
-                        throw new FormatException("Unescaped control character in JSON string");
+                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                     destination[destinationIndex++] = value;
                     continue;
                 }
 
                 if (sourceIndex >= source.Length)
-                    throw new FormatException("Unterminated JSON escape sequence");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
 
                 char escape = source[sourceIndex++];
                 switch (escape)
@@ -659,12 +664,12 @@ namespace LuminPack.Core
                             if (sourceIndex + 6 > source.Length ||
                                 source[sourceIndex] != '\\' || source[sourceIndex + 1] != 'u')
                             {
-                                throw new FormatException("A high surrogate must be followed by a low surrogate");
+                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
                             }
 
                             int low = ParseHex4(source, sourceIndex + 2);
                             if ((uint)(low - 0xDC00) > 0x3FFu)
-                                throw new FormatException("Invalid low surrogate in JSON string");
+                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
 
                             sourceIndex += 6;
                             destination[destinationIndex++] = (char)codeUnit;
@@ -672,7 +677,7 @@ namespace LuminPack.Core
                         }
                         else if ((uint)(codeUnit - 0xDC00) <= 0x3FFu)
                         {
-                            throw new FormatException("Unexpected low surrogate in JSON string");
+                            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
                         }
                         else
                         {
@@ -682,7 +687,8 @@ namespace LuminPack.Core
                         break;
                     }
                     default:
-                        throw new FormatException("Invalid JSON escape sequence");
+                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON escape sequence");
+                        break;
                 }
             }
 
@@ -693,14 +699,14 @@ namespace LuminPack.Core
         private static int ParseHex4(ReadOnlySpan<byte> source, int index)
         {
             if (index < 0 || source.Length - index < 4)
-                throw new FormatException("Incomplete Unicode escape sequence");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Incomplete Unicode escape sequence");
 
             int result = 0;
             for (int i = 0; i < 4; i++)
             {
                 int hex = HexValue(source[index + i]);
                 if (hex < 0)
-                    throw new FormatException("Invalid Unicode escape sequence");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid Unicode escape sequence");
                 result = (result << 4) | hex;
             }
             return result;
@@ -710,14 +716,14 @@ namespace LuminPack.Core
         private static int ParseHex4(ReadOnlySpan<char> source, int index)
         {
             if (index < 0 || source.Length - index < 4)
-                throw new FormatException("Incomplete Unicode escape sequence");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Incomplete Unicode escape sequence");
 
             int result = 0;
             for (int i = 0; i < 4; i++)
             {
                 int hex = HexValue(source[index + i]);
                 if (hex < 0)
-                    throw new FormatException("Invalid Unicode escape sequence");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid Unicode escape sequence");
                 result = (result << 4) | hex;
             }
             return result;
@@ -798,7 +804,8 @@ namespace LuminPack.Core
                 return true;
             }
             
-            throw new InvalidOperationException("Expected JSON object");
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected JSON object");
+            return false;
         }
         
         #endregion
@@ -809,7 +816,7 @@ namespace LuminPack.Core
         public float ReadNextFloatValue()
         {
             if (!Read() || CurrentTokenType != JsonTokenType.Number)
-                throw new FormatException("Expected a number in JSON array");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Expected a number in JSON array");
             return ReadFloat();
         }
 
@@ -817,14 +824,14 @@ namespace LuminPack.Core
         public void ConsumeArrayEnd()
         {
             if (!Read() || CurrentTokenType != JsonTokenType.ArrayEnd)
-                throw new FormatException("Expected the end of a JSON array");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Expected the end of a JSON array");
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadInt()
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                throw new InvalidOperationException("Expected number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             
             if (SerializeStringAsUtf8)
             {
@@ -864,7 +871,7 @@ namespace LuminPack.Core
                 _currentIndex = isNegative ? (start - 1) : start;
                 var numberSpan = ReadNumberSpan();
                 if (!Utf8Parser.TryParse(numberSpan, out int result, out int consumed) || consumed != numberSpan.Length)
-                    throw new FormatException("Invalid JSON integer");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON integer");
                 return result;
             }
             else
@@ -912,7 +919,7 @@ namespace LuminPack.Core
                 _currentIndex = isNegative ? (start - 2) : start;
                 var numberChars = ReadNumberChars();
                 if (!int.TryParse(numberChars, out int result))
-                    throw new FormatException("Invalid JSON integer");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON integer");
                 return result;
             }
         }
@@ -921,7 +928,7 @@ namespace LuminPack.Core
         public uint ReadUInt()
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                throw new InvalidOperationException("Expected number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             
             if (SerializeStringAsUtf8)
             {
@@ -952,7 +959,7 @@ namespace LuminPack.Core
                 
                 var numberSpan = ReadNumberSpan();
                 if (!Utf8Parser.TryParse(numberSpan, out uint value, out int consumed) || consumed != numberSpan.Length)
-                    throw new FormatException("Invalid JSON unsigned integer");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON unsigned integer");
                 return value;
             }
             else
@@ -987,7 +994,7 @@ namespace LuminPack.Core
                 
                 var numberChars = ReadNumberChars();
                 if (!uint.TryParse(numberChars, out uint value))
-                    throw new FormatException("Invalid JSON unsigned integer");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON unsigned integer");
                 return value;
             }
         }
@@ -996,20 +1003,20 @@ namespace LuminPack.Core
         public byte ReadByte()
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                throw new InvalidOperationException("Expected number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             
             if (SerializeStringAsUtf8)
             {
                 var numberSpan = ReadNumberSpan();
                 if (!Utf8Parser.TryParse(numberSpan, out byte value, out int consumed) || consumed != numberSpan.Length)
-                    throw new FormatException("Invalid JSON byte");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON byte");
                 return value;
             }
             else
             {
                 var numberChars = ReadNumberChars();
                 if (!byte.TryParse(numberChars, out byte value))
-                    throw new FormatException("Invalid JSON byte");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON byte");
                 return value;
             }
         }
@@ -1018,20 +1025,20 @@ namespace LuminPack.Core
         public sbyte ReadSByte()
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                throw new InvalidOperationException("Expected number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             
             if (SerializeStringAsUtf8)
             {
                 var numberSpan = ReadNumberSpan();
                 if (!Utf8Parser.TryParse(numberSpan, out sbyte value, out int consumed) || consumed != numberSpan.Length)
-                    throw new FormatException("Invalid JSON signed byte");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON signed byte");
                 return value;
             }
             else
             {
                 var numberChars = ReadNumberChars();
                 if (!sbyte.TryParse(numberChars, out sbyte value))
-                    throw new FormatException("Invalid JSON signed byte");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON signed byte");
                 return value;
             }
         }
@@ -1040,20 +1047,20 @@ namespace LuminPack.Core
         public short ReadShort()
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                throw new InvalidOperationException("Expected number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             
             if (SerializeStringAsUtf8)
             {
                 var numberSpan = ReadNumberSpan();
                 if (!Utf8Parser.TryParse(numberSpan, out short value, out int consumed) || consumed != numberSpan.Length)
-                    throw new FormatException("Invalid JSON short integer");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON short integer");
                 return value;
             }
             else
             {
                 var numberChars = ReadNumberChars();
                 if (!short.TryParse(numberChars, out short value))
-                    throw new FormatException("Invalid JSON short integer");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON short integer");
                 return value;
             }
         }
@@ -1062,20 +1069,20 @@ namespace LuminPack.Core
         public ushort ReadUShort()
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                throw new InvalidOperationException("Expected number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             
             if (SerializeStringAsUtf8)
             {
                 var numberSpan = ReadNumberSpan();
                 if (!Utf8Parser.TryParse(numberSpan, out ushort value, out int consumed) || consumed != numberSpan.Length)
-                    throw new FormatException("Invalid JSON unsigned short integer");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON unsigned short integer");
                 return value;
             }
             else
             {
                 var numberChars = ReadNumberChars();
                 if (!ushort.TryParse(numberChars, out ushort value))
-                    throw new FormatException("Invalid JSON unsigned short integer");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON unsigned short integer");
                 return value;
             }
         }
@@ -1084,20 +1091,20 @@ namespace LuminPack.Core
         public long ReadLong()
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                throw new InvalidOperationException("Expected number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             
             if (SerializeStringAsUtf8)
             {
                 var numberSpan = ReadNumberSpan();
                 if (!Utf8Parser.TryParse(numberSpan, out long value, out int consumed) || consumed != numberSpan.Length)
-                    throw new FormatException("Invalid JSON long integer");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON long integer");
                 return value;
             }
             else
             {
                 var numberChars = ReadNumberChars();
                 if (!long.TryParse(numberChars, out long value))
-                    throw new FormatException("Invalid JSON long integer");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON long integer");
                 return value;
             }
         }
@@ -1106,20 +1113,20 @@ namespace LuminPack.Core
         public ulong ReadULong()
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                throw new InvalidOperationException("Expected number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             
             if (SerializeStringAsUtf8)
             {
                 var numberSpan = ReadNumberSpan();
                 if (!Utf8Parser.TryParse(numberSpan, out ulong value, out int consumed) || consumed != numberSpan.Length)
-                    throw new FormatException("Invalid JSON unsigned long integer");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON unsigned long integer");
                 return value;
             }
             else
             {
                 var numberChars = ReadNumberChars();
                 if (!ulong.TryParse(numberChars, out ulong value))
-                    throw new FormatException("Invalid JSON unsigned long integer");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON unsigned long integer");
                 return value;
             }
         }
@@ -1128,7 +1135,7 @@ namespace LuminPack.Core
         public float ReadFloat()
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                throw new InvalidOperationException("Expected number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             
             if (SerializeStringAsUtf8)
             {
@@ -1146,7 +1153,7 @@ namespace LuminPack.Core
         public double ReadDouble()
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                throw new InvalidOperationException("Expected number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             
             if (SerializeStringAsUtf8)
             {
@@ -1366,7 +1373,7 @@ namespace LuminPack.Core
         private static float FallbackParseFloatUtf8(ReadOnlySpan<byte> span)
         {
             if (!Utf8Parser.TryParse(span, out float v, out int consumed) || consumed != span.Length)
-                throw new FormatException("Invalid JSON floating-point number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
             return v;
         }
         
@@ -1375,7 +1382,7 @@ namespace LuminPack.Core
         {
             if (!float.TryParse(chars, System.Globalization.NumberStyles.Float,
                     System.Globalization.NumberFormatInfo.InvariantInfo, out float v))
-                throw new FormatException("Invalid JSON floating-point number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
             return v;
         }
         
@@ -1383,7 +1390,7 @@ namespace LuminPack.Core
         private static double FallbackParseDoubleUtf8(ReadOnlySpan<byte> span)
         {
             if (!Utf8Parser.TryParse(span, out double v, out int consumed) || consumed != span.Length)
-                throw new FormatException("Invalid JSON floating-point number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
             return v;
         }
         
@@ -1392,7 +1399,7 @@ namespace LuminPack.Core
         {
             if (!double.TryParse(chars, System.Globalization.NumberStyles.Float,
                     System.Globalization.NumberFormatInfo.InvariantInfo, out double v))
-                throw new FormatException("Invalid JSON floating-point number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
             return v;
         }
         
@@ -1400,13 +1407,13 @@ namespace LuminPack.Core
         public decimal ReadDecimal()
         {
             if (CurrentTokenType != JsonTokenType.Number)
-                throw new InvalidOperationException("Expected number");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
             
             if (SerializeStringAsUtf8)
             {
                 var numberSpan = ReadNumberSpan();
                 if (!Utf8Parser.TryParse(numberSpan, out decimal value, out int consumed) || consumed != numberSpan.Length)
-                    throw new FormatException("Invalid JSON decimal number");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON decimal number");
                 return value;
             }
             else
@@ -1414,7 +1421,7 @@ namespace LuminPack.Core
                 var numberChars = ReadNumberChars();
                 if (!decimal.TryParse(numberChars, System.Globalization.NumberStyles.Float,
                         System.Globalization.NumberFormatInfo.InvariantInfo, out decimal value))
-                    throw new FormatException("Invalid JSON decimal number");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON decimal number");
                 return value;
             }
         }
@@ -1453,7 +1460,8 @@ namespace LuminPack.Core
             else if (CurrentTokenType == JsonTokenType.False)
                 return false;
             
-            throw new InvalidOperationException("Current token is not a boolean");
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Current token is not a boolean");
+            return false;
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1610,7 +1618,8 @@ namespace LuminPack.Core
                 }
             }
             
-            throw new FormatException("Invalid boolean value");
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid boolean value");
+            return false;
         }
         
         private bool ReadNull()
@@ -1645,7 +1654,8 @@ namespace LuminPack.Core
                 }
             }
             
-            throw new FormatException("Invalid null value");
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid null value");
+            return false;
         }
         
         #endregion

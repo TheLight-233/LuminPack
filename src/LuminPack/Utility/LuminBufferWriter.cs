@@ -144,8 +144,10 @@ public static class LuminBufferWriterPool
 /// </remarks>
 public sealed class LuminBufferWriter : IDisposable
 {
-    
-    const int InitialBufferSize = 262144; // 256K(32768, 65536, 131072, 262144)
+    internal const int InitialBufferSize = 32 * 1024;
+    internal const int GrowthNumerator = 3;
+    internal const int GrowthDenominator = 2;
+    private const int MinimumReservedHeadroom = 256;
     
     private BufferSegment _buffer;
 
@@ -214,12 +216,10 @@ public sealed class LuminBufferWriter : IDisposable
     public Memory<byte> GetMemory(int index = 0)
     {
         if (_buffer.IsNull)
-        {
-            _buffer = AllocatedBuffer();
-        }
+            AllocateInitialBuffer();
 
         if ((uint)index > (uint)CurrentIndex)
-            throw new ArgumentOutOfRangeException(nameof(index));
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(index));
 
         return new Memory<byte>(GetSpan().Slice(index).ToArray());
     }
@@ -240,17 +240,15 @@ public sealed class LuminBufferWriter : IDisposable
     public Span<byte> GetFullSpan()
     {
         if (_buffer.IsNull)
-        {
-            _buffer = AllocatedBuffer();
-        }
-        
+            AllocateInitialBuffer();
+
         return _buffer.WrittenBuffer;
     }
 
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private unsafe BufferSegment AllocatedBuffer()
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void AllocateInitialBuffer()
     {
-        return new BufferSegment(InitialBufferSize);
+        _buffer = new BufferSegment(InitialBufferSize);
     }
 
     /// <summary>Associates the native buffer with an externally managed write index.</summary>
@@ -369,7 +367,7 @@ public sealed class LuminBufferWriter : IDisposable
     public int CompressToAndReset(LuminBufferWriter destination)
     {
         if (ReferenceEquals(this, destination))
-            throw new ArgumentException("Source and destination writers must be different instances.", nameof(destination));
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException("Source and destination writers must be different instances.", nameof(destination));
         try
         {
             return LuminCompressor.Compress(this, destination);
@@ -396,7 +394,7 @@ public sealed class LuminBufferWriter : IDisposable
     public int DecompressToAndReset(LuminBufferWriter destination)
     {
         if (ReferenceEquals(this, destination))
-            throw new ArgumentException("Source and destination writers must be different instances.", nameof(destination));
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException("Source and destination writers must be different instances.", nameof(destination));
         try
         {
             return LuminCompressor.Decompress(this, destination);
@@ -507,18 +505,39 @@ public sealed class LuminBufferWriter : IDisposable
     /// </summary>
     internal void EnsureCapacity(int minCapacity)
     {
+        if (minCapacity < 0)
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(minCapacity));
+
         if (_buffer.IsNull)
-            _buffer = new BufferSegment(Math.Max(minCapacity, InitialBufferSize));
+            _buffer = new BufferSegment(CalculateExpandedCapacity(0, minCapacity, reserveWriteHeadroom: true));
         else if (_buffer.TotalLength < minCapacity)
         {
-            // Variable-size values reserve once before their bulk write. Keep enough
-            // headroom that the normal 87.5% post-write check does not immediately
-            // resize the same buffer a second time.
-            long doubled = (long)_buffer.TotalLength << 1;
-            long requiredWithHeadroom = minCapacity + ((long)minCapacity >> 2);
-            int newCapacity = (int)Math.Min(int.MaxValue, Math.Max(doubled, requiredWithHeadroom));
+            int newCapacity = CalculateExpandedCapacity(
+                _buffer.TotalLength,
+                minCapacity,
+                reserveWriteHeadroom: true);
             _buffer.Resize(newCapacity);
         }
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static int CalculateExpandedCapacity(
+        int currentCapacity,
+        int minCapacity,
+        bool reserveWriteHeadroom)
+    {
+        long geometricGrowth = (long)currentCapacity * GrowthNumerator / GrowthDenominator;
+        long requiredCapacity = minCapacity;
+
+        if (reserveWriteHeadroom && minCapacity > currentCapacity)
+        {
+            // A one-sixth reserve keeps the requested payload below the 87.5% check
+            // threshold without the 25% slack previously retained by bulk writes.
+            requiredCapacity += Math.Max((long)minCapacity / 6, MinimumReservedHeadroom);
+        }
+
+        long capacity = Math.Max(InitialBufferSize, Math.Max(geometricGrowth, requiredCapacity));
+        return capacity >= int.MaxValue ? int.MaxValue : (int)capacity;
     }
 
     /// <summary>
@@ -570,27 +589,37 @@ internal unsafe struct BufferSegment : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Check(ref LuminPackWriter writer)
     {
-        
         if (writer._currentIndex > _resizeThreshold) // 87.5% 阈值
-        {
-            Resize(_totalLength << 1); // 双倍扩容
-            writer.FlushBuffer();
-            _resizeThreshold = _totalLength - (_totalLength >> 3);
-        }
-        
+            ResizeAndRefresh(ref writer);
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Check(ref LuminPackJsonWriter writer)
     {
-        
         if (writer._currentIndex > _resizeThreshold) // 87.5% 阈值
-        {
-            Resize(_totalLength << 1); // 双倍扩容
-            writer.FlushBuffer();
-            _resizeThreshold = _totalLength - (_totalLength >> 3);
-        }
-        
+            ResizeAndRefresh(ref writer);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ResizeAndRefresh(ref LuminPackWriter writer)
+    {
+        Resize(LuminBufferWriter.CalculateExpandedCapacity(
+            _totalLength,
+            _totalLength,
+            reserveWriteHeadroom: false));
+        writer.FlushBuffer();
+        _resizeThreshold = _totalLength - (_totalLength >> 3);
+    }
+
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void ResizeAndRefresh(ref LuminPackJsonWriter writer)
+    {
+        Resize(LuminBufferWriter.CalculateExpandedCapacity(
+            _totalLength,
+            _totalLength,
+            reserveWriteHeadroom: false));
+        writer.FlushBuffer();
+        _resizeThreshold = _totalLength - (_totalLength >> 3);
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]

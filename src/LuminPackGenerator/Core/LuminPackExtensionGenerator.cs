@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using LuminPack.SourceGenerator;
-using LuminPack.SourceGenerator.Formatter;
+using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.Code.Core;
@@ -254,7 +254,7 @@ namespace LuminPack
 
         public static T DeserializeJson<T>(string buffer, LuminPackSerializerOption? options = null)
         {
-            if (buffer is null) throw new ArgumentNullException(nameof(buffer));
+            if (buffer is null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(buffer));
             return DeserializeJson<T>(buffer.AsSpan(), options);
         }
 
@@ -294,7 +294,7 @@ namespace LuminPack
             try
             {
                 var reader = new LuminPackJsonReader(ref buffer, state);
-                if (!reader.Read()) throw new FormatException("JSON input does not contain a value");
+                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value");
                 reader.ReadValue(ref value);
                 reader.EnsureEndOfDocument();
                 return reader.CurrentIndex;
@@ -310,7 +310,7 @@ namespace LuminPack
             {
                 var bytes = MemoryMarshal.Cast<char, byte>(buffer);
                 var reader = new LuminPackJsonReader(ref bytes, state);
-                if (!reader.Read()) throw new FormatException("JSON input does not contain a value");
+                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value");
                 reader.ReadValue(ref value);
                 reader.EnsureEndOfDocument();
                 return reader.CurrentIndex;
@@ -326,7 +326,7 @@ namespace LuminPack
             {
                 var bytes = buffer.GetSpan();
                 var reader = new LuminPackJsonReader(ref bytes, state);
-                if (!reader.Read()) throw new FormatException("JSON input does not contain a value");
+                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value");
                 reader.ReadValue(ref value);
                 reader.EnsureEndOfDocument();
                 return value;
@@ -485,7 +485,7 @@ namespace LuminPack
 			return SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly);
 		}
 
-		var formatter = FormatterDiscovery.GetFormatter(FormatterTypeName.Get(type));
+		var formatter = CodeEmitterRegistry.GetEmitter(FormatterTypeName.Get(type));
 		return json
 			? formatter.WriteJson is not null && formatter.ReadJson is not null
 			: formatter.Write is not null && formatter.Read is not null;
@@ -504,7 +504,7 @@ namespace LuminPack
 			return SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly);
 		}
 
-		return FormatterEvaluatorDiscovery.GetFormatter(FormatterTypeName.Get(type)) is not null;
+		return EvaluatorEmitterRegistry.GetEmitter(FormatterTypeName.Get(type)) is not null;
 	}
 
 	private static string GenerateSerializerOverloads(Compilation compilation, IEnumerable<ITypeSymbol> types)
@@ -627,7 +627,7 @@ namespace LuminPack
 
 		sb.AppendLine("        public static int DeserializeJson(string buffer, ref " + typeName + " value, LuminPackSerializerOption? options = null)");
 		sb.AppendLine("        {");
-		sb.AppendLine("            if (buffer is null) throw new ArgumentNullException(nameof(buffer));");
+		sb.AppendLine("            if (buffer is null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(buffer));");
 		sb.AppendLine("            return DeserializeJson(buffer.AsSpan(), ref value, options);");
 		sb.AppendLine("        }");
 		sb.AppendLine();
@@ -639,7 +639,7 @@ namespace LuminPack
 		sb.AppendLine("            try");
 		sb.AppendLine("            {");
 		sb.AppendLine("                var reader = new LuminPackJsonReader(ref buffer, state);");
-		sb.AppendLine("                if (!reader.Read()) throw new FormatException(\"JSON input does not contain a value\");");
+		sb.AppendLine("                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\");");
 		sb.AppendLine("                " + extensionType + ".ReadValue(ref reader, ref value);");
 		sb.AppendLine("                reader.EnsureEndOfDocument();");
 		sb.AppendLine("                return reader.CurrentIndex;");
@@ -667,7 +667,7 @@ namespace LuminPack
 		sb.AppendLine("            {");
 		sb.AppendLine("                var bytes = MemoryMarshal.Cast<char, byte>(buffer);");
 		sb.AppendLine("                var reader = new LuminPackJsonReader(ref bytes, state);");
-		sb.AppendLine("                if (!reader.Read()) throw new FormatException(\"JSON input does not contain a value\");");
+		sb.AppendLine("                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\");");
 		sb.AppendLine("                " + extensionType + ".ReadValue(ref reader, ref value);");
 		sb.AppendLine("                reader.EnsureEndOfDocument();");
 		sb.AppendLine("                return reader.CurrentIndex;");
@@ -840,7 +840,7 @@ namespace LuminPack
 			return true;
 		}
 
-		var formatter = FormatterDiscovery.GetFormatter(FormatterTypeName.Get(type));
+		var formatter = CodeEmitterRegistry.GetEmitter(FormatterTypeName.Get(type));
 		bool registered = formatter.Write is not null || formatter.Read is not null ||
 			formatter.WriteJson is not null || formatter.ReadJson is not null;
 		if (!registered)
@@ -873,12 +873,12 @@ namespace LuminPack
 			}
 
 			(Action<LuminLocalFieldData, StringBuilder> Serialize, Action<LuminLocalFieldData, StringBuilder> Deserialize) formatter =
-				(EnumFormatter.GenerateSerializeCode, EnumFormatter.GenerateDeserializeCode);
+				(EnumEmitter.GenerateSerializeCode, EnumEmitter.GenerateDeserializeCode);
 			(Action<LuminLocalFieldData, StringBuilder> Serialize, Action<LuminLocalFieldData, StringBuilder> Deserialize) jsonFormatter =
-				(EnumFormatter.GenerateJsonSerializeCode, EnumFormatter.GenerateJsonDeserializeCode);
+				(EnumEmitter.GenerateJsonSerializeCode, EnumEmitter.GenerateJsonDeserializeCode);
 			AppendBinaryFormatterExtension(sb, typeName, field, formatter, metaInfo);
 			AppendJsonFormatterExtension(sb, typeName, field, jsonFormatter, metaInfo);
-			AppendCalculateFormatterExtension(sb, typeName, field, EnumFormatter.GenerateCalculateOffsetCode, metaInfo);
+			AppendCalculateFormatterExtension(sb, typeName, field, EnumEmitter.GenerateCalculateOffsetCode, metaInfo);
 			return;
 		}
 
@@ -890,16 +890,16 @@ namespace LuminPack
 			}
 
 			(Action<LuminLocalFieldData, StringBuilder> Serialize, Action<LuminLocalFieldData, StringBuilder> Deserialize) formatter =
-				(NullableFormatter.GenerateSerializeCode, NullableFormatter.GenerateDeserializeCode);
+				(NullableEmitter.GenerateSerializeCode, NullableEmitter.GenerateDeserializeCode);
 			(Action<LuminLocalFieldData, StringBuilder> Serialize, Action<LuminLocalFieldData, StringBuilder> Deserialize) jsonFormatter =
-				(NullableFormatter.GenerateJsonSerializeCode, NullableFormatter.GenerateJsonDeserializeCode);
+				(NullableEmitter.GenerateJsonSerializeCode, NullableEmitter.GenerateJsonDeserializeCode);
 			AppendBinaryFormatterExtension(sb, typeName, field, formatter, metaInfo);
 			AppendJsonFormatterExtension(sb, typeName, field, jsonFormatter, metaInfo);
-			AppendCalculateFormatterExtension(sb, typeName, field, NullableFormatter.GenerateCalculateOffsetCode, metaInfo);
+			AppendCalculateFormatterExtension(sb, typeName, field, NullableEmitter.GenerateCalculateOffsetCode, metaInfo);
 			return;
 		}
 
-		var staticFormatter = FormatterDiscovery.GetFormatter(typeName);
+		var staticFormatter = CodeEmitterRegistry.GetEmitter(typeName);
 		if ((staticFormatter.Write is null || staticFormatter.Read is null) &&
 			(staticFormatter.WriteJson is null || staticFormatter.ReadJson is null))
 		{
@@ -914,7 +914,7 @@ namespace LuminPack
 		if (staticFormatter.Write is not null && staticFormatter.Read is not null)
 		{
 			AppendBinaryFormatterExtension(sb, typeName, field, (staticFormatter.Write, staticFormatter.Read), metaInfo);
-			var compressed = FormatterDiscovery.GetCompressFormatter(typeName);
+			var compressed = CodeEmitterRegistry.GetCompressEmitter(typeName);
 			if (compressed.Item1 is not null && compressed.Item2 is not null)
 			{
 				GenerateWithCompressExtension(sb, typeName, field, compressed, metaInfo);
@@ -927,6 +927,10 @@ namespace LuminPack
 			{
 				GenerateFreshDictionaryDeserializeExtension(sb, typeName, field, metaInfo);
 			}
+			else if (IsExactManagedArrayType(field.TypeSymbol))
+			{
+				GenerateFreshArrayDeserializeExtension(sb, typeName, field, metaInfo);
+			}
 		}
 
 		if (staticFormatter.WriteJson is not null && staticFormatter.ReadJson is not null)
@@ -934,7 +938,7 @@ namespace LuminPack
 			AppendJsonFormatterExtension(sb, typeName, field, (staticFormatter.WriteJson, staticFormatter.ReadJson), metaInfo);
 		}
 
-		Action<LuminLocalFieldData, StringBuilder> evaluatorFormatter = FormatterEvaluatorDiscovery.GetFormatter(typeName);
+		Action<LuminLocalFieldData, StringBuilder> evaluatorFormatter = EvaluatorEmitterRegistry.GetEmitter(typeName);
 		if (evaluatorFormatter is not null)
 		{
 			AppendCalculateFormatterExtension(sb, typeName, field, evaluatorFormatter, metaInfo);
@@ -977,7 +981,9 @@ namespace LuminPack
 		MetaInfo metaInfo)
 	{
 		sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
-		sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+		sb.AppendLine(ShouldAggressivelyInlineBinaryWrite(field)
+			? "        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]"
+			: "        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]");
 		sb.AppendLine(metaInfo.IsNet8
 			? "        public static void WriteValue(ref this LuminPackWriter writer, scoped in " + typeName + " value)"
 			: "        public static void WriteValue(ref this LuminPackWriter writer, in " + typeName + " value)");
@@ -994,6 +1000,41 @@ namespace LuminPack
 		formatter.Deserialize(field, sb);
 		sb.AppendLine("        }");
 		sb.AppendLine();
+	}
+
+	private static bool ShouldAggressivelyInlineBinaryWrite(LuminLocalFieldData field)
+	{
+		if (field.TypeSymbol is IArrayTypeSymbol array)
+		{
+			if (array.Rank != 1)
+			{
+				return true;
+			}
+
+			// Keep the closed unmanaged bulk copy in its caller. Managed arrays contain
+			// a loop plus null/growth slow paths, which are cheaper behind one call.
+			return array.ElementType.IsUnmanagedType;
+		}
+
+		if (field.TypeSymbol is not INamedTypeSymbol named)
+		{
+			return true;
+		}
+
+		string namespaceName = named.ContainingNamespace?.ToDisplayString() ?? string.Empty;
+		if (namespaceName == "System.Collections.Generic" && named.Name == "Dictionary" &&
+			named.TypeArguments.Length == 2)
+		{
+			return false;
+		}
+
+		if (namespaceName == "System.Collections.Generic" && named.Name == "List" &&
+			named.TypeArguments.Length == 1)
+		{
+			return named.TypeArguments[0].IsUnmanagedType;
+		}
+
+		return true;
 	}
 
 	private static void AppendJsonFormatterExtension(StringBuilder sb, string typeName, LuminLocalFieldData field,
@@ -1486,7 +1527,7 @@ namespace LuminPack
 			: "        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]");
 		sb.AppendLine(metaInfo.IsNet8 ? ("        public static void ReadFreshValue(ref this LuminPackReader reader, scoped ref " + typeName + " value)") : ("        public static void ReadFreshValue(ref this LuminPackReader reader, ref " + typeName + " value)"));
 		sb.AppendLine("        {");
-		ListFormatter.GenerateFreshDeserializeCode(localData, sb);
+		ListEmitter.GenerateFreshDeserializeCode(localData, sb);
 		sb.AppendLine("        }");
 		sb.AppendLine();
 	}
@@ -1510,9 +1551,26 @@ namespace LuminPack
 		sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]");
 		sb.AppendLine(metaInfo.IsNet8 ? ("        public static void ReadFreshValue(ref this LuminPackReader reader, scoped ref " + typeName + " value)") : ("        public static void ReadFreshValue(ref this LuminPackReader reader, ref " + typeName + " value)"));
 		sb.AppendLine("        {");
-		DictionaryFormatter.GenerateFreshDeserializeCode(localData, sb);
+		DictionaryEmitter.GenerateFreshDeserializeCode(localData, sb);
 		sb.AppendLine("        }");
 		sb.AppendLine();
+	}
+
+	private static void GenerateFreshArrayDeserializeExtension(StringBuilder sb, string typeName, LuminLocalFieldData localData, MetaInfo metaInfo)
+	{
+		sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+		sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]");
+		sb.AppendLine(metaInfo.IsNet8 ? ("        public static void ReadFreshValue(ref this LuminPackReader reader, scoped ref " + typeName + " value)") : ("        public static void ReadFreshValue(ref this LuminPackReader reader, ref " + typeName + " value)"));
+		sb.AppendLine("        {");
+		ArrayEmitter.GenerateFreshDeserializeCode(localData, sb);
+		sb.AppendLine("        }");
+		sb.AppendLine();
+	}
+
+	private static bool IsExactManagedArrayType(ITypeSymbol typeSymbol)
+	{
+		return typeSymbol is IArrayTypeSymbol { Rank: 1 } array &&
+		       !array.ElementType.IsUnmanagedType && !ContainsTypeParameter(array.ElementType);
 	}
 
 	private static bool IsExactDictionaryType(string typeName)
@@ -1534,7 +1592,7 @@ namespace LuminPack
 		{
 			return typeName.Substring(0, typeName.Length - 2);
 		}
-		string firstGeneric = FormatterDiscovery.GetFirstGeneric(typeName);
+		string firstGeneric = CodeEmitterRegistry.GetFirstGeneric(typeName);
 		if (!string.IsNullOrEmpty(firstGeneric) && (typeName.Contains("List<") || typeName.Contains("List`")))
 		{
 			return firstGeneric;

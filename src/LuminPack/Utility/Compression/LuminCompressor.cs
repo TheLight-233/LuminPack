@@ -794,15 +794,15 @@ public static class LuminCompressor
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowInsufficientBuffer()
-        => throw new ArgumentException("Destination buffer is too small for LuminZ operation.");
+        => global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException("Destination buffer is too small for LuminZ operation.");
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowSourceTooLarge()
-        => throw new ArgumentOutOfRangeException(
+        => global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(
             "sourceLength",
             "Source is too large to represent a bounded LuminZ output in a single Span<byte>.");
 
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowInvalidData()
-        => throw new InvalidDataException("LuminZ: compressed data is invalid or corrupted.");
+        => global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidDataException("LuminZ: compressed data is invalid or corrupted.");
 }

@@ -16,7 +16,6 @@ using System.Threading.Tasks;
 using LuminPack.Attribute;
 using LuminPack.Code;
 using LuminPack.Core;
-using LuminPack.Interface;
 using LuminPack.Option;
 using LuminPack.Utility;
 using static LuminPack.Code.LuminPackMarshal;
@@ -463,7 +462,7 @@ namespace LuminPack
             {
                 var reader = new LuminPackJsonReader(bufferWriter);
                 if (!reader.Read())
-                    throw new FormatException("JSON input does not contain a value");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value");
                 reader.ReadValue(ref value);
                 reader.EnsureEndOfDocument();
                 return reader.CurrentIndex;
@@ -490,7 +489,7 @@ namespace LuminPack
                 var span = MemoryMarshal.Cast<char, byte>(buffer);
                 var reader = new LuminPackJsonReader(ref span, state);
                 if (!reader.Read())
-                    throw new FormatException("JSON input does not contain a value");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value");
                 reader.ReadValue(ref value);
                 reader.EnsureEndOfDocument();
            
@@ -517,7 +516,7 @@ namespace LuminPack
             {
                 var reader = new LuminPackJsonReader(ref buffer, state);
                 if (!reader.Read())
-                    throw new FormatException("JSON input does not contain a value");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value");
                 reader.ReadValue(ref value);
                 reader.EnsureEndOfDocument();
            
@@ -865,7 +864,7 @@ namespace LuminPack.Core
         public virtual object? GetData()
         {
             if (typeof(T).IsValueType) 
-                throw new ArgumentException("T must not be a value type!");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException("T must not be a value type!");
             return DataContainer;
         }
 

@@ -14,7 +14,6 @@ using System.Numerics;
 using System.Text.Unicode;
 #endif
 
-using LuminPack.Interface;
 using LuminPack.Option;
 using LuminPack.Code;
 using LuminPack.Internal;
@@ -383,7 +382,7 @@ namespace LuminPack.Core
                 }
 
                 if (length < 0)
-                    throw new InvalidDataException("String token terminator was not found.");
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidDataException("String token terminator was not found.");
                 return;
             }
 

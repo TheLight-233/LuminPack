@@ -822,7 +822,7 @@ namespace LuminPack.SourceGenerator
                 INamedTypeSymbol originalSymbol = namedType.OriginalDefinition;
                 string metadataName = $"{originalSymbol.ContainingNamespace}.{originalSymbol.MetadataName}";
                 
-                if (FormatterTypeMap.StaticFormatterTypes.Contains(metadataName))
+                if (CodeEmitterTypeCatalog.SupportedMetadataNames.Contains(metadataName))
                 {
                     field.Type = LuminFiledType.Other;
                     return; 
@@ -891,7 +891,7 @@ namespace LuminPack.SourceGenerator
                                 field.Type = LuminFiledType.List;
                                 ProcessGenericArguments(namedType.TypeArguments, field, genericParameters);
                             } 
-                            else if (FormatterTypeMap.StaticFormatterTypes.Contains(metadataName))
+                            else if (CodeEmitterTypeCatalog.SupportedMetadataNames.Contains(metadataName))
                             {
                                 field.Type = LuminFiledType.Other;
                             }
@@ -947,7 +947,7 @@ namespace LuminPack.SourceGenerator
                     INamedTypeSymbol originalSymbol = namedTypeArg.OriginalDefinition;
                     string metadataName = $"{originalSymbol.ContainingNamespace}.{originalSymbol.MetadataName}";
                     
-                    if (FormatterTypeMap.StaticFormatterTypes.Contains(metadataName))
+                    if (CodeEmitterTypeCatalog.SupportedMetadataNames.Contains(metadataName))
                     {
                         field.Type = LuminFiledType.Other;
                         
@@ -1010,7 +1010,7 @@ namespace LuminPack.SourceGenerator
                 INamedTypeSymbol originalSymbol = elementNamedType.OriginalDefinition;
                 string metadataName = $"{originalSymbol.ContainingNamespace}.{originalSymbol.MetadataName}";
                 
-                if (FormatterTypeMap.StaticFormatterTypes.Contains(metadataName))
+                if (CodeEmitterTypeCatalog.SupportedMetadataNames.Contains(metadataName))
                 {
                     field.Type = LuminFiledType.Other;
                     

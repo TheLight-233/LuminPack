@@ -6,7 +6,6 @@ using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
 using System.Text.Unicode;
 #endif
-using LuminPack.Interface;
 using LuminPack.Option;
 using LuminPack.Code;
 using LuminPack.Internal;
@@ -142,6 +141,12 @@ namespace LuminPack.Core
                 (uint)count <= (uint)(_bufferReference.Length - index))
                 return;
 
+            EnsureCapacitySlow(index, count);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void EnsureCapacitySlow(int index, int count)
+        {
             if (_writerBuffer is null)
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + count));
 
@@ -644,7 +649,7 @@ namespace LuminPack.Core
         /// </summary>
         /// <param name="value"></param>
         /// <returns>偏移量</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public int WriteString(string? value)
         {
             var mode = _stringSerializationMode;
@@ -663,7 +668,7 @@ namespace LuminPack.Core
         /// <param name="value"></param>
         /// <param name="length"></param>
         /// <returns>偏移量</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public void WriteString(string? value, int length)
         {
             var mode = _stringSerializationMode;
@@ -683,7 +688,7 @@ namespace LuminPack.Core
         /// <param name="index"></param>
         /// <param name="value"></param>
         /// <returns>偏移量</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public int WriteString(ref int index, string? value)
         {
             var mode = _stringSerializationMode;
@@ -703,7 +708,7 @@ namespace LuminPack.Core
         /// <param name="value"></param>
         /// <param name="length"></param>
         /// <returns>偏移量</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public void WriteString(ref int index, string? value, int length)
         {
             var mode = _stringSerializationMode;
@@ -723,7 +728,7 @@ namespace LuminPack.Core
         /// /// <param name="index"></param>
         /// <param name="value"></param>
         /// <returns>偏移量</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
         public int WriteString(ref int index, ReadOnlySpan<char> value)
         {
             var mode = _stringSerializationMode;

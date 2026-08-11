@@ -40,7 +40,7 @@ public static class TypeMetaChecker
     // scoped thread-local bag keeps the hot Add path allocation-free after setup,
     // while the completed bag is copied onto that transform's LuminDataInfo.
     internal static List<Diagnostic> _reportContext =>
-        _diagnosticContext ?? throw new InvalidOperationException("No active generator diagnostic scope.");
+        _diagnosticContext ?? LuminPackExceptionHelper.ThrowInvalidOperationException<List<Diagnostic>>("No active generator diagnostic scope.");
 
     internal static List<Diagnostic> CurrentDiagnostics => _reportContext;
 

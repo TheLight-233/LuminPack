@@ -1,6 +1,5 @@
 
 using System;
-using LuminPack.Enum;
 
 namespace LuminPack.Attribute;
 

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using LuminPack.SourceGenerator;
+using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.Code.Core;
@@ -69,10 +70,23 @@ public static class LuminPackCodeGenerator
 				}
 				if (luminFiledType2 == LuminFiledType.Struct)
 				{
-					string generatedTypeName = GetGeneratedTypeName(field);
-					sb.AppendLine(text + "if (!evaluator.IsReferenceOrContainsReferences<" + generatedTypeName + ">())");
-					sb.AppendLine(text + "    totalLength += Unsafe.SizeOf<" + generatedTypeName + ">() * " + fieldPath + ".Count;");
-					sb.AppendLine(text + "else");
+					ITypeSymbol elementType = EmitterTypeTraits.GetCollectionElementType(field.TypeSymbol);
+					string generatedTypeName = elementType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+						?? GetGeneratedTypeName(field);
+					if (EmitterTypeTraits.TryGetIsUnmanaged(elementType, out bool isUnmanaged))
+					{
+						if (isUnmanaged)
+						{
+							sb.AppendLine(text + "totalLength += Unsafe.SizeOf<" + generatedTypeName + ">() * " + fieldPath + ".Count;");
+							break;
+						}
+					}
+					else
+					{
+						sb.AppendLine(text + "if (!evaluator.IsReferenceOrContainsReferences<" + generatedTypeName + ">())");
+						sb.AppendLine(text + "    totalLength += Unsafe.SizeOf<" + generatedTypeName + ">() * " + fieldPath + ".Count;");
+						sb.AppendLine(text + "else");
+					}
 				}
 				sb.AppendLine(text + "for (int i" + text2 + " = 0; i" + text2 + " < " + fieldPath + ".Count; i" + text2 + "++)");
 				sb.AppendLine(text + "{");
@@ -201,10 +215,23 @@ public static class LuminPackCodeGenerator
 				}
 				if (luminFiledType == LuminFiledType.Struct)
 				{
-					string generatedTypeName = GetGeneratedTypeName(field);
-					sb.AppendLine(text + "if (!evaluator.IsReferenceOrContainsReferences<" + generatedTypeName + ">())");
-					sb.AppendLine(text + "    totalLength += Unsafe.SizeOf<" + generatedTypeName + ">() * " + fieldPath + ".Length;");
-					sb.AppendLine(text + "else");
+					ITypeSymbol elementType = EmitterTypeTraits.GetCollectionElementType(field.TypeSymbol);
+					string generatedTypeName = elementType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+						?? GetGeneratedTypeName(field);
+					if (EmitterTypeTraits.TryGetIsUnmanaged(elementType, out bool isUnmanaged))
+					{
+						if (isUnmanaged)
+						{
+							sb.AppendLine(text + "totalLength += Unsafe.SizeOf<" + generatedTypeName + ">() * " + fieldPath + ".Length;");
+							break;
+						}
+					}
+					else
+					{
+						sb.AppendLine(text + "if (!evaluator.IsReferenceOrContainsReferences<" + generatedTypeName + ">())");
+						sb.AppendLine(text + "    totalLength += Unsafe.SizeOf<" + generatedTypeName + ">() * " + fieldPath + ".Length;");
+						sb.AppendLine(text + "else");
+					}
 				}
 				sb.AppendLine(text + "for (int i" + text2 + " = 0; i" + text2 + " < " + fieldPath + ".Length; i" + text2 + "++)");
 				sb.AppendLine(text + "{");
@@ -1836,9 +1863,7 @@ public static class LuminPackCodeGenerator
 			return LuminFiledType.Enum;
 		default:
 		{
-			throw new InvalidOperationException();
-			LuminFiledType result = default(LuminFiledType);
-			return result;
+			return LuminPackExceptionHelper.ThrowInvalidOperationException<LuminFiledType>();
 		}
 		}
 	}
@@ -1847,14 +1872,14 @@ public static class LuminPackCodeGenerator
 	{
 		if (genericTypes.Count == 0)
 		{
-			throw new ArgumentException("Empty generic types");
+			LuminPackExceptionHelper.ThrowArgumentException("Empty generic types");
 		}
 		switch (genericTypes[0])
 		{
 		case LuminGenericsType.List:
 			if (genericTypes.Count < 2)
 			{
-				throw new ArgumentException("Insufficient generic parameters for List");
+				LuminPackExceptionHelper.ThrowArgumentException("Insufficient generic parameters for List");
 			}
 			return ConvertGenericsToFieldType(genericTypes.Skip(1).ToList());
 		case LuminGenericsType.Byte:
@@ -1893,9 +1918,7 @@ public static class LuminPackCodeGenerator
 			return LuminFiledType.Enum;
 		default:
 		{
-			throw new InvalidOperationException();
-			LuminFiledType result = default(LuminFiledType);
-			return result;
+			return LuminPackExceptionHelper.ThrowInvalidOperationException<LuminFiledType>();
 		}
 		}
 	}
@@ -1950,9 +1973,7 @@ public static class LuminPackCodeGenerator
 			return "double";
 		default:
 		{
-			throw new InvalidOperationException();
-			string result = default(string);
-			return result;
+			return LuminPackExceptionHelper.ThrowInvalidOperationException<string>();
 		}
 		}
 	}
@@ -2007,9 +2028,7 @@ public static class LuminPackCodeGenerator
 			return "0";
 		default:
 		{
-			throw new InvalidOperationException();
-			string result = default(string);
-			return result;
+			return LuminPackExceptionHelper.ThrowInvalidOperationException<string>();
 		}
 		}
 	}
@@ -2040,9 +2059,7 @@ public static class LuminPackCodeGenerator
 			return "8";
 		default:
 		{
-			throw new InvalidOperationException();
-			string result = default(string);
-			return result;
+			return LuminPackExceptionHelper.ThrowInvalidOperationException<string>();
 		}
 		}
 	}
@@ -2085,9 +2102,7 @@ public static class LuminPackCodeGenerator
 			return "4 + " + field.Name + "Count" + text + " * " + GetEnumFieldLength(field.EnumType);
 		default:
 		{
-			throw new InvalidOperationException();
-			string result = default(string);
-			return result;
+			return LuminPackExceptionHelper.ThrowInvalidOperationException<string>();
 		}
 		}
 	}
@@ -2096,7 +2111,7 @@ public static class LuminPackCodeGenerator
 	{
 		if (genericTypes.Count == 0)
 		{
-			throw new ArgumentException("Empty generic types");
+			LuminPackExceptionHelper.ThrowArgumentException("Empty generic types");
 		}
 		LuminGenericsType luminGenericsType = genericTypes.FirstOrDefault();
 		switch (luminGenericsType)
@@ -2169,9 +2184,7 @@ public static class LuminPackCodeGenerator
 			return true;
 		default:
 		{
-			throw new InvalidOperationException();
-			bool result = default(bool);
-			return result;
+			return LuminPackExceptionHelper.ThrowInvalidOperationException<bool>();
 		}
 		}
 	}
@@ -2220,9 +2233,7 @@ public static class LuminPackCodeGenerator
 			return false;
 		default:
 		{
-			throw new InvalidOperationException();
-			bool result = default(bool);
-			return result;
+			return LuminPackExceptionHelper.ThrowInvalidOperationException<bool>();
 		}
 		}
 	}
@@ -2302,9 +2313,27 @@ public static class LuminPackCodeGenerator
 
 	private static bool IsMergeableField(LuminDataField field)
 	{
-		if (!IsUnmanagedFiledType(field.Type) && (field.Type != LuminFiledType.Struct || !IsPureValueTypeStruct(field)) && !FormatterDiscovery.KnownValueTypes.Contains(field.TypeName))
+		// Unity's C# compiler does not accept Nullable<T> as an argument for
+		// `where T : unmanaged`, even when newer Roslyn versions report the
+		// closed nullable type as unmanaged. Keep nullable values on their
+		// dedicated formatter path instead of folding them into a constrained
+		// multi-value WriteUnmanaged/ReadUnmanaged call.
+		if (field.TypeSymbol is INamedTypeSymbol
+		    {
+			    OriginalDefinition.SpecialType: SpecialType.System_Nullable_T
+		    })
 		{
-			return FormatterDiscovery.KnownValueTypes.Contains("global::" + field.TypeName);
+			return false;
+		}
+
+		if (EmitterTypeTraits.TryGetIsUnmanaged(field.TypeSymbol, out bool isUnmanaged))
+		{
+			return isUnmanaged;
+		}
+
+		if (!IsUnmanagedFiledType(field.Type) && (field.Type != LuminFiledType.Struct || !IsPureValueTypeStruct(field)) && !CodeEmitterRegistry.KnownValueTypes.Contains(field.TypeName))
+		{
+			return CodeEmitterRegistry.KnownValueTypes.Contains("global::" + field.TypeName);
 		}
 		return true;
 	}
@@ -2846,7 +2875,6 @@ public static class LuminPackCodeGenerator
 			sb.AppendLine("            if (value is null)");
 			sb.AppendLine("            {");
 			sb.AppendLine("                writer.WriteNullObjectHeader();");
-			sb.AppendLine("                writer.Advance(1);");
 			sb.AppendLine("                return;");
 			sb.AppendLine("            }");
 		}
@@ -3079,6 +3107,20 @@ public static class LuminPackCodeGenerator
 				case LuminFiledType.List:
 				case LuminFiledType.Array:
 				{
+					if (luminDataField.Type == LuminFiledType.Array &&
+					    !luminDataField.IsCompress && IsExactManagedArrayType(luminDataField))
+					{
+						if (flag2)
+						{
+							sb.AppendLine("            reader.FlushCurrentIndex(offset);");
+						}
+						sb.AppendLine("            reader.ReadFreshValue(ref " + text4 + ");");
+						if (flag2)
+						{
+							sb.AppendLine("            offset = reader.GetCurrentSpanIndex();");
+						}
+						break;
+					}
 					if (IsStringList(luminDataField))
 					{
 						sb.AppendLine("            " + text4 + " = reader.ReadStringListAndAdvance(ref offset)!;");
@@ -3345,6 +3387,12 @@ public static class LuminPackCodeGenerator
 			return field.GenericType[0] == LuminGenericsType.String;
 		}
 		return false;
+	}
+
+	private static bool IsExactManagedArrayType(LuminDataField field)
+	{
+		return field.TypeSymbol is IArrayTypeSymbol { Rank: 1 } array &&
+		       !array.ElementType.IsUnmanagedType && !ContainsTypeParameter(array.ElementType);
 	}
 
 	private static bool IsExactFreshCollectionType(LuminDataField field)

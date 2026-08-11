@@ -2,7 +2,6 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using LuminPack.Code;
-using LuminPack.Interface;
 using LuminPack.Internal;
 using LuminPack.Option;
 
@@ -71,12 +70,6 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public ILuminPackEvaluator<T> GetEvaluator<T>()
-    {
-        return FormatterCacheEvaluator<T>.Instance;
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool IsReferenceOrContainsReferences<T>()
     {
         return RuntimeHelpers.IsReferenceOrContainsReferences<T>();
@@ -142,14 +135,6 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
     }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void CalculateValueWithEvaluator<TEvaluator, T>(TEvaluator evaluator, scoped in T? value) 
-        where TEvaluator : ILuminPackEvaluator<T>
-    {
-        var v = value;
-        evaluator.CalculateOffset(ref this, ref v);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void CalculateArray<T>(scoped ref T?[]? array)
     {
         if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
@@ -204,21 +189,6 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
         {
             var value = span[i];
             LuminPackFormatterCache.Cache<T>.CalculateOffset(ref this, ref value!);
-        }
-    }
-
-    private sealed class FormatterCacheEvaluator<T> : ILuminPackEvaluator<T>
-    {
-        internal static readonly FormatterCacheEvaluator<T> Instance = new();
-
-        private FormatterCacheEvaluator()
-        {
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void CalculateOffset(ref LuminPackEvaluator evaluator, scoped ref T? value)
-        {
-            LuminPackFormatterCache.Cache<T>.CalculateOffset(ref evaluator, ref value!);
         }
     }
 

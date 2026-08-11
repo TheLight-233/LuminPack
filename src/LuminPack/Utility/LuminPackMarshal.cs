@@ -197,6 +197,22 @@ public static class LuminPackMarshal
     {
         return Unsafe.As<Dictionary<TKey, TValue?>, DictionaryView<TKey, TValue?>>(ref dict!);
     }
+
+    private static readonly bool UsesLegacyHashTableFreeEntryEncoding =
+        string.Equals(typeof(object).Assembly.GetName().Name, "mscorlib", StringComparison.Ordinal);
+
+    /// <summary>
+    /// Returns whether a Dictionary/HashSet entry represents a live item on the
+    /// current runtime. Unity/Mono and .NET Framework mark free entries with a
+    /// negative hash code; modern CoreCLR encodes the free list in <paramref name="next"/>.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool IsHashTableEntryActive(uint hashCode, int next)
+    {
+        return UsesLegacyHashTableFreeEntryEncoding
+            ? hashCode != uint.MaxValue
+            : next >= -1;
+    }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static HashSetView<T?> GetHashSetView<T>(HashSet<T?>? set)
@@ -337,7 +353,7 @@ public static class LuminPackMarshal
     public static unsafe Span<T> CreateSpan<T>(T* ptr, int length) where T : unmanaged
     {
         if (ptr == null && length != 0)
-            throw new ArgumentException("Null pointer with non-zero length");
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException("Null pointer with non-zero length");
         
         return new Span<T>(ptr, length);
     }
@@ -373,7 +389,7 @@ public static class LuminPackMarshal
     public static unsafe ref T AsRef<T>(IntPtr ptr) where T : unmanaged
     {
         if (ptr == IntPtr.Zero)
-            throw new ArgumentNullException(nameof(ptr));
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(ptr));
 
         return ref Unsafe.AsRef<T>(ptr.ToPointer());
     }
@@ -389,11 +405,11 @@ public static class LuminPackMarshal
         Action<IntPtr, IntPtr, int> blockProcessor)
     {
         if (byteLength < 0)
-            throw new ArgumentOutOfRangeException(nameof(byteLength));
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(byteLength));
         if (blockSize <= 0)
-            throw new ArgumentOutOfRangeException(nameof(blockSize));
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(blockSize));
         if (blockProcessor is null)
-            throw new ArgumentNullException(nameof(blockProcessor));
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(blockProcessor));
 
         byte* src = (byte*)source;
         byte* dest = (byte*)destination;
@@ -1147,6 +1163,12 @@ public static class LuminPackMarshal
         int count)
         where TKey : notnull
     {
+#if !NETSTANDARD2_1
+        if (IntPtr.Size != 8)
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowPlatformNotSupportedException(
+                "Direct Dictionary bucket rebuilding requires the modern 64-bit Dictionary layout.");
+#endif
+
         ref var entriesRef = ref GetArrayReference(view._entries);
         ref var bucketsRef = ref GetArrayReference(view._buckets);
 
@@ -1154,10 +1176,14 @@ public static class LuminPackMarshal
 
         // 64 位平台使用 FastMod。
         // 只在循环外进行一次整数除法。
-        ulong fastModMultiplier =
-            IntPtr.Size == 8
-                ? GetFastModMultiplier(bucketCount)
-                : 0;
+#if NETSTANDARD2_1
+        ulong fastModMultiplier = IntPtr.Size == 8
+            ? GetFastModMultiplier(bucketCount)
+            : 0;
+#else
+        // Dictionary already computed this value when it allocated _buckets.
+        ulong fastModMultiplier = view._fastModMultiplier;
+#endif
 
         /*
          * Dictionary 对默认 comparer 的值类型可以直接调用
@@ -1272,12 +1298,26 @@ public static class LuminPackMarshal
         int count)
         where TKey : notnull
     {
+#if !NETSTANDARD2_1
+        // CoreCLR x86 omits Dictionary._fastModMultiplier. DictionaryView models
+        // the modern 64-bit layout, so every field after _entries is shifted on
+        // x86. Return before reading any such field; generated callers already
+        // rebuild through the public Dictionary.Add path when this returns false.
+        if (IntPtr.Size != 8)
+            return false;
+#endif
+
         ref var entriesRef = ref GetArrayReference(view._entries);
         ref var bucketsRef = ref GetArrayReference(view._buckets);
         uint bucketCount = (uint)view._buckets.Length;
+#if NETSTANDARD2_1
         ulong fastModMultiplier = IntPtr.Size == 8
             ? GetFastModMultiplier(bucketCount)
             : 0;
+#else
+        // Dictionary already computed this value when it allocated _buckets.
+        ulong fastModMultiplier = view._fastModMultiplier;
+#endif
 
         // Generated callers construct the dictionary with the default comparer.
         // Value-type keys can therefore use their constrained hash/equality path even
@@ -1479,20 +1519,24 @@ public static class LuminPackMarshal
     {
         public int[] _buckets;
         public Entry[] _entries;
-        public int _count;
-#if NETSTANDARD2_1
-        public int _freeList;
-        public int _freeCount;
-        public int _version;
-#else
-        public int _version;
-        public int _freeList;
-        public int _freeCount;
+#if !NETSTANDARD2_1
+        // Modern Dictionary stores its cached FastMod multiplier before the
+        // integer state. Keep this declaration before _count so automatic
+        // layout maps it to the same 64-bit slot.
+        public ulong _fastModMultiplier;
 #endif
+        public int _count;
+        public int _freeList;
+        public int _freeCount;
+        public int _version;
         public IEqualityComparer<TKey> _comparer;
         public Dictionary<TKey, TValue>.KeyCollection _keys;
         public Dictionary<TKey, TValue>.ValueCollection _values;
+#if NETSTANDARD2_1
+        // Retain the Mono/.NET Standard reference slot and the old multiplier
+        // calculation path; Unity validation is intentionally deferred.
         private object sync;
+#endif
         
         public struct Entry
         {

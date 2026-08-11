@@ -18,6 +18,104 @@ namespace LuminPack.Code
         }
 
         [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowArgumentException(string message, string? paramName = null)
+        {
+            throw new ArgumentException(message, paramName);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static T ThrowArgumentException<T>(string message, string? paramName = null)
+        {
+            throw new ArgumentException(message, paramName);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowArgumentNullException(string paramName)
+        {
+            throw new ArgumentNullException(paramName);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static T ThrowArgumentNullException<T>(string paramName)
+        {
+            throw new ArgumentNullException(paramName);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowArgumentOutOfRangeException(string paramName, string? message = null)
+        {
+            throw new ArgumentOutOfRangeException(paramName, message);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowInvalidOperationException(string? message = null)
+        {
+            throw new InvalidOperationException(message);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static T ThrowInvalidOperationException<T>(string? message = null)
+        {
+            throw new InvalidOperationException(message);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowFormatException(string message)
+        {
+            throw new FormatException(message);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowInvalidDataException(string message)
+        {
+            throw new InvalidDataException(message);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowKeyNotFoundException(string? message = null)
+        {
+            throw message is null ? new System.Collections.Generic.KeyNotFoundException() : new System.Collections.Generic.KeyNotFoundException(message);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static T ThrowKeyNotFoundException<T>(string? message = null)
+        {
+            throw message is null ? new System.Collections.Generic.KeyNotFoundException() : new System.Collections.Generic.KeyNotFoundException(message);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowNotSupportedException(string? message = null)
+        {
+            throw new NotSupportedException(message);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static T ThrowNotSupportedException<T>(string? message = null)
+        {
+            throw new NotSupportedException(message);
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowPlatformNotSupportedException(string message)
+        {
+            throw new PlatformNotSupportedException(message);
+        }
+
+        [DoesNotReturn]
         public static void ThrowMessage(string message)
         {
             throw new LuminPackException(message);
@@ -95,6 +193,34 @@ namespace LuminPack.Code
         internal static void ThrowInvalidCollectionLength(int length)
         {
             throw new InvalidDataException($"Invalid collection length: {length}.");
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowCollectionModifiedDuringSerialization()
+        {
+            throw new InvalidOperationException("Collection was modified during serialization.");
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowNegativeMultiDimensionalArrayDimension()
+        {
+            throw new FormatException("A multidimensional array dimension cannot be negative.");
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowMultiDimensionalArrayDimensionsTooLarge()
+        {
+            throw new FormatException("The multidimensional array dimensions are too large.");
+        }
+
+        [DoesNotReturn]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static void ThrowMultiDimensionalArrayLengthMismatch()
+        {
+            throw new FormatException("The multidimensional array element count does not match its dimensions.");
         }
 
         [DoesNotReturn]

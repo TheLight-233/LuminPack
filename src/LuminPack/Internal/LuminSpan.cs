@@ -14,11 +14,11 @@ public readonly unsafe ref struct LuminSpan<T>
     internal readonly IntPtr _reference;
     private readonly object _dummy;
 #endif
-    
+
     internal readonly nint _length;
-    
+
     public nint Length => _length;
-    
+
     public bool IsEmpty
     {
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -68,7 +68,7 @@ public readonly unsafe ref struct LuminSpan<T>
 #endif
         _length = span.Length;
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LuminSpan(in ReadOnlySpan<T> span)
     {
@@ -92,7 +92,7 @@ public readonly unsafe ref struct LuminSpan<T>
 #endif
         _length = length;
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LuminSpan(ref T reference, nint length)
     {
@@ -116,7 +116,7 @@ public readonly unsafe ref struct LuminSpan<T>
 #endif
         _length = length;
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LuminSpan(void* ptr, nint length)
     {
@@ -139,7 +139,7 @@ public readonly unsafe ref struct LuminSpan<T>
 #else
             local = ref Unsafe.AsRef<T>(_reference.ToPointer());
 #endif
-            
+
         return ref local;
     }
 
@@ -152,7 +152,7 @@ public readonly unsafe ref struct LuminSpan<T>
         return ref Unsafe.Add(ref Unsafe.AsRef<T>(_reference.ToPointer()), offset);
 #endif
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref T Offset(nint offset)
     {
@@ -162,33 +162,42 @@ public readonly unsafe ref struct LuminSpan<T>
         return ref Unsafe.Add(ref Unsafe.AsRef<T>(_reference.ToPointer()), offset);
 #endif
     }
-    
+
     [Obsolete("GetHashCode() on Span will always throw an exception.")]
-    public override int GetHashCode() => throw new NotSupportedException();
+    public override int GetHashCode() =>
+        LuminPackExceptionHelper.ThrowNotSupportedException<int>();
+
     [Obsolete("Equals() on Span will always throw an exception. Use the equality operator instead.")]
-    public override bool Equals(object obj) => throw new NotSupportedException();
-    
+    public override bool Equals(object obj) =>
+        LuminPackExceptionHelper.ThrowNotSupportedException<bool>();
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public override string ToString()
     {
-        return $"System.LuminSpan<{typeof (T).Name}>[{_length}]";
+        return $"System.LuminSpan<{typeof(T).Name}>[{_length}]";
     }
-    
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static implicit operator LuminSpan<T>(T[] array) => new (array);
+    public static implicit operator LuminSpan<T>(T[] array) => new(array);
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static implicit operator LuminSpan<T>(in Span<T> span) => new (span);
+    public static implicit operator LuminSpan<T>(in Span<T> span) => new(span);
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static implicit operator LuminSpan<T>(in ReadOnlySpan<T> span) => new (span);
-    
-    public static bool operator ==(LuminSpan<T> left, LuminSpan<T> right) => left._reference.Equals(right._reference);
-    public static bool operator !=(LuminSpan<T> left, LuminSpan<T> right) => !left._reference.Equals(right._reference);
-    
+    public static implicit operator LuminSpan<T>(in ReadOnlySpan<T> span) => new(span);
+
+    public static bool operator ==(LuminSpan<T> left, LuminSpan<T> right) =>
+        left._reference.Equals(right._reference);
+
+    public static bool operator !=(LuminSpan<T> left, LuminSpan<T> right) =>
+        !left._reference.Equals(right._reference);
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public LuminSpan<T> Slice(int start)
     {
         if ((uint)start > (uint)_length)
-            throw new ArgumentOutOfRangeException(nameof(start));
+            LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(start));
+
         nint newLen = _length - start;
 #if NET8_0_OR_GREATER
         return new LuminSpan<T>(ref Unsafe.Add(ref _reference, start), newLen);
@@ -201,7 +210,8 @@ public readonly unsafe ref struct LuminSpan<T>
     public LuminSpan<T> Slice(int start, int length)
     {
         if ((uint)start > (uint)_length || (uint)length > (uint)(_length - start))
-            throw new ArgumentOutOfRangeException(nameof(start));
+            LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(start));
+
 #if NET8_0_OR_GREATER
         return new LuminSpan<T>(ref Unsafe.Add(ref _reference, start), length);
 #else
@@ -245,7 +255,7 @@ public readonly unsafe ref struct LuminSpan<T>
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Enumerator GetEnumerator() => new(this);
-    
+
     public ref struct Enumerator
     {
         private readonly LuminSpan<T> _span;
@@ -263,7 +273,7 @@ public readonly unsafe ref struct LuminSpan<T>
         {
             return ++_index < _span._length;
         }
-        
+
         public readonly ref T Current
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -274,17 +284,16 @@ public readonly unsafe ref struct LuminSpan<T>
 #endif
         }
     }
-    
 }
 
 public static class LuminSpanExtension
 {
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static LuminSpan<T> AsLuminSpan<T>(this T[] array) => new(array);
-        
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static LuminSpan<T> AsLuminSpan<T>(this in Span<T> span) => new(span);
-        
+
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static LuminSpan<T> AsLuminSpan<T>(this in ReadOnlySpan<T> span) => new(span);
 }

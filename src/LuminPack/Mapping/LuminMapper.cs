@@ -68,7 +68,7 @@ public static class LuminMapper
 
     [System.Diagnostics.CodeAnalysis.DoesNotReturn]
     private static void ThrowNotRegistered<TSource, TDest>()
-        => throw new InvalidOperationException(
+        => global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException(
             $"[LuminMapper] No mapper registered for {typeof(TSource).FullName} → {typeof(TDest).FullName}. " +
             $"Make sure the [LuminMapper] partial class is in the same assembly and the source generator is enabled.");
 }

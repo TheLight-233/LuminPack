@@ -49,12 +49,12 @@ public sealed class ObjectPool<T>
 
     public ObjectPool(
 #if !NET8_0_OR_GREATER
-        IPooledObjectPolicy<T> policy,
+        IPooledObjectPolicy<T>? policy,
 #endif
         int maxSize = 16)
     {
         if (maxSize < 0)
-            throw new ArgumentOutOfRangeException(nameof(maxSize));
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(maxSize));
 
         _poolId = Interlocked.Increment(ref s_nextPoolId);
         if (_poolId == 0)
@@ -66,7 +66,10 @@ public sealed class ObjectPool<T>
         _ring = new RingBuffer(Math.Max(1, maxSize));
 
 #if !NET8_0_OR_GREATER
-        _policy = policy ?? throw new ArgumentNullException(nameof(policy));
+        if (policy is null)
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(policy));
+
+        _policy = policy;
 #endif
     }
 
@@ -154,7 +157,7 @@ public sealed class ObjectPool<T>
     public void Resize(int newSize)
     {
         if (newSize < 0)
-            throw new ArgumentOutOfRangeException(nameof(newSize));
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(newSize));
 
         var oldRing = Volatile.Read(ref _ring);
         var newRing = new RingBuffer(Math.Max(1, newSize));

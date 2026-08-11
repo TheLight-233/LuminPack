@@ -252,7 +252,7 @@ public sealed unsafe class LuminF14Map<TKey, TValue> : IDisposable
     public void Add(scoped in TKey key, scoped in TValue value)
     {
         if (!TryAdd(key, value))
-            throw new ArgumentException("Key already exists");
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException("Key already exists");
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
