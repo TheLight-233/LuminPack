@@ -19,8 +19,15 @@ namespace LuminPackUnitTest
         {
             Console.WriteLine("Starting LuminPack Serialization Tests...");
             Console.WriteLine("=========================================\n");
-            
+
             var testResults = new List<string>();
+            if (args.Contains("--dictionary-layout-regression", StringComparer.Ordinal))
+            {
+                BinaryDirectResultRegressionTest.VerifyDictionaryLayoutRegression();
+                Console.WriteLine("Dictionary layout regression verification passed.");
+                return;
+            }
+
             // Run all tests
             TestEmptyStruct(testResults);
             TestEnum(testResults);
@@ -242,8 +249,10 @@ namespace LuminPackUnitTest
             LuminBufferWriterPoolRegressionTest.Run(testResults);
             BufferWriterOperationContextTest.Run(testResults);
             WriterReaderCorrectnessRegressionTest.Run(testResults);
+            BufferResizeColdPathRegressionTest.Run(testResults);
             StringSerializerFallbackTest.Run(testResults);
-            
+            InterfaceCollectionReadRegressionTest.Run(testResults);
+
             // Print summary
             Console.WriteLine("\n=========================================");
             Console.WriteLine("Test Summary:");

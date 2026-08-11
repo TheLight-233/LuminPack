@@ -35,7 +35,7 @@ dotnet add package LuminPack
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="LuminPack" Version="1.0.9" />
+  <PackageReference Include="LuminPack" Version="1.1.1" />
 </ItemGroup>
 ```
 
@@ -66,9 +66,7 @@ LuminPack 支持 Unity Mono 和 IL2CPP。建议在发布前至少执行一次目
 
 ## 🔮 后续更新计划
 
-1.  Unity编辑器扩展，可视化生成文件
-2.  内置压缩功能
-3.  内置加密功能
+1.  内置加密模块
 
 ## 🚀 Quick Start 快速开始
 
@@ -85,7 +83,7 @@ public class Person
 }
 ```
 
-序列化代码将由c#源代码生成器功能生成，您可以查询生成的名为'命名空间+外层类名(如有)+ClassNameParser.g.cs'的文件查看详细代码。
+序列化代码将由c#源代码生成器功能生成。
 
 调用 `LuminPackSerializer.Serialize<T>/Deserialize<T>` 序列化/反序列化二进制对象实例。
 
@@ -156,8 +154,6 @@ public class MyClass2
     public string[] strings;
 }
 ```
-
-LuminPack有39条诊断规则（ `LuminPack001` 到`LuminPack039` ）
 
 LuminPack不序列化成员名或其他信息，而是按照声明的顺序序列化字段。如果类型是继承的，则按照父级→子级的内存布局顺序执行序列化。成员的顺序不能因反序列化而改变。关于模式演变，请参阅版本容忍部分。
 
@@ -249,29 +245,15 @@ public static SimpleClass Rent()
 
 LuminPack支持序列化接口和抽象类对象，实现多态序列化。
 
-LuminPack支持最低程度的自动收集继承类，对于标记了\[LuminPackable]特性的abstract，interface，LuminPack会自动收集符合以下规则的子类
+LuminPack支持自动收集继承类，对于标记了\[LuminPackable]特性的abstract，interface，LuminPack会自动收集子类
 
-```
-规则：
-1. 如果子类泛型参数数量超过基类，不收集
-2. 如果子类泛型参数不是直接传递给基类（如 MyClass<U> : MyClassBase<T>），不收集
-3. 如果子类有约束且和基类约束不一样，不收集
-4. 如果基类被完全具象化（如 MyClassBase<int>），子类不能有泛型参数
-
-允许的情况：
-- MyClass<T> : MyClassBase<T> （泛型参数完全匹配，约束一致）
-- MyClass : MyClassBase<int> （完全具体化，子类无泛型）
-
-Id分配规则：从0开始递个递增，如果遇到[LuminPackUnion]显示注册过的Id，则跳过。
-```
-
-对于不会自动收集的类型，LuminPack 支持手动注册。只有接口和抽象类可以使用 `[LuminPackUnion]` 属性，每个派生类型需要配置唯一的 Union Tag。
+LuminPack 同时支持手动注册Union。只有接口和抽象类可以使用 `[LuminPackUnion]` 属性，每个派生类型需要配置唯一的 Union Tag。
 
 ```csharp
 // Annotate [LuminPackable] and inheritance types with [LuminPackUnion]
 // Union also supports interface class
 [LuminPackable]
-[LuminPackUnion(0, typeof(Child1))]
+[LuminPackUnion(0, typeof(Child1))] //Child1和Child2会被自动收集，也可以像示例一样手动注册
 [LuminPackUnion(1, typeof(Child2))]
 public abstract class IUnionSample
 {
@@ -321,7 +303,7 @@ global::LuminPack.Generated.LuminPackBenchmark_SimpleClassBaseParser.Register();
 //所有生成的Parser都在LuminPack.Generated命名空间下，生成的Parser的类名规则为：命名空间+外层类名+类名+Parser
 ```
 
-Register方法接受6个参数，分别是Type，Id，二进制序列化函数指针，二进制反序列化函数指针，Json序列化函数指针，Json反序列化函数指针
+Register方法接受6个参数，分别是Type，Id，二进制序列化函数委托，二进制反序列化函数委托，Json序列化函数委托，Json反序列化函数委托
 
 用户需要手写几个静态函数
 
@@ -359,10 +341,10 @@ private static unsafe void ReadJsonLuminPackBenchmark_FooA(ref global::LuminPack
 // 最后调用Register方法
 LuminPack.Generated.LuminPackBenchmark_IFooParser.Register(
     typeof(FooA), 100, 
-    &WriteLuminPackBenchmark_FooA, 
-    &ReadLuminPackBenchmark_FooA, 
-    &WriteJsonLuminPackBenchmark_FooA, 
-    &ReadJsonLuminPackBenchmark_FooA);
+    WriteLuminPackBenchmark_FooA, 
+    ReadLuminPackBenchmark_FooA, 
+    WriteJsonLuminPackBenchmark_FooA, 
+    ReadJsonLuminPackBenchmark_FooA);
 ```
 
 ## 📝 版本容忍
@@ -469,26 +451,6 @@ public class Node
 LuminPack的序列化池通过Marshal申请非托管内存，这极大提高了Buffer扩容的性能。
 
 因此，请确保所有WriteBuffer调用Dispose方法，以释放非托管内存。
-
-LuminPack内置了高性能`ObjectPool`
-
-```csharp
-#if NET8_0_OR_GREATER
-    private static readonly ObjectPool<ReusableLinkedArrayBufferWriter> _pool = 
-        new(MaxPoolSize);
-#else
-    private static readonly ObjectPool<ReusableLinkedArrayBufferWriter> _pool = 
-        new(new BufferWriterPolicy(), MaxPoolSize);
-#endif
-
-public static ReusableLinkedArrayBufferWriter Rent() => _pool.Rent();
-    
-public static void Return(ReusableLinkedArrayBufferWriter writer) => _pool.Return(writer);
-```
-
-.Net8以上版本，ObjectPool的对象需要继承IPooledObjectPolicy接口。
-
-.Net Standard2.1版本，则需要单独定义继承继承IPooledObjectPolicy接口的类，通过依赖注入的方式。
 
 ## 🎮 Unity
 

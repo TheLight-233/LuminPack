@@ -1,6 +1,9 @@
 using LuminPack;
 using LuminPack.Attribute;
+using LuminPack.Code;
 using LuminPack.Core;
+using LuminPack.Generated;
+using LuminPack.Utility;
 
 
 namespace LuminPackUnitTest;
@@ -43,6 +46,13 @@ public partial class BinaryDirectReferenceCollectionRoot
     public BinaryDirectReferenceElement?[]? Elements;
 }
 
+[LuminPackable]
+public partial class BinaryDirectDictionaryMutationValue
+{
+    public Lazy<int>? MutationTrigger;
+    public int Value;
+}
+
 internal static class BinaryDirectResultRegressionTest
 {
     public static void Run(List<string> results)
@@ -59,6 +69,18 @@ internal static class BinaryDirectResultRegressionTest
             FreshDictionaryBuilderPreservesDictionarySemantics);
         RunCase(results, nameof(UnmanagedDictionaryPairsRemainCompact),
             UnmanagedDictionaryPairsRemainCompact);
+        RunCase(results, nameof(DictionaryArchitectureFallbacksRoundTrip),
+            DictionaryArchitectureFallbacksRoundTrip);
+        RunCase(results, nameof(DictionaryDenseMutationIsRejected),
+            DictionaryDenseMutationIsRejected);
+    }
+
+    public static void VerifyDictionaryLayoutRegression()
+    {
+        FreshDictionaryBuilderPreservesDictionarySemantics();
+        UnmanagedDictionaryPairsRemainCompact();
+        DictionaryArchitectureFallbacksRoundTrip();
+        DictionaryDenseMutationIsRejected();
     }
 
     private static void SmallNestedGenericAndFreshCollectionsRoundTrip()
@@ -177,6 +199,109 @@ internal static class BinaryDirectResultRegressionTest
             "Dictionary<long, byte> introduced trailing padding in an unmanaged key/value pair.");
     }
 
+    private static void DictionaryArchitectureFallbacksRoundTrip()
+    {
+        var value = new Dictionary<int, long>
+        {
+            [7] = long.MinValue,
+            [11] = 42,
+            [97] = long.MaxValue
+        };
+
+        var payload = LuminPackSerializer.Serialize(value);
+        var binaryResult = LuminPackSerializer.Deserialize<Dictionary<int, long>>(payload);
+        Assert(binaryResult is { Count: 3 } && binaryResult[7] == long.MinValue &&
+               binaryResult[11] == 42 && binaryResult[97] == long.MaxValue,
+            "The architecture-safe binary Dictionary path did not round-trip.");
+
+        Assert(binaryResult!.Remove(11),
+            "The architecture-safe binary Dictionary result could not remove an entry.");
+        binaryResult.Add(13, -13);
+        Assert(binaryResult.Count == 3 && binaryResult[13] == -13,
+            "The architecture-safe binary Dictionary result did not preserve public mutation semantics.");
+
+        var managedSparse = new Dictionary<string, long>
+        {
+            ["alpha"] = 1,
+            ["removed"] = 2,
+            ["omega"] = 3
+        };
+        Assert(managedSparse.Remove("removed"),
+            "The managed sparse Dictionary fixture did not create a free entry.");
+        var managedSparsePayload = LuminPackSerializer.Serialize(managedSparse);
+        var managedSparseResult = LuminPackSerializer.Deserialize<Dictionary<string, long>>(managedSparsePayload);
+        Assert(managedSparseResult is { Count: 2 } && managedSparseResult["alpha"] == 1 &&
+               managedSparseResult["omega"] == 3 && !managedSparseResult.ContainsKey("removed"),
+            "The managed Dictionary NoInlining sparse fallback did not preserve its wire values.");
+
+        var json = LuminPackSerializer.SerializeJson(value);
+        var jsonResult = LuminPackSerializer.DeserializeJson<Dictionary<int, long>>(json);
+        Assert(jsonResult is { Count: 3 } && jsonResult[7] == long.MinValue &&
+               jsonResult[11] == 42 && jsonResult[97] == long.MaxValue,
+            "The architecture-safe JSON Dictionary path did not round-trip.");
+    }
+
+    private static void DictionaryDenseMutationIsRejected()
+    {
+        if (IntPtr.Size != 8)
+            return;
+
+        var removeDictionary = new Dictionary<int, BinaryDirectDictionaryMutationValue>();
+        removeDictionary.Add(1, new BinaryDirectDictionaryMutationValue
+        {
+            Value = 11,
+            MutationTrigger = new Lazy<int>(() =>
+            {
+                removeDictionary.Remove(2);
+                return 101;
+            })
+        });
+        removeDictionary.Add(2, new BinaryDirectDictionaryMutationValue { Value = 22 });
+        AssertDictionaryMutationThrows(removeDictionary,
+            "Dense Dictionary serialization did not reject a Remove that left a free entry.");
+
+        var clearDictionary = new Dictionary<int, BinaryDirectDictionaryMutationValue>();
+        clearDictionary.Add(1, new BinaryDirectDictionaryMutationValue
+        {
+            Value = 31,
+            MutationTrigger = new Lazy<int>(() =>
+            {
+                clearDictionary.Clear();
+                return 202;
+            })
+        });
+        clearDictionary.Add(2, new BinaryDirectDictionaryMutationValue { Value = 32 });
+        AssertDictionaryMutationThrows(clearDictionary,
+            "Dense Dictionary serialization did not reject Clear after the version snapshot.");
+    }
+
+    private static void AssertDictionaryMutationThrows(
+        Dictionary<int, BinaryDirectDictionaryMutationValue> dictionary,
+        string message)
+    {
+        LuminBufferWriter buffer = LuminBufferWriterPool.Rent();
+        try
+        {
+            var writer = new LuminPackWriter(buffer);
+            bool threw = false;
+            try
+            {
+                global::LuminPack.Generated.LuminPackExtensions_LuminPackUnitTest
+                    .WriteValue(ref writer, in dictionary);
+            }
+            catch (InvalidOperationException)
+            {
+                threw = true;
+            }
+
+            Assert(threw, message);
+        }
+        finally
+        {
+            LuminBufferWriterPool.Return(buffer);
+        }
+    }
+
     private static void FreshDictionaryBuilderPreservesDictionarySemantics()
     {
         var value = new Dictionary<int, string>();
@@ -189,6 +314,49 @@ internal static class BinaryDirectResultRegressionTest
         var result = LuminPackSerializer.Deserialize<Dictionary<int, string>>(payload);
         Assert(result is { Count: 256 } && result.All(pair => value[pair.Key] == pair.Value),
             "The fresh Dictionary bucket builder lost colliding entries.");
+
+        if (IntPtr.Size == 8)
+        {
+            var resultView = LuminPackMarshal.GetDictionaryView(result!);
+            Assert(resultView._count == result.Count && resultView._freeList == -1 &&
+                   resultView._freeCount == 0 && resultView._version == result.Count,
+                "The fresh Dictionary builder did not publish the runtime's count/free-list/version state.");
+            Assert(resultView._fastModMultiplier != 0,
+                "The modern Dictionary layout did not expose its cached fast-mod multiplier.");
+        }
+
+        Assert(result.Remove(257),
+            "A freshly rebuilt Dictionary could not remove an existing entry.");
+
+        var sparsePayload = LuminPackSerializer.Serialize(result);
+        var sparseResult = LuminPackSerializer.Deserialize<Dictionary<int, string>>(sparsePayload);
+        Assert(sparseResult is { Count: 255 } && !sparseResult.ContainsKey(257) &&
+               sparseResult.All(pair => result[pair.Key] == pair.Value),
+            "The managed Dictionary sparse serialization fallback lost or reordered entries.");
+
+        result.Add(-1, "replacement");
+        Assert(result.Count == 256 && result[-1] == "replacement" && !result.ContainsKey(257),
+            "A freshly rebuilt Dictionary could not reuse a removed entry correctly.");
+
+        var enumerator = result.GetEnumerator();
+        Assert(enumerator.MoveNext(), "The rebuilt Dictionary unexpectedly had no entries.");
+        result.Add(-2, "version-change");
+        var versionThrew = false;
+        try
+        {
+            _ = enumerator.MoveNext();
+        }
+        catch (InvalidOperationException)
+        {
+            versionThrew = true;
+        }
+        finally
+        {
+            enumerator.Dispose();
+        }
+
+        Assert(versionThrew,
+            "The fresh Dictionary builder did not preserve enumerator version checks.");
 
         var duplicatePayload = LuminPackSerializer.Serialize(
             new Dictionary<int, int> { [1] = 10, [2] = 20 });

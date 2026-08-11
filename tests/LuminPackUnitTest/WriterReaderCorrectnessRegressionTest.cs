@@ -2,6 +2,9 @@ using System.Buffers;
 using LuminPack;
 using LuminPack.Option;
 using LuminPack.Attribute;
+using LuminPack.Code;
+using LuminPack.Core;
+using LuminPack.Utility;
 
 namespace LuminPackUnitTest;
 
@@ -13,6 +16,12 @@ public partial class LargeArrayWriterModel
     public int Suffix;
 }
 
+[LuminPackable]
+public partial class NullHeaderProbeModel
+{
+    public int Value;
+}
+
 internal static class WriterReaderCorrectnessRegressionTest
 {
     public static void Run(List<string> results)
@@ -22,6 +31,69 @@ internal static class WriterReaderCorrectnessRegressionTest
         RunCase(results, nameof(LargeUtf8StringGrowsOnlyOnSlowPath), LargeUtf8StringGrowsOnlyOnSlowPath);
         RunCase(results, nameof(NullAndLargeUnmanagedArraysUseOneSafeBulkCopy),
             NullAndLargeUnmanagedArraysUseOneSafeBulkCopy);
+        RunCase(results, nameof(NullObjectHeadersAdvanceExactlyOnce),
+            NullObjectHeadersAdvanceExactlyOnce);
+    }
+
+    private static void NullObjectHeadersAdvanceExactlyOnce()
+    {
+        NullHeaderProbeModel? model = null;
+        Uri? uri = null;
+        System.Globalization.CultureInfo? culture = null;
+        TimeZoneInfo? timeZone = null;
+        Type? type = null;
+
+        AssertSingleNullObjectHeader(model, "generated object");
+
+        LuminBufferWriter buffer = LuminBufferWriterPool.Rent();
+        try
+        {
+            var writer = new LuminPackWriter(buffer);
+            global::LuminPack.Generated.LuminPackExtensions_LuminPackUnitTest.WriteValue(ref writer, in uri);
+            AssertSingleNullObjectHeader(ref writer, "Uri formatter");
+
+            writer = new LuminPackWriter(buffer);
+            global::LuminPack.Generated.LuminPackExtensions_LuminPackUnitTest.WriteValue(ref writer, in culture);
+            AssertSingleNullObjectHeader(ref writer, "CultureInfo formatter");
+
+            writer = new LuminPackWriter(buffer);
+            global::LuminPack.Generated.LuminPackExtensions_LuminPackUnitTest.WriteValue(ref writer, in timeZone);
+            AssertSingleNullObjectHeader(ref writer, "TimeZoneInfo formatter");
+
+            writer = new LuminPackWriter(buffer);
+            global::LuminPack.Generated.LuminPackExtensions_LuminPackUnitTest.WriteValue(ref writer, in type);
+            AssertSingleNullObjectHeader(ref writer, "Type formatter");
+        }
+        finally
+        {
+            LuminBufferWriterPool.Return(buffer);
+        }
+
+        List<NullHeaderProbeModel?> values =
+        [
+            null,
+            new NullHeaderProbeModel { Value = 73 }
+        ];
+        List<NullHeaderProbeModel?> result = LuminPackSerializer.Deserialize<List<NullHeaderProbeModel?>>(
+            LuminPackSerializer.Serialize(values));
+        Assert(result is { Count: 2 } && result[0] is null && result[1]?.Value == 73,
+            "A null generated object consumed the following collection element.");
+    }
+
+    private static void AssertSingleNullObjectHeader<T>(T value, string formatter)
+    {
+        byte[] payload = LuminPackSerializer.Serialize(value);
+        Assert(payload.Length == 1 && payload[0] == LuminPackCode.NullObject,
+            $"The {formatter} wrote {payload.Length} bytes for a one-byte null object header.");
+        Assert(LuminPackSerializer.Sizeof(value) == payload.Length,
+            $"The {formatter} serializer and size evaluator disagree for null.");
+    }
+
+    private static void AssertSingleNullObjectHeader(ref LuminPackWriter writer, string formatter)
+    {
+        ReadOnlySpan<byte> payload = writer.GetSpan();
+        Assert(payload.Length == 1 && payload[0] == LuminPackCode.NullObject,
+            $"The {formatter} wrote {payload.Length} bytes for a one-byte null object header.");
     }
 
     private static void NullAndLargeUnmanagedArraysUseOneSafeBulkCopy()

@@ -1,6 +1,5 @@
 using LuminPack;
 using LuminPack.Attribute;
-using LuminPack.Enum;
 
 namespace LuminPackUnitTest;
 

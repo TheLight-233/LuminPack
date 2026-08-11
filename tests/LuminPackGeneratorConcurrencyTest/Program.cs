@@ -47,6 +47,55 @@ if (args.Contains("--verify-direct-static-dispatch", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--verify-array-compile-time-classification", StringComparer.Ordinal))
+{
+    ArrayEmitterCompileTimeClassificationRegression.Run(references);
+    Console.WriteLine("Passed compile-time array element classification verification.");
+    return;
+}
+
+if (args.Contains("--verify-collection-compile-time-classification", StringComparer.Ordinal))
+{
+    CollectionEmitterCompileTimeClassificationRegression.Run(references);
+    Console.WriteLine("Passed compile-time collection element classification verification.");
+    return;
+}
+
+if (args.Contains("--verify-compile-time-unmanaged-specialization", StringComparer.Ordinal))
+{
+    CompileTimeUnmanagedSpecializationRegression.Run(references);
+    Console.WriteLine("Passed closed and constrained-generic unmanaged specialization verification.");
+    return;
+}
+
+if (args.Contains("--verify-interface-read-formatter-shape", StringComparer.Ordinal))
+{
+    InterfaceReadEmitterShapeRegression.Run();
+    Console.WriteLine("Passed interface ReadValue formatter shape verification.");
+    return;
+}
+
+if (args.Contains("--verify-binary-write-inlining-policy", StringComparer.Ordinal))
+{
+    BinaryWriteInliningPolicyRegression.Run(references);
+    Console.WriteLine("Passed binary WriteValue formatter inlining policy verification.");
+    return;
+}
+
+if (args.Contains("--verify-multidimensional-read-formatter-shape", StringComparer.Ordinal))
+{
+    MultiDimensionalArrayReadShapeRegression.Run();
+    Console.WriteLine("Passed multidimensional-array ReadValue formatter shape verification.");
+    return;
+}
+
+if (args.Contains("--verify-unity-nullable-merge-compatibility", StringComparer.Ordinal))
+{
+    UnityNullableMergeCompatibilityRegression.Run(references);
+    Console.WriteLine("Passed Unity/C# 10 nullable unmanaged-merge compatibility verification.");
+    return;
+}
+
 var failures = new ConcurrentQueue<string>();
 Parallel.For(0, CompilationCount, compilationIndex =>
 {
@@ -411,6 +460,7 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
             public string[] Names = default!;
             public List<string> Labels = default!;
             public Dictionary<string, List<int>> Index = default!;
+            public Dictionary<int, long> Counters = default!;
             public IReadOnlyCollection<string> ReadOnlyLabels { get; set; } = default!;
             public ImmutableArray<string> ImmutableLabels;
             public KeyValuePair<int, string> Pair;
@@ -422,8 +472,48 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
         new[] { CSharpSyntaxTree.ParseText(directSource, parseOptions) },
         references,
         new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
-    var (directOutput, _) = RunFormatterGenerators(directInput, parseOptions);
+    var (directOutput, directGenerated) = RunFormatterGenerators(directInput, parseOptions);
     AssertNoCompilationErrors(directOutput, "direct-static closed formatter graph", ignoreRoslyn43RefReadonlyMismatch: true);
+
+    string normalizedDirectGenerated = directGenerated.Replace("\r\n", "\n");
+    if (!normalizedDirectGenerated.Contains(
+            "if (global::System.IntPtr.Size == 8)\n" +
+            "            {\n" +
+            "                var dictionaryView = LuminPackMarshal.GetDictionaryView(value);\n" +
+            "                if (dictionaryView._count == count)",
+            StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "The unmanaged Dictionary binary fast path reads layout-sensitive state without a 64-bit guard.");
+    }
+    if (!normalizedDirectGenerated.Contains(
+            "if (global::System.IntPtr.Size != 8)\n" +
+            "            {\n" +
+            "                var fallback = new global::System.Collections.Generic.Dictionary<int, long>(length);",
+            StringComparison.Ordinal) ||
+        normalizedDirectGenerated.IndexOf(
+            "if (global::System.IntPtr.Size != 8)", StringComparison.Ordinal) >
+        normalizedDirectGenerated.IndexOf(
+            "var dictionaryView = LuminPackMarshal.GetDictionaryView(result);", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "The Dictionary reader touches its runtime-layout view before the 32-bit public-API fallback.");
+    }
+    if (!normalizedDirectGenerated.Contains(
+            "if (global::System.IntPtr.Size == 8)\n" +
+            "                {\n" +
+            "                    nuint dictIndex = 0;\n" +
+            "                    var dictView = LuminPackMarshal.GetDictionaryView(value);",
+            StringComparison.Ordinal) ||
+        !normalizedDirectGenerated.Contains(
+            "else\n" +
+            "                {\n" +
+            "                    foreach (var entry in value)",
+            StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "The Dictionary JSON formatter is missing its guarded dense path or public-enumerator 32-bit fallback.");
+    }
 
     const string generatedContainer = "LuminPack.Generated.LuminPackExtensions_DirectStaticDispatch";
     int directWrites = 0;

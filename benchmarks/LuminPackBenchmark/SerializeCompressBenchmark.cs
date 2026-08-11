@@ -7,7 +7,6 @@ using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Jobs;
 using LuminPack;
 using LuminPack.Attribute;
-using LuminPack.Enum;
 using LuminPack.Utility;
 using MemoryPack;
 using MessagePack;

@@ -9,7 +9,7 @@ using LuminPack.Core;
 using LuminPack.Generated;
 using LuminPack.Option;
 using LuminPack.Utility;
-using GeneratorType = LuminPack.Enum.GeneratorType;
+using GeneratorType = LuminPack.Attribute.GeneratorType;
 
 namespace LuminPackBenchmark;
 

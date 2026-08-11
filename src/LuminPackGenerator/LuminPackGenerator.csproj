@@ -3,12 +3,14 @@
         <TargetFramework>netstandard2.0</TargetFramework>
         <LangVersion>13</LangVersion>
         <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+        <PlatformTarget>AnyCPU</PlatformTarget>
+        <Prefer32Bit>false</Prefer32Bit>
 
         <IsAnalyzer>true</IsAnalyzer>
         <IsRoslynComponent>true</IsRoslynComponent>
 
         <PackageId>LuminPackGenerator</PackageId>
-        <Version>1.1</Version>
+        <Version>1.1.1</Version>
         <Authors>TheLight233</Authors>
         <Description>LuminPack Source Generator</Description>
 
@@ -23,10 +25,11 @@
 
     <Target Name="IncludeAnalyzerInPackage" BeforeTargets="_GetPackageFiles">
         <ItemGroup>
-            <None Include="$(OutputPath)$(AssemblyName).dll"
+            <None Include="$(TargetPath)"
                   Pack="true"
                   PackagePath="analyzers/dotnet/cs"
                   Visible="false" />
         </ItemGroup>
     </Target>
+
 </Project>

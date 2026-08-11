@@ -10,7 +10,7 @@
 
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>LuminPack</PackageId>
-        <Version>1.1</Version>
+        <Version>1.1.1</Version>
         <Authors>TheLight233</Authors>
         <Description>Ultra-performance binary and json serializer with source generator support</Description>
         <PackageTags>serialization;binary;json;high-performance;luminpack;sourcegenerator</PackageTags>
@@ -32,6 +32,16 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <!--
+            Keep the generator as a separately published package dependency while
+            preventing it from running against the LuminPack runtime itself.
+            Omitting OutputItemType=Analyzer means the compiler never executes it;
+            NuGet pack still converts the project reference to a package dependency.
+            Private=false also keeps the generator DLL out of runtime output.
+        -->
+        <ProjectReference Include="..\LuminPackGenerator\LuminPackGenerator.csproj"
+                          Private="false" />
+
         <None Include="../../README.md" Pack="true" PackagePath="\" />
         <None Update="Core\LuminPackWriter.Unmanaged.tt">
           <Generator>TextTemplatingFileGenerator</Generator>

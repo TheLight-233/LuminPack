@@ -220,13 +220,7 @@ internal static class CompressionSafetyPerfTest
     private static LuminBufferWriter CreateWriter(ReadOnlySpan<byte> payload)
     {
         var writer = new LuminBufferWriter(true);
-        if (payload.Length > writer.DangerousGetBuffer().Length)
-        {
-            writer.Dispose();
-            throw new ArgumentOutOfRangeException(nameof(payload),
-                "Test payload exceeds the writer's initial buffer.");
-        }
-
+        writer.EnsureCapacity(payload.Length);
         payload.CopyTo(writer.DangerousGetBuffer());
         PublishLength(writer, payload.Length);
         return writer;

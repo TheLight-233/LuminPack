@@ -288,8 +288,36 @@ internal static class ReaderBoundaryValidationTest
 
         var forgedLength = payload.ToArray();
         BitConverter.GetBytes(value.Length - 1).CopyTo(forgedLength, 1 + sizeof(int) * 2);
-        AssertThrows(() => LuminPackSerializer.Deserialize<int[,]>(forgedLength),
+        AssertFormatException(
+            () => LuminPackSerializer.Deserialize<int[,]>(forgedLength),
+            "The multidimensional array element count does not match its dimensions.",
             "A multidimensional array whose element count disagreed with its dimensions was accepted.");
+
+        var negativeDimension = LuminPackSerializer.Serialize(new int[1, 1]);
+        BitConverter.GetBytes(-1).CopyTo(negativeDimension, 1);
+        AssertFormatException(
+            () => LuminPackSerializer.Deserialize<int[,]>(negativeDimension),
+            "A multidimensional array dimension cannot be negative.",
+            "A negative multidimensional-array dimension was accepted.");
+
+        var overflowingDimensions = LuminPackSerializer.Serialize(new int[1, 1]);
+        BitConverter.GetBytes(int.MaxValue).CopyTo(overflowingDimensions, 1);
+        BitConverter.GetBytes(2).CopyTo(overflowingDimensions, 1 + sizeof(int));
+        BitConverter.GetBytes(0).CopyTo(overflowingDimensions, 1 + sizeof(int) * 2);
+        AssertFormatException(
+            () => LuminPackSerializer.Deserialize<int[,]>(overflowingDimensions),
+            "The multidimensional array dimensions are too large.",
+            "Overflowing rank-2 multidimensional-array dimensions reached allocation.");
+
+        var overflowingRankThreeDimensions = LuminPackSerializer.Serialize(new int[1, 1, 1]);
+        BitConverter.GetBytes(int.MaxValue).CopyTo(overflowingRankThreeDimensions, 1);
+        BitConverter.GetBytes(2).CopyTo(overflowingRankThreeDimensions, 1 + sizeof(int));
+        BitConverter.GetBytes(1).CopyTo(overflowingRankThreeDimensions, 1 + sizeof(int) * 2);
+        BitConverter.GetBytes(0).CopyTo(overflowingRankThreeDimensions, 1 + sizeof(int) * 3);
+        AssertFormatException(
+            () => LuminPackSerializer.Deserialize<int[,,]>(overflowingRankThreeDimensions),
+            "The multidimensional array dimensions are too large.",
+            "Overflowing rank-3 multidimensional-array dimensions reached allocation.");
 
     }
 
@@ -309,6 +337,29 @@ internal static class ReaderBoundaryValidationTest
         catch
         {
             return;
+        }
+
+        throw new InvalidOperationException(message);
+    }
+
+    private static void AssertFormatException(Action action, string expectedMessage, string message)
+    {
+        try
+        {
+            action();
+        }
+        catch (FormatException exception)
+        {
+            if (exception.Message == expectedMessage)
+                return;
+
+            throw new InvalidOperationException(
+                $"{message} Expected '{expectedMessage}', received '{exception.Message}'.");
+        }
+        catch (Exception exception)
+        {
+            throw new InvalidOperationException(
+                $"{message} Expected FormatException, received {exception.GetType().Name}.");
         }
 
         throw new InvalidOperationException(message);
