@@ -30,13 +30,7 @@ public static class TimeZoneInfoEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            ");
-        sb.AppendLine("            reader.ReadStringLength(ref index, out var length);");
-        sb.AppendLine("            ");
-        sb.AppendLine("            var source = reader.ReadString(length);");
-        sb.AppendLine("            ");
-        sb.AppendLine("            var symbol = reader.StringRecordLength();");
-        sb.AppendLine("            ");
-        sb.AppendLine("            reader.Advance(length + symbol);");
+        sb.AppendLine("            var source = reader.ReadStringAndAdvance(ref index);");
         sb.AppendLine("            ");
         sb.AppendLine("            if (string.IsNullOrEmpty(source))");
         sb.AppendLine("            {");

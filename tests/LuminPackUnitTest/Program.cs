@@ -10,6 +10,7 @@ using static LuminPackUnitTest.GenericSerializationTest;
 using static LuminPackUnitTest.MultiDimensionalArraySerializationTest;
 using static LuminPackUnitTest.SpecialTypesSerializationTest;
 using static LuminPackUnitTest.CollectionTypesSerializationTest;
+using static LuminPackUnitTest.PhaseOneRegressionTest;
 
 namespace LuminPackUnitTest
 {
@@ -40,6 +41,8 @@ namespace LuminPackUnitTest
             TestLong(testResults);
             TestULong(testResults);
             TestString(testResults);
+            TestStringNullAndEmpty(testResults);
+            PhaseOneRegressionTest.Run(testResults);
             TestStringUtf8Token(testResults);
             TestStringUtf16(testResults);
             TestBool(testResults);

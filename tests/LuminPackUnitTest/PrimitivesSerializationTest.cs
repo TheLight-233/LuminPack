@@ -229,6 +229,36 @@ namespace LuminPackUnitTest
                 results.Add($"✗ TestString - ERROR: {ex.Message}");
             }
         }
+
+        public static void TestStringNullAndEmpty(List<string> results)
+        {
+            try
+            {
+                string? empty = "";
+                string? nullValue = null;
+
+                foreach (var option in new[]
+                         {
+                             new LuminPackSerializerOption { StringRecording = LuminPackStringRecording.Length },
+                             new LuminPackSerializerOption { StringRecording = LuminPackStringRecording.Length, StringEncoding = LuminPackStringEncoding.UTF16 },
+                         })
+                {
+                    string? emptyBack = LuminPackSerializer.Deserialize<string>(LuminPackSerializer.Serialize(empty, option), option);
+                    string? nullBack = LuminPackSerializer.Deserialize<string>(LuminPackSerializer.Serialize(nullValue, option), option);
+                    if (emptyBack != "" || nullBack != null)
+                    {
+                        results.Add($"✗ TestStringNullAndEmpty - FAILED: empty='{emptyBack}' null={nullBack}");
+                        return;
+                    }
+                }
+
+                results.Add("✓ TestStringNullAndEmpty - PASSED");
+            }
+            catch (Exception ex)
+            {
+                results.Add($"✗ TestStringNullAndEmpty - ERROR: {ex.Message}");
+            }
+        }
         
         public static void TestStringUtf8Token(List<string> results)
         {

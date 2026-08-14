@@ -35,7 +35,7 @@ dotnet add package LuminPack
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="LuminPack" Version="1.1.1" />
+  <PackageReference Include="LuminPack" Version="1.1.2" />
 </ItemGroup>
 ```
 
@@ -473,7 +473,7 @@ LuminPack 按照以下规则生成 JSON 文本。默认使用 UTF-8 处理字符
 | `string`、`char` | JSON string，并按 JSON 规则转义 |
 | `Guid`、`DateTime`、`DateTimeOffset`、`TimeSpan` 等 | JSON string |
 
-JSON number 只能保证表示有限浮点值；`NaN`、`PositiveInfinity` 和 `NegativeInfinity` 不属于标准 JSON 数字，不应用于需要跨库交换的 JSON 数据。
+JSON number 只能保证表示有限浮点值；`NaN`、`PositiveInfinity` 和 `NegativeInfinity` 不属于标准 JSON 数字，不应用于需要跨库交换的 JSON 数据。LuminPack 在序列化这些值时抛出异常，反序列化时超出目标类型表示范围的数字（如 `1e999`）同样被拒绝。反序列化默认限制 JSON 嵌套深度（`LuminPackSerializerOption.MaxJsonDepth`，默认 1024）。
 
 ### 对象
 
@@ -547,9 +547,11 @@ Union 的 `null` 值直接写为 `null`。客户端与服务端交换 JSON 时�
 ### String 字符串
 
 `(int utf16-length, utf16-value)`\
-`(int ~utf8-byte-count, int utf16-length, utf8-bytes)`
+`(int utf8-byte-count, int utf16-length, utf8-bytes)`
 
-字符串有两种形式，UTF16和UTF8。如果第一个4byte有符号整数 `-1` ，表示null。 `0` ，表示空。UTF16与collection相同（序列化为 `ReadOnlySpan<char>` ， UTF16 -value的字节数为UTF16 -length \* 2）。如果第一个有符号整数<=  `-2` ，则value用UTF8编码。Utf8-byte-count以补码形式编码， `~utf8-byte-count` 检索字节数。下一个有符号整数是utf16-length，它允许 `-1` 表示未知长度。Utf8-bytes存储utf8-byte-count的字节数。
+字符串有两种形式，UTF16和UTF8。Length 模式下第一个4字节有符号整数 `-1` 表示 `null`， `0` 表示空字符串 `""`。UTF16与collection相同（序列化为 `ReadOnlySpan<char>` ， UTF16 -value的字节数为UTF16 -length \* 2）。UTF8 模式下第一个整数为 utf8 字节数，第二个整数为 utf16 字符数（`-1` 表示未知，读取时按慢路径解码）。Utf8-bytes存储 utf8-byte-count 的字节数。
+
+Token 模式没有 null 标记，`null` 与空字符串统一编码为空 token，反序列化结果均为 `string.Empty`。
 
 ### Union 多态
 

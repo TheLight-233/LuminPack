@@ -20,6 +20,12 @@ namespace LuminPack.Core
         
         internal static readonly SearchValues<char> NumberSearchValuesChar =
             SearchValues.Create("0123456789.eE+-");
+
+        internal static readonly SearchValues<byte> ControlCharsSearchValues =
+            SearchValues.Create(Enumerable.Range(0, 0x20).Select(static i => (byte)i).ToArray());
+
+        internal static readonly SearchValues<char> ControlCharsCharSearchValues =
+            SearchValues.Create(Enumerable.Range(0, 0x20).Select(static i => (char)i).ToArray());
 #endif
         
         // 共享幂次查找表，Reader 和 Writer 均使用
@@ -56,6 +62,7 @@ namespace LuminPack.Core
         
         private readonly LuminPackReaderOptionalState _state;
         private readonly bool SerializeStringAsUtf8;
+        private readonly int _maxDepth;
         private byte[]? _utf8StringScratch;
         private char[]? _utf16StringScratch;
         
@@ -99,6 +106,7 @@ namespace LuminPack.Core
             _depth = 0;
             CurrentTokenType = JsonTokenType.None;
             SerializeStringAsUtf8 = _state.Option.StringEncoding is LuminPackStringEncoding.UTF8;
+            _maxDepth = _state.Option.MaxJsonDepth;
             _utf8StringScratch = null;
             _utf16StringScratch = null;
         }
@@ -116,6 +124,7 @@ namespace LuminPack.Core
             _depth = 0;
             CurrentTokenType = JsonTokenType.None;
             SerializeStringAsUtf8 = _state.Option.StringEncoding is LuminPackStringEncoding.UTF8;
+            _maxDepth = _state.Option.MaxJsonDepth;
             _utf8StringScratch = null;
             _utf16StringScratch = null;
         }
@@ -134,6 +143,7 @@ namespace LuminPack.Core
             _depth = 0;
             CurrentTokenType = JsonTokenType.None;
             SerializeStringAsUtf8 = bufferWriter.Option.StringEncoding is LuminPackStringEncoding.UTF8;
+            _maxDepth = bufferWriter.Option.MaxJsonDepth;
             _utf8StringScratch = null;
             _utf16StringScratch = null;
         }
@@ -253,55 +263,75 @@ namespace LuminPack.Core
                 c = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex));
             }
             
-            switch (c)
+            while (true)
             {
-                case '{':
-                    CurrentTokenType = JsonTokenType.ObjectStart;
-                    _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
-                    _depth++;
-                    return true;
-                    
-                case '}':
-                    CurrentTokenType = JsonTokenType.ObjectEnd;
-                    _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
-                    _depth--;
-                    return true;
-                    
-                case '[':
-                    CurrentTokenType = JsonTokenType.ArrayStart;
-                    _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
-                    _depth++;
-                    return true;
-                    
-                case ']':
-                    CurrentTokenType = JsonTokenType.ArrayEnd;
-                    _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
-                    _depth--;
-                    return true;
-                    
-                case '"':
-                    CurrentTokenType = JsonTokenType.String;
-                    return true;
-                    
-                case 't':
-                case 'f':
-                    return ReadBoolean();
-                    
-                case 'n':
-                    return ReadNull();
-                    
-                case ',':
-                case ':':
-                    _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
-                    return Read();
-                    
-                default:
-                    if ((c >= '0' && c <= '9') || c == '-')
-                    {
-                        CurrentTokenType = JsonTokenType.Number;
+                switch (c)
+                {
+                    case '{':
+                        CurrentTokenType = JsonTokenType.ObjectStart;
+                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                        _depth++;
+                        if (_maxDepth > 0 && _depth > _maxDepth)
+                            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON nesting depth exceeds the configured maximum");
                         return true;
+                        
+                    case '}':
+                        CurrentTokenType = JsonTokenType.ObjectEnd;
+                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                        _depth--;
+                        return true;
+                        
+                    case '[':
+                        CurrentTokenType = JsonTokenType.ArrayStart;
+                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                        _depth++;
+                        if (_maxDepth > 0 && _depth > _maxDepth)
+                            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON nesting depth exceeds the configured maximum");
+                        return true;
+                        
+                    case ']':
+                        CurrentTokenType = JsonTokenType.ArrayEnd;
+                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                        _depth--;
+                        return true;
+                        
+                    case '"':
+                        CurrentTokenType = JsonTokenType.String;
+                        return true;
+                        
+                    case 't':
+                    case 'f':
+                        return ReadBoolean();
+                        
+                    case 'n':
+                        return ReadNull();
+                        
+                    case ',':
+                    case ':':
+                    {
+                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                        SkipWhitespace();
+                        if (_currentIndex >= _bufferReference.Length)
+                            return false;
+                        if (SerializeStringAsUtf8)
+                            c = (char)_bufferReference[_currentIndex];
+                        else
+                        {
+                            if (_currentIndex + 1 >= _bufferReference.Length)
+                                return false;
+                            c = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex));
+                        }
+                        continue;
                     }
-                    return false;
+                        
+                    default:
+                        if ((c >= '0' && c <= '9') || c == '-')
+                        {
+                            CurrentTokenType = JsonTokenType.Number;
+                            return true;
+                        }
+                        return false;
+                }
             }
         }
         
@@ -420,6 +450,8 @@ namespace LuminPack.Core
             int special = remaining.IndexOfAny((byte)'"', (byte)'\\');
             if (special >= 0 && remaining[special] == '"')
             {
+                if (remaining.Slice(0, special).ContainsAny(NumberCharLookup.ControlCharsSearchValues))
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                 _currentIndex += special + 1;
                 return _bufferReference.Slice(start, special);
             }
@@ -494,6 +526,8 @@ namespace LuminPack.Core
             int special = charSpan.IndexOfAny('"', '\\');
             if (special >= 0 && charSpan[special] == '"')
             {
+                if (charSpan[..special].ContainsAny(NumberCharLookup.ControlCharsCharSearchValues))
+                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                 var result = charSpan[..special];
                 _currentIndex += (special + 1) * 2;
                 return result;
@@ -1374,6 +1408,8 @@ namespace LuminPack.Core
         {
             if (!Utf8Parser.TryParse(span, out float v, out int consumed) || consumed != span.Length)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
+            if (float.IsInfinity(v))
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
         }
         
@@ -1383,6 +1419,8 @@ namespace LuminPack.Core
             if (!float.TryParse(chars, System.Globalization.NumberStyles.Float,
                     System.Globalization.NumberFormatInfo.InvariantInfo, out float v))
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
+            if (float.IsInfinity(v))
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
         }
         
@@ -1391,6 +1429,8 @@ namespace LuminPack.Core
         {
             if (!Utf8Parser.TryParse(span, out double v, out int consumed) || consumed != span.Length)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
+            if (double.IsInfinity(v))
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
         }
         
@@ -1400,6 +1440,8 @@ namespace LuminPack.Core
             if (!double.TryParse(chars, System.Globalization.NumberStyles.Float,
                     System.Globalization.NumberFormatInfo.InvariantInfo, out double v))
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
+            if (double.IsInfinity(v))
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
         }
         

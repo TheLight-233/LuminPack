@@ -27,6 +27,9 @@ packages/
 *.coveragexml
 coverage/
 
+# Scratch / probe output
+.tmp/
+
 # Operating system files
 .DS_Store
 Thumbs.db

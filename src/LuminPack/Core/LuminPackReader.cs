@@ -556,9 +556,6 @@ namespace LuminPack.Core
                 length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index));
 #endif
                 ValidateStringLength(index, length);
-
-                if (length == LuminPackCode.NullCollection)
-                    length = 0;
             }
 
         }
@@ -602,7 +599,8 @@ namespace LuminPack.Core
             {
                 if (length != LuminPackCode.NullCollection)
                     LuminPackExceptionHelper.ThrowInvalidStringLength(length);
-                length = 0;
+                index += recordLength;
+                return null;
             }
             else if ((uint)length > (uint)(bufferLength - index - recordLength))
             {
@@ -610,7 +608,7 @@ namespace LuminPack.Core
             }
 
             var value = length == 0
-                ? null
+                ? string.Empty
                 : isUtf8
                     ? ReadUtf8StringWithLengthOutlined(index, length)
                     : ReadUtf16StringWithLength(index, length);
@@ -812,7 +810,8 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf8StringWithLength(int index, int length)
         {
-            if (length <= 0) return null;
+            if (length < 0) return null;
+            if (length == 0) return string.Empty;
 
             int index1 = index + 4;
 #if NET8_0_OR_GREATER
@@ -839,23 +838,27 @@ namespace LuminPack.Core
             }
             else
             {
+                if ((uint)utf16Length > (uint)length)
+                    LuminPackExceptionHelper.ThrowFailedEncoding(OperationStatus.InvalidData);
 
-                // regular path, know decoded UTF16 length will gets faster decode result
+                if (utf16Length == length)
+                {
+                    unsafe
+                    {
+                        fixed (byte* p = &Unsafe.Add(ref spanRef, 4))
+                        {
+                            var asciiBytes = new ReadOnlySpan<byte>(p, length);
+                            if (Ascii.IsValid(asciiBytes))
+                                return string.Create(length, new AsciiStringState(p, length), DecodeAsciiString);
+                        }
+                    }
+                }
+
                 unsafe
                 {
                     fixed (byte* p = &Unsafe.Add(ref spanRef, 4))
                     {
-                        
-                        return string.Create(utf16Length, ((IntPtr)p, length), static (dest, state) =>
-                        {
-                            var src = LuminPackMarshal.CreateSpan(ref Unsafe.AsRef<byte>((byte*)state.Item1), state.Item2);
-                            var status = StringSerializer.Deserialize(src, dest, out var bytesRead, out var charsWritten,
-                                replaceInvalidSequences: false);
-                            if (status != OperationStatus.Done)
-                            {
-                                LuminPackExceptionHelper.ThrowFailedEncoding(status);
-                            }
-                        });
+                        return string.Create(utf16Length, new Utf8StringState(p, length), DecodeUtf8String);
                     }
                 }
             }
@@ -875,7 +878,8 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf16StringWithLength(int index, int length)
         {
-            if (length <= 0) return null;
+            if (length < 0) return null;
+            if (length == 0) return string.Empty;
 
             if ((length & 1) != 0)
             {
@@ -1686,7 +1690,7 @@ namespace LuminPack.Core
                 case VarIntCodes.SByte:
                     return checked((byte)ReadUnmanaged<sbyte>());
                 case VarIntCodes.UInt16:
-                    return checked((byte)ReadUnmanaged<byte>());
+                    return checked((byte)ReadUnmanaged<ushort>());
                 case VarIntCodes.Int16:
                     return checked((byte)ReadUnmanaged<short>());
                 case VarIntCodes.UInt32:
@@ -1900,6 +1904,93 @@ namespace LuminPack.Core
         }
 
         #endregion
+
+#if NET8_0_OR_GREATER
+        private readonly unsafe struct Utf8StringState
+        {
+            internal readonly byte* Data;
+            internal readonly int Length;
+
+            internal Utf8StringState(byte* data, int length)
+            {
+                Data = data;
+                Length = length;
+            }
+        }
+
+        private readonly unsafe struct AsciiStringState
+        {
+            internal readonly byte* Data;
+            internal readonly int Length;
+
+            internal AsciiStringState(byte* data, int length)
+            {
+                Data = data;
+                Length = length;
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void DecodeAsciiString(Span<char> destination, AsciiStringState state)
+        {
+            ref byte src = ref Unsafe.AsRef<byte>(state.Data);
+            ref byte dst = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(destination));
+            uint i = 0;
+
+            if (Vector512.IsHardwareAccelerated)
+            {
+                for (; i + 64 <= state.Length; i += 64)
+                {
+                    var data = Vector512.LoadUnsafe(ref Unsafe.Add(ref src, i));
+                    Vector512<ushort> lo = Vector512.WidenLower(data);
+                    Vector512<ushort> hi = Vector512.WidenUpper(data);
+                    lo.StoreUnsafe(ref Unsafe.As<byte, ushort>(ref Unsafe.Add(ref dst, (nint)(i << 1))));
+                    hi.StoreUnsafe(ref Unsafe.As<byte, ushort>(ref Unsafe.Add(ref dst, (nint)((i + 32) << 1))));
+                }
+            }
+
+            if (Vector256.IsHardwareAccelerated)
+            {
+                for (; i + 32 <= state.Length; i += 32)
+                {
+                    var data = Vector256.LoadUnsafe(ref Unsafe.Add(ref src, i));
+                    Vector256<ushort> lo = Vector256.WidenLower(data);
+                    Vector256<ushort> hi = Vector256.WidenUpper(data);
+                    lo.StoreUnsafe(ref Unsafe.As<byte, ushort>(ref Unsafe.Add(ref dst, (nint)(i << 1))));
+                    hi.StoreUnsafe(ref Unsafe.As<byte, ushort>(ref Unsafe.Add(ref dst, (nint)((i + 16) << 1))));
+                }
+            }
+
+            if (Vector128.IsHardwareAccelerated)
+            {
+                for (; i + 16 <= state.Length; i += 16)
+                {
+                    var data = Vector128.LoadUnsafe(ref Unsafe.Add(ref src, i));
+                    Vector128<ushort> lo = Vector128.WidenLower(data);
+                    Vector128<ushort> hi = Vector128.WidenUpper(data);
+                    lo.StoreUnsafe(ref Unsafe.As<byte, ushort>(ref Unsafe.Add(ref dst, (nint)(i << 1))));
+                    hi.StoreUnsafe(ref Unsafe.As<byte, ushort>(ref Unsafe.Add(ref dst, (nint)((i + 8) << 1))));
+                }
+            }
+
+            for (; i < state.Length; i++)
+            {
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, (nint)(i << 1)), Unsafe.Add(ref src, (nint)i));
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static void DecodeUtf8String(Span<char> destination, Utf8StringState state)
+        {
+            var source = new ReadOnlySpan<byte>(state.Data, state.Length);
+            var status = Utf8.ToUtf16(source, destination, out _, out var charsWritten,
+                replaceInvalidSequences: false);
+            if (status != OperationStatus.Done || charsWritten != destination.Length)
+            {
+                LuminPackExceptionHelper.ThrowFailedEncoding(status);
+            }
+        }
+#endif
         
     }
 }

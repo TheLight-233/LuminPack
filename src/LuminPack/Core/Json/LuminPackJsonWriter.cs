@@ -305,7 +305,12 @@ namespace LuminPack.Core
         {
             WriteCommaIfNeeded();
             WriteByteRaw(Quote);
-            WriteRaw(utf8PropertyName);
+
+            if (SerializeStringAsUtf8)
+                WriteStringContentUtf8Raw(utf8PropertyName);
+            else
+                WriteStringContentUtf16(Encoding.UTF8.GetString(utf8PropertyName).AsSpan());
+
             WriteByteRaw(Quote);
             WriteByteRaw(Colon);
             
@@ -407,6 +412,80 @@ namespace LuminPack.Core
             }
         }
         
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteStringContentUtf8Raw(ReadOnlySpan<byte> value)
+        {
+            bool needsEscape = false;
+            for (int i = 0; i < value.Length; i++)
+            {
+                byte b = value[i];
+                if (b < 0x20 || b == '"' || b == '\\')
+                {
+                    needsEscape = true;
+                    break;
+                }
+            }
+
+            if (!needsEscape)
+            {
+                EnsureCapacity(value.Length);
+                ref byte dst = ref GetCurrentSpanReference();
+                Unsafe.CopyBlockUnaligned(ref dst, ref MemoryMarshal.GetReference(value), (uint)value.Length);
+                Advance(value.Length);
+            }
+            else
+            {
+                WriteStringContentUtf8Slow(value);
+            }
+        }
+
+        private void WriteStringContentUtf8Slow(ReadOnlySpan<byte> value)
+        {
+            for (int i = 0; i < value.Length; i++)
+            {
+                byte b = value[i];
+
+                if (b == '"')
+                {
+                    WriteByteRaw(Backslash);
+                    WriteByteRaw((byte)'"');
+                }
+                else if (b == '\\')
+                {
+                    WriteByteRaw(Backslash);
+                    WriteByteRaw((byte)'\\');
+                }
+                else if (b == '\n')
+                {
+                    WriteByteRaw(Backslash);
+                    WriteByteRaw((byte)'n');
+                }
+                else if (b == '\r')
+                {
+                    WriteByteRaw(Backslash);
+                    WriteByteRaw((byte)'r');
+                }
+                else if (b == '\t')
+                {
+                    WriteByteRaw(Backslash);
+                    WriteByteRaw((byte)'t');
+                }
+                else if (b < 0x20)
+                {
+                    WriteByteRaw(Backslash);
+                    WriteByteRaw((byte)'u');
+                    WriteByteRaw((byte)'0');
+                    WriteByteRaw((byte)'0');
+                    WriteByteRaw(HexChar((b >> 4) & 0xF));
+                    WriteByteRaw(HexChar(b & 0xF));
+                }
+                else
+                {
+                    WriteByteRaw(b);
+                }
+            }
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteStringContentUtf16(ReadOnlySpan<char> value)
         {
@@ -874,6 +953,8 @@ namespace LuminPack.Core
         {
             WriteCommaIfNeeded();
             EnsureCapacity(SerializeStringAsUtf8 ? 24 : 64);
+            if (float.IsNaN(value) || float.IsInfinity(value))
+                LuminPackExceptionHelper.ThrowFormatException("NaN and Infinity are not valid JSON numbers");
             if (SerializeStringAsUtf8)
             {
                 // Final benchmark winner: exponent-guarded speculative direct write.
@@ -928,11 +1009,13 @@ namespace LuminPack.Core
         {
             WriteCommaIfNeeded();
             EnsureCapacity(SerializeStringAsUtf8 ? 32 : 64);
+            if (double.IsNaN(value) || double.IsInfinity(value))
+                LuminPackExceptionHelper.ThrowFormatException("NaN and Infinity are not valid JSON numbers");
             if (SerializeStringAsUtf8)
             {
-                // Final benchmark winner for the general-purpose writer:
-                // Guard32 + DirectCurrent. It keeps GameLike ~3x faster than DotNet,
-                // wins RandomFinite, and remains faster on true adversarial values.
+                // Final benchmark winner: exponent-guarded speculative direct write.
+                // Only ordinary exponent range enters Lumin's fast path; unusual values
+                // fall through to Utf8Formatter without paying the expensive 1..9 loop.
                 ulong bits = Unsafe.As<double, ulong>(ref value);
                 ulong absBits = bits & 0x7FFF_FFFF_FFFF_FFFFUL;
                 ulong exp = (absBits >> 52) & 0x7FFUL;

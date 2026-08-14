@@ -464,11 +464,19 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteNullStringHeader(ref int index)
         {
-#if NET8_0_OR_GREATER
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index), 0);
-#else
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index), 0);
-#endif
+            if (SerializeStringRecordAsToken)
+            {
+                WriteStringRecordTokenHeader(ref index);
+                return;
+            }
+
+            if (SerializeStringAsUtf8)
+            {
+                WriteNullUtf8LengthHeader(ref index);
+                return;
+            }
+
+            WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -476,20 +484,20 @@ namespace LuminPack.Core
         {
             if (SerializeStringRecordAsToken)
             {
-#if NET8_0_OR_GREATER
-                Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index), 0);
-#else
-                Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index), 0);
-#endif
-
-                offset = 1;
+                WriteStringRecordTokenHeader(ref index);
+                offset = SerializeStringAsUtf8 ? 1 : 2;
+                return;
             }
-            else
+
+            if (SerializeStringAsUtf8)
             {
-                WriteStringRecordLengthHeader(ref _currentIndex, 0);
-
-                offset = 4;
+                WriteNullUtf8LengthHeader(ref index);
+                offset = sizeof(int) * 2;
+                return;
             }
+
+            WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
+            offset = sizeof(int);
         }
 
         /// <summary>
@@ -532,6 +540,13 @@ namespace LuminPack.Core
 #else
             Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index), length);
 #endif
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteNullUtf8LengthHeader(ref int index)
+        {
+            WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
+            WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -813,9 +828,16 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteUtf8WithLength(int index, string? value)
         {
-            if (string.IsNullOrEmpty(value))
+            if (value is null)
             {
-                WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
+                WriteNullUtf8LengthHeader(ref index);
+                return 0;
+            }
+
+            if (value.Length == 0)
+            {
+                WriteStringRecordLengthHeader(ref index, 0);
+                WriteStringRecordLengthHeader(ref index, 0);
                 return 0;
             }
             
@@ -852,10 +874,16 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUtf8WithLength(int index, string? value, int length)
         {
-            if (length is 0)
+            if (value is null)
             {
-                WriteStringRecordLengthHeader(ref index, -1);
-                
+                WriteNullUtf8LengthHeader(ref index);
+                return;
+            }
+
+            if (length is 0 || value.Length is 0)
+            {
+                WriteStringRecordLengthHeader(ref index, 0);
+                WriteStringRecordLengthHeader(ref index, 0);
                 return;
             }
             
@@ -863,9 +891,9 @@ namespace LuminPack.Core
 
             int index1 = index + 4;
 #if NET8_0_OR_GREATER
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index1), length);
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index1), value.Length);
 #else
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index1), length);
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index1), value.Length);
 #endif
             
             var startIndex = index + 8;
@@ -884,7 +912,8 @@ namespace LuminPack.Core
         {
             if (value.Length is 0)
             {
-                WriteStringRecordLengthHeader(ref index, -1);
+                WriteStringRecordLengthHeader(ref index, 0);
+                WriteStringRecordLengthHeader(ref index, 0);
                 return 0;
             }
             
@@ -990,9 +1019,15 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteUtf16WithLength(int index, string? value)
         {
-            if (string.IsNullOrEmpty(value) || value.Length is 0)
+            if (value is null)
             {
-                WriteStringRecordLengthHeader(ref index, -1);
+                WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
+                return 0;
+            }
+
+            if (value.Length is 0)
+            {
+                WriteStringRecordLengthHeader(ref index, 0);
                 return 0;
             }
             
@@ -1008,10 +1043,15 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUtf16WithLength(int index, string? value, int length)
         {
-            if (length is 0)
+            if (value is null)
             {
-                WriteStringRecordLengthHeader(ref index, -1);
-                
+                WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
+                return;
+            }
+
+            if (length is 0 || value.Length is 0)
+            {
+                WriteStringRecordLengthHeader(ref index, 0);
                 return;
             }
             
@@ -1027,7 +1067,7 @@ namespace LuminPack.Core
         {
             if (value.Length is 0)
             {
-                WriteStringRecordLengthHeader(ref index, -1);
+                WriteStringRecordLengthHeader(ref index, 0);
                 return 0;
             }
             

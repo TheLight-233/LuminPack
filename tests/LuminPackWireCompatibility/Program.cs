@@ -38,6 +38,7 @@ internal static class WireFixtures
         Put(directory, "string-utf16", "Unity ↔ .NET 8 😀", Utf16Length);
         Put(directory, "int-array", Enumerable.Range(-32, 97).Select(x => x * 17).ToArray());
         Put(directory, "string-list", new List<string> { "alpha", "中文", "😀", string.Empty });
+        Put(directory, "string-null-empty", new List<string> { null!, string.Empty, "x" });
         Put(directory, "dictionary", new Dictionary<string, int> { ["one"] = 1, ["中文"] = 2 });
         Put(directory, "queue", CreateQueue());
         Put(directory, "stack", CreateStack());
@@ -55,7 +56,9 @@ internal static class WireFixtures
         Check(Get<string>(directory, "string-utf16", Utf16Length) == "Unity ↔ .NET 8 😀", "string-utf16");
         Check(Get<int[]>(directory, "int-array").SequenceEqual(Enumerable.Range(-32, 97).Select(x => x * 17)), "int-array");
         var strings = Get<List<string>>(directory, "string-list");
-        Check(strings.Count == 4 && strings[0] == "alpha" && strings[1] == "中文" && strings[2] == "😀" && strings[3] == null, "string-list");
+        Check(strings.Count == 4 && strings[0] == "alpha" && strings[1] == "中文" && strings[2] == "😀" && strings[3] == "", "string-list");
+        var nullEmpty = Get<List<string>>(directory, "string-null-empty");
+        Check(nullEmpty.Count == 3 && nullEmpty[0] == null && nullEmpty[1] == "" && nullEmpty[2] == "x", "string-null-empty");
         var dictionary = Get<Dictionary<string, int>>(directory, "dictionary");
         Check(dictionary.Count == 2 && dictionary["中文"] == 2, "dictionary");
         Check(Get<Queue<int>>(directory, "queue").SequenceEqual(CreateQueue()), "queue");

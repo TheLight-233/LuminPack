@@ -37,8 +37,10 @@ internal static class LuminPackUnionDispatchCodeGenerator
             if (matchedRoot == null)
                 continue;
 
+            var canSeal = root.TypeKind == TypeKind.Class && !HasDerivedUnionMember(data, definition);
+
             AppendPartialType(sb, definition, (builder, indent) =>
-                AppendMemberMethods(builder, indent, data, root, matchedRoot, members, suffix, extensionType));
+                AppendMemberMethods(builder, indent, data, root, matchedRoot, members, suffix, extensionType, canSeal));
         }
 
         return sb.ToString();
@@ -91,13 +93,16 @@ internal static class LuminPackUnionDispatchCodeGenerator
         INamedTypeSymbol matchedRoot,
         IReadOnlyList<LuminUnionMemberInfo> members,
         string suffix,
-        string extensionType)
+        string extensionType,
+        bool canSeal)
     {
         var padding = new string(' ', indent * 4);
         var bodyPadding = new string(' ', (indent + 1) * 4);
         var rootType = matchedRoot.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var isInterface = root.TypeKind == TypeKind.Interface;
-        var prefix = isInterface ? $"void {rootType}." : "internal override void ";
+        var prefix = isInterface
+            ? $"void {rootType}."
+            : (canSeal ? "internal sealed override void " : "internal override void ");
 
         if (RequiresClosedGenericDispatch(members))
         {
@@ -321,6 +326,20 @@ internal static class LuminPackUnionDispatchCodeGenerator
     private static void AppendMethodAttribute(StringBuilder sb, string padding)
     {
         sb.AppendLine($"{padding}[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+    }
+
+    private static bool HasDerivedUnionMember(LuminDataInfo data, INamedTypeSymbol definition)
+    {
+        foreach (var member in data.UnionMembers)
+        {
+            if (SymbolEqualityComparer.Default.Equals(member.Type.OriginalDefinition, definition))
+                continue;
+
+            if (FindMatchedRoot(member.Type, definition) != null)
+                return true;
+        }
+
+        return false;
     }
 
     private static INamedTypeSymbol FindMatchedRoot(INamedTypeSymbol member, INamedTypeSymbol root)

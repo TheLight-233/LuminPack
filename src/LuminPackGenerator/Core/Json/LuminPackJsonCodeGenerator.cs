@@ -359,7 +359,10 @@ public static class LuminPackJsonCodeGenerator
 		sb.AppendLine("                    break;");
 		sb.AppendLine();
 		sb.AppendLine("                if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
+		sb.AppendLine("                {");
+		sb.AppendLine("                    reader.Skip();");
 		sb.AppendLine("                    continue;");
+		sb.AppendLine("                }");
 		sb.AppendLine();
 		sb.AppendLine("                ulong propHash;");
 		sb.AppendLine("                if (isUtf8)");
@@ -963,7 +966,10 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
 		sb.AppendLine("                    break;");
 		sb.AppendLine();
 		sb.AppendLine("                if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
+		sb.AppendLine("                {");
+		sb.AppendLine("                    reader.Skip();");
 		sb.AppendLine("                    continue;");
+		sb.AppendLine("                }");
 		sb.AppendLine();
 		sb.AppendLine("                ulong propHash;");
 		sb.AppendLine("                if (isUtf8)");

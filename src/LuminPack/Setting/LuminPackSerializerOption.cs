@@ -50,12 +50,19 @@ namespace LuminPack.Option
         /// <summary>Gets or sets the standard format used by supported formatted values.</summary>
         public StandardFormat StandardFormat { get; set; } = new('G');
 
+        /// <summary>
+        /// Gets or sets the maximum JSON nesting depth accepted during deserialization.
+        /// Defaults to 1024; values of 0 or less disable the limit.
+        /// </summary>
+        public int MaxJsonDepth { get; set; } = 1024;
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void ResetToDefault()
         {
             StringEncoding = LuminPackStringEncoding.UTF8;
             StringRecording = LuminPackStringRecording.Length;
             StandardFormat = new StandardFormat('G');
+            MaxJsonDepth = 1024;
         }
         
     }

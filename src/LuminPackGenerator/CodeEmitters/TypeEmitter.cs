@@ -46,13 +46,7 @@ public static class TypeEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            ");
-        sb.AppendLine("            reader.ReadStringLength(ref index, out var length);");
-        sb.AppendLine("            ");
-        sb.AppendLine("            var typeName = reader.ReadString(length);");
-        sb.AppendLine("            ");
-        sb.AppendLine("            var symbol = reader.StringRecordLength();");
-        sb.AppendLine("            ");
-        sb.AppendLine("            reader.Advance(length + symbol);");
+        sb.AppendLine("            var typeName = reader.ReadStringAndAdvance(ref index);");
         sb.AppendLine("            ");
         sb.AppendLine("            if (string.IsNullOrEmpty(typeName))");
         sb.AppendLine("            {");

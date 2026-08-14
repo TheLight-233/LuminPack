@@ -186,7 +186,7 @@ internal static class ReaderBoundaryValidationTest
 
         reader.ReadStringLength(ref index, out int length);
         string? value = reader.ReadString(length);
-        reader.Advance(length + reader.StringRecordLength());
+        reader.Advance((length < 0 ? 0 : length) + reader.StringRecordLength());
 
         Assert(value is null, "A null length-prefixed string did not deserialize as null.");
         Assert(reader.GetCurrentSpanIndex() == bytes.Length,

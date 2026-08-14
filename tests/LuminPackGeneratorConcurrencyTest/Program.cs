@@ -33,6 +33,13 @@ if (args.Contains("--verify-generic-union-dispatch", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--verify-sealed-union-dispatch", StringComparer.Ordinal))
+{
+    VerifySealedUnionDispatch(references);
+    Console.WriteLine("Passed sealed leaf-union-dispatch verification.");
+    return;
+}
+
 if (args.Contains("--verify-union-auto-discovery", StringComparer.Ordinal))
 {
     VerifyUnionAutoDiscovery(references);
@@ -437,6 +444,88 @@ static void VerifyGenericUnionDispatch(MetadataReference[] references)
     {
         throw new InvalidOperationException(
             "The generic union dispatch did not emit its MethodTable cache and exact closed-type static call path.");
+    }
+}
+
+static void VerifySealedUnionDispatch(MetadataReference[] references)
+{
+    const string source = """
+        using System;
+
+        namespace LuminPack.Attribute
+        {
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
+            public sealed class LuminPackableAttribute : Attribute
+            {
+            }
+
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = true)]
+            public sealed class LuminPackUnionAttribute : Attribute
+            {
+                public LuminPackUnionAttribute(ushort tag, Type type)
+                {
+                }
+            }
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public abstract partial class ClassUnionRoot
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial class LeafMember : ClassUnionRoot
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial class ParentMember : ClassUnionRoot
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial class ChildMember : ParentMember
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial interface InterfaceUnionRoot
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial class InterfaceLeafMember : InterfaceUnionRoot
+        {
+        }
+        """;
+
+    var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+    var compilation = CSharpCompilation.Create(
+        "SealedUnionDispatch",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        parseOptions: parseOptions);
+    var result = driver.RunGenerators(compilation).GetRunResult().Results.Single();
+    if (result.Exception is not null)
+    {
+        throw new InvalidOperationException("Sealed union generator failed.", result.Exception);
+    }
+
+    var dispatch = string.Join(
+        Environment.NewLine,
+        result.GeneratedSources
+            .Where(static item => item.HintName.EndsWith(".UnionDispatch.g.cs", StringComparison.Ordinal))
+            .Select(static item => item.SourceText?.ToString() ?? string.Empty));
+    if (!dispatch.Contains("internal sealed override void __LuminPackUnionSerialize_", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("A leaf class-union member did not emit a sealed dispatch override.");
+    }
+    if (!dispatch.Contains("internal override void __LuminPackUnionSerialize_", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("A class-union member with a LuminPackable subclass was incorrectly sealed.");
     }
 }
 
