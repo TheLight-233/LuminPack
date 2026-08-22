@@ -80,9 +80,9 @@ internal static class WriterReaderCorrectnessRegressionTest
             "A null generated object consumed the following collection element.");
     }
 
-    private static void AssertSingleNullObjectHeader<T>(T value, string formatter)
+    private static void AssertSingleNullObjectHeader(NullHeaderProbeModel? value, string formatter)
     {
-        byte[] payload = LuminPackSerializer.Serialize(value);
+        byte[] payload = LuminPackSerializer.Serialize(in value);
         Assert(payload.Length == 1 && payload[0] == LuminPackCode.NullObject,
             $"The {formatter} wrote {payload.Length} bytes for a one-byte null object header.");
         Assert(LuminPackSerializer.Sizeof(value) == payload.Length,

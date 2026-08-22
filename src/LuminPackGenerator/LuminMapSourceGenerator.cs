@@ -25,7 +25,8 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                 var (opts, compilation) = pair;
                 var cs   = (CSharpParseOptions)opts;
                 var net8 = cs.PreprocessorSymbolNames.Contains("NET8_0_OR_GREATER");
-                return new MetaInfo(cs, cs.LanguageVersion, net8, false);
+                var net9_OR_GREATER = cs.PreprocessorSymbolNames.Contains("NET9_0_OR_GREATER");
+                return new MetaInfo(cs, cs.LanguageVersion, net8, net9_OR_GREATER,false);
             });
 
         var autoMapDeclarations = context.SyntaxProvider
@@ -132,9 +133,9 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                     if (!string.IsNullOrEmpty(formatterSupport))
                         spc.AddSource("LuminPack.SerializerInvocation.Extension.g.cs", formatterSupport);
 
-                    var formatterRegistry = LuminPackExtensionGenerator.GenerateFormatterCacheRegistrations(compilation, meta);
-                    if (!string.IsNullOrEmpty(formatterRegistry))
-                        spc.AddSource("GeneratedFormattersRegistry.g.cs", formatterRegistry);
+                    var serializer = LuminPackSerializerGenerator.GenerateSerializerClass(compilation, meta);
+                    if (!string.IsNullOrEmpty(serializer))
+                        spc.AddSource("LuminPackSerializer.g.cs", serializer);
                 }
                 catch (Exception ex)
                 {

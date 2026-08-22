@@ -237,7 +237,7 @@ internal static class BinaryUnionSafetyTest
         var rawSize = LuminPackSerializer.Sizeof(rawValue);
         var rawPayload = LuminPackSerializer.Serialize(rawValue);
         var expectedSize = LuminPackSerializer.Sizeof(value);
-        var payload = LuminPackSerializer.Serialize<ISerializable>(value);
+        var payload = LuminPackSerializer.Serialize(value);
         var result = LuminPackSerializer.Deserialize<ISerializable>(payload);
 
         Assert(expectedSize == payload.Length,

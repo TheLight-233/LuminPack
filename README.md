@@ -35,7 +35,7 @@ dotnet add package LuminPack
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="LuminPack" Version="1.1.2" />
+  <PackageReference Include="LuminPack" Version="1.1.3" />
 </ItemGroup>
 ```
 

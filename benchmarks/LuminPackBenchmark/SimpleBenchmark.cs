@@ -214,7 +214,8 @@ public class SimpleBenchmark
     [Benchmark]
     public void LuminPackDeserialize()
     {
-        var res = LuminPackSerializer.Deserialize<SimpleClassBase>(buffer1);
+        SimpleClassBase res = default;
+        LuminPackSerializer.Deserialize(buffer1, ref res);
     }
     
     [Benchmark]

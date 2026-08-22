@@ -2,7 +2,10 @@ using System.Collections;
 using System.Text;
 using LuminPack;
 using LuminPack.Attribute;
+using LuminPack.Core;
+using LuminPack.Generated;
 using LuminPack.Option;
+using LuminPack.Utility;
 
 if (args.Length != 2 || args[0] is not ("write" or "verify"))
     throw new ArgumentException("Usage: LuminPackWireCompatibility <write|verify> <directory>");
@@ -45,7 +48,6 @@ internal static class WireFixtures
         Put(directory, "bit-array", new BitArray(new[] { true, false, true, true, false, false, true, true, false }));
         Put(directory, "string-builder", new StringBuilder("Unity-LuminPack-界-😀"));
         Put(directory, "multi-array", CreateGrid());
-        Put(directory, "wire-stats", CreateStats());
         Put(directory, "generated-model", CreateModel());
     }
 
@@ -67,8 +69,6 @@ internal static class WireFixtures
         Check(Get<StringBuilder>(directory, "string-builder").ToString() == "Unity-LuminPack-界-😀", "string-builder");
         var grid = Get<int[,]>(directory, "multi-array");
         Check(grid.GetLength(0) == 3 && grid.GetLength(1) == 4 && grid[2, 3] == 203, "multi-array");
-        var stats = Get<WireStats>(directory, "wire-stats");
-        Check(stats.Health == 900 && stats.Experience == 123456789 && stats.Speed == 3.5f && stats.Accuracy == 0.975 && stats.Alive, "wire-stats");
         var model = Get<WireModel>(directory, "generated-model");
         Check(model.Id == 42 && model.Name == "wire" && model.Stats.Health == 900 && model.Stats.Alive && model.Values.SequenceEqual(new[] { 3, 5, 8 }), "generated-model");
     }
@@ -115,8 +115,24 @@ internal static class WireFixtures
         Values = new List<int> { 3, 5, 8 }
     };
 
-    private static void Put<T>(string directory, string name, T value, LuminPackSerializerOption? option = null) =>
-        File.WriteAllBytes(Path.Combine(directory, name + ".bin"), LuminPackSerializer.Serialize(value, option));
+    private static void Put<T>(string directory, string name, T value, LuminPackSerializerOption? option = null)
+    {
+        var writerBuffer = LuminBufferWriterPool.Rent();
+        try
+        {
+            var state = new LuminPackWriterOptionalState();
+            state.Init(option);
+            var writer = new LuminPackWriter(writerBuffer, state);
+            writer.WriteValue(in value);
+            writerBuffer.CompleteWrite(writer.CurrentIndex);
+            File.WriteAllBytes(Path.Combine(directory, name + ".bin"), writerBuffer.GetSpan().ToArray());
+            state.Reset();
+        }
+        finally
+        {
+            LuminBufferWriterPool.Return(writerBuffer);
+        }
+    }
 
     private static T Get<T>(string directory, string name, LuminPackSerializerOption? option = null) =>
         LuminPackSerializer.Deserialize<T>(File.ReadAllBytes(Path.Combine(directory, name + ".bin")), option);

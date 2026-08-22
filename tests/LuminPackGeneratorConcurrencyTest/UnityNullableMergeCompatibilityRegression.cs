@@ -23,7 +23,7 @@ internal static class UnityNullableMergeCompatibilityRegression
             .WithLanguageVersion(LanguageVersion.CSharp10);
         MetadataReference[] references = platformReferences
             .Append(MetadataReference.CreateFromFile(
-                typeof(global::LuminPack.LuminPackSerializer).Assembly.Location))
+                typeof(global::LuminPack.Core.LuminPackWriter).Assembly.Location))
             .ToArray();
         var compilation = CSharpCompilation.Create(
             "UnityNullableMergeCompatibility",

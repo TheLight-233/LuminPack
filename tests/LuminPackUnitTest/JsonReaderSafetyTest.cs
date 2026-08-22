@@ -1,6 +1,10 @@
 using System.Numerics;
+using System.Text;
 using LuminPack;
+using LuminPack.Core;
+using LuminPack.Generated;
 using LuminPack.Option;
+using LuminPack.Utility;
 
 namespace LuminPackUnitTest;
 
@@ -126,7 +130,7 @@ internal static class JsonReaderSafetyTest
 
     private static void AssertNestedUnion(ISerializable value, LuminPackSerializerOption? option)
     {
-        var json = LuminPackSerializer.SerializeJson<ISerializable>(value, option);
+        var json = LuminPackSerializer.SerializeJson(value, option);
         var result = LuminPackSerializer.DeserializeJson<ISerializable>(json, option);
         Assert(result is Class1 { A: 11, D: Struct1 { A: 22 } },
             "A nested JSON union left its wrapper end token unread or lost the nested value.");
@@ -229,14 +233,30 @@ internal static class JsonReaderSafetyTest
 
     private static T? RoundTrip<T>(T value, LuminPackSerializerOption? option = null)
     {
-        var json = LuminPackSerializer.SerializeJson(value, option);
-        var result = LuminPackSerializer.DeserializeJson<T>(json, option);
-        if (typeof(T).IsValueType)
+        var buffer = LuminBufferWriterPool.Rent();
+        try
         {
-            Assert(EqualityComparer<T>.Default.Equals(value, result),
-                $"{typeof(T).Name} JSON round-trip changed its value.");
+            var state = new LuminPackWriterOptionalState();
+            state.Init(option);
+            var writer = new LuminPackJsonWriter(buffer, state);
+            writer.WriteValue(in value);
+            var json = writer.Option.StringEncoding is LuminPackStringEncoding.UTF8
+                ? Encoding.UTF8.GetString(writer.GetSpan())
+                : Encoding.Unicode.GetString(writer.GetSpan());
+            state.Reset();
+
+            var result = LuminPackSerializer.DeserializeJson<T>(json, option);
+            if (typeof(T).IsValueType)
+            {
+                Assert(EqualityComparer<T>.Default.Equals(value, result),
+                    $"{typeof(T).Name} JSON round-trip changed its value.");
+            }
+            return result;
         }
-        return result;
+        finally
+        {
+            LuminBufferWriterPool.Return(buffer);
+        }
     }
 
     private static void AssertThrows<TException>(Action action)

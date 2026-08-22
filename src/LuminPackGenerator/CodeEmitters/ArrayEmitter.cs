@@ -49,7 +49,10 @@ public static class ArrayEmitter
         {
             sb.AppendLine("            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + baseTypeName + ">())");
             sb.AppendLine("            {");
-            sb.AppendLine("                writer.WriteArray(value);");
+            sb.AppendLine("                writer.EnsureAdditionalCapacity(checked(sizeof(int) + value.Length * global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + baseTypeName + ">()));");
+            sb.AppendLine("                writer.DangerousWriteUnmanagedArray(ref index, value, out var offset);");
+            sb.AppendLine("                writer.Advance(offset);");
+            sb.AppendLine("                writer.CheckBuffer();");
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
         }
@@ -97,7 +100,8 @@ public static class ArrayEmitter
         {
             sb.AppendLine($@"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{baseTypeName}>())");
             sb.AppendLine(@"            {");
-            sb.AppendLine(@"                reader.ReadArray(ref value!);");
+            sb.AppendLine(@"                reader.DangerousReadUnmanagedArray(ref index, ref value!, out var offset);");
+            sb.AppendLine(@"                reader.Advance(offset);");
             sb.AppendLine(@"                ");
             sb.AppendLine(@"                return;");
             sb.AppendLine(@"            }");
@@ -290,7 +294,10 @@ public static class ArrayEmitter
         {
             sb.AppendLine("            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + baseTypeName + ">())");
             sb.AppendLine("            {");
-            sb.AppendLine("                writer.WriteArray(value);");
+            sb.AppendLine("                writer.EnsureAdditionalCapacity(checked(sizeof(int) + value.Length * global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + baseTypeName + ">()));");
+            sb.AppendLine("                writer.DangerousWriteUnmanagedArray(ref index, value, out var offset);");
+            sb.AppendLine("                writer.Advance(offset);");
+            sb.AppendLine("                writer.CheckBuffer();");
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
         }
@@ -347,7 +354,8 @@ public static class ArrayEmitter
         {
             sb.AppendLine($@"            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<{baseTypeName}>())");
             sb.AppendLine(@"            {");
-            sb.AppendLine(@"                reader.ReadArray(ref value!);");
+            sb.AppendLine(@"                reader.DangerousReadUnmanagedArray(ref index, ref value!, out var offset);");
+            sb.AppendLine(@"                reader.Advance(offset);");
             sb.AppendLine(@"                ");
             sb.AppendLine(@"                return;");
             sb.AppendLine(@"            }");

@@ -141,7 +141,9 @@ internal static class CompilationTypeAnalysisCache
         foreach (INamedTypeSymbol packable in orderedPackables)
         {
             var ownedGraph = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
-            AddPackableGraph(packable, ownedGraph, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
+            // analyzedTypes 传全局 formatterTypes：非序列化成员（忽略/私有/计算属性）的类型
+            // 也归入分析，由共享生成器兜底补全扩展方法（宁多务少，绝不缺失）。
+            AddPackableGraph(packable, ownedGraph, formatterTypes, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
             foreach (ITypeSymbol type in ownedGraph)
             {
                 if (!owners.ContainsKey(type))
@@ -232,23 +234,50 @@ internal static class CompilationTypeAnalysisCache
         }
     }
 
+    /// <summary>
+    /// 收集一个 packable 的所有权图。
+    /// 所有权（ownedTypes）必须与「每类型生成器实际序列化的成员」严格一致，
+    /// 否则会出现「被声称所有却无人生成扩展方法」→ 编译报错。
+    /// 序列化规则（与 LuminPackSourceGenerator 保持一致）：
+    ///   字段：非静态、非隐式、非 [LuminPackIgnore]，且 (有 [LuminPackInclude] 或 Public/Internal/ProtectedOrInternal)
+    ///   属性：非静态、非 [LuminPackIgnore]、是自动属性（有后台字段），且 (有 [LuminPackInclude] 或 Public/Internal/ProtectedOrInternal)
+    /// 其余成员类型（[LuminPackIgnore]、私有无 Include、计算只读属性等）不占用所有权，
+    /// 但**仍归入 analyzedTypes（全局 formatterTypes）**由共享生成器兜底补全扩展方法——
+    /// 遵循「宁多务少，扩展方法绝不能缺失」原则；边界由 IsStaticFormatterCandidate 控制，不会无限膨胀。
+    /// </summary>
     private static void AddPackableGraph(
         INamedTypeSymbol packable,
-        ISet<ITypeSymbol> types,
+        ISet<ITypeSymbol> ownedTypes,
+        ISet<ITypeSymbol> analyzedTypes,
         ISet<ITypeSymbol> visited)
     {
         if (!visited.Add(packable)) return;
-        AddTypeGraph(packable, types);
+        AddTypeGraph(packable, ownedTypes);
+        AddTypeGraph(packable, analyzedTypes);
 
         foreach (ISymbol member in packable.GetMembers())
         {
             switch (member)
             {
                 case IFieldSymbol { IsStatic: false, IsImplicitlyDeclared: false } field:
-                    AddTypeGraph(field.Type, types);
+                    // 序列化字段：非 Ignore，且 (Include 或 公开访问性)
+                    bool fieldSerialized = !TypeMetaChecker.TryCheckIgnoreAttribute(field) &&
+                        (TypeMetaChecker.TryCheckIncludeAttribute(field) || IsPubliclyAccessible(field.DeclaredAccessibility));
+                    AddMemberGraph(field.Type, ownedTypes, analyzedTypes, fieldSerialized);
                     break;
-                case IPropertySymbol { IsStatic: false, IsImplicitlyDeclared: false } property:
-                    AddTypeGraph(property.Type, types);
+
+                case IPropertySymbol property
+                    when LuminPackSourceGenerator.IsAutoProperty(property) && !property.IsStatic:
+                    // 序列化自动属性：非 Ignore，且 (Include 或 公开访问性)
+                    bool propSerialized = !TypeMetaChecker.TryCheckIgnoreAttribute(property) &&
+                        (TypeMetaChecker.TryCheckIncludeAttribute(property) || IsPubliclyAccessible(property.DeclaredAccessibility));
+                    AddMemberGraph(property.Type, ownedTypes, analyzedTypes, propSerialized);
+                    break;
+
+                case IPropertySymbol { IsStatic: false } computedProperty:
+                    // 计算只读属性（无后台字段）：LuminPack 不序列化它，不占用所有权；
+                    // 但类型仍归入分析（宁多务少），由共享生成器兜底。
+                    AddTypeGraph(computedProperty.Type, analyzedTypes);
                     break;
             }
         }
@@ -256,9 +285,27 @@ internal static class CompilationTypeAnalysisCache
         if (packable.BaseType is { SpecialType: not SpecialType.System_Object } baseType &&
             HasPackableAttribute(baseType))
         {
-            AddPackableGraph(baseType, types, visited);
+            AddPackableGraph(baseType, ownedTypes, analyzedTypes, visited);
         }
     }
+
+    /// <summary>
+    /// 成员类型：序列化成员 → 所有权（每类型生成）；否则 → 仅归入分析（共享生成器兜底）。
+    /// 无论是否序列化，类型都进 analyzedTypes，保证扩展方法绝不缺失。
+    /// </summary>
+    private static void AddMemberGraph(
+        ITypeSymbol type, ISet<ITypeSymbol> ownedTypes, ISet<ITypeSymbol> analyzedTypes, bool serialized)
+    {
+        if (serialized) AddTypeGraph(type, ownedTypes);
+        AddTypeGraph(type, analyzedTypes);
+    }
+
+    /// <summary>与生成器序列化规则一致的"可序列化访问性"（跳过 Private/ProtectedAndInternal/Protected）。</summary>
+    private static bool IsPubliclyAccessible(Accessibility accessibility)
+        => accessibility is not (
+            Accessibility.Private or
+            Accessibility.ProtectedAndInternal or
+            Accessibility.Protected);
 
     private static void AddTypeGraph(ITypeSymbol type, ISet<ITypeSymbol> types)
     {

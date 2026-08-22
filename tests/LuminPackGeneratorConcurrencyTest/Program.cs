@@ -535,7 +535,7 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
         .WithLanguageVersion(LanguageVersion.Preview)
         .WithPreprocessorSymbols("NET8_0_OR_GREATER");
     var runtimeReference = MetadataReference.CreateFromFile(
-        typeof(global::LuminPack.LuminPackSerializer).Assembly.Location);
+        typeof(global::LuminPack.Core.LuminPackWriter).Assembly.Location);
     var references = platformReferences.Append(runtimeReference).ToArray();
 
     const string directSource = """
@@ -704,13 +704,14 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
     int fallbackWrites = 0;
     int fallbackReads = 0;
     int fallbackCalculates = 0;
+    const string fallbackContainer = "LuminPack.Generated.LuminPackExtensions_ExternalConsumer";
     foreach (SyntaxTree tree in consumerOutput.SyntaxTrees.Skip(consumerInput.SyntaxTrees.Count()))
     {
         SemanticModel model = consumerOutput.GetSemanticModel(tree);
         foreach (InvocationExpressionSyntax invocation in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
         {
             if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method ||
-                method.ContainingType?.ToDisplayString() != "LuminPack.Core.LuminPackLocalExtension" ||
+                method.ContainingType?.ToDisplayString() != fallbackContainer ||
                 !method.IsGenericMethod ||
                 method.TypeArguments.Length != 1 ||
                 method.TypeArguments[0].ToDisplayString().TrimEnd('?') != "ExternalContracts.ExternalContract")
@@ -860,11 +861,10 @@ static void VerifyFormatterScope(MetadataReference[] references)
         throw new InvalidOperationException("Registered closed generic formatter support was not emitted.");
     }
     if (!generated.Split('\n').Any(static line =>
-            line.Contains("Cache<", StringComparison.Ordinal) &&
-            line.Contains("Dictionary<", StringComparison.Ordinal) &&
-            line.Contains(">.CalculateOffset =", StringComparison.Ordinal)))
+            line.Contains("CalculateOffset(ref this global::LuminPack.Core.LuminPackEvaluator evaluator", StringComparison.Ordinal) &&
+            line.Contains("Dictionary<", StringComparison.Ordinal)))
     {
-        throw new InvalidOperationException("Closed dictionary formatter did not register its size evaluator.");
+        throw new InvalidOperationException("Closed dictionary formatter did not emit its size evaluator.");
     }
     if (generated.Contains("InputControl", StringComparison.Ordinal))
     {

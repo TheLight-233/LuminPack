@@ -108,20 +108,6 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
     }
 
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void CalculateValue<T>(scoped in T? value)
-    {
-        var writableValue = value;
-        LuminPackFormatterCache.Cache<T>.CalculateOffset(ref this, ref writableValue);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void CalculatePolymorphismValue<T>(scoped in T? value)
-    {
-        CalculateValue(in value);
-        Subtract(1); // Object polymorphism replaces the normal object header with the union header.
-    }
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void CalculateUnionHeader(scoped in ushort tag)
     {
         if (tag < LuminPackCode.WideTag)
@@ -134,64 +120,6 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
         }
     }
     
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void CalculateArray<T>(scoped ref T?[]? array)
-    {
-        if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
-        {
-            Add(DangerousCalculateArray(ref array));
-            
-            return;
-        }
-        
-        Add(sizeof(int));
-
-        if (array is null)
-            return;
-
-        for (int i = 0; i < array.Length; i++)
-        {
-            LuminPackFormatterCache.Cache<T>.CalculateOffset(ref this, ref array[i]!);
-        }
-    }
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void CalculateSpan<T>(scoped ref Span<T?> span)
-    {
-        if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
-        {
-            Add(DangerousCalculateSpan(ref span));
-            
-            return;
-        }
-
-        Add(sizeof(int));
-
-        for (int i = 0; i < span.Length; i++)
-        {
-            LuminPackFormatterCache.Cache<T>.CalculateOffset(ref this, ref span[i]!);
-        }
-    }
-    
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void CalculateSpan<T>(scoped ref ReadOnlySpan<T?> span)
-    {
-        if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
-        {
-            Add(DangerousCalculateSpan(ref span));
-            
-            return;
-        }
-        
-        Add(sizeof(int));
-
-        for (int i = 0; i < span.Length; i++)
-        {
-            var value = span[i];
-            LuminPackFormatterCache.Cache<T>.CalculateOffset(ref this, ref value!);
-        }
-    }
-
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int CalculateUnmanagedArray<T>(scoped ref T?[]? array) 
         where T : unmanaged

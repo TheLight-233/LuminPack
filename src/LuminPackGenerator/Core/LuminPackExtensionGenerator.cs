@@ -88,287 +88,146 @@ public static class LuminPackExtensionGenerator
 			}, metaInfo, analyzedTypes);
 		}
 
+		AppendGenericDispatchExtensions(sb, compilation, metaInfo);
+
 		return GenerateExtension(sb, GetExtensionClassName(compilation));
 	}
 
 	/// <summary>
-	/// Generates the compilation-wide static formatter set and the closed-type dispatch used by
-	/// the generated serializer.  This is intentionally emitted once per compilation: individual
-	/// packable declarations only emit their own object formatter, while this method owns recursive
-	/// collection/scalar formatters and their de-duplication.
+	/// Emits the generic dispatch extensions (<c>WriteValue&lt;T&gt;</c>, <c>ReadValue&lt;T&gt;</c>,
+	/// <c>CalculateOffset&lt;T&gt;</c> and their JSON counterparts) that replace the old cache-delegate
+	/// fallback. Each generic method resolves the runtime type's MethodTable through a frozen
+	/// <see cref="global::LuminPack.Utility.LuminFrozenNintMap{TValue}"/> to a contiguous id, then
+	/// dispatches with a dense <c>switch(id)</c> that the JIT lowers to a jump table. This is O(1)
+	/// with no cache, no delegate, and no linear typeof-chain.
 	/// </summary>
-	public static string GenerateCompilationSupport(Compilation compilation, MetaInfo metaInfo)
+	private static void AppendGenericDispatchExtensions(StringBuilder sb, Compilation compilation, MetaInfo metaInfo)
 	{
-		ITypeSymbol[] orderedTypes = GetOrderedFormatterTypes(compilation);
+		ITypeSymbol[] types = GetOrderedFormatterTypes(compilation);
+		string scopedIn = metaInfo.IsNet8 ? "scoped in " : "in ";
+		string scopedRef = metaInfo.IsNet8 ? "scoped ref " : "ref ";
+		string unsafeAs = "global::System.Runtime.CompilerServices.Unsafe.As";
+		string throwNoFormatter = "global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));";
 
-		var sb = new StringBuilder();
-		var analyzedTypes = new HashSet<string>(StringComparer.Ordinal);
-		foreach (ITypeSymbol type in orderedTypes)
+		DispatchEntry[] dispatch = types
+			.Select((type, index) => new DispatchEntry(
+				index,
+				FormatterTypeName.Get(type),
+				CanRegisterFormatter(type, compilation, json: false),
+				CanRegisterFormatter(type, compilation, json: true),
+				CanRegisterCalculateFormatter(type, compilation)))
+			.Where(static d => d.Binary || d.Json || d.Calculate)
+			.ToArray();
+
+		// Frozen MethodTable -> contiguous-id map, built once.
+		sb.AppendLine("        private static readonly global::LuminPack.Utility.LuminFrozenNintMap<uint> s_formatterTypeIds = BuildFormatterTypeIds();");
+		sb.AppendLine();
+		sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]");
+		sb.AppendLine("        private static global::LuminPack.Utility.LuminFrozenNintMap<uint> BuildFormatterTypeIds()");
+		sb.AppendLine("        {");
+		sb.AppendLine("            var pairs = new global::System.Collections.Generic.List<global::System.Collections.Generic.KeyValuePair<nint, uint>>(" + dispatch.Length + ");");
+		foreach (var d in dispatch)
 		{
-			foreach (LuminLocalFieldData field in EnumerateFormatterFields(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default)))
+			sb.AppendLine("            pairs.Add(new global::System.Collections.Generic.KeyValuePair<nint, uint>(global::LuminPack.Code.LuminPackMarshal.GetMethodTable(typeof(" + d.Name + ")), " + d.Id + "u));");
+		}
+		sb.AppendLine("            return global::LuminPack.Utility.LuminFrozenNintMap<uint>.Create(pairs);");
+		sb.AppendLine("        }");
+		sb.AppendLine();
+
+		AppendGenericSwitch(sb, dispatch, "WriteValue", "ref this LuminPackWriter writer", scopedIn, "T value", metaInfo, op: "write", isJson: false, unsafeAs, throwNoFormatter);
+		AppendGenericSwitch(sb, dispatch, "ReadValue", "ref this LuminPackReader reader", scopedRef, "T value", metaInfo, op: "read", isJson: false, unsafeAs, throwNoFormatter);
+		AppendGenericSwitch(sb, dispatch, "CalculateOffset", "ref this LuminPackEvaluator evaluator", scopedRef, "T value", metaInfo, op: "calculate", isJson: false, unsafeAs, throwNoFormatter);
+		AppendGenericSwitch(sb, dispatch, "WriteValue", "ref this global::LuminPack.Core.LuminPackJsonWriter writer", scopedIn, "T value", metaInfo, op: "write", isJson: true, unsafeAs, throwNoFormatter);
+		AppendGenericSwitch(sb, dispatch, "ReadValue", "ref this global::LuminPack.Core.LuminPackJsonReader reader", scopedRef, "T value", metaInfo, op: "read", isJson: true, unsafeAs, throwNoFormatter);
+	}
+
+	private static void AppendGenericSwitch(
+		StringBuilder sb,
+		DispatchEntry[] dispatch,
+		string methodName,
+		string receiver,
+		string paramModifier,
+		string param,
+		MetaInfo metaInfo,
+		string op,
+		bool isJson,
+		string unsafeAs,
+		string throwNoFormatter)
+	{
+		sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+		sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
+		sb.AppendLine("        public static void " + methodName + "<T>(" + receiver + ", " + paramModifier + param + ")");
+		sb.AppendLine("        {");
+		sb.AppendLine("            if (!s_formatterTypeIds.TryGetValue(global::LuminPack.Code.LuminPackMarshal.GetMethodTable(typeof(T)), out var id))");
+		sb.AppendLine("            {");
+		sb.AppendLine("                " + throwNoFormatter);
+		sb.AppendLine("                return;");
+		sb.AppendLine("            }");
+		sb.AppendLine("            switch (id)");
+		sb.AppendLine("            {");
+		foreach (DispatchEntry d in dispatch)
+		{
+			bool supported = op switch
 			{
-				GenerateFormatterExtensions(sb, field, metaInfo, analyzedTypes);
+				"write" => isJson ? d.Json : d.Binary,
+				"read" => isJson ? d.Json : d.Binary,
+				"calculate" => d.Calculate,
+				_ => false
+			};
+			sb.AppendLine("                case " + d.Id + "u:");
+			sb.AppendLine("                {");
+			if (supported)
+			{
+				switch (op)
+				{
+					case "write":
+						sb.AppendLine("                    var v = " + unsafeAs + "<T, " + d.Name + ">(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in value)); writer.WriteValue(in v); return;");
+						break;
+					case "read":
+						sb.AppendLine("                    " + d.Name + " v = default!; reader.ReadValue(ref v); value = " + unsafeAs + "<" + d.Name + ", T>(ref v); return;");
+						break;
+					case "calculate":
+						sb.AppendLine("                    var v = " + unsafeAs + "<T, " + d.Name + ">(ref value); evaluator.CalculateOffset(ref v); return;");
+						break;
+				}
 			}
+			else
+			{
+				sb.AppendLine("                    " + throwNoFormatter);
+				sb.AppendLine("                    return;");
+			}
+			sb.AppendLine("                }");
+		}
+		sb.AppendLine("                default:");
+		sb.AppendLine("                {");
+		sb.AppendLine("                    " + throwNoFormatter);
+		sb.AppendLine("                    return;");
+		sb.AppendLine("                }");
+		sb.AppendLine("            }");
+		sb.AppendLine("        }");
+		sb.AppendLine();
+	}
+
+	private sealed class DispatchEntry
+	{
+		public DispatchEntry(int id, string name, bool binary, bool json, bool calculate)
+		{
+			Id = id;
+			Name = name;
+			Binary = binary;
+			Json = json;
+			Calculate = calculate;
 		}
 
-		string extensions = GenerateExtension(sb, GetExtensionClassName(compilation));
-        string cacheRegistrations = GenerateFormatterCacheRegistrations(compilation, orderedTypes, metaInfo);
-		return extensions + cacheRegistrations;
+		public int Id { get; }
+		public string Name { get; }
+		public bool Binary { get; }
+		public bool Json { get; }
+		public bool Calculate { get; }
 	}
 
-	public static string GenerateSerializer(Compilation compilation, MetaInfo metaInfo)
-	{
-		return $$"""
-#nullable enable
-using global::System;
-using global::System.Buffers;
-using global::System.IO;
-using global::System.Runtime.CompilerServices;
-using global::System.Runtime.InteropServices;
-using global::System.Text;
-using global::System.Threading;
-using global::System.Threading.Tasks;
-using global::LuminPack.Core;
-using global::LuminPack.Option;
-using global::LuminPack.Utility;
 
-namespace LuminPack
-{
-    /// <summary>Static, source-generated AOT serializer entry points.</summary>
-    public static class LuminPackSerializer
-    {
-        [ThreadStatic] private static LuminPackWriterOptionalState? _writerState;
-        [ThreadStatic] private static LuminPackReaderOptionalState? _readerState;
-
-        public static byte[] Serialize<T>(T value, LuminPackSerializerOption? option = null)
-        {
-            var buffer = LuminBufferWriterPool.Rent();
-            var state = _writerState ??= new LuminPackWriterOptionalState();
-            state.Init(option);
-            try
-            {
-                var writer = new LuminPackWriter(buffer, state);
-                global::LuminPack.Core.LuminPackLocalExtension.WriteValue(ref writer, in value);
-                return writer.GetSpan().ToArray();
-            }
-            finally
-            {
-                state.Reset();
-                LuminBufferWriterPool.Return(buffer);
-            }
-        }
-
-        public static void Serialize<T>(T value, LuminBufferWriter buffer)
-        {
-            var state = buffer.WriterState;
-            try
-            {
-                var writer = new LuminPackWriter(buffer, state);
-                global::LuminPack.Core.LuminPackLocalExtension.WriteValue(ref writer, in value);
-                buffer.CompleteWrite(writer.CurrentIndex);
-            }
-            catch
-            {
-                buffer.ResetCore();
-                throw;
-            }
-            finally { state.ResetOperationState(); }
-        }
-
-        public static T Deserialize<T>(ReadOnlySpan<byte> buffer, LuminPackSerializerOption? options = null)
-        {
-            T value = default!;
-            Deserialize(buffer, ref value, options);
-            return value;
-        }
-
-        public static int Deserialize<T>(ReadOnlySpan<byte> buffer, ref T value, LuminPackSerializerOption? options = null)
-        {
-            var state = _readerState ??= new LuminPackReaderOptionalState();
-            state.Init(options);
-            try
-            {
-                var reader = new LuminPackReader(ref buffer, state);
-                global::LuminPack.Core.LuminPackLocalExtension.ReadValue(ref reader, ref value);
-                return reader.GetCurrentSpanIndex();
-            }
-            finally { state.Reset(); }
-        }
-
-        public static T Deserialize<T>(LuminBufferWriter buffer)
-        {
-            T value = default!;
-            Deserialize(buffer, ref value);
-            return value;
-        }
-
-        public static int Deserialize<T>(LuminBufferWriter buffer, ref T value)
-        {
-            var state = buffer.ReaderState;
-            try
-            {
-                var bytes = buffer.GetSpan();
-                var reader = new LuminPackReader(ref bytes, state);
-                global::LuminPack.Core.LuminPackLocalExtension.ReadValue(ref reader, ref value);
-                return reader.GetCurrentSpanIndex();
-            }
-            finally { state.ResetOperationState(); }
-        }
-
-        public static string SerializeJson<T>(T value, LuminPackSerializerOption? option = null)
-        {
-            var buffer = LuminBufferWriterPool.Rent();
-            var state = _writerState ??= new LuminPackWriterOptionalState();
-            state.Init(option);
-            try
-            {
-                var writer = new LuminPackJsonWriter(buffer, state);
-                writer.WriteValue(ref value);
-                return writer.Option.StringEncoding is LuminPackStringEncoding.UTF8
-                    ? Encoding.UTF8.GetString(writer.GetSpan())
-                    : Encoding.Unicode.GetString(writer.GetSpan());
-            }
-            finally
-            {
-                state.Reset();
-                LuminBufferWriterPool.Return(buffer);
-            }
-        }
-
-        public static void SerializeJson<T>(T value, LuminBufferWriter buffer)
-        {
-            var state = buffer.WriterState;
-            try
-            {
-                var writer = new LuminPackJsonWriter(buffer, state);
-                writer.WriteValue(ref value);
-                buffer.CompleteWrite(writer.CurrentIndex);
-            }
-            catch
-            {
-                buffer.ResetCore();
-                throw;
-            }
-            finally { state.ResetOperationState(); }
-        }
-
-        public static T DeserializeJson<T>(string buffer, LuminPackSerializerOption? options = null)
-        {
-            if (buffer is null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(buffer));
-            return DeserializeJson<T>(buffer.AsSpan(), options);
-        }
-
-        public static T DeserializeJson<T>(ReadOnlySpan<char> buffer, LuminPackSerializerOption? options = null)
-        {
-            if (options?.StringEncoding is not LuminPackStringEncoding.UTF16)
-            {
-                int byteCount = Encoding.UTF8.GetByteCount(buffer);
-                byte[] rented = ArrayPool<byte>.Shared.Rent(byteCount);
-                try
-                {
-                    int written = Encoding.UTF8.GetBytes(buffer, rented);
-                    return DeserializeJson<T>(rented.AsSpan(0, written), options);
-                }
-                finally
-                {
-                    ArrayPool<byte>.Shared.Return(rented);
-                }
-            }
-
-            T value = default!;
-            DeserializeJson(buffer, ref value, options);
-            return value;
-        }
-
-        public static T DeserializeJson<T>(ReadOnlySpan<byte> buffer, LuminPackSerializerOption? options = null)
-        {
-            T value = default!;
-            DeserializeJson(buffer, ref value, options);
-            return value;
-        }
-
-        public static int DeserializeJson<T>(ReadOnlySpan<byte> buffer, ref T value, LuminPackSerializerOption? options = null)
-        {
-            var state = _readerState ??= new LuminPackReaderOptionalState();
-            state.Init(options);
-            try
-            {
-                var reader = new LuminPackJsonReader(ref buffer, state);
-                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value");
-                reader.ReadValue(ref value);
-                reader.EnsureEndOfDocument();
-                return reader.CurrentIndex;
-            }
-            finally { state.Reset(); }
-        }
-
-        public static int DeserializeJson<T>(ReadOnlySpan<char> buffer, ref T value, LuminPackSerializerOption? options = null)
-        {
-            var state = _readerState ??= new LuminPackReaderOptionalState();
-            state.Init(options);
-            try
-            {
-                var bytes = MemoryMarshal.Cast<char, byte>(buffer);
-                var reader = new LuminPackJsonReader(ref bytes, state);
-                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value");
-                reader.ReadValue(ref value);
-                reader.EnsureEndOfDocument();
-                return reader.CurrentIndex;
-            }
-            finally { state.Reset(); }
-        }
-
-        public static T DeserializeJson<T>(LuminBufferWriter buffer)
-        {
-            T value = default!;
-            var state = buffer.ReaderState;
-            try
-            {
-                var bytes = buffer.GetSpan();
-                var reader = new LuminPackJsonReader(ref bytes, state);
-                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value");
-                reader.ReadValue(ref value);
-                reader.EnsureEndOfDocument();
-                return value;
-            }
-            finally { state.ResetOperationState(); }
-        }
-
-        public static async ValueTask SerializeAsync<T>(Stream stream, T value, LuminPackSerializerOption? option = null, CancellationToken cancellationToken = default)
-        {
-            var data = Serialize(value, option);
-            await stream.WriteAsync(data, cancellationToken).ConfigureAwait(false);
-            await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
-        }
-
-        public static async ValueTask<T> DeserializeAsync<T>(Stream stream, LuminPackSerializerOption? options = null, CancellationToken cancellationToken = default)
-        {
-            using var data = new MemoryStream();
-            await stream.CopyToAsync(data, cancellationToken).ConfigureAwait(false);
-            return Deserialize<T>(data.GetBuffer().AsSpan(0, checked((int)data.Length)), options);
-        }
-
-        public static async ValueTask<T> DeserializeAsync<T>(Stream stream, T value, LuminPackSerializerOption? options = null, CancellationToken cancellationToken = default)
-        {
-            using var data = new MemoryStream();
-            await stream.CopyToAsync(data, cancellationToken).ConfigureAwait(false);
-            Deserialize(data.GetBuffer().AsSpan(0, checked((int)data.Length)), ref value, options);
-            return value;
-        }
-
-        public static int Sizeof<T>(T value, LuminPackSerializerOption? option = null) => Serialize(value, option).Length;
-        public static int Compress(LuminBufferWriter source, LuminBufferWriter destination) => LuminCompressor.Compress(source, destination);
-        public static int Compress(ReadOnlySpan<byte> source, Span<byte> destination) => LuminCompressor.Compress(source, destination);
-        public static byte[] Compress(ReadOnlySpan<byte> source) => LuminCompressor.Compress(source);
-        public static int Decompress(LuminBufferWriter source, LuminBufferWriter destination) => LuminCompressor.Decompress(source, destination);
-        public static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination) => LuminCompressor.Decompress(source, destination);
-        public static byte[] Decompress(ReadOnlySpan<byte> source) => LuminCompressor.Decompress(source);
-    }
-}
-""";
-	}
-
-	private static ITypeSymbol[] GetOrderedFormatterTypes(Compilation compilation)
+	internal static ITypeSymbol[] GetOrderedFormatterTypes(Compilation compilation)
 	{
 		return CompilationTypeAnalysisCache.GetOrCreate(compilation).FormatterTypes
 			.Where(static type => !ContainsTypeParameter(type))
@@ -378,99 +237,6 @@ namespace LuminPack
 			.ToArray();
 	}
 
-    public static string GenerateFormatterCacheRegistrations(Compilation compilation, MetaInfo metaInfo)
-        => GenerateFormatterCacheRegistrations(compilation, GetOrderedFormatterTypes(compilation), metaInfo);
-
-    private static string GenerateFormatterCacheRegistrations(
-        Compilation compilation,
-        IEnumerable<ITypeSymbol> types,
-        MetaInfo metaInfo)
-	{
-		var registrations = types
-			.Select(type => new
-			{
-				Type = type,
-				Name = FormatterTypeName.Get(type),
-				Binary = CanRegisterFormatter(type, compilation, json: false),
-				Json = CanRegisterFormatter(type, compilation, json: true),
-				Calculate = CanRegisterCalculateFormatter(type, compilation)
-			})
-			.Where(static registration => registration.Binary || registration.Json || registration.Calculate)
-			.ToArray();
-		if (registrations.Length == 0)
-		{
-			return string.Empty;
-		}
-
-		string assemblyName = SanitizeAssemblyName(compilation.AssemblyName ?? "Assembly");
-		string extensionType = "global::LuminPack.Generated." + GetExtensionClassName(compilation);
-		var sb = new StringBuilder();
-		sb.AppendLine("// <auto-generated/>");
-		sb.AppendLine("#nullable enable");
-		sb.AppendLine("namespace LuminPackRegisters." + assemblyName);
-		sb.AppendLine("{");
-		sb.AppendLine("    public static class GeneratedFormattersRegistry");
-		sb.AppendLine("    {");
-		if (TypeMetaChecker.IsUnityProject(compilation))
-		{
-			sb.AppendLine("#if UNITY_EDITOR");
-			sb.AppendLine("        [global::UnityEditor.InitializeOnLoadMethod]");
-			sb.AppendLine("#endif");
-			sb.AppendLine("        [global::UnityEngine.RuntimeInitializeOnLoadMethod(global::UnityEngine.RuntimeInitializeLoadType.BeforeSceneLoad)]");
-		}
-		else
-		{
-			sb.AppendLine("#if NET5_0_OR_GREATER");
-			sb.AppendLine("        [global::System.Runtime.CompilerServices.ModuleInitializer]");
-			sb.AppendLine("#endif");
-		}
-		sb.AppendLine("        internal static void Initialize()");
-		sb.AppendLine("        {");
-		for (var index = 0; index < registrations.Length; index++)
-		{
-			var registration = registrations[index];
-			if (registration.Binary)
-			{
-				sb.AppendLine("            global::LuminPack.Core.LuminPackFormatterCache.Cache<" + registration.Name + ">.Serialize = Serialize_" + index + ";");
-				sb.AppendLine("            global::LuminPack.Core.LuminPackFormatterCache.Cache<" + registration.Name + ">.Deserialize = Deserialize_" + index + ";");
-			}
-			if (registration.Json)
-			{
-				sb.AppendLine("            global::LuminPack.Core.LuminPackFormatterCache.Cache<" + registration.Name + ">.SerializeJson = SerializeJson_" + index + ";");
-				sb.AppendLine("            global::LuminPack.Core.LuminPackFormatterCache.Cache<" + registration.Name + ">.DeserializeJson = DeserializeJson_" + index + ";");
-			}
-			if (registration.Calculate)
-			{
-				sb.AppendLine("            global::LuminPack.Core.LuminPackFormatterCache.Cache<" + registration.Name + ">.CalculateOffset = CalculateOffset_" + index + ";");
-			}
-		}
-		sb.AppendLine("        }");
-		sb.AppendLine();
-		for (var index = 0; index < registrations.Length; index++)
-		{
-			var registration = registrations[index];
-			if (registration.Binary)
-			{
-                string scoped = metaInfo.IsNet8 ? "scoped " : string.Empty;
-                sb.AppendLine("        private static void Serialize_" + index + "(ref global::LuminPack.Core.LuminPackWriter writer, " + scoped + "in " + registration.Name + " value) => " + extensionType + ".WriteValue(ref writer, in value);");
-                sb.AppendLine("        private static void Deserialize_" + index + "(ref global::LuminPack.Core.LuminPackReader reader, " + scoped + "ref " + registration.Name + " value) => " + extensionType + ".ReadValue(ref reader, ref value);");
-			}
-			if (registration.Json)
-			{
-                string scoped = metaInfo.IsNet8 ? "scoped " : string.Empty;
-                sb.AppendLine("        private static void SerializeJson_" + index + "(ref global::LuminPack.Core.LuminPackJsonWriter writer, " + scoped + "in " + registration.Name + " value) => " + extensionType + ".WriteValue(ref writer, in value);");
-                sb.AppendLine("        private static void DeserializeJson_" + index + "(ref global::LuminPack.Core.LuminPackJsonReader reader, " + scoped + "ref " + registration.Name + " value) => " + extensionType + ".ReadValue(ref reader, ref value);");
-			}
-			if (registration.Calculate)
-			{
-                string scoped = metaInfo.IsNet8 ? "scoped " : string.Empty;
-                sb.AppendLine("        private static void CalculateOffset_" + index + "(ref global::LuminPack.Core.LuminPackEvaluator evaluator, " + scoped + "ref " + registration.Name + " value) => " + extensionType + ".CalculateOffset(ref evaluator, ref value);");
-			}
-		}
-		sb.AppendLine("    }");
-		sb.AppendLine("}");
-		return sb.ToString();
-	}
 
 	private static bool CanRegisterFormatter(ITypeSymbol type, Compilation compilation, bool json)
 	{
@@ -506,180 +272,6 @@ namespace LuminPack
 
 		return EvaluatorEmitterRegistry.GetEmitter(FormatterTypeName.Get(type)) is not null;
 	}
-
-	private static string GenerateSerializerOverloads(Compilation compilation, IEnumerable<ITypeSymbol> types)
-	{
-		var sb = new StringBuilder();
-		string extensionType = "global::LuminPack.Generated." + GetExtensionClassName(compilation);
-		foreach (ITypeSymbol type in types)
-		{
-			string typeName = FormatterTypeName.Get(type);
-			AppendSerializerOverloads(sb, typeName, extensionType);
-		}
-		return sb.ToString();
-	}
-
-	private static void AppendSerializerOverloads(StringBuilder sb, string typeName, string extensionType)
-	{
-		sb.AppendLine("        public static byte[] Serialize(" + typeName + " value, LuminPackSerializerOption? option = null)");
-		sb.AppendLine("        {");
-		sb.AppendLine("            var buffer = LuminBufferWriterPool.Rent();");
-		sb.AppendLine("            var state = _writerState ??= new LuminPackWriterOptionalState();");
-		sb.AppendLine("            state.Init(option);");
-		sb.AppendLine("            try");
-		sb.AppendLine("            {");
-		sb.AppendLine("                var writer = new LuminPackWriter(buffer, state);");
-		sb.AppendLine("                " + extensionType + ".WriteValue(ref writer, in value);");
-		sb.AppendLine("                return writer.GetSpan().ToArray();");
-		sb.AppendLine("            }");
-		sb.AppendLine("            finally");
-		sb.AppendLine("            {");
-		sb.AppendLine("                state.Reset();");
-		sb.AppendLine("                LuminBufferWriterPool.Return(buffer);");
-		sb.AppendLine("            }");
-		sb.AppendLine("        }");
-		sb.AppendLine();
-
-		sb.AppendLine("        public static void Serialize(" + typeName + " value, LuminBufferWriter buffer)");
-		sb.AppendLine("        {");
-		sb.AppendLine("            var state = buffer.WriterState;");
-		sb.AppendLine("            try");
-		sb.AppendLine("            {");
-		sb.AppendLine("                var writer = new LuminPackWriter(buffer, state);");
-		sb.AppendLine("                " + extensionType + ".WriteValue(ref writer, in value);");
-		sb.AppendLine("                buffer.CompleteWrite(writer.CurrentIndex);");
-		sb.AppendLine("            }");
-		sb.AppendLine("            catch");
-		sb.AppendLine("            {");
-		sb.AppendLine("                buffer.ResetCore();");
-		sb.AppendLine("                throw;");
-		sb.AppendLine("            }");
-		sb.AppendLine("            finally { state.ResetOperationState(); }");
-		sb.AppendLine("        }");
-		sb.AppendLine();
-
-		sb.AppendLine("        public static int Deserialize(ReadOnlySpan<byte> buffer, ref " + typeName + " value, LuminPackSerializerOption? options = null)");
-		sb.AppendLine("        {");
-		sb.AppendLine("            var state = _readerState ??= new LuminPackReaderOptionalState();");
-		sb.AppendLine("            state.Init(options);");
-		sb.AppendLine("            try");
-		sb.AppendLine("            {");
-		sb.AppendLine("                var reader = new LuminPackReader(ref buffer, state);");
-		sb.AppendLine("                " + extensionType + ".ReadValue(ref reader, ref value);");
-		sb.AppendLine("                return reader.GetCurrentSpanIndex();");
-		sb.AppendLine("            }");
-		sb.AppendLine("            finally { state.Reset(); }");
-		sb.AppendLine("        }");
-		sb.AppendLine();
-
-		sb.AppendLine("        public static int Deserialize(LuminBufferWriter buffer, ref " + typeName + " value)");
-		sb.AppendLine("        {");
-		sb.AppendLine("            var state = buffer.ReaderState;");
-		sb.AppendLine("            try");
-		sb.AppendLine("            {");
-		sb.AppendLine("                var bytes = buffer.GetSpan();");
-		sb.AppendLine("                var reader = new LuminPackReader(ref bytes, state);");
-		sb.AppendLine("                " + extensionType + ".ReadValue(ref reader, ref value);");
-		sb.AppendLine("                return reader.GetCurrentSpanIndex();");
-		sb.AppendLine("            }");
-		sb.AppendLine("            finally { state.ResetOperationState(); }");
-		sb.AppendLine("        }");
-		sb.AppendLine();
-
-		sb.AppendLine("        public static string SerializeJson(" + typeName + " value, LuminPackSerializerOption? option = null)");
-		sb.AppendLine("        {");
-		sb.AppendLine("            var buffer = LuminBufferWriterPool.Rent();");
-		sb.AppendLine("            var state = _writerState ??= new LuminPackWriterOptionalState();");
-		sb.AppendLine("            state.Init(option);");
-		sb.AppendLine("            try");
-		sb.AppendLine("            {");
-		sb.AppendLine("                var writer = new LuminPackJsonWriter(buffer, state);");
-		sb.AppendLine("                " + extensionType + ".WriteValue(ref writer, in value);");
-		sb.AppendLine("                return writer.Option.StringEncoding is LuminPackStringEncoding.UTF8");
-		sb.AppendLine("                    ? Encoding.UTF8.GetString(writer.GetSpan())");
-		sb.AppendLine("                    : Encoding.Unicode.GetString(writer.GetSpan());");
-		sb.AppendLine("            }");
-		sb.AppendLine("            finally");
-		sb.AppendLine("            {");
-		sb.AppendLine("                state.Reset();");
-		sb.AppendLine("                LuminBufferWriterPool.Return(buffer);");
-		sb.AppendLine("            }");
-		sb.AppendLine("        }");
-		sb.AppendLine();
-
-		sb.AppendLine("        public static void SerializeJson(" + typeName + " value, LuminBufferWriter buffer)");
-		sb.AppendLine("        {");
-		sb.AppendLine("            var state = buffer.WriterState;");
-		sb.AppendLine("            try");
-		sb.AppendLine("            {");
-		sb.AppendLine("                var writer = new LuminPackJsonWriter(buffer, state);");
-		sb.AppendLine("                " + extensionType + ".WriteValue(ref writer, in value);");
-		sb.AppendLine("                buffer.CompleteWrite(writer.CurrentIndex);");
-		sb.AppendLine("            }");
-		sb.AppendLine("            catch");
-		sb.AppendLine("            {");
-		sb.AppendLine("                buffer.ResetCore();");
-		sb.AppendLine("                throw;");
-		sb.AppendLine("            }");
-		sb.AppendLine("            finally { state.ResetOperationState(); }");
-		sb.AppendLine("        }");
-		sb.AppendLine();
-
-		sb.AppendLine("        public static int DeserializeJson(string buffer, ref " + typeName + " value, LuminPackSerializerOption? options = null)");
-		sb.AppendLine("        {");
-		sb.AppendLine("            if (buffer is null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(buffer));");
-		sb.AppendLine("            return DeserializeJson(buffer.AsSpan(), ref value, options);");
-		sb.AppendLine("        }");
-		sb.AppendLine();
-
-		sb.AppendLine("        public static int DeserializeJson(ReadOnlySpan<byte> buffer, ref " + typeName + " value, LuminPackSerializerOption? options = null)");
-		sb.AppendLine("        {");
-		sb.AppendLine("            var state = _readerState ??= new LuminPackReaderOptionalState();");
-		sb.AppendLine("            state.Init(options);");
-		sb.AppendLine("            try");
-		sb.AppendLine("            {");
-		sb.AppendLine("                var reader = new LuminPackJsonReader(ref buffer, state);");
-		sb.AppendLine("                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\");");
-		sb.AppendLine("                " + extensionType + ".ReadValue(ref reader, ref value);");
-		sb.AppendLine("                reader.EnsureEndOfDocument();");
-		sb.AppendLine("                return reader.CurrentIndex;");
-		sb.AppendLine("            }");
-		sb.AppendLine("            finally { state.Reset(); }");
-		sb.AppendLine("        }");
-		sb.AppendLine();
-
-		sb.AppendLine("        public static int DeserializeJson(ReadOnlySpan<char> buffer, ref " + typeName + " value, LuminPackSerializerOption? options = null)");
-		sb.AppendLine("        {");
-		sb.AppendLine("            if (options?.StringEncoding is not LuminPackStringEncoding.UTF16)");
-		sb.AppendLine("            {");
-		sb.AppendLine("                int byteCount = Encoding.UTF8.GetByteCount(buffer);");
-		sb.AppendLine("                byte[] rented = ArrayPool<byte>.Shared.Rent(byteCount);");
-		sb.AppendLine("                try");
-		sb.AppendLine("                {");
-		sb.AppendLine("                    int written = Encoding.UTF8.GetBytes(buffer, rented);");
-		sb.AppendLine("                    return DeserializeJson(rented.AsSpan(0, written), ref value, options);");
-		sb.AppendLine("                }");
-		sb.AppendLine("                finally { ArrayPool<byte>.Shared.Return(rented); }");
-		sb.AppendLine("            }");
-		sb.AppendLine("            var state = _readerState ??= new LuminPackReaderOptionalState();");
-		sb.AppendLine("            state.Init(options);");
-		sb.AppendLine("            try");
-		sb.AppendLine("            {");
-		sb.AppendLine("                var bytes = MemoryMarshal.Cast<char, byte>(buffer);");
-		sb.AppendLine("                var reader = new LuminPackJsonReader(ref bytes, state);");
-		sb.AppendLine("                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\");");
-		sb.AppendLine("                " + extensionType + ".ReadValue(ref reader, ref value);");
-		sb.AppendLine("                reader.EnsureEndOfDocument();");
-		sb.AppendLine("                return reader.CurrentIndex;");
-		sb.AppendLine("            }");
-		sb.AppendLine("            finally { state.Reset(); }");
-		sb.AppendLine("        }");
-		sb.AppendLine();
-
-		sb.AppendLine("        public static int Sizeof(" + typeName + " value, LuminPackSerializerOption? option = null) => Serialize(value, option).Length;");
-		sb.AppendLine();
-	}
-
 	private static IEnumerable<LuminLocalFieldData> EnumerateFormatterFields(LuminDataInfo data)
 	{
 		HashSet<ITypeSymbol> visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
@@ -1642,7 +1234,7 @@ namespace LuminPack
 		}
 	}
 
-	private static string SanitizeAssemblyName(string assemblyName)
+	internal static string SanitizeAssemblyName(string assemblyName)
 	{
 		if (string.IsNullOrEmpty(assemblyName))
 		{

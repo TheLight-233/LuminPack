@@ -5,6 +5,7 @@ using BenchmarkDotNet.Jobs;
 using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Core;
+using LuminPack.Generated;
 using LuminPack.Option;
 using LuminPack.Utility;
 
@@ -47,7 +48,7 @@ public class BufferWriterOperationContextBenchmark
     private LuminBufferWriter _fastCustomBuffer = null!;
     private LuminBufferWriter _fastReadBuffer = null!;
     private byte[] _smallPayload = null!;
-
+    
     [GlobalSetup]
     public void Setup()
     {
@@ -144,7 +145,9 @@ public class BufferWriterOperationContextBenchmark
         try
         {
             var reader = new LuminPackReader(ref payload, state);
-            return reader.ReadValue<ContextSmall>();
+            ContextSmall? value = default;
+            reader.ReadValue(ref value);
+            return value;
         }
         finally
         {

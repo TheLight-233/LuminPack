@@ -299,7 +299,13 @@ internal static class LuminPackUnionDispatchCodeGenerator
                 }
                 else
                 {
-                    sb.AppendLine($"{padding}evaluator.CalculatePolymorphismValue(this);");
+                    // Open generic member: route through the generated generic
+                    // CalculateOffset<T> dispatch (typeof chain, JIT-folded for a
+                    // closed T), then undo the normal object header that the union
+                    // header replaces. No cache, no delegate.
+                    sb.AppendLine($"{padding}var concreteValue = this;");
+                    sb.AppendLine($"{padding}{extensionType}.CalculateOffset(ref evaluator, ref concreteValue);");
+                    sb.AppendLine($"{padding}evaluator.Subtract(1);");
                 }
                 break;
         }

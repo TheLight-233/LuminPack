@@ -2,6 +2,7 @@ using System.Text;
 using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Core;
+using LuminPack.Generated;
 using LuminPack.Option;
 using LuminPack.Utility;
 

@@ -902,15 +902,6 @@ namespace LuminPack.Core
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public T? ReadValue<T>()
-        {
-            T? value = default;
-            LuminPackFormatterCache.Cache<T>.Deserialize(ref this, ref value);
-            return value;
-        }
-        
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadObjectHeader(ref int index, out byte memberCount)
         {
             memberCount = _bufferReference[index];
@@ -1047,12 +1038,7 @@ namespace LuminPack.Core
                 array = AllocateUninitializedArray<T>(length);
             }
 
-            ref T first = ref LuminPackMarshal.GetArrayReference(array);
-            for (nint i = 0; i < length; i++)
-            {
-                this.ReadValue(ref Unsafe.Add(ref first, i));
-            }
-
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1090,12 +1076,7 @@ namespace LuminPack.Core
                 array = AllocateUninitializedArray<T>(length);
             }
 
-            ref T first = ref LuminPackMarshal.GetArrayReference(array);
-            for (nint i = 0; i < length; i++)
-            {
-                this.ReadValue(ref Unsafe.Add(ref first, i));
-            }
-
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1135,12 +1116,7 @@ namespace LuminPack.Core
                 span = AllocateUninitializedArray<T>(length);
             }
 
-            ref var first = ref MemoryMarshal.GetReference(span);
-            for (nint i = 0; i < length; i++)
-            {
-                this.ReadValue(ref Unsafe.Add(ref first, i));
-            }
-
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1179,12 +1155,7 @@ namespace LuminPack.Core
                 span = AllocateUninitializedArray<T>(length);
             }
 
-            ref var first = ref MemoryMarshal.GetReference(span);
-            for (nint i = 0; i < length; i++)
-            {
-                this.ReadValue(ref Unsafe.Add(ref first, i));
-            }
-
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1211,12 +1182,7 @@ namespace LuminPack.Core
                 array = AllocateUninitializedArray<T>(length);
             }
 
-            ref T first = ref LuminPackMarshal.GetArrayReference(array);
-            for (nint i = 0; i < length; i++)
-            {
-                this.ReadValue(ref Unsafe.Add(ref first, i));
-            }
-
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1243,12 +1209,7 @@ namespace LuminPack.Core
                 span = AllocateUninitializedArray<T>(length);
             }
 
-            ref var first = ref MemoryMarshal.GetReference(span);
-            for (nint i = 0; i < length; i++)
-            {
-                this.ReadValue(ref Unsafe.Add(ref first, i));
-            }
-
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

@@ -27,7 +27,7 @@ internal static class BinaryWriteInliningPolicyRegression
             .WithLanguageVersion(LanguageVersion.Preview)
             .WithPreprocessorSymbols("NET8_0_OR_GREATER");
         var references = platformReferences
-            .Append(MetadataReference.CreateFromFile(typeof(global::LuminPack.LuminPackSerializer).Assembly.Location))
+            .Append(MetadataReference.CreateFromFile(typeof(global::LuminPack.Core.LuminPackWriter).Assembly.Location))
             .ToArray();
         var compilation = CSharpCompilation.Create(
             "BinaryWriteInliningPolicy",

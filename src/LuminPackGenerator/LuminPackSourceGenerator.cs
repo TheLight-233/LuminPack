@@ -58,7 +58,8 @@ namespace LuminPack.SourceGenerator
                     var csOptions = (CSharpParseOptions)parseOptions;
                     var langVersion = csOptions.LanguageVersion;
                     var net8 = csOptions.PreprocessorSymbolNames.Contains("NET8_0_OR_GREATER");
-                    return (csOptions, langVersion, net8);
+                    var net9OrGreater = csOptions.PreprocessorSymbolNames.Contains("NET9_0_OR_GREATER");
+                    return (csOptions, langVersion, net8, net9OrGreater);
                 }).WithTrackingName("LuminPack.LuminPackable.0_ParseOptionsProvider");
                 
                 var metaInfo = parseOptionsInfo
@@ -66,14 +67,14 @@ namespace LuminPack.SourceGenerator
                     .Select((combined, _) =>
                     {
                         var (parseInfo, compilation) = combined;
-                        var (csOptions, langVersion, net8) = parseInfo;
+                        var (csOptions, langVersion, net8, net9OrGreater) = parseInfo;
                 
                         // 从 CompilationOptions 获取 unsafe 标志
                         var allowUnsafe = compilation.Options is CSharpCompilationOptions csharpOptions 
                             ? csharpOptions.AllowUnsafe 
                             : false;
                 
-                        return new MetaInfo(csOptions, langVersion, net8, allowUnsafe);
+                        return new MetaInfo(csOptions, langVersion, net8, net9OrGreater, allowUnsafe);
                     }).WithTrackingName("LuminPack.LuminPackable.0_MetaInfo");
 
         
