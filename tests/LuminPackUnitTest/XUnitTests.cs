@@ -107,5 +107,13 @@ namespace LuminPackUnitTest
         [Fact]
         public void PruneGenericWrapper()
             => AssertSuitePassed(Run(PruneGenericWrapperTest.Run));
+
+        [Fact]
+        public void ModelBoundary()
+            => AssertSuitePassed(Run(ModelBoundaryTest.Run));
+
+        [Fact]
+        public void IBufferWriterInterop()
+            => AssertSuitePassed(Run(IBufferWriterInteropTest.Run));
     }
 }

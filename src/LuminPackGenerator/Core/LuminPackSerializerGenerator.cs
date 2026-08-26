@@ -588,7 +588,9 @@ public static class LuminPackSerializerGenerator
     private static void AppendGenericFallbacks(StringBuilder sb, MetaInfo metaInfo)
     {
         AppendGenericSerialize(sb);
+        AppendGenericSerializeBufferWriter(sb);
         AppendGenericSerializeJson(sb);
+        AppendGenericSerializeJsonBufferWriter(sb);
         AppendGenericSizeof(sb);
         AppendGenericDeserializeSpan(sb);
         AppendGenericDeserializeSpanRef(sb);
@@ -624,6 +626,81 @@ public static class LuminPackSerializerGenerator
         sb.AppendLine("                var buffer = AllocateUninitializedArray<byte>(writer.CurrentIndex);");
         sb.AppendLine("                writer.GetSpan().CopyTo(buffer.AsSpan());");
         sb.AppendLine("                return buffer;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            finally");
+        sb.AppendLine("            {");
+        sb.AppendLine("                LuminBufferWriterPool.Return(writerBuffer);");
+        sb.AppendLine("                state.Reset();");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// Emits a generic <c>Serialize&lt;T&gt;(in T, IBufferWriter&lt;byte&gt;)</c> overload.  Serialization
+    /// runs through the existing LuminBufferWriter fast path (native buffer, concrete method calls only)
+    /// and the published payload is copied into the caller's <c>IBufferWriter&lt;byte&gt;</c> (e.g. a
+    /// <c>System.IO.Pipelines.PipeWriter</c> or <c>ArrayBufferWriter&lt;byte&gt;</c>).  The internal
+    /// generated call path is untouched, so no interface virtual dispatch enters the hot path.
+    /// </summary>
+    private static void AppendGenericSerializeBufferWriter(StringBuilder sb)
+    {
+        sb.AppendLine("        /// <summary>Serializes a <typeparamref name=\"T\"/> into an arbitrary <see cref=\"IBufferWriter{T}\"/> using the generated generic dispatch.</summary>");
+        sb.AppendLine("        /// <typeparam name=\"T\">The value type to serialize.</typeparam>");
+        sb.AppendLine("        /// <param name=\"value\">The value to serialize.</param>");
+        sb.AppendLine("        /// <param name=\"bufferWriter\">The destination writer, e.g. <c>System.IO.Pipelines.PipeWriter</c> or <c>ArrayBufferWriter&lt;byte&gt;</c>.</param>");
+        sb.AppendLine("        /// <param name=\"option\">The configuration for this call, or <see langword=\"null\"/> for LuminPack defaults.</param>");
+        sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+        sb.AppendLine("        " + _currentAccess + " static void Serialize<T>(in T value, global::System.Buffers.IBufferWriter<byte> bufferWriter, LuminPackSerializerOption? option = null)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (bufferWriter is null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(bufferWriter));");
+        sb.AppendLine("            var writerBuffer = LuminBufferWriterPool.Rent();");
+        sb.AppendLine("            var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();");
+        sb.AppendLine("            state.Init(option);");
+        sb.AppendLine("            try");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var writer = new LuminPackWriter(writerBuffer, state);");
+        sb.AppendLine("                writer.WriteValue(in value);");
+        sb.AppendLine("                var source = writer.GetSpan();");
+        sb.AppendLine("                var dest = bufferWriter.GetSpan(source.Length);");
+        sb.AppendLine("                source.CopyTo(dest);");
+        sb.AppendLine("                bufferWriter.Advance(source.Length);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            finally");
+        sb.AppendLine("            {");
+        sb.AppendLine("                LuminBufferWriterPool.Return(writerBuffer);");
+        sb.AppendLine("                state.Reset();");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine();
+    }
+
+    /// <summary>
+    /// Emits a generic <c>SerializeJson&lt;T&gt;(T, IBufferWriter&lt;byte&gt;)</c> overload writing the JSON
+    /// bytes (in the configured encoding) into an arbitrary <c>IBufferWriter&lt;byte&gt;</c>.
+    /// </summary>
+    private static void AppendGenericSerializeJsonBufferWriter(StringBuilder sb)
+    {
+        sb.AppendLine("        /// <summary>Serializes <typeparamref name=\"T\"/> as JSON bytes into an arbitrary <see cref=\"IBufferWriter{T}\"/> using the generated generic dispatch.</summary>");
+        sb.AppendLine("        /// <typeparam name=\"T\">The value type to serialize.</typeparam>");
+        sb.AppendLine("        /// <param name=\"value\">The value to serialize.</param>");
+        sb.AppendLine("        /// <param name=\"bufferWriter\">The destination writer that receives the JSON bytes.</param>");
+        sb.AppendLine("        /// <param name=\"option\">The configuration for this call, or <see langword=\"null\"/> for LuminPack defaults.</param>");
+        sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+        sb.AppendLine("        " + _currentAccess + " static void SerializeJson<T>(T value, global::System.Buffers.IBufferWriter<byte> bufferWriter, LuminPackSerializerOption? option = null)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (bufferWriter is null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(bufferWriter));");
+        sb.AppendLine("            var writerBuffer = LuminBufferWriterPool.Rent();");
+        sb.AppendLine("            var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();");
+        sb.AppendLine("            state.Init(option);");
+        sb.AppendLine("            try");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var writer = new LuminPackJsonWriter(writerBuffer, state);");
+        sb.AppendLine("                writer.WriteValue(in value);");
+        sb.AppendLine("                var source = writer.GetSpan();");
+        sb.AppendLine("                var dest = bufferWriter.GetSpan(source.Length);");
+        sb.AppendLine("                source.CopyTo(dest);");
+        sb.AppendLine("                bufferWriter.Advance(source.Length);");
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");

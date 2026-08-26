@@ -262,6 +262,8 @@ namespace LuminPackUnitTest
 StringSerializerFallbackTest.Run(testResults);
             InterfaceCollectionReadRegressionTest.Run(testResults);
             PruneGenericWrapperTest.Run(testResults);
+            ModelBoundaryTest.Run(testResults);
+            IBufferWriterInteropTest.Run(testResults);
 
             // Print summary
             Console.WriteLine("\n=========================================");

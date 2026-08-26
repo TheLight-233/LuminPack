@@ -30,18 +30,17 @@ LuminPack 在早期设计和实现过程中学习、借鉴了 MemoryPack 的优�
 
 ### ✨ 主要特性
 
-*   支持现代I / O api ( `ReadOnlySpan<byte>` ,  `ReadOnlySequence<byte>` )
-*   更新支持至.Net10
-*   基于增量源代码生成器的代码生成
-*   同时支持二进制、Json
-*   基于非托管内存的WriterBuffer
-*   无反射
-*   多态序列化
-*   有限的版本容忍（快速/默认）和完全的版本容忍支持
-*   循环引用序列化
-*   AOT友好
-*   反序列化缓存池
-*   通过增量源代码生成器支持Unity
+*   **几乎零运行时开销**：无反射、无运行时委托 / 字典缓存、无对象图查找——热路径全部是生成代码对具体方法的直接调用，JIT 可直接内联，序列化过程不产生虚调用与托管分配。
+*   **ALC 安全**：运行时不存在进程级 `Type` / 委托静态缓存；泛型派发与多态派发以 MethodTable 地址为键、值仅为 `int` 标识，可回收 `AssemblyLoadContext` 中的插件程序集可以正常卸载，无静态 provider 泄漏问题。
+*   **基于增量源代码生成器**：为每个 `[LuminPackable]` 类型在编译期生成专用解析代码；支持按需剪枝的生成模式（`Full` / `Medium` / `Light` / `Minimal`），在生成代码量与编译时长之间取舍。
+*   **支持现代 I/O API**：`ReadOnlySpan<byte>`、`ReadOnlySequence<byte>`，并可直接序列化进任意 `IBufferWriter<byte>`（如 `System.IO.Pipelines.PipeWriter`）。
+*   **同时支持二进制与 JSON**：两套独立协议，按场景选择。
+*   **基于非托管内存的 WriterBuffer**：原生缓冲 + 线程静态 / 集中池，扩容与复用几乎零分配。
+*   **多态序列化**：接口 / 抽象类 union 自动收集派生类型，支持跨程序集注册。
+*   **版本容忍**：快速（Object）与完全（VersionTolerant）两种模式。
+*   **循环引用序列化**：引用跟踪，支持对象环。
+*   **反序列化缓存池**：可复用实例，进一步降低 GC。
+*   **AOT 友好**：无反射、无动态代码生成，适配 .NET AOT、Unity Mono 与 IL2CPP，覆盖 `netstandard2.1` 至 `net10.0`。
 
 <a id="installation"></a>
 ## 📦 Installation 安装
