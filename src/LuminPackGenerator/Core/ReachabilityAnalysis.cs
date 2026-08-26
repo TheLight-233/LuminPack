@@ -442,44 +442,150 @@ internal static class ReachabilityAnalysisCache
     /// </summary>
     private static void ExpandUnionMembers(Compilation compilation, INamedTypeSymbol packable, ISet<ITypeSymbol> types, CompilationTypeAnalysis analysis)
     {
-        bool isUnion = packable.TypeKind == TypeKind.Interface ||
-                       packable.IsAbstract ||
-                       packable.GetAttributes().Any(static attribute =>
-                           attribute.AttributeClass?.ToDisplayString() == UnionAttributeName);
-        if (!isUnion)
+        bool isLuminUnion = packable.TypeKind == TypeKind.Interface ||
+                            packable.IsAbstract ||
+                            packable.GetAttributes().Any(static attribute =>
+                                attribute.AttributeClass?.ToDisplayString() == UnionAttributeName);
+
+        if (isLuminUnion)
         {
+            // Explicit [LuminPackUnion] members.
+            foreach (var attribute in packable.GetAttributes())
+            {
+                if (attribute.AttributeClass?.ToDisplayString() != UnionAttributeName)
+                {
+                    continue;
+                }
+                foreach (var argument in attribute.ConstructorArguments)
+                {
+                    if (argument.Value is INamedTypeSymbol member)
+                    {
+                        ExpandType(compilation, member, types, analysis);
+                    }
+                }
+            }
+
+            // Auto-discovered derived types declared in this compilation.
+            INamedTypeSymbol baseDef = packable.OriginalDefinition;
+            foreach (ProjectTypeData declared in analysis.DeclaredTypes)
+            {
+                if (!HasPackableAttribute(declared.Symbol))
+                {
+                    continue;
+                }
+                if (IsDerivedFrom(declared.Symbol, baseDef))
+                {
+                    ExpandType(compilation, declared.Symbol, types, analysis);
+                }
+            }
             return;
         }
 
-        // Explicit [LuminPackUnion] members.
-        foreach (var attribute in packable.GetAttributes())
+        // .NET 11 / C# 15 union declarations: expand their case types so pruning modes keep the
+        // case formatters reachable.  The synthesized [Union] attribute may not be visible to the
+        // generator for `union` keyword declarations, so also detect the union keyword in syntax.
+        if (IsCs11Union(packable, compilation))
         {
-            if (attribute.AttributeClass?.ToDisplayString() != UnionAttributeName)
+            foreach (ITypeSymbol caseType in CollectCs11UnionCaseTypes(compilation, packable))
+            {
+                ExpandType(compilation, caseType, types, analysis);
+            }
+        }
+    }
+
+    private static bool IsCs11Union(INamedTypeSymbol type, Compilation compilation)
+    {
+        INamedTypeSymbol? unionAttribute = compilation.GetTypeByMetadataName("System.Runtime.CompilerServices.UnionAttribute");
+        if (unionAttribute is not null &&
+            type.GetAttributes().Any(attribute => SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, unionAttribute)))
+        {
+            return true;
+        }
+
+        foreach (SyntaxReference reference in type.DeclaringSyntaxReferences)
+        {
+            SyntaxNode node = reference.GetSyntax();
+            if (node is TypeDeclarationSyntax tds &&
+                (tds.Keyword.Text == "union" || tds.Modifiers.Any(static m => m.Text == "union")))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static IEnumerable<ITypeSymbol> CollectCs11UnionCaseTypes(Compilation compilation, INamedTypeSymbol packable)
+    {
+        var cases = new List<ITypeSymbol>();
+        var seen = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+
+        // The compiler-generated case constructors are visible for the explicit [Union] form and, on
+        // a closed generic union, already substitute the type arguments (e.g. Some<UnionCat>).
+        foreach (IMethodSymbol ctor in packable.InstanceConstructors)
+        {
+            if (ctor.DeclaredAccessibility == Accessibility.Public &&
+                ctor.Parameters.Length == 1 &&
+                ctor.Parameters[0].Type is INamedTypeSymbol caseType &&
+                seen.Add(caseType))
+            {
+                cases.Add(caseType);
+            }
+        }
+
+        if (cases.Count != 0)
+        {
+            return cases;
+        }
+
+        // `union` keyword: case types live in the declaration's parameter list (read via reflection
+        // because the generator targets an older Roslyn).  For a closed generic union, substitute the
+        // type parameters so closed case types (Some<UnionCat>) stay reachable.
+        foreach (SyntaxReference reference in packable.DeclaringSyntaxReferences)
+        {
+            SyntaxNode node = reference.GetSyntax();
+            if (node is not TypeDeclarationSyntax tds ||
+                (tds.Keyword.Text != "union" && !tds.Modifiers.Any(static m => m.Text == "union")))
             {
                 continue;
             }
-            foreach (var argument in attribute.ConstructorArguments)
+
+            object? parameterList = node.GetType().GetProperty("ParameterList")?.GetValue(node);
+            object? parameters = parameterList?.GetType().GetProperty("Parameters")?.GetValue(parameterList);
+            if (parameters is not System.Collections.IEnumerable enumerable)
             {
-                if (argument.Value is INamedTypeSymbol member)
+                continue;
+            }
+
+            SemanticModel model = compilation.GetSemanticModel(node.SyntaxTree);
+            foreach (object? parameter in enumerable)
+            {
+                object? typeSyntax = parameter?.GetType().GetProperty("Type")?.GetValue(parameter);
+                if (typeSyntax is not SyntaxNode typeNode)
                 {
-                    ExpandType(compilation, member, types, analysis);
+                    continue;
+                }
+                if (model.GetTypeInfo(typeNode).Type is INamedTypeSymbol caseType && seen.Add(caseType))
+                {
+                    cases.Add(caseType);
+                }
+            }
+
+            if (packable.TypeArguments.Length != 0)
+            {
+                var map = new Dictionary<ITypeParameterSymbol, ITypeSymbol>(SymbolEqualityComparer.Default);
+                for (int i = 0; i < packable.TypeParameters.Length && i < packable.TypeArguments.Length; i++)
+                {
+                    map[packable.TypeParameters[i]] = packable.TypeArguments[i];
+                }
+                for (int i = 0; i < cases.Count; i++)
+                {
+                    cases[i] = Substitute(compilation, cases[i], map);
                 }
             }
         }
 
-        // Auto-discovered derived types declared in this compilation.
-        INamedTypeSymbol baseDef = packable.OriginalDefinition;
-        foreach (ProjectTypeData declared in analysis.DeclaredTypes)
-        {
-            if (!HasPackableAttribute(declared.Symbol))
-            {
-                continue;
-            }
-            if (IsDerivedFrom(declared.Symbol, baseDef))
-            {
-                ExpandType(compilation, declared.Symbol, types, analysis);
-            }
-        }
+        return cases;
     }
 
     private static bool IsDerivedFrom(INamedTypeSymbol derived, INamedTypeSymbol baseDef)

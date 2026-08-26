@@ -51,13 +51,20 @@ public static class LuminPackExtensionGenerator
 		string typeName = GetGlobalTypeName(data);
 		if (TryAddAnalyzedType(analyzedTypes, "root:" + typeName))
 		{
+			if (data.isUnion && data.isValueType)
+			{
+				LuminPackUnionCodeGenerator.GenerateCaseMapStruct(data, sb);
+			}
 			GenerateRootBinaryExtensions(sb, data, typeName, metaInfo);
 			GenerateRootJsonExtensions(sb, data, typeName, metaInfo);
-			LuminPackCodeGenerator.GenerateLocalClassStructure(
-				sb,
-				data,
-				analyzedTypes,
-				layout => analysis.IsLayoutOwnedBy(layout.TypeSymbol, owner));
+			if (!(data.isUnion && data.isValueType))
+			{
+				LuminPackCodeGenerator.GenerateLocalClassStructure(
+					sb,
+					data,
+					analyzedTypes,
+					layout => analysis.IsLayoutOwnedBy(layout.TypeSymbol, owner));
+			}
 			foreach (LuminDataField field in data.fields.Where(static x => x.ClassFields.Count > 0))
 			{
 				LuminPackCodeGenerator.GeneratorUnsafeAccessorMethod(sb, field, field.ClassFields, analyzedTypes);
@@ -713,7 +720,14 @@ public static class LuminPackExtensionGenerator
 		AppendRootMethodHeader(sb, "ReadValue", "LuminPackReader", typeName, data, metaInfo, read: true);
 		if (data.isUnion)
 		{
-			GenerateUnionDeserialize(data, sb);
+			if (data.isValueType)
+			{
+				GenerateUnionDeserializeStruct(sb, data);
+			}
+			else
+			{
+				GenerateUnionDeserialize(data, sb);
+			}
 		}
 		else
 		{
@@ -757,7 +771,14 @@ public static class LuminPackExtensionGenerator
 		sb.AppendLine("        {");
 		if (data.isUnion)
 		{
-			LuminPackUnionCodeGenerator.GenerateCalculateOffsetCode(data, sb, typeName);
+			if (data.isValueType)
+			{
+				LuminPackUnionCodeGenerator.GenerateCalculateOffsetCodeStruct(data, sb, typeName);
+			}
+			else
+			{
+				LuminPackUnionCodeGenerator.GenerateCalculateOffsetCode(data, sb, typeName);
+			}
 		}
 		else
 		{
@@ -782,7 +803,14 @@ public static class LuminPackExtensionGenerator
 	{
 		if (data.isUnion)
 		{
-			GenerateUnionJsonExtensions(sb, data, typeName, metaInfo);
+			if (data.isValueType)
+			{
+				GenerateUnionJsonExtensionsStruct(sb, data, typeName, metaInfo);
+			}
+			else
+			{
+				GenerateUnionJsonExtensions(sb, data, typeName, metaInfo);
+			}
 			return;
 		}
 
@@ -918,6 +946,39 @@ public static class LuminPackExtensionGenerator
 		sb.AppendLine("            }");
 	}
 
+	/// <summary>
+	/// Root binary deserialize for a .NET 11 union struct: read the tag, read the case value with the
+	/// concrete <c>ReadValue</c>, then reconstruct the union through its single-parameter case constructor.
+	/// </summary>
+	private static void GenerateUnionDeserializeStruct(StringBuilder sb, LuminDataInfo data)
+	{
+		int maxTag = data.UnionMembers.Count == 0 ? 0 : data.UnionMembers.Max(static member => member.Id);
+		sb.AppendLine(maxTag < 250 && !data.IsWideTag
+			? "            if (!reader.TryPeekUnionHeader(out var tag))"
+			: "            if (!reader.TryPeekWideUnionHeader(out var tag))");
+		sb.AppendLine("            {");
+		sb.AppendLine("                value = default;");
+		sb.AppendLine("                return;");
+		sb.AppendLine("            }");
+		sb.AppendLine("            switch (tag)");
+		sb.AppendLine("            {");
+		foreach (LuminUnionMemberInfo member in data.UnionMembers)
+		{
+			string memberType = GetUnionMemberType(data, member);
+			sb.AppendLine("                case " + member.Id + ":");
+			sb.AppendLine("                {");
+			sb.AppendLine("                    " + memberType + " member = default!;");
+			sb.AppendLine("                    reader.ReadValue(ref member);");
+			sb.AppendLine("                    value = new " + data.classFullName + "(member);");
+			sb.AppendLine("                    return;");
+			sb.AppendLine("                }");
+		}
+		sb.AppendLine("                default:");
+		sb.AppendLine("                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof(" + data.classFullName + ")); ");
+		sb.AppendLine("                    return;");
+		sb.AppendLine("            }");
+	}
+
 	private static void GenerateUnionJsonExtensions(StringBuilder sb, LuminDataInfo data, string typeName, MetaInfo metaInfo)
 	{
 		string genericParameters = data.isGeneric ? "<" + string.Join(", ", data.GenericParameters) + ">" : string.Empty;
@@ -957,6 +1018,51 @@ public static class LuminPackExtensionGenerator
 			sb.AppendLine(compatibility.RequiresCast
 				? "                        value = (" + data.classFullName + ")(object)member;"
 				: "                        value = member;");
+			sb.AppendLine("                        break;");
+			sb.AppendLine("                    }");
+		}
+		sb.AppendLine("                    default: global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof(" + typeName + ")); break;");
+		sb.AppendLine("                }");
+		sb.AppendLine("            }");
+		sb.AppendLine("        }");
+		sb.AppendLine();
+	}
+
+	private static void GenerateUnionJsonExtensionsStruct(StringBuilder sb, LuminDataInfo data, string typeName, MetaInfo metaInfo)
+	{
+		string genericParameters = data.isGeneric ? "<" + string.Join(", ", data.GenericParameters) + ">" : string.Empty;
+		sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+		sb.AppendLine("        public static void WriteValue" + genericParameters + "(ref this global::LuminPack.Core.LuminPackJsonWriter writer, " + (metaInfo.IsNet8 ? "scoped in " : "in ") + typeName + " value)");
+		AppendGenericConstraints(sb, data);
+		sb.AppendLine("        {");
+		LuminPackUnionCodeGenerator.GenerateSerializeJsonCodeStruct(data, sb, typeName);
+		sb.AppendLine("        }");
+		sb.AppendLine();
+		sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
+		sb.AppendLine("        public static void ReadValue" + genericParameters + "(ref this global::LuminPack.Core.LuminPackJsonReader reader, " + (metaInfo.IsNet8 ? "scoped ref " : "ref ") + typeName + " value)");
+		AppendGenericConstraints(sb, data);
+		sb.AppendLine("        {");
+		sb.AppendLine("            if (reader.IsNull()) { value = default; return; }");
+		sb.AppendLine("            reader.TryConsumeObjectStart();");
+		sb.AppendLine("            ushort tag = 0;");
+		sb.AppendLine("            while (reader.Read())");
+		sb.AppendLine("            {");
+		sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd) return;");
+		sb.AppendLine("                if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String) continue;");
+		sb.AppendLine("                var property = reader.ReadString();");
+		sb.AppendLine("                if (!reader.Read()) break;");
+		sb.AppendLine("                if (property == \"$type\") { tag = (ushort)reader.ReadInt(); continue; }");
+		sb.AppendLine("                if (property != \"$value\") { reader.Skip(); continue; }");
+		sb.AppendLine("                switch (tag)");
+		sb.AppendLine("                {");
+		foreach (LuminUnionMemberInfo member in data.UnionMembers)
+		{
+			string memberType = GetUnionMemberType(data, member);
+			sb.AppendLine("                    case " + member.Id + ":");
+			sb.AppendLine("                    {");
+			sb.AppendLine("                        " + memberType + " member = default!;");
+			sb.AppendLine("                        global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref member);");
+			sb.AppendLine("                        value = new " + data.classFullName + "(member);");
 			sb.AppendLine("                        break;");
 			sb.AppendLine("                    }");
 		}
@@ -1047,7 +1153,7 @@ public static class LuminPackExtensionGenerator
 		}
 	}
 
-	private static void AppendGenericConstraints(StringBuilder sb, LuminDataInfo data)
+	internal static void AppendGenericConstraints(StringBuilder sb, LuminDataInfo data)
 	{
 		foreach (GenericParameterConstraint constraint in data.GenericConstraints)
 		{
@@ -1221,7 +1327,14 @@ public static class LuminPackExtensionGenerator
 	{
 		if (data.isUnion)
 		{
-			LuminPackUnionCodeGenerator.GenerateSerializeCode(data, sb);
+			if (data.isValueType)
+			{
+				LuminPackUnionCodeGenerator.GenerateSerializeCodeStruct(data, sb);
+			}
+			else
+			{
+				LuminPackUnionCodeGenerator.GenerateSerializeCode(data, sb);
+			}
 			return;
 		}
 		switch (data.generatorType)
@@ -1242,7 +1355,14 @@ public static class LuminPackExtensionGenerator
 	{
 		if (data.isUnion)
 		{
-			LuminPackUnionCodeGenerator.GenerateDeserializeCode(data, sb);
+			if (data.isValueType)
+			{
+				LuminPackUnionCodeGenerator.GenerateDeserializeCodeStruct(data, sb);
+			}
+			else
+			{
+				LuminPackUnionCodeGenerator.GenerateDeserializeCode(data, sb);
+			}
 			return;
 		}
 		switch (data.generatorType)

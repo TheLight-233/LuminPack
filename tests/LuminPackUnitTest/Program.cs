@@ -264,6 +264,9 @@ StringSerializerFallbackTest.Run(testResults);
             PruneGenericWrapperTest.Run(testResults);
             ModelBoundaryTest.Run(testResults);
             IBufferWriterInteropTest.Run(testResults);
+#if NET11_0_OR_GREATER
+            Net11UnionTest.Run(testResults);
+#endif
 
             // Print summary
             Console.WriteLine("\n=========================================");

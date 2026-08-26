@@ -115,5 +115,11 @@ namespace LuminPackUnitTest
         [Fact]
         public void IBufferWriterInterop()
             => AssertSuitePassed(Run(IBufferWriterInteropTest.Run));
+
+#if NET11_0_OR_GREATER
+        [Fact]
+        public void Net11Union()
+            => AssertSuitePassed(Run(Net11UnionTest.Run));
+#endif
     }
 }

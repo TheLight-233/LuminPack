@@ -36,18 +36,18 @@ LuminPack 在早期设计和实现过程中学习、借鉴了 MemoryPack 的优�
 *   **支持现代 I/O API**：`ReadOnlySpan<byte>`、`ReadOnlySequence<byte>`，并可直接序列化进任意 `IBufferWriter<byte>`（如 `System.IO.Pipelines.PipeWriter`）。
 *   **同时支持二进制与 JSON**：两套独立协议，按场景选择。
 *   **基于非托管内存的 WriterBuffer**：原生缓冲 + 线程静态 / 集中池，扩容与复用几乎零分配。
-*   **多态序列化**：接口 / 抽象类 union 自动收集派生类型，支持跨程序集注册。
+*   **多态序列化**：接口 / 抽象类 union 自动收集派生类型，支持跨程序集注册；原生支持 .NET 11 / C# 15 的 `union` 类型（含泛型 union 与值类型 case）。
 *   **版本容忍**：快速（Object）与完全（VersionTolerant）两种模式。
 *   **循环引用序列化**：引用跟踪，支持对象环。
 *   **反序列化缓存池**：可复用实例，进一步降低 GC。
-*   **AOT 友好**：无反射、无动态代码生成，适配 .NET AOT、Unity Mono 与 IL2CPP，覆盖 `netstandard2.1` 至 `net10.0`。
+*   **AOT 友好**：无反射、无动态代码生成，适配 .NET AOT、Unity Mono 与 IL2CPP，覆盖 `netstandard2.1` 至 `net11.0`。
 
 <a id="installation"></a>
 ## 📦 Installation 安装
 
 ### .NET 项目
 
-LuminPack 支持 `netstandard2.1`、`net8.0`、`net9.0` 和 `net10.0`。只需安装 `LuminPack`，NuGet 会自动安装匹配版本的 `LuminPackGenerator` 依赖：
+LuminPack 支持 `netstandard2.1`、`net8.0`、`net9.0`、`net10.0` 和 `net11.0`。只需安装 `LuminPack`，NuGet 会自动安装匹配版本的 `LuminPackGenerator` 依赖：
 
 ```shell
 dotnet add package LuminPack
@@ -57,7 +57,7 @@ dotnet add package LuminPack
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="LuminPack" Version="1.1.3" />
+  <PackageReference Include="LuminPack" Version="1.1.4" />
 </ItemGroup>
 ```
 

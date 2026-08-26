@@ -79,10 +79,10 @@ namespace LuminPack.SourceGenerator
 
         
                 var typeDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
-                    static (node, _) => node 
-                        is ClassDeclarationSyntax 
-                        or StructDeclarationSyntax 
-                        or InterfaceDeclarationSyntax 
+                    static (node, _) => node
+                        is TypeDeclarationSyntax
+                        or StructDeclarationSyntax
+                        or InterfaceDeclarationSyntax
                         or RecordDeclarationSyntax,
                     static (context, _) =>
                     {
@@ -160,7 +160,7 @@ namespace LuminPack.SourceGenerator
                         }
 
                         var extension = LuminPackExtensionGenerator.CodeGenerator(dataInfo, metaInfo, compilation);
-                        var unionDispatch = dataInfo.isUnion
+                        var unionDispatch = dataInfo.isUnion && !dataInfo.isValueType
                             ? LuminPackUnionDispatchCodeGenerator.Generate(dataInfo, compilation)
                             : string.Empty;
                         if (string.IsNullOrEmpty(extension)) return;
@@ -276,15 +276,28 @@ namespace LuminPack.SourceGenerator
             //Check Layout
             TypeMetaChecker.TryCheckStructLayout(typeSymbol, dataInfo);
             
-            if (symbol.IsAbstract)
+            // .NET 11 (C# 15) union declarations lower to a struct carrying
+            // [System.Runtime.CompilerServices.Union] + IUnion + one public single-parameter
+            // constructor per case type.  Treat them as union roots exactly like
+            // abstract-class/interface unions.  The attribute exists only on .NET 11+, which is the
+            // high/low version gate: older TFMs never satisfy this branch.
+            bool isCs11UnionStruct = IsCs11UnionStruct(typeSymbol, compilation);
+            if (isCs11UnionStruct)
             {
                 dataInfo.isUnion = true;
-
-                dataInfo.IsWideTag = TypeMetaChecker.TryCheckWideTagAttribute(typeSymbol);
+                CollectCs11UnionStructMembers(typeSymbol, dataInfo, compilation);
             }
-            
-            if (TypeMetaChecker.TryCheckUnionAttribute(typeSymbol) || symbol.IsAbstract)
+            else
             {
+                if (symbol.IsAbstract)
+                {
+                    dataInfo.isUnion = true;
+
+                    dataInfo.IsWideTag = TypeMetaChecker.TryCheckWideTagAttribute(typeSymbol);
+                }
+            
+                if (TypeMetaChecker.TryCheckUnionAttribute(typeSymbol) || symbol.IsAbstract)
+                {
                 if (!dataInfo.CanGenerateUnionDispatch)
                 {
                     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
@@ -455,6 +468,7 @@ namespace LuminPack.SourceGenerator
                 }
 
             }
+            }
 
             if (dataInfo.generatorType is GeneratorType.CircleReference or GeneratorType.VersionTolerant)
             {
@@ -542,7 +556,10 @@ namespace LuminPack.SourceGenerator
             
             TypeMetaChecker.CheckSerializeCallBack(typeSymbol, dataInfo);
             
-            AnalyzeMainClassConstructors(typeSymbol, dataInfo);
+            if (!dataInfo.isUnion)
+            {
+                AnalyzeMainClassConstructors(typeSymbol, dataInfo);
+            }
             
             dataInfo.RentPoolMethod = TypeMetaChecker.AnalyzeRentPoolMethod(typeSymbol, _location);
             
@@ -2267,6 +2284,120 @@ namespace LuminPack.SourceGenerator
         /// <summary>
         /// 分析主类的构造函数
         /// </summary>
+        /// <summary>
+        /// Detects a .NET 11 / C# 15 union.  Two forms are recognized:
+        /// 1. An explicit <c>[System.Runtime.CompilerServices.Union]</c> attribute on a struct (the
+        ///    custom-union pattern) — the attribute and case constructors are visible to the generator.
+        /// 2. A <c>union Pet(Cat, Dog);</c> declaration, whose <c>UnionDeclarationSyntax</c> reaches
+        ///    the generator as a <c>TypeDeclarationSyntax</c> carrying a <c>union</c> keyword.  Its
+        ///    synthesized <c>[Union]</c> attribute and constructors are added during lowering (after
+        ///    generators run), so it is detected from syntax and the case types are read from the
+        ///    parameter list.
+        /// The <c>System.Runtime.CompilerServices.UnionAttribute</c> metadata type exists only on
+        /// .NET 11+, which is the high/low version gate: older TFMs never satisfy this branch.
+        /// </summary>
+        private static bool IsCs11UnionStruct(INamedTypeSymbol type, Compilation compilation)
+        {
+            INamedTypeSymbol? unionAttribute = compilation.GetTypeByMetadataName("System.Runtime.CompilerServices.UnionAttribute");
+            if (unionAttribute is not null &&
+                type.GetAttributes().Any(attribute =>
+                    SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, unionAttribute)))
+            {
+                return true;
+            }
+
+            foreach (SyntaxReference reference in type.DeclaringSyntaxReferences)
+            {
+                SyntaxNode node = reference.GetSyntax();
+                if (node is TypeDeclarationSyntax tds &&
+                    (tds.Keyword.Text == "union" || tds.Modifiers.Any(static m => m.Text == "union")))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        /// Collects the case types of a .NET 11 union.  Prefers the compiler-generated case
+        /// constructors (visible for the explicit <c>[Union]</c> form).  For <c>union</c> declarations
+        /// the constructors are synthesized after generator execution, so the case types are read from
+        /// the declaration's parameter list instead.
+        /// </summary>
+        private static void CollectCs11UnionStructMembers(INamedTypeSymbol type, LuminDataInfo dataInfo, Compilation compilation)
+        {
+            ushort tag = 0;
+            var seen = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+
+            foreach (IMethodSymbol ctor in type.InstanceConstructors)
+            {
+                if (ctor.DeclaredAccessibility != Accessibility.Public || ctor.Parameters.Length != 1)
+                {
+                    continue;
+                }
+
+                if (ctor.Parameters[0].Type is not INamedTypeSymbol caseType ||
+                    !seen.Add(caseType))
+                {
+                    continue;
+                }
+
+                dataInfo.UnionMembers.Add(new LuminUnionMemberInfo(tag++, caseType));
+            }
+
+            if (tag == 0)
+            {
+                CollectCs11UnionCaseTypesFromSyntax(type, dataInfo, compilation, seen);
+            }
+
+            dataInfo.IsWideTag = tag > 249;
+        }
+
+        private static void CollectCs11UnionCaseTypesFromSyntax(
+            INamedTypeSymbol type,
+            LuminDataInfo dataInfo,
+            Compilation compilation,
+            HashSet<ITypeSymbol> seen)
+        {
+            foreach (SyntaxReference reference in type.DeclaringSyntaxReferences)
+            {
+                SyntaxNode node = reference.GetSyntax();
+                if (node is not TypeDeclarationSyntax tds ||
+                    (tds.Keyword.Text != "union" && !tds.Modifiers.Any(static m => m.Text == "union")))
+                {
+                    continue;
+                }
+
+                // UnionDeclarationSyntax carries the case types in a parameter list; reach it through
+                // reflection so the generator (built against older Roslyn) works in the .NET 11 host.
+                object? parameterList = node.GetType().GetProperty("ParameterList")?.GetValue(node);
+                object? parameters = parameterList?.GetType().GetProperty("Parameters")?.GetValue(parameterList);
+                if (parameters is not System.Collections.IEnumerable enumerable)
+                {
+                    continue;
+                }
+
+                SemanticModel model = compilation.GetSemanticModel(node.SyntaxTree);
+                foreach (object? parameter in enumerable)
+                {
+                    object? typeSyntax = parameter?.GetType().GetProperty("Type")?.GetValue(parameter);
+                    if (typeSyntax is not SyntaxNode typeNode)
+                    {
+                        continue;
+                    }
+
+                    if (model.GetTypeInfo(typeNode).Type is not INamedTypeSymbol caseType ||
+                        !seen.Add(caseType))
+                    {
+                        continue;
+                    }
+
+                    dataInfo.UnionMembers.Add(new LuminUnionMemberInfo((ushort)dataInfo.UnionMembers.Count, caseType));
+                }
+            }
+        }
+
         private static void AnalyzeMainClassConstructors(INamedTypeSymbol typeSymbol, LuminDataInfo dataInfo)
         {
             dataInfo.SelectedConstructor = AnalyzeTypeConstructors(
