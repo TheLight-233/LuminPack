@@ -67,13 +67,21 @@ public static class LuminPackExtensionGenerator
 		return GenerateExtension(sb, GetExtensionClassName(compilation));
 	}
 
-	public static string GenerateSerializerInvocationSupport(Compilation compilation, MetaInfo metaInfo)
+	public static string GenerateSerializerInvocationSupport(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis? reachability = null)
 	{
 		CompilationTypeAnalysis analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
 		var sb = new StringBuilder();
 		var analyzedTypes = new HashSet<string>(StringComparer.Ordinal);
-		foreach (ITypeSymbol type in analysis.FormatterTypes
-			.Where(type => !analysis.HasOwner(type))
+
+		// Full mode emits every no-owner type observed in the project.  Prune mode restricts the
+		// source set to the reachable no-owner types and suppresses optional variants (compress /
+		// fresh-read), which are only ever referenced through [LuminPackable] member graphs (owned
+		// types) and are therefore never needed by a reachable no-owner formatter.
+		IEnumerable<ITypeSymbol> sourceTypes = reachability is null
+			? analysis.FormatterTypes.Where(type => !analysis.HasOwner(type))
+			: reachability.ReachableNoOwnerTypes;
+
+		foreach (ITypeSymbol type in sourceTypes
 			.Where(static type => !ContainsTypeParameter(type))
 			.Where(IsAotVisible)
 			.Where(IsStaticFormatterCandidate)
@@ -85,10 +93,10 @@ public static class LuminPackExtensionGenerator
 				TypeSymbol = type,
 				Name = "value",
 				IsValue = type.IsValueType
-			}, metaInfo, analyzedTypes);
+			}, metaInfo, analyzedTypes, emitOptionalVariants: reachability is null);
 		}
 
-		AppendGenericDispatchExtensions(sb, compilation, metaInfo);
+		AppendGenericDispatchExtensions(sb, compilation, metaInfo, reachability);
 
 		return GenerateExtension(sb, GetExtensionClassName(compilation));
 	}
@@ -101,9 +109,9 @@ public static class LuminPackExtensionGenerator
 	/// dispatches with a dense <c>switch(id)</c> that the JIT lowers to a jump table. This is O(1)
 	/// with no cache, no delegate, and no linear typeof-chain.
 	/// </summary>
-	private static void AppendGenericDispatchExtensions(StringBuilder sb, Compilation compilation, MetaInfo metaInfo)
+	private static void AppendGenericDispatchExtensions(StringBuilder sb, Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis? reachability = null)
 	{
-		ITypeSymbol[] types = GetOrderedFormatterTypes(compilation);
+		ITypeSymbol[] types = GetOrderedFormatterTypes(compilation, reachability);
 		string scopedIn = metaInfo.IsNet8 ? "scoped in " : "in ";
 		string scopedRef = metaInfo.IsNet8 ? "scoped ref " : "ref ";
 		string unsafeAs = "global::System.Runtime.CompilerServices.Unsafe.As";
@@ -228,8 +236,21 @@ public static class LuminPackExtensionGenerator
 
 
 	internal static ITypeSymbol[] GetOrderedFormatterTypes(Compilation compilation)
+		=> GetOrderedFormatterTypes(compilation, reachability: null);
+
+	internal static ITypeSymbol[] GetOrderedFormatterTypes(Compilation compilation, ReachabilityAnalysis? reachability)
 	{
-		return CompilationTypeAnalysisCache.GetOrCreate(compilation).FormatterTypes
+		CompilationTypeAnalysis analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
+
+		// Full mode lists every formatter type in the project.  Prune tiers list exactly the emitted
+		// set (emitted owned graphs plus the reachable no-owner complement); the generic dispatch
+		// switch and the serializer entry overloads must reference exactly the types for which a
+		// concrete extension method is emitted.
+		IEnumerable<ITypeSymbol> types = reachability is null
+			? analysis.FormatterTypes
+			: reachability.EmittedTypes;
+
+		return types
 			.Where(static type => !ContainsTypeParameter(type))
 			.Where(IsAotVisible)
 			.Where(IsStaticFormatterCandidate)
@@ -346,7 +367,7 @@ public static class LuminPackExtensionGenerator
 		};
 	}
 
-	private static bool ContainsTypeParameter(ITypeSymbol? type)
+	internal static bool ContainsTypeParameter(ITypeSymbol? type)
 	{
 		if (type is null || type is ITypeParameterSymbol)
 		{
@@ -361,7 +382,7 @@ public static class LuminPackExtensionGenerator
 		};
 	}
 
-	private static bool IsAotVisible(ITypeSymbol type)
+	internal static bool IsAotVisible(ITypeSymbol type)
 	{
 		if (type is IArrayTypeSymbol array)
 		{
@@ -389,7 +410,7 @@ public static class LuminPackExtensionGenerator
 		return true;
 	}
 
-	private static bool IsStaticFormatterCandidate(ITypeSymbol type)
+	internal static bool IsStaticFormatterCandidate(ITypeSymbol type)
 	{
 		if (type.TypeKind == TypeKind.Enum)
 		{
@@ -450,7 +471,8 @@ public static class LuminPackExtensionGenerator
 		StringBuilder sb,
 		LuminLocalFieldData field,
 		MetaInfo metaInfo,
-		HashSet<string> analyzedTypes)
+		HashSet<string> analyzedTypes,
+		bool emitOptionalVariants = true)
 	{
 		string typeName = field.TypeName;
 		bool isEnum = field.TypeSymbol?.TypeKind == TypeKind.Enum;
@@ -506,22 +528,25 @@ public static class LuminPackExtensionGenerator
 		if (staticFormatter.Write is not null && staticFormatter.Read is not null)
 		{
 			AppendBinaryFormatterExtension(sb, typeName, field, (staticFormatter.Write, staticFormatter.Read), metaInfo);
-			var compressed = CodeEmitterRegistry.GetCompressEmitter(typeName);
-			if (compressed.Item1 is not null && compressed.Item2 is not null)
+			if (emitOptionalVariants)
 			{
-				GenerateWithCompressExtension(sb, typeName, field, compressed, metaInfo);
-			}
-			if (IsExactListType(typeName))
-			{
-				GenerateFreshListDeserializeExtension(sb, typeName, field, metaInfo);
-			}
-			else if (IsExactDictionaryType(typeName))
-			{
-				GenerateFreshDictionaryDeserializeExtension(sb, typeName, field, metaInfo);
-			}
-			else if (IsExactManagedArrayType(field.TypeSymbol))
-			{
-				GenerateFreshArrayDeserializeExtension(sb, typeName, field, metaInfo);
+				var compressed = CodeEmitterRegistry.GetCompressEmitter(typeName);
+				if (compressed.Item1 is not null && compressed.Item2 is not null)
+				{
+					GenerateWithCompressExtension(sb, typeName, field, compressed, metaInfo);
+				}
+				if (IsExactListType(typeName))
+				{
+					GenerateFreshListDeserializeExtension(sb, typeName, field, metaInfo);
+				}
+				else if (IsExactDictionaryType(typeName))
+				{
+					GenerateFreshDictionaryDeserializeExtension(sb, typeName, field, metaInfo);
+				}
+				else if (IsExactManagedArrayType(field.TypeSymbol))
+				{
+					GenerateFreshArrayDeserializeExtension(sb, typeName, field, metaInfo);
+				}
 			}
 		}
 

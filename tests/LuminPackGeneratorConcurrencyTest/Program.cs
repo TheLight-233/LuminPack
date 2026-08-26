@@ -103,6 +103,27 @@ if (args.Contains("--verify-unity-nullable-merge-compatibility", StringComparer.
     return;
 }
 
+if (args.Contains("--verify-light-mode", StringComparer.Ordinal))
+{
+    VerifyLightMode(references);
+    Console.WriteLine("Passed light-mode reachability, interprocedural propagation, and variant gating verification.");
+    return;
+}
+
+if (args.Contains("--verify-medium-mode", StringComparer.Ordinal))
+{
+    VerifyMediumMode(references);
+    Console.WriteLine("Passed medium-mode accessibility tiering verification.");
+    return;
+}
+
+if (args.Contains("--verify-minimal-mode", StringComparer.Ordinal))
+{
+    VerifyMinimalMode(references);
+    Console.WriteLine("Passed minimal-mode call-site-only pruning verification.");
+    return;
+}
+
 var failures = new ConcurrentQueue<string>();
 Parallel.For(0, CompilationCount, compilationIndex =>
 {
@@ -733,11 +754,348 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
     }
 }
 
+static void VerifyLightMode(MetadataReference[] platformReferences)
+{
+    var parseOptions = CSharpParseOptions.Default
+        .WithLanguageVersion(LanguageVersion.Preview)
+        .WithPreprocessorSymbols("NET8_0_OR_GREATER");
+    var runtimeReference = MetadataReference.CreateFromFile(
+        typeof(global::LuminPack.Core.LuminPackWriter).Assembly.Location);
+
+    // The serializer entry point (LuminPackSerializer) is source-generated, so it does not exist
+    // in the runtime assembly. Provide a minimal stub in a separate referenced assembly so the
+    // consumer's input compilation can resolve the call sites that prune-mode reachability scans.
+    const string runtimeStubSource = """
+        namespace LuminPack
+        {
+            public static class LuminPackSerializer
+            {
+                public static byte[] Serialize<T>(T value) => System.Array.Empty<byte>();
+                public static T Deserialize<T>(byte[] bytes) => default!;
+            }
+        }
+        """;
+    var runtimeStub = CSharpCompilation.Create(
+        "LuminPackRuntimeStub",
+        new[] { CSharpSyntaxTree.ParseText(runtimeStubSource, parseOptions) },
+        platformReferences.Append(runtimeReference),
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    var references = platformReferences.Append(runtimeReference)
+        .Append(runtimeStub.ToMetadataReference())
+        .ToArray();
+
+    const string source = """
+        using System.Collections.Generic;
+        using LuminPack;
+        using LuminPack.Attribute;
+
+        [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Light)]
+
+        [LuminPackable]
+        public partial class UsedPackable
+        {
+            public List<int> Numbers = default!;
+        }
+
+        [LuminPackable]
+        public partial class UnusedPackable
+        {
+            public string Name = default!;
+        }
+
+        // Not [LuminPackable] and never passed to a serializer call site: must not emit
+        // a concrete formatter in prune mode, and must not appear in the generic dispatch.
+        public sealed class NeverMentionedPayload
+        {
+            public int Value;
+        }
+
+        public static class Wrappers
+        {
+            // Interprocedural generic wrapper: the payload type T is resolved from the concrete
+            // call sites of Save<...>/Restore<...>.  Dictionary<string,List<int>> is a valid
+            // no-owner formatter candidate reached ONLY through this wrapper.
+            public static void Save<T>(T value)
+            {
+                _ = LuminPackSerializer.Serialize(value);
+            }
+
+            public static T Restore<T>(byte[] bytes)
+            {
+                return LuminPackSerializer.Deserialize<T>(bytes);
+            }
+        }
+
+        public static class Usage
+        {
+            public static byte[] Run()
+            {
+                Wrappers.Save(new Dictionary<string, List<int>>());
+                var restored = Wrappers.Restore<Dictionary<string, List<int>>>(System.Array.Empty<byte>());
+                _ = restored;
+                return LuminPackSerializer.Serialize(new UsedPackable());
+            }
+        }
+        """;
+
+    var input = CSharpCompilation.Create(
+        "LightModeVerify",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    var (output, generated) = RunPruneModeGenerators(input, parseOptions);
+    AssertNoCompilationErrors(output, "Light mode closed graph", ignoreRoslyn43RefReadonlyMismatch: true);
+
+    // Dictionary<string,List<int>> is a valid no-owner formatter candidate reached only through the
+    // interprocedural generic wrapper Save<...>/Restore<...>.
+    if (!generated.Contains("global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<int>>", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Light mode did not propagate the concrete instantiation through the generic wrapper method.");
+    }
+
+    // NeverMentionedPayload is neither owned nor passed to any serializer call site.
+    if (generated.Contains("NeverMentionedPayload", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Light mode emitted a formatter for a type that is not reachable from any serializer call site.");
+    }
+
+    // The dispatch switch must reference exactly the emitted set (owned + reachable no-owner).
+    const string dispatchType = "global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<int>>";
+    if (!generated.Contains("GetMethodTable(typeof(" + dispatchType + "))", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "The light-mode generic dispatch case for the wrapper-reached type was not registered.");
+    }
+    if (generated.Contains("GetMethodTable(typeof(global::NeverMentionedPayload", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "The light-mode generic dispatch registered a formatter that was not generated.");
+    }
+
+    // Owned types (UsedPackable) and their graphs always emit.  UnusedPackable is owned too, so it
+    // emits as a per-type root even though no call site reaches it.
+    if (!generated.Contains("global::UsedPackable", StringComparison.Ordinal) ||
+        !generated.Contains("global::UnusedPackable", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Light mode dropped an owned [LuminPackable] type that must always emit.");
+    }
+
+    // Optional variants are gated: the wrapper-reached collection is a no-owner type and its
+    // reachable graph contains no compress / fresh-read reference, so its formatter must not carry
+    // those variants.
+    if (generated.Contains("WriteValueWithCompress(ref this LuminPackWriter writer, scoped in global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<int>>", StringComparison.Ordinal) ||
+        generated.Contains("ReadFreshValue(ref this LuminPackReader reader, scoped ref global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<int>>", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Light mode emitted an unreferenced optional formatter variant for a reachable no-owner type.");
+    }
+}
+
+static void VerifyMediumMode(MetadataReference[] platformReferences)
+{
+    var parseOptions = CSharpParseOptions.Default
+        .WithLanguageVersion(LanguageVersion.Preview)
+        .WithPreprocessorSymbols("NET8_0_OR_GREATER");
+    var runtimeReference = MetadataReference.CreateFromFile(
+        typeof(global::LuminPack.Core.LuminPackWriter).Assembly.Location);
+
+    const string runtimeStubSource = """
+        namespace LuminPack
+        {
+            public static class LuminPackSerializer
+            {
+                public static byte[] Serialize<T>(T value) => System.Array.Empty<byte>();
+                public static T Deserialize<T>(byte[] bytes) => default!;
+            }
+        }
+        """;
+    var runtimeStub = CSharpCompilation.Create(
+        "LuminPackRuntimeStub",
+        new[] { CSharpSyntaxTree.ParseText(runtimeStubSource, parseOptions) },
+        platformReferences.Append(runtimeReference),
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    var references = platformReferences.Append(runtimeReference)
+        .Append(runtimeStub.ToMetadataReference())
+        .ToArray();
+
+    const string source = """
+        using LuminPack;
+        using LuminPack.Attribute;
+
+        [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Medium)]
+
+        // Public enum: a valid formatter candidate kept by the middle tier even though no call site
+        // reaches it (public types are conservative API surfaces).
+        public enum PublicCandidate
+        {
+            A = 0,
+            B = 1,
+        }
+
+        // Internal enum: a valid formatter candidate that is strictly pruned (not reachable).
+        internal enum InternalCandidate
+        {
+            A = 0,
+            B = 1,
+        }
+
+        public static class Usage
+        {
+            public static byte[] Run()
+            {
+                _ = typeof(PublicCandidate);
+                _ = typeof(InternalCandidate);
+                return LuminPackSerializer.Serialize(42);
+            }
+        }
+        """;
+
+    var input = CSharpCompilation.Create(
+        "MediumVerify",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    var (output, generated) = RunPruneModeGenerators(input, parseOptions);
+    AssertNoCompilationErrors(output, "medium mode closed graph", ignoreRoslyn43RefReadonlyMismatch: true);
+
+    if (!generated.Contains("global::PublicCandidate", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Medium mode did not keep the public non-packable type.");
+    }
+    if (generated.Contains("InternalCandidate", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "medium mode did not prune an internal non-reachable type.");
+    }
+}
+
+static void VerifyMinimalMode(MetadataReference[] platformReferences)
+{
+    var parseOptions = CSharpParseOptions.Default
+        .WithLanguageVersion(LanguageVersion.Preview)
+        .WithPreprocessorSymbols("NET8_0_OR_GREATER");
+    var runtimeReference = MetadataReference.CreateFromFile(
+        typeof(global::LuminPack.Core.LuminPackWriter).Assembly.Location);
+
+    const string runtimeStubSource = """
+        namespace LuminPack
+        {
+            public static class LuminPackSerializer
+            {
+                public static byte[] Serialize<T>(T value) => System.Array.Empty<byte>();
+                public static T Deserialize<T>(byte[] bytes) => default!;
+            }
+        }
+        """;
+    var runtimeStub = CSharpCompilation.Create(
+        "LuminPackRuntimeStub",
+        new[] { CSharpSyntaxTree.ParseText(runtimeStubSource, parseOptions) },
+        platformReferences.Append(runtimeReference),
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    var references = platformReferences.Append(runtimeReference)
+        .Append(runtimeStub.ToMetadataReference())
+        .ToArray();
+
+    const string source = """
+        using LuminPack;
+        using LuminPack.Attribute;
+
+        [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Minimal)]
+
+        [LuminPackable]
+        public partial class UsedPackable
+        {
+            public int Value;
+        }
+
+        // Declared [LuminPackable] but never serialized: minimal tier must prune it entirely,
+        // unlike Reachable which always keeps every packable.
+        [LuminPackable]
+        public partial class UnusedPackable
+        {
+            public int Value;
+        }
+
+        [LuminPackable]
+        public abstract partial class UnionRoot
+        {
+        }
+
+        [LuminPackable]
+        public sealed partial class UnionChild : UnionRoot
+        {
+            public int V;
+        }
+
+        public static class Usage
+        {
+            public static byte[] Run()
+            {
+                _ = LuminPackSerializer.Serialize(new UsedPackable());
+                // UnionChild is reached only through the union dispatch of the reachable UnionRoot.
+                return LuminPackSerializer.Serialize<UnionRoot>(new UnionChild());
+            }
+        }
+        """;
+
+    var input = CSharpCompilation.Create(
+        "MinimalVerify",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    var (output, generated) = RunPruneModeGenerators(input, parseOptions);
+    AssertNoCompilationErrors(output, "minimal mode closed graph", ignoreRoslyn43RefReadonlyMismatch: true);
+
+    if (!generated.Contains("global::UsedPackable", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Minimal mode did not emit a [LuminPackable] type that is passed to a serializer call site.");
+    }
+    if (generated.Contains("UnusedPackable", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Minimal mode emitted a [LuminPackable] type that is never serialized.");
+    }
+    if (!generated.Contains("global::UnionChild", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Minimal mode did not keep a union member reached through a reachable union root.");
+    }
+}
+
+static (Compilation Output, string Generated) RunPruneModeGenerators(
+    CSharpCompilation input,
+    CSharpParseOptions parseOptions)
+{    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new Microsoft.CodeAnalysis.ISourceGenerator[]
+        {
+            new LuminPackSourceGenerator().AsSourceGenerator(),
+            new LuminMapSourceGenerator().AsSourceGenerator(),
+        },
+        parseOptions: parseOptions);
+    driver = driver.RunGeneratorsAndUpdateCompilation(input, out Compilation output, out _);
+    var runResult = driver.GetRunResult();
+    foreach (GeneratorRunResult result in runResult.Results)
+    {
+        if (result.Exception is not null)
+            throw new InvalidOperationException("Prune-mode generator failed.", result.Exception);
+    }
+
+    string generated = string.Join(
+        Environment.NewLine,
+        runResult.Results.SelectMany(static result => result.GeneratedSources)
+            .Select(static source => source.SourceText.ToString()));
+    return (output, generated);
+}
+
 static (Compilation Output, string Generated) RunFormatterGenerators(
     CSharpCompilation input,
     CSharpParseOptions parseOptions)
-{
-    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+{    GeneratorDriver driver = CSharpGeneratorDriver.Create(
         new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     driver = driver.RunGeneratorsAndUpdateCompilation(input, out Compilation output, out _);
@@ -964,3 +1322,4 @@ static string BuildSource(int compilationIndex)
         }
         """;
 }
+

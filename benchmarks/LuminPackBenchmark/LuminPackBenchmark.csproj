@@ -8,6 +8,7 @@
         <PublishAot>true</PublishAot>
         <InvariantGlobalization>true</InvariantGlobalization>
         <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+        <LuminPackGenerationMode>Light</LuminPackGenerationMode>
     </PropertyGroup>
 
     <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
@@ -22,6 +23,10 @@
         <ProjectReference Include="..\..\src\LuminPackGenerator\LuminPackGenerator.csproj"
                           OutputItemType="Analyzer"/>
       <ProjectReference Include="..\..\src\LuminPack\LuminPack.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <CompilerVisibleProperty Include="LuminPackGenerationMode" />
     </ItemGroup>
 
     <ItemGroup>

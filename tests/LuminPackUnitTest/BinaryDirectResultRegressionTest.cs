@@ -279,27 +279,19 @@ internal static class BinaryDirectResultRegressionTest
         Dictionary<int, BinaryDirectDictionaryMutationValue> dictionary,
         string message)
     {
-        LuminBufferWriter buffer = LuminBufferWriterPool.Rent();
+        bool threw = false;
         try
         {
-            var writer = new LuminPackWriter(buffer);
-            bool threw = false;
-            try
-            {
-                global::LuminPack.Generated.LuminPackExtensions_LuminPackUnitTest
-                    .WriteValue(ref writer, in dictionary);
-            }
-            catch (InvalidOperationException)
-            {
-                threw = true;
-            }
-
-            Assert(threw, message);
+            // Prune-mode reachability seeds formatter generation from LuminPackSerializer.* call
+            // sites, so the mutation fast path is exercised through the public API.
+            _ = LuminPackSerializer.Serialize(dictionary);
         }
-        finally
+        catch (InvalidOperationException)
         {
-            LuminBufferWriterPool.Return(buffer);
+            threw = true;
         }
+
+        Assert(threw, message);
     }
 
     private static void FreshDictionaryBuilderPreservesDictionarySemantics()

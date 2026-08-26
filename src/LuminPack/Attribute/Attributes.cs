@@ -159,3 +159,53 @@ public sealed class LuminPackWideTagAttribute : System.Attribute
 public sealed class LuminPackCompressAttribute : System.Attribute
 {
 }
+
+/// <summary>Selects the source-generator emission strategy for an assembly.</summary>
+public enum LuminPackGenerationMode : byte
+{
+    /// <summary>
+    /// Generates formatter extensions for every type observed in the project.  The default and the
+    /// most conservative option: any type can be serialized, but generated code is the largest.
+    /// </summary>
+    Full = 0,
+
+    /// <summary>
+    /// Generates the reachable types plus always keeps <c>public</c> non-<c>[LuminPackable]</c> types.
+    /// Public types are conservative API surfaces (they may be serialized across assembly boundaries
+    /// or via reflection); <c>internal</c> / <c>private</c> types are strictly pruned.  Suitable for
+    /// library projects.
+    /// </summary>
+    Medium = 1,
+
+    /// <summary>
+    /// Generates formatter extensions only for types reachable from <c>LuminPackSerializer.*</c> call sites
+    /// (including concrete instantiations of generic wrapper methods) and from every <c>[LuminPackable]</c>
+    /// member graph.  <c>[LuminPackable]</c> types are always kept even if never serialized.
+    /// </summary>
+    Light = 2,
+
+    /// <summary>
+    /// The most aggressive tier.  Only types actually passed to <c>LuminPackSerializer.*</c> call sites
+    /// (and their transitively reachable graphs) are generated.  Even <c>[LuminPackable]</c> types that are
+    /// declared but never serialized in this assembly are pruned.  Use only when serialization happens
+    /// exclusively through static <c>LuminPackSerializer</c> calls in this assembly.
+    /// </summary>
+    Minimal = 3,
+}
+
+/// <summary>
+/// Assembly-level option for the LuminPack source generators.
+/// <c>Prune</c> mode only emits formatter extensions that can actually be serialized from this assembly's roots
+/// and <c>LuminPackSerializer.*</c> call sites, and suppresses optional formatter variants (compress / fresh-read)
+/// that are not referenced. Runtime behavior is unchanged for reachable types.
+/// </summary>
+[AttributeUsage(AttributeTargets.Assembly, AllowMultiple = false, Inherited = false)]
+public sealed class LuminPackGeneratorOptionsAttribute : System.Attribute
+{
+    public LuminPackGenerationMode Mode { get; }
+
+    public LuminPackGeneratorOptionsAttribute(LuminPackGenerationMode mode)
+    {
+        Mode = mode;
+    }
+}

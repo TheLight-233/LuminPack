@@ -1,5 +1,27 @@
 # **LuminPack**
 
+## 📑 目录
+
+- [📖 简介](#intro)
+- [📦 Installation 安装](#installation)
+- [🔮 后续更新计划](#roadmap)
+- [🚀 Quick Start 快速开始](#quickstart)
+- [📋 LuminPack基础类型](#basetypes)
+- [🔧 内置支持的类型](#builtin-types)
+- [🎯 定义 `[LuminPackable]` 数据](#define-data)
+- [🔍 `[LuminPackableObject]`](#luminpackableobject)
+- [⚙️ 生成模式（源码生成器）](#generation-modes)
+- [🔄 反序列化缓存池](#deserialize-pool)
+- [🎭 多态序列化](#polymorphism)
+- [🌐 跨程序集多态](#cross-assembly)
+- [📝 版本容忍](#version-tolerant)
+- [🔗 循环引用](#circular-reference)
+- [💾 WriteBuffer池](#writebuffer)
+- [🎮 Unity](#unity)
+- [📜 JSON 格式规范](#json-spec)
+- [📐 二进制格式规范](#binary-spec)
+
+<a id="intro"></a>
 ## 📖 简介
 
 LuminPack 是一款面向 Unity 存档、网络传输等场景的高性能序列化库，同时支持二进制与 JSON 序列化。项目通过增量源代码生成器为具体类型生成专用解析代码，并针对 Unity、AOT 以及 .NET Standard 2.1 等使用环境进行适配。
@@ -21,6 +43,7 @@ LuminPack 在早期设计和实现过程中学习、借鉴了 MemoryPack 的优�
 *   反序列化缓存池
 *   通过增量源代码生成器支持Unity
 
+<a id="installation"></a>
 ## 📦 Installation 安装
 
 ### .NET 项目
@@ -64,10 +87,12 @@ LuminPack 支持 Unity Mono 和 IL2CPP。建议在发布前至少执行一次目
 </ItemGroup>
 ```
 
+<a id="roadmap"></a>
 ## 🔮 后续更新计划
 
 1.  内置加密模块
 
+<a id="quickstart"></a>
 ## 🚀 Quick Start 快速开始
 
 定义要序列化的结构体或类，并用 `[LuminPackable]` 属性对其进行注释。
@@ -98,6 +123,7 @@ var result = LuminPackSerializer.Deserialize<Person>(buffer);
 var resultJson = LuminPackSerializer.DeserializeJson<Person>(bufferJson);
 ```
 
+<a id="basetypes"></a>
 ## 📋 LuminPack基础类型
 
 默认情况下，LuminPack基础类型将实现最高性能
@@ -108,6 +134,7 @@ Float, Double, Char, String, Decimal, Bool,
 Enum, Struct, Class, List, Array
 ```
 
+<a id="builtin-types"></a>
 ## 🔧 内置支持的类型
 
 默认情况下，这些类型可以被序列化：
@@ -127,6 +154,7 @@ Enum, Struct, Class, List, Array
 *   `ConcurrentBag<>`, `ConcurrentQueue<>`, `ConcurrentStack<>`, `ConcurrentDictionary<,>`, `BlockingCollection<>`
 *   Immutable collections (`ImmutableList<>`, etc.) and interfaces (`IImmutableList<>`, etc.)
 
+<a id="define-data"></a>
 ## 🎯 定义 `[LuminPackable]` 数据
 
 `[LuminPackable]` 可以注释到任何 `class` ,  `abstract class`  ,  `struct`  ,  `record` ,  `record struct` 和 `interface` 。如果类型 `struct` 或 `record struct` 不包含引用类型（c#非托管类型），则不使用任何直接从内存序列化/反序列化的规则，LuminPack会直接复制内存。
@@ -177,6 +205,7 @@ LuminPack不依赖构造函数反序列化，因此您可以随意定义构造�
 
 LuminPack默认支持 **`0 ~ 249`** 个成员字段
 
+<a id="luminpackableobject"></a>
 ## 🔍 `[LuminPackableObject]`
 
 \[LuminPackableObject]可以作用于任何字段以及属性，这将告诉LuminPackCodeGenerator不要直接解析该字段并写入Myclass的解析器，而是通过注册在LuminPack的Myclass2的解析器去解析。通常情况下，这会损失大概30%的性能，因此如果您遇到源代码生成器生成错误代码等情况，可以尝试用\[LuminPackableObject]标记字段或属性。
@@ -225,6 +254,75 @@ public static void OnDeserializing()
 }
 ```
 
+<a id="generation-modes"></a>
+## ⚙️ 生成模式（源码生成器）
+
+默认情况下，LuminPack 的源码生成器会为项目中**观察到的每一个类型**生成格式化扩展方法（`Full` 模式）。
+对于大型项目，这会产生大量从未真正序列化的类型的扩展方法，拖慢编译。你可以通过生成模式开关，
+让生成器**只生成真正会被序列化的类型**的扩展方法，从而减少生成代码、加快编译。
+
+### 四种模式（从最省心到最激进）
+
+| 模式 | 生成范围 |
+| --- | --- |
+| `Full`（默认） | 为项目中观察到的每一个类型生成扩展方法（最省心，但生成的代码最多） |
+| `Medium` | 只生成可达类型，但**额外保留 `public` 非 `[LuminPackable]` 类型**（公共类型属于保守的 API 表面，可能被跨程序集或反射序列化） |
+| `Light` | 只生成从 `LuminPackSerializer.*` 调用点（含泛型包装方法的具体实例化）和**所有** `[LuminPackable]` 成员图可达的类型；`internal`/`private` 类型被严格剪枝 |
+| `Minimal` | 最激进。**只从 `LuminPackSerializer.*` 调用点出发**，只有真正被调用的类型才会被生成；即使标了 `[LuminPackable]` 但从未被序列化的类型也会被剪掉 |
+
+各档位的差异在于"根"的范围：
+
+*   `Full`：根 = 项目中所有类型。
+*   `Medium` / `Light`：根 = 所有 `[LuminPackable]` 类型 + 所有序列化调用点；`Medium` 再多保留 `public` 类型。
+*   `Minimal`：根 = 只有 `LuminPackSerializer.*` 调用点。
+
+### 开启方式（两种任选其一）
+
+**方式一：MSBuild 属性（推荐）**，在 `.csproj` 的 `<PropertyGroup>` 中声明，并在项目中让生成器能读取该属性：
+
+```xml
+<PropertyGroup>
+  <LuminPackGenerationMode>Light</LuminPackGenerationMode>
+  <!-- 或 <LuminPackGenerationMode>Medium</LuminPackGenerationMode> -->
+  <!-- 或 <LuminPackGenerationMode>Minimal</LuminPackGenerationMode> -->
+</PropertyGroup>
+
+<ItemGroup>
+  <CompilerVisibleProperty Include="LuminPackGenerationMode" />
+</ItemGroup>
+```
+
+> 说明：`CompilerVisibleProperty` 是 Roslyn 生成器读取 MSBuild 属性的标准机制，必须同时添加，
+> `build_property.LuminPackGenerationMode` 才会暴露给生成器。
+
+**方式二：程序集特性**，在任意 `.cs` 文件中：
+
+```csharp
+using LuminPack.Attribute;
+
+[assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Light)]
+```
+
+两种方式都开启时，取更激进的一档生效。
+
+### 剪枝档位的可达性规则
+
+*   **调用点**：所有 `LuminPackSerializer.*` 调用（`Serialize` / `Deserialize` / `SerializeJson` / `DeserializeJson` 等）传入的类型。
+*   **泛型包装方法**：例如 `void Save<T>(T x) => Serialize(x);`，生成器会从 `Save<MyStruct>()` 等具体调用点
+    解析 `T`，并生成 `MyStruct` 的扩展方法。
+*   **类型实参图**：对种子类型递归展开其类型实参、数组元素、包含类型。
+*   **多态成员**：可达的 union（接口/抽象类）会连带展开其派生类型，保证多态派发完整。
+
+### 注意事项
+
+*   `Light` / `Minimal` 模式下，**无法静态证明可达的序列化**（如通过反射、`typeof` 驱动、跨程序集直接序列化非 `[LuminPackable]`
+    类型）会像"未注册 formatter"一样在运行期抛出异常。这是刻意的取舍：剪枝只保留可证明会被序列化的类型。
+    若你的场景依赖这类用法，请使用 `Full` 或 `Medium`。
+*   `Minimal` 会剪掉**声明了但从未被序列化**的 `[LuminPackable]` 类型，请确认你的序列化都发生在当前程序集的静态调用点上，
+    否则请回退到 `Light`。
+*   剪枝只影响**生成代码量**，不影响**运行期性能**——可达类型的格式化方法完全相同。
+
+<a id="deserialize-pool"></a>
 ## 🔄 反序列化缓存池
 
 LuminPack支持反序列化从缓存池取代new创建实例，减少GC开销。
@@ -241,6 +339,7 @@ public static SimpleClass Rent()
 }
 ```
 
+<a id="polymorphism"></a>
 ## 🎭 多态序列化
 
 LuminPack支持序列化接口和抽象类对象，实现多态序列化。
@@ -294,6 +393,7 @@ switch (result)
 
 对于`LuminPackUnion`的Tag，支持 `0`  \~  `65535`， 对与`250`以下的性能更佳。因此推荐使用`250`以下的值作为Tag
 
+<a id="cross-assembly"></a>
 ## 🌐 跨程序集多态
 
 LuminPack支持跨程序集多态序列化。如果程序集A定义了abstract类，程序集B的类继承了程序集A的abstract类，由于源生成器的限制，源生成器并不能分析到程序集B继承的子类，不会生成对应的序列化代码。此时需要用户手动注册，调用源生成器为A生成的abstract的Parser类的Register方法。以下是示例代码
@@ -347,6 +447,7 @@ LuminPack.Generated.LuminPackBenchmark_IFooParser.Register(
     ReadJsonLuminPackBenchmark_FooA);
 ```
 
+<a id="version-tolerant"></a>
 ## 📝 版本容忍
 
 在默认情况下 LuminPack的代码生成模式（ `GenerateType.Object` ）， 仅支持有限的模式演化。
@@ -428,6 +529,7 @@ public class VersionTolerantObject2
 
 `GenerateType.VersionTolerant` 比 `GenerateType.Object` 性能更差，使用时请注意。
 
+<a id="circular-reference"></a>
 ## 🔗 循环引用
 
 ```csharp
@@ -446,12 +548,14 @@ public class Node
 
 对象引用跟踪只对标记为 `GenerateType.CircularReference` 的对象进行。如果要跟踪任何其他对象，请对其进行包装。
 
+<a id="writebuffer"></a>
 ## 💾 WriteBuffer池
 
 LuminPack的序列化池通过Marshal申请非托管内存，这极大提高了Buffer扩容的性能。
 
 因此，请确保所有WriteBuffer调用Dispose方法，以释放非托管内存。
 
+<a id="unity"></a>
 ## 🎮 Unity
 
 LuminPack 针对 Unity 和 .NET Standard 2.1 进行了专门适配与优化，并支持增量源代码生成。
@@ -459,6 +563,7 @@ LuminPack 针对 Unity 和 .NET Standard 2.1 进行了专门适配与优化，�
 *   针对常用集合和非托管泛型提供 Unity 专用实现。
 *   支持 Mono 与 IL2CPP 运行环境。
 
+<a id="json-spec"></a>
 ## 📜 JSON 格式规范
 
 LuminPack 按照以下规则生成 JSON 文本。默认使用 UTF-8 处理字符串，也可通过 `LuminPackSerializerOption.Utf16` 选择 UTF-16。序列化和反序列化必须使用一致的字符编码选项。
@@ -517,6 +622,7 @@ Union 的 `null` 值直接写为 `null`。客户端与服务端交换 JSON 时�
 
 > JSON 格式与二进制格式是两套独立协议，不能将 `Serialize` 的二进制结果传给 `DeserializeJson`，反之亦然。
 
+<a id="binary-spec"></a>
 ## 📐 二进制格式规范
 
 端序必须 `Little Endian` 。

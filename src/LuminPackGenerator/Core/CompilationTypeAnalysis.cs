@@ -44,6 +44,10 @@ internal sealed class CompilationTypeAnalysis
 
     internal bool HasOwner(ITypeSymbol type) => _formatterOwners.ContainsKey(type);
 
+    /// <summary>Gets the packable type that owns the formatter graph containing <paramref name="type"/>, if any.</summary>
+    internal INamedTypeSymbol? GetOwner(ITypeSymbol type)
+        => _formatterOwners.TryGetValue(type, out INamedTypeSymbol? owner) ? owner : null;
+
     internal bool IsLayoutOwnedBy(ITypeSymbol type, INamedTypeSymbol owner)
         => _layoutOwners.TryGetValue(NormalizeLayoutType(type), out INamedTypeSymbol actual) &&
            SymbolEqualityComparer.Default.Equals(actual, owner);

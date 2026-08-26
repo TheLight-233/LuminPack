@@ -29,6 +29,13 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                 return new MetaInfo(cs, cs.LanguageVersion, net8, net9_OR_GREATER,false);
             });
 
+        var generationMode = context.AnalyzerConfigOptionsProvider
+            .Select(static (options, _) =>
+            {
+                options.GlobalOptions.TryGetValue("build_property.LuminPackGenerationMode", out string? value);
+                return LuminPackGenerationTierResolver.FromProperty(value);
+            });
+
         var autoMapDeclarations = context.SyntaxProvider
             .CreateSyntaxProvider(
                 static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax,
@@ -105,10 +112,11 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
         context.RegisterSourceOutput(
             allAuto.Combine(allManual)
                    .Combine(context.CompilationProvider)
-                   .Combine(metaProvider),
+                   .Combine(metaProvider)
+                   .Combine(generationMode),
             static (spc, pair) =>
             {
-                var (((autoInfos, manualInfos), compilation), meta) = pair;
+                var ((((autoInfos, manualInfos), compilation), meta), mode) = pair;
 
                 // Unity auto-references managed plug-ins from every compilation. Merely
                 // finding LuminPack in metadata therefore is not evidence that the target
@@ -129,11 +137,19 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                             spc.AddSource("GeneratedMappersRegistry.g.cs", code);
                     }
 
-                    var formatterSupport = LuminPackExtensionGenerator.GenerateSerializerInvocationSupport(compilation, meta);
+                    LuminPackGenerationTier propertyTier = mode;
+                    LuminPackGenerationTier assemblyTier = LuminPackGenerationTierResolver.FromAssembly(compilation);
+                    LuminPackGenerationTier effectiveTier = (LuminPackGenerationTier)Math.Max((int)propertyTier, (int)assemblyTier);
+
+                    ReachabilityAnalysis? reachability = effectiveTier != LuminPackGenerationTier.Full
+                        ? ReachabilityAnalysisCache.GetOrCreate(compilation, effectiveTier)
+                        : null;
+
+                    var formatterSupport = LuminPackExtensionGenerator.GenerateSerializerInvocationSupport(compilation, meta, reachability);
                     if (!string.IsNullOrEmpty(formatterSupport))
                         spc.AddSource("LuminPack.SerializerInvocation.Extension.g.cs", formatterSupport);
 
-                    var serializer = LuminPackSerializerGenerator.GenerateSerializerClass(compilation, meta);
+                    var serializer = LuminPackSerializerGenerator.GenerateSerializerClass(compilation, meta, reachability);
                     if (!string.IsNullOrEmpty(serializer))
                         spc.AddSource("LuminPackSerializer.g.cs", serializer);
                 }

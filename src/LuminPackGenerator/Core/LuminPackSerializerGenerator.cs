@@ -20,9 +20,9 @@ public static class LuminPackSerializerGenerator
     private static string _extensionType = "global::LuminPack.Generated.LuminPackExtensions_";
     private static string _currentAccess = "public";
 
-    public static string GenerateSerializerClass(Compilation compilation, MetaInfo metaInfo)
+    public static string GenerateSerializerClass(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis? reachability = null)
     {
-        ITypeSymbol[] orderedTypes = LuminPackExtensionGenerator.GetOrderedFormatterTypes(compilation);
+        ITypeSymbol[] orderedTypes = LuminPackExtensionGenerator.GetOrderedFormatterTypes(compilation, reachability);
         if (orderedTypes.Length == 0)
         {
             return string.Empty;

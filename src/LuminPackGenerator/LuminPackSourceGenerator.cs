@@ -102,16 +102,26 @@ namespace LuminPack.SourceGenerator
                     .Select(static (symbol, _) => symbol!)
                     .WithTrackingName("LuminPack.LuminPackable.1_ForAttributeLuminPackableAttribute");
 
+                var generationMode = context.AnalyzerConfigOptionsProvider
+                    .Select(static (options, _) =>
+                    {
+                        options.GlobalOptions.TryGetValue("build_property.LuminPackGenerationMode", out string? value);
+                        return LuminPackGenerationTierResolver.FromProperty(value);
+                    })
+                    .WithTrackingName("LuminPack.LuminPackable.0_GenerationMode");
+
                 var provider = typeDeclarations
                     .Combine(context.CompilationProvider)
                     .Combine(metaInfo)
+                    .Combine(generationMode)
                     .Select((source, _) =>
                     {
-                        var symbol = source.Left.Left;
-                        var compilation = source.Left.Right;
-                        var metadata = source.Right;
+                        var symbol = source.Left.Left.Left;
+                        var compilation = source.Left.Left.Right;
+                        var metadata = source.Left.Right;
+                        var tier = source.Right;
                         var dataInfo = CreateLuminDataInfo(symbol, compilation, metadata);
-                        return ((dataInfo, compilation), metadata);
+                        return ((dataInfo, compilation), (metadata, tier));
                     })
                     .WithTrackingName("LuminPack.LuminPackable.2_LuminPackCombined");
         
@@ -135,8 +145,20 @@ namespace LuminPack.SourceGenerator
                         }
 
                         var compilation = source.Item1.Item2;
-                        var metaInfo = source.Item2;
-                
+                        var metaInfo = source.Item2.Item1;
+                        var propertyTier = source.Item2.Item2;
+
+                        LuminPackGenerationTier assemblyTier = LuminPackGenerationTierResolver.FromAssembly(compilation);
+                        LuminPackGenerationTier effectiveTier = (LuminPackGenerationTier)Math.Max((int)propertyTier, (int)assemblyTier);
+
+                        if (effectiveTier == LuminPackGenerationTier.Minimal &&
+                            !ReachabilityAnalysisCache.GetOrCreate(compilation, effectiveTier).ShouldEmitPackable(dataInfo.TypeSymbol))
+                        {
+                            // Minimal tier: skip [LuminPackable] types that are never passed to a
+                            // serializer call site (nor reachable from one).
+                            return;
+                        }
+
                         var extension = LuminPackExtensionGenerator.CodeGenerator(dataInfo, metaInfo, compilation);
                         var unionDispatch = dataInfo.isUnion
                             ? LuminPackUnionDispatchCodeGenerator.Generate(dataInfo, compilation)
