@@ -247,7 +247,13 @@ internal static class ReachabilityAnalysisCache
             finalCandidates.Add(type);
         }
 
-        if (tier == LuminPackGenerationTier.Minimal)
+        // Minimal prunes to the call-site reachable set.  On a fresh build LuminPackSerializer is itself
+        // generated code and is not yet in the input compilation, so no call site resolves and the
+        // seed set is empty; conservatively fall back to emitting every packable (Light behaviour) so
+        // the first build is not broken.  Once the serializer exists (IDE or a rebuild), call sites
+        // resolve and real Minimal pruning applies.
+        bool minimalPrune = tier == LuminPackGenerationTier.Minimal && seeds.Count != 0;
+        if (minimalPrune)
         {
             // Minimal: seed the emitted set from call-site reachable packables, then close over the
             // member graphs until stable.  A packable that appears as a serialized member of an

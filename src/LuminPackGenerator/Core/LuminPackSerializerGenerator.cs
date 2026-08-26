@@ -22,11 +22,11 @@ public static class LuminPackSerializerGenerator
 
     public static string GenerateSerializerClass(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis? reachability = null)
     {
+        // The serializer entry class is always emitted so user code can reference
+        // LuminPackSerializer.Serialize<T> / Deserialize<T> (and the IDE offers completion) even when
+        // pruning yields no concrete formatter candidates.  The generic fallbacks below route through
+        // the generic dispatch, which throws the normal "no formatter" error for unreachable types.
         ITypeSymbol[] orderedTypes = LuminPackExtensionGenerator.GetOrderedFormatterTypes(compilation, reachability);
-        if (orderedTypes.Length == 0)
-        {
-            return string.Empty;
-        }
         string asm = LuminPackExtensionGenerator.SanitizeAssemblyName(compilation.AssemblyName ?? "Assembly");
         _extensionType = "global::LuminPack.Generated.LuminPackExtensions_" + asm;
 

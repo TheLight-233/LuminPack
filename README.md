@@ -1,4 +1,4 @@
-# **LuminPack**
+﻿# **LuminPack**
 
 ## 📑 目录
 
@@ -57,7 +57,7 @@ dotnet add package LuminPack
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="LuminPack" Version="1.1.4" />
+  <PackageReference Include="LuminPack" Version="1.1.5" />
 </ItemGroup>
 ```
 
