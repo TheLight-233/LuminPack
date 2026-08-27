@@ -13,7 +13,7 @@
 - [⚙️ 生成模式（源码生成器）](#generation-modes)
 - [🔄 反序列化缓存池](#deserialize-pool)
 - [🎭 多态序列化](#polymorphism)
-- [🌐 跨程序集多态](#cross-assembly)
+- [🌐 跨程序集多态 / Register 手动注册](#cross-assembly)
 - [📝 版本容忍](#version-tolerant)
 - [🔗 循环引用](#circular-reference)
 - [💾 WriteBuffer池](#writebuffer)
@@ -57,7 +57,7 @@ dotnet add package LuminPack
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="LuminPack" Version="1.1.5" />
+  <PackageReference Include="LuminPack" Version="1.1.6" />
 </ItemGroup>
 ```
 
@@ -393,58 +393,134 @@ switch (result)
 对于`LuminPackUnion`的Tag，支持 `0`  \~  `65535`， 对与`250`以下的性能更佳。因此推荐使用`250`以下的值作为Tag
 
 <a id="cross-assembly"></a>
-## 🌐 跨程序集多态
+## 🌐 跨程序集多态 / Register 手动注册
 
-LuminPack支持跨程序集多态序列化。如果程序集A定义了abstract类，程序集B的类继承了程序集A的abstract类，由于源生成器的限制，源生成器并不能分析到程序集B继承的子类，不会生成对应的序列化代码。此时需要用户手动注册，调用源生成器为A生成的abstract的Parser类的Register方法。以下是示例代码
+> **⚠️ 使用 Register 需要开启 Unsafe**：Register 注册 API 以**函数指针（`delegate*`）** 方式传入静态方法，调用处需要 `unsafe` 上下文。
+> 因此使用 Register 的项目必须在 `.csproj` 中开启 `AllowUnsafeBlocks`：
+>
+> ```xml
+> <PropertyGroup>
+>   <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+> </PropertyGroup>
+> ```
+>
+> 开启后源生成器才会生成 `Register` 方法。如果你开启了 unsafe 但**不希望生成 Register 相关代码**，
+> 可以通过 `[LuminPackGeneratorOptions]` 的 `register` 参数显式关闭：
+>
+> ```csharp
+> using LuminPack.Attribute;
+>
+> [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Full, LuminPackRegisterMode.Disabled)]
+> ```
+>
+> `LuminPackRegisterMode.Auto`（默认）：跟随 unsafe 设置，开启 unsafe 才生成；`Disabled`：即使开启 unsafe 也不生成 Register 相关代码。
+
+LuminPack 有两处运行时手动注册机制，均以 **函数指针（`delegate*`）** 方式传入静态方法。注册表以 **MethodTable 地址（`nint`）** 为键、
+存储方法指针，不持有强 `Type` 引用，保持 ALC 安全。注册后生成类型的**热路径不受任何影响**，
+只有未生成代码的类型（或未列入 union 的类型）才会走注册表。
+
+### 1️⃣ `LuminPackSerializer.Register<T>` —— 泛型派发兜底
+
+用于源码生成器**没有生成对应代码**的类型（例如未标记 `[LuminPackable]`、或处于剪枝模式且从未出现在任何序列化调用点上的类型）。
+泛型派发 `WriteValue<T>/ReadValue<T>` 的 default 分支按 MethodTable 查询该注册表并直接调用注册的方法指针（类型化签名，零装箱）。
+
+用户需要手写与下面签名一致的静态方法（参数为**具体类型**，而不是 `object`）：
 
 ```csharp
-global::LuminPack.Generated.LuminPackBenchmark_SimpleClassBaseParser.Register(); 
-//所有生成的Parser都在LuminPack.Generated命名空间下，生成的Parser的类名规则为：命名空间+外层类名+类名+Parser
+private static void WriteLegacy(ref LuminPackWriter writer, in LegacyModel value)
+{
+    writer.WriteValue(value.Id);
+    writer.WriteValue(value.Name);
+}
+
+private static void ReadLegacy(ref LuminPackReader reader, ref LegacyModel value)
+{
+    value = new LegacyModel();
+    reader.ReadValue(ref value.Id);
+    reader.ReadValue(ref value.Name);
+}
+
+// 二进制只注册写/读即可；JSON 与大小计算为可选重载
+unsafe
+{
+    LuminPackSerializer.Register<LegacyModel>(
+        &WriteLegacy, &ReadLegacy,
+        &WriteJsonLegacy, &ReadJsonLegacy);   // 可选：&WriteJsonLegacy / &ReadJsonLegacy / &CalcSizeLegacy
+}
 ```
 
-Register方法接受6个参数，分别是Type，Id，二进制序列化函数委托，二进制反序列化函数委托，Json序列化函数委托，Json反序列化函数委托
+可用重载：
 
-用户需要手写几个静态函数
+| 重载 | 参数 |
+| --- | --- |
+| `Register<T>(writeValue, readValue)` | 二进制写 / 读 |
+| `Register<T>(writeValue, readValue, writeValueJson, readValueJson)` | 二进制 + JSON |
+| `Register<T>(writeValue, readValue, writeValueJson, readValueJson, calculateOffset)` | 二进制 + JSON + 大小计算 |
+
+JSON 写/读方法签名分别为 `(ref LuminPackJsonWriter writer, in T value)` 与 `(ref LuminPackJsonReader reader, ref T value)`，
+大小计算方法签名为 `(ref LuminPackEvaluator evaluator, in T value)`。重复注册同一类型会抛出 `ArgumentException`。
+
+### 2️⃣ 多态基类 `.Register<TMember>` —— 跨程序集多态注册
+
+如果程序集 A 定义了 `[LuminPackable]` 的接口 / abstract 类（union 基类），程序集 B 的类继承了它，由于源生成器只能分析本程序集，
+A 的生成器**看不到 B 的子类**，不会为它生成 union 槽实现——基类生成的 `__LuminPackUnionSerialize_xxx` 等槽方法内部会直接 Throw。
+此时需要用户手动注册：源生成器会为基类生成一个静态字段 `LuminCircleReferenceMap`（MethodTable → 方法指针）以及 `Register<TMember>` 方法。
+
+用户手写的方法签名以**基类类型**为参数，内部把基类引用转为具体子类后写字段：
 
 ```csharp
-private static unsafe void WriteLuminPackBenchmark_FooA(ref LuminPackWriter writer, ref global::LuminPackBenchmark.IFoo value)
+// 基类：global::MyLib.IFoo（程序集 A）；子类：global::MyApp.FooA（程序集 B，[LuminPackable]）
+
+private static void WriteFooA(ref LuminPackWriter writer, ref global::MyLib.IFoo value)
 {
-    writer.WriteUnionHeader(0);
-    writer.WritePolymorphismValue(LuminPackMarshal.As<global::LuminPackBenchmark.IFoo, global::LuminPackBenchmark.FooA>(ref value));
+    writer.WriteUnionHeader(0);                                  // tag 由你指定，须与 Register 的 tag 一致
+    writer.WritePolymorphismValue(LuminPackMarshal.As<global::MyLib.IFoo, global::MyApp.FooA>(ref value));
 }
 
-private static unsafe void ReadLuminPackBenchmark_FooA(ref LuminPackReader reader, ref global::LuminPackBenchmark.IFoo value)
+private static void ReadFooA(ref LuminPackReader reader, ref global::MyLib.IFoo value)
 {
-    global::LuminPackBenchmark.FooA tempValue = default!;
+    global::MyApp.FooA tempValue = default!;
     reader.ReadPolymorphismValue(ref tempValue);
-    value = LuminPackMarshal.As<global::LuminPackBenchmark.FooA, global::LuminPackBenchmark.IFoo>(ref tempValue!);
+    value = LuminPackMarshal.As<global::MyApp.FooA, global::MyLib.IFoo>(ref tempValue!);
 }
 
-private static unsafe void WriteJsonLuminPackBenchmark_FooA(ref global::LuminPack.Core.LuminPackJsonWriter writer, ref global::LuminPackBenchmark.IFoo value)
+private static void WriteJsonFooA(ref LuminPackJsonWriter writer, ref global::MyLib.IFoo value)
 {
     writer.WriteObjectStart();
-    writer.WritePropertyName(LuminPackConstUtf8.TypeU8);
+    if (writer.Option.StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
+        writer.WritePropertyName(LuminPackConstUtf8.TypeU8);
+    else
+        writer.WritePropertyName(LuminPackConstUtf8.TypeU16);
     writer.WriteInt(0);
-    writer.WritePropertyName(LuminPackConstUtf8.ValueU8);
-    writer.WriteValue(ref LuminPackMarshal.As<global::LuminPackBenchmark.IFoo, global::LuminPackBenchmark.FooA>(ref value)!);
+    if (writer.Option.StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
+        writer.WritePropertyName(LuminPackConstUtf8.ValueU8);
+    else
+        writer.WritePropertyName(LuminPackConstUtf8.ValueU16);
+    writer.WriteValue(LuminPackMarshal.As<global::MyLib.IFoo, global::MyApp.FooA>(ref value)!);
     writer.WriteObjectEnd();
 }
 
-private static unsafe void ReadJsonLuminPackBenchmark_FooA(ref global::LuminPack.Core.LuminPackJsonReader reader, ref global::LuminPackBenchmark.IFoo value)
+private static void ReadJsonFooA(ref LuminPackJsonReader reader, ref global::MyLib.IFoo value)
 {
-    global::LuminPackBenchmark.FooA tempValue = default!;
+    global::MyApp.FooA tempValue = default!;
     reader.ReadValue(ref tempValue);
-    value = LuminPackMarshal.As<global::LuminPackBenchmark.FooA, global::LuminPackBenchmark.IFoo>(ref tempValue!);
+    value = LuminPackMarshal.As<global::MyApp.FooA, global::MyLib.IFoo>(ref tempValue!);
 }
 
-// 最后调用Register方法
-LuminPack.Generated.LuminPackBenchmark_IFooParser.Register(
-    typeof(FooA), 100, 
-    WriteLuminPackBenchmark_FooA, 
-    ReadLuminPackBenchmark_FooA, 
-    WriteJsonLuminPackBenchmark_FooA, 
-    ReadJsonLuminPackBenchmark_FooA);
+// 最后调用基类的 Register（TMember 为具体子类，tag 与写入的 union header 一致）
+unsafe
+{
+    global::MyLib.IFoo.Register<global::MyApp.FooA>(0,
+        &WriteFooA, &ReadFooA, &WriteJsonFooA, &ReadJsonFooA);
+}
 ```
+
+说明：
+
+* `tag` 是写入线格式的 union 标签（`WriteUnionHeader(tag)`），反序列化时按 tag 查询注册表；tag 不能与基类生成器已生成的成员 tag 冲突。
+* 二进制写 / 读、JSON 写 / 读四个方法指针均为必填；`Sizeof` 对该类注册成员仍会抛出（与生成成员的槽行为一致）。
+* 注册表定义在基类 partial 上（基类自身程序集生成），`Register` 调用与序列化发生在同一进程内即可，跨程序集使用。
+* 同样适用于"基类声明在序列化程序集、子类未被生成器列入 union"的场景（如未标记 `[LuminPackable]` 的子类）。
 
 <a id="version-tolerant"></a>
 ## 📝 版本容忍

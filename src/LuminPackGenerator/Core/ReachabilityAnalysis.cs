@@ -71,6 +71,33 @@ internal static class LuminPackGenerationTierResolver
 
         return LuminPackGenerationTier.Full;
     }
+
+    /// <summary>Maps the optional <c>[LuminPackGeneratorOptions]</c> Register argument to a register mode.</summary>
+    internal static LuminPackRegisterMode RegisterModeFromAssembly(Compilation compilation)
+    {
+        foreach (var attribute in compilation.Assembly.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString() != GeneratorOptionsAttr)
+            {
+                continue;
+            }
+
+            if (attribute.ConstructorArguments.Length > 1)
+            {
+                int value = attribute.ConstructorArguments[1].Value switch
+                {
+                    byte b => b,
+                    int i => i,
+                    _ => -1
+                };
+                return value == 1 ? LuminPackRegisterMode.Disabled : LuminPackRegisterMode.Auto;
+            }
+
+            return LuminPackRegisterMode.Auto;
+        }
+
+        return LuminPackRegisterMode.Auto;
+    }
 }
 
 /// <summary>

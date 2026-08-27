@@ -2,6 +2,7 @@ using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Code;
 using LuminPack.Core;
+using LuminPack.Generated;
 using LuminPackUnionContracts;
 
 namespace LuminPackUnitTest;
@@ -110,6 +111,7 @@ internal static class BinaryUnionSafetyTest
         RunCase(results, nameof(KnownTagUsesStaticDeserializeSwitch), KnownTagUsesStaticDeserializeSwitch);
         RunCase(results, nameof(UnlistedUnionMemberIsRejected), UnlistedUnionMemberIsRejected);
         RunCase(results, nameof(CrossAssemblyUnlistedMemberIsRejected), CrossAssemblyUnlistedMemberIsRejected);
+        RunCase(results, nameof(RegisteredUnlistedMemberRoundTrips), RegisteredUnlistedMemberRoundTrips);
         RunCase(results, nameof(NullWideGenericAndMultipleRootsRoundTrip), NullWideGenericAndMultipleRootsRoundTrip);
         RunCase(results, nameof(ClosedGenericTagsUseConstantTimeDispatch), ClosedGenericTagsUseConstantTimeDispatch);
         RunCase(results, nameof(DynamicUnionRegistrationIsNotAvailable), DynamicUnionRegistrationIsNotAvailable);
@@ -198,6 +200,63 @@ internal static class BinaryUnionSafetyTest
             "An external interface union member without a generated contract tag was accepted.");
         AssertThrows(() => LuminPackSerializer.Serialize(classValue),
             "An external class union member without a generated contract tag was accepted.");
+    }
+
+    private static void RegisteredUnlistedMemberRoundTrips()
+    {
+        unsafe
+        {
+            IFastInterfaceUnion.Register<RegisteredInterfaceUnionMember>(100,
+                &WriteRegisteredMember, &ReadRegisteredMember, &WriteJsonRegisteredMember, &ReadJsonRegisteredMember);
+        }
+
+        Assert(IFastInterfaceUnion.TryGetRegisteredFormatter(100, out var probeEntry) && probeEntry.ReadValue != 0,
+            "probe: registered formatter not found by tag after Register.");
+
+        IFastInterfaceUnion value = new RegisteredInterfaceUnionMember { Value = 321 };
+        var payload = LuminPackSerializer.Serialize(value);
+        Assert(payload[0] == 100, "The registered union member wrote the wrong wire tag.");
+        Assert(LuminPackSerializer.Deserialize<IFastInterfaceUnion>(payload) is RegisteredInterfaceUnionMember { Value: 321 },
+            "The registered union member did not round-trip.");
+        var json = LuminPackSerializer.SerializeJson(value);
+        Assert(LuminPackSerializer.DeserializeJson<IFastInterfaceUnion>(json) is RegisteredInterfaceUnionMember { Value: 321 },
+            "The registered union member did not round-trip through JSON.");
+    }
+
+    private static void WriteRegisteredMember(ref LuminPackWriter writer, ref IFastInterfaceUnion value)
+    {
+        writer.WriteUnionHeader(100);
+        writer.WriteValue(LuminPackMarshal.As<IFastInterfaceUnion, RegisteredInterfaceUnionMember>(ref value).Value);
+    }
+
+    private static void ReadRegisteredMember(ref LuminPackReader reader, ref IFastInterfaceUnion value)
+    {
+        var v = new RegisteredInterfaceUnionMember();
+        reader.ReadValue(ref v.Value);
+        value = LuminPackMarshal.As<RegisteredInterfaceUnionMember, IFastInterfaceUnion>(ref v);
+    }
+
+    private static void WriteJsonRegisteredMember(ref LuminPackJsonWriter writer, ref IFastInterfaceUnion value)
+    {
+        writer.WriteObjectStart();
+        if (writer.Option.StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
+            writer.WritePropertyName(LuminPackConstUtf8.TypeU8);
+        else
+            writer.WritePropertyName(LuminPackConstUtf8.TypeU16);
+        writer.WriteInt(100);
+        if (writer.Option.StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
+            writer.WritePropertyName(LuminPackConstUtf8.ValueU8);
+        else
+            writer.WritePropertyName(LuminPackConstUtf8.ValueU16);
+        writer.WriteValue(LuminPackMarshal.As<IFastInterfaceUnion, RegisteredInterfaceUnionMember>(ref value).Value);
+        writer.WriteObjectEnd();
+    }
+
+    private static void ReadJsonRegisteredMember(ref LuminPackJsonReader reader, ref IFastInterfaceUnion value)
+    {
+        var v = new RegisteredInterfaceUnionMember();
+        reader.ReadValue(ref v.Value);
+        value = LuminPackMarshal.As<RegisteredInterfaceUnionMember, IFastInterfaceUnion>(ref v);
     }
 
     private static void ClosedGenericTagsUseConstantTimeDispatch()

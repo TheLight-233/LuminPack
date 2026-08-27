@@ -204,8 +204,23 @@ public sealed class LuminPackGeneratorOptionsAttribute : System.Attribute
 {
     public LuminPackGenerationMode Mode { get; }
 
-    public LuminPackGeneratorOptionsAttribute(LuminPackGenerationMode mode)
+    public LuminPackRegisterMode Register { get; }
+
+    public LuminPackGeneratorOptionsAttribute(
+        LuminPackGenerationMode mode,
+        LuminPackRegisterMode register = LuminPackRegisterMode.Auto)
     {
         Mode = mode;
+        Register = register;
     }
+}
+
+/// <summary>Controls whether the manual-registration (Register) APIs are generated for an assembly.</summary>
+public enum LuminPackRegisterMode : byte
+{
+    /// <summary>Follow the project's unsafe setting: Register code is generated only when <c>AllowUnsafeBlocks</c> is enabled.</summary>
+    Auto = 0,
+
+    /// <summary>Never generate Register code, even when the project enables <c>AllowUnsafeBlocks</c>.</summary>
+    Disabled = 1,
 }

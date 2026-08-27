@@ -10,7 +10,7 @@
         <IsRoslynComponent>true</IsRoslynComponent>
 
         <PackageId>LuminPackGenerator</PackageId>
-        <Version>1.1.5</Version>
+        <Version>1.1.6</Version>
         <Authors>TheLight233</Authors>
         <Description>LuminPack Source Generator</Description>
 

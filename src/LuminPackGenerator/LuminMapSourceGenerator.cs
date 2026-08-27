@@ -26,7 +26,11 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                 var cs   = (CSharpParseOptions)opts;
                 var net8 = cs.PreprocessorSymbolNames.Contains("NET8_0_OR_GREATER");
                 var net9_OR_GREATER = cs.PreprocessorSymbolNames.Contains("NET9_0_OR_GREATER");
-                return new MetaInfo(cs, cs.LanguageVersion, net8, net9_OR_GREATER,false);
+                var allowUnsafe = compilation.Options is CSharpCompilationOptions csharpOptions
+                    ? csharpOptions.AllowUnsafe
+                    : false;
+                var registerMode = LuminPackGenerationTierResolver.RegisterModeFromAssembly(compilation);
+                return new MetaInfo(cs, cs.LanguageVersion, net8, net9_OR_GREATER, allowUnsafe, registerMode);
             });
 
         var generationMode = context.AnalyzerConfigOptionsProvider

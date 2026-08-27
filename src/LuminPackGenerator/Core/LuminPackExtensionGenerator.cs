@@ -103,20 +103,24 @@ public static class LuminPackExtensionGenerator
 			}, metaInfo, analyzedTypes, emitOptionalVariants: reachability is null);
 		}
 
-		AppendGenericDispatchExtensions(sb, compilation, metaInfo, reachability);
+		AppendGenericDispatchExtensions(sb, compilation, metaInfo, GetExtensionClassName(compilation), reachability);
 
 		return GenerateExtension(sb, GetExtensionClassName(compilation));
 	}
 
 	/// <summary>
 	/// Emits the generic dispatch extensions (<c>WriteValue&lt;T&gt;</c>, <c>ReadValue&lt;T&gt;</c>,
-	/// <c>CalculateOffset&lt;T&gt;</c> and their JSON counterparts) that replace the old cache-delegate
-	/// fallback. Each generic method resolves the runtime type's MethodTable through a frozen
-	/// <see cref="global::LuminPack.Utility.LuminFrozenNintMap{TValue}"/> to a contiguous id, then
-	/// dispatches with a dense <c>switch(id)</c> that the JIT lowers to a jump table. This is O(1)
-	/// with no cache, no delegate, and no linear typeof-chain.
+	/// <c>CalculateOffset&lt;T&gt;</c> and their JSON counterparts). Each closed <c>T</c> carries its
+	/// compact formatter id (0,1,2,3...) in <see cref="global::LuminPack.LuminPackTypeCache{T}"/>,
+	/// written by this assembly's static constructor, and the generic method dispatches with a dense
+	/// <c>switch(TypeId)</c> that the JIT lowers to a jump table. That replaces the old MethodTable
+	/// lookup + frozen-map probe on the hot path. The <c>default</c> branch (TypeId still
+	/// <see cref="uint.MaxValue"/>, i.e. no generated formatter) falls back to
+	/// <see cref="global::LuminPack.Code.LuminPackFormatterRegistry"/> for types the generator did
+	/// not cover (manual <c>LuminPackSerializer.Register</c>), calling the stored method pointer
+	/// directly with the T-typed signature - no boxing.
 	/// </summary>
-	private static void AppendGenericDispatchExtensions(StringBuilder sb, Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis? reachability = null)
+	private static void AppendGenericDispatchExtensions(StringBuilder sb, Compilation compilation, MetaInfo metaInfo, string extensionClassName, ReachabilityAnalysis? reachability = null)
 	{
 		ITypeSymbol[] types = GetOrderedFormatterTypes(compilation, reachability);
 		string scopedIn = metaInfo.IsNet8 ? "scoped in " : "in ";
@@ -134,18 +138,15 @@ public static class LuminPackExtensionGenerator
 			.Where(static d => d.Binary || d.Json || d.Calculate)
 			.ToArray();
 
-		// Frozen MethodTable -> contiguous-id map, built once.
-		sb.AppendLine("        private static readonly global::LuminPack.Utility.LuminFrozenNintMap<uint> s_formatterTypeIds = BuildFormatterTypeIds();");
-		sb.AppendLine();
-		sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]");
-		sb.AppendLine("        private static global::LuminPack.Utility.LuminFrozenNintMap<uint> BuildFormatterTypeIds()");
+		// The static ctor writes each per-type compact id before any generic dispatch extension can
+		// run (the JIT runs a type's static ctor before its static methods). uint.MaxValue stays the
+		// "not generated" sentinel, so ids can be dense 0,1,2,3... for a JIT jump table.
+		sb.AppendLine("        static " + extensionClassName + "()");
 		sb.AppendLine("        {");
-		sb.AppendLine("            var pairs = new global::System.Collections.Generic.List<global::System.Collections.Generic.KeyValuePair<nint, uint>>(" + dispatch.Length + ");");
-		foreach (var d in dispatch)
+		foreach (DispatchEntry d in dispatch)
 		{
-			sb.AppendLine("            pairs.Add(new global::System.Collections.Generic.KeyValuePair<nint, uint>(global::LuminPack.Code.LuminPackMarshal.GetMethodTable(typeof(" + d.Name + ")), " + d.Id + "u));");
+			sb.AppendLine("            global::LuminPack.LuminPackTypeCache<" + d.Name + ">.TypeId = " + d.Id + "u;");
 		}
-		sb.AppendLine("            return global::LuminPack.Utility.LuminFrozenNintMap<uint>.Create(pairs);");
 		sb.AppendLine("        }");
 		sb.AppendLine();
 
@@ -169,16 +170,13 @@ public static class LuminPackExtensionGenerator
 		string unsafeAs,
 		string throwNoFormatter)
 	{
+		string cacheType = "global::LuminPack.LuminPackTypeCache";
+		string registryTryGet = "global::LuminPack.Code.LuminPackFormatterRegistry.TryGetValue(global::LuminPack.Code.LuminPackMarshal.GetMethodTable(typeof(T)), out var __entry)";
 		sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
 		sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");
 		sb.AppendLine("        public static void " + methodName + "<T>(" + receiver + ", " + paramModifier + param + ")");
 		sb.AppendLine("        {");
-		sb.AppendLine("            if (!s_formatterTypeIds.TryGetValue(global::LuminPack.Code.LuminPackMarshal.GetMethodTable(typeof(T)), out var id))");
-		sb.AppendLine("            {");
-		sb.AppendLine("                " + throwNoFormatter);
-		sb.AppendLine("                return;");
-		sb.AppendLine("            }");
-		sb.AppendLine("            switch (id)");
+		sb.AppendLine("            switch (" + cacheType + "<T>.TypeId)");
 		sb.AppendLine("            {");
 		foreach (DispatchEntry d in dispatch)
 		{
@@ -214,10 +212,54 @@ public static class LuminPackExtensionGenerator
 			sb.AppendLine("                }");
 		}
 		sb.AppendLine("                default:");
+		if (!metaInfo.AllowUnsafe || metaInfo.RegisterMode == LuminPackRegisterMode.Disabled)
+		{
+			// Without AllowUnsafeBlocks the registered method pointers cannot be invoked, so the
+			// fallback registry is not emitted at all.
+			sb.AppendLine("                {");
+			sb.AppendLine("                    " + throwNoFormatter);
+			sb.AppendLine("                    return;");
+			sb.AppendLine("                }");
+		}
+		else
+		{
 		sb.AppendLine("                {");
-		sb.AppendLine("                    " + throwNoFormatter);
-		sb.AppendLine("                    return;");
+		sb.AppendLine("                    if (!" + registryTryGet + ")");
+		sb.AppendLine("                    {");
+		sb.AppendLine("                        " + throwNoFormatter);
+		sb.AppendLine("                        return;");
+		sb.AppendLine("                    }");
+		switch (op)
+		{
+			case "write":
+				if (isJson)
+				{
+					sb.AppendLine("                    if (__entry.WriteValueJson == 0) { " + throwNoFormatter + " }");
+					sb.AppendLine("                    unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackJsonWriter, in T, void>)__entry.WriteValueJson)(ref writer, in value); } return;");
+				}
+				else
+				{
+					sb.AppendLine("                    unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackWriter, in T, void>)__entry.WriteValue)(ref writer, in value); } return;");
+				}
+				break;
+			case "read":
+				if (isJson)
+				{
+					sb.AppendLine("                    if (__entry.ReadValueJson == 0) { " + throwNoFormatter + " }");
+					sb.AppendLine("                    unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackJsonReader, ref T, void>)__entry.ReadValueJson)(ref reader, ref value); } return;");
+				}
+				else
+				{
+					sb.AppendLine("                    unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackReader, ref T, void>)__entry.ReadValue)(ref reader, ref value); } return;");
+				}
+				break;
+			case "calculate":
+				sb.AppendLine("                    if (__entry.CalculateOffset == 0) { " + throwNoFormatter + " }");
+				sb.AppendLine("                    unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackEvaluator, in T, void>)__entry.CalculateOffset)(ref evaluator, in value); } return;");
+				break;
+		}
 		sb.AppendLine("                }");
+		}
 		sb.AppendLine("            }");
 		sb.AppendLine("        }");
 		sb.AppendLine();
@@ -726,7 +768,7 @@ public static class LuminPackExtensionGenerator
 			}
 			else
 			{
-				GenerateUnionDeserialize(data, sb);
+				GenerateUnionDeserialize(data, sb, metaInfo);
 			}
 		}
 		else
@@ -914,7 +956,7 @@ public static class LuminPackExtensionGenerator
 		sb.AppendLine("            global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(value!.GetType(), typeof(" + data.classFullName + ")); ");
 	}
 
-	private static void GenerateUnionDeserialize(LuminDataInfo data, StringBuilder sb)
+	private static void GenerateUnionDeserialize(LuminDataInfo data, StringBuilder sb, MetaInfo metaInfo)
 	{
 		int maxTag = data.UnionMembers.Count == 0 ? 0 : data.UnionMembers.Max(static member => member.Id);
 		sb.AppendLine(maxTag < 250 && !data.IsWideTag
@@ -940,9 +982,27 @@ public static class LuminPackExtensionGenerator
 			sb.AppendLine("                    return;");
 			sb.AppendLine("                }");
 		}
+		if (!metaInfo.AllowUnsafe || metaInfo.RegisterMode == LuminPackRegisterMode.Disabled)
+		{
+			sb.AppendLine("                default:");
+			sb.AppendLine("                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof(" + data.classFullName + ")); ");
+			sb.AppendLine("                    return;");
+		}
+		else
+		{
 		sb.AppendLine("                default:");
+		sb.AppendLine("                {");
+		sb.AppendLine("                    if (" + data.classFullName + ".TryGetRegisteredFormatter(tag, out var __registered) && __registered.ReadValue != 0)");
+		sb.AppendLine("                    {");
+		sb.AppendLine("                        " + data.classFullName + " __registeredValue = default!;");
+		sb.AppendLine("                        unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackReader, ref " + data.classFullName + ", void>)__registered.ReadValue)(ref reader, ref __registeredValue); }");
+		sb.AppendLine("                        value = __registeredValue;");
+		sb.AppendLine("                        return;");
+		sb.AppendLine("                    }");
 		sb.AppendLine("                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof(" + data.classFullName + ")); ");
 		sb.AppendLine("                    return;");
+		sb.AppendLine("                }");
+		}
 		sb.AppendLine("            }");
 	}
 
@@ -1021,7 +1081,25 @@ public static class LuminPackExtensionGenerator
 			sb.AppendLine("                        break;");
 			sb.AppendLine("                    }");
 		}
-		sb.AppendLine("                    default: global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof(" + typeName + ")); break;");
+		if (!metaInfo.AllowUnsafe || metaInfo.RegisterMode == LuminPackRegisterMode.Disabled)
+		{
+			sb.AppendLine("                    default: global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof(" + typeName + ")); break;");
+		}
+		else
+		{
+		sb.AppendLine("                    default:");
+		sb.AppendLine("                    {");
+		sb.AppendLine("                        if (" + typeName + ".TryGetRegisteredFormatter(tag, out var __registered) && __registered.ReadValueJson != 0)");
+		sb.AppendLine("                        {");
+		sb.AppendLine("                            " + typeName + " __registeredValue = default!;");
+		sb.AppendLine("                            unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackJsonReader, ref " + typeName + ", void>)__registered.ReadValueJson)(ref reader, ref __registeredValue); }");
+		sb.AppendLine("                            value = __registeredValue;");
+		sb.AppendLine("                            break;");
+		sb.AppendLine("                        }");
+		sb.AppendLine("                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof(" + typeName + "));");
+		sb.AppendLine("                        break;");
+		sb.AppendLine("                    }");
+		}
 		sb.AppendLine("                }");
 		sb.AppendLine("            }");
 		sb.AppendLine("        }");

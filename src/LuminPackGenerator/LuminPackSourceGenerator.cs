@@ -73,8 +73,9 @@ namespace LuminPack.SourceGenerator
                         var allowUnsafe = compilation.Options is CSharpCompilationOptions csharpOptions 
                             ? csharpOptions.AllowUnsafe 
                             : false;
+                        var registerMode = LuminPackGenerationTierResolver.RegisterModeFromAssembly(compilation);
                 
-                        return new MetaInfo(csOptions, langVersion, net8, net9OrGreater, allowUnsafe);
+                        return new MetaInfo(csOptions, langVersion, net8, net9OrGreater, allowUnsafe, registerMode);
                     }).WithTrackingName("LuminPack.LuminPackable.0_MetaInfo");
 
         
@@ -161,7 +162,7 @@ namespace LuminPack.SourceGenerator
 
                         var extension = LuminPackExtensionGenerator.CodeGenerator(dataInfo, metaInfo, compilation);
                         var unionDispatch = dataInfo.isUnion && !dataInfo.isValueType
-                            ? LuminPackUnionDispatchCodeGenerator.Generate(dataInfo, compilation)
+                            ? LuminPackUnionDispatchCodeGenerator.Generate(dataInfo, compilation, metaInfo)
                             : string.Empty;
                         if (string.IsNullOrEmpty(extension)) return;
                 

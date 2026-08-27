@@ -587,6 +587,14 @@ public static class LuminPackSerializerGenerator
 
     private static void AppendGenericFallbacks(StringBuilder sb, MetaInfo metaInfo)
     {
+        // The manual-registration API uses function pointers (delegate*), which require an unsafe
+        // context.  When the project does not enable AllowUnsafeBlocks (or opts out via
+        // [LuminPackGeneratorOptions(register: Disabled)]), skip it entirely so the generated
+        // code compiles without unsafe.
+        if (metaInfo.AllowUnsafe && metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
+        {
+            AppendRegister(sb);
+        }
         AppendGenericSerialize(sb);
         AppendGenericSerializeBufferWriter(sb);
         AppendGenericSerializeJson(sb);
@@ -604,6 +612,50 @@ public static class LuminPackSerializerGenerator
         AppendGenericDeserializeJsonBuffer(sb);
         AppendGenericDeserializeAsync(sb);
         AppendGenericDeserializeAsyncValue(sb);
+    }
+
+    private static void AppendRegister(StringBuilder sb)
+    {
+        sb.AppendLine("        /// <summary>Manually registers write/read method pointers for a type the source generator did not cover.</summary>");
+        sb.AppendLine("        /// <typeparam name=\"T\">The runtime type to register.</typeparam>");
+        sb.AppendLine("        /// <param name=\"writeValue\">Static binary writer, e.g. <c>&amp;MyType.Write</c>.</param>");
+        sb.AppendLine("        /// <param name=\"readValue\">Static binary reader, e.g. <c>&amp;MyType.Read</c>.</param>");
+        sb.AppendLine("        /// <remarks>Requires an unsafe context at the call site.</remarks>");
+        sb.AppendLine("        public static unsafe void Register<T>(");
+        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackWriter, in T, void> writeValue,");
+        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackReader, ref T, void> readValue)");
+        sb.AppendLine("            => global::LuminPack.Code.LuminPackFormatterRegistry.Register(typeof(T), (nint)writeValue, (nint)readValue);");
+        sb.AppendLine();
+        sb.AppendLine("        /// <summary>Manually registers write/read + JSON method pointers for a type the source generator did not cover.</summary>");
+        sb.AppendLine("        /// <typeparam name=\"T\">The runtime type to register.</typeparam>");
+        sb.AppendLine("        /// <param name=\"writeValue\">Static binary writer, e.g. <c>&amp;MyType.Write</c>.</param>");
+        sb.AppendLine("        /// <param name=\"readValue\">Static binary reader, e.g. <c>&amp;MyType.Read</c>.</param>");
+        sb.AppendLine("        /// <param name=\"writeValueJson\">Static JSON writer, e.g. <c>&amp;MyType.WriteJson</c>.</param>");
+        sb.AppendLine("        /// <param name=\"readValueJson\">Static JSON reader, e.g. <c>&amp;MyType.ReadJson</c>.</param>");
+        sb.AppendLine("        /// <remarks>Requires an unsafe context at the call site.</remarks>");
+        sb.AppendLine("        public static unsafe void Register<T>(");
+        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackWriter, in T, void> writeValue,");
+        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackReader, ref T, void> readValue,");
+        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackJsonWriter, in T, void> writeValueJson,");
+        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackJsonReader, ref T, void> readValueJson)");
+        sb.AppendLine("            => global::LuminPack.Code.LuminPackFormatterRegistry.Register(typeof(T), (nint)writeValue, (nint)readValue, (nint)writeValueJson, (nint)readValueJson);");
+        sb.AppendLine();
+        sb.AppendLine("        /// <summary>Manually registers write/read + JSON + offset method pointers for a type the source generator did not cover.</summary>");
+        sb.AppendLine("        /// <typeparam name=\"T\">The runtime type to register.</typeparam>");
+        sb.AppendLine("        /// <param name=\"writeValue\">Static binary writer, e.g. <c>&amp;MyType.Write</c>.</param>");
+        sb.AppendLine("        /// <param name=\"readValue\">Static binary reader, e.g. <c>&amp;MyType.Read</c>.</param>");
+        sb.AppendLine("        /// <param name=\"writeValueJson\">Static JSON writer, e.g. <c>&amp;MyType.WriteJson</c>.</param>");
+        sb.AppendLine("        /// <param name=\"readValueJson\">Static JSON reader, e.g. <c>&amp;MyType.ReadJson</c>.</param>");
+        sb.AppendLine("        /// <param name=\"calculateOffset\">Static size calculator, e.g. <c>&amp;MyType.CalcSize</c>.</param>");
+        sb.AppendLine("        /// <remarks>Requires an unsafe context at the call site.</remarks>");
+        sb.AppendLine("        public static unsafe void Register<T>(");
+        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackWriter, in T, void> writeValue,");
+        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackReader, ref T, void> readValue,");
+        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackJsonWriter, in T, void> writeValueJson,");
+        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackJsonReader, ref T, void> readValueJson,");
+        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackEvaluator, in T, void> calculateOffset)");
+        sb.AppendLine("            => global::LuminPack.Code.LuminPackFormatterRegistry.Register(typeof(T), (nint)writeValue, (nint)readValue, (nint)writeValueJson, (nint)readValueJson, (nint)calculateOffset);");
+        sb.AppendLine();
     }
 
     private static void AppendGenericSerialize(StringBuilder sb)
