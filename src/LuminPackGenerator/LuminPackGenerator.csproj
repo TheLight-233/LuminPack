@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
     <PropertyGroup>
         <TargetFramework>netstandard2.0</TargetFramework>
         <LangVersion>13</LangVersion>
@@ -10,7 +10,7 @@
         <IsRoslynComponent>true</IsRoslynComponent>
 
         <PackageId>LuminPackGenerator</PackageId>
-        <Version>1.1.6</Version>
+        <Version>1.1.7</Version>
         <Authors>TheLight233</Authors>
         <Description>LuminPack Source Generator</Description>
 

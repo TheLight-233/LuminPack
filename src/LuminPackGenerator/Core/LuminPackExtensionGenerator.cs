@@ -299,11 +299,18 @@ public static class LuminPackExtensionGenerator
 			? analysis.FormatterTypes
 			: reachability.EmittedTypes;
 
+		// Full mode walks every distinct symbol, so distinct symbols that canonicalize to the
+		// same formatter name (native ints nint/IntPtr, nuint/UIntPtr, ValueTuple vs the
+		// (a,b) syntax, or same-named types from different assemblies) must collapse to one
+		// entry. Otherwise the LuminPackSerializer per-type overloads and the generic dispatch
+		// would both emit identical signatures -> CS0001/CS0111 duplicate members.
 		return types
 			.Where(static type => !ContainsTypeParameter(type))
 			.Where(IsAotVisible)
 			.Where(IsStaticFormatterCandidate)
 			.OrderBy(static type => FormatterTypeName.Get(type), StringComparer.Ordinal)
+			.GroupBy(static type => FormatterTypeName.Get(type), StringComparer.Ordinal)
+			.Select(static group => group.First())
 			.ToArray();
 	}
 
