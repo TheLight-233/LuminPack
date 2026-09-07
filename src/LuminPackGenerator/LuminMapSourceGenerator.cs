@@ -134,6 +134,31 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
 
                 try
                 {
+                    // Validate [LuminPackable(GeneratorType.Custom)] types and emit the automatic
+                    // LuminPackSerializer.Register registration module initializer.
+                    var customModels = CustomFormatterAnalyzer.AnalyzeAll(compilation, spc.ReportDiagnostic);
+                    bool hasValidCustom = customModels.Any(static m => !m.HasErrors && m.RegisterTier > 0);
+                    if (hasValidCustom && (!meta.AllowUnsafe || meta.RegisterMode == LuminPackRegisterMode.Disabled))
+                    {
+                        foreach (var model in customModels.Where(static m => !m.HasErrors && m.RegisterTier > 0))
+                        {
+                            spc.ReportDiagnostic(Diagnostic.Create(
+                                DiagnosticDescriptors.CustomRegistrationSkippedNoUnsafe,
+                                model.Type.Locations.FirstOrDefault() ?? Location.None,
+                                model.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
+                        }
+                    }
+                    else if (hasValidCustom)
+                    {
+                        var customCode = CustomFormatterRegistrationGenerator.Generate(
+                            customModels,
+                            compilation,
+                            meta,
+                            TypeMetaChecker.IsUnityProject(compilation));
+                        if (!string.IsNullOrEmpty(customCode))
+                            spc.AddSource("LuminPackCustomFormatterRegistry.g.cs", customCode);
+                    }
+
                     if (hasMappers)
                     {
                         var code = GenerateMappersRegistry(autoInfos!, manualInfos, compilation, meta);

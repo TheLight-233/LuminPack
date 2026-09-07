@@ -14,6 +14,7 @@
 - [🔄 反序列化缓存池](#deserialize-pool)
 - [🎭 多态序列化](#polymorphism)
 - [🌐 跨程序集多态 / Register 手动注册](#cross-assembly)
+- [✍️ GeneratorType.Custom 手写格式化器](#custom-formatter)
 - [📝 版本容忍](#version-tolerant)
 - [🔗 循环引用](#circular-reference)
 - [💾 WriteBuffer池](#writebuffer)
@@ -57,7 +58,7 @@ dotnet add package LuminPack
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="LuminPack" Version="1.1.7" />
+  <PackageReference Include="LuminPack" Version="1.1.8" />
 </ItemGroup>
 ```
 
@@ -136,22 +137,43 @@ Enum, Struct, Class, List, Array
 <a id="builtin-types"></a>
 ## 🔧 内置支持的类型
 
-默认情况下，这些类型可以被序列化：
+默认情况下，这些类型可以被序列化（绝大多数也支持 JSON 与尺寸计算）：
 
-*   .Net所有非托管类型 (`byte`, `int`, `bool`, `char`, `double`, etc.)
-*   `string`, `decimal`, `Half`, `Int128`, `UInt128`, `Guid`, `Rune`, `BigInteger`
-*   `TimeSpan`, `DateTime`, `DateTimeOffset`, `TimeOnly`, `DateOnly`, `TimeZoneInfo`
-*   `Complex`, `Plane`, `Quaternion` `Matrix3x2`, `Matrix4x4`, `Vector2`, `Vector3`, `Vector4`
-*   `Uri`, `Version`, `StringBuilder`, `Type`, `BitArray`, `CultureInfo`
-*   `T[]`, `T[,]`, `T[,,]`, `T[,,,]`, `Memory<>`, `ReadOnlyMemory<>`, `ArraySegment<>`, `ReadOnlySequence<>`
-*   `Nullable<>`, `Lazy<>`, `KeyValuePair<,>`, `Tuple<,...>`, `ValueTuple<,...>`
-*   `List<>`, `LinkedList<>`, `Queue<>`, `Stack<>`, `HashSet<>`, `SortedSet<>`, `PriorityQueue<,>`
-*   `Dictionary<,>`, `SortedList<,>`, `SortedDictionary<,>`, `ReadOnlyDictionary<,>`
-*   `Collection<>`, `ReadOnlyCollection<>`, `ObservableCollection<>`, `ReadOnlyObservableCollection<>`, `ReadOnlyCollectionBuilder<>`
-*   `IEnumerable<>`, `ICollection<>`, `IList<>`, `IReadOnlyCollection<>`, `IReadOnlyList<>`, `ISet<>`
-*   `IDictionary<,>`, `IReadOnlyDictionary<,>`, `ILookup<,>`, `IGrouping<,>`,
-*   `ConcurrentBag<>`, `ConcurrentQueue<>`, `ConcurrentStack<>`, `ConcurrentDictionary<,>`, `BlockingCollection<>`
-*   Immutable collections (`ImmutableList<>`, etc.) and interfaces (`IImmutableList<>`, etc.)
+*   原生非托管标量（别名与全限定名均支持）：
+    `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`,
+    `nint`/`IntPtr`, `nuint`/`UIntPtr`
+*   浮点/字符/布尔：`float`, `double`, `decimal`, `bool`, `char`
+*   Guid / 时间 / 日期：`Guid`, `DateTime`, `DateTimeOffset`, `TimeSpan`,
+    `DateOnly`(.NET 8+), `TimeOnly`(.NET 8+), `TimeZoneInfo`
+*   System.Numerics：`BigInteger`, `Complex`, `Plane`, `Quaternion`,
+    `Matrix3x2`, `Matrix4x4`, `Vector2`, `Vector3`, `Vector4`
+*   .NET 8+ 标量：`Half`, `Int128`, `UInt128`, `System.Text.Rune`
+*   字符串/引用系统类型：`string`, `Uri`, `Version`, `StringBuilder`, `Type`,
+    `BitArray`, `CultureInfo`
+*   泛型包装：`Nullable<>`, `Lazy<>`, `KeyValuePair<,>`, `Tuple<,...>`(1–7),
+    `ValueTuple<,...>`(1–7)
+*   内存/跨度：`Memory<>`, `ReadOnlyMemory<>`, `ArraySegment<>`,
+    `ReadOnlySequence<>`
+*   可变集合：`List<>`, `LinkedList<>`, `Queue<>`, `Stack<>`, `HashSet<>`,
+    `SortedSet<>`, `SortedList<,>`, `Dictionary<,>`, `SortedDictionary<,>`,
+    `ReadOnlyDictionary<,>`, `PriorityQueue<,>`
+*   并发集合：`ConcurrentBag<>`, `ConcurrentQueue<>`, `ConcurrentStack<>`,
+    `ConcurrentDictionary<,>`, `BlockingCollection<>`
+*   只读/可观察集合：`Collection<>`, `ReadOnlyCollection<>`,
+    `ObservableCollection<>`, `ReadOnlyObservableCollection<>`
+*   Immutable 系列：`ImmutableArray<>`, `ImmutableList<>`, `ImmutableQueue<>`,
+    `ImmutableStack<>`, `ImmutableDictionary<,>`, `ImmutableHashSet<>`,
+    `ImmutableSortedDictionary<,>`, `ImmutableSortedSet<>`,
+    `ReadOnlyCollectionBuilder<>`
+*   Frozen (.NET 8+)：`FrozenDictionary<,>`, `FrozenSet<>`
+*   集合接口：`IEnumerable<>`, `ICollection<>`, `IReadOnlyCollection<>`,
+    `IList<>`, `IReadOnlyList<>`, `ISet<>`, `IReadOnlySet<>`,
+    `IDictionary<,>`, `IReadOnlyDictionary<,>`, `ILookup<,>`, `IGrouping<,>`
+*   Immutable 接口：`IImmutableList<>`, `IImmutableQueue<>`, `IImmutableStack<>`,
+    `IImmutableDictionary<,>`, `IImmutableSet<>`
+*   数组：`T[]`, `T[,]`, `T[,,]`, `T[,,,]`(任意维度)，以及原生标量数组的
+    压缩(`WithCompress`)与快速内存操作路径
+*   枚举：用户自定义 `enum` 直接按底层值序列化
 
 <a id="define-data"></a>
 ## 🎯 定义 `[LuminPackable]` 数据
@@ -521,6 +543,50 @@ unsafe
 * 二进制写 / 读、JSON 写 / 读四个方法指针均为必填；`Sizeof` 对该类注册成员仍会抛出（与生成成员的槽行为一致）。
 * 注册表定义在基类 partial 上（基类自身程序集生成），`Register` 调用与序列化发生在同一进程内即可，跨程序集使用。
 * 同样适用于"基类声明在序列化程序集、子类未被生成器列入 union"的场景（如未标记 `[LuminPackable]` 的子类）。
+
+<a id="custom-formatter"></a>
+## ✍️ GeneratorType.Custom —— 用户手写格式化器
+
+`[LuminPackable(GeneratorType.Custom)]` 告诉源生成器**不生成任何扩展方法**，序列化/反序列化完全由你手写的静态方法实现。源生成器会校验这些方法，并在编译期自动通过 `LuminPackSerializer.Register<T>()`（模块初始化器）注册——无需手动调用 Register。
+
+```csharp
+[LuminPackable(GeneratorType.Custom)]
+public sealed class MyVector
+{
+    public float X, Y, Z;
+
+    // 必需：二进制写/读
+    public static void Serialize(ref LuminPackWriter writer, in MyVector value)
+    {
+        writer.WriteValue(value.X);
+        writer.WriteValue(value.Y);
+        writer.WriteValue(value.Z);
+    }
+
+    public static void Deserialize(ref LuminPackReader reader, ref MyVector value)
+    {
+        value = new MyVector();
+        reader.ReadValue(ref value.X);
+        reader.ReadValue(ref value.Y);
+        reader.ReadValue(ref value.Z);
+    }
+}
+
+// 正常使用泛型入口，运行时走注册的手写方法（零装箱）
+var buffer = LuminPackSerializer.Serialize(new MyVector());
+```
+
+方法集必须精确匹配 Register 的三种重载之一（遵守"不需要5种全都写"原则）：
+
+| 组合 | 必需方法 |
+| --- | --- |
+| 仅二进制 | `Serialize` + `Deserialize` |
+| 二进制 + JSON | 再加 `SerializeJson` + `DeserializeJson`（JSON 必须成对） |
+| 二进制 + JSON + 尺寸 | 再加 `CalculateOffset`（第三种重载要求 JSON 方法齐全） |
+
+校验诊断（`LuminPack100`–`LuminPack108`）会报告：缺少必需方法、方法非 `static`、签名不匹配、JSON 方法只写了一半、`CalculateOffset` 但 JSON 不全、泛型类型不支持（运行时按封闭类型注册）、union 根不支持，以及项目未开启 `AllowUnsafeBlocks` 时注册被跳过的警告（Register 使用函数指针，需要 unsafe 上下文）。方法必须是 `public` 或 `internal`，以便生成的注册代码能取其地址。
+
+Custom 类型作为其他 `[LuminPackable]` 类型的字段时，请给该字段标记 `[LuminPackableObject]`，使其通过注册表派发到手写方法而不是内联展开。
 
 <a id="version-tolerant"></a>
 ## 📝 版本容忍

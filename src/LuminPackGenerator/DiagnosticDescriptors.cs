@@ -193,6 +193,52 @@ internal static class DiagnosticDescriptors
         "Source generation failed",
         "LuminPack source generation failed: {0}");
 
+    // Custom formatter validation ([LuminPackable(GeneratorType.Custom)]).
+    public static readonly DiagnosticDescriptor CustomMissingMethod = Error(
+        "LuminPack100",
+        "Custom formatter method missing",
+        "Custom type '{0}' must declare static method '{1}' with signature '{2}'.");
+
+    public static readonly DiagnosticDescriptor CustomMethodMustBeStatic = Error(
+        "LuminPack101",
+        "Custom formatter method must be static",
+        "Custom formatter method '{1}' on '{0}' must be static.");
+
+    public static readonly DiagnosticDescriptor CustomMethodSignatureMismatch = Error(
+        "LuminPack102",
+        "Custom formatter method signature mismatch",
+        "Custom formatter method '{1}' on '{0}' must have signature '{2}'.");
+
+    public static readonly DiagnosticDescriptor CustomMethodMustBeAccessible = Error(
+        "LuminPack103",
+        "Custom formatter method must be accessible",
+        "Custom formatter method '{1}' on '{0}' must be public or internal so generated registration code can take its address.");
+
+    public static readonly DiagnosticDescriptor CustomJsonMethodsIncomplete = Error(
+        "LuminPack104",
+        "Custom JSON formatter methods incomplete",
+        "Custom type '{0}' declares '{1}' but not '{2}'; JSON registration requires both SerializeJson and DeserializeJson.");
+
+    public static readonly DiagnosticDescriptor CustomCalculateOffsetRequiresJson = Error(
+        "LuminPack105",
+        "Custom CalculateOffset requires JSON methods",
+        "Custom type '{0}' declares CalculateOffset, but the matching Register overload also requires SerializeJson and DeserializeJson.");
+
+    public static readonly DiagnosticDescriptor CustomTypeMustNotBeGeneric = Error(
+        "LuminPack106",
+        "Custom formatter type cannot be generic",
+        "Custom formatter type '{0}' cannot be generic; runtime registration happens per closed type.");
+
+    public static readonly DiagnosticDescriptor CustomUnionNotSupported = Error(
+        "LuminPack107",
+        "Custom formatter type cannot be a union root",
+        "Custom formatter type '{0}' cannot be abstract or a union root; union dispatch requires generated formatters.");
+
+    public static readonly DiagnosticDescriptor CustomRegistrationSkippedNoUnsafe = Warning(
+        "LuminPack108",
+        "Custom registration skipped without unsafe",
+        "Custom type '{0}' will not be registered automatically because the project does not enable AllowUnsafeBlocks (Register uses function pointers); enable unsafe or call LuminPackSerializer.Register manually.");
+
     private static DiagnosticDescriptor Error(string id, string title, string message) =>
         new(id, title, message, Category, DiagnosticSeverity.Error, isEnabledByDefault: true);
 

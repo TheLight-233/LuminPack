@@ -10,7 +10,7 @@
 
         <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
         <PackageId>LuminPack</PackageId>
-        <Version>1.1.7</Version>
+        <Version>1.1.8</Version>
         <Authors>TheLight233</Authors>
         <Description>Ultra-performance binary and json serializer with source generator support</Description>
         <PackageTags>serialization;binary;json;high-performance;luminpack;sourcegenerator</PackageTags>

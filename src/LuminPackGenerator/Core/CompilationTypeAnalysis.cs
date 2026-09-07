@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using LuminPack.Code;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -227,6 +228,10 @@ internal static class CompilationTypeAnalysisCache
         ICollection<INamedTypeSymbol> packableTypes)
     {
         declaredTypes.Add(new ProjectTypeData(type));
+        // Custom types keep their owner role so Minimal-tier reachability still expands
+        // their member graphs (their field types get shared formatter extensions); the
+        // extension emission itself filters Custom types out (see
+        // LuminPackExtensionGenerator.IsCustomGeneratorType).
         if (HasPackableAttribute(type))
         {
             packableTypes.Add(type);

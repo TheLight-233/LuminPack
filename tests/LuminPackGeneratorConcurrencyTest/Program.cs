@@ -1,4 +1,8 @@
+using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -12,11 +16,106 @@ var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
     .Select(static path => MetadataReference.CreateFromFile(path))
     .ToArray();
 
+if (args.Contains("--verify-readonly-collection-builder", StringComparer.Ordinal))
+{
+    VerifyReadOnlyCollectionBuilder(references);
+    Console.WriteLine("Passed ReadOnlyCollectionBuilder built-in emitter recognition.");
+    return;
+}
+
 if (args.Contains("--verify-scoped-emission", StringComparer.Ordinal))
 {
     VerifyScopedEmission(references);
     Console.WriteLine("Passed scoped emission verification for C# 10/non-NET8 and Preview/NET8.");
     return;
+}
+
+static void VerifyReadOnlyCollectionBuilder(MetadataReference[] references)
+{
+    // .NET Core removed ReadOnlyCollectionBuilder<T> from the runtime's own
+    // System.Collections.Immutable. The emitter targets the NuGet package's
+    // netstandard2.0 facade, where the type is public. Swap that reference in so
+    // LuminPack's generator can resolve and emit the emitter for it.
+    string packageDll = FindSciNetstandard2Dll();
+
+    var modified = references
+        .Where(static r => !string.Equals(Path.GetFileName(r.Display), "System.Collections.Immutable.dll", StringComparison.OrdinalIgnoreCase))
+        .Append(MetadataReference.CreateFromFile(packageDll))
+        .ToArray();
+
+    const string source = """
+        using System;
+
+        namespace LuminPack.Attribute
+        {
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
+            public sealed class LuminPackableAttribute : Attribute
+            {
+            }
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial class RcbHolder
+        {
+            public global::System.Collections.Immutable.ReadOnlyCollectionBuilder<int> Values = new();
+        }
+        """;
+
+    var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+    var compilation = CSharpCompilation.Create(
+        "ReadOnlyCollectionBuilder",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        modified,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        parseOptions: parseOptions);
+    var run = driver.RunGenerators(compilation).GetRunResult();
+
+    Diagnostic[] errors = run.Diagnostics
+        .Where(static d => d.Severity == DiagnosticSeverity.Error)
+        .ToArray();
+    if (errors.Length != 0)
+    {
+        throw new InvalidOperationException(
+            "LuminPack reported errors for ReadOnlyCollectionBuilder: " +
+            string.Join("; ", errors.Select(static d => d.GetMessage())));
+    }
+
+    bool recognized = run.Results
+        .SelectMany(static r => r.GeneratedSources)
+        .Any(static g => g.SourceText.ToString().Contains("ReadOnlyCollectionBuilder", StringComparison.Ordinal));
+    if (!recognized)
+    {
+        throw new InvalidOperationException("Generator did not emit ReadOnlyCollectionBuilder handling.");
+    }
+}
+
+static string FindSciNetstandard2Dll()
+{
+    string root = Path.Combine(
+        Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+        ".nuget", "packages", "system.collections.immutable");
+    var candidates = new List<KeyValuePair<Version, string>>();
+    if (Directory.Exists(root))
+    {
+        foreach (string versionDir in Directory.GetDirectories(root))
+        {
+            string dll = Path.Combine(versionDir, "lib", "netstandard2.0", "System.Collections.Immutable.dll");
+            if (File.Exists(dll) && Version.TryParse(Path.GetFileName(versionDir), out Version version))
+            {
+                candidates.Add(new KeyValuePair<Version, string>(version, dll));
+            }
+        }
+    }
+
+    if (candidates.Count == 0)
+    {
+        throw new InvalidOperationException(
+            "Cannot locate System.Collections.Immutable netstandard2.0 package dll under the NuGet cache.");
+    }
+
+    return candidates.OrderByDescending(static kvp => kvp.Key).First().Value;
 }
 
 if (args.Contains("--verify-formatter-scope", StringComparer.Ordinal))

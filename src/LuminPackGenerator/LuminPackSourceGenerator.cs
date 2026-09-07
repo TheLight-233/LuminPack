@@ -149,6 +149,13 @@ namespace LuminPack.SourceGenerator
                         var metaInfo = source.Item2.Item1;
                         var propertyTier = source.Item2.Item2;
 
+                        // Custom types emit no extension methods; the aggregate pipeline in
+                        // LuminMapSourceGenerator validates them and emits registration code.
+                        if (dataInfo.generatorType == GeneratorType.Custom)
+                        {
+                            return;
+                        }
+
                         LuminPackGenerationTier assemblyTier = LuminPackGenerationTierResolver.FromAssembly(compilation);
                         LuminPackGenerationTier effectiveTier = (LuminPackGenerationTier)Math.Max((int)propertyTier, (int)assemblyTier);
 
@@ -271,7 +278,15 @@ namespace LuminPack.SourceGenerator
                     dataInfo.interfaces.Add(fullName);
                 }
             }
-            
+
+            // Custom formatter types implement serialization manually; the generator emits no
+            // extension methods for them and skips member/union analysis entirely. Validation
+            // and registration are handled by CustomFormatterAnalyzer in the aggregate pipeline.
+            if (dataInfo.generatorType == GeneratorType.Custom)
+            {
+                return dataInfo;
+            }
+
             #region Diagnostics
 
             //Check Layout

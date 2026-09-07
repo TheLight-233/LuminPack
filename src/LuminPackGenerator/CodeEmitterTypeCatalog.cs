@@ -117,6 +117,7 @@ internal static class CodeEmitterTypeCatalog
         "System.Collections.Immutable.IImmutableSet`1",
         "System.Collections.Immutable.IImmutableQueue`1",
         "System.Collections.Immutable.IImmutableStack`1",
+        "System.Collections.Immutable.ReadOnlyCollectionBuilder`1",
         
     };
 }

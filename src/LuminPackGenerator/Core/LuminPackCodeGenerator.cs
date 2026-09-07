@@ -3227,7 +3227,24 @@ public static class LuminPackCodeGenerator
 		}
 		if (flag)
 		{
-			sb.AppendLine("            value = result;");
+			if (data.isValueType || polymorphism)
+			{
+				sb.AppendLine("            value = result;");
+			}
+			else
+			{
+				// Deserialize-into-existing: when a root instance is supplied, preserve its identity and
+				// commit members into it only on success so a parse failure never publishes a partially
+				// initialized object into value.
+				sb.AppendLine("            if (value is null)");
+				sb.AppendLine("            {");
+				sb.AppendLine("                value = result;");
+				sb.AppendLine("            }");
+				foreach (LuminDataField field in data.fields.Where(static field => CanDeserializeDirectlyIntoConstructedObject(field)))
+				{
+					sb.AppendLine("                value." + field.Identifier + " = result." + field.Identifier + ";");
+				}
+			}
 			if (data.fields.Any(static field => !CanDeserializeDirectlyIntoConstructedObject(field)))
 			{
 				if (data.isValueType)

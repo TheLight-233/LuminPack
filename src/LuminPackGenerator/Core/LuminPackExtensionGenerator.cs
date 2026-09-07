@@ -92,6 +92,7 @@ public static class LuminPackExtensionGenerator
 			.Where(static type => !ContainsTypeParameter(type))
 			.Where(IsAotVisible)
 			.Where(IsStaticFormatterCandidate)
+			.Where(static type => !IsCustomGeneratorType(type))
 			.OrderBy(static type => FormatterTypeName.Get(type), StringComparer.Ordinal))
 		{
 			GenerateFormatterExtensions(sb, new LuminLocalFieldData
@@ -197,7 +198,7 @@ public static class LuminPackExtensionGenerator
 						sb.AppendLine("                    var v = " + unsafeAs + "<T, " + d.Name + ">(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in value)); writer.WriteValue(in v); return;");
 						break;
 					case "read":
-						sb.AppendLine("                    " + d.Name + " v = default!; reader.ReadValue(ref v); value = " + unsafeAs + "<" + d.Name + ", T>(ref v); return;");
+						sb.AppendLine("                    ref var v = ref " + unsafeAs + "<T, " + d.Name + ">(ref value); reader.ReadValue(ref v); value = " + unsafeAs + "<" + d.Name + ", T>(ref v); return;");
 						break;
 					case "calculate":
 						sb.AppendLine("                    var v = " + unsafeAs + "<T, " + d.Name + ">(ref value); evaluator.CalculateOffset(ref v); return;");
@@ -308,10 +309,23 @@ public static class LuminPackExtensionGenerator
 			.Where(static type => !ContainsTypeParameter(type))
 			.Where(IsAotVisible)
 			.Where(IsStaticFormatterCandidate)
+			.Where(static type => !IsCustomGeneratorType(type))
 			.OrderBy(static type => FormatterTypeName.Get(type), StringComparer.Ordinal)
 			.GroupBy(static type => FormatterTypeName.Get(type), StringComparer.Ordinal)
 			.Select(static group => group.First())
 			.ToArray();
+	}
+
+	/// <summary>
+	/// True when the type declares [LuminPackable(GeneratorType.Custom)]: the generator emits no
+	/// formatter extensions for it — user-written static methods are registered at runtime
+	/// through LuminPackSerializer.Register instead.
+	/// </summary>
+	internal static bool IsCustomGeneratorType(ITypeSymbol type)
+	{
+		return type is INamedTypeSymbol named &&
+		       HasPackableAttribute(named) &&
+		       TypeMetaChecker.CheckGeneratorType(named) == GeneratorType.Custom;
 	}
 
 

@@ -86,6 +86,7 @@ public static class EvaluatorEmitterRegistry
             case "global::System.Collections.Immutable.IImmutableQueue":
             case "global::System.Collections.Immutable.IImmutableStack":
             case "global::System.Collections.Immutable.IImmutableSet":
+            case "global::System.Collections.Immutable.ReadOnlyCollectionBuilder":
             case "global::System.Collections.Frozen.FrozenSet":
                 return CollectionEvaluatorEmitter.GenerateEnumerableCalculateOffsetCode;
 
