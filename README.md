@@ -21,6 +21,7 @@
 - [🎮 Unity](#unity)
 - [📜 JSON 格式规范](#json-spec)
 - [📐 二进制格式规范](#binary-spec)
+- [🤖 AI Skill](#ai-skill)
 
 <a id="intro"></a>
 ## 📖 简介
@@ -818,6 +819,25 @@ Token 模式没有 null 标记，`null` 与空字符串统一编码为空 token�
 `(values...)`
 
 元组是固定大小的非空值集合。 `KeyValuePair<TKey, TValue>` 和 `ValueTuple<T,...>` 被序列化为Tuple。
+
+<a id="ai-skill"></a>
+## 🤖 AI Skill（供 AI 助手使用）
+
+仓库附带一个面向 AI 助手 / Agent 的 Skill：`skills/luminpack/`。它是一份 LuminPack **使用说明书**，目的是让 AI 写出正确使用 LuminPack 的代码，覆盖：
+
+- `[LuminPackable]` 标记与全部序列化特性的用法
+- `LuminPackSerializer` 二进制 / JSON / 压缩 / Register 注册 API
+- 源码生成器的生成模式配置（Full / Medium / Light / Minimal）
+- 多态 union、版本容忍、循环引用、`GeneratorType.Custom` 自定义格式化器、`LuminMapper` 映射
+- 常见陷阱与性能提示
+
+Skill 内含可直接照抄的完整示例代码（Custom formatter、`Register<T>`、跨程序集多态 `Register<TMember>`、反序列化缓存池、委托成员等），并附属性目录与 API 参考。
+
+### 安装 / 使用
+
+- **支持仓库 `skills/` 目录自动发现的环境**：克隆仓库后即可直接使用，无需额外操作。
+- **Agent Skills 兼容环境**：将 `skills/luminpack/` 目录复制到项目的 Skill 目录（如 `.claude/skills/`、`.trae/skills/` 等）。
+- **手动参考**：直接阅读 `skills/luminpack/SKILL.md` 及 `skills/luminpack/references/` 下的属性目录与 API 参考。
 
 ## 📄 License 许可证
 

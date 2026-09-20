@@ -208,6 +208,107 @@ namespace LuminPackUnitTest
         }
 
         [Fact]
+        public unsafe void Block2_Matches_TwoSequentialBlocks()
+        {
+            // Block2(c) must equal Block(c) followed by Block(c+1), covering counter wrap.
+            byte[] key = Enumerable.Range(0, 32).Select(i => (byte)i).ToArray();
+            byte[] nonce = FromHex("000000090000004a00000000");
+            uint[] counters = { 0u, 1u, 0xFFFFFFFEu, 0xFFFFFFFFu };
+
+            fixed (byte* k = key)
+            fixed (byte* n = nonce)
+            {
+                foreach (uint c in counters)
+                {
+                    uint* state = stackalloc uint[16];
+                    byte* block1 = stackalloc byte[64];
+                    byte* block2 = stackalloc byte[64];
+                    byte* pair = stackalloc byte[128];
+
+                    ChaCha20.Initialize(state, k, key.Length, n, nonce.Length, c);
+                    ChaCha20.Block(state, block1);        // counter c
+                    ChaCha20.Block2(state, pair);         // counters c, c+1 (state untouched)
+
+                    state[12] = c + 1u;
+                    ChaCha20.Block(state, block2);        // counter c+1
+
+                    var first = new byte[64];
+                    var second = new byte[64];
+                    var firstPair = new byte[64];
+                    var secondPair = new byte[64];
+                    System.Runtime.InteropServices.Marshal.Copy((IntPtr)block1, first, 0, 64);
+                    System.Runtime.InteropServices.Marshal.Copy((IntPtr)block2, second, 0, 64);
+                    System.Runtime.InteropServices.Marshal.Copy((IntPtr)pair, firstPair, 0, 64);
+                    System.Runtime.InteropServices.Marshal.Copy((IntPtr)(pair + 64), secondPair, 0, 64);
+
+                    Assert.Equal(first, firstPair);
+                    Assert.Equal(second, secondPair);
+                }
+            }
+        }
+
+        [Fact]
+        public unsafe void Block4_Matches_FourSequentialBlocks()
+        {
+            // Block4(c) must equal Block(c..c+3), covering counter wrap.
+            byte[] key = Enumerable.Range(0, 32).Select(i => (byte)i).ToArray();
+            byte[] nonce = FromHex("000000090000004a00000000");
+            uint[] counters = { 0u, 1u, 0xFFFFFFFDu, 0xFFFFFFFEu };
+
+            fixed (byte* k = key)
+            fixed (byte* n = nonce)
+            {
+                foreach (uint c in counters)
+                {
+                    uint* state = stackalloc uint[16];
+                    byte* quad = stackalloc byte[256];
+                    byte* single = stackalloc byte[64];
+
+                    ChaCha20.Initialize(state, k, key.Length, n, nonce.Length, c);
+                    ChaCha20.Block4(state, quad);         // counters c..c+3 (state untouched)
+
+                    for (int b = 0; b < 4; b++)
+                    {
+                        state[12] = c + (uint)b;
+                        ChaCha20.Block(state, single);    // counter c+b
+
+                        var expected = new byte[64];
+                        var actual = new byte[64];
+                        System.Runtime.InteropServices.Marshal.Copy((IntPtr)single, expected, 0, 64);
+                        System.Runtime.InteropServices.Marshal.Copy((IntPtr)(quad + b * 64), actual, 0, 64);
+                        Assert.Equal(expected, actual);
+                    }
+                }
+            }
+        }
+
+        [Fact]
+        public unsafe void Simd_Matches_Scalar()
+        {
+            // Dispatched Block (SSE2/AVX2) must be byte-identical to the scalar implementation.
+            byte[] key = Enumerable.Range(0, 32).Select(i => (byte)i).ToArray();
+            byte[] nonce = FromHex("000000090000004a00000000");
+
+            fixed (byte* k = key)
+            fixed (byte* n = nonce)
+            {
+                uint* state = stackalloc uint[16];
+                byte* simd = stackalloc byte[64];
+                byte* scalar = stackalloc byte[64];
+
+                ChaCha20.Initialize(state, k, key.Length, n, nonce.Length, 1u);
+                ChaCha20.Block(state, simd);          // dispatched to SSE2/AVX2 path
+                ChaCha20.BlockScalar(state, scalar);
+
+                var a = new byte[64];
+                var b = new byte[64];
+                System.Runtime.InteropServices.Marshal.Copy((IntPtr)simd, a, 0, 64);
+                System.Runtime.InteropServices.Marshal.Copy((IntPtr)scalar, b, 0, 64);
+                Assert.Equal(a, b);
+            }
+        }
+
+        [Fact]
         public async Task AsyncStream_EncryptDecrypt_RoundTrip()
         {
             var rng = new Random(7);

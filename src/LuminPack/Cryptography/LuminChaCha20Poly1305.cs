@@ -3,6 +3,10 @@ using System.IO;
 using System.Runtime.CompilerServices;
 using System.Threading;
 using System.Threading.Tasks;
+#if NET8_0_OR_GREATER
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
+#endif
 
 namespace LuminPack.Cryptography
 {
@@ -54,7 +58,7 @@ namespace LuminPack.Cryptography
             fixed (byte* ctPtr = &AsRef(ciphertext))
             {
                 uint* state = stackalloc uint[16];
-                byte* block = stackalloc byte[BlockSize];
+                byte* block = stackalloc byte[BlockSize * 4];
 
                 // Derive the one-time Poly1305 key from keystream block 0.
                 ChaCha20.Initialize(state, keyPtr, key.Length, noncePtr, nonce.Length, 0);
@@ -71,6 +75,32 @@ namespace LuminPack.Cryptography
                 uint counter = 1;
                 int length = plaintext.Length;
                 int pos = 0;
+#if NET8_0_OR_GREATER
+                if (Avx512F.IsSupported)
+                {
+                    // Quad-block fast path: four keystream blocks (counters c..c+3) per call.
+                    while (pos + (BlockSize * 4) <= length)
+                    {
+                        state[12] = counter;
+                        ChaCha20.Block4(state, block);
+                        XorKeystream(ctPtr + pos, ptPtr + pos, block, BlockSize * 4);
+                        counter += 4;
+                        pos += BlockSize * 4;
+                    }
+                }
+                if (Avx2.IsSupported)
+                {
+                    // Dual-block fast path: two keystream blocks (counters c, c+1) per call.
+                    while (pos + (BlockSize * 2) <= length)
+                    {
+                        state[12] = counter;
+                        ChaCha20.Block2(state, block);
+                        XorKeystream(ctPtr + pos, ptPtr + pos, block, BlockSize * 2);
+                        counter += 2;
+                        pos += BlockSize * 2;
+                    }
+                }
+#endif
                 while (pos < length)
                 {
                     int take = length - pos;
@@ -80,8 +110,7 @@ namespace LuminPack.Cryptography
                     state[12] = counter++;
                     ChaCha20.Block(state, block);
 
-                    for (int i = 0; i < take; i++)
-                        ctPtr[pos + i] = (byte)(ptPtr[pos + i] ^ block[i]);
+                    XorKeystream(ctPtr + pos, ptPtr + pos, block, take);
 
                     pos += take;
                 }
@@ -123,7 +152,7 @@ namespace LuminPack.Cryptography
             fixed (byte* ctPtr = &AsRef(ciphertext))
             {
                 uint* state = stackalloc uint[16];
-                byte* block = stackalloc byte[BlockSize];
+                byte* block = stackalloc byte[BlockSize * 4];
 
                 ChaCha20.Initialize(state, keyPtr, key.Length, noncePtr, nonce.Length, 0);
                 ChaCha20.Block(state, block);
@@ -152,13 +181,39 @@ namespace LuminPack.Cryptography
             fixed (byte* ptPtr = &AsRef(plaintext))
             {
                 uint* state = stackalloc uint[16];
-                byte* block = stackalloc byte[BlockSize];
+                byte* block = stackalloc byte[BlockSize * 4];
 
                 ChaCha20.Initialize(state, keyPtr, key.Length, noncePtr, nonce.Length, 0);
 
                 uint counter = 1;
                 int length = ciphertext.Length;
                 int pos = 0;
+#if NET8_0_OR_GREATER
+                if (Avx512F.IsSupported)
+                {
+                    // Quad-block fast path: four keystream blocks (counters c..c+3) per call.
+                    while (pos + (BlockSize * 4) <= length)
+                    {
+                        state[12] = counter;
+                        ChaCha20.Block4(state, block);
+                        XorKeystream(ptPtr + pos, ctPtr + pos, block, BlockSize * 4);
+                        counter += 4;
+                        pos += BlockSize * 4;
+                    }
+                }
+                if (Avx2.IsSupported)
+                {
+                    // Dual-block fast path: two keystream blocks (counters c, c+1) per call.
+                    while (pos + (BlockSize * 2) <= length)
+                    {
+                        state[12] = counter;
+                        ChaCha20.Block2(state, block);
+                        XorKeystream(ptPtr + pos, ctPtr + pos, block, BlockSize * 2);
+                        counter += 2;
+                        pos += BlockSize * 2;
+                    }
+                }
+#endif
                 while (pos < length)
                 {
                     int take = length - pos;
@@ -168,8 +223,7 @@ namespace LuminPack.Cryptography
                     state[12] = counter++;
                     ChaCha20.Block(state, block);
 
-                    for (int i = 0; i < take; i++)
-                        ptPtr[pos + i] = (byte)(ctPtr[pos + i] ^ block[i]);
+                    XorKeystream(ptPtr + pos, ctPtr + pos, block, take);
 
                     pos += take;
                 }
@@ -246,6 +300,81 @@ namespace LuminPack.Cryptography
             while ((read = await source.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
                 ms.Write(buffer, 0, read);
             return ms.ToArray();
+        }
+
+        /// <summary>
+        /// XORs <paramref name="length"/> bytes of keystream <paramref name="key"/> into
+        /// <paramref name="src"/>, writing the result to <paramref name="dst"/>. Uses the widest
+        /// available SIMD (AVX2 32B / SSE2 16B), falling back to 32-bit unaligned word XOR.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe void XorKeystream(byte* dst, byte* src, byte* key, int length)
+        {
+            int i = 0;
+#if NET8_0_OR_GREATER
+            if (Avx512F.IsSupported)
+            {
+                ref byte d = ref Unsafe.AsRef<byte>(dst);
+                ref byte s = ref Unsafe.AsRef<byte>(src);
+                ref byte k = ref Unsafe.AsRef<byte>(key);
+                for (; i + 64 <= length; i += 64)
+                    Vector512.StoreUnsafe(Vector512.LoadUnsafe(ref s, (nuint)i) ^ Vector512.LoadUnsafe(ref k, (nuint)i), ref d, (nuint)i);
+                for (; i + 32 <= length; i += 32)
+                    Vector256.StoreUnsafe(Vector256.LoadUnsafe(ref s, (nuint)i) ^ Vector256.LoadUnsafe(ref k, (nuint)i), ref d, (nuint)i);
+                for (; i + 16 <= length; i += 16)
+                    Vector128.StoreUnsafe(Vector128.LoadUnsafe(ref s, (nuint)i) ^ Vector128.LoadUnsafe(ref k, (nuint)i), ref d, (nuint)i);
+                for (; i + 4 <= length; i += 4)
+                    Unsafe.WriteUnaligned(ref Unsafe.Add(ref d, i),
+                        Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref s, i)) ^
+                        Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref k, i)));
+                for (; i < length; i++)
+                    Unsafe.Add(ref d, i) = (byte)(Unsafe.Add(ref s, i) ^ Unsafe.Add(ref k, i));
+                return;
+            }
+            if (Avx2.IsSupported)
+            {
+                ref byte d = ref Unsafe.AsRef<byte>(dst);
+                ref byte s = ref Unsafe.AsRef<byte>(src);
+                ref byte k = ref Unsafe.AsRef<byte>(key);
+                for (; i + 32 <= length; i += 32)
+                    Vector256.StoreUnsafe(Vector256.LoadUnsafe(ref s, (nuint)i) ^ Vector256.LoadUnsafe(ref k, (nuint)i), ref d, (nuint)i);
+                for (; i + 16 <= length; i += 16)
+                    Vector128.StoreUnsafe(Vector128.LoadUnsafe(ref s, (nuint)i) ^ Vector128.LoadUnsafe(ref k, (nuint)i), ref d, (nuint)i);
+                for (; i + 4 <= length; i += 4)
+                    Unsafe.WriteUnaligned(ref Unsafe.Add(ref d, i),
+                        Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref s, i)) ^
+                        Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref k, i)));
+                for (; i < length; i++)
+                    Unsafe.Add(ref d, i) = (byte)(Unsafe.Add(ref s, i) ^ Unsafe.Add(ref k, i));
+                return;
+            }
+            if (Sse2.IsSupported)
+            {
+                ref byte d = ref Unsafe.AsRef<byte>(dst);
+                ref byte s = ref Unsafe.AsRef<byte>(src);
+                ref byte k = ref Unsafe.AsRef<byte>(key);
+                for (; i + 16 <= length; i += 16)
+                    Vector128.StoreUnsafe(Vector128.LoadUnsafe(ref s, (nuint)i) ^ Vector128.LoadUnsafe(ref k, (nuint)i), ref d, (nuint)i);
+                for (; i + 4 <= length; i += 4)
+                    Unsafe.WriteUnaligned(ref Unsafe.Add(ref d, i),
+                        Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref s, i)) ^
+                        Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref k, i)));
+                for (; i < length; i++)
+                    Unsafe.Add(ref d, i) = (byte)(Unsafe.Add(ref s, i) ^ Unsafe.Add(ref k, i));
+                return;
+            }
+#endif
+            {
+                ref byte d = ref Unsafe.AsRef<byte>(dst);
+                ref byte s = ref Unsafe.AsRef<byte>(src);
+                ref byte k = ref Unsafe.AsRef<byte>(key);
+                for (; i + 4 <= length; i += 4)
+                    Unsafe.WriteUnaligned(ref Unsafe.Add(ref d, i),
+                        Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref s, i)) ^
+                        Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref k, i)));
+                for (; i < length; i++)
+                    Unsafe.Add(ref d, i) = (byte)(Unsafe.Add(ref s, i) ^ Unsafe.Add(ref k, i));
+            }
         }
 
         private static void ValidateKey(int length)

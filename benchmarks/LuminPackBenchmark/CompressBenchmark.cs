@@ -23,7 +23,9 @@ namespace LuminPackBenchmark;
 public class CompressBenchmark
 {
     private byte[] _testData;
-    
+    private byte[] _scratch;
+    private const string RatioCategory = "Ratio";
+
     SimpleClass data = SimpleClass.Create();
     
     LuminBufferWriter _bufferWriter1 = LuminBufferWriterPool.Rent();
@@ -35,7 +37,11 @@ public class CompressBenchmark
     {
         _testData = LuminPackSerializer.Serialize(SimpleClass.Create());
         LuminPackSerializer.Serialize(SimpleClass.Create(), _bufferWriter1);
+        _scratch = ArrayPool<byte>.Shared.Rent(LuminCompressor.GetMaxCompressedSize(_testData.Length));
     }
+
+    [GlobalCleanup]
+    public void Cleanup() => ArrayPool<byte>.Shared.Return(_scratch);
     
     [Benchmark(Baseline = true)]
     public void LuminCompress()
@@ -112,4 +118,49 @@ public class CompressBenchmark
         Snappy.DecompressToMemory(compressed.Memory.Span);
     }
 
+    // ===== Ratio group: return compressed byte count so BenchmarkDotNet prints it =====
+    [Benchmark, BenchmarkCategory(RatioCategory)]
+    public int LuminSize()
+    {
+        return LuminCompressor.Compress(_testData, _scratch);
+    }
+
+    [Benchmark, BenchmarkCategory(RatioCategory)]
+    public int LZ4Size()
+    {
+        _arrayBufferWriter.ResetWrittenCount();
+        LZ4Pickler.Pickle(_testData, _arrayBufferWriter);
+        return _arrayBufferWriter.WrittenCount;
+    }
+
+    [Benchmark, BenchmarkCategory(RatioCategory)]
+    public int ZstdSize()
+    {
+        return ZstdSharp.Zstd.Compress(_testData).Length;
+    }
+
+    [Benchmark, BenchmarkCategory(RatioCategory)]
+    public int SnappySize()
+    {
+        using var compressed = Snappy.CompressToMemory(_testData);
+        return compressed.Memory.Length;
+    }
+
+    [Benchmark, BenchmarkCategory(RatioCategory)]
+    public int BrotliSize()
+    {
+        var buffer = ArrayPool<byte>.Shared.Rent(BrotliEncoderMaxCompressedSize(_testData.Length));
+        try
+        {
+            using (BrotliEncoder brotliEncoder = new BrotliEncoder(1, 22))
+            {
+                brotliEncoder.Compress(_testData, buffer, out int bytesConsumed, out int bytesWritten, true);
+                return bytesWritten;
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
+    }
 }

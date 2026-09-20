@@ -85,6 +85,11 @@ using LuminPack.Core;
 using System.Numerics;
 #endif
 
+#if NET8_0_OR_GREATER
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.X86;
+#endif
+
 namespace LuminPack.Utility;
 
 /// <summary>
@@ -678,21 +683,16 @@ public static class LuminCompressor
         ref byte end = ref Unsafe.Add(ref dst, len);
         if (offset >= 8)
         {
-            while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref dst, 8), ref end))
-            {
-                if (Environment.Is64BitProcess)
-                    Unsafe.WriteUnaligned(ref dst, Unsafe.ReadUnaligned<ulong>(ref src));
-                else
-                    Unsafe.CopyBlockUnaligned(ref dst, ref src, 8);
-                dst = ref Unsafe.Add(ref dst, 8);
-                src = ref Unsafe.Add(ref src, 8);
-            }
-            while (Unsafe.IsAddressLessThan(ref dst, ref end))
-            {
-                dst = src;
-                dst = ref Unsafe.Add(ref dst, 1);
-                src = ref Unsafe.Add(ref src, 1);
-            }
+#if NET8_0_OR_GREATER
+            // LZ4 wild-copy style: widen the bulk copy when the offset guarantees the
+            // read window stays fully behind the current write position (offset >= width),
+            // and the length is long enough that a vectorized copy pays off over the
+            // chain-check overhead (short copies stay scalar).
+            if (offset >= 64 && Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && len >= 128) { CopyMatch512(ref dst, ref src, ref end); return; }
+            if (offset >= 32 && Vector256.IsHardwareAccelerated && len >= 64) { CopyMatch256(ref dst, ref src, ref end); return; }
+            if (offset >= 16 && Vector128.IsHardwareAccelerated && len >= 32) { CopyMatch128(ref dst, ref src, ref end); return; }
+#endif
+            CopyMatchCore8(ref dst, ref src, ref end);
             return;
         }
         // offset 2–7: byte-by-byte (period too small for bulk tricks without scatter)
@@ -704,14 +704,134 @@ public static class LuminCompressor
         }
     }
 
+    /// <summary>8-byte wild-copy bulk path (offset ≥ 8), plus byte tail.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static int ExtendMatch(ref byte a, ref byte b, ref byte limit)
+    private static void CopyMatchCore8(ref byte dst, ref byte src, ref byte end)
     {
-        ref byte start = ref a;
+        while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref dst, 8), ref end))
+        {
+            if (Environment.Is64BitProcess)
+                Unsafe.WriteUnaligned(ref dst, Unsafe.ReadUnaligned<ulong>(ref src));
+            else
+                Unsafe.CopyBlockUnaligned(ref dst, ref src, 8);
+            dst = ref Unsafe.Add(ref dst, 8);
+            src = ref Unsafe.Add(ref src, 8);
+        }
+        while (Unsafe.IsAddressLessThan(ref dst, ref end))
+        {
+            dst = src;
+            dst = ref Unsafe.Add(ref dst, 1);
+            src = ref Unsafe.Add(ref src, 1);
+        }
+    }
 
+#if NET8_0_OR_GREATER
+    /// <summary>64-byte wild copy (offset ≥ 64); delegates the residual to the 32-byte path.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CopyMatch512(ref byte dst, ref byte src, ref byte end)
+    {
+        while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref dst, 64), ref end))
+        {
+            Vector512.StoreUnsafe(Vector512.LoadUnsafe(ref src), ref dst);
+            dst = ref Unsafe.Add(ref dst, 64);
+            src = ref Unsafe.Add(ref src, 64);
+        }
+        CopyMatch256(ref dst, ref src, ref end);
+    }
+
+    /// <summary>32-byte wild copy (offset ≥ 32); delegates the residual to the 16-byte path.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CopyMatch256(ref byte dst, ref byte src, ref byte end)
+    {
+        while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref dst, 32), ref end))
+        {
+            Vector256.StoreUnsafe(Vector256.LoadUnsafe(ref src), ref dst);
+            dst = ref Unsafe.Add(ref dst, 32);
+            src = ref Unsafe.Add(ref src, 32);
+        }
+        CopyMatch128(ref dst, ref src, ref end);
+    }
+
+    /// <summary>16-byte wild copy (offset ≥ 16); delegates the residual to the 8-byte path.</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static void CopyMatch128(ref byte dst, ref byte src, ref byte end)
+    {
+        while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref dst, 16), ref end))
+        {
+            Vector128.StoreUnsafe(Vector128.LoadUnsafe(ref src), ref dst);
+            dst = ref Unsafe.Add(ref dst, 16);
+            src = ref Unsafe.Add(ref src, 16);
+        }
+        CopyMatchCore8(ref dst, ref src, ref end);
+    }
+
+    /// <summary>SIMD match extension, 64-byte stride (Vector512; needs AVX512BW).</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int ExtendMatch512(ref byte a, ref byte b, ref byte start, ref byte limit)
+    {
+        nint remaining = (nint)Unsafe.ByteOffset(ref a, ref limit);
+        while (remaining >= 64)
+        {
+            ulong mask = Vector512.Equals(
+                Vector512.LoadUnsafe(ref a), Vector512.LoadUnsafe(ref b))
+                .ExtractMostSignificantBits();
+            if (mask != ulong.MaxValue)
+                return (int)Unsafe.ByteOffset(ref start, ref a)
+                     + (int)BitOperations.TrailingZeroCount(~mask);
+            a = ref Unsafe.Add(ref a, 64);
+            b = ref Unsafe.Add(ref b, 64);
+            remaining -= 64;
+        }
+        return ExtendMatch256(ref a, ref b, ref start, ref limit);
+    }
+
+    /// <summary>SIMD match extension, 32-byte stride (Vector256 / AVX2).</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int ExtendMatch256(ref byte a, ref byte b, ref byte start, ref byte limit)
+    {
+        nint remaining = (nint)Unsafe.ByteOffset(ref a, ref limit);
+        while (remaining >= 32)
+        {
+            uint mask = Vector256.Equals(
+                Vector256.LoadUnsafe(ref a), Vector256.LoadUnsafe(ref b))
+                .ExtractMostSignificantBits();
+            if (mask != uint.MaxValue)
+                return (int)Unsafe.ByteOffset(ref start, ref a)
+                     + (int)BitOperations.TrailingZeroCount(~mask);
+            a = ref Unsafe.Add(ref a, 32);
+            b = ref Unsafe.Add(ref b, 32);
+            remaining -= 32;
+        }
+        return ExtendMatch128(ref a, ref b, ref start, ref limit);
+    }
+
+    /// <summary>SIMD match extension, 16-byte stride (Vector128 / SSE2).</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static int ExtendMatch128(ref byte a, ref byte b, ref byte start, ref byte limit)
+    {
+        nint remaining = (nint)Unsafe.ByteOffset(ref a, ref limit);
+        while (remaining >= 16)
+        {
+            // Only the low 16 mask bits are meaningful for a 16-byte vector.
+            uint mask = Vector128.Equals(
+                Vector128.LoadUnsafe(ref a), Vector128.LoadUnsafe(ref b))
+                .ExtractMostSignificantBits();
+            if ((mask & 0xFFFF) != 0xFFFF)
+                return (int)Unsafe.ByteOffset(ref start, ref a)
+                     + (int)BitOperations.TrailingZeroCount(~mask);
+            a = ref Unsafe.Add(ref a, 16);
+            b = ref Unsafe.Add(ref b, 16);
+            remaining -= 16;
+        }
+        return ExtendMatchScalar(ref a, ref b, ref start, ref limit);
+    }
+#endif
+
+    /// <summary>Scalar 16-byte-unrolled + 8-byte + 1-byte match extension (shared netstandard2.1 path).</summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int ExtendMatchScalar(ref byte a, ref byte b, ref byte start, ref byte limit)
+    {
         // 16-byte unrolled loop: two ulong XOR per iteration.
-        // The (d0|d1)!=0 OR-then-branch avoids a branch every 8 bytes and
-        // keeps the predictor happy on long matches (common in compressible data).
         while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref a, 16), ref limit))
         {
             ulong d0 = ReadU64(ref a)                    ^ ReadU64(ref b);
@@ -739,6 +859,30 @@ public static class LuminCompressor
             b = ref Unsafe.Add(ref b, 1);
         }
         return (int)Unsafe.ByteOffset(ref start, ref a);
+    }
+
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static int ExtendMatch(ref byte a, ref byte b, ref byte limit)
+    {
+        ref byte start = ref a;
+
+#if NET8_0_OR_GREATER
+        // SIMD match extension: compare 64/32/16 bytes per iteration and locate the
+        // first differing byte via the comparison mask. Equal bytes set mask bit i;
+        // the first mismatch is TrailingZeroCount(~mask) (lowest clear bit).
+        // Kept as small non-inlined helpers so ExtendMatch itself stays JIT-inlinable
+        // into its hot loop; only long matches ever pay the call. The IsHardwareAccelerated /
+        // IsSupported checks are JIT-folded constants (no field reads).
+        nint remaining = (nint)Unsafe.ByteOffset(ref a, ref limit);
+        if (Vector512.IsHardwareAccelerated && Avx512BW.IsSupported && remaining >= 64)
+            return ExtendMatch512(ref a, ref b, ref start, ref limit);
+        if (Vector256.IsHardwareAccelerated && remaining >= 32)
+            return ExtendMatch256(ref a, ref b, ref start, ref limit);
+        if (Vector128.IsHardwareAccelerated && remaining >= 16)
+            return ExtendMatch128(ref a, ref b, ref start, ref limit);
+#endif
+
+        return ExtendMatchScalar(ref a, ref b, ref start, ref limit);
     }
 
     // ══════════════════════════════════════════════════════════════
