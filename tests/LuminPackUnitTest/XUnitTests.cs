@@ -85,6 +85,26 @@ namespace LuminPackUnitTest
             => AssertSuitePassed(Run(LuminBufferWriterPoolRegressionTest.Run));
 
         [Fact]
+        public void DeepPrivateMember()
+            => AssertSuitePassed(Run(DeepPrivateMemberTest.Run));
+
+        [Fact]
+        public void ShallowPrivateMember()
+            => AssertSuitePassed(Run(ShallowPrivateMemberTest.Run));
+
+        [Fact]
+        public void LocalLayoutInvariant()
+            => AssertSuitePassed(Run(LocalLayoutInvariantTest.Run));
+
+        [Fact]
+        public void LayoutKindPrivate()
+            => AssertSuitePassed(Run(LayoutKindPrivateTest.Run));
+
+        [Fact]
+        public void OnDemandLocalLayout()
+            => AssertSuitePassed(Run(OnDemandLocalLayoutTest.Run));
+
+        [Fact]
         public void BufferWriterOperationContext()
             => AssertSuitePassed(Run(BufferWriterOperationContextTest.Run));
 

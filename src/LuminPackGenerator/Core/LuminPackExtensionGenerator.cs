@@ -57,18 +57,10 @@ public static class LuminPackExtensionGenerator
 			}
 			GenerateRootBinaryExtensions(sb, data, typeName, metaInfo);
 			GenerateRootJsonExtensions(sb, data, typeName, metaInfo);
-			if (!(data.isUnion && data.isValueType))
-			{
-				LuminPackCodeGenerator.GenerateLocalClassStructure(
-					sb,
-					data,
-					analyzedTypes,
-					layout => analysis.IsLayoutOwnedBy(layout.TypeSymbol, owner));
-			}
-			foreach (LuminDataField field in data.fields.Where(static x => x.ClassFields.Count > 0))
-			{
-				LuminPackCodeGenerator.GeneratorUnsafeAccessorMethod(sb, field, field.ClassFields, analyzedTypes);
-			}
+			// Local layout mirrors and the private-member accessors are no longer emitted per type.
+			// Every Local for the assembly lives in the dedicated LuminPack.LocalLayouts.g.cs file
+			// (see LuminPackLocalLayoutGenerator), which is what makes nesting depth irrelevant: a
+			// mirror emitted once is reachable from any generated formatter in the same assembly.
 		}
 
 		return GenerateExtension(sb, GetExtensionClassName(compilation));
@@ -378,6 +370,15 @@ public static class LuminPackExtensionGenerator
 	private static string GetExtensionClassName(Compilation compilation)
 	{
 		return "LuminPackExtensions_" + SanitizeAssemblyName(compilation.AssemblyName ?? "Assembly");
+	}
+
+	/// <summary>
+	/// Assembly-wide extension class name. The dedicated Local layout file and the per-type extension
+	/// files must agree on it so the Locals are visible from every generated formatter.
+	/// </summary>
+	public static string GetExtensionClassNameFor(Compilation compilation)
+	{
+		return GetExtensionClassName(compilation);
 	}
 
 	private static bool HasPackableAttribute(INamedTypeSymbol type)

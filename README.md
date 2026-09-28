@@ -59,7 +59,7 @@ dotnet add package LuminPack
 
 ```xml
 <ItemGroup>
-  <PackageReference Include="LuminPack" Version="1.1.8" />
+  <PackageReference Include="LuminPack" Version="1.1.9" />
 </ItemGroup>
 ```
 
@@ -232,19 +232,20 @@ LuminPack默认支持 **`0 ~ 249`** 个成员字段
 
 \[LuminPackableObject]可以作用于任何字段以及属性，这将告诉LuminPackCodeGenerator不要直接解析该字段并写入Myclass的解析器，而是通过注册在LuminPack的Myclass2的解析器去解析。通常情况下，这会损失大概30%的性能，因此如果您遇到源代码生成器生成错误代码等情况，可以尝试用\[LuminPackableObject]标记字段或属性。
 
-**以LuminPackable的示例代码为例**。在 **.Net8** 以上的平台, 对于嵌套类私有字段的解析，注释\[LuminPackInclude]将会 **正常工作**。但在 **.Net Standard2.1** 平台，**这将不会工作**。
+**以LuminPackable的示例代码为例**。对于嵌套类型的私有成员，注释\[LuminPackInclude]在 **`netstandard2.1`、`net8.0` 及以上**的所有平台都会 **正常工作**，并且 **嵌套层数不受限制**。
 
-例如以上示例代码，对于MyClass的 **"private MyClass2 myClass;"** 字段，使用\[LuminPackInclude]将会正常工作并解析MyClass2的所有 **public** 字段，但是不会解析Myclass2的 **private** 字段, 即使您在Myclass2的 **private** 字段标记\[LuminPackInclude]。如果想要正常工作，请使用\[LuminPackableObject]来取消基础类型的解析。
+对于MyClass的 **"private MyClass2 myClass;"** 字段，使用\[LuminPackInclude]不仅会解析MyClass2的所有 **public** 字段，也会解析其标记了\[LuminPackInclude]的 **private** 字段。再往下的层级同样如此：MyClass2 的私有 MyClass3、MyClass3 的私有字段……都可以逐层解析，无需额外标记。
 
 ```csharp
 [LuminPackable]
 public class MyClass
 {
-    [LuminPackInclude]
-    [LuminPackableObject] //这将使MyClass2的私有字段num1正常解析
+    [LuminPackInclude] //MyClass2 中标记了 [LuminPackInclude] 的私有字段会一并解析
     private MyClass2 myClass;
 }
 ```
+
+实现方式：生成器会为所有需要访问私有/受保护成员的类型生成 **Local 布局镜像**，统一输出在单个 `LuminPack.LocalLayouts.g.cs` 文件中。镜像严格复刻原类型的继承链与 `LayoutKind`（包括 `Explicit` 及其 `FieldOffset`），生成代码通过重新解释引用来读写这些槽位。每一层都是一次独立的重新解释，不会像嵌套访问器那样在深层级上失效。镜像按需生成，只有真正需要访问私有/受保护成员或需要 `Unsafe.As` 转换的类型才会生成。
 
 ### 序列化回调
 

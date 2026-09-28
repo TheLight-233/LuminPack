@@ -84,7 +84,7 @@ byte[] Decompress(ReadOnlySpan<byte> source);
 
 ## 常见陷阱
 
-- `netstandard2.1` 下嵌套类型的私有字段 `[LuminPackInclude]` 不生效，改用 `[LuminPackableObject]`（约损失 30% 性能，仅必要时用）。
+- `[LuminPackInclude]` 解析私有成员在所有平台（`netstandard2.1` 及 `net8.0+`）都生效，**嵌套层数不受限**；生成器按需生成 Local 布局镜像（集中在 `LuminPack.LocalLayouts.g.cs`）。不要再为了私有成员加 `[LuminPackableObject]` 规避——那会白损失约 30% 性能。
 - `Register<T>` / 基类 `Register<TMember>` 使用函数指针，调用处与项目都需要 `AllowUnsafeBlocks`。
 - `GeneratorType.Custom` 手写方法必须 `static`，签名精确匹配三种 Register 重载之一（见 api.md），否则编译报 LuminPack100~108。
 - Custom 类型作为其他 `[LuminPackable]` 的字段时，字段要标 `[LuminPackableObject]`。

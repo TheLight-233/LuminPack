@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
 using LuminPack.Code;
 using LuminPack.Code.Core;
 using Microsoft.CodeAnalysis;
@@ -207,6 +208,79 @@ namespace LuminPack.SourceGenerator
                         //         DiagnosticSeverity.Error,
                         //         true),
                         //     Location.None));
+                    }
+                });
+
+                // Local layout mirrors are an assembly-wide concern, so they are emitted into one
+                // dedicated file instead of being scattered across the per-type extension files.
+                // Collecting every analyzed type lets a mirror be emitted exactly once and be shared
+                // by every formatter that needs it, which removes the previous nesting-depth ceiling.
+                context.RegisterSourceOutput(provider.Collect(), static (context, sources) =>
+                {
+                    try
+                    {
+                        var body = new StringBuilder();
+                        var registry = new LuminPackLocalLayoutGenerator.LocalLayoutRegistry();
+                        Compilation compilation = null;
+
+                        foreach (var source in sources)
+                        {
+                            var dataInfo = source.Item1.Item1;
+                            if (dataInfo.TypeSymbol is null)
+                            {
+                                continue;
+                            }
+
+                            if (dataInfo.Diagnostics.Length != 0 &&
+                                dataInfo.Diagnostics.Any(static diagnostic =>
+                                    diagnostic.Severity == DiagnosticSeverity.Error))
+                            {
+                                continue;
+                            }
+
+                            // Custom types emit no extension methods and therefore never reach a Local.
+                            if (dataInfo.generatorType == GeneratorType.Custom)
+                            {
+                                continue;
+                            }
+
+                            var innerCompilation = source.Item1.Item2;
+                            var tier = source.Item2.Item2;
+                            LuminPackGenerationTier assemblyTier = LuminPackGenerationTierResolver.FromAssembly(innerCompilation);
+                            LuminPackGenerationTier effectiveTier = (LuminPackGenerationTier)Math.Max((int)tier, (int)assemblyTier);
+
+                            if (effectiveTier == LuminPackGenerationTier.Minimal &&
+                                !ReachabilityAnalysisCache.GetOrCreate(innerCompilation, effectiveTier).ShouldEmitPackable(dataInfo.TypeSymbol))
+                            {
+                                continue;
+                            }
+
+                            compilation = innerCompilation;
+
+                            LuminPackLocalLayoutGenerator.AppendRootLocalClass(body, registry, dataInfo);
+                            LuminPackLocalLayoutGenerator.AppendNestedLocalClasses(body, registry, dataInfo.fields);
+                            LuminPackLocalLayoutGenerator.AppendLocalMemberAccessors(body, registry, dataInfo.fields);
+                        }
+
+                        if (compilation is null || body.Length == 0)
+                        {
+                            return;
+                        }
+
+                        string wrapped = LuminPackLocalLayoutGenerator.Wrap(
+                            body.ToString(),
+                            LuminPackExtensionGenerator.GetExtensionClassNameFor(compilation));
+                        if (!string.IsNullOrEmpty(wrapped))
+                        {
+                            context.AddSource("LuminPack.LocalLayouts.g.cs", wrapped);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        context.ReportDiagnostic(Diagnostic.Create(
+                            DiagnosticDescriptors.GeneratorFailure,
+                            Location.None,
+                            ex.GetType().FullName + ": " + ex.Message));
                     }
                 });
             }
@@ -1251,23 +1325,14 @@ namespace LuminPack.SourceGenerator
                         
                         if (TypeMetaChecker.TryCheckIncludeAttribute(member) && !member.Type.IsAnonymousType)
                         {
-                            if (_metadata is not null && !_metadata.IsNet8)
-                            {
-                                TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                                    DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                                    member.Locations.FirstOrDefault() ?? _location,
-                                    namedTypeArg.Name, member.Name
-                                ));
-                                continue;
-                            }
                             goto Set;
                         }
-                
+
                         if (member.DeclaredAccessibility is 
                             Accessibility.Private or 
                             Accessibility.ProtectedAndInternal or 
                             Accessibility.Protected) continue; // 忽略静态属性
-                
+
                         Set:
                         if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(member))
                         {
@@ -1314,16 +1379,6 @@ namespace LuminPack.SourceGenerator
 
                         if (TypeMetaChecker.TryCheckIncludeAttribute(nestedMember) && !nestedMember.Type.IsAnonymousType)
                         {
-                            if (_metadata is not null && !_metadata.IsNet8)
-                            {
-                                TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                                    DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                                    nestedMember.Locations.FirstOrDefault() ?? _location,
-                                    namedTypeArg.Name, nestedMember.Name
-                                ));
-                                continue;
-                            }
-                    
                             goto Set;
                         }
                 
@@ -1408,16 +1463,6 @@ namespace LuminPack.SourceGenerator
                         
                         if (TypeMetaChecker.TryCheckIncludeAttribute(member))
                         {
-                            if (_metadata is not null && !_metadata.IsNet8)
-                            {
-                                TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                                    DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                                    member.Locations.FirstOrDefault() ?? _location,
-                                    namedTypeArg.Name, member.Name
-                                ));
-                                continue;
-                            }
-                    
                             goto Set;
                         }
                                 
@@ -1475,16 +1520,6 @@ namespace LuminPack.SourceGenerator
             
                         if (TypeMetaChecker.TryCheckIncludeAttribute(nestedMember))
                         {
-                            if (_metadata is not null && !_metadata.IsNet8)
-                            {
-                                TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                                    DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                                    nestedMember.Locations.FirstOrDefault() ?? _location,
-                                    namedTypeArg.Name, nestedMember.Name
-                                ));
-                                continue;
-                            }
-                    
                             goto Set;
                         }
                 
@@ -1667,20 +1702,30 @@ namespace LuminPack.SourceGenerator
 
                 string typeName = "";
                 bool isValue = false;
-                
+                bool isProperty = false;
+
                 if (member is IPropertySymbol property)
                 {
                     if (!IsAutoProperty(property)) continue;
-                    
+
                     typeName = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     isValue = property.Type.IsValueType;
+                    isProperty = true;
                 }
                 else if (member is IFieldSymbol field)
                 {
                     typeName = field.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     isValue = field.Type.IsValueType;
                 }
-                    
+
+                // A Local layout mirror is only required for storage slots that the generated
+                // extension class cannot name: explicit private/protected fields, and the always
+                // private backing field of an auto-property.
+                bool isPrivate = isProperty ||
+                    member.DeclaredAccessibility is
+                        Accessibility.Private or
+                        Accessibility.ProtectedAndInternal or
+                        Accessibility.Protected;
 
                 if (localFields.Any(x => x.Name == member.Name))
                 {
@@ -1691,7 +1736,19 @@ namespace LuminPack.SourceGenerator
                     ));
                 }
 
-                TypeMetaChecker.TryCheckAndGetFiledOffsetAttribute(member, out var offset);
+                // An auto-property's storage is its backing field, and a [FieldOffset] on an
+                // explicit-layout type sits on that backing field rather than on the property, so the
+                // offset has to be read from the field for the mirror to reproduce an Explicit layout.
+                ISymbol offsetOwner = member;
+                if (member is IPropertySymbol offsetProperty)
+                {
+                    string backingFieldName = "<" + offsetProperty.Name + ">k__BackingField";
+                    offsetOwner = typeSymbol.GetMembers()
+                        .OfType<IFieldSymbol>()
+                        .FirstOrDefault(f => f.Name == backingFieldName) ?? member;
+                }
+
+                TypeMetaChecker.TryCheckAndGetFiledOffsetAttribute(offsetOwner, out var offset);
                 
                 localFields.Add(new LuminLocalFieldData
                 {
@@ -1705,6 +1762,8 @@ namespace LuminPack.SourceGenerator
                     Name = member.Name,
                     filedOffset = offset,
                     IsValue = isValue,
+                    IsPrivate = isPrivate,
+                    IsProperty = isProperty,
                 });
             }
         }
@@ -1863,15 +1922,6 @@ namespace LuminPack.SourceGenerator
                 
                 if (TypeMetaChecker.TryCheckIncludeAttribute(member))
                 {
-                    if (_metadata is not null && !_metadata.IsNet8)
-                    {
-                        TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                            DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                            member.Locations.FirstOrDefault() ?? _location,
-                            classSymbol.Name, member.Name
-                        ));
-                        continue;
-                    }
                     goto Set;
                 }
                 
@@ -1935,15 +1985,6 @@ namespace LuminPack.SourceGenerator
 
                 if (TypeMetaChecker.TryCheckIncludeAttribute(nestedMember))
                 {
-                    if (_metadata is not null && !_metadata.IsNet8)
-                    {
-                        TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                            DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                            nestedMember.Locations.FirstOrDefault() ?? _location,
-                            classSymbol.Name, nestedMember.Name
-                        ));
-                        continue;
-                    }
                     goto Set;
                 }
 
@@ -2007,16 +2048,6 @@ namespace LuminPack.SourceGenerator
                     continue;
                 }
         
-                if (shouldInclude && _metadata is not null && !_metadata.IsNet8)
-                {
-                    TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                        DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                        member.Locations.FirstOrDefault() ?? _location,
-                        namedType.Name, member.Name
-                    ));
-                    continue;
-                }
-        
                 // 修复：只对真正的只读结构体标记为 Other
                 if (TypeMetaChecker.TryCheckFieldStructIsReadOnly(member))
                 {
@@ -2067,16 +2098,6 @@ namespace LuminPack.SourceGenerator
                                            Accessibility.ProtectedAndInternal or 
                                            Accessibility.Protected)) 
                 {
-                    continue;
-                }
-        
-                if (shouldInclude && _metadata is not null && !_metadata.IsNet8)
-                {
-                    TypeMetaChecker._reportContext.Add(Diagnostic.Create(
-                        DiagnosticDescriptors.NetStandardClassOrStructMemberFieldCantInclude,
-                        nestedMember.Locations.FirstOrDefault() ?? _location,
-                        namedType.Name, nestedMember.Name
-                    ));
                     continue;
                 }
         

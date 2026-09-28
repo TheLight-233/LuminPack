@@ -17,7 +17,7 @@
 | --- | --- | --- |
 | `[LuminPackOrder(uint order)]` | field / property | 显式指定成员顺序。`CircleReference` / `VersionTolerant` 模式下每个成员必填。 |
 | `[LuminPackIgnore]` | field / property | 从序列化目标中排除。 |
-| `[LuminPackInclude]` | field / property | 把私有成员提升为序列化目标。`netstandard2.1` 下嵌套类型私有字段不生效（见下）。 |
+| `[LuminPackInclude]` | field / property | 把私有成员提升为序列化目标。所有平台（含 `netstandard2.1`）均生效，嵌套层数不受限。 |
 | `[LuminPackableObject]` | field / property | 不内联解析该成员，改经注册表派发到目标类型自己的 formatter（约损失 30% 性能）。用于生成器无法正确内联的嵌套类型。 |
 | `[LuminPackDelegate(string instanceName, string methodName)]` | field / property | 成员序列化委托给某实例上的方法。 |
 | `[LuminPackStaticDelegate(Type typeName, string methodName)]` | field / property | 成员序列化委托给静态方法。 |
@@ -50,7 +50,7 @@
 
 ## 常见组合
 
-- 私有嵌套类型需要解析私有字段时：`[LuminPackInclude]` + `[LuminPackableObject]` 同时标注字段。
+- 私有嵌套类型需要解析私有字段时：逐层标 `[LuminPackInclude]` 即可，任意层数都生效（经 Local 布局镜像访问），无需再叠加 `[LuminPackableObject]`。
 - 版本容忍 / 循环引用：类型标 `[LuminPackable(GenerateType.VersionTolerant / CircleReference)]`，每个成员标 `[LuminPackOrder]`。
 - 压缩热数据数组：成员标 `[LuminPackCompress]`（配合 `LuminPackSerializer.Compress/Decompress` 或原生数组快速路径）。
 

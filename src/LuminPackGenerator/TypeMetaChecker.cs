@@ -634,6 +634,18 @@ public static class TypeMetaChecker
         dataInfo.structLayout = StructLayout.Default;
         return false;
     }
+
+    /// <summary>
+    /// Layout kind declared on <paramref name="symbol"/>, or <see cref="StructLayout.Default"/> when the
+    /// type carries no <c>[StructLayout]</c>. Used to mirror the layout of nested member types onto
+    /// their Local layout class.
+    /// </summary>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static StructLayout GetStructLayout(INamedTypeSymbol symbol)
+    {
+        var probe = new LuminDataInfo();
+        return TryCheckStructLayout(symbol, probe) ? probe.structLayout : StructLayout.Default;
+    }
     
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static bool TryCheckAndGetFiledOffsetAttribute(ISymbol symbol, out int offset)

@@ -1,4 +1,4 @@
-﻿using System.Collections.Concurrent;
+using System.Collections.Concurrent;
 using System.Text;
 using LuminPack;
 using static LuminPackUnitTest.PrimitivesSerializationTest;
@@ -96,6 +96,11 @@ namespace LuminPackUnitTest
             Test_RecordWithPrivateMember2(results);
             Test_StructWithPrivateMember(results);
             Test_ClassWithPrivateMember(results);
+            ShallowPrivateMemberTest.Run(results);
+            DeepPrivateMemberTest.Run(results);
+            LocalLayoutInvariantTest.Run(results);
+            LayoutKindPrivateTest.Run(results);
+            OnDemandLocalLayoutTest.Run(results);
             Test_Struct1(results);
             Test_Class1(results);
             Test_Struct2(results);
