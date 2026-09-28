@@ -416,11 +416,21 @@ public static class LuminPackLocalLayoutGenerator
     /// Emits the member accessors that hand out a <c>ref</c> to a mirrored private/protected slot.
     ///
     /// <para>
-    /// These replace the previous <c>[UnsafeAccessor]</c> externs. An <c>UnsafeAccessor</c> call can
-    /// only reach the member it names, so reaching a member of a member required nesting a second
-    /// accessor inside the first - a form the runtime does not support and which faulted at runtime.
-    /// Going through the Local mirror instead makes every level an independent reinterpretation, so the
-    /// accessor never has to compose with another one and nesting depth stops mattering.
+    /// These replace the previous <c>[UnsafeAccessor]</c> externs, which declared the instance
+    /// parameter as a byref (<c>in DeclaringType value</c>). For a reference type that form does not
+    /// hand back a ref into the object: the returned ref does not alias the field, so reads return
+    /// garbage, writes are silently lost, and repeated writes fault with
+    /// <c>AccessViolationException</c>. Nesting depth was never the limitation - accessors compose
+    /// fine - but a correct emitter would have to pass the instance by value for classes and by
+    /// <c>ref</c> for structs (by value on a struct throws <c>BadImageFormatException</c>), and
+    /// choosing wrongly corrupts memory with no compile-time error.
+    /// </para>
+    ///
+    /// <para>
+    /// The Local mirror sidesteps that hazard: a single <c>(in T value)</c> signature serves classes
+    /// and structs alike, and every level is an independent reinterpretation, so nesting depth is
+    /// irrelevant. Collapsing back to UnsafeAccessor for net8.0+ would also leave Unity on the mirror
+    /// path anyway, since the netstandard2.1 profile never has the attribute available.
     /// </para>
     ///
     /// <para>

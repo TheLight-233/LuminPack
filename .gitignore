@@ -30,6 +30,10 @@ coverage/
 # Scratch / probe output
 .tmp/
 
+# Editor and tooling state
+.vscode/
+.trae/
+
 # Operating system files
 .DS_Store
 Thumbs.db

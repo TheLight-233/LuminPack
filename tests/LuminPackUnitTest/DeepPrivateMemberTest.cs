@@ -10,9 +10,10 @@ namespace LuminPackUnitTest
     //
     //  DeepRoot ->(private) DeepLevel1 ->(private) DeepLevel2 ->(private) DeepLevel3
     //
-    //  每一层都通过 [LuminPackInclude] 要求序列化 private 成员。改动前嵌套私有成员由
-    //  [UnsafeAccessor] 逐层链接访问，超过两层时运行时会崩溃（AccessViolation）；改动后
-    //  所有私有访问都经 Local 镜像派发，层数不再受限。
+    //  每一层都通过 [LuminPackInclude] 要求序列化 private 成员。改动前私有成员由
+    //  [UnsafeAccessor] + in 参数访问：对引用类型它返回的 ref 不指向真实字段，表现为读到垃圾值、
+    //  写入丢失，反复写入最终触发 AccessViolation（并非层级上限所致）；改动后所有私有访问都经
+    //  Local 镜像派发，不再区分引用类型与值类型。
     // ─────────────────────────────────────────────────────────────────────────
 
     [LuminPackable]

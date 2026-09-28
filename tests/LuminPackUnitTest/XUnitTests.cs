@@ -21,8 +21,11 @@ namespace LuminPackUnitTest
 
         private static void AssertSuitePassed(List<string> results)
         {
+            // "?" marks a case that cannot run in the current configuration - currently the reader
+            // boundary checks, whose EnsureReadable call is compiled out in Release. That is a
+            // deliberate skip, so it must not be reported as a failure.
             var failures = results
-                .Where(static result => !result.StartsWith("✓"))
+                .Where(static result => !result.StartsWith("✓") && !result.StartsWith("?"))
                 .ToArray();
             Assert.True(failures.Length == 0,
                 "Suite failures (" + failures.Length + "):\n" + string.Join("\n", failures));
