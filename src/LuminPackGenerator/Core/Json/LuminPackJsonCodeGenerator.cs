@@ -117,6 +117,45 @@ public static class LuminPackJsonCodeGenerator
 			ulong num2 = ComputeUtf16Hash(field.Name);
 			sb.AppendLine($"        private const ulong {arg2} = {num2}UL;");
 		}
+		GenerateJsonPropertyLookup(sb, data, true);
+		GenerateJsonPropertyLookup(sb, data, false);
+	}
+
+	private static void GenerateJsonPropertyLookup(StringBuilder sb, LuminDataInfo data, bool utf8)
+	{
+		string encoding = utf8 ? "Utf8" : "Utf16";
+		string element = utf8 ? "byte" : "char";
+		string prefix = utf8 ? "_utf8_" : "_utf16_";
+		var names = data.fields.Select((field, index) => new { field.Name, Index = index }).ToList();
+		if (data.generatorType == GeneratorType.CircleReference && !data.isValueType)
+		{
+			names.Add(new { Name = "$id", Index = -2 });
+			names.Add(new { Name = "$ref", Index = -3 });
+		}
+		sb.AppendLine("        private static int GetJsonPropertyIndex" + encoding + "(global::System.ReadOnlySpan<" + element + "> name)");
+		sb.AppendLine("        {");
+		bool small = data.fields.Count <= 8;
+		sb.AppendLine(small
+			? "            switch (name.Length)"
+			: "            switch (global::LuminPack.Internal.XxHash3.Hash64" + encoding + "(name))");
+		sb.AppendLine("            {");
+		// Group equal keys so even a compile-time hash collision produces valid C#.
+		var groups = names.GroupBy(item => small
+			? (ulong)(utf8 ? Encoding.UTF8.GetByteCount(item.Name) : item.Name.Length)
+			: (utf8 ? ComputeUtf8Hash(item.Name) : ComputeUtf16Hash(item.Name)));
+		foreach (var group in groups)
+		{
+			sb.AppendLine("                case " + group.Key + (small ? ":" : "UL:"));
+			foreach (var item in group)
+			{
+				string fieldName = item.Index == -2 ? "id" : item.Index == -3 ? "ref" : item.Name;
+				sb.AppendLine("                    if (global::System.MemoryExtensions.SequenceEqual<" + element + ">(name, " + prefix + fieldName + ")) return " + item.Index + ";");
+			}
+			sb.AppendLine("                    break;");
+		}
+		sb.AppendLine("            }");
+		sb.AppendLine("            return -1;");
+		sb.AppendLine("        }");
 	}
 
 	private static string EscapeChar(char c)
@@ -364,58 +403,24 @@ public static class LuminPackJsonCodeGenerator
 		sb.AppendLine("                    continue;");
 		sb.AppendLine("                }");
 		sb.AppendLine();
-		sb.AppendLine("                ulong propHash;");
-		sb.AppendLine("                if (isUtf8)");
+		sb.AppendLine("                int propertyIndex = isUtf8");
+		sb.AppendLine("                    ? GetJsonPropertyIndexUtf8(reader.ReadStringUtf8())");
+		sb.AppendLine("                    : GetJsonPropertyIndexUtf16(reader.ReadStringUtf16());");
+		sb.AppendLine("                if (!reader.Read()) break;");
+		sb.AppendLine("                switch (propertyIndex)");
 		sb.AppendLine("                {");
-		sb.AppendLine("                    var propNameUtf8 = reader.ReadStringUtf8();");
-		sb.AppendLine("                    propHash = global::LuminPack.Internal.XxHash3.Hash64Utf8(propNameUtf8);");
-		sb.AppendLine("                }");
-		sb.AppendLine("                else");
-		sb.AppendLine("                {");
-		sb.AppendLine("                    var propNameUtf16 = reader.ReadStringUtf16();");
-		sb.AppendLine("                    propHash = global::LuminPack.Internal.XxHash3.Hash64Utf16(propNameUtf16);");
-		sb.AppendLine("                }");
-		sb.AppendLine();
-		sb.AppendLine("                if (!reader.Read())");
-		sb.AppendLine("                    break;");
-		sb.AppendLine();
-		sb.AppendLine("                if (isUtf8)");
-		sb.AppendLine("                {");
-		sb.AppendLine("                    switch (propHash)");
-		sb.AppendLine("                    {");
-		foreach (LuminDataField field2 in data.fields)
+		for (int fieldIndex = 0; fieldIndex < data.fields.Count; fieldIndex++)
 		{
-			sb.AppendLine("                        case _utf8Hash_" + field2.Name + ":");
-			sb.AppendLine("                        {");
-			GenerateJsonDeserializeField(sb, field2, flag && CanDeserializeDirectlyIntoConstructedObject(field2) ? ("result." + field2.Identifier) : (field2.Name + "Temp"), "                            ");
-			sb.AppendLine("                            break;");
-			sb.AppendLine("                        }");
+			var field = data.fields[fieldIndex];
+			sb.AppendLine("                    case " + fieldIndex + ":");
+			sb.AppendLine("                    {");
+			GenerateJsonDeserializeField(sb, field, flag && CanDeserializeDirectlyIntoConstructedObject(field) ? ("result." + field.Identifier) : (field.Name + "Temp"), "                        ");
+			sb.AppendLine("                        break;");
+			sb.AppendLine("                    }");
 		}
-		sb.AppendLine("                        default:");
-		sb.AppendLine("                        {");
-		sb.AppendLine("                            reader.Skip();");
-		sb.AppendLine("                            break;");
-		sb.AppendLine("                        }");
-		sb.AppendLine("                    }");
-		sb.AppendLine("                }");
-		sb.AppendLine("                else");
-		sb.AppendLine("                {");
-		sb.AppendLine("                    switch (propHash)");
-		sb.AppendLine("                    {");
-		foreach (LuminDataField field3 in data.fields)
-		{
-			sb.AppendLine("                        case _utf16Hash_" + field3.Name + ":");
-			sb.AppendLine("                        {");
-			GenerateJsonDeserializeField(sb, field3, flag && CanDeserializeDirectlyIntoConstructedObject(field3) ? ("result." + field3.Identifier) : (field3.Name + "Temp"), "                            ");
-			sb.AppendLine("                            break;");
-			sb.AppendLine("                        }");
-		}
-		sb.AppendLine("                        default:");
-		sb.AppendLine("                        {");
-		sb.AppendLine("                            reader.Skip();");
-		sb.AppendLine("                            break;");
-		sb.AppendLine("                        }");
-		sb.AppendLine("                    }");
+		sb.AppendLine("                    default:");
+		sb.AppendLine("                        reader.Skip();");
+		sb.AppendLine("                        break;");
 		sb.AppendLine("                }");
 		sb.AppendLine("            }");
 		sb.AppendLine();
@@ -971,16 +976,16 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
 		sb.AppendLine("                    continue;");
 		sb.AppendLine("                }");
 		sb.AppendLine();
-		sb.AppendLine("                ulong propHash;");
+		sb.AppendLine("                int propertyIndex;");
 		sb.AppendLine("                if (isUtf8)");
 		sb.AppendLine("                {");
 		sb.AppendLine("                    var propNameUtf8 = reader.ReadStringUtf8();");
-		sb.AppendLine("                    propHash = global::LuminPack.Internal.XxHash3.Hash64Utf8(propNameUtf8);");
+		sb.AppendLine("                    propertyIndex = GetJsonPropertyIndexUtf8(propNameUtf8);");
 		sb.AppendLine("                }");
 		sb.AppendLine("                else");
 		sb.AppendLine("                {");
 		sb.AppendLine("                    var propNameUtf16 = reader.ReadStringUtf16();");
-		sb.AppendLine("                    propHash = global::LuminPack.Internal.XxHash3.Hash64Utf16(propNameUtf16);");
+		sb.AppendLine("                    propertyIndex = GetJsonPropertyIndexUtf16(propNameUtf16);");
 		sb.AppendLine("                }");
 		sb.AppendLine();
 		sb.AppendLine("                if (!reader.Read())");
@@ -988,7 +993,7 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
 		sb.AppendLine();
 		if (!data.isValueType)
 		{
-			sb.AppendLine("                if (propHash == _utf8Hash_id || propHash == _utf16Hash_id)");
+			sb.AppendLine("                if (propertyIndex == -2)");
 			sb.AppendLine("                {");
 			sb.AppendLine("                    var id = reader.ReadUInt();");
 			sb.AppendLine("                    objectId = id;");
@@ -996,7 +1001,7 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
 			sb.AppendLine("                    continue;");
 			sb.AppendLine("                }");
 			sb.AppendLine();
-			sb.AppendLine("                if (propHash == _utf8Hash_ref || propHash == _utf16Hash_ref)");
+			sb.AppendLine("                if (propertyIndex == -3)");
 			sb.AppendLine("                {");
 			sb.AppendLine("                    var rId = reader.ReadUInt();");
 			sb.AppendLine("                    refId = rId;");
@@ -1006,12 +1011,11 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
 			sb.AppendLine("                }");
 			sb.AppendLine();
 		}
-		sb.AppendLine("                switch (propHash)");
+		sb.AppendLine("                switch (propertyIndex)");
 		sb.AppendLine("                {");
 		foreach (LuminDataField field in data.fields)
 		{
-			sb.AppendLine("                    case _utf8Hash_" + field.Name + ":");
-			sb.AppendLine("                    case _utf16Hash_" + field.Name + ":");
+			sb.AppendLine("                    case " + data.fields.IndexOf(field) + ":");
 			sb.AppendLine("                    {");
 			GenerateJsonDeserializeFieldWithCircleReference(sb, field, field.Name + "Temp", "                        ");
 			sb.AppendLine("                        break;");
