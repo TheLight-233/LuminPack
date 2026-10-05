@@ -24,6 +24,8 @@ namespace LuminPack.Core
 #endif
         internal int _currentIndex;
         private LuminBufferWriter? _writerBuffer;
+        private readonly IBufferWriter<byte>? _output;
+        private long _committedBytes;
         private readonly LuminPackWriterOptionalState _state;
         private readonly bool SerializeStringAsUtf8;
         
@@ -58,6 +60,8 @@ namespace LuminPack.Core
         
         public ref int CurrentIndex => ref _currentIndex;
         public int Depth => _depth;
+        /// <summary>Gets the total JSON bytes written, including committed output chunks.</summary>
+        public long BytesWritten => _committedBytes + _currentIndex;
         
         #region Constructors
         
@@ -72,6 +76,8 @@ namespace LuminPack.Core
 #endif
             _currentIndex = 0;
             _writerBuffer = null;
+            _output = null;
+            _committedBytes = 0;
             _depth = 0;
             _isFirstElement = true;
             SerializeStringAsUtf8 = _state.Option.StringEncoding is LuminPackStringEncoding.UTF8;
@@ -91,6 +97,8 @@ namespace LuminPack.Core
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
             _writerBuffer = bufferWriter;
+            _output = null;
+            _committedBytes = 0;
             _currentIndex = 0;
             _depth = 0;
             _isFirstElement = true;
@@ -108,10 +116,55 @@ namespace LuminPack.Core
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
             _writerBuffer = bufferWriter;
+            _output = null;
+            _committedBytes = 0;
             _currentIndex = 0;
             _depth = 0;
             _isFirstElement = true;
             SerializeStringAsUtf8 = bufferWriter.Option.StringEncoding is LuminPackStringEncoding.UTF8;
+        }
+
+        /// <summary>Creates a sequential writer which commits JSON directly to an external buffer writer.</summary>
+        /// <remarks>CurrentIndex and GetSpan refer to the current chunk. Use BytesWritten for the total and FlushToBufferWriter to commit the final chunk.</remarks>
+        public LuminPackJsonWriter(IBufferWriter<byte> output, LuminPackWriterOptionalState state, int initialSizeHint)
+        {
+            if (output is null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(output));
+            if (initialSizeHint <= 0) LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(initialSizeHint));
+            _state = state;
+            _output = output;
+            _writerBuffer = null;
+            _committedBytes = 0;
+            _currentIndex = 0;
+            _depth = 0;
+            _isFirstElement = true;
+            SerializeStringAsUtf8 = state.Option.StringEncoding is LuminPackStringEncoding.UTF8;
+            _bufferReference = output.GetSpan(initialSizeHint);
+            if (_bufferReference.Length < initialSizeHint)
+                LuminPackExceptionHelper.ThrowInvalidOperationException("IBufferWriter returned a span smaller than sizeHint");
+#if NET8_0_OR_GREATER
+            _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
+#else
+            _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
+#endif
+        }
+
+        /// <summary>Commits the remaining JSON bytes to the external writer without flushing its underlying stream.</summary>
+        public void FlushToBufferWriter()
+        {
+            if (_output is null)
+                LuminPackExceptionHelper.ThrowInvalidOperationException("This JSON writer has no external output");
+            if (_currentIndex != 0)
+            {
+                _output.Advance(_currentIndex);
+                _committedBytes += _currentIndex;
+                _currentIndex = 0;
+            }
+            _bufferReference = default;
+#if NET8_0_OR_GREATER
+            _bufferStart = ref Unsafe.NullRef<byte>();
+#else
+            _bufferStart = null;
+#endif
         }
         
         #endregion
@@ -150,6 +203,21 @@ namespace LuminPack.Core
         {
             if (count < 0 || _currentIndex > int.MaxValue - count)
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(count);
+
+            if (_output is not null)
+            {
+                FlushToBufferWriter();
+                int sizeHint = Math.Max(4096, count);
+                _bufferReference = _output.GetSpan(sizeHint);
+                if (_bufferReference.Length < sizeHint)
+                    LuminPackExceptionHelper.ThrowInvalidOperationException("IBufferWriter returned a span smaller than sizeHint");
+#if NET8_0_OR_GREATER
+                _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
+#else
+                _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
+#endif
+                return;
+            }
 
             if (_writerBuffer is null)
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(_currentIndex + count);
@@ -245,6 +313,19 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteRaw(scoped ReadOnlySpan<byte> value)
         {
+            if (_output is not null)
+            {
+                while (!value.IsEmpty)
+                {
+                    if (_currentIndex == _bufferReference.Length)
+                        EnsureCapacity(Math.Min(4096, value.Length));
+                    int count = Math.Min(value.Length, _bufferReference.Length - _currentIndex);
+                    value.Slice(0, count).CopyTo(_bufferReference.Slice(_currentIndex));
+                    Advance(count);
+                    value = value.Slice(count);
+                }
+                return;
+            }
             EnsureCapacity(value.Length);
             value.CopyTo(_bufferReference.Slice(_currentIndex, value.Length));
             Advance(value.Length);
@@ -253,6 +334,11 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteRaw(scoped ReadOnlySpan<char> value)
         {
+            if (_output is not null)
+            {
+                WriteRaw(MemoryMarshal.AsBytes(value));
+                return;
+            }
             var byteCount = checked(value.Length << 1);
             EnsureCapacity(byteCount);
             MemoryMarshal.Cast<char, byte>(value).CopyTo(_bufferReference.Slice(_currentIndex, byteCount));
@@ -506,6 +592,22 @@ namespace LuminPack.Core
         private void WriteUtf8StringSegment(ReadOnlySpan<char> value)
         {
             if (value.IsEmpty) return;
+            if (_output is not null)
+            {
+                while (!value.IsEmpty)
+                {
+                    var result = StringSerializer.Serialize(value, _bufferReference.Slice(_currentIndex),
+                        out int charsRead, out int written);
+                    Advance(written);
+                    value = value.Slice(charsRead);
+                    if (result == OperationStatus.Done) return;
+                    if (result != OperationStatus.DestinationTooSmall)
+                        LuminPackExceptionHelper.ThrowFailedEncoding(result);
+                    FlushToBufferWriter();
+                    EnsureCapacity(4);
+                }
+                return;
+            }
 
             // Try the actual available space first, including exact-size caller spans.
             var status = StringSerializer.Serialize(value, _bufferReference.Slice(_currentIndex),
@@ -670,6 +772,11 @@ namespace LuminPack.Core
             
             if (!needsEscape)
             {
+                if (_output is not null)
+                {
+                    WriteRaw(value);
+                    return;
+                }
                 int byteCount = checked(value.Length * 2);
                 EnsureCapacity(byteCount);
                 ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value));
@@ -702,12 +809,19 @@ namespace LuminPack.Core
                     if (i > lastWritten)
                     {
                         var segment = value.Slice(lastWritten, i - lastWritten);
-                        int byteCount = checked(segment.Length * 2);
-                        EnsureCapacity(byteCount);
-                        ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(segment));
-                        ref byte dst = ref GetCurrentSpanReference();
-                        Unsafe.CopyBlock(ref dst, ref src, (uint)byteCount);
-                        Advance(byteCount);
+                        if (_output is not null)
+                        {
+                            WriteRaw(segment);
+                        }
+                        else
+                        {
+                            int byteCount = checked(segment.Length * 2);
+                            EnsureCapacity(byteCount);
+                            ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(segment));
+                            ref byte dst = ref GetCurrentSpanReference();
+                            Unsafe.CopyBlock(ref dst, ref src, (uint)byteCount);
+                            Advance(byteCount);
+                        }
                     }
                     
                     if (c == '"')
@@ -752,6 +866,11 @@ namespace LuminPack.Core
             if (lastWritten < value.Length)
             {
                 var segment = value.Slice(lastWritten);
+                if (_output is not null)
+                {
+                    WriteRaw(segment);
+                    return;
+                }
                 int byteCount = checked(segment.Length * 2);
                 EnsureCapacity(byteCount);
                 ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(segment));
