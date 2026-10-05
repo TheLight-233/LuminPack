@@ -11,7 +11,7 @@
 | string 输出的转码与计数 | 待验证 | 独立测量端到端收益 |
 | 外部 IBufferWriter 直接输出 | 已提交 `a679db8` | 按块直接写入，去掉完整中间缓冲和整体复制 |
 | 多段输入 | 验证完成 | 复用 native staging，消除每次大数组分配 |
-| CJK SIMD | 待验证 | 不能依赖调用方额外 padding，必须符合转码状态契约 |
+| CJK SIMD | 已提交 | 纯中文 32 / 4096 单元 2.4x / 3.4x；混合不倒退 |
 | 大数组并行解码 | 待验证 | 元素边界、独立状态、引用与回调限制 |
 
 ## 密集转义
@@ -54,3 +54,11 @@
 复用 byte[] 结果的 1 KB 输入从 103.04 ns / 1056 B 到 58.60 ns / 0 B；64 KB 从 4.882 μs / 65,568 B 到 2.295 μs / 0 B。源数据为 `round2-sequence-benchmark.md`，基准为 `SequenceInputBenchmark.cs`。
 
 63 / 63 / 64 项完整测试、五目标构建及生成器并发回归通过。新增空段、逐字节头部拆分、中文与 emoji、UTF-8 / UTF-16 选项、消耗长度、重复数组读取零 staging 分配、大小序列切换和空输入发布验证。
+
+## CJK SIMD
+
+新增 `Internal/Utf8BmpTranscoder`：SSSE3 精确存储前缀内核，每次处理 8 个 U+0800..U+FFFF 非代理项字符，直接写出 24 字节（16 + 8），不依赖调用方预留 padding。`StringSerializer.Serialize` 仅在 `mode == Utf8`、源至少 32 单元、目标至少 24 字节且首字符落在 3 字节 BMP 区间时尝试；命中后剩余部分仍交给平台 `Utf8.FromUtf16`，因此 `OperationStatus`、已消费长度、严格/替换语义完全保持不变。首字符为代理项（emoji）时直接跳过内核，避免无谓的向量探测。
+
+净效果（`BeforeKernel` 复刻未加内核的同一包装，同进程比较）：纯中文 32 单元 53.4 → 22.3 ns（2.4x），4096 单元 6.07 → 1.80 μs（3.4x）。`ChineseFirstMixed` 只有前 8 单元为纯 BMP 时才命中，首个块含 ASCII 时短串多约 5 ns；ASCII 与 emoji 在噪声内。全部 0 B/op。源数据为 `round2-cjk-benchmark.md`，基准为 `Utf8BmpBenchmark.cs`。
+
+netstandard2.1 不进入该内核，走原 `SerializeAsUtf8`。64 / 64 / 65 项完整测试、五目标构建通过。`Utf8BmpTranscoderTest` 遍历纯中文前缀加 ASCII / 2 字节 / emoji / 孤立及配对代理项后缀，对 0..长度×3+4 的全部目标容量核验状态、消费长度、写出字节与前后 canary。

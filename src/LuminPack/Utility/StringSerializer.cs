@@ -4,6 +4,8 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
 using System.Text.Unicode;
+using System.Runtime.Intrinsics.X86;
+using LuminPack.Internal;
 #endif
 
 namespace LuminPack.Utility;
@@ -26,6 +28,19 @@ public static class StringSerializer
         bool isFinalBlock = true)
     {
 #if NET8_0_OR_GREATER
+        if (mode == SerializeMode.Utf8 && source.Length >= 32 && destination.Length >= 24 &&
+            source[0] >= 0x0800 && (source[0] < 0xD800 || source[0] > 0xDFFF) && Ssse3.IsSupported)
+        {
+            Utf8BmpTranscoder.TranscodePrefix(source, destination, out int prefixChars, out int prefixBytes);
+            if (prefixChars != 0)
+            {
+                var status = Utf8.FromUtf16(source.Slice(prefixChars), destination.Slice(prefixBytes),
+                    out charsRead, out bytesWritten, replaceInvalidSequences, isFinalBlock);
+                charsRead += prefixChars;
+                bytesWritten += prefixBytes;
+                return status;
+            }
+        }
         return mode is SerializeMode.Utf8
             ? Utf8.FromUtf16(
                 source,
