@@ -245,6 +245,17 @@ public sealed class LuminBufferWriter : IDisposable
         return _buffer.WrittenBuffer;
     }
 
+    /// <summary>Copies a raw sequence into this reusable native buffer and publishes its length.</summary>
+    /// <remarks>Invalidates previous borrowed spans. Oversized buffers follow the normal pool retention limit.</remarks>
+    public void LoadSequence(in ReadOnlySequence<byte> source)
+    {
+        int length = checked((int)source.Length);
+        ResetCore();
+        EnsureCapacity(length);
+        source.CopyTo(GetFullSpan().Slice(0, length));
+        CompleteWrite(length);
+    }
+
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void AllocateInitialBuffer()
     {
