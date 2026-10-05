@@ -24,7 +24,7 @@ public enum Utf8BenchmarkData
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MinColumn, MaxColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByParams)]
-[SimpleJob(RuntimeMoniker.Net90, launchCount: 1, warmupCount: 6, iterationCount: 12)]
+[SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 6, iterationCount: 12)]
 [MemoryDiagnoser]
 [DisassemblyDiagnoser(maxDepth: 5, printSource: true, printInstructionAddresses: true)]
 public unsafe class Utf8SimdBenchmark

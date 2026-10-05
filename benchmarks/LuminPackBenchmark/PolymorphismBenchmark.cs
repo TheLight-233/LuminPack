@@ -554,7 +554,7 @@ public interface Ifoo
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MinColumn, MaxColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
-[SimpleJob(RuntimeMoniker.Net90, launchCount: 1, warmupCount: 5, iterationCount: 10)]
+[SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 5, iterationCount: 10)]
 [MemoryDiagnoser]
 [GcServer]
 [MarkdownExporterAttribute.GitHub]

@@ -44,8 +44,6 @@ internal static class BufferWriterPoolJitProbe
 [DisassemblyDiagnoser(maxDepth: 4, printSource: true, printInstructionAddresses: true)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [CategoriesColumn]
-[SimpleJob(RuntimeMoniker.Net80, launchCount: 1, warmupCount: 3, iterationCount: 5)]
-[SimpleJob(RuntimeMoniker.Net90, launchCount: 1, warmupCount: 3, iterationCount: 5)]
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 3, iterationCount: 5)]
 public class BufferWriterPoolHotPathBenchmark
 {
