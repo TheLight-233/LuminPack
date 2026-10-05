@@ -8,7 +8,7 @@
 | 跳过未知字符串不分配 scratch | 已提交 `cf5edb8` | UTF-8 / UTF-16 转义值跳过为 0 B 分配 |
 | 密集转义的小片段编码 | 已提交 `1bc8cd2` | 直接输出 UTF-8 scalar，耗时减少 24–28% |
 | 属性名分派与名称复核 | 已提交 `f95029f` | 小模型免 hash；大模型和引用元数据复核名称 |
-| string 输出的转码与计数 | 待验证 | 独立测量端到端收益 |
+| string 输出的转码与计数 | 测量完成，保持默认 | UTF-16 输出中文 2.0x、纯 ASCII −15%，不改默认 |
 | 外部 IBufferWriter 直接输出 | 已提交 `a679db8` | 按块直接写入，去掉完整中间缓冲和整体复制 |
 | 多段输入 | 验证完成 | 复用 native staging，消除每次大数组分配 |
 | CJK SIMD | 已提交 | 纯中文 32 / 4096 单元 2.4x / 3.4x；混合不倒退 |
@@ -62,3 +62,9 @@
 净效果（`BeforeKernel` 复刻未加内核的同一包装，同进程比较）：纯中文 32 单元 53.4 → 22.3 ns（2.4x），4096 单元 6.07 → 1.80 μs（3.4x）。`ChineseFirstMixed` 只有前 8 单元为纯 BMP 时才命中，首个块含 ASCII 时短串多约 5 ns；ASCII 与 emoji 在噪声内。全部 0 B/op。源数据为 `round2-cjk-benchmark.md`，基准为 `Utf8BmpBenchmark.cs`。
 
 netstandard2.1 不进入该内核，走原 `SerializeAsUtf8`。64 / 64 / 65 项完整测试、五目标构建通过。`Utf8BmpTranscoderTest` 遍历纯中文前缀加 ASCII / 2 字节 / emoji / 孤立及配对代理项后缀，对 0..长度×3+4 的全部目标容量核验状态、消费长度、写出字节与前后 canary。
+
+## string 返回路径
+
+`SerializeJson<T>()` 返回 string 时，当前用 UTF-8 内部输出再 `GetString`。实测把内部输出换成 UTF-16（结果字符串完全相同）中文文档 9.92 → 4.97 μs，但纯 ASCII 的 `CharacterSaveData` 32.4 → 37.3 μs，回退约 15%，因为输出缓冲翻倍而 ASCII 写入已接近拷贝成本。
+
+这是数据分布取舍而非普适收益，因此**不改默认**：继续 UTF-8，中文为主的调用方可显式传 `StringEncoding = LuminPackStringEncoding.UTF16` 获得约 2 倍。数据为 `round2-string-return.md`，基准为 `JsonStringReturnBenchmark.cs`。`writer` 内累计 UTF-16 长度只省一次计数扫描，量级远小于 2 倍，且需在每个写入点计数，未采用。
