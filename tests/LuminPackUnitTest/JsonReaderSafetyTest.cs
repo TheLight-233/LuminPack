@@ -21,6 +21,8 @@ internal static class JsonReaderSafetyTest
         RunCase(results, nameof(EscapedStringsUnescapeInBothEncodings), EscapedStringsUnescapeInBothEncodings);
         RunCase(results, nameof(EscapedPropertyNamesAndUnknownNestedValues), EscapedPropertyNamesAndUnknownNestedValues);
         RunCase(results, nameof(MalformedStringsAreRejected), MalformedStringsAreRejected);
+        RunCase(results, nameof(SkippedStringsValidateEveryEscape), SkippedStringsValidateEveryEscape);
+        RunCase(results, nameof(SkippedEscapedStringsDoNotAllocate), SkippedEscapedStringsDoNotAllocate);
         RunCase(results, nameof(MalformedNumbersAndTrailingDataAreRejected), MalformedNumbersAndTrailingDataAreRejected);
         RunCase(results, nameof(NumericVectorTypesConsumeEveryArrayToken), NumericVectorTypesConsumeEveryArrayToken);
         RunCase(results, nameof(NestedUnionsConsumeTheirOuterObjectEnd), NestedUnionsConsumeTheirOuterObjectEnd);
@@ -82,6 +84,48 @@ internal static class JsonReaderSafetyTest
         AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<string>("\"\\u12\""));
         AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<string>("\"\\uD800x\""));
         AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<string>("\"\\q\"", Utf16));
+    }
+
+    private static void SkippedStringsValidateEveryEscape()
+    {
+        foreach (string malformed in new[] { "\\q", "\\u12", "\\uZZZZ", "\\uD800x", "\\uDC00",
+                     "\\uD800\\uD800", "\\uD800\\u12", "literal\ncontrol", "trailing\\" })
+        {
+            string json = "{\"Unknown\":{\"nested\":[\"" + malformed + "\"]},\"Val\":5}";
+            AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<A>(json));
+            AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<A>(json, Utf16));
+        }
+
+        const string valid = "{\"Unknown\":[\"\\\\uD800\\\"\\/\\b\\f\\n\\r\\t\\u0000\\u4F60\\uD83D\\uDE00\"],\"Val\":5}";
+        Assert(LuminPackSerializer.DeserializeJson<A>(valid)?.Val == 5,
+            "Skipping escaped UTF-8 strings consumed the next property.");
+        Assert(LuminPackSerializer.DeserializeJson<A>(valid, Utf16)?.Val == 5,
+            "Skipping escaped UTF-16 strings consumed the next property.");
+    }
+
+    private static void SkipDocument(byte[] bytes, LuminPackReaderOptionalState state)
+    {
+        ReadOnlySpan<byte> source = bytes;
+        var reader = new LuminPackJsonReader(ref source, state);
+        Assert(reader.Read(), "Skip test did not read its first token.");
+        reader.Skip();
+        reader.EnsureEndOfDocument();
+    }
+
+    private static void SkippedEscapedStringsDoNotAllocate()
+    {
+        string json = "[\"" + string.Concat(Enumerable.Repeat("text\\n\\u4F60\\uD83D\\uDE00\\\\", 1000)) + "\"]";
+        foreach (var option in new[] { new LuminPackSerializerOption(), Utf16 })
+        {
+            byte[] bytes = option.StringEncoding == LuminPackStringEncoding.UTF8
+                ? Encoding.UTF8.GetBytes(json) : Encoding.Unicode.GetBytes(json);
+            var state = new LuminPackReaderOptionalState(option);
+            SkipDocument(bytes, state); // Warm shared search tables and JIT before measuring.
+            long start = GC.GetAllocatedBytesForCurrentThread();
+            for (int iteration = 0; iteration < 10; iteration++) SkipDocument(bytes, state);
+            Assert(GC.GetAllocatedBytesForCurrentThread() == start,
+                "Skipping escaped JSON strings allocated an unescape scratch buffer.");
+        }
     }
 
     private static void MalformedNumbersAndTrailingDataAreRejected()

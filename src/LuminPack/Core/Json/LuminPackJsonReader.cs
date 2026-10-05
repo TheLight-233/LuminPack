@@ -434,7 +434,10 @@ namespace LuminPack.Core
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ReadOnlySpan<byte> ReadStringUtf8()
+        public ReadOnlySpan<byte> ReadStringUtf8() => ReadStringUtf8(true);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private ReadOnlySpan<byte> ReadStringUtf8(bool unescape)
         {
             if (CurrentTokenType != JsonTokenType.String && CurrentTokenType != JsonTokenType.PropertyName)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected string");
@@ -470,7 +473,10 @@ namespace LuminPack.Core
                 {
                     var raw = _bufferReference.Slice(start, scan - start);
                     _currentIndex = scan + 1;
-                    return hasEscape ? UnescapeUtf8(raw) : raw;
+                    if (!hasEscape) return raw;
+                    if (unescape) return UnescapeUtf8(raw);
+                    ValidateStringEscapes(raw);
+                    return raw;
                 }
                 else if (b == '\\')
                 {
@@ -508,7 +514,10 @@ namespace LuminPack.Core
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ReadOnlySpan<char> ReadStringUtf16()
+        public ReadOnlySpan<char> ReadStringUtf16() => ReadStringUtf16(true);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private ReadOnlySpan<char> ReadStringUtf16(bool unescape)
         {
             if (CurrentTokenType != JsonTokenType.String && CurrentTokenType != JsonTokenType.PropertyName)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected string");
@@ -548,7 +557,10 @@ namespace LuminPack.Core
                     var bytes = _bufferReference.Slice(start, byteCount);
                     var raw = MemoryMarshal.Cast<byte, char>(bytes);
                     _currentIndex = scan + 2;
-                    return hasEscape ? UnescapeUtf16(raw) : raw;
+                    if (!hasEscape) return raw;
+                    if (unescape) return UnescapeUtf16(raw);
+                    ValidateStringEscapes(raw);
+                    return raw;
                 }
 
                 if (c == '\\')
@@ -574,13 +586,93 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SkipStringUtf8()
         {
-            _ = ReadStringUtf8();
+            _ = ReadStringUtf8(false);
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SkipStringUtf16()
         {
-            _ = ReadStringUtf16();
+            _ = ReadStringUtf16(false);
+        }
+
+        // The shared scanner already checked literal control characters and the closing quote.
+        // Skipping still validates every escape, but never creates a scratch buffer.
+        private static void ValidateStringEscapes(ReadOnlySpan<byte> source)
+        {
+            int index;
+            while ((index = source.IndexOf((byte)'\\')) >= 0)
+            {
+                source = source.Slice(index + 1);
+                if (source.IsEmpty)
+                    LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
+                byte escape = source[0];
+                source = source.Slice(1);
+                switch (escape)
+                {
+                    case (byte)'"': case (byte)'\\': case (byte)'/':
+                    case (byte)'b': case (byte)'f': case (byte)'n': case (byte)'r': case (byte)'t':
+                        break;
+                    case (byte)'u':
+                    {
+                        int codeUnit = ParseHex4(source, 0);
+                        source = source.Slice(4);
+                        if ((uint)(codeUnit - 0xD800) <= 0x3FFu)
+                        {
+                            if (source.Length < 6 || source[0] != '\\' || source[1] != 'u')
+                                LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
+                            int low = ParseHex4(source, 2);
+                            if ((uint)(low - 0xDC00) > 0x3FFu)
+                                LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
+                            source = source.Slice(6);
+                        }
+                        else if ((uint)(codeUnit - 0xDC00) <= 0x3FFu)
+                            LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
+                        break;
+                    }
+                    default:
+                        LuminPackExceptionHelper.ThrowFormatException("Invalid JSON escape sequence");
+                        break;
+                }
+            }
+        }
+
+        private static void ValidateStringEscapes(ReadOnlySpan<char> source)
+        {
+            int index;
+            while ((index = source.IndexOf('\\')) >= 0)
+            {
+                source = source.Slice(index + 1);
+                if (source.IsEmpty)
+                    LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
+                char escape = source[0];
+                source = source.Slice(1);
+                switch (escape)
+                {
+                    case '"': case '\\': case '/':
+                    case 'b': case 'f': case 'n': case 'r': case 't':
+                        break;
+                    case 'u':
+                    {
+                        int codeUnit = ParseHex4(source, 0);
+                        source = source.Slice(4);
+                        if ((uint)(codeUnit - 0xD800) <= 0x3FFu)
+                        {
+                            if (source.Length < 6 || source[0] != '\\' || source[1] != 'u')
+                                LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
+                            int low = ParseHex4(source, 2);
+                            if ((uint)(low - 0xDC00) > 0x3FFu)
+                                LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
+                            source = source.Slice(6);
+                        }
+                        else if ((uint)(codeUnit - 0xDC00) <= 0x3FFu)
+                            LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
+                        break;
+                    }
+                    default:
+                        LuminPackExceptionHelper.ThrowFormatException("Invalid JSON escape sequence");
+                        break;
+                }
+            }
         }
 
         private ReadOnlySpan<byte> UnescapeUtf8(ReadOnlySpan<byte> source)
