@@ -18,6 +18,7 @@ internal static class JsonWriterSafetyTest
         RunCase(results, nameof(Utf8StringsPreserveBytesAndSpanBoundaries), Utf8StringsPreserveBytesAndSpanBoundaries);
         RunCase(results, nameof(Utf8PropertyNamesPreserveBytes), Utf8PropertyNamesPreserveBytes);
         RunCase(results, nameof(Utf8SegmentsGrowAndKeepFollowingValues), Utf8SegmentsGrowAndKeepFollowingValues);
+        RunCase(results, nameof(DenseUtf8HandlesEveryBmpCodeUnit), DenseUtf8HandlesEveryBmpCodeUnit);
     }
 
     private static byte[] ExpectedUtf8String(string value)
@@ -126,6 +127,16 @@ internal static class JsonWriterSafetyTest
         string expected = "[" + Encoding.UTF8.GetString(ExpectedUtf8String(value)) + ",\"tail😀\"]";
         Assert(writer.GetSpan().SequenceEqual(Encoding.UTF8.GetBytes(expected)),
             "UTF-8 segment growth corrupted a following value or comma state.");
+    }
+
+    private static void DenseUtf8HandlesEveryBmpCodeUnit()
+    {
+        // A leading escape forces the small scalar encoder, including isolated surrogates.
+        for (int codeUnit = 0; codeUnit <= char.MaxValue; codeUnit++)
+            CheckUtf8String("\n" + (char)codeUnit + "\t");
+        foreach (char high in new[] { '\uD800', '\uDBFF' })
+        foreach (char low in new[] { '\uDC00', '\uDFFF' })
+            CheckUtf8String("\n" + high + low + "\t");
     }
 
     private static void LargeStringGrowsBeforeWriting()

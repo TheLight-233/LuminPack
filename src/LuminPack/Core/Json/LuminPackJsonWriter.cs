@@ -778,46 +778,12 @@ namespace LuminPack.Core
         
         private void WriteStringContentSlow(ReadOnlySpan<char> value)
         {
-            Span<byte> utf8Buf = stackalloc byte[4];
-            Span<char> charBuf = stackalloc char[2];
-            
             for (int i = 0; i < value.Length; i++)
             {
                 char c = value[i];
-                
-                if (c == '"')
+                if (NeedsJsonEscape(c))
                 {
-                    WriteByteRaw(Backslash);
-                    WriteByteRaw((byte)'"');
-                }
-                else if (c == '\\')
-                {
-                    WriteByteRaw(Backslash);
-                    WriteByteRaw((byte)'\\');
-                }
-                else if (c == '\n')
-                {
-                    WriteByteRaw(Backslash);
-                    WriteByteRaw((byte)'n');
-                }
-                else if (c == '\r')
-                {
-                    WriteByteRaw(Backslash);
-                    WriteByteRaw((byte)'r');
-                }
-                else if (c == '\t')
-                {
-                    WriteByteRaw(Backslash);
-                    WriteByteRaw((byte)'t');
-                }
-                else if (c < 0x20)
-                {
-                    WriteByteRaw(Backslash);
-                    WriteByteRaw((byte)'u');
-                    WriteByteRaw((byte)'0');
-                    WriteByteRaw((byte)'0');
-                    WriteByteRaw(HexChar((c >> 4) & 0xF));
-                    WriteByteRaw(HexChar(c & 0xF));
+                    WriteEscapedUtf8Char(c);
                 }
                 else if (c <= 0x7F)
                 {
@@ -825,16 +791,36 @@ namespace LuminPack.Core
                 }
                 else
                 {
-                    charBuf[0] = c;
-                    int charCount = 1;
-                    if (char.IsHighSurrogate(c) && i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
+                    uint scalar = c;
+                    if (char.IsSurrogate(c))
                     {
-                        charBuf[1] = value[++i];
-                        charCount = 2;
+                        if (char.IsHighSurrogate(c) && i + 1 < value.Length && char.IsLowSurrogate(value[i + 1]))
+                            scalar = 0x10000u + (((uint)c - 0xD800u) << 10) + (value[++i] - 0xDC00u);
+                        else
+                            scalar = 0xFFFD;
                     }
-
-                    int len = Encoding.UTF8.GetBytes(charBuf[..charCount], utf8Buf);
-                    WriteRaw(utf8Buf[..len]);
+                    int length = scalar <= 0x7FF ? 2 : scalar <= 0xFFFF ? 3 : 4;
+                    EnsureCapacity(length);
+                    ref byte destination = ref GetCurrentSpanReference();
+                    if (length == 2)
+                    {
+                        destination = (byte)(0xC0 | (scalar >> 6));
+                        Unsafe.Add(ref destination, 1) = (byte)(0x80 | (scalar & 0x3F));
+                    }
+                    else if (length == 3)
+                    {
+                        destination = (byte)(0xE0 | (scalar >> 12));
+                        Unsafe.Add(ref destination, 1) = (byte)(0x80 | ((scalar >> 6) & 0x3F));
+                        Unsafe.Add(ref destination, 2) = (byte)(0x80 | (scalar & 0x3F));
+                    }
+                    else
+                    {
+                        destination = (byte)(0xF0 | (scalar >> 18));
+                        Unsafe.Add(ref destination, 1) = (byte)(0x80 | ((scalar >> 12) & 0x3F));
+                        Unsafe.Add(ref destination, 2) = (byte)(0x80 | ((scalar >> 6) & 0x3F));
+                        Unsafe.Add(ref destination, 3) = (byte)(0x80 | (scalar & 0x3F));
+                    }
+                    Advance(length);
                 }
             }
         }
