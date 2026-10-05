@@ -1,0 +1,34 @@
+extern alias old;
+using BenchmarkDotNet.Attributes;
+using LuminPack.Core;
+using LuminPack.Option;
+
+[InProcess]
+[MemoryDiagnoser]
+public class DenseStringBenchmark
+{
+    [Params(8, 4096)] public int Length { get; set; }
+    private string _value = null!;
+    private byte[] _buffer = null!;
+    private readonly LuminPackWriterOptionalState _state = new();
+    private readonly old::LuminPack.Option.LuminPackWriterOptionalState _oldState = new();
+    [GlobalSetup] public void Setup()
+    {
+        _value = string.Concat(Enumerable.Repeat("\n\t\"\\\0中🚀", (Length + 7) / 8)).Substring(0, Length);
+        _buffer = new byte[Length * 6 + 2];
+    }
+    [Benchmark(Baseline = true)] public int Baseline()
+    {
+        Span<byte> destination = _buffer;
+        var writer = new old::LuminPack.Core.LuminPackJsonWriter(ref destination, _oldState);
+        writer.WriteString(_value);
+        return writer.CurrentIndex;
+    }
+    [Benchmark] public int Runtime()
+    {
+        Span<byte> destination = _buffer;
+        var writer = new LuminPackJsonWriter(ref destination, _state);
+        writer.WriteString(_value);
+        return writer.CurrentIndex;
+    }
+}
