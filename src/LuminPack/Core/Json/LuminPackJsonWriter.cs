@@ -41,6 +41,17 @@ namespace LuminPack.Core
         private const byte Colon = (byte)':';
         private const byte Comma = (byte)',';
         private const byte Backslash = (byte)'\\';
+
+#if NET8_0_OR_GREATER
+        private const string StringEscapeChars =
+            "\u0000\u0001\u0002\u0003\u0004\u0005\u0006\u0007" +
+            "\u0008\u0009\u000A\u000B\u000C\u000D\u000E\u000F" +
+            "\u0010\u0011\u0012\u0013\u0014\u0015\u0016\u0017" +
+            "\u0018\u0019\u001A\u001B\u001C\u001D\u001E\u001F\"\\";
+        private static readonly SearchValues<char> s_stringEscapeChars = SearchValues.Create(StringEscapeChars);
+        private static readonly SearchValues<byte> s_stringEscapeBytes =
+            SearchValues.Create(Encoding.UTF8.GetBytes(StringEscapeChars));
+#endif
         
         private static readonly StandardFormat s_floatFormatG = new('G');
         private static readonly StandardFormat s_doubleFormatG = new('G');
@@ -385,6 +396,30 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteStringContentUtf8(ReadOnlySpan<char> value)
         {
+#if NET8_0_OR_GREATER
+            // Tiny ASCII values are cheaper to scan and narrow without a transcoder call.
+            if (value.Length <= 16)
+            {
+                EnsureCapacity(value.Length);
+                ref byte destination = ref GetCurrentSpanReference();
+                for (int i = 0; i < value.Length; i++)
+                {
+                    char c = value[i];
+                    if (c > 0x7F || NeedsJsonEscape(c))
+                    {
+                        if (c <= 0x7F)
+                            WriteStringContentSlow(value);
+                        else
+                            WriteStringContentUtf8Encoded(value);
+                        return;
+                    }
+                    Unsafe.Add(ref destination, i) = (byte)c;
+                }
+                Advance(value.Length);
+                return;
+            }
+            WriteStringContentUtf8Encoded(value);
+#else
             bool needsEscape = false;
             for (int i = 0; i < value.Length; i++)
             {
@@ -410,11 +445,143 @@ namespace LuminPack.Core
             {
                 WriteStringContentSlow(value);
             }
+#endif
+        }
+
+#if NET8_0_OR_GREATER
+        private void WriteStringContentUtf8Encoded(ReadOnlySpan<char> value)
+        {
+            int escapeIndex = value.IndexOfAny(s_stringEscapeChars);
+            if (escapeIndex < 0)
+                WriteUtf8StringSegment(value);
+            else
+                WriteStringContentUtf8Escaped(value, escapeIndex);
+        }
+
+        private void WriteStringContentUtf8Escaped(ReadOnlySpan<char> value, int escapeIndex)
+        {
+            while (true)
+            {
+                if (escapeIndex <= 8 && value.Length - escapeIndex >= 3 &&
+                    NeedsJsonEscape(value[escapeIndex + 1]) && NeedsJsonEscape(value[escapeIndex + 2]))
+                {
+                    // Keep dense escape clusters on the existing scalar path, in bounded
+                    // blocks so a dense prefix does not slow a long ordinary suffix.
+                    int blockLength = Math.Min(64, value.Length);
+                    if (blockLength < value.Length && char.IsHighSurrogate(value[blockLength - 1]) &&
+                        char.IsLowSurrogate(value[blockLength]))
+                        blockLength++;
+                    WriteStringContentSlow(value.Slice(0, blockLength));
+                    value = value.Slice(blockLength);
+                    escapeIndex = value.IndexOfAny(s_stringEscapeChars);
+                    if (escapeIndex < 0)
+                    {
+                        WriteUtf8StringSegment(value);
+                        return;
+                    }
+                    continue;
+                }
+
+                if (escapeIndex > 0)
+                    WriteUtf8StringSegment(value.Slice(0, escapeIndex));
+
+                // Consecutive escapes stay scalar; do not search or transcode empty runs.
+                do
+                {
+                    WriteEscapedUtf8Char(value[escapeIndex++]);
+                }
+                while (escapeIndex < value.Length && NeedsJsonEscape(value[escapeIndex]));
+
+                value = value.Slice(escapeIndex);
+                escapeIndex = value.IndexOfAny(s_stringEscapeChars);
+                if (escapeIndex < 0)
+                {
+                    WriteUtf8StringSegment(value);
+                    return;
+                }
+            }
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteUtf8StringSegment(ReadOnlySpan<char> value)
+        {
+            if (value.IsEmpty) return;
+
+            // Try the actual available space first, including exact-size caller spans.
+            var status = StringSerializer.Serialize(value, _bufferReference.Slice(_currentIndex),
+                out _, out int bytesWritten);
+            if (status != OperationStatus.Done)
+                bytesWritten = WriteUtf8StringSegmentSlow(value);
+            Advance(bytesWritten);
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private int WriteUtf8StringSegmentSlow(ReadOnlySpan<char> value)
+        {
+            EnsureCapacity(Encoding.UTF8.GetByteCount(value));
+            return Encoding.UTF8.GetBytes(value, _bufferReference.Slice(_currentIndex));
+        }
+#endif
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool NeedsJsonEscape(char value) => value < 0x20 || value == '"' || value == '\\';
+
+        private void WriteEscapedUtf8Char(char value)
+        {
+            byte escaped = value switch
+            {
+                '"' => (byte)'"',
+                '\\' => (byte)'\\',
+                '\n' => (byte)'n',
+                '\r' => (byte)'r',
+                '\t' => (byte)'t',
+                _ => (byte)'u'
+            };
+            int length = escaped == (byte)'u' ? 6 : 2;
+            EnsureCapacity(length);
+            ref byte destination = ref GetCurrentSpanReference();
+            destination = Backslash;
+            Unsafe.Add(ref destination, 1) = escaped;
+            if (length == 6)
+            {
+                Unsafe.Add(ref destination, 2) = (byte)'0';
+                Unsafe.Add(ref destination, 3) = (byte)'0';
+                Unsafe.Add(ref destination, 4) = HexChar((value >> 4) & 0xF);
+                Unsafe.Add(ref destination, 5) = HexChar(value & 0xF);
+            }
+            Advance(length);
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteStringContentUtf8Raw(ReadOnlySpan<byte> value)
         {
+#if NET8_0_OR_GREATER
+            int escapeIndex = value.IndexOfAny(s_stringEscapeBytes);
+            if (escapeIndex < 0)
+            {
+                WriteRaw(value);
+                return;
+            }
+
+            while (true)
+            {
+                if (escapeIndex > 0)
+                    WriteRaw(value.Slice(0, escapeIndex));
+                do
+                {
+                    WriteEscapedUtf8Char((char)value[escapeIndex++]);
+                }
+                while (escapeIndex < value.Length && NeedsJsonEscape((char)value[escapeIndex]));
+
+                value = value.Slice(escapeIndex);
+                escapeIndex = value.IndexOfAny(s_stringEscapeBytes);
+                if (escapeIndex < 0)
+                {
+                    WriteRaw(value);
+                    return;
+                }
+            }
+#else
             bool needsEscape = false;
             for (int i = 0; i < value.Length; i++)
             {
@@ -437,6 +604,7 @@ namespace LuminPack.Core
             {
                 WriteStringContentUtf8Slow(value);
             }
+#endif
         }
 
         private void WriteStringContentUtf8Slow(ReadOnlySpan<byte> value)
