@@ -13,6 +13,7 @@
 | 多段输入 | 验证完成 | 复用 native staging，消除每次大数组分配 |
 | CJK SIMD | 已提交 `845e24f` | 纯中文 32 / 4096 单元 2.4x / 3.4x；混合不倒退 |
 | JSON 枚举底层宽度 | 已提交 `92f0d4c` | 修复 64 位截断与窄底层越界读；8 种底层类型全覆盖 |
+| 时间/Guid 零分配格式化 | 已提交 | DateTime/DateTimeOffset/Guid/TimeSpan 耗时 0.45–0.72x，分配 −99.4% |
 | 大数组并行解码 | 待验证 | 元素边界、独立状态、引用与回调限制 |
 
 ## 密集转义
@@ -86,3 +87,15 @@ expected: LongValue=5000000000, ULongValue=18000000000000000000
 行为变化：8/16 位及有符号 32 位枚举的输出与修复前**逐字节一致**；64 位底层枚举由截断值变为正确值；`uint` 底层枚举大于 `int.MaxValue` 的值由负数变为正确的正数。
 
 验证：新增 `JsonEnumBackingTypeTest` 覆盖全部 8 种底层类型的最小/最大值，含对象字段、独立枚举 formatter、`List`/数组三条路径，并对每个属性断言类型化数值。把生成器改动 stash 后重跑，**4 项全部失败**，证明用例确实能拦住该缺陷。恢复后 68 / 68 / 69 项完整测试通过，五目标构建成功，生成器并发回归通过（32 个并行编译、512 个有效类型）。
+
+## 时间 / Guid 零分配格式化
+
+改动前生成代码写 `writer.WriteString(value.ToString("O"))`，每个值先分配一个中间字符串再转码。新增 `LuminPackJsonWriter.WriteFormattedValue` 与 `WriteDateTime` / `WriteDateTimeOffset` / `WriteGuid` / `WriteTimeSpan`：先 `TryFormat` 进 `stackalloc` 缓冲区，再复用既有内容写入路径（含引号与逗号状态），生成器 4 处相应改为直接调用。索引与时间戳格式不含任何需要 JSON 转义的字符，因此内容路径只需转码或拷贝。
+
+配对基准（同一次运行内与 `ToString` 路径比较，各写入 1000 个值）：耗时降到 **0.45–0.72 倍**（Guid / TimeSpan 0.45、DateTime 0.66、DateTimeOffset 0.72），分配从 56,520–96,536 B 降到 536 B，即 **−99.4%**。剩下的 536 B 是基准自身每次调用构造一个 `LuminPackWriterOptionalState`；xUnit 用例走线程静态状态池，64 值 × 4 类型实测 **0 B**。数据为 `round3-formatted-scalar-benchmark.md`，基准为 `JsonFormattedScalarBenchmark.cs`。
+
+正确性按「与旧行为逐字节一致」验证，而不是只看往返：`JsonFormattedScalarTest` 对每种类型的最小/最大、UTC/Local/Unspecified、±14:00 与 ±12:00 偏移、亚毫秒 tick 等取值，断言写入器字节 == `ToString` 文本，并断言 UTF-8 与 UTF-16 两种编码输出相同的 JSON 字符串；另有嵌套/集合/可空往返与 0 分配用例。固定容量写入器在容量不足时仍抛 `SpanOutOfRange` 而非越界写（基准首次运行因 UTF-16 需要双倍缓冲而暴露，属基准自身缓冲区计算错误）。
+
+范围限制：`DateOnly` / `TimeOnly` / `Int128` / `UInt128` 保留原 `ToString` 路径。低于 net8.0 的消费方会解析到 LuminPack 的 netstandard2.1 资产，该目标不可能声明这些类型的方法，生成代码若直接调用会编译失败；这四类在负载中也少见，故不为此引入跨资产可用性判断。
+
+73 / 73 / 74 项完整测试通过，五目标构建成功，生成器并发回归通过。读取侧未改动：`DateTime.Parse` 等仍需先由 `ReadString()` 产生字符串，需要 reader 暴露 span 才能继续优化，属独立改动。

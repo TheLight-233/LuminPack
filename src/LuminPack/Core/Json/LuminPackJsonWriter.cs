@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Buffers;
 using System.Buffers.Text;
 using System.Runtime.CompilerServices;
@@ -453,6 +453,85 @@ namespace LuminPack.Core
         
         #endregion
         
+        #region Formatted Values
+
+        /// <summary>
+        /// Emits an already formatted, escape-free ASCII payload as a JSON string.
+        /// The ISO-8601, GUID and TimeSpan formats used below never contain a
+        /// character that requires JSON escaping, so the content writers only
+        /// need to transcode or copy.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteFormattedValue(ReadOnlySpan<char> text)
+        {
+            WriteCommaIfNeeded();
+            WriteByteRaw(Quote);
+
+            if (SerializeStringAsUtf8)
+                WriteStringContentUtf8(text);
+            else
+                WriteStringContentUtf16(text);
+
+            WriteByteRaw(Quote);
+        }
+
+        /// <summary>Writes a <see cref="DateTime"/> in its round-trip ("O") form without allocating a string.</summary>
+        public void WriteDateTime(DateTime value)
+        {
+            // "yyyy-MM-ddTHH:mm:ss.fffffff" is 27 characters.
+            Span<char> buffer = stackalloc char[33];
+            if (value.TryFormat(buffer, out int written, "O"))
+            {
+                WriteFormattedValue(buffer.Slice(0, written));
+                return;
+            }
+
+            WriteString(value.ToString("O"));
+        }
+
+        /// <summary>Writes a <see cref="DateTimeOffset"/> in its round-trip ("O") form without allocating a string.</summary>
+        public void WriteDateTimeOffset(DateTimeOffset value)
+        {
+            // Round-trip text plus the "+hh:mm" offset is 33 characters.
+            Span<char> buffer = stackalloc char[33];
+            if (value.TryFormat(buffer, out int written, "O"))
+            {
+                WriteFormattedValue(buffer.Slice(0, written));
+                return;
+            }
+
+            WriteString(value.ToString("O"));
+        }
+
+        /// <summary>Writes a <see cref="Guid"/> in its "D" form without allocating a string.</summary>
+        public void WriteGuid(Guid value)
+        {
+            Span<char> buffer = stackalloc char[36];
+            if (value.TryFormat(buffer, out int written))
+            {
+                WriteFormattedValue(buffer.Slice(0, written));
+                return;
+            }
+
+            WriteString(value.ToString());
+        }
+
+        /// <summary>Writes a <see cref="TimeSpan"/> in its constant ("c") form without allocating a string.</summary>
+        public void WriteTimeSpan(TimeSpan value)
+        {
+            // "-10675199.02:48:05.4775808" is 26 characters.
+            Span<char> buffer = stackalloc char[32];
+            if (value.TryFormat(buffer, out int written, "c"))
+            {
+                WriteFormattedValue(buffer.Slice(0, written));
+                return;
+            }
+
+            WriteString(value.ToString());
+        }
+
+        #endregion
+
         #region String
         
         public void WriteString(string? value)

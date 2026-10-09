@@ -57,15 +57,24 @@ public static class UnmanagedEmitter
         switch (data.TypeName)
         {
             case "global::System.Guid":
-                sb.AppendLine("            writer.WriteString(value.ToString());");
+                sb.AppendLine("            writer.WriteGuid(value);");
                 break;
             case "global::System.DateTime":
+                sb.AppendLine("            writer.WriteDateTime(value);");
+                break;
             case "global::System.DateTimeOffset":
+                sb.AppendLine("            writer.WriteDateTimeOffset(value);");
+                break;
+            case "global::System.TimeSpan":
+                sb.AppendLine("            writer.WriteTimeSpan(value);");
+                break;
+            // DateOnly/TimeOnly/Int128/UInt128 keep the ToString path on purpose:
+            // a consumer below net8.0 resolves LuminPack's netstandard2.1 asset,
+            // which cannot declare methods for types that target does not have.
             case "global::System.DateOnly":
             case "global::System.TimeOnly":
                 sb.AppendLine("            writer.WriteString(value.ToString(\"O\"));");
                 break;
-            case "global::System.TimeSpan":
             case "global::System.Int128":
             case "global::System.UInt128":
                 sb.AppendLine("            writer.WriteString(value.ToString());");
