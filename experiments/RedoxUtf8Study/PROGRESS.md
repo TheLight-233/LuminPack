@@ -13,7 +13,7 @@
 | 多段输入 | 验证完成 | 复用 native staging，消除每次大数组分配 |
 | CJK SIMD | 已提交 `845e24f` | 纯中文 32 / 4096 单元 2.4x / 3.4x；混合不倒退 |
 | JSON 枚举底层宽度 | 已提交 `92f0d4c` | 修复 64 位截断与窄底层越界读；8 种底层类型全覆盖 |
-| 时间/Guid 零分配格式化 | 已提交 | DateTime/DateTimeOffset/Guid/TimeSpan 耗时 0.45–0.72x，分配 −99.4% |
+| 时间/Guid 零分配格式化 | 已提交 `bf69e3e` | DateTime/DateTimeOffset/Guid/TimeSpan 耗时 0.45–0.72x，分配 −99.4% |
 | 大数组并行解码 | 待验证 | 元素边界、独立状态、引用与回调限制 |
 
 ## 密集转义
