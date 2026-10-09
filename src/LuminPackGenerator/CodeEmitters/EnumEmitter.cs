@@ -1,5 +1,6 @@
 using System.Text;
 using LuminPack.Code;
+using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator.CodeEmitters;
 
@@ -29,14 +30,39 @@ public static class EnumEmitter
 
     public static void GenerateJsonSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
-        sb.AppendLine("            var local = value;");
-        sb.AppendLine("            var intValue = global::System.Runtime.CompilerServices.Unsafe.As<" + data.TypeName + ", int>(ref local);");
-        sb.AppendLine("            writer.WriteInt(intValue);");
+        var names = GetJsonEnumTypeNames(data.TypeSymbol);
+        sb.AppendLine("            writer." + names.WriteMethod + "((" + names.Keyword + ")value);");
     }
 
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
-        sb.AppendLine("            var intValue = reader.ReadInt();");
-        sb.AppendLine("            value = global::System.Runtime.CompilerServices.Unsafe.As<int, " + data.TypeName + ">(ref intValue);");
+        var names = GetJsonEnumTypeNames(data.TypeSymbol);
+        sb.AppendLine("            value = (" + data.TypeName + ")reader." + names.ReadMethod + "();");
+    }
+
+    /// <summary>
+    /// Resolves the underlying-type keyword and the matching JSON read/write method names
+    /// for an enum. The JSON representation writes the raw underlying value, so every
+    /// declared width must be preserved: narrowing to <c>int</c> silently truncated
+    /// 64-bit-backed enums, and reinterpreting a narrow enum as <c>int</c> read past it.
+    /// A symbol that is not a resolvable enum keeps the historical <c>int</c> behavior.
+    /// </summary>
+    internal static (string Keyword, string WriteMethod, string ReadMethod) GetJsonEnumTypeNames(ITypeSymbol? typeSymbol)
+    {
+        var underlying = typeSymbol is INamedTypeSymbol { TypeKind: TypeKind.Enum } named
+            ? named.EnumUnderlyingType?.SpecialType
+            : null;
+
+        return underlying switch
+        {
+            SpecialType.System_SByte => ("sbyte", "WriteSByte", "ReadSByte"),
+            SpecialType.System_Byte => ("byte", "WriteByte", "ReadByte"),
+            SpecialType.System_Int16 => ("short", "WriteShort", "ReadShort"),
+            SpecialType.System_UInt16 => ("ushort", "WriteUShort", "ReadUShort"),
+            SpecialType.System_UInt32 => ("uint", "WriteUInt", "ReadUInt"),
+            SpecialType.System_Int64 => ("long", "WriteLong", "ReadLong"),
+            SpecialType.System_UInt64 => ("ulong", "WriteULong", "ReadULong"),
+            _ => ("int", "WriteInt", "ReadInt")
+        };
     }
 }

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using LuminPack.SourceGenerator;
+using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -326,8 +327,11 @@ public static class LuminPackJsonCodeGenerator
 			sb.AppendLine(indent + "writer.WriteBool(" + valueExpr + ");");
 			break;
 		case LuminFiledType.Enum:
-			sb.AppendLine(indent + "writer.WriteInt((int)" + valueExpr + ");");
+		{
+			var enumNames = EnumEmitter.GetJsonEnumTypeNames(field.TypeSymbol);
+			sb.AppendLine(indent + "writer." + enumNames.WriteMethod + "((" + enumNames.Keyword + ")" + valueExpr + ");");
 			break;
+		}
 		case LuminFiledType.Struct:
 		case LuminFiledType.Class:
 		case LuminFiledType.List:
@@ -578,7 +582,8 @@ public static class LuminPackJsonCodeGenerator
 		case LuminFiledType.Enum:
 		{
 			string text2 = field.FullTypeName ?? field.Name;
-			sb.AppendLine(indent + targetVar + " = (" + text2 + ")reader.ReadInt();");
+			var enumNames = EnumEmitter.GetJsonEnumTypeNames(field.TypeSymbol);
+			sb.AppendLine(indent + targetVar + " = (" + text2 + ")reader." + enumNames.ReadMethod + "();");
 			break;
 		}
 		case LuminFiledType.Struct:
@@ -872,8 +877,11 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
 			sb.AppendLine(indent + "writer.WriteBool(" + text + ");");
 			break;
 		case LuminFiledType.Enum:
-			sb.AppendLine(indent + "writer.WriteInt((int)" + text + ");");
+		{
+			var enumNames = EnumEmitter.GetJsonEnumTypeNames(field.TypeSymbol);
+			sb.AppendLine(indent + "writer." + enumNames.WriteMethod + "((" + enumNames.Keyword + ")" + text + ");");
 			break;
+		}
 		case LuminFiledType.Struct:
 		case LuminFiledType.Class:
 		case LuminFiledType.List:
@@ -1156,10 +1164,11 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
 		case LuminFiledType.Enum:
 		{
 			string text2 = field.FullTypeName ?? field.Name;
+			var enumNames = EnumEmitter.GetJsonEnumTypeNames(field.TypeSymbol);
 			sb.AppendLine(indent + "if (reader.IsNull())");
 			sb.AppendLine(indent + "    " + targetVar + " = default;");
 			sb.AppendLine(indent + "else");
-			sb.AppendLine(indent + "    " + targetVar + " = (" + text2 + ")reader.ReadInt();");
+			sb.AppendLine(indent + "    " + targetVar + " = (" + text2 + ")reader." + enumNames.ReadMethod + "();");
 			break;
 		}
 		case LuminFiledType.Struct:

@@ -12,6 +12,7 @@
 | 外部 IBufferWriter 直接输出 | 已提交 `a679db8` | 按块直接写入，去掉完整中间缓冲和整体复制 |
 | 多段输入 | 验证完成 | 复用 native staging，消除每次大数组分配 |
 | CJK SIMD | 已提交 `845e24f` | 纯中文 32 / 4096 单元 2.4x / 3.4x；混合不倒退 |
+| JSON 枚举底层宽度 | 已提交 | 修复 64 位截断与窄底层越界读；8 种底层类型全覆盖 |
 | 大数组并行解码 | 待验证 | 元素边界、独立状态、引用与回调限制 |
 
 ## 密集转义
@@ -68,3 +69,20 @@ netstandard2.1 不进入该内核，走原 `SerializeAsUtf8`。64 / 64 / 65 项�
 `SerializeJson<T>()` 返回 string 时，当前用 UTF-8 内部输出再 `GetString`。实测把内部输出换成 UTF-16（结果字符串完全相同）中文文档 9.92 → 4.97 μs，但纯 ASCII 的 `CharacterSaveData` 32.4 → 37.3 μs，回退约 15%，因为输出缓冲翻倍而 ASCII 写入已接近拷贝成本。
 
 这是数据分布取舍而非普适收益，因此**不改默认**：继续 UTF-8，中文为主的调用方可显式传 `StringEncoding = LuminPackStringEncoding.UTF16` 获得约 2 倍。数据为 `round2-string-return.md`，基准为 `JsonStringReturnBenchmark.cs`。`writer` 内累计 UTF-16 长度只省一次计数扫描，量级远小于 2 倍，且需在每个写入点计数，未采用。
+
+## JSON 枚举底层宽度（正确性修复）
+
+JSON 把枚举写成整数 token，但两条发射路径都先把值收窄到 `int`：`EnumEmitter` 的独立/集合 formatter 用 `Unsafe.As<T, int>`，内联代码生成器的 4 处用 `(int)` 强转。后果是 64 位底层枚举静默截断，`byte`/`short` 等窄底层枚举被当作 4 字节读取。修复前实测：
+
+```
+written : {"LongValue":705032704,"ULongValue":-989331456}
+expected: LongValue=5000000000, ULongValue=18000000000000000000
+```
+
+`5,000,000,000` 只写回低 32 位，读回同样是错值，属静默数据损坏；`ulong` 更严重。二进制路径不受影响（用 `Unsafe.SizeOf<T>` 与 `WriteUnaligned`），只有 JSON 坏了；现有测试里唯一的非 int 底层枚举 `TestEnumVal : short` 只覆盖了二进制，因此没有拦住。
+
+修复方式：新增 `EnumEmitter.GetJsonEnumTypeNames`，从 Roslyn 的 `INamedTypeSymbol.EnumUnderlyingType`（权威来源，而不是可能失真的 `LuminEnumFieldType`）解析底层关键字与匹配的 `WriteXxx`/`ReadXxx`，两条路径共用，共 6 处。
+
+行为变化：8/16 位及有符号 32 位枚举的输出与修复前**逐字节一致**；64 位底层枚举由截断值变为正确值；`uint` 底层枚举大于 `int.MaxValue` 的值由负数变为正确的正数。
+
+验证：新增 `JsonEnumBackingTypeTest` 覆盖全部 8 种底层类型的最小/最大值，含对象字段、独立枚举 formatter、`List`/数组三条路径，并对每个属性断言类型化数值。把生成器改动 stash 后重跑，**4 项全部失败**，证明用例确实能拦住该缺陷。恢复后 68 / 68 / 69 项完整测试通过，五目标构建成功，生成器并发回归通过（32 个并行编译、512 个有效类型）。
