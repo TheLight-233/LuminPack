@@ -14,6 +14,9 @@
 | CJK SIMD | 已提交 `845e24f` | 纯中文 32 / 4096 单元 2.4x / 3.4x；混合不倒退 |
 | JSON 枚举底层宽度 | 已提交 `92f0d4c` | 修复 64 位截断与窄底层越界读；8 种底层类型全覆盖 |
 | 时间/Guid 零分配格式化 | 已提交 `bf69e3e` | DateTime/DateTimeOffset/Guid/TimeSpan 耗时 0.45–0.72x，分配 −99.4% |
+| Sizeof 合并长度少算 | 已提交 | 运行时尺寸表达式被解析为 0；已复现并修复 |
+| WriteUnmanaged 越界写 | **待修复** | 无容量检查，固定 span 过小时静默越界（已复现） |
+| >255 字段的成员数截断 | **待修复** | `(byte)` 静默截断对象头计数 |
 | 大数组并行解码 | 待验证 | 元素边界、独立状态、引用与回调限制 |
 
 ## 密集转义
@@ -94,8 +97,37 @@ expected: LongValue=5000000000, ULongValue=18000000000000000000
 
 配对基准（同一次运行内与 `ToString` 路径比较，各写入 1000 个值）：耗时降到 **0.45–0.72 倍**（Guid / TimeSpan 0.45、DateTime 0.66、DateTimeOffset 0.72），分配从 56,520–96,536 B 降到 536 B，即 **−99.4%**。剩下的 536 B 是基准自身每次调用构造一个 `LuminPackWriterOptionalState`；xUnit 用例走线程静态状态池，64 值 × 4 类型实测 **0 B**。数据为 `round3-formatted-scalar-benchmark.md`，基准为 `JsonFormattedScalarBenchmark.cs`。
 
-正确性按「与旧行为逐字节一致」验证，而不是只看往返：`JsonFormattedScalarTest` 对每种类型的最小/最大、UTC/Local/Unspecified、±14:00 与 ±12:00 偏移、亚毫秒 tick 等取值，断言写入器字节 == `ToString` 文本，并断言 UTF-8 与 UTF-16 两种编码输出相同的 JSON 字符串；另有嵌套/集合/可空往返与 0 分配用例。固定容量写入器在容量不足时仍抛 `SpanOutOfRange` 而非越界写（基准首次运行因 UTF-16 需要双倍缓冲而暴露，属基准自身缓冲区计算错误）。
+正确性按「与旧行为逐字节一致」验证，而不是只看往返：`JsonFormattedScalarTest` 对每种类型的最小/最大、UTC/Local/Unspecified、±14:00 与 ±12:00 偏移、亚毫秒 tick 等取值，断言写入器字节 == `ToString` 文本，并断言 UTF-8 与 UTF-16 两种编码输出相同的 JSON 字符串；另有嵌套/集合/可空往返与 0 分配用例。基准首次运行曾因 UTF-16 需要双倍缓冲而抛 `SpanOutOfRange`，当时据此认为「固定容量写入器一律抛异常而非越界写」；后续审查推翻了这个结论，见下节（该异常来自字符串路径的 `EnsureCapacity`，`WriteUnmanaged` 并无检查）。
 
 范围限制：`DateOnly` / `TimeOnly` / `Int128` / `UInt128` 保留原 `ToString` 路径。低于 net8.0 的消费方会解析到 LuminPack 的 netstandard2.1 资产，该目标不可能声明这些类型的方法，生成代码若直接调用会编译失败；这四类在负载中也少见，故不为此引入跨资产可用性判断。
 
 73 / 73 / 74 项完整测试通过，五目标构建成功，生成器并发回归通过。读取侧未改动：`DateTime.Parse` 等仍需先由 `ReadString()` 产生字符串，需要 reader 暴露 span 才能继续优化，属独立改动。
+
+## 审查发现：Sizeof 合并长度少算（已修复）
+
+`GetFixedFieldLength` 的兜底分支返回了一个畸形字符串（末尾多一个 `>`）：`"Unsafe.SizeOf<" + typeName + ">()>"`。调用方用 `int.TryParse` 消费它，解析失败即按 **0** 计。这不止是拼写问题：即使去掉多余的 `>`，该分支产出的是**表达式**而非数字字面量，`int.TryParse` 一样会读成 0。真正的修法是把合并组累加成表达式项：
+
+```csharp
+totalLength += 4 + Unsafe.SizeOf<global::System.Guid>();
+```
+
+只改了 `IsMergeableField` 守卫的两处（`LuminPackCodeGenerator.cs` 的容器元素合并路径）；另两处由 `IsUnmanagedFiledType` 守卫，只会产出数字字面量，不受影响。
+
+触发条件：**托管**容器元素中出现 **≥2 个连续** mergeable 字段，其中至少一个是不在 switch 里的 unmanaged 类型（Guid / DateTime / DateTimeOffset / TimeSpan / Int128 / UInt128 / Half / Rune / Vector* / Complex / Plane / Quaternion / Matrix* / GCHandle）。单个 Guid 字段不触发（合并需要连续两个），纯 unmanaged 元素走 `SizeOf<element>*Count` 也绕开。修复前实测：
+
+```
+List<Element Guid,Guid,string>  : actual 98 B, Sizeof 34 B, delta 64  !! UNDER-REPORTED
+List<Element int,DateTime,string>: actual 58 B, Sizeof 42 B, delta 16  !! UNDER-REPORTED
+```
+
+影响：公开 API `Sizeof<T>()` 静默返回错值，违反仓库已有断言 `ArraySizeofMatchesSerializedLength`。修复后上述两例均为 delta 0。
+
+验证：新增 `SizeEvaluationMergeTest`，含 `List` 与数组两种形态、6 种运行时尺寸类型同组、以及单字段的对照用例（确认没有过度修正）。把生成器改动 stash 后重跑：合并用例**失败**、对照用例通过；恢复后 75 / 75 / 76 项完整测试通过，五目标构建成功，生成器并发回归通过。
+
+## 审查发现：待修复项
+
+**`WriteUnmanaged` 无容量检查（内存越界）**。`LuminPackWriter.Unmanaged.cs:19-41` 直接算指针 + `Unsafe.WriteUnaligned`，既无 `EnsureCapacity` 也无边界判断；`Advance` 的检查是 `#if DEBUG` 且发生在写之后。实测 32 字节写入 4 字节 span：**不抛异常，span 之后的 canary 被改写**。固定容量写入器（`LuminPackWriter(ref Span<byte>, state)`）是公开 API，且与上一项的少算组合后，用 `Sizeof` 定长分配再写入即可静默损坏内存。本轮按要求仅修上一项，此项仍未修。
+
+**>255 字段的成员数截断**。`LuminPackCodeGenerator.cs:2690` 生成 `writer.WriteUnmanaged((byte){fields.Count}`，`(byte)300` 在 unchecked 下静默变 44；而 `WriteObjectHeader` 形参本身是 `byte`，线格式上限 255（兄弟分支传 `int` 字面量，超限反而编译失败，两条路径行为不一致）。
+
+以下经复核**确认不是缺陷**：循环引用表的 `GetValueRefOrAddDefault → TryAdd → CuckooInsert → Resize + TryAdd` 递归，因 `Resize` 恒为容量翻倍而必然收敛；`GetEnumFieldType` 的 `sbyte → Byte` 映射在二进制路径按同宽度位级往返，正确；`nint`/`nuint` 按平台宽度序列化，进程内自洽，但二进制载荷不可跨 32/64 位移植，属文档事项。

@@ -144,13 +144,15 @@ public static class LuminPackCodeGenerator
 						int num5 = FindNextMergeableField(field.ClassFields, m);
 						if (num5 != m)
 						{
-							int num6 = 0;
+							// A merged group mixes numeric literals with types whose size is only
+							// known to the runtime, so emit expression terms. Parsing them with
+							// int.TryParse silently read the SizeOf form as zero.
+							var num6 = new List<string>();
 							for (int n = m; n <= num5; n++)
 							{
-								int.TryParse(GetFixedFieldLength(field.ClassFields[n]), out var result3);
-								num6 += result3;
+								num6.Add(GetFixedFieldLength(field.ClassFields[n]));
 							}
-							sb.Append($"{text}    totalLength += {num6};");
+							sb.Append($"{text}    totalLength += {string.Join(" + ", num6)};");
 							sb.AppendLine();
 							m = num5;
 							continue;
@@ -288,13 +290,14 @@ public static class LuminPackCodeGenerator
 						int num3 = FindNextMergeableField(field.ClassFields, k);
 						if (num3 != k)
 						{
-							int num4 = 0;
+							// See the sibling merge site: emit expression terms so that types
+							// sized only by Unsafe.SizeOf are not dropped as zero.
+							var num4 = new List<string>();
 							for (int l = k; l <= num3; l++)
 							{
-								int.TryParse(GetFixedFieldLength(field.ClassFields[l]), out var result2);
-								num4 += result2;
+								num4.Add(GetFixedFieldLength(field.ClassFields[l]));
 							}
-							sb.Append($"{text}    totalLength += {num4};");
+							sb.Append($"{text}    totalLength += {string.Join(" + ", num4)};");
 							sb.AppendLine();
 							k = num3;
 							continue;
@@ -2419,7 +2422,7 @@ public static class LuminPackCodeGenerator
 			LuminFiledType.Decimal => "16",
 			LuminFiledType.Bool => "1",
 			LuminFiledType.Enum => GetEnumFieldLength(field.EnumType),
-			_ => "Unsafe.SizeOf<" + GetGeneratedTypeName(field) + ">()>",
+			_ => "Unsafe.SizeOf<" + GetGeneratedTypeName(field) + ">()",
 		};
 	}
 
