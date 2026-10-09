@@ -30,6 +30,9 @@ coverage/
 # Scratch / probe output
 .tmp/
 
+# Local research experiments (kept on disk, not versioned)
+experiments/
+
 # Editor and tooling state
 .vscode/
 .trae/
