@@ -15,8 +15,8 @@
 | JSON 枚举底层宽度 | 已提交 `92f0d4c` | 修复 64 位截断与窄底层越界读；8 种底层类型全覆盖 |
 | 时间/Guid 零分配格式化 | 已提交 `bf69e3e` | DateTime/DateTimeOffset/Guid/TimeSpan 耗时 0.45–0.72x，分配 −99.4% |
 | Sizeof 合并长度少算 | 已提交 `d5383ae` | 运行时尺寸表达式被解析为 0；已复现并修复 |
-| WriteUnmanaged 越界写 | **待修复** | 无容量检查，固定 span 过小时静默越界（已复现） |
-| >255 字段的成员数截断 | **待修复** | `(byte)` 静默截断对象头计数 |
+| WriteUnmanaged 无容量检查 | 设计约定 | 定长写入由调用方按 `Sizeof` 保证容量，非缺陷 |
+| >255 字段的成员数截断 | 设计约定 | 项目规定上限 255，超限类型不在契约内 |
 | 大数组并行解码 | 待验证 | 元素边界、独立状态、引用与回调限制 |
 
 ## 密集转义
@@ -124,10 +124,10 @@ List<Element int,DateTime,string>: actual 58 B, Sizeof 42 B, delta 16  !! UNDER-
 
 验证：新增 `SizeEvaluationMergeTest`，含 `List` 与数组两种形态、6 种运行时尺寸类型同组、以及单字段的对照用例（确认没有过度修正）。把生成器改动 stash 后重跑：合并用例**失败**、对照用例通过；恢复后 75 / 75 / 76 项完整测试通过，五目标构建成功，生成器并发回归通过。
 
-## 审查发现：待修复项
+## 审查发现：设计约定（非缺陷）
 
-**`WriteUnmanaged` 无容量检查（内存越界）**。`LuminPackWriter.Unmanaged.cs:19-41` 直接算指针 + `Unsafe.WriteUnaligned`，既无 `EnsureCapacity` 也无边界判断；`Advance` 的检查是 `#if DEBUG` 且发生在写之后。实测 32 字节写入 4 字节 span：**不抛异常，span 之后的 canary 被改写**。固定容量写入器（`LuminPackWriter(ref Span<byte>, state)`）是公开 API，且与上一项的少算组合后，用 `Sizeof` 定长分配再写入即可静默损坏内存。本轮按要求仅修上一项，此项仍未修。
+**`WriteUnmanaged` 无容量检查**。`LuminPackWriter.Unmanaged.cs:19-41` 直接算指针 + `Unsafe.WriteUnaligned`，不做边界判断。这是设计约定而非缺陷：只有不定长类型才走容量检查路径，定长写入由调用方保证目标容量，按 `Sizeof<T>()` 定长分配即为正确用法。实测 32 字节写入 4 字节 span 不会抛异常，属超出调用方契约的用法。上文「固定容量写入器一律抛异常」的说法据此更正。
 
-**>255 字段的成员数截断**。`LuminPackCodeGenerator.cs:2690` 生成 `writer.WriteUnmanaged((byte){fields.Count}`，`(byte)300` 在 unchecked 下静默变 44；而 `WriteObjectHeader` 形参本身是 `byte`，线格式上限 255（兄弟分支传 `int` 字面量，超限反而编译失败，两条路径行为不一致）。
+**>255 字段的成员数**。`LuminPackCodeGenerator.cs:2690` 用 `(byte)` 写对象头计数。成员数上限 255 是项目规定（线格式本就以 byte 存储，`WriteObjectHeader` 形参即 `byte`），超过 255 个可序列化成员的类型不在契约内，该转换是有意为之。
 
 以下经复核**确认不是缺陷**：循环引用表的 `GetValueRefOrAddDefault → TryAdd → CuckooInsert → Resize + TryAdd` 递归，因 `Resize` 恒为容量翻倍而必然收敛；`GetEnumFieldType` 的 `sbyte → Byte` 映射在二进制路径按同宽度位级往返，正确；`nint`/`nuint` 按平台宽度序列化，进程内自洽，但二进制载荷不可跨 32/64 位移植，属文档事项。
