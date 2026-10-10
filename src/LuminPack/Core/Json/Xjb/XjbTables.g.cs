@@ -5,7 +5,7 @@
 //   - bench/xjb/float_to_decimal/xjb32_i.cpp  (xjb_v2_f32_to_dec: .pow10_table_reverse, .h37)
 //   - bench/xjb/float_to_decimal/xjb64_i.cpp  (xjb64_v2_f64_to_dec: g[1234])
 //   - bench/xjb/float_to_decimal/xjb64_i.cpp  (xjb64_v2_f64_to_dec: h7[2048], verification only)
-// Licensed under the terms of the upstream LICENSE file (see ThirdPartyNotices/xjb.txt).
+// Licensed under the terms of the upstream LICENSE file (see docs/xjb-LICENSE.txt).
 // Regenerate with tools/xjb-tables/extract_tables.py.
 // </auto-generated>
 
@@ -62,7 +62,7 @@ namespace LuminPack.Core
 //   - bench/xjb/float_to_decimal/xjb32_i.cpp  (xjb_v2_f32_to_dec: .pow10_table_reverse, .h37)
 //   - bench/xjb/float_to_decimal/xjb64_i.cpp  (xjb64_v2_f64_to_dec: g[1234])
 //   - bench/xjb/float_to_decimal/xjb64_i.cpp  (xjb64_v2_f64_to_dec: h7[2048], verification only)
-// Licensed under the terms of the upstream LICENSE file (see ThirdPartyNotices/xjb.txt).
+// Licensed under the terms of the upstream LICENSE file (see docs/xjb-LICENSE.txt).
 // Regenerate with tools/xjb-tables/extract_tables.py.
 // </auto-generated>
 

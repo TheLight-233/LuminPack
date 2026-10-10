@@ -843,3 +843,8 @@ Skill 内含可直接照抄的完整示例代码（Custom formatter、`Register<
 ## 📄 License 许可证
 
 This library is licensed under the MIT License.
+
+第三方组件的许可证与声明文件归档在 `docs/` 目录：
+
+- [docs/xjb-LICENSE.txt](docs/xjb-LICENSE.txt)：xjb 上游许可证全文（Apache License 2.0）
+- [docs/xjb-NOTICE.md](docs/xjb-NOTICE.md)：xjb 第三方声明，包含上游来源、锁定提交及移植内容说明
