@@ -1,4 +1,4 @@
-﻿using System.Buffers;
+using System.Buffers;
 using System.Runtime.CompilerServices;
 
 namespace LuminPack.Option
@@ -56,6 +56,19 @@ namespace LuminPack.Option
         /// </summary>
         public int MaxJsonDepth { get; set; } = 1024;
 
+        /// <summary>
+        /// Gets or sets whether the JSON reader validates the full RFC 8259 grammar (number syntax, separators,
+        /// bracket matching, trailing commas, token boundaries) in addition to converting values.
+        /// <para>The default is <c>false</c>, which is the trusted fast path meant for documents produced by
+        /// LuminPack itself: values are still parsed with correct rounding, but malformed shapes are not
+        /// rejected, which is what kept JSON deserialization about twice as fast as System.Text.Json before the
+        /// grammar validation was added.</para>
+        /// <para>Set it to <c>true</c> when the JSON comes from an untrusted or hand-written source; the reader
+        /// then rejects <c>01</c>, <c>1.</c>, <c>+1</c>, <c>[1 2]</c>, <c>{"a" 1}</c>, <c>[1,]</c>, mismatched
+        /// brackets, trailing data and similar shapes.</para>
+        /// </summary>
+        public bool ValidateJsonSyntax { get; set; }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void ResetToDefault()
         {
@@ -63,6 +76,7 @@ namespace LuminPack.Option
             StringRecording = LuminPackStringRecording.Length;
             StandardFormat = new StandardFormat('G');
             MaxJsonDepth = 1024;
+            ValidateJsonSyntax = false;
         }
         
     }

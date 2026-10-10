@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Buffers;
 using System.Buffers.Text;
 using System.Runtime.CompilerServices;
@@ -12,39 +12,13 @@ namespace LuminPack.Core
 {
     internal static class NumberCharLookup
     {
-        internal static readonly bool[] IsNumberChar;
-        
 #if NET8_0_OR_GREATER
-        internal static readonly SearchValues<byte> NumberSearchValues =
-            SearchValues.Create("0123456789.eE+-"u8);
-        
-        internal static readonly SearchValues<char> NumberSearchValuesChar =
-            SearchValues.Create("0123456789.eE+-");
-
         internal static readonly SearchValues<byte> ControlCharsSearchValues =
             SearchValues.Create(Enumerable.Range(0, 0x20).Select(static i => (byte)i).ToArray());
 
         internal static readonly SearchValues<char> ControlCharsCharSearchValues =
             SearchValues.Create(Enumerable.Range(0, 0x20).Select(static i => (char)i).ToArray());
 #endif
-        
-        // 共享幂次查找表，Reader 和 Writer 均使用
-        internal static readonly double[] Pow10d =
-        {
-            1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,  1e8,  1e9,
-            1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17
-        };
-        
-        static NumberCharLookup()
-        {
-            IsNumberChar = new bool[256];
-            for (int i = '0'; i <= '9'; i++) IsNumberChar[i] = true;
-            IsNumberChar['.'] = true;
-            IsNumberChar['e'] = true;
-            IsNumberChar['E'] = true;
-            IsNumberChar['+'] = true;
-            IsNumberChar['-'] = true;
-        }
     }
     
     [StructLayout(LayoutKind.Sequential)]
@@ -63,11 +37,31 @@ namespace LuminPack.Core
         private readonly LuminPackReaderOptionalState _state;
         private readonly bool SerializeStringAsUtf8;
         private readonly int _maxDepth;
+        /// <summary>True when the reader must validate the full RFC 8259 grammar (option ValidateJsonSyntax).</summary>
+        private readonly bool _validateJsonSyntax;
         private byte[]? _utf8StringScratch;
         private char[]? _utf16StringScratch;
         
         internal int _currentIndex;
         internal int _depth;
+        
+        // --- RFC 8259 token sequence state -----------------------------------
+        // Read() previously skipped ',', ':' unconditionally and never checked
+        // which bracket closed which container, so malformed input such as
+        // `[1 2]`, `{"a" 1}`, `[1,]` or `{"a":[1}}` was silently accepted.
+        // The token returned last decides which separators may follow next.
+        private const byte JsonStateValue = 0;       // value required: document start, after ':' or after ',' in an array
+        private const byte JsonStateValueOrEnd = 1;   // after '[': a value or ']'
+        private const byte JsonStateName = 2;        // after ',' in an object: a property name is required
+        private const byte JsonStateNameOrEnd = 3;   // after '{': a property name or '}'
+        private const byte JsonStateColon = 4;       // after a property name: ':' is required
+        private const byte JsonStateAfterValue = 5;  // after a value: ',' or the matching closing bracket
+        
+        private byte _jsonState;
+        /// <summary>Bit (depth - 1) is set while the container at that depth is an object.</summary>
+        private ulong _containerKindBits;
+        /// <summary>Container kinds for depths above 64; allocated only for unusually deep documents.</summary>
+        private byte[]? _deepContainerKinds;
         
         public enum JsonTokenType : byte
         {
@@ -104,9 +98,13 @@ namespace LuminPack.Core
 #endif
             _currentIndex = 0;
             _depth = 0;
+            _jsonState = JsonStateValue;
+            _containerKindBits = 0;
+            _deepContainerKinds = null;
             CurrentTokenType = JsonTokenType.None;
             SerializeStringAsUtf8 = _state.Option.StringEncoding is LuminPackStringEncoding.UTF8;
             _maxDepth = _state.Option.MaxJsonDepth;
+            _validateJsonSyntax = _state.Option.ValidateJsonSyntax;
             _utf8StringScratch = null;
             _utf16StringScratch = null;
         }
@@ -122,9 +120,13 @@ namespace LuminPack.Core
 #endif
             _currentIndex = 0;
             _depth = 0;
+            _jsonState = JsonStateValue;
+            _containerKindBits = 0;
+            _deepContainerKinds = null;
             CurrentTokenType = JsonTokenType.None;
             SerializeStringAsUtf8 = _state.Option.StringEncoding is LuminPackStringEncoding.UTF8;
             _maxDepth = _state.Option.MaxJsonDepth;
+            _validateJsonSyntax = _state.Option.ValidateJsonSyntax;
             _utf8StringScratch = null;
             _utf16StringScratch = null;
         }
@@ -141,9 +143,13 @@ namespace LuminPack.Core
 #endif
             _currentIndex = 0;
             _depth = 0;
+            _jsonState = JsonStateValue;
+            _containerKindBits = 0;
+            _deepContainerKinds = null;
             CurrentTokenType = JsonTokenType.None;
             SerializeStringAsUtf8 = bufferWriter.Option.StringEncoding is LuminPackStringEncoding.UTF8;
             _maxDepth = bufferWriter.Option.MaxJsonDepth;
+            _validateJsonSyntax = bufferWriter.Option.ValidateJsonSyntax;
             _utf8StringScratch = null;
             _utf16StringScratch = null;
         }
@@ -192,6 +198,9 @@ namespace LuminPack.Core
 #endif
             _currentIndex = 0;
             _depth = 0;
+            _jsonState = JsonStateValue;
+            _containerKindBits = 0;
+            _deepContainerKinds = null;
             CurrentTokenType = JsonTokenType.None;
         }
         
@@ -243,7 +252,214 @@ namespace LuminPack.Core
             }
         }
         
-        public bool Read()
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool IsValueState(byte state) => state <= JsonStateValueOrEnd;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool IsNameState(byte state) => state == JsonStateName || state == JsonStateNameOrEnd;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void ThrowMalformedJson(string message) =>
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(message);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool IsCurrentContainerObject()
+        {
+            if (_depth == 0)
+                return false;
+            return _depth <= 64
+                ? (_containerKindBits & (1UL << (_depth - 1))) != 0
+                : _deepContainerKinds![_depth - 1] != 0;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void PushContainer(bool isObject)
+        {
+            _depth++;
+            if (_maxDepth > 0 && _depth > _maxDepth)
+                ThrowMalformedJson("JSON nesting depth exceeds the configured maximum");
+
+            if (_validateJsonSyntax)
+            {
+                if (_depth <= 64)
+                {
+                    if (isObject)
+                        _containerKindBits |= 1UL << (_depth - 1);
+                    else
+                        _containerKindBits &= ~(1UL << (_depth - 1));
+                }
+                else
+                {
+                    SetDeepContainerKind(_depth, isObject);
+                }
+            }
+
+            _jsonState = isObject ? JsonStateNameOrEnd : JsonStateValueOrEnd;
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void SetDeepContainerKind(int depth, bool isObject)
+        {
+            byte[] kinds = _deepContainerKinds!;
+            if (kinds is null || depth > kinds.Length)
+            {
+                int size = Math.Max(depth, 256);
+                Array.Resize(ref kinds, size);
+                _deepContainerKinds = kinds;
+            }
+
+            kinds[depth - 1] = isObject ? (byte)1 : (byte)0;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void PopContainer(bool isObject)
+        {
+            if (_validateJsonSyntax && (_depth == 0 || IsCurrentContainerObject() != isObject))
+                ThrowMalformedJson("Mismatched JSON closing bracket");
+
+            if (_depth > 0)
+                _depth--;
+            _jsonState = JsonStateAfterValue;
+        }
+
+        /// <summary>Re-reads the next character after a separator; returns false at end of input.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryReadCurrentChar(out char c)
+        {
+            if (SerializeStringAsUtf8)
+            {
+                if (_currentIndex >= _bufferReference.Length)
+                {
+                    c = default;
+                    return false;
+                }
+
+                c = (char)_bufferReference[_currentIndex];
+                return true;
+            }
+
+            if (_currentIndex + 1 >= _bufferReference.Length)
+            {
+                c = default;
+                return false;
+            }
+
+            c = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex));
+            return true;
+        }
+
+        /// <summary>Ensures a number or literal token ends at EOF or at a JSON structural delimiter.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void RequireTokenEndBoundary(int index)
+        {
+            if (!_validateJsonSyntax)
+                return;
+            if (!IsValueDelimiterAt(index))
+                ThrowMalformedJson("Invalid JSON token: expected a value delimiter");
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool IsValueDelimiterAt(int index)
+        {
+            if (SerializeStringAsUtf8)
+            {
+                if ((uint)index >= (uint)_bufferReference.Length)
+                    return true;
+
+                byte b = _bufferReference[index];
+                return b == (byte)' ' || b == (byte)'\t' || b == (byte)'\n' || b == (byte)'\r' ||
+                       b == (byte)',' || b == (byte)']' || b == (byte)'}';
+            }
+
+            if (index + 1 >= _bufferReference.Length)
+                return true;
+
+            char c = Unsafe.ReadUnaligned<char>(ref GetSpanReference(index));
+            return c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ',' || c == ']' || c == '}';
+        }
+
+        /// <summary>
+        /// Fast exit for plain integer tokens (what game data is made of): the pre-change reader returned
+        /// 1-2 digit values from two byte comparisons and left the rest to Utf8Parser, and benchmarking showed
+        /// integer parsing 3.5x slower without a fast path. The grammar and the token boundary are still
+        /// enforced — a leading zero must not be followed by a digit, the token must end at a value delimiter,
+        /// and the magnitude must fit in 19 digits / <see cref="long"/> — while every other shape (fractions,
+        /// exponents, out-of-range literals) falls through to <see cref="ScanJsonNumber"/>.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryReadPlainInteger(out long value)
+        {
+            value = 0;
+            int step = SerializeStringAsUtf8 ? 1 : 2;
+            int i = _currentIndex;
+
+            bool negative = false;
+            if (!IsNumberAtEnd(i) && NumberCharAt(i) == '-')
+            {
+                negative = true;
+                i += step;
+            }
+
+            uint first = NumberDigitOrNonDigit(i);
+            if (first > 9u)
+                return false;
+
+            if (first == 0u)
+            {
+                if (NumberDigitOrNonDigit(i + step) <= 9u || !IsValueDelimiterAt(i + step))
+                    return false;
+
+                _currentIndex = i + step;
+                return true;
+            }
+
+            ulong magnitude = first;
+            int digits = 1;
+            int j = i + step;
+            while (true)
+            {
+                uint digit = NumberDigitOrNonDigit(j);
+                if (digit > 9u)
+                    break;
+
+                if (digits == 19)
+                {
+                    // 20 digits can never fit; let the strict scanner report the range error.
+                    if (!IsNumberAtEnd(j))
+                        return false;
+
+                    break;
+                }
+
+                magnitude = magnitude * 10 + digit;
+                digits++;
+                j += step;
+            }
+
+            if (!IsValueDelimiterAt(j))
+                return false;
+
+            if (negative ? magnitude > 9_223_372_036_854_775_808UL : magnitude > 9_223_372_036_854_775_807UL)
+                return false;
+
+            _currentIndex = j;
+            value = negative ? unchecked(-(long)magnitude) : (long)magnitude;
+            return true;
+        }
+
+        /// <summary>Digit value at <paramref name="index"/> or 10 when the buffer ends there.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private uint NumberDigitOrNonDigit(int index) =>
+            IsNumberAtEnd(index) ? 10u : NumberDigitAt(index);
+        
+        /// <summary>
+        /// Advances to the next JSON token: the original lenient tokenizer when the document is trusted
+        /// (option ValidateJsonSyntax = false, the default), the fully validated tokenizer otherwise.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool Read() => _validateJsonSyntax ? ReadStrict() : ReadTrusted();
+
+        private bool ReadTrusted()
         {
             SkipWhitespace();
             
@@ -335,6 +551,144 @@ namespace LuminPack.Core
             }
         }
         
+        private bool ReadStrict()
+        {
+            SkipWhitespace();
+            
+            if (_currentIndex >= _bufferReference.Length)
+            {
+                if (_validateJsonSyntax && _depth > 0)
+                    ThrowMalformedJson("Unterminated JSON object or array");
+                return false;
+            }
+            
+            char c;
+            if (SerializeStringAsUtf8)
+            {
+                byte b = _bufferReference[_currentIndex];
+                c = (char)b;
+            }
+            else
+            {
+                if (_currentIndex + 1 >= _bufferReference.Length)
+                {
+                    if (_depth > 0)
+                        ThrowMalformedJson("Unterminated JSON object or array");
+                    return false;
+                }
+                c = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex));
+            }
+            
+            while (true)
+            {
+                byte state = _jsonState;
+                
+                switch (c)
+                {
+                    case '{':
+                        if (_validateJsonSyntax && !IsValueState(state))
+                            ThrowMalformedJson("Expected a JSON value");
+                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                        PushContainer(true);
+                        CurrentTokenType = JsonTokenType.ObjectStart;
+                        return true;
+                        
+                    case '}':
+                        if (_validateJsonSyntax && state != JsonStateNameOrEnd && state != JsonStateAfterValue)
+                            ThrowMalformedJson("Unexpected '}' in JSON input");
+                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                        PopContainer(true);
+                        CurrentTokenType = JsonTokenType.ObjectEnd;
+                        return true;
+                        
+                    case '[':
+                        if (_validateJsonSyntax && !IsValueState(state))
+                            ThrowMalformedJson("Expected a JSON value");
+                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                        PushContainer(false);
+                        CurrentTokenType = JsonTokenType.ArrayStart;
+                        return true;
+                        
+                    case ']':
+                        if (_validateJsonSyntax && state != JsonStateValueOrEnd && state != JsonStateAfterValue)
+                            ThrowMalformedJson("Unexpected ']' in JSON input");
+                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                        PopContainer(false);
+                        CurrentTokenType = JsonTokenType.ArrayEnd;
+                        return true;
+                        
+                    case '"':
+                        if (IsNameState(state))
+                        {
+                            _jsonState = JsonStateColon;
+                        }
+                        else
+                        {
+                            if (!IsValueState(state))
+                                ThrowMalformedJson("Expected a JSON value");
+                            _jsonState = JsonStateAfterValue;
+                        }
+                        CurrentTokenType = JsonTokenType.String;
+                        return true;
+                        
+                    case 't':
+                    case 'f':
+                        if (_validateJsonSyntax && !IsValueState(state))
+                            ThrowMalformedJson("Expected a JSON value");
+                        return ReadBoolean();
+                        
+                    case 'n':
+                        if (_validateJsonSyntax && !IsValueState(state))
+                            ThrowMalformedJson("Expected a JSON value");
+                        return ReadNull();
+                        
+                    case ',':
+                    {
+                        if (_validateJsonSyntax)
+                        {
+                            if (state != JsonStateAfterValue)
+                                ThrowMalformedJson("Unexpected ',' in JSON input");
+                            if (_depth == 0)
+                                ThrowMalformedJson("Unexpected ',' outside a JSON container");
+                        }
+                        _jsonState = IsCurrentContainerObject() ? JsonStateName : JsonStateValue;
+                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                        SkipWhitespace();
+                        if (!TryReadCurrentChar(out c))
+                        {
+                            ThrowMalformedJson(_depth > 0
+                                ? "Unterminated JSON object or array"
+                                : "Unexpected end of JSON input after ','");
+                        }
+                        continue;
+                    }
+                        
+                    case ':':
+                    {
+                        if (_validateJsonSyntax && state != JsonStateColon)
+                            ThrowMalformedJson("Unexpected ':' in JSON input");
+                        _jsonState = JsonStateValue;
+                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                        SkipWhitespace();
+                        if (!TryReadCurrentChar(out c))
+                            ThrowMalformedJson("Unexpected end of JSON input after ':'");
+                        continue;
+                    }
+                        
+                    default:
+                        if ((c >= '0' && c <= '9') || c == '-')
+                        {
+                            if (!IsValueState(state))
+                                ThrowMalformedJson("Expected a JSON value");
+                            _jsonState = JsonStateAfterValue;
+                            CurrentTokenType = JsonTokenType.Number;
+                            return true;
+                        }
+                        return false;
+                }
+            }
+        }
+        
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryConsumeArrayStart()
         {
@@ -384,10 +738,7 @@ namespace LuminPack.Core
                     break;
                     
                 case JsonTokenType.Number:
-                    if (SerializeStringAsUtf8)
-                        ReadNumberSpan();
-                    else
-                        ReadNumberChars();
+                    SkipNumberToken();
                     break;
                     
                 case JsonTokenType.True:
@@ -416,10 +767,7 @@ namespace LuminPack.Core
                     SkipStringToken();
                     break;
                 case JsonTokenType.Number:
-                    if (SerializeStringAsUtf8)
-                        ReadNumberSpan();
-                    else
-                        ReadNumberChars();
+                    SkipNumberToken();
                     break;
             }
         }
@@ -953,308 +1301,484 @@ namespace LuminPack.Core
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Expected the end of a JSON array");
         }
         
+        // -----------------------------------------------------------------
+        // Strict RFC 8259 number scanning (P0 correctness)
+        //
+        // The previous implementation scanned a "candidate character" set and then
+        // relied on Utf8Parser/TryParse, while ReadInt/ReadUInt returned 1-2 digit
+        // prefixes without checking the token ended. `1.5`, `1e2`, `01`, `1.`, `1e+`
+        // and `1x` were therefore accepted or silently truncated. All numeric readers
+        // now share this validated scanner.
+        // -----------------------------------------------------------------
+
+        /// <summary>Validated layout of a JSON number token. Indices are byte offsets into the reader buffer,
+        /// so UTF-8 and UTF-16 (two bytes per character) share the same shape.</summary>
+        private readonly struct JsonNumberShape
+        {
+            internal readonly int End;
+            internal readonly int IntStart;
+            internal readonly int IntEnd;
+            internal readonly int FracStart;
+            internal readonly int FracEnd;
+            internal readonly int Exponent;
+            internal readonly bool Negative;
+            internal readonly bool HasFraction;
+            internal readonly bool HasExponent;
+
+            internal JsonNumberShape(int end, int intStart, int intEnd, int fracStart, int fracEnd,
+                int exponent, bool negative, bool hasFraction, bool hasExponent)
+            {
+                End = end;
+                IntStart = intStart;
+                IntEnd = intEnd;
+                FracStart = fracStart;
+                FracEnd = fracEnd;
+                Exponent = exponent;
+                Negative = negative;
+                HasFraction = hasFraction;
+                HasExponent = hasExponent;
+            }
+
+            internal bool IsInteger => !HasFraction && !HasExponent;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool IsNumberAtEnd(int index) =>
+            SerializeStringAsUtf8 ? index >= _bufferReference.Length : index + 1 >= _bufferReference.Length;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private char NumberCharAt(int index) =>
+            SerializeStringAsUtf8
+                ? (char)_bufferReference[index]
+                : Unsafe.ReadUnaligned<char>(ref GetSpanReference(index));
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private uint NumberDigitAt(int index)
+        {
+            char c = NumberCharAt(index);
+            return (uint)(c - '0');
+        }
+
+        /// <summary>Validates a complete number token: [minus] int [frac] [exp] followed by EOF or a value delimiter.</summary>
+        private JsonNumberShape ScanJsonNumber(int start)
+        {
+            int step = SerializeStringAsUtf8 ? 1 : 2;
+            int i = start;
+            bool negative = false;
+
+            if (!IsNumberAtEnd(i) && NumberCharAt(i) == '-')
+            {
+                negative = true;
+                i += step;
+            }
+
+            int intStart = i;
+            int intDigits = 0;
+            if (!IsNumberAtEnd(i) && NumberCharAt(i) == '0')
+            {
+                i += step;
+                intDigits = 1;
+            }
+            else
+            {
+                while (!IsNumberAtEnd(i))
+                {
+                    uint d = NumberDigitAt(i);
+                    if (d > 9u) break;
+                    i += step;
+                    intDigits++;
+                }
+            }
+
+            if (intDigits == 0)
+                ThrowMalformedJson("Invalid JSON number: expected an integer part");
+
+            int intEnd = i;
+            int fracStart = i;
+            int fracEnd = i;
+            bool hasFraction = false;
+            if (!IsNumberAtEnd(i) && NumberCharAt(i) == '.')
+            {
+                hasFraction = true;
+                i += step;
+                fracStart = i;
+                while (!IsNumberAtEnd(i))
+                {
+                    uint d = NumberDigitAt(i);
+                    if (d > 9u) break;
+                    i += step;
+                }
+
+                fracEnd = i;
+                if (fracEnd == fracStart)
+                    ThrowMalformedJson("Invalid JSON number: expected digits after '.'");
+            }
+
+            int exponent = 0;
+            bool hasExponent = false;
+            if (!IsNumberAtEnd(i))
+            {
+                char marker = NumberCharAt(i);
+                if (marker == 'e' || marker == 'E')
+                {
+                    hasExponent = true;
+                    i += step;
+                    bool expNegative = false;
+                    if (!IsNumberAtEnd(i))
+                    {
+                        char sign = NumberCharAt(i);
+                        if (sign == '+' || sign == '-')
+                        {
+                            expNegative = sign == '-';
+                            i += step;
+                        }
+                    }
+
+                    int expStart = i;
+                    int expValue = 0;
+                    while (!IsNumberAtEnd(i))
+                    {
+                        uint d = NumberDigitAt(i);
+                        if (d > 9u) break;
+                        if (expValue < 1_000_000)
+                            expValue = expValue * 10 + (int)d;
+                        i += step;
+                    }
+
+                    if (i == expStart)
+                        ThrowMalformedJson("Invalid JSON number: expected digits in the exponent");
+
+                    exponent = expNegative ? -expValue : expValue;
+                }
+            }
+
+            RequireTokenEndBoundary(i);
+            return new JsonNumberShape(i, intStart, intEnd, fracStart, fracEnd, exponent, negative, hasFraction, hasExponent);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private ulong ParseUnsignedDigits(int start, int end, string error)
+        {
+            int step = SerializeStringAsUtf8 ? 1 : 2;
+            if ((end - start) / step > 20)
+                ThrowMalformedJson(error);
+
+            if (end - start == step)
+                return NumberDigitAt(start);
+
+            ulong acc = 0;
+            for (int i = start; i < end; i += step)
+            {
+                ulong d = NumberDigitAt(i);
+                if (acc > 1_844_674_407_370_955_161UL || (acc == 1_844_674_407_370_955_161UL && d > 5UL))
+                    ThrowMalformedJson(error);
+                acc = acc * 10 + d;
+            }
+
+            return acc;
+        }
+
+        /// <summary>Converts token digits to mantissa * 10^exponent10 without dropping significant digits.</summary>
+        private bool TryAccumulateDecimalDigits(in JsonNumberShape shape, out ulong mantissa, out int exponent10)
+        {
+            int step = SerializeStringAsUtf8 ? 1 : 2;
+            mantissa = 0;
+            exponent10 = 0;
+            int digits = 0;
+            bool started = false;
+
+            for (int i = shape.IntStart; i < shape.IntEnd; i += step)
+            {
+                uint d = NumberDigitAt(i);
+                if (!started)
+                {
+                    if (d == 0u) continue;
+                    started = true;
+                }
+
+                if (digits == 19) return false;
+                mantissa = mantissa * 10 + d;
+                digits++;
+            }
+
+            for (int i = shape.FracStart; i < shape.FracEnd; i += step)
+            {
+                uint d = NumberDigitAt(i);
+                if (!started)
+                {
+                    if (d == 0u)
+                    {
+                        if (exponent10 > -400) exponent10--;
+                        continue;
+                    }
+                    started = true;
+                }
+
+                if (digits == 19) return false;
+                mantissa = mantissa * 10 + d;
+                digits++;
+                if (exponent10 > -400) exponent10--;
+            }
+
+            if (shape.HasExponent)
+                exponent10 += shape.Exponent;
+
+            return true;
+        }
+
+        private static readonly double[] s_pow10Double =
+        {
+            1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,  1e8,  1e9,
+            1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17, 1e18, 1e19,
+            1e20, 1e21, 1e22
+        };
+
+        private static readonly float[] s_pow10Float =
+        {
+            1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f, 1e7f, 1e8f, 1e9f, 1e10f
+        };
+
+        /// <summary>
+        /// Exact fast path: exactly representable operands need a single IEEE-754 operation, so the
+        /// result equals correct rounding of the decimal literal. Every other input returns false and
+        /// is handled by the general-purpose parser.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryParseDoubleExact(in JsonNumberShape shape, out double value)
+        {
+            value = 0;
+            if (!TryAccumulateDecimalDigits(shape, out ulong mantissa, out int exponent10))
+                return false;
+
+            if (mantissa == 0)
+            {
+                value = shape.Negative ? -0.0 : 0.0;
+                return true;
+            }
+
+            if (exponent10 == 0)
+            {
+                value = shape.Negative ? -(double)mantissa : (double)mantissa;
+                return true;
+            }
+
+            if (mantissa > (1UL << 53) || exponent10 < -22 || exponent10 > 22)
+                return false;
+
+            double m = mantissa;
+            double result = exponent10 > 0 ? m * s_pow10Double[exponent10] : m / s_pow10Double[-exponent10];
+            value = shape.Negative ? -result : result;
+            return true;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryParseFloatExact(in JsonNumberShape shape, out float value)
+        {
+            value = 0;
+            if (!TryAccumulateDecimalDigits(shape, out ulong mantissa, out int exponent10))
+                return false;
+
+            if (mantissa == 0)
+            {
+                value = shape.Negative ? -0f : 0f;
+                return true;
+            }
+
+            if (exponent10 == 0)
+            {
+                value = shape.Negative ? -(float)mantissa : (float)mantissa;
+                return true;
+            }
+
+            if (mantissa > (1UL << 24) || exponent10 < -10 || exponent10 > 10)
+                return false;
+
+            float m = mantissa;
+            float result = exponent10 > 0 ? m * s_pow10Float[exponent10] : m / s_pow10Float[-exponent10];
+            value = shape.Negative ? -result : result;
+            return true;
+        }
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadInt()
         {
             if (CurrentTokenType != JsonTokenType.Number)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
-            
-            if (SerializeStringAsUtf8)
+
+            if (TryReadPlainInteger(out long plain) && plain >= int.MinValue && plain <= int.MaxValue)
+                return (int)plain;
+            JsonNumberShape shape = ScanJsonNumber(_currentIndex);
+            if (!shape.IsInteger)
+                ThrowMalformedJson("Invalid JSON integer");
+
+            ulong magnitude = ParseUnsignedDigits(shape.IntStart, shape.IntEnd, "Invalid JSON integer");
+            if (shape.Negative)
             {
-                int start = _currentIndex;
-                bool isNegative = false;
-                
-                if (_bufferReference[start] == '-')
-                {
-                    isNegative = true;
-                    start++;
-                }
-                
-                if (start + 2 <= _bufferReference.Length)
-                {
-                    byte b1 = _bufferReference[start];
-                    if (b1 >= '0' && b1 <= '9')
-                    {
-                        byte b2 = _bufferReference[start + 1];
-                        if (b2 < '0' || b2 > '9')
-                        {
-                            _currentIndex = start + 1;
-                            int value = b1 - '0';
-                            return isNegative ? -value : value;
-                        }
-                        else if (start + 2 < _bufferReference.Length)
-                        {
-                            byte b3 = _bufferReference[start + 2];
-                            if (b3 < '0' || b3 > '9')
-                            {
-                                _currentIndex = start + 2;
-                                int value = (b1 - '0') * 10 + (b2 - '0');
-                                return isNegative ? -value : value;
-                            }
-                        }
-                    }
-                }
-                _currentIndex = isNegative ? (start - 1) : start;
-                var numberSpan = ReadNumberSpan();
-                if (!Utf8Parser.TryParse(numberSpan, out int result, out int consumed) || consumed != numberSpan.Length)
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON integer");
-                return result;
+                if (magnitude > 2_147_483_648UL)
+                    ThrowMalformedJson("Invalid JSON integer");
+                _currentIndex = shape.End;
+                return unchecked((int)(0UL - magnitude));
             }
-            else
-            {
-                int start = _currentIndex;
-                bool isNegative = false;
-                
-                if (_currentIndex + 1 < _bufferReference.Length)
-                {
-                    char c = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex));
-                    if (c == '-')
-                    {
-                        isNegative = true;
-                        start += 2;
-                    }
-                    
-                    if (start + 2 <= _bufferReference.Length)
-                    {
-                        char c1 = Unsafe.ReadUnaligned<char>(ref GetSpanReference(start));
-                        if (c1 >= '0' && c1 <= '9')
-                        {
-                            if (start + 4 <= _bufferReference.Length)
-                            {
-                                char c2 = Unsafe.ReadUnaligned<char>(ref GetSpanReference(start + 2));
-                                if (c2 < '0' || c2 > '9')
-                                {
-                                    _currentIndex = start + 2;
-                                    int value = c1 - '0';
-                                    return isNegative ? -value : value;
-                                }
-                                else if (start + 6 <= _bufferReference.Length)
-                                {
-                                    char c3 = Unsafe.ReadUnaligned<char>(ref GetSpanReference(start + 4));
-                                    if (c3 < '0' || c3 > '9')
-                                    {
-                                        _currentIndex = start + 4;
-                                        int value = (c1 - '0') * 10 + (c2 - '0');
-                                        return isNegative ? -value : value;
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                _currentIndex = isNegative ? (start - 2) : start;
-                var numberChars = ReadNumberChars();
-                if (!int.TryParse(numberChars, out int result))
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON integer");
-                return result;
-            }
+
+            if (magnitude > 2_147_483_647UL)
+                ThrowMalformedJson("Invalid JSON integer");
+            _currentIndex = shape.End;
+            return (int)magnitude;
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public uint ReadUInt()
         {
             if (CurrentTokenType != JsonTokenType.Number)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
-            
-            if (SerializeStringAsUtf8)
-            {
-                int start = _currentIndex;
-                
-                if (start + 2 <= _bufferReference.Length)
-                {
-                    byte b1 = _bufferReference[start];
-                    if (b1 >= '0' && b1 <= '9')
-                    {
-                        byte b2 = _bufferReference[start + 1];
-                        if (b2 < '0' || b2 > '9')
-                        {
-                            _currentIndex = start + 1;
-                            return (uint)(b1 - '0');
-                        }
-                        else if (start + 2 < _bufferReference.Length)
-                        {
-                            byte b3 = _bufferReference[start + 2];
-                            if (b3 < '0' || b3 > '9')
-                            {
-                                _currentIndex = start + 2;
-                                return (uint)((b1 - '0') * 10 + (b2 - '0'));
-                            }
-                        }
-                    }
-                }
-                
-                var numberSpan = ReadNumberSpan();
-                if (!Utf8Parser.TryParse(numberSpan, out uint value, out int consumed) || consumed != numberSpan.Length)
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON unsigned integer");
-                return value;
-            }
-            else
-            {
-                int start = _currentIndex;
-                
-                if (start + 2 <= _bufferReference.Length)
-                {
-                    char c1 = Unsafe.ReadUnaligned<char>(ref GetSpanReference(start));
-                    if (c1 >= '0' && c1 <= '9')
-                    {
-                        if (start + 4 <= _bufferReference.Length)
-                        {
-                            char c2 = Unsafe.ReadUnaligned<char>(ref GetSpanReference(start + 2));
-                            if (c2 < '0' || c2 > '9')
-                            {
-                                _currentIndex = start + 2;
-                                return (uint)(c1 - '0');
-                            }
-                            else if (start + 6 <= _bufferReference.Length)
-                            {
-                                char c3 = Unsafe.ReadUnaligned<char>(ref GetSpanReference(start + 4));
-                                if (c3 < '0' || c3 > '9')
-                                {
-                                    _currentIndex = start + 4;
-                                    return (uint)((c1 - '0') * 10 + (c2 - '0'));
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                var numberChars = ReadNumberChars();
-                if (!uint.TryParse(numberChars, out uint value))
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON unsigned integer");
-                return value;
-            }
+
+            if (TryReadPlainInteger(out long plain) && plain >= 0 && plain <= uint.MaxValue)
+                return (uint)plain;
+            JsonNumberShape shape = ScanJsonNumber(_currentIndex);
+            if (!shape.IsInteger || shape.Negative)
+                ThrowMalformedJson("Invalid JSON unsigned integer");
+
+            ulong magnitude = ParseUnsignedDigits(shape.IntStart, shape.IntEnd, "Invalid JSON unsigned integer");
+            if (magnitude > 4_294_967_295UL)
+                ThrowMalformedJson("Invalid JSON unsigned integer");
+            _currentIndex = shape.End;
+            return (uint)magnitude;
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public byte ReadByte()
         {
             if (CurrentTokenType != JsonTokenType.Number)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
-            
-            if (SerializeStringAsUtf8)
-            {
-                var numberSpan = ReadNumberSpan();
-                if (!Utf8Parser.TryParse(numberSpan, out byte value, out int consumed) || consumed != numberSpan.Length)
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON byte");
-                return value;
-            }
-            else
-            {
-                var numberChars = ReadNumberChars();
-                if (!byte.TryParse(numberChars, out byte value))
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON byte");
-                return value;
-            }
+
+            if (TryReadPlainInteger(out long plain) && plain >= 0 && plain <= byte.MaxValue)
+                return (byte)plain;
+            JsonNumberShape shape = ScanJsonNumber(_currentIndex);
+            if (!shape.IsInteger || shape.Negative)
+                ThrowMalformedJson("Invalid JSON byte");
+
+            ulong magnitude = ParseUnsignedDigits(shape.IntStart, shape.IntEnd, "Invalid JSON byte");
+            if (magnitude > 255UL)
+                ThrowMalformedJson("Invalid JSON byte");
+            _currentIndex = shape.End;
+            return (byte)magnitude;
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public sbyte ReadSByte()
         {
             if (CurrentTokenType != JsonTokenType.Number)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
-            
-            if (SerializeStringAsUtf8)
+
+            if (TryReadPlainInteger(out long plain) && plain >= sbyte.MinValue && plain <= sbyte.MaxValue)
+                return (sbyte)plain;
+            JsonNumberShape shape = ScanJsonNumber(_currentIndex);
+            if (!shape.IsInteger)
+                ThrowMalformedJson("Invalid JSON signed byte");
+
+            ulong magnitude = ParseUnsignedDigits(shape.IntStart, shape.IntEnd, "Invalid JSON signed byte");
+            if (shape.Negative)
             {
-                var numberSpan = ReadNumberSpan();
-                if (!Utf8Parser.TryParse(numberSpan, out sbyte value, out int consumed) || consumed != numberSpan.Length)
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON signed byte");
-                return value;
+                if (magnitude > 128UL)
+                    ThrowMalformedJson("Invalid JSON signed byte");
+                _currentIndex = shape.End;
+                return unchecked((sbyte)(0UL - magnitude));
             }
-            else
-            {
-                var numberChars = ReadNumberChars();
-                if (!sbyte.TryParse(numberChars, out sbyte value))
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON signed byte");
-                return value;
-            }
+
+            if (magnitude > 127UL)
+                ThrowMalformedJson("Invalid JSON signed byte");
+            _currentIndex = shape.End;
+            return (sbyte)magnitude;
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public short ReadShort()
         {
             if (CurrentTokenType != JsonTokenType.Number)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
-            
-            if (SerializeStringAsUtf8)
+
+            if (TryReadPlainInteger(out long plain) && plain >= short.MinValue && plain <= short.MaxValue)
+                return (short)plain;
+            JsonNumberShape shape = ScanJsonNumber(_currentIndex);
+            if (!shape.IsInteger)
+                ThrowMalformedJson("Invalid JSON short integer");
+
+            ulong magnitude = ParseUnsignedDigits(shape.IntStart, shape.IntEnd, "Invalid JSON short integer");
+            if (shape.Negative)
             {
-                var numberSpan = ReadNumberSpan();
-                if (!Utf8Parser.TryParse(numberSpan, out short value, out int consumed) || consumed != numberSpan.Length)
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON short integer");
-                return value;
+                if (magnitude > 32_768UL)
+                    ThrowMalformedJson("Invalid JSON short integer");
+                _currentIndex = shape.End;
+                return unchecked((short)(0UL - magnitude));
             }
-            else
-            {
-                var numberChars = ReadNumberChars();
-                if (!short.TryParse(numberChars, out short value))
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON short integer");
-                return value;
-            }
+
+            if (magnitude > 32_767UL)
+                ThrowMalformedJson("Invalid JSON short integer");
+            _currentIndex = shape.End;
+            return (short)magnitude;
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort ReadUShort()
         {
             if (CurrentTokenType != JsonTokenType.Number)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
-            
-            if (SerializeStringAsUtf8)
-            {
-                var numberSpan = ReadNumberSpan();
-                if (!Utf8Parser.TryParse(numberSpan, out ushort value, out int consumed) || consumed != numberSpan.Length)
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON unsigned short integer");
-                return value;
-            }
-            else
-            {
-                var numberChars = ReadNumberChars();
-                if (!ushort.TryParse(numberChars, out ushort value))
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON unsigned short integer");
-                return value;
-            }
+
+            if (TryReadPlainInteger(out long plain) && plain >= 0 && plain <= ushort.MaxValue)
+                return (ushort)plain;
+            JsonNumberShape shape = ScanJsonNumber(_currentIndex);
+            if (!shape.IsInteger || shape.Negative)
+                ThrowMalformedJson("Invalid JSON unsigned short integer");
+
+            ulong magnitude = ParseUnsignedDigits(shape.IntStart, shape.IntEnd, "Invalid JSON unsigned short integer");
+            if (magnitude > 65_535UL)
+                ThrowMalformedJson("Invalid JSON unsigned short integer");
+            _currentIndex = shape.End;
+            return (ushort)magnitude;
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public long ReadLong()
         {
             if (CurrentTokenType != JsonTokenType.Number)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
-            
-            if (SerializeStringAsUtf8)
+
+            if (TryReadPlainInteger(out long plain))
+                return plain;
+            JsonNumberShape shape = ScanJsonNumber(_currentIndex);
+            if (!shape.IsInteger)
+                ThrowMalformedJson("Invalid JSON long integer");
+
+            ulong magnitude = ParseUnsignedDigits(shape.IntStart, shape.IntEnd, "Invalid JSON long integer");
+            if (shape.Negative)
             {
-                var numberSpan = ReadNumberSpan();
-                if (!Utf8Parser.TryParse(numberSpan, out long value, out int consumed) || consumed != numberSpan.Length)
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON long integer");
-                return value;
+                if (magnitude > 9_223_372_036_854_775_808UL)
+                    ThrowMalformedJson("Invalid JSON long integer");
+                _currentIndex = shape.End;
+                return unchecked((long)(0UL - magnitude));
             }
-            else
-            {
-                var numberChars = ReadNumberChars();
-                if (!long.TryParse(numberChars, out long value))
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON long integer");
-                return value;
-            }
+
+            if (magnitude > 9_223_372_036_854_775_807UL)
+                ThrowMalformedJson("Invalid JSON long integer");
+            _currentIndex = shape.End;
+            return (long)magnitude;
         }
-        
+
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ulong ReadULong()
         {
             if (CurrentTokenType != JsonTokenType.Number)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
-            
-            if (SerializeStringAsUtf8)
-            {
-                var numberSpan = ReadNumberSpan();
-                if (!Utf8Parser.TryParse(numberSpan, out ulong value, out int consumed) || consumed != numberSpan.Length)
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON unsigned long integer");
-                return value;
-            }
-            else
-            {
-                var numberChars = ReadNumberChars();
-                if (!ulong.TryParse(numberChars, out ulong value))
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON unsigned long integer");
-                return value;
-            }
+
+            if (TryReadPlainInteger(out long plain) && plain >= 0)
+                return (ulong)plain;
+            JsonNumberShape shape = ScanJsonNumber(_currentIndex);
+            if (!shape.IsInteger || shape.Negative)
+                ThrowMalformedJson("Invalid JSON unsigned long integer");
+
+            ulong magnitude = ParseUnsignedDigits(shape.IntStart, shape.IntEnd, "Invalid JSON unsigned long integer");
+            _currentIndex = shape.End;
+            return magnitude;
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1262,17 +1786,18 @@ namespace LuminPack.Core
         {
             if (CurrentTokenType != JsonTokenType.Number)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
-            
-            if (SerializeStringAsUtf8)
+
+            JsonNumberShape shape = ScanJsonNumber(_currentIndex);
+            float value;
+            if (!TryParseFloatExact(shape, out value))
             {
-                var span = ReadNumberSpan();
-                return TryParseFloatUtf8(span, out float fast) ? fast : FallbackParseFloatUtf8(span);
+                value = SerializeStringAsUtf8
+                    ? FallbackParseFloatUtf8(_bufferReference.Slice(_currentIndex, shape.End - _currentIndex))
+                    : FallbackParseFloatUtf16(NumberChars(_currentIndex, shape.End));
             }
-            else
-            {
-                var chars = ReadNumberChars();
-                return TryParseFloatUtf16(chars, out float fast) ? fast : FallbackParseFloatUtf16(chars);
-            }
+
+            _currentIndex = shape.End;
+            return value;
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1280,220 +1805,19 @@ namespace LuminPack.Core
         {
             if (CurrentTokenType != JsonTokenType.Number)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
-            
-            if (SerializeStringAsUtf8)
+
+            JsonNumberShape shape = ScanJsonNumber(_currentIndex);
+            double value;
+            if (!TryParseDoubleExact(shape, out value))
             {
-                var span = ReadNumberSpan();
-                return TryParseDoubleUtf8(span, out double fast) ? fast : FallbackParseDoubleUtf8(span);
-            }
-            else
-            {
-                var chars = ReadNumberChars();
-                return TryParseDoubleUtf16(chars, out double fast) ? fast : FallbackParseDoubleUtf16(chars);
-            }
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool TryParseFloatUtf8(ReadOnlySpan<byte> span, out float value)
-        {
-            if (span.IsEmpty) { value = 0; return false; }
-            
-            int pos = 0;
-            bool neg = span[0] == (byte)'-';
-            if (neg) pos++;
-            
-            if (pos >= span.Length) { value = 0; return false; }
-            
-            ulong intPart = 0;
-            int intDigits = 0;
-            while (pos < span.Length)
-            {
-                uint d = span[pos] - (uint)'0';
-                if (d > 9u) break;
-                intPart = intPart * 10 + d;
-                pos++;
-                if (++intDigits > 15) { value = 0; return false; }
+                value = SerializeStringAsUtf8
+                    ? FallbackParseDoubleUtf8(_bufferReference.Slice(_currentIndex, shape.End - _currentIndex))
+                    : FallbackParseDoubleUtf16(NumberChars(_currentIndex, shape.End));
             }
 
-            if (intDigits == 0) { value = 0; return false; }
-            
-            ulong fracPart = 0;
-            int fracDigits = 0;
-            if (pos < span.Length && span[pos] == (byte)'.')
-            {
-                pos++;
-                while (pos < span.Length)
-                {
-                    uint d = span[pos] - (uint)'0';
-                    if (d > 9u) break;
-                    fracPart = fracPart * 10 + d;
-                    pos++;
-                    if (++fracDigits > 9) { value = 0; return false; }
-                }
-                if (fracDigits == 0) { value = 0; return false; }
-            }
-            
-            // 剩余字符（e/E/+/超长数字）→ fallback
-            if (pos < span.Length) { value = 0; return false; }
-            
-            double result = (double)intPart;
-            if (fracDigits > 0)
-                result += (double)fracPart / NumberCharLookup.Pow10d[fracDigits];
-            
-            value = neg ? -(float)result : (float)result;
-            return true;
+            _currentIndex = shape.End;
+            return value;
         }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool TryParseFloatUtf16(ReadOnlySpan<char> span, out float value)
-        {
-            if (span.IsEmpty) { value = 0; return false; }
-            
-            int pos = 0;
-            bool neg = span[0] == '-';
-            if (neg) pos++;
-            
-            if (pos >= span.Length) { value = 0; return false; }
-            
-            ulong intPart = 0;
-            int intDigits = 0;
-            while (pos < span.Length)
-            {
-                uint d = span[pos] - (uint)'0';
-                if (d > 9u) break;
-                intPart = intPart * 10 + d;
-                pos++;
-                if (++intDigits > 15) { value = 0; return false; }
-            }
-
-            if (intDigits == 0) { value = 0; return false; }
-            
-            ulong fracPart = 0;
-            int fracDigits = 0;
-            if (pos < span.Length && span[pos] == '.')
-            {
-                pos++;
-                while (pos < span.Length)
-                {
-                    uint d = span[pos] - (uint)'0';
-                    if (d > 9u) break;
-                    fracPart = fracPart * 10 + d;
-                    pos++;
-                    if (++fracDigits > 9) { value = 0; return false; }
-                }
-                if (fracDigits == 0) { value = 0; return false; }
-            }
-            
-            if (pos < span.Length) { value = 0; return false; }
-            
-            double result = (double)intPart;
-            if (fracDigits > 0)
-                result += (double)fracPart / NumberCharLookup.Pow10d[fracDigits];
-            
-            value = neg ? -(float)result : (float)result;
-            return true;
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool TryParseDoubleUtf8(ReadOnlySpan<byte> span, out double value)
-        {
-            if (span.IsEmpty) { value = 0; return false; }
-            
-            int pos = 0;
-            bool neg = span[0] == (byte)'-';
-            if (neg) pos++;
-            
-            if (pos >= span.Length) { value = 0; return false; }
-            
-            ulong intPart = 0;
-            int intDigits = 0;
-            while (pos < span.Length)
-            {
-                uint d = span[pos] - (uint)'0';
-                if (d > 9u) break;
-                intPart = intPart * 10 + d;
-                pos++;
-                if (++intDigits > 15) { value = 0; return false; }
-            }
-
-            if (intDigits == 0) { value = 0; return false; }
-            
-            ulong fracPart = 0;
-            int fracDigits = 0;
-            if (pos < span.Length && span[pos] == (byte)'.')
-            {
-                pos++;
-                while (pos < span.Length)
-                {
-                    uint d = span[pos] - (uint)'0';
-                    if (d > 9u) break;
-                    fracPart = fracPart * 10 + d;
-                    pos++;
-                    if (++fracDigits > 17) { value = 0; return false; }
-                }
-                if (fracDigits == 0) { value = 0; return false; }
-            }
-            
-            if (pos < span.Length) { value = 0; return false; }
-            
-            double result = (double)intPart;
-            if (fracDigits > 0)
-                result += (double)fracPart / NumberCharLookup.Pow10d[fracDigits];
-            
-            value = neg ? -result : result;
-            return true;
-        }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool TryParseDoubleUtf16(ReadOnlySpan<char> span, out double value)
-        {
-            if (span.IsEmpty) { value = 0; return false; }
-            
-            int pos = 0;
-            bool neg = span[0] == '-';
-            if (neg) pos++;
-            
-            if (pos >= span.Length) { value = 0; return false; }
-            
-            ulong intPart = 0;
-            int intDigits = 0;
-            while (pos < span.Length)
-            {
-                uint d = span[pos] - (uint)'0';
-                if (d > 9u) break;
-                intPart = intPart * 10 + d;
-                pos++;
-                if (++intDigits > 15) { value = 0; return false; }
-            }
-
-            if (intDigits == 0) { value = 0; return false; }
-            
-            ulong fracPart = 0;
-            int fracDigits = 0;
-            if (pos < span.Length && span[pos] == '.')
-            {
-                pos++;
-                while (pos < span.Length)
-                {
-                    uint d = span[pos] - (uint)'0';
-                    if (d > 9u) break;
-                    fracPart = fracPart * 10 + d;
-                    pos++;
-                    if (++fracDigits > 17) { value = 0; return false; }
-                }
-                if (fracDigits == 0) { value = 0; return false; }
-            }
-            
-            if (pos < span.Length) { value = 0; return false; }
-            
-            double result = (double)intPart;
-            if (fracDigits > 0)
-                result += (double)fracPart / NumberCharLookup.Pow10d[fracDigits];
-            
-            value = neg ? -result : result;
-            return true;
-        }
-        
         
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static float FallbackParseFloatUtf8(ReadOnlySpan<byte> span)
@@ -1542,28 +1866,26 @@ namespace LuminPack.Core
         {
             if (CurrentTokenType != JsonTokenType.Number)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
-            
+
+            JsonNumberShape shape = ScanJsonNumber(_currentIndex);
+            decimal value;
             if (SerializeStringAsUtf8)
             {
-                var numberSpan = ReadNumberSpan();
-                if (!Utf8Parser.TryParse(numberSpan, out decimal value, out int consumed) || consumed != numberSpan.Length)
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON decimal number");
-                return value;
+                var token = _bufferReference.Slice(_currentIndex, shape.End - _currentIndex);
+                if (!Utf8Parser.TryParse(token, out value, out int consumed) || consumed != token.Length)
+                    ThrowMalformedJson("Invalid JSON decimal number");
             }
             else
             {
-                var numberChars = ReadNumberChars();
-                if (!decimal.TryParse(numberChars, System.Globalization.NumberStyles.Float,
-                        System.Globalization.NumberFormatInfo.InvariantInfo, out decimal value))
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON decimal number");
-                return value;
+                if (!decimal.TryParse(NumberChars(_currentIndex, shape.End), System.Globalization.NumberStyles.Float,
+                        System.Globalization.NumberFormatInfo.InvariantInfo, out value))
+                    ThrowMalformedJson("Invalid JSON decimal number");
             }
+
+            _currentIndex = shape.End;
+            return value;
         }
         
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-#if NET5_0_OR_GREATER
-        [SkipLocalsInit]
-#endif
         public char ReadChar()
         {
             if (SerializeStringAsUtf8)
@@ -1598,92 +1920,20 @@ namespace LuminPack.Core
             return false;
         }
         
+        /// <summary>Advances past the current number token using the same strict grammar as the numeric readers.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private ReadOnlySpan<byte> ReadNumberSpan()
+        private void SkipNumberToken()
         {
-            int start = _currentIndex;
-            
-#if NET8_0_OR_GREATER
-            if (_currentIndex < _bufferReference.Length && _bufferReference[_currentIndex] == '-')
-                _currentIndex++;
-            
-            var remaining = _bufferReference.Slice(_currentIndex);
-            int end = remaining.IndexOfAnyExcept(NumberCharLookup.NumberSearchValues);
-            _currentIndex += end < 0 ? remaining.Length : end;
-#else
-            if (_currentIndex < _bufferReference.Length && _bufferReference[_currentIndex] == '-')
-                _currentIndex++;
-            
-            while (_currentIndex < _bufferReference.Length)
-            {
-                byte b = _bufferReference[_currentIndex];
-                if (NumberCharLookup.IsNumberChar[b])
-                    _currentIndex++;
-                else
-                    break;
-            }
-#endif
-            
-            return _bufferReference.Slice(start, _currentIndex - start);
+            _currentIndex = ScanJsonNumber(_currentIndex).End;
         }
         
+        /// <summary>Reinterprets the validated UTF-16 number token as characters (callers only use this in UTF-16 mode).</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private ReadOnlySpan<char> ReadNumberChars()
+        private ReadOnlySpan<char> NumberChars(int start, int end)
         {
-            int start = _currentIndex;
-            
-#if NET8_0_OR_GREATER
-            if (_currentIndex + 1 < _bufferReference.Length)
-            {
-                char c = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex));
-                if (c == '-')
-                    _currentIndex += 2;
-            }
-            
-            int available = (_bufferReference.Length - _currentIndex) & ~1;
-            if (available > 0)
-            {
-                var charSpan = MemoryMarshal.Cast<byte, char>(
-                    _bufferReference.Slice(_currentIndex, available));
-                int end = charSpan.IndexOfAnyExcept(NumberCharLookup.NumberSearchValuesChar);
-                _currentIndex += (end < 0 ? charSpan.Length : end) * 2;
-            }
-            
-            int totalBytes = _currentIndex - start;
-            var byteSpan = _bufferReference.Slice(start, totalBytes);
+            var byteSpan = _bufferReference.Slice(start, end - start);
             ref char charRef = ref Unsafe.As<byte, char>(ref MemoryMarshal.GetReference(byteSpan));
-            return MemoryMarshal.CreateReadOnlySpan(ref charRef, totalBytes / 2);
-#else
-            int charCount = 0;
-            
-            if (_currentIndex + 1 < _bufferReference.Length)
-            {
-                char c = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex));
-                if (c == '-')
-                {
-                    _currentIndex += 2;
-                    charCount++;
-                }
-            }
-            
-            while (_currentIndex + 1 < _bufferReference.Length)
-            {
-                char c = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex));
-                if (c < 256 && NumberCharLookup.IsNumberChar[c])
-                {
-                    _currentIndex += 2;
-                    charCount++;
-                }
-                else
-                {
-                    break;
-                }
-            }
-            
-            var byteSpan = _bufferReference.Slice(start, charCount * 2);
-            ref char charRef = ref Unsafe.As<byte, char>(ref MemoryMarshal.GetReference(byteSpan));
-            return MemoryMarshal.CreateReadOnlySpan(ref charRef, charCount);
-#endif
+            return MemoryMarshal.CreateReadOnlySpan(ref charRef, (end - start) >> 1);
         }
         
         private bool ReadBoolean()
@@ -1697,8 +1947,10 @@ namespace LuminPack.Core
                         _bufferReference[_currentIndex + 2] == 'u' &&
                         _bufferReference[_currentIndex + 3] == 'e')
                     {
-                        CurrentTokenType = JsonTokenType.True;
                         _currentIndex += 4;
+                        RequireTokenEndBoundary(_currentIndex);
+                        _jsonState = JsonStateAfterValue;
+                        CurrentTokenType = JsonTokenType.True;
                         return true;
                     }
                 }
@@ -1710,8 +1962,10 @@ namespace LuminPack.Core
                         _bufferReference[_currentIndex + 3] == 's' &&
                         _bufferReference[_currentIndex + 4] == 'e')
                     {
-                        CurrentTokenType = JsonTokenType.False;
                         _currentIndex += 5;
+                        RequireTokenEndBoundary(_currentIndex);
+                        _jsonState = JsonStateAfterValue;
+                        CurrentTokenType = JsonTokenType.False;
                         return true;
                     }
                 }
@@ -1728,8 +1982,10 @@ namespace LuminPack.Core
                         char c3 = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex + 6));
                         if (c1 == 'r' && c2 == 'u' && c3 == 'e')
                         {
-                            CurrentTokenType = JsonTokenType.True;
                             _currentIndex += 8;
+                            RequireTokenEndBoundary(_currentIndex);
+                            _jsonState = JsonStateAfterValue;
+                            CurrentTokenType = JsonTokenType.True;
                             return true;
                         }
                     }
@@ -1744,8 +2000,10 @@ namespace LuminPack.Core
                         char c4 = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex + 8));
                         if (c1 == 'a' && c2 == 'l' && c3 == 's' && c4 == 'e')
                         {
-                            CurrentTokenType = JsonTokenType.False;
                             _currentIndex += 10;
+                            RequireTokenEndBoundary(_currentIndex);
+                            _jsonState = JsonStateAfterValue;
+                            CurrentTokenType = JsonTokenType.False;
                             return true;
                         }
                     }
@@ -1766,8 +2024,10 @@ namespace LuminPack.Core
                     _bufferReference[_currentIndex + 2] == 'l' &&
                     _bufferReference[_currentIndex + 3] == 'l')
                 {
-                    CurrentTokenType = JsonTokenType.Null;
                     _currentIndex += 4;
+                    RequireTokenEndBoundary(_currentIndex);
+                    _jsonState = JsonStateAfterValue;
+                    CurrentTokenType = JsonTokenType.Null;
                     return true;
                 }
             }
@@ -1781,8 +2041,10 @@ namespace LuminPack.Core
                     char c3 = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex + 6));
                     if (c0 == 'n' && c1 == 'u' && c2 == 'l' && c3 == 'l')
                     {
-                        CurrentTokenType = JsonTokenType.Null;
                         _currentIndex += 8;
+                        RequireTokenEndBoundary(_currentIndex);
+                        _jsonState = JsonStateAfterValue;
+                        CurrentTokenType = JsonTokenType.Null;
                         return true;
                     }
                 }

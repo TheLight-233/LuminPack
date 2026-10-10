@@ -1,8 +1,16 @@
-using LuminPack;
+﻿using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Core;
 
 namespace LuminPackUnitTest;
+
+// The reader's fast path is the default (trusted JSON, meant for LuminPack-produced documents);
+// these regression cases exercise the explicit strict validation mode for external input.
+internal static class StrictJson
+{
+    internal static readonly LuminPack.Option.LuminPackSerializerOption Utf8 =
+        LuminPack.Option.LuminPackSerializerOption.Utf8 with { ValidateJsonSyntax = true };
+}
 
 [LuminPackable]
 public partial class StrayNumberProbeModel
@@ -45,16 +53,18 @@ internal static class PhaseOneRegressionTest
             $"ReadVarIntByte consumed {reader.GetCurrentSpanIndex()} bytes; writer wrote {written}.");
     }
 
+    // Strict RFC 8259 token sequencing: a stray value inside an object is malformed
+    // JSON. It used to be skipped silently; it is now rejected without hanging.
     private static void JsonStrayNumberInObjectDoesNotHang()
     {
-        var result = LuminPackSerializer.DeserializeJson<StrayNumberProbeModel>("{\"Age\":1, 5}");
-        Assert(result?.Age == 1, "A stray number in a JSON object corrupted the parsed result.");
+        AssertThrows(() => LuminPackSerializer.DeserializeJson<StrayNumberProbeModel>("{\"Age\":1, 5}", StrictJson.Utf8),
+            "A stray number in a JSON object was accepted.");
     }
 
     private static void JsonCircleRefDrainDoesNotHang()
     {
-        var result = LuminPackSerializer.DeserializeJson<CircleRefJsonProbe>("{\"$id\":1,\"Name\":\"a\",5,\"$ref\":1}");
-        Assert(result?.Name == "a", "A stray number in a JSON object corrupted the circle-reference drain.");
+        AssertThrows(() => LuminPackSerializer.DeserializeJson<CircleRefJsonProbe>("{\"$id\":1,\"Name\":\"a\",5,\"$ref\":1}", StrictJson.Utf8),
+            "A stray number in a circle-reference object was accepted.");
     }
 
     private static void JsonNanInfinityAreRejected()
@@ -76,16 +86,17 @@ internal static class PhaseOneRegressionTest
     private static void JsonDeepNestingIsRejected()
     {
         var json = new string('[', 5000) + "0" + new string(']', 5000);
-        AssertThrows(() => LuminPackSerializer.DeserializeJson<int[]>(json),
+        AssertThrows(() => LuminPackSerializer.DeserializeJson<int[]>(json, StrictJson.Utf8),
             "Deeply nested JSON exceeded the depth limit without an error.");
     }
 
+    // Trailing separators were previously tolerated by the generic tokenizer; the strict
+    // sequence check rejects them immediately, so no 100k-element skip walk can recurse.
     private static void JsonManySeparatorsDoNotOverflowStack()
     {
         var json = "[" + new string(',', 100_000) + "]";
-        var value = LuminPackSerializer.DeserializeJson<int[]>(json);
-        Assert(value is not null,
-            "A stream of separators did not terminate cleanly without a stack overflow.");
+        AssertThrows(() => LuminPackSerializer.DeserializeJson<int[]>(json, StrictJson.Utf8),
+            "A stream of separators was accepted.");
     }
 
     private static void AssertThrows(Action action, string message)
