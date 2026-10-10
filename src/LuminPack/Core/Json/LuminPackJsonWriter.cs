@@ -55,9 +55,6 @@ namespace LuminPack.Core
             SearchValues.Create(Encoding.UTF8.GetBytes(StringEscapeChars));
 #endif
         
-        private static readonly StandardFormat s_floatFormatG = new('G');
-        private static readonly StandardFormat s_doubleFormatG = new('G');
-        
         public ref int CurrentIndex => ref _currentIndex;
         public int Depth => _depth;
         /// <summary>Gets the total JSON bytes written, including committed output chunks.</summary>
@@ -1032,271 +1029,14 @@ namespace LuminPack.Core
         #endregion
 
         #region Fast float/double serialization
-        // 算法：验证后最短表示（round-trip verified shortest representation）
-        //
-        // 原理：float 最多 9 位有效十进制数字。从 1 位小数试到 9 位，
-        //       每次做 round-trip 验证：(float)(scaled / scale) == value
-        //       第一个通过的即为最短正确表示，直接输出。
-        //
-        // 正确性：对所有有限 float 保证 IEEE754 round-trip（反序列化后得到原值）。
-        //         NaN/Infinity 自动 fallback 到 Ryu。
-        //
-        // 性能来源：
-        //   1. 整数快速路径（约 40% 真实数据是整数）
-        //   2. 多数值 dec=1..3 即通过，只需 1~3 次整数乘除
-        //   3. 消除 Ryu 的 pow10 表查找和 128-bit 乘法
-        //   4. stackalloc 临时 buffer 避免提前写入不确定数据
 
-        // 幂次查找表（float 最多 dec=9，double 最多 dec=17）
-        private static readonly double[] s_floatPow10d =
-            { 1.0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9 };
-
-        private static readonly long[] s_floatPow10L =
-            { 1L, 10L, 100L, 1_000L, 10_000L, 100_000L, 1_000_000L, 10_000_000L, 100_000_000L, 1_000_000_000L };
-
-        private static readonly double[] s_doublePow10d =
-        {
-            1e0,  1e1,  1e2,  1e3,  1e4,  1e5,  1e6,  1e7,  1e8,  1e9,
-            1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17
-        };
-
-        private static readonly long[] s_doublePow10L =
-        {
-            1L, 10L, 100L, 1_000L, 10_000L, 100_000L,
-            1_000_000L, 10_000_000L, 100_000_000L, 1_000_000_000L,
-            10_000_000_000L, 100_000_000_000L, 1_000_000_000_000L,
-            10_000_000_000_000L, 100_000_000_000_000L, 1_000_000_000_000_000L,
-            10_000_000_000_000_000L, 100_000_000_000_000_000L
-        };
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int WriteUInt64Utf8(Span<byte> dest, ulong value)
-        {
-            if (value < 10) { dest[0] = (byte)('0' + value); return 1; }
-            int digits = 0;
-            ulong tmp = value;
-            while (tmp != 0) { tmp /= 10; digits++; }
-            int pos = digits;
-            while (value != 0) { dest[--pos] = (byte)('0' + value % 10); value /= 10; }
-            return digits;
-        }
-
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int WriteUInt64Utf16(Span<char> dest, ulong value)
-        {
-            if (value < 10) { dest[0] = (char)('0' + value); return 1; }
-            int digits = 0;
-            ulong tmp = value;
-            while (tmp != 0) { tmp /= 10; digits++; }
-            int pos = digits;
-            while (value != 0) { dest[--pos] = (char)('0' + value % 10); value /= 10; }
-            return digits;
-        }
-
-#if NET5_0_OR_GREATER
-        [SkipLocalsInit]
-#endif
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int TryFloatToUtf8(float value, Span<byte> dest)
-        {
-            uint bits = Unsafe.As<float, uint>(ref value);
-            
-            if ((bits & 0x7F800000u) == 0x7F800000u) return 0;
-
-            int pos = 0;
-            
-            if ((bits & 0x80000000u) != 0)
-            {
-                dest[pos++] = (byte)'-';
-                value = -value;
-                bits &= 0x7FFFFFFFu;
-            }
-            
-            if (bits == 0) { dest[pos++] = (byte)'0'; return pos; }
-
-            double d = value;
-            
-            if (d < 1e15 && value == MathF.Floor(value))
-            {
-                pos += WriteUInt64Utf8(dest.Slice(pos), (ulong)d);
-                return pos;
-            }
-            
-            for (int dec = 1; dec <= 9; dec++)
-            {
-                double scale   = s_floatPow10d[dec];
-                double scaledD = d * scale + 0.5;
-                
-                if (scaledD >= 9.2e18) continue;
-
-                long scaled = (long)scaledD;
-                long scaleL = s_floatPow10L[dec];
-                
-                if ((float)((double)scaled / scale) != value) continue;
-
-                ulong intPart = (ulong)(scaled / scaleL);
-                int   fracRaw = (int)(scaled % scaleL); 
-
-                pos += WriteUInt64Utf8(dest.Slice(pos), intPart);
-
-                if (fracRaw > 0)
-                {
-                    dest[pos++] = (byte)'.';
-                    
-                    Span<byte> fracBuf = stackalloc byte[10];
-                    int fr = fracRaw;
-                    for (int i = dec - 1; i >= 0; i--)
-                    {
-                        fracBuf[i] = (byte)('0' + fr % 10);
-                        fr /= 10;
-                    }
-                    int writeLen = dec;
-                    while (writeLen > 0 && fracBuf[writeLen - 1] == (byte)'0') writeLen--;
-
-                    fracBuf.Slice(0, writeLen).CopyTo(dest.Slice(pos));
-                    pos += writeLen;
-                }
-
-                return pos;
-            }
-
-            return 0;
-        }
-
-#if NET5_0_OR_GREATER
-        [SkipLocalsInit]
-#endif
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int TryFloatToUtf16(float value, Span<char> dest)
-        {
-            uint bits = Unsafe.As<float, uint>(ref value);
-
-            if ((bits & 0x7F800000u) == 0x7F800000u) return 0;
-
-            int pos = 0;
-
-            if ((bits & 0x80000000u) != 0)
-            {
-                dest[pos++] = '-';
-                value = -value;
-                bits &= 0x7FFFFFFFu;
-            }
-
-            if (bits == 0) { dest[pos++] = '0'; return pos; }
-
-            double d = value;
-
-            if (d < 1e15 && value == MathF.Floor(value))
-            {
-                pos += WriteUInt64Utf16(dest.Slice(pos), (ulong)d);
-                return pos;
-            }
-
-            for (int dec = 1; dec <= 9; dec++)
-            {
-                double scale   = s_floatPow10d[dec];
-                double scaledD = d * scale + 0.5;
-                if (scaledD >= 9.2e18) continue;
-
-                long scaled = (long)scaledD;
-                long scaleL = s_floatPow10L[dec];
-
-                if ((float)((double)scaled / scale) != value) continue;
-
-                ulong intPart = (ulong)(scaled / scaleL);
-                int   fracRaw = (int)(scaled % scaleL);
-
-                pos += WriteUInt64Utf16(dest.Slice(pos), intPart);
-
-                if (fracRaw > 0)
-                {
-                    dest[pos++] = '.';
-                    Span<char> fracBuf = stackalloc char[10];
-                    int fr = fracRaw;
-                    for (int i = dec - 1; i >= 0; i--)
-                    {
-                        fracBuf[i] = (char)('0' + fr % 10);
-                        fr /= 10;
-                    }
-                    int writeLen = dec;
-                    while (writeLen > 0 && fracBuf[writeLen - 1] == '0') writeLen--;
-
-                    fracBuf.Slice(0, writeLen).CopyTo(dest.Slice(pos));
-                    pos += writeLen;
-                }
-
-                return pos;
-            }
-
-            return 0;
-        }
-
-#if NET5_0_OR_GREATER
-        [SkipLocalsInit]
-#endif
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int TryDoubleToUtf8(double value, Span<byte> dest)
-        {
-            ulong bits64 = Unsafe.As<double, ulong>(ref value);
-
-            if ((bits64 & 0x7FF0_0000_0000_0000UL) == 0x7FF0_0000_0000_0000UL) return 0;
-
-            int pos = 0;
-
-            if ((bits64 & 0x8000_0000_0000_0000UL) != 0)
-            {
-                dest[pos++] = (byte)'-';
-                value = -value;
-                bits64 &= 0x7FFF_FFFF_FFFF_FFFFUL;
-            }
-
-            if (bits64 == 0) { dest[pos++] = (byte)'0'; return pos; }
-
-            if (value < 1e15 && value == Math.Floor(value))
-            {
-                pos += WriteUInt64Utf8(dest.Slice(pos), (ulong)value);
-                return pos;
-            }
-
-            for (int dec = 1; dec <= 17; dec++)
-            {
-                double scale   = s_doublePow10d[dec];
-                double scaledD = value * scale + 0.5;
-                if (scaledD >= 9.2e18) continue;
-
-                long scaled = (long)scaledD;
-                long scaleL = s_doublePow10L[dec];
-
-                if ((double)scaled / scale != value) continue;
-
-                ulong intPart = (ulong)(scaled / scaleL);
-                long  fracRaw = scaled % scaleL;
-
-                pos += WriteUInt64Utf8(dest.Slice(pos), intPart);
-
-                if (fracRaw > 0)
-                {
-                    dest[pos++] = (byte)'.';
-                    Span<byte> fracBuf = stackalloc byte[18];
-                    long fr = fracRaw;
-                    for (int i = dec - 1; i >= 0; i--)
-                    {
-                        fracBuf[i] = (byte)('0' + fr % 10);
-                        fr /= 10;
-                    }
-                    int writeLen = dec;
-                    while (writeLen > 0 && fracBuf[writeLen - 1] == (byte)'0') writeLen--;
-
-                    fracBuf.Slice(0, writeLen).CopyTo(dest.Slice(pos));
-                    pos += writeLen;
-                }
-
-                return pos;
-            }
-
-            return 0;
-        }
-        
+        // Conversion: xjb (https://github.com/xjb714/xjb) shortest-decimal core, ported in
+        // Core/Json/Xjb. The previous "try 1..9/17 fraction digits and verify the round trip"
+        // loop plus its Utf8Formatter fallback is gone:
+        //   1. XjbFloat32/XjbFloat64 turn the IEEE-754 bit pattern into {digits, exponent10} directly;
+        //   2. LuminPackJsonFloatFormatter lays the digits out as JSON (policy documented there and
+        //      kept byte compatible with the previous writer);
+        //   3. NaN/Infinity still throw the existing exception and -0 keeps its sign bit.
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET5_0_OR_GREATER
         [SkipLocalsInit]
@@ -1307,49 +1047,16 @@ namespace LuminPack.Core
             EnsureCapacity(SerializeStringAsUtf8 ? 24 : 64);
             if (float.IsNaN(value) || float.IsInfinity(value))
                 LuminPackExceptionHelper.ThrowFormatException("NaN and Infinity are not valid JSON numbers");
+
             if (SerializeStringAsUtf8)
             {
-                // Final benchmark winner: exponent-guarded speculative direct write.
-                // Only ordinary exponent range enters Lumin's fast path; unusual values
-                // fall through to Utf8Formatter without paying the expensive 1..9 loop.
-                uint bits = Unsafe.As<float, uint>(ref value);
-                uint absBits = bits & 0x7FFF_FFFFu;
-                uint exp = (absBits >> 23) & 0xFFu;
-
-                if (absBits == 0 || (uint)(exp - 95u) <= 64u)
-                {
-                    int len = TryFloatToUtf8(value, _bufferReference.Slice(_currentIndex));
-                    if (len > 0)
-                    {
-                        _currentIndex += len;
-                        return;
-                    }
-                }
-
-                Utf8Formatter.TryFormat(
-                    value,
-                    _bufferReference.Slice(_currentIndex),
-                    out int written,
-                    s_floatFormatG);
-                _currentIndex += written;
+                _currentIndex += LuminPackJsonFloatFormatter.WriteFloatUtf8(
+                    _bufferReference.Slice(_currentIndex), value);
             }
             else
             {
-                // UTF-16 was not part of the benchmark campaign: preserve existing path.
-                Span<char> tmp = stackalloc char[24];
-                int len = TryFloatToUtf16(value, tmp);
-                if (len > 0)
-                {
-                    MemoryMarshal.Cast<char, byte>(tmp.Slice(0, len))
-                        .CopyTo(_bufferReference.Slice(_currentIndex, len * 2));
-                    _currentIndex += len * 2;
-                }
-                else
-                {
-                    var charSpan = MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex, 64));
-                    value.TryFormat(charSpan, out int fb, default, System.Globalization.NumberFormatInfo.InvariantInfo);
-                    _currentIndex += fb * 2;
-                }
+                _currentIndex += LuminPackJsonFloatFormatter.WriteFloatUtf16(
+                    MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex)), value) * 2;
             }
         }
         
@@ -1363,42 +1070,21 @@ namespace LuminPack.Core
             EnsureCapacity(SerializeStringAsUtf8 ? 32 : 64);
             if (double.IsNaN(value) || double.IsInfinity(value))
                 LuminPackExceptionHelper.ThrowFormatException("NaN and Infinity are not valid JSON numbers");
+
             if (SerializeStringAsUtf8)
             {
-                // Final benchmark winner: exponent-guarded speculative direct write.
-                // Only ordinary exponent range enters Lumin's fast path; unusual values
-                // fall through to Utf8Formatter without paying the expensive 1..9 loop.
-                ulong bits = Unsafe.As<double, ulong>(ref value);
-                ulong absBits = bits & 0x7FFF_FFFF_FFFF_FFFFUL;
-                ulong exp = (absBits >> 52) & 0x7FFUL;
-
-                if (absBits == 0 || (ulong)(exp - 991UL) <= 64UL)
-                {
-                    int len = TryDoubleToUtf8(value, _bufferReference.Slice(_currentIndex));
-                    if (len > 0)
-                    {
-                        _currentIndex += len;
-                        return;
-                    }
-                }
-
-                Utf8Formatter.TryFormat(
-                    value,
-                    _bufferReference.Slice(_currentIndex),
-                    out int written,
-                    s_doubleFormatG);
-                _currentIndex += written;
+                _currentIndex += LuminPackJsonFloatFormatter.WriteDoubleUtf8(
+                    _bufferReference.Slice(_currentIndex), value);
             }
             else
             {
-                var charSpan = MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex, 64));
-                value.TryFormat(charSpan, out int fb, default, System.Globalization.NumberFormatInfo.InvariantInfo);
-                _currentIndex += fb * 2;
+                _currentIndex += LuminPackJsonFloatFormatter.WriteDoubleUtf16(
+                    MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex)), value) * 2;
             }
         }
 
         #endregion
-
+        
         #region Primitive Types
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
