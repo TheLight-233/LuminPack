@@ -165,7 +165,43 @@ namespace LuminPack.Core
         }
 
         // -----------------------------------------------------------------
-        // long
+        // int / uint
+        // -----------------------------------------------------------------
+
+        // 10K packed LUT for small values (packed store intentionally writes 4 bytes),
+        // digit-pair linear formatter for the rest.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static int WriteUInt32(Span<byte> dest, uint value)
+        {
+            if (value < 10_000u)
+                return WritePacked4(dest, s_lut10K, (int)value);
+
+            return WriteUInt32PairLinear(dest, value);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static int WriteInt32(Span<byte> dest, int value)
+        {
+            if (value >= 0)
+            {
+                uint u = (uint)value;
+                if (u < 10_000u)
+                    return WritePacked4(dest, s_lut10K, (int)u);
+
+                return WriteUInt32PairLinear(dest, u);
+            }
+
+            uint magnitude = 0u - (uint)value; // int.MinValue safe
+            dest[0] = (byte)'-';
+
+            if (magnitude < 10_000u)
+                return 1 + WritePacked4(dest[1..], s_lut10K, (int)magnitude);
+
+            return 1 + WriteUInt32PairLinear(dest[1..], magnitude);
+        }
+
+        // -----------------------------------------------------------------
+        // long / ulong
         // -----------------------------------------------------------------
 
         // Final benchmark winner for long: 10K packed LUT + quad formatter.
@@ -173,13 +209,7 @@ namespace LuminPack.Core
         internal static int WriteLong(Span<byte> dest, long value)
         {
             if (value >= 0)
-            {
-                ulong u = (ulong)value;
-                if (u < 10_000UL)
-                    return WritePacked4(dest, s_lut10K, (int)u);
-
-                return WriteUInt64Quad(dest, u);
-            }
+                return WriteULong(dest, (ulong)value);
 
             ulong magnitude = 0UL - (ulong)value; // long.MinValue safe
             dest[0] = (byte)'-';
@@ -188,6 +218,17 @@ namespace LuminPack.Core
                 return 1 + WritePacked4(dest[1..], s_lut10K, (int)magnitude);
 
             return 1 + WriteUInt64Quad(dest[1..], magnitude);
+        }
+
+        // Same routing as long: 10K packed LUT for small values (packed store
+        // intentionally writes 4 bytes), quad formatter above.
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static int WriteULong(Span<byte> dest, ulong value)
+        {
+            if (value < 10_000UL)
+                return WritePacked4(dest, s_lut10K, (int)value);
+
+            return WriteUInt64Quad(dest, value);
         }
 
         private static readonly ulong[] s_pow10U64 =

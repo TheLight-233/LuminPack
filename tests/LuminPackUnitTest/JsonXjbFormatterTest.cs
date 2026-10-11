@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Text;
 using System.Numerics;
 using LuminPack.Core;
 using Xunit;
@@ -71,6 +72,98 @@ public class JsonXjbFormatterTest
         // scalar core reproduces the aarch64 specialization bit for bit (hash of the official
         // table computed from the upstream source, see tools/xjb-tables/extract_tables.py).
         Assert.Equal(0x8fbe1453ffa24dd9UL, Fnv1a64(H7Formula(), 1));
+    }
+
+    // ---------------------------------------------------------------- int32/uint32 number fast path
+
+    [Fact]
+    public void WriteInt32AndWriteUInt32MatchUtf8Formatter()
+    {
+        Span<byte> expected = stackalloc byte[16];
+        Span<byte> dest = stackalloc byte[16];
+
+        for (uint value = 0; value <= 10_000u; value++)
+        {
+            Utf8Formatter.TryFormat(value, expected, out int en);
+            int an = LuminPackJsonNumberFormatter.WriteUInt32(dest, value);
+            Assert.True(an == en && dest[..an].SequenceEqual(expected[..en]), $"uint32 mismatch: {value}");
+        }
+
+        for (int value = -10_000; value <= 10_000; value++)
+        {
+            Utf8Formatter.TryFormat(value, expected, out int en);
+            int an = LuminPackJsonNumberFormatter.WriteInt32(dest, value);
+            Assert.True(an == en && dest[..an].SequenceEqual(expected[..en]), $"int32 mismatch: {value}");
+        }
+
+        foreach (int value in new[] { int.MinValue, int.MinValue + 1, -1_000_000_000, -100_000, -10_001, 10_001, 100_000, 1_000_000_000, int.MaxValue - 1, int.MaxValue })
+        {
+            Utf8Formatter.TryFormat(value, expected, out int en);
+            int an = LuminPackJsonNumberFormatter.WriteInt32(dest, value);
+            Assert.True(an == en && dest[..an].SequenceEqual(expected[..en]), $"int32 mismatch: {value}");
+        }
+
+        foreach (uint value in new[] { 10_001u, 100_000u, 1_000_000_000u, uint.MaxValue - 1u, uint.MaxValue })
+        {
+            Utf8Formatter.TryFormat(value, expected, out int en);
+            int an = LuminPackJsonNumberFormatter.WriteUInt32(dest, value);
+            Assert.True(an == en && dest[..an].SequenceEqual(expected[..en]), $"uint32 mismatch: {value}");
+        }
+
+        ulong state = 0x5DEECE66D5DEECE6UL;
+        for (int i = 0; i < 500_000; i++)
+        {
+            state += 0x9E3779B97F4A7C15UL;
+            ulong z = state;
+            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+            z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+            z ^= z >> 31;
+
+            uint u = (uint)z;
+            Utf8Formatter.TryFormat(u, expected, out int en);
+            int an = LuminPackJsonNumberFormatter.WriteUInt32(dest, u);
+            Assert.True(an == en && dest[..an].SequenceEqual(expected[..en]), $"uint32 mismatch: {u}");
+
+            int s = unchecked((int)z);
+            Utf8Formatter.TryFormat(s, expected, out en);
+            an = LuminPackJsonNumberFormatter.WriteInt32(dest, s);
+            Assert.True(an == en && dest[..an].SequenceEqual(expected[..en]), $"int32 mismatch: {s}");
+        }
+    }
+
+    [Fact]
+    public void WriteULongMatchesUtf8Formatter()
+    {
+        Span<byte> expected = stackalloc byte[24];
+        Span<byte> dest = stackalloc byte[24];
+
+        for (ulong value = 0; value <= 10_000UL; value++)
+        {
+            Utf8Formatter.TryFormat(value, expected, out int en);
+            int an = LuminPackJsonNumberFormatter.WriteULong(dest, value);
+            Assert.True(an == en && dest[..an].SequenceEqual(expected[..en]), $"ulong mismatch: {value}");
+        }
+
+        foreach (ulong value in new[] { 10_001UL, 100_000UL, 1_000_000_000UL, 9_999_999_999UL, 10_000_000_000UL, 1_000_000_000_000_000_000UL, ulong.MaxValue - 1UL, ulong.MaxValue })
+        {
+            Utf8Formatter.TryFormat(value, expected, out int en);
+            int an = LuminPackJsonNumberFormatter.WriteULong(dest, value);
+            Assert.True(an == en && dest[..an].SequenceEqual(expected[..en]), $"ulong mismatch: {value}");
+        }
+
+        ulong state = 0x243F6A8885A308D3UL;
+        for (int i = 0; i < 500_000; i++)
+        {
+            state += 0x9E3779B97F4A7C15UL;
+            ulong z = state;
+            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9UL;
+            z = (z ^ (z >> 27)) * 0x94D049BB133111EBUL;
+            z ^= z >> 31;
+
+            Utf8Formatter.TryFormat(z, expected, out int en);
+            int an = LuminPackJsonNumberFormatter.WriteULong(dest, z);
+            Assert.True(an == en && dest[..an].SequenceEqual(expected[..en]), $"ulong mismatch: {z}");
+        }
     }
 
     private static byte[] H7Formula()

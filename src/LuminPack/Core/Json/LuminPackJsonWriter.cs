@@ -1,6 +1,5 @@
 using System;
 using System.Buffers;
-using System.Buffers.Text;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -1097,8 +1096,8 @@ namespace LuminPack.Core
             if (SerializeStringAsUtf8)
             {
                 EnsureCapacity(11);
-                Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
-                _currentIndex += written;
+                _currentIndex += LuminPackJsonNumberFormatter.WriteInt32(
+                    _bufferReference.Slice(_currentIndex), value);
             }
             else
             {
@@ -1119,8 +1118,8 @@ namespace LuminPack.Core
             if (SerializeStringAsUtf8)
             {
                 EnsureCapacity(10);
-                Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
-                _currentIndex += written;
+                _currentIndex += LuminPackJsonNumberFormatter.WriteUInt32(
+                    _bufferReference.Slice(_currentIndex), value);
             }
             else
             {
@@ -1251,8 +1250,8 @@ namespace LuminPack.Core
             if (SerializeStringAsUtf8)
             {
                 EnsureCapacity(20);
-                Utf8Formatter.TryFormat(value, _bufferReference.Slice(_currentIndex), out int written);
-                _currentIndex += written;
+                _currentIndex += LuminPackJsonNumberFormatter.WriteULong(
+                    _bufferReference.Slice(_currentIndex), value);
             }
             else
             {
