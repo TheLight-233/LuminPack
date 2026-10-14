@@ -42,6 +42,9 @@ internal static class WireFixtures
         Put(directory, "int-array", Enumerable.Range(-32, 97).Select(x => x * 17).ToArray());
         Put(directory, "string-list", new List<string> { "alpha", "中文", "😀", string.Empty });
         Put(directory, "string-null-empty", new List<string> { null!, string.Empty, "x" });
+        Put(directory, "short-ascii", Enumerable.Range(4, 13).Select(n => new string('x', n)).ToArray(), Utf8Length);
+        Put(directory, "medium-ascii", Enumerable.Range(17, 16).Select(n => new string('x', n)).ToArray(), Utf8Length);
+        Put(directory, "short-unicode", new[] { "中文", "玩家_00001_😀", "A\0B\u007fC", "éclair" }, Utf8Length);
         Put(directory, "dictionary", new Dictionary<string, int> { ["one"] = 1, ["中文"] = 2 });
         Put(directory, "queue", CreateQueue());
         Put(directory, "stack", CreateStack());
@@ -61,6 +64,12 @@ internal static class WireFixtures
         Check(strings.Count == 4 && strings[0] == "alpha" && strings[1] == "中文" && strings[2] == "😀" && strings[3] == "", "string-list");
         var nullEmpty = Get<List<string>>(directory, "string-null-empty");
         Check(nullEmpty.Count == 3 && nullEmpty[0] == null && nullEmpty[1] == "" && nullEmpty[2] == "x", "string-null-empty");
+        Check(Get<string[]>(directory, "short-ascii", Utf8Length)
+            .SequenceEqual(Enumerable.Range(4, 13).Select(n => new string('x', n))), "short-ascii");
+        Check(Get<string[]>(directory, "medium-ascii", Utf8Length)
+            .SequenceEqual(Enumerable.Range(17, 16).Select(n => new string('x', n))), "medium-ascii");
+        Check(Get<string[]>(directory, "short-unicode", Utf8Length)
+            .SequenceEqual(new[] { "中文", "玩家_00001_😀", "A\0B\u007fC", "éclair" }), "short-unicode");
         var dictionary = Get<Dictionary<string, int>>(directory, "dictionary");
         Check(dictionary.Count == 2 && dictionary["中文"] == 2, "dictionary");
         Check(Get<Queue<int>>(directory, "queue").SequenceEqual(CreateQueue()), "queue");

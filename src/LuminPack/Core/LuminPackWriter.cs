@@ -545,8 +545,20 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteNullUtf8LengthHeader(ref int index)
         {
-            WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
-            WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
+            WriteEmptyOrNullUtf8LengthHeader(index, LuminPackCode.NullCollection);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteEmptyOrNullUtf8LengthHeader(int index, int length)
+        {
+            // Both words belong to the record, even when the reader ignores the
+            // character count. Initialize them together in a reused buffer.
+            long header = (long)(uint)length | ((long)length << 32);
+#if NET8_0_OR_GREATER
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index), header);
+#else
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index), header);
+#endif
         }
 
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -664,9 +676,18 @@ namespace LuminPack.Core
         /// </summary>
         /// <param name="value"></param>
         /// <returns>偏移量</returns>
+#if NET8_0_OR_GREATER
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#else
         [MethodImpl(MethodImplOptions.NoInlining)]
+#endif
         public int WriteString(string? value)
         {
+#if NET8_0_OR_GREATER
+            return _stringSerializationMode == 1
+                ? WriteUtf8WithLength(_currentIndex, value)
+                : WriteStringOtherMode(_currentIndex, value);
+#else
             var mode = _stringSerializationMode;
             if (mode == 3)
                 return WriteUtf16WithLength(_currentIndex, value);
@@ -675,6 +696,7 @@ namespace LuminPack.Core
             return mode == 0
                 ? WriteUtf8WithToken(_currentIndex, value)
                 : WriteUtf16WithToken(_currentIndex, value);
+#endif
         }
         
         /// <summary>
@@ -703,9 +725,18 @@ namespace LuminPack.Core
         /// <param name="index"></param>
         /// <param name="value"></param>
         /// <returns>偏移量</returns>
+#if NET8_0_OR_GREATER
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#else
         [MethodImpl(MethodImplOptions.NoInlining)]
+#endif
         public int WriteString(ref int index, string? value)
         {
+#if NET8_0_OR_GREATER
+            return _stringSerializationMode == 1
+                ? WriteUtf8WithLength(index, value)
+                : WriteStringOtherMode(index, value);
+#else
             var mode = _stringSerializationMode;
             if (mode == 3)
                 return WriteUtf16WithLength(index, value);
@@ -714,7 +745,23 @@ namespace LuminPack.Core
             return mode == 0
                 ? WriteUtf8WithToken(index, value)
                 : WriteUtf16WithToken(index, value);
+#endif
         }
+
+#if NET8_0_OR_GREATER
+        // Only the small mode test is inlined into generated parsers. Each mode
+        // keeps its own frame; UTF-8 identifiers never prepare token/copy state.
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private int WriteStringOtherMode(int index, string? value)
+        {
+            var mode = _stringSerializationMode;
+            if (mode == 3)
+                return WriteUtf16WithLength(index, value);
+            return mode == 0
+                ? WriteUtf8WithToken(index, value)
+                : WriteUtf16WithToken(index, value);
+        }
+#endif
         
         /// <summary>
         /// 序列化字符串(已知长度)
@@ -825,7 +872,11 @@ namespace LuminPack.Core
             return bytesWritten;
         }
 
+#if NET8_0_OR_GREATER
+        [MethodImpl(MethodImplOptions.NoInlining)]
+#else
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#endif
         public int WriteUtf8WithLength(int index, string? value)
         {
             if (value is null)
@@ -836,21 +887,37 @@ namespace LuminPack.Core
 
             if (value.Length == 0)
             {
-                WriteStringRecordLengthHeader(ref index, 0);
-                WriteStringRecordLengthHeader(ref index, 0);
+                WriteEmptyOrNullUtf8LengthHeader(index, 0);
                 return 0;
             }
             
             var source = value.AsSpan();
-            
-            // UTF8.GetMaxByteCount -> (length + 1) * 3
-            var maxByteCount = checked((value.Length + 1) * 3);
             
             var startIndex = checked(index + 8);
             var dest = (uint)startIndex <= (uint)_bufferReference.Length
                 ? _bufferReference.Slice(startIndex)
                 : Span<byte>.Empty;
 
+#if NET8_0_OR_GREATER
+            // Common identifiers need neither partial-conversion state nor the
+            // general transcoder's argument frame. Validate before writing.
+            if (ShortAsciiTranscoder.TryEncode(source, dest, escapeJson: false))
+            {
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index),
+                    ((ulong)(uint)value.Length << 32) | (uint)value.Length);
+                return value.Length;
+            }
+            return WriteUtf8WithLengthSlow(index, source, dest);
+        }
+
+        // Keep general transcoding, retry state and its argument frame out of
+        // the short ASCII path.
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private int WriteUtf8WithLengthSlow(int index, ReadOnlySpan<char> source, Span<byte> dest)
+        {
+#endif
+            // UTF8.GetMaxByteCount -> (length + 1) * 3
+            var maxByteCount = checked((source.Length + 1) * 3);
             var status = StringSerializer.Serialize(source, dest, out _, out var bytesWritten, replaceInvalidSequences: false);
 
             if (status != OperationStatus.Done)
@@ -866,7 +933,7 @@ namespace LuminPack.Core
 #else
             ref var destPointer = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            As<byte, UnmanagedViewModel<int, int>>(ref destPointer) = new UnmanagedViewModel<int, int>(bytesWritten, value.Length);
+            As<byte, UnmanagedViewModel<int, int>>(ref destPointer) = new UnmanagedViewModel<int, int>(bytesWritten, source.Length);
 
             return bytesWritten;
         }
@@ -882,8 +949,7 @@ namespace LuminPack.Core
 
             if (length is 0 || value.Length is 0)
             {
-                WriteStringRecordLengthHeader(ref index, 0);
-                WriteStringRecordLengthHeader(ref index, 0);
+                WriteEmptyOrNullUtf8LengthHeader(index, 0);
                 return;
             }
             
@@ -912,8 +978,7 @@ namespace LuminPack.Core
         {
             if (value.Length is 0)
             {
-                WriteStringRecordLengthHeader(ref index, 0);
-                WriteStringRecordLengthHeader(ref index, 0);
+                WriteEmptyOrNullUtf8LengthHeader(index, 0);
                 return 0;
             }
             

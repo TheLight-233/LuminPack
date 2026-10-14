@@ -120,6 +120,13 @@ public static class StringSerializer
         bool isFinalBlock = true)
     {
 #if NET8_0_OR_GREATER
+        if (global::LuminPack.Internal.ShortAsciiTranscoder.TryEncode(source, destination, escapeJson: false))
+        {
+            charsRead = source.Length;
+            bytesWritten = source.Length;
+            return OperationStatus.Done;
+        }
+
         // Native .NET API preserves partial-buffer, invalid-UTF16 and streaming
         // semantics. It also avoids extra SIMD dispatch on ASCII / Emoji / Mixed.
         if (!PreferCustomSimd(source, destination.Length))

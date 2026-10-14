@@ -610,7 +610,7 @@ namespace LuminPack.Core
             var value = length == 0
                 ? string.Empty
                 : isUtf8
-                    ? ReadUtf8StringWithLengthOutlined(index, length)
+                    ? ReadUtf8StringWithLength(index, length)
                     : ReadUtf16StringWithLength(index, length);
             index += length + recordLength;
             return value;
@@ -627,12 +627,6 @@ namespace LuminPack.Core
                 : ReadUtf16StringWithToken(index, length);
             index += length + (isUtf8 ? 1 : 2);
             return value;
-        }
-
-        [MethodImpl(MethodImplOptions.NoInlining)]
-        private string? ReadUtf8StringWithLengthOutlined(int index, int length)
-        {
-            return ReadUtf8StringWithLength(index, length);
         }
 
         /// <summary>
@@ -843,6 +837,13 @@ namespace LuminPack.Core
 
                 if (utf16Length == length)
                 {
+                    if (Vector128.IsHardwareAccelerated && (uint)(length - 4) <= 28)
+                    {
+                        var shortString = length <= 16
+                            ? ReadShortAsciiString(ref Unsafe.Add(ref spanRef, 4), length)
+                            : ShortAsciiTranscoder.TryDecodeMedium(ref Unsafe.Add(ref spanRef, 4), length);
+                        if (shortString is not null) return shortString;
+                    }
                     unsafe
                     {
                         fixed (byte* p = &Unsafe.Add(ref spanRef, 4))
@@ -1938,6 +1939,37 @@ namespace LuminPack.Core
             {
                 Unsafe.WriteUnaligned(ref Unsafe.Add(ref dst, (nint)(i << 1)), Unsafe.Add(ref src, (nint)i));
             }
+        }
+
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static string? ReadShortAsciiString(ref byte source, int length)
+        {
+            if (length < 8)
+            {
+                var shortBytes = Vector128.Create(Unsafe.ReadUnaligned<uint>(ref source),
+                    Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, length - 4)), 0u, 0u).AsByte();
+                if (shortBytes.ExtractMostSignificantBits() != 0) return null;
+                string shortResult = new string('\0', length);
+                ref ushort shortOutput = ref Unsafe.As<char, ushort>(ref Unsafe.AsRef(in shortResult.GetPinnableReference()));
+                var chars = Vector128.WidenLower(shortBytes);
+                Unsafe.WriteUnaligned(ref Unsafe.As<ushort, byte>(ref shortOutput), chars.GetLower());
+                Unsafe.WriteUnaligned(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref shortOutput, length - 4)), chars.GetUpper());
+                return shortResult;
+            }
+
+            var bytes = Vector128.Create(Vector64.LoadUnsafe(ref source),
+                Vector64.LoadUnsafe(ref source, (nuint)(length - 8)));
+            // A matching byte/char count is only a hint; invalid UTF-8 must still
+            // go through the validating decoder. No string is published yet.
+            if (bytes.ExtractMostSignificantBits() != 0) return null;
+
+            // This fresh, non-interned string is filled before it escapes. Managed
+            // references remain GC-tracked, so no input pin or callback is needed.
+            string result = new string('\0', length);
+            ref ushort output = ref Unsafe.As<char, ushort>(ref Unsafe.AsRef(in result.GetPinnableReference()));
+            Vector128.WidenLower(bytes).StoreUnsafe(ref output);
+            Vector128.WidenUpper(bytes).StoreUnsafe(ref output, (nuint)(length - 8));
+            return result;
         }
 
         [MethodImpl(MethodImplOptions.NoInlining)]
