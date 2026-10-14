@@ -605,20 +605,25 @@ public static class LuminPackCodeGenerator
 					if (luminDataField4.ClassFields.Count > 0 && IsMergeableField(luminDataField4.ClassFields[0]))
 					{
 						int num5 = Math.Min(FindNextMergeableField(luminDataField4.ClassFields, 0), 13);
-						sb.Append($"{text}    {field.Name}ListOffset{text2} += writer.WriteUnmanaged(ref {field.Name}ListOffset{text2}, (byte){luminDataField4.ClassFields.Count}");
-						for (int l = 0; l <= num5; l++)
+						if (!TryGenerateFixedUnmanagedWrite(sb, luminDataField4.ClassFields, 0, num5,
+							member => "element." + member.Identifier, field.Name + "ListOffset" + text2,
+							text + "    ", advanceWriter: false, writeHeader: true))
 						{
-							LuminDataField luminDataField5 = luminDataField4.ClassFields[l];
-							if (luminDataField5.IsPrivate)
+							sb.Append($"{text}    {field.Name}ListOffset{text2} += writer.WriteUnmanaged(ref {field.Name}ListOffset{text2}, (byte){luminDataField4.ClassFields.Count}");
+							for (int l = 0; l <= num5; l++)
 							{
-								sb.Append(", Get" + field.Name + luminDataField5.Name + "(element)");
+								LuminDataField luminDataField5 = luminDataField4.ClassFields[l];
+								if (luminDataField5.IsPrivate)
+								{
+									sb.Append(", Get" + field.Name + luminDataField5.Name + "(element)");
+								}
+								else
+								{
+									sb.Append(", element." + luminDataField5.Name);
+								}
 							}
-							else
-							{
-								sb.Append(", element." + luminDataField5.Name);
-							}
+							sb.AppendLine(");");
 						}
-						sb.AppendLine(");");
 						num4 = num5 + 1;
 					}
 					else
@@ -673,6 +678,13 @@ public static class LuminPackCodeGenerator
 								if (num6 - m >= 14)
 								{
 									num6 = m + 14;
+								}
+								if (TryGenerateFixedUnmanagedWrite(sb, luminDataField4.ClassFields, m, num6,
+									member => "element." + member.Identifier, field.Name + "ListOffset" + text2,
+									text + "    ", advanceWriter: false))
+								{
+									m = num6;
+									continue;
 								}
 								sb.Append(text + "    " + field.Name + "ListOffset" + text2 + " += writer.WriteUnmanaged(ref " + field.Name + "ListOffset" + text2);
 								for (int n = m; n <= num6; n++)
@@ -821,20 +833,25 @@ public static class LuminPackCodeGenerator
 					if (luminDataField.ClassFields.Count > 0 && IsMergeableField(luminDataField.ClassFields[0]))
 					{
 						int num2 = Math.Min(FindNextMergeableField(luminDataField.ClassFields, 0), 13);
-						sb.Append($"{text}    {field.Name}ListOffset{text2} += writer.WriteUnmanaged(ref {field.Name}ListOffset{text2}, (byte){luminDataField.ClassFields.Count}");
-						for (int i = 0; i <= num2; i++)
+						if (!TryGenerateFixedUnmanagedWrite(sb, luminDataField.ClassFields, 0, num2,
+							member => text3 + "." + member.Identifier, field.Name + "ListOffset" + text2,
+							text + "    ", advanceWriter: false, writeHeader: true))
 						{
-							LuminDataField luminDataField2 = luminDataField.ClassFields[i];
-							if (luminDataField2.IsPrivate)
+							sb.Append($"{text}    {field.Name}ListOffset{text2} += writer.WriteUnmanaged(ref {field.Name}ListOffset{text2}, (byte){luminDataField.ClassFields.Count}");
+							for (int i = 0; i <= num2; i++)
 							{
-								sb.Append(", Get" + field.Name + luminDataField2.Name + "(" + text3 + ")");
+								LuminDataField luminDataField2 = luminDataField.ClassFields[i];
+								if (luminDataField2.IsPrivate)
+								{
+									sb.Append(", Get" + field.Name + luminDataField2.Name + "(" + text3 + ")");
+								}
+								else
+								{
+									sb.Append(", " + text3 + "." + luminDataField2.Name);
+								}
 							}
-							else
-							{
-								sb.Append(", " + text3 + "." + luminDataField2.Name);
-							}
+							sb.AppendLine(");");
 						}
-						sb.AppendLine(");");
 						num = num2 + 1;
 					}
 					else
@@ -889,6 +906,13 @@ public static class LuminPackCodeGenerator
 								if (num3 - j >= 14)
 								{
 									num3 = j + 14;
+								}
+								if (TryGenerateFixedUnmanagedWrite(sb, luminDataField.ClassFields, j, num3,
+									member => text3 + "." + member.Identifier, field.Name + "ListOffset" + text2,
+									text + "    ", advanceWriter: false))
+								{
+									j = num3;
+									continue;
 								}
 								sb.Append(text + "    " + field.Name + "ListOffset" + text2 + " += writer.WriteUnmanaged(ref " + field.Name + "ListOffset" + text2);
 								for (int k = j; k <= num3; k++)
@@ -1024,7 +1048,14 @@ public static class LuminPackCodeGenerator
 						{
 							num8 = num7 + 14;
 						}
-						sb.Append(text + "writer.Advance(writer.WriteUnmanaged(ref " + offset);
+						if (TryGenerateFixedUnmanagedWrite(sb, field.ClassFields, num7, num8,
+							member => text7 + "." + member.Identifier, offset, text, advanceWriter: false))
+						{
+							num7 = num8;
+							continue;
+						}
+						sb.AppendLine(text + "{");
+						sb.Append(text + "    int __luminWrittenSize = writer.WriteUnmanaged(ref " + offset);
 						for (int num9 = num7; num9 <= num8; num9++)
 						{
 							if (field.ClassFields[num9].IsPrivate)
@@ -1036,8 +1067,10 @@ public static class LuminPackCodeGenerator
 								sb.Append(", " + text7 + "." + field.ClassFields[num9].Name);
 							}
 						}
-						sb.Append("));");
+						sb.Append(");");
 						sb.AppendLine();
+						sb.AppendLine(text + "    " + offset + " += __luminWrittenSize;");
+						sb.AppendLine(text + "}");
 						num7 = num8;
 						continue;
 					}
@@ -1056,7 +1089,8 @@ public static class LuminPackCodeGenerator
 		case LuminFiledType.Enum:
 			if (isMultClass)
 			{
-				sb.AppendLine(text + "writer.Advance(writer.WriteUnmanaged(ref " + offset + ", (" + GetEnumTypeName(field.EnumType) + ")" + fieldPath + "));");
+				sb.AppendLine(text + "writer.WriteUnmanagedWithoutSizeReturn(ref " + offset + ", (" + GetEnumTypeName(field.EnumType) + ")" + fieldPath + ");");
+				sb.AppendLine(text + offset + " += " + GetEnumFieldLength(field.EnumType) + ";");
 			}
 			else
 			{
@@ -1594,6 +1628,13 @@ public static class LuminPackCodeGenerator
 						if (num2 - j >= 14)
 						{
 							num2 = j + 14;
+						}
+						if (TryGenerateFixedUnmanagedRead(sb, field.ClassFields, j, num2,
+							member => flag2 ? text4 + "." + member.Identifier : parentName + field.Name + member.Name + "Temp" + text2,
+							offset, text))
+						{
+							j = num2;
+							continue;
 						}
 						sb.Append(text + offset + " += reader.ReadUnmanaged(ref " + offset);
 						for (int k = j; k <= num2; k++)
@@ -2341,6 +2382,67 @@ public static class LuminPackCodeGenerator
 		return true;
 	}
 
+	private static bool TryGenerateFixedUnmanagedWrite(StringBuilder sb, List<LuminDataField> fields,
+		int first, int last, Func<LuminDataField, string> fieldPath, string offset, string indent,
+		bool advanceWriter, bool writeHeader = false)
+	{
+		// Direct field loads let the JIT avoid keeping one byref per argument alive.
+		// Keep getters and arbitrary unmanaged structs on the existing in-parameter path.
+		for (int i = first; i <= last; i++)
+		{
+			if (!IsFixedLengthType(fields[i].Type) || fields[i].IsPrivate || fields[i].isProperty)
+			{
+				return false;
+			}
+		}
+
+		sb.AppendLine(indent + "{");
+		sb.AppendLine(indent + "    ref byte __luminFixedBlock = ref writer.GetSpanReference(" + offset + ");");
+		int size = 0;
+		if (writeHeader)
+		{
+			sb.AppendLine(indent + "    __luminFixedBlock = (byte)" + fields.Count + ";");
+			size = 1;
+		}
+		for (int i = first; i <= last; i++)
+		{
+			string destination = size == 0 ? "__luminFixedBlock" : "Unsafe.Add(ref __luminFixedBlock, " + size + ")";
+			sb.AppendLine(indent + "    Unsafe.WriteUnaligned(ref " + destination + ", " + fieldPath(fields[i]) + ");");
+			size += int.Parse(GetFixedFieldLength(fields[i]));
+		}
+		sb.AppendLine(indent + (advanceWriter ? "    writer.Advance(" + size + ");" : "    " + offset + " += " + size + ";"));
+		sb.AppendLine(indent + "}");
+		return true;
+	}
+
+	private static bool TryGenerateFixedUnmanagedRead(StringBuilder sb, List<LuminDataField> fields,
+		int first, int last, Func<LuminDataField, string> fieldPath, string offset, string indent)
+	{
+		int length = 0;
+		for (int i = first; i <= last; i++)
+		{
+			if (!IsFixedLengthType(fields[i].Type) || fields[i].IsPrivate || fields[i].isProperty || fields[i].IsCompress)
+				return false;
+			length += int.Parse(GetFixedFieldLength(fields[i]));
+		}
+		// Load the source once and assign fields directly instead of preparing
+		// simultaneous out references. Constructors and private/property paths
+		// retain their existing local-value and commit rules.
+		sb.AppendLine(indent + "{");
+		sb.AppendLine(indent + "    reader.EnsureReadable(" + offset + ", " + length + ");");
+		sb.AppendLine(indent + "    ref byte __luminReadBlock = ref reader.GetSpanReference(" + offset + ");");
+		int position = 0;
+		for (int i = first; i <= last; i++)
+		{
+			string source = position == 0 ? "__luminReadBlock" : "Unsafe.Add(ref __luminReadBlock, " + position + ")";
+			sb.AppendLine(indent + "    " + fieldPath(fields[i]) + " = Unsafe.ReadUnaligned<" + GetGeneratedTypeName(fields[i]) + ">(ref " + source + ");");
+			position += int.Parse(GetFixedFieldLength(fields[i]));
+		}
+		sb.AppendLine(indent + "    " + offset + " += " + length + ";");
+		sb.AppendLine(indent + "}");
+		return true;
+	}
+
 	[MethodImpl(MethodImplOptions.AggressiveInlining)]
 	private static int FindNextMergeableField(LuminDataInfo data, int index)
 	{
@@ -2690,13 +2792,18 @@ public static class LuminPackCodeGenerator
 			if (data.fields.Count > 0 && IsMergeableField(data.fields[0]))
 			{
 				int num3 = Math.Min(FindNextMergeableField(data, 0), 13);
-				sb.Append($"            writer.Advance(writer.WriteUnmanaged((byte){data.fields.Count}");
-				for (int num4 = 0; num4 <= num3; num4++)
+				if (!TryGenerateFixedUnmanagedWrite(sb, data.fields, 0, num3,
+					field => (flag ? "serializeValue" : "value") + "." + field.Identifier,
+					"writer.GetCurrentSpanIndex()", "            ", advanceWriter: true, writeHeader: true))
 				{
-					string text4 = ((data.fields[num4].IsPrivate || data.fields[num4].isProperty) ? "local" : (flag ? "serializeValue" : "value"));
-					sb.Append(", " + text4 + "." + data.fields[num4].Identifier);
+					sb.Append($"            writer.Advance(writer.WriteUnmanaged((byte){data.fields.Count}");
+					for (int num4 = 0; num4 <= num3; num4++)
+					{
+						string text4 = ((data.fields[num4].IsPrivate || data.fields[num4].isProperty) ? "local" : (flag ? "serializeValue" : "value"));
+						sb.Append(", " + text4 + "." + data.fields[num4].Identifier);
+					}
+					sb.AppendLine("));");
 				}
-				sb.AppendLine("));");
 				num2 = num3 + 1;
 			}
 			else
@@ -2765,6 +2872,13 @@ public static class LuminPackCodeGenerator
 					if (num6 - num5 >= 14)
 					{
 						num6 = num5 + 14;
+					}
+					if (TryGenerateFixedUnmanagedWrite(sb, data.fields, num5, num6,
+						field => (flag ? "serializeValue" : "value") + "." + field.Identifier,
+						"writer.GetCurrentSpanIndex()", "            ", advanceWriter: true))
+					{
+						num5 = num6;
+						continue;
 					}
 					sb.Append("            writer.Advance(writer.WriteUnmanaged(");
 					for (int num7 = num5; num7 <= num6; num7++)
@@ -2957,6 +3071,13 @@ public static class LuminPackCodeGenerator
 					if (num2 - num >= 14)
 					{
 						num2 = num + 14;
+					}
+					if (TryGenerateFixedUnmanagedRead(sb, data.fields, num, num2,
+						member => flag && CanDeserializeDirectlyIntoConstructedObject(member) ? "result." + member.Identifier : member.Name + "Temp",
+						"offset", "            "))
+					{
+						num = num2;
+						continue;
 					}
 					sb.Append("            offset += reader.ReadUnmanaged(ref offset, ");
 					for (int num3 = num; num3 <= num2; num3++)
