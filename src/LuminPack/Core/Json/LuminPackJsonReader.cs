@@ -13,11 +13,13 @@ namespace LuminPack.Core
     internal static class NumberCharLookup
     {
 #if NET8_0_OR_GREATER
-        internal static readonly SearchValues<byte> ControlCharsSearchValues =
-            SearchValues.Create(Enumerable.Range(0, 0x20).Select(static i => (byte)i).ToArray());
+        internal static readonly SearchValues<byte> StringSpecialBytes =
+            SearchValues.Create(Enumerable.Range(0, 0x20).Select(static i => (byte)i)
+                .Concat(new byte[] { (byte)'"', (byte)'\\' }).ToArray());
 
-        internal static readonly SearchValues<char> ControlCharsCharSearchValues =
-            SearchValues.Create(Enumerable.Range(0, 0x20).Select(static i => (char)i).ToArray());
+        internal static readonly SearchValues<char> StringSpecialChars =
+            SearchValues.Create(Enumerable.Range(0, 0x20).Select(static i => (char)i)
+                .Concat(new char[] { '"', '\\' }).ToArray());
 #endif
     }
     
@@ -459,6 +461,59 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Read() => _validateJsonSyntax ? ReadStrict() : ReadTrusted();
 
+        /// <summary>
+        /// Matches an unescaped generated property name and advances to its value token.
+        /// A mismatch leaves the reader unchanged so ordinary property lookup can handle
+        /// whitespace, reordered, missing, unknown, duplicate or escaped names.
+        /// </summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryReadPropertyName(ReadOnlySpan<byte> utf8Name, ReadOnlySpan<char> utf16Name)
+        {
+            int index = _currentIndex;
+            if ((uint)index >= (uint)_bufferReference.Length)
+                return false;
+
+            bool comma;
+            int end;
+            if (SerializeStringAsUtf8)
+            {
+                comma = _bufferReference[index] == ',';
+                if (comma) index++;
+                var remaining = _bufferReference.Slice(index);
+                if (remaining.Length < utf8Name.Length + 3 || remaining[0] != '"' ||
+                    remaining[utf8Name.Length + 1] != '"' || remaining[utf8Name.Length + 2] != ':' ||
+                    !remaining.Slice(1, utf8Name.Length).SequenceEqual(utf8Name))
+                    return false;
+                end = index + utf8Name.Length + 3;
+            }
+            else
+            {
+                var remaining = MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(index));
+                if (remaining.IsEmpty) return false;
+                comma = remaining[0] == ',';
+                if (comma) remaining = remaining.Slice(1);
+                if (remaining.Length < utf16Name.Length + 3 || remaining[0] != '"' ||
+                    remaining[utf16Name.Length + 1] != '"' || remaining[utf16Name.Length + 2] != ':' ||
+                    !remaining.Slice(1, utf16Name.Length).SequenceEqual(utf16Name))
+                    return false;
+                end = index + (utf16Name.Length + 3 + (comma ? 1 : 0)) * 2;
+            }
+
+            if (_validateJsonSyntax)
+            {
+                // Preserve exactly the separator/container checks performed by ReadStrict.
+                if (_depth == 0 || !IsCurrentContainerObject() ||
+                    (comma ? _jsonState != JsonStateAfterValue : !IsNameState(_jsonState)))
+                    return false;
+                _jsonState = JsonStateValue;
+            }
+
+            _currentIndex = end;
+            if (!Read())
+                ThrowMalformedJson("Expected a JSON property value");
+            return true;
+        }
+
         private bool ReadTrusted()
         {
             SkipWhitespace();
@@ -795,23 +850,24 @@ namespace LuminPack.Core
             
             _currentIndex++;
             int start = _currentIndex;
+            int scan = _currentIndex;
             
 #if NET8_0_OR_GREATER
             var remaining = _bufferReference.Slice(_currentIndex);
-            int special = remaining.IndexOfAny((byte)'"', (byte)'\\');
+            int special = remaining.IndexOfAny(NumberCharLookup.StringSpecialBytes);
             if (special >= 0 && remaining[special] == '"')
             {
-                if (remaining.Slice(0, special).ContainsAny(NumberCharLookup.ControlCharsSearchValues))
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                 _currentIndex += special + 1;
                 return _bufferReference.Slice(start, special);
             }
 
             if (special < 0)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
+            if (remaining[special] < 0x20)
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
+            scan += special;
 #endif
 
-            int scan = _currentIndex;
             bool hasEscape = false;
             while (scan < _bufferReference.Length)
             {
@@ -852,6 +908,14 @@ namespace LuminPack.Core
             if (SerializeStringAsUtf8)
             {
                 var utf8 = ReadStringUtf8();
+#if NET8_0_OR_GREATER
+                if ((uint)(utf8.Length - 17) <= 15)
+                {
+                    var ascii = global::LuminPack.Internal.ShortAsciiTranscoder.TryDecodeMedium(
+                        ref MemoryMarshal.GetReference(utf8), utf8.Length);
+                    if (ascii is not null) return ascii;
+                }
+#endif
                 return Encoding.UTF8.GetString(utf8);
             }
             else
@@ -875,16 +939,15 @@ namespace LuminPack.Core
             
             _currentIndex += 2;
             int start = _currentIndex;
+            int scan = _currentIndex;
             
 #if NET8_0_OR_GREATER
             int available = (_bufferReference.Length - _currentIndex) & ~1;
             var charSpan = MemoryMarshal.Cast<byte, char>(
                 _bufferReference.Slice(_currentIndex, available));
-            int special = charSpan.IndexOfAny('"', '\\');
+            int special = charSpan.IndexOfAny(NumberCharLookup.StringSpecialChars);
             if (special >= 0 && charSpan[special] == '"')
             {
-                if (charSpan[..special].ContainsAny(NumberCharLookup.ControlCharsCharSearchValues))
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                 var result = charSpan[..special];
                 _currentIndex += (special + 1) * 2;
                 return result;
@@ -892,9 +955,11 @@ namespace LuminPack.Core
 
             if (special < 0)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
+            if (charSpan[special] < 0x20)
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
+            scan += special * 2;
 #endif
 
-            int scan = _currentIndex;
             bool hasEscape = false;
             while (scan + 1 < _bufferReference.Length)
             {
@@ -1538,6 +1603,90 @@ namespace LuminPack.Core
             1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f, 1e7f, 1e8f, 1e9f, 1e10f
         };
 
+        // Scan and accumulate together. A valid but inexact/long token can go straight
+        // to the platform parser, without another grammar scan or digit accumulation.
+        // A failed scan leaves the cursor unchanged for the general grammar/error path.
+        private bool TryScanFloatingPoint(out ulong mantissa, out int exponent10, out bool negative,
+            out int end, out bool exactMantissa)
+        {
+            int step = SerializeStringAsUtf8 ? 1 : 2;
+            int index = _currentIndex;
+            negative = !IsNumberAtEnd(index) && NumberCharAt(index) == '-';
+            if (negative) index += step;
+            mantissa = 0;
+            exponent10 = 0;
+            int places = 0;
+            exactMantissa = true;
+            end = index;
+
+            uint first = NumberDigitOrNonDigit(index);
+            if (first > 9) return false;
+            mantissa = first;
+            index += step;
+            int digits = 1;
+            uint digit;
+            while ((digit = NumberDigitOrNonDigit(index)) <= 9)
+            {
+                if (first == 0) return false;
+                if (digits < 19)
+                {
+                    mantissa = mantissa * 10 + digit;
+                    digits++;
+                }
+                else exactMantissa = false;
+                index += step;
+            }
+
+            if (!IsNumberAtEnd(index) && NumberCharAt(index) == '.')
+            {
+                index += step;
+                int fractionStart = index;
+                while ((digit = NumberDigitOrNonDigit(index)) <= 9)
+                {
+                    if (digits < 19)
+                    {
+                        mantissa = mantissa * 10 + digit;
+                        digits++;
+                    }
+                    else exactMantissa = false;
+                    places++;
+                    index += step;
+                }
+                if (index == fractionStart) return false;
+            }
+
+            int exponent = 0;
+            if (!IsNumberAtEnd(index) && (NumberCharAt(index) == 'e' || NumberCharAt(index) == 'E'))
+            {
+                index += step;
+                bool negativeExponent = false;
+                if (!IsNumberAtEnd(index) && (NumberCharAt(index) == '+' || NumberCharAt(index) == '-'))
+                {
+                    negativeExponent = NumberCharAt(index) == '-';
+                    index += step;
+                }
+                int exponentStart = index;
+                while ((digit = NumberDigitOrNonDigit(index)) <= 9)
+                {
+                    if (exponent < 10_000)
+                        exponent = exponent * 10 + (int)digit;
+                    else exactMantissa = false;
+                    index += step;
+                }
+                if (index == exponentStart) return false;
+                if (negativeExponent) exponent = -exponent;
+            }
+
+            if (!IsValueDelimiterAt(index)) return false;
+            long scale = (long)exponent - places;
+            if (scale < -400 || scale > 400)
+                exactMantissa = false;
+            else
+                exponent10 = (int)scale;
+            end = index;
+            return true;
+        }
+
         /// <summary>
         /// Exact fast path: exactly representable operands need a single IEEE-754 operation, so the
         /// result equals correct rounding of the decimal literal. Every other input returns false and
@@ -1787,6 +1936,25 @@ namespace LuminPack.Core
             if (CurrentTokenType != JsonTokenType.Number)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
 
+            if (TryScanFloatingPoint(out ulong mantissa, out int exponent, out bool negative, out int end, out bool exact))
+            {
+                float result;
+                if (exact && (exponent == 0 || (mantissa <= (1UL << 24) && exponent >= -10 && exponent <= 10)))
+                {
+                    result = exponent == 0 ? (float)mantissa : exponent > 0
+                        ? (float)mantissa * s_pow10Float[exponent] : (float)mantissa / s_pow10Float[-exponent];
+                    if (negative) result = -result;
+                }
+                else
+                {
+                    result = SerializeStringAsUtf8
+                        ? FallbackParseFloatUtf8(_bufferReference.Slice(_currentIndex, end - _currentIndex))
+                        : FallbackParseFloatUtf16(NumberChars(_currentIndex, end));
+                }
+                _currentIndex = end;
+                return result;
+            }
+
             JsonNumberShape shape = ScanJsonNumber(_currentIndex);
             float value;
             if (!TryParseFloatExact(shape, out value))
@@ -1805,6 +1973,25 @@ namespace LuminPack.Core
         {
             if (CurrentTokenType != JsonTokenType.Number)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected number");
+
+            if (TryScanFloatingPoint(out ulong mantissa, out int exponent, out bool negative, out int end, out bool exact))
+            {
+                double result;
+                if (exact && (exponent == 0 || (mantissa <= (1UL << 53) && exponent >= -22 && exponent <= 22)))
+                {
+                    result = exponent == 0 ? (double)mantissa : exponent > 0
+                        ? (double)mantissa * s_pow10Double[exponent] : (double)mantissa / s_pow10Double[-exponent];
+                    if (negative) result = -result;
+                }
+                else
+                {
+                    result = SerializeStringAsUtf8
+                        ? FallbackParseDoubleUtf8(_bufferReference.Slice(_currentIndex, end - _currentIndex))
+                        : FallbackParseDoubleUtf16(NumberChars(_currentIndex, end));
+                }
+                _currentIndex = end;
+                return result;
+            }
 
             JsonNumberShape shape = ScanJsonNumber(_currentIndex);
             double value;

@@ -120,6 +120,23 @@ public static class LuminPackJsonCodeGenerator
 		}
 		GenerateJsonPropertyLookup(sb, data, true);
 		GenerateJsonPropertyLookup(sb, data, false);
+		GenerateOrderedJsonPropertyLookup(sb, data);
+	}
+
+	private static void GenerateOrderedJsonPropertyLookup(StringBuilder sb, LuminDataInfo data)
+	{
+		sb.AppendLine("        private static bool TryReadOrderedJsonProperty(ref global::LuminPack.Core.LuminPackJsonReader reader, int index)");
+		sb.AppendLine("        {");
+		sb.AppendLine("            switch (index)");
+		sb.AppendLine("            {");
+		for (int i = 0; i < data.fields.Count; i++)
+		{
+			string name = data.fields[i].Name;
+			sb.AppendLine("                case " + i + ": return reader.TryReadPropertyName(_utf8_" + name + ", _utf16_" + name + ");");
+		}
+		sb.AppendLine("                default: return false;");
+		sb.AppendLine("            }");
+		sb.AppendLine("        }");
 	}
 
 	private static void GenerateJsonPropertyLookup(StringBuilder sb, LuminDataInfo data, bool utf8)
@@ -184,6 +201,15 @@ public static class LuminPackJsonCodeGenerator
 		for (int i = 0; i < data.fields.Count; i++)
 		{
 			LuminDataField luminDataField = data.fields[i];
+			if (metaInfo.IsNet8 && metaInfo.CSharpVersion > Microsoft.CodeAnalysis.CSharp.LanguageVersion.CSharp10)
+			{
+				string marker = i == 0 ? "Prefix" : "Sep";
+				string literal = Microsoft.CodeAnalysis.CSharp.SymbolDisplay.FormatLiteral(
+					(i == 0 ? "{" : ",") + "\"" + luminDataField.Name + "\":", true);
+				sb.AppendLine("        private static global::System.ReadOnlySpan<byte> _json" + marker + "Utf8_" + luminDataField.Name + " { [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)] get => " + literal + "u8; }");
+				sb.AppendLine("        private static global::System.ReadOnlySpan<char> _json" + marker + "Utf16_" + luminDataField.Name + " { [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)] get => global::System.MemoryExtensions.AsSpan(" + literal + "); }");
+				continue;
+			}
 			string text = string.Join(", ", from b in Encoding.UTF8.GetBytes(luminDataField.Name)
 				select $"(byte){b}");
 			string text2 = string.Join(", ", luminDataField.Name.Select((char c) => "(char)'" + EscapeChar(c) + "'"));
@@ -247,10 +273,15 @@ public static class LuminPackJsonCodeGenerator
 			string text3 = ((luminDataField2.IsPrivate || luminDataField2.isProperty) ? "local" : "value");
 			string text4 = ((num == 0) ? "Prefix" : "Sep");
 			sb.AppendLine("            // 字段: " + luminDataField2.Name);
+			if (TryGenerateJsonIntegerProperty(sb, luminDataField2, text4, text3 + "." + luminDataField2.Identifier, metaInfo))
+			{
+				sb.AppendLine();
+				continue;
+			}
 			sb.AppendLine("            if (isUtf8)");
-			sb.AppendLine("                writer.WriteRaw(_json" + text4 + "Utf8_" + luminDataField2.Name + ");");
+			GenerateJsonLiteralWrite(sb, luminDataField2.Name, text4, utf8: true, metaInfo);
 			sb.AppendLine("            else");
-			sb.AppendLine("                writer.WriteRaw(_json" + text4 + "Utf16_" + luminDataField2.Name + ");");
+			GenerateJsonLiteralWrite(sb, luminDataField2.Name, text4, utf8: false, metaInfo);
 			sb.AppendLine("            writer.SetFirstElement(true);");
 			GenerateJsonSerializeField(sb, luminDataField2, text3 + "." + luminDataField2.Identifier, "            ");
 			sb.AppendLine();
@@ -259,6 +290,62 @@ public static class LuminPackJsonCodeGenerator
 		// incomplete UTF-16 token and makes the top-level end check fail.
 		sb.AppendLine("            writer.WriteObjectEnd();");
 		sb.AppendLine("        }");
+	}
+
+	private static bool TryGenerateJsonIntegerProperty(StringBuilder sb, LuminDataField field,
+		string marker, string valueExpr, MetaInfo metaInfo)
+	{
+		if (!metaInfo.IsNet8 || field.IsPrivate || field.isProperty ||
+			field.TypeSymbol is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T } ||
+			field.Type is not (LuminFiledType.Int or LuminFiledType.UInt or LuminFiledType.Long or LuminFiledType.ULong))
+			return false;
+		byte[] bytes = Encoding.UTF8.GetBytes((marker == "Prefix" ? "{" : ",") + "\"" + field.Name + "\":");
+		if (bytes.Length < 8 || bytes.Length > 16)
+			return false;
+		ulong first = 0, last = 0;
+		for (int i = 0; i < 8; i++)
+		{
+			first |= (ulong)bytes[i] << (i * 8);
+			last |= (ulong)bytes[bytes.Length - 8 + i] << (i * 8);
+		}
+		sb.AppendLine("            if (isUtf8 && global::System.BitConverter.IsLittleEndian)");
+		sb.AppendLine($"                writer.WriteGeneratedInteger(0x{first:X16}UL, 0x{last:X16}UL, {bytes.Length}, {valueExpr});");
+		sb.AppendLine("            else");
+		sb.AppendLine("            {");
+		sb.AppendLine("                if (isUtf8)");
+		GenerateJsonLiteralWrite(sb, field.Name, marker, utf8: true, metaInfo);
+		sb.AppendLine("                else");
+		GenerateJsonLiteralWrite(sb, field.Name, marker, utf8: false, metaInfo);
+		sb.AppendLine("                writer.SetFirstElement(true);");
+		GenerateJsonSerializeField(sb, field, valueExpr, "                ");
+		sb.AppendLine("            }");
+		return true;
+	}
+
+	private static void GenerateJsonLiteralWrite(StringBuilder sb, string name, string marker, bool utf8, MetaInfo metaInfo)
+	{
+		string field = "_json" + marker + (utf8 ? "Utf8_" : "Utf16_") + name;
+		string literal = (marker == "Prefix" ? "{" : ",") + "\"" + name + "\":";
+		byte[] bytes = (utf8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(literal);
+		if (metaInfo.IsNet8 && bytes.Length >= 8 && bytes.Length <= 16)
+		{
+			ulong first = 0, last = 0;
+			for (int i = 0; i < 8; i++)
+			{
+				first |= (ulong)bytes[i] << (i * 8);
+				last |= (ulong)bytes[bytes.Length - 8 + i] << (i * 8);
+			}
+			sb.AppendLine("            {");
+			sb.AppendLine("                if (global::System.BitConverter.IsLittleEndian)");
+			sb.AppendLine($"                    writer.WriteGeneratedLiteral(0x{first:X16}UL, 0x{last:X16}UL, {bytes.Length});");
+			sb.AppendLine("                else");
+			sb.AppendLine("                    writer.WriteRaw(" + field + ");");
+			sb.AppendLine("            }");
+		}
+		else
+		{
+			sb.AppendLine("                writer.WriteRaw(" + field + ");");
+		}
 	}
 
 	private static void GenerateJsonSerializeField(StringBuilder sb, LuminDataField field, string valueExpr, string indent)
@@ -396,21 +483,27 @@ public static class LuminPackJsonCodeGenerator
 		sb.AppendLine();
 		sb.AppendLine("            bool isUtf8 = reader.Option.StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8;");
 		sb.AppendLine();
-		sb.AppendLine("            while (reader.Read())");
+		sb.AppendLine("            int nextPropertyIndex = 0;");
+		sb.AppendLine("            while (true)");
 		sb.AppendLine("            {");
-		sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd)");
-		sb.AppendLine("                    break;");
-		sb.AppendLine();
-		sb.AppendLine("                if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
+		sb.AppendLine("                int propertyIndex = nextPropertyIndex;");
+		sb.AppendLine("                if (!TryReadOrderedJsonProperty(ref reader, propertyIndex))");
 		sb.AppendLine("                {");
-		sb.AppendLine("                    reader.Skip();");
-		sb.AppendLine("                    continue;");
-		sb.AppendLine("                }");
+		sb.AppendLine("                    if (!reader.Read() || reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd)");
+		sb.AppendLine("                        break;");
 		sb.AppendLine();
-		sb.AppendLine("                int propertyIndex = isUtf8");
-		sb.AppendLine("                    ? GetJsonPropertyIndexUtf8(reader.ReadStringUtf8())");
-		sb.AppendLine("                    : GetJsonPropertyIndexUtf16(reader.ReadStringUtf16());");
-		sb.AppendLine("                if (!reader.Read()) break;");
+		sb.AppendLine("                    if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
+		sb.AppendLine("                    {");
+		sb.AppendLine("                        reader.Skip();");
+		sb.AppendLine("                        continue;");
+		sb.AppendLine("                    }");
+		sb.AppendLine();
+		sb.AppendLine("                    propertyIndex = isUtf8");
+		sb.AppendLine("                        ? GetJsonPropertyIndexUtf8(reader.ReadStringUtf8())");
+		sb.AppendLine("                        : GetJsonPropertyIndexUtf16(reader.ReadStringUtf16());");
+		sb.AppendLine("                    if (!reader.Read()) break;");
+		sb.AppendLine("                }");
+		sb.AppendLine("                nextPropertyIndex = propertyIndex + 1;");
 		sb.AppendLine("                switch (propertyIndex)");
 		sb.AppendLine("                {");
 		for (int fieldIndex = 0; fieldIndex < data.fields.Count; fieldIndex++)

@@ -960,14 +960,14 @@ static void VerifyLightMode(MetadataReference[] platformReferences)
             "Light mode emitted a formatter for a type that is not reachable from any serializer call site.");
     }
 
-    // The dispatch switch must reference exactly the emitted set (owned + reachable no-owner).
+    // The compact-id registration must contain the emitted set (owned + reachable no-owner).
     const string dispatchType = "global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<int>>";
-    if (!generated.Contains("GetMethodTable(typeof(" + dispatchType + "))", StringComparison.Ordinal))
+    if (!generated.Contains("LuminPackTypeCache<" + dispatchType + ">.TypeId = ", StringComparison.Ordinal))
     {
         throw new InvalidOperationException(
             "The light-mode generic dispatch case for the wrapper-reached type was not registered.");
     }
-    if (generated.Contains("GetMethodTable(typeof(global::NeverMentionedPayload", StringComparison.Ordinal))
+    if (generated.Contains("LuminPackTypeCache<global::NeverMentionedPayload>.TypeId", StringComparison.Ordinal))
     {
         throw new InvalidOperationException(
             "The light-mode generic dispatch registered a formatter that was not generated.");
@@ -1384,6 +1384,14 @@ static void AssertScopedEmission(
     {
         throw new InvalidOperationException(
             $"{scenario} scoped emission mismatch. Expected {shouldEmitScoped}, got {emitsScoped}.");
+    }
+
+    bool emitsLiteralPrefix = generatedSource.Contains(
+        "ReadOnlySpan<byte> _jsonPrefixUtf8_", StringComparison.Ordinal);
+    if (emitsLiteralPrefix != shouldEmitScoped ||
+        (!shouldEmitScoped && !generatedSource.Contains("readonly byte[] _jsonPrefixUtf8_", StringComparison.Ordinal)))
+    {
+        throw new InvalidOperationException($"{scenario} JSON prefix storage does not match its language/target branch.");
     }
 }
 

@@ -311,15 +311,7 @@ namespace LuminPack.Core
         {
             if (_output is not null)
             {
-                while (!value.IsEmpty)
-                {
-                    if (_currentIndex == _bufferReference.Length)
-                        EnsureCapacity(Math.Min(4096, value.Length));
-                    int count = Math.Min(value.Length, _bufferReference.Length - _currentIndex);
-                    value.Slice(0, count).CopyTo(_bufferReference.Slice(_currentIndex));
-                    Advance(count);
-                    value = value.Slice(count);
-                }
+                WriteRawToOutput(value);
                 return;
             }
             EnsureCapacity(value.Length);
@@ -332,13 +324,98 @@ namespace LuminPack.Core
         {
             if (_output is not null)
             {
-                WriteRaw(MemoryMarshal.AsBytes(value));
+                WriteRawToOutput(MemoryMarshal.AsBytes(value));
                 return;
             }
             var byteCount = checked(value.Length << 1);
             EnsureCapacity(byteCount);
             MemoryMarshal.Cast<char, byte>(value).CopyTo(_bufferReference.Slice(_currentIndex, byteCount));
             Advance(byteCount);
+        }
+
+        // Keep segmented-output loops out of each inlined generated JSON prefix.
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteRawToOutput(scoped ReadOnlySpan<byte> value)
+        {
+            while (!value.IsEmpty)
+            {
+                if (_currentIndex == _bufferReference.Length)
+                    EnsureCapacity(Math.Min(4096, value.Length));
+                int count = Math.Min(value.Length, _bufferReference.Length - _currentIndex);
+                value.Slice(0, count).CopyTo(_bufferReference.Slice(_currentIndex));
+                Advance(count);
+                value = value.Slice(count);
+            }
+        }
+
+        /// <summary>Generator-only copy of an 8..16-byte literal packed into two overlapping native words.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteGeneratedLiteral(ulong first, ulong last, int byteCount)
+        {
+            if ((uint)(byteCount - 8) > 8)
+                LuminPackExceptionHelper.ThrowSpanOutOfRange(byteCount);
+            if ((uint)_currentIndex > (uint)_bufferReference.Length)
+                LuminPackExceptionHelper.ThrowSpanOutOfRange(_currentIndex);
+            EnsureCapacity(byteCount);
+            ref byte destination = ref GetCurrentSpanReference();
+            Unsafe.WriteUnaligned(ref destination, first);
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, byteCount - 8), last);
+            Advance(byteCount);
+        }
+
+        /// <summary>Writes a generated native-word UTF-8 property prefix and its integer value.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void WriteGeneratedInteger(ulong first, ulong last, int byteCount, int value)
+        {
+            Span<byte> number = ReserveGeneratedIntegerPrefix(first, last, byteCount, 11);
+            int written = LuminPackJsonNumberFormatter.WriteInt32(number, value);
+            _currentIndex += byteCount + written;
+        }
+
+        /// <summary>Writes a generated native-word UTF-8 property prefix and its integer value.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void WriteGeneratedInteger(ulong first, ulong last, int byteCount, uint value)
+        {
+            Span<byte> number = ReserveGeneratedIntegerPrefix(first, last, byteCount, 10);
+            int written = LuminPackJsonNumberFormatter.WriteUInt32(number, value);
+            _currentIndex += byteCount + written;
+        }
+
+        /// <summary>Writes a generated native-word UTF-8 property prefix and its integer value.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void WriteGeneratedInteger(ulong first, ulong last, int byteCount, long value)
+        {
+            Span<byte> number = ReserveGeneratedIntegerPrefix(first, last, byteCount, 20);
+            int written = LuminPackJsonNumberFormatter.WriteLong(number, value);
+            _currentIndex += byteCount + written;
+        }
+
+        /// <summary>Writes a generated native-word UTF-8 property prefix and its integer value.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void WriteGeneratedInteger(ulong first, ulong last, int byteCount, ulong value)
+        {
+            Span<byte> number = ReserveGeneratedIntegerPrefix(first, last, byteCount, 20);
+            int written = LuminPackJsonNumberFormatter.WriteULong(number, value);
+            _currentIndex += byteCount + written;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private Span<byte> ReserveGeneratedIntegerPrefix(ulong first, ulong last, int byteCount, int maxDigits)
+        {
+            if (!SerializeStringAsUtf8)
+                LuminPackExceptionHelper.ThrowInvalidOperationException("Generated integer prefixes require UTF-8");
+            if ((uint)(byteCount - 8) > 8)
+                LuminPackExceptionHelper.ThrowSpanOutOfRange(byteCount);
+            if ((uint)_currentIndex > (uint)_bufferReference.Length)
+                LuminPackExceptionHelper.ThrowSpanOutOfRange(_currentIndex);
+            // Reserve before obtaining either reference: growth/streaming may
+            // replace the span and reset the cursor. Advance only after formatting.
+            EnsureCapacity(byteCount + maxDigits);
+            ref byte destination = ref GetCurrentSpanReference();
+            Unsafe.WriteUnaligned(ref destination, first);
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, byteCount - 8), last);
+            _isFirstElement = false;
+            return _bufferReference.Slice(_currentIndex + byteCount);
         }
         
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -540,6 +617,29 @@ namespace LuminPack.Core
                 return;
             }
 
+#if NET8_0_OR_GREATER
+            // Reserve the quotes and content together. The transcoder only writes
+            // after validating the complete value, so misses retain the normal path.
+            if (SerializeStringAsUtf8 && (uint)(value.Length - 4) <= 28 &&
+                global::System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated)
+            {
+                EnsureCapacity(value.Length + 2);
+                if (global::LuminPack.Internal.ShortAsciiTranscoder.TryEncode(
+                    value.AsSpan(), _bufferReference.Slice(_currentIndex + 1, value.Length), escapeJson: true))
+                {
+                    ref byte output = ref GetCurrentSpanReference();
+                    output = Quote;
+                    Unsafe.Add(ref output, value.Length + 1) = Quote;
+                    Advance(value.Length + 2);
+                    return;
+                }
+                WriteByteRaw(Quote);
+                WriteStringContentUtf8Encoded(value.AsSpan());
+                WriteByteRaw(Quote);
+                return;
+            }
+#endif
+
             WriteByteRaw(Quote);
             
             if (SerializeStringAsUtf8)
@@ -559,9 +659,15 @@ namespace LuminPack.Core
         {
 #if NET8_0_OR_GREATER
             // Tiny ASCII values are cheaper to scan and narrow without a transcoder call.
-            if (value.Length <= 16)
+            if (value.Length <= 32)
             {
                 EnsureCapacity(value.Length);
+                if (global::LuminPack.Internal.ShortAsciiTranscoder.TryEncode(
+                    value, _bufferReference.Slice(_currentIndex), escapeJson: true))
+                {
+                    Advance(value.Length);
+                    return;
+                }
                 ref byte destination = ref GetCurrentSpanReference();
                 for (int i = 0; i < value.Length; i++)
                 {
