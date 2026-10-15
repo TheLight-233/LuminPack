@@ -286,12 +286,12 @@ public static void OnDeserializing()
 
 ### 四种模式（从最省心到最激进）
 
-| 模式 | 生成范围 |
-| --- | --- |
-| `Full`（默认） | 为项目中观察到的每一个类型生成扩展方法（最省心，但生成的代码最多） |
-| `Medium` | 只生成可达类型，但**额外保留 `public` 非 `[LuminPackable]` 类型**（公共类型属于保守的 API 表面，可能被跨程序集或反射序列化） |
-| `Light` | 只生成从 `LuminPackSerializer.*` 调用点（含泛型包装方法的具体实例化）和**所有** `[LuminPackable]` 成员图可达的类型；`internal`/`private` 类型被严格剪枝 |
-| `Minimal` | 最激进。**只从 `LuminPackSerializer.*` 调用点出发**，只有真正被调用的类型才会被生成；即使标了 `[LuminPackable]` 但从未被序列化的类型也会被剪掉 |
+| 模式 | 扩展层：packable 扩展 / 格式化器 | facade 层：`LuminPackSerializer` 具体重载 |
+| --- | --- | --- |
+| `Full`（默认） | 为项目中观察到的每一个类型生成扩展方法（最省心，但生成的代码最多） | 为每个保留类型发出**全部 14 种**具体重载 |
+| `Medium` | 只生成可达类型，但**额外保留 `public` 非 `[LuminPackable]` 类型**（公共类型属于保守的 API 表面，可能被跨程序集或反射序列化） | 同 `Full`：每个保留类型发出全部 14 种 |
+| `Light` | 只生成从 `LuminPackSerializer.*` 调用点（含泛型包装方法的具体实例化）和**所有** `[LuminPackable]` 成员图可达的类型；`internal`/`private` 类型被严格剪枝 | **按调用点裁剪**：只为实际被调用到的重载形态生成；无调用点的类型不发具体重载 |
+| `Minimal` | 最激进。**只从 `LuminPackSerializer.*` 调用点出发**，只有真正被调用的类型才会被生成；即使标了 `[LuminPackable]` 但从未被序列化的类型也会被剪掉 | 与 `Light` 相同（按调用点裁剪） |
 
 各档位的差异在于"根"的范围：
 
@@ -299,7 +299,7 @@ public static void OnDeserializing()
 *   `Medium` / `Light`：根 = 所有 `[LuminPackable]` 类型 + 所有序列化调用点；`Medium` 再多保留 `public` 类型。
 *   `Minimal`：根 = 只有 `LuminPackSerializer.*` 调用点。
 
-> 档位同时决定**两层**选择。第一层（packable 扩展 / 格式化器）：`Full` 覆盖全部类型；`Medium` 覆盖可达类型并额外保留 `public` 非 `[LuminPackable]` 类型；`Light` 保留**每一个** `[LuminPackable]` 的扩展与格式化器；`Minimal` 才按可达性裁剪。第二层（`LuminPackSerializer` facade 的具体重载）：`Full` 与 `Medium` 为每个保留类型发出**全部 14 种**具体重载；`Light` 与 `Minimal` **都按调用点裁剪**具体重载，二者在这一层没有区别——Light 与 Minimal 的差别仅在 packable 扩展层。
+> `Light` 与 `Minimal` 的差别**只在扩展层**：`Light` 保留每一个 `[LuminPackable]` 的扩展与格式化器（供泛型回退使用），`Minimal` 才按可达性裁剪。两档的 facade 具体重载层都按调用点裁剪，未生成的具体重载由共享的泛型回退承接。
 
 ### 开启方式（两种任选其一）
 
