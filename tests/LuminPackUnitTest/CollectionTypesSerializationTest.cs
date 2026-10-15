@@ -1,19 +1,17 @@
-using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Frozen;
-using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Collections.ObjectModel;
-using System.Linq;
-using System.Text;
 using LuminPack;
 
 namespace LuminPackUnitTest
 {
+    /// <summary>Provides collection types serialization test functionality.</summary>
     public class CollectionTypesSerializationTest
     {
         // ConcurrentDictionary Tests
+        /// <summary>Verifies test concurrent dictionary.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestConcurrentDictionary(List<string> results)
         {
             try
@@ -24,10 +22,10 @@ namespace LuminPackUnitTest
                     [2] = "Two",
                     [3] = "Three"
                 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ConcurrentDictionary<int, string>>(buf);
-                
+
                 if (val.Count == result.Count && val.All(kv => result.TryGetValue(kv.Key, out var v) && v == kv.Value))
                     results.Add("✓ TestConcurrentDictionary - PASSED");
                 else
@@ -40,6 +38,8 @@ namespace LuminPackUnitTest
         }
 
         // SortedDictionary Tests
+        /// <summary>Verifies test sorted dictionary.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestSortedDictionary(List<string> results)
         {
             try
@@ -50,10 +50,10 @@ namespace LuminPackUnitTest
                     { 1, "One" },
                     { 2, "Two" }
                 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<SortedDictionary<int, string>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestSortedDictionary - PASSED");
                 else
@@ -66,15 +66,17 @@ namespace LuminPackUnitTest
         }
 
         // Stack Tests
+        /// <summary>Verifies test stack.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestStack(List<string> results)
         {
             try
             {
                 var val = new Stack<int>(new[] { 1, 2, 3, 4, 5 });
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<Stack<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestStack - PASSED");
                 else
@@ -87,15 +89,17 @@ namespace LuminPackUnitTest
         }
 
         // Queue Tests
+        /// <summary>Verifies test queue.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestQueue(List<string> results)
         {
             try
             {
                 var val = new Queue<int>(new[] { 1, 2, 3, 4, 5 });
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<Queue<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestQueue - PASSED");
                 else
@@ -108,15 +112,17 @@ namespace LuminPackUnitTest
         }
 
         // LinkedList Tests
+        /// <summary>Verifies test linked list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestLinkedList(List<string> results)
         {
             try
             {
                 var val = new LinkedList<int>(new[] { 1, 2, 3, 4, 5 });
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<LinkedList<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestLinkedList - PASSED");
                 else
@@ -129,15 +135,17 @@ namespace LuminPackUnitTest
         }
 
         // HashSet Tests
+        /// <summary>Verifies test hash set.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestHashSet(List<string> results)
         {
             try
             {
-                var val = new HashSet<int> { 1, 2, 3, 4, 5, 3, 2 }; // 重复项应被忽略
-                
+                var val = new HashSet<int> { 1, 2, 3, 4, 5, 3, 2 }; // Ignore duplicate entries.
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<HashSet<int>>(buf);
-                
+
                 if (val.SetEquals(result))
                     results.Add("✓ TestHashSet - PASSED");
                 else
@@ -150,15 +158,17 @@ namespace LuminPackUnitTest
         }
 
         // SortedSet Tests
+        /// <summary>Verifies test sorted set.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestSortedSet(List<string> results)
         {
             try
             {
                 var val = new SortedSet<int> { 5, 1, 3, 2, 4 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<SortedSet<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestSortedSet - PASSED");
                 else
@@ -171,6 +181,8 @@ namespace LuminPackUnitTest
         }
 
         // SortedList Tests
+        /// <summary>Verifies test sorted list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestSortedList(List<string> results)
         {
             try
@@ -181,10 +193,10 @@ namespace LuminPackUnitTest
                     { 1, "One" },
                     { 2, "Two" }
                 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<SortedList<int, string>>(buf);
-                
+
                 if (val.Count == result.Count && val.All(kv => result.ContainsKey(kv.Key) && result[kv.Key] == kv.Value))
                     results.Add("✓ TestSortedList - PASSED");
                 else
@@ -197,6 +209,8 @@ namespace LuminPackUnitTest
         }
 
         // BlockingCollection Tests
+        /// <summary>Verifies test blocking collection.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestBlockingCollection(List<string> results)
         {
             try
@@ -206,13 +220,13 @@ namespace LuminPackUnitTest
                 val.Add(2);
                 val.Add(3);
                 val.CompleteAdding();
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<BlockingCollection<int>>(buf);
-                
+
                 var valArray = val.ToArray();
                 var resultArray = result.ToArray();
-                
+
                 if (valArray.SequenceEqual(resultArray))
                     results.Add("✓ TestBlockingCollection - PASSED");
                 else
@@ -225,19 +239,21 @@ namespace LuminPackUnitTest
         }
 
         // ConcurrentBag Tests
+        /// <summary>Verifies test concurrent bag.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestConcurrentBag(List<string> results)
         {
             try
             {
                 var val = new ConcurrentBag<int> { 1, 2, 3, 4, 5 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ConcurrentBag<int>>(buf);
-                
-                // ConcurrentBag 没有保证顺序，所以比较集合内容而不考虑顺序
+
+                // ConcurrentBag has no ordering guarantee; compare contents without regard to order.
                 var valSorted = val.OrderBy(x => x).ToArray();
                 var resultSorted = result.OrderBy(x => x).ToArray();
-                
+
                 if (valSorted.SequenceEqual(resultSorted))
                     results.Add("✓ TestConcurrentBag - PASSED");
                 else
@@ -250,15 +266,17 @@ namespace LuminPackUnitTest
         }
 
         // ConcurrentQueue Tests
+        /// <summary>Verifies test concurrent queue.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestConcurrentQueue(List<string> results)
         {
             try
             {
                 var val = new ConcurrentQueue<int>(new[] { 1, 2, 3, 4, 5 });
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ConcurrentQueue<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestConcurrentQueue - PASSED");
                 else
@@ -271,15 +289,17 @@ namespace LuminPackUnitTest
         }
 
         // ConcurrentStack Tests
+        /// <summary>Verifies test concurrent stack.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestConcurrentStack(List<string> results)
         {
             try
             {
                 var val = new ConcurrentStack<int>(new[] { 1, 2, 3, 4, 5 });
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ConcurrentStack<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestConcurrentStack - PASSED");
                 else
@@ -292,15 +312,17 @@ namespace LuminPackUnitTest
         }
 
         // Collection Tests
+        /// <summary>Verifies test collection.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestCollection(List<string> results)
         {
             try
             {
                 var val = new Collection<int> { 1, 2, 3, 4, 5 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<Collection<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestCollection - PASSED");
                 else
@@ -313,15 +335,17 @@ namespace LuminPackUnitTest
         }
 
         // ObservableCollection Tests
+        /// <summary>Verifies test observable collection.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestObservableCollection(List<string> results)
         {
             try
             {
                 var val = new ObservableCollection<int> { 1, 2, 3, 4, 5 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ObservableCollection<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestObservableCollection - PASSED");
                 else
@@ -334,16 +358,18 @@ namespace LuminPackUnitTest
         }
 
         // ReadOnlyCollection Tests
+        /// <summary>Verifies test read only collection.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestReadOnlyCollection(List<string> results)
         {
             try
             {
                 var innerList = new List<int> { 1, 2, 3, 4, 5 };
                 var val = new ReadOnlyCollection<int>(innerList);
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ReadOnlyCollection<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestReadOnlyCollection - PASSED");
                 else
@@ -356,16 +382,18 @@ namespace LuminPackUnitTest
         }
 
         // ReadOnlyObservableCollection Tests
+        /// <summary>Verifies test read only observable collection.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestReadOnlyObservableCollection(List<string> results)
         {
             try
             {
                 var innerCollection = new ObservableCollection<int> { 1, 2, 3, 4, 5 };
                 var val = new ReadOnlyObservableCollection<int>(innerCollection);
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ReadOnlyObservableCollection<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestReadOnlyObservableCollection - PASSED");
                 else
@@ -378,6 +406,8 @@ namespace LuminPackUnitTest
         }
 
         // PriorityQueue Tests
+        /// <summary>Verifies test priority queue.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestPriorityQueue(List<string> results)
         {
             try
@@ -386,23 +416,23 @@ namespace LuminPackUnitTest
                 val.Enqueue("One", 3);
                 val.Enqueue("Two", 1);
                 val.Enqueue("Three", 2);
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<PriorityQueue<string, int>>(buf);
-                
+
                 bool equal = true;
                 while (val.Count > 0 && result.Count > 0)
                 {
                     val.TryDequeue(out var valItem, out var valPriority);
                     result.TryDequeue(out var resultItem, out var resultPriority);
-                    
+
                     if (valItem != resultItem || valPriority != resultPriority)
                     {
                         equal = false;
                         break;
                     }
                 }
-                
+
                 if (equal && val.Count == 0 && result.Count == 0)
                     results.Add("✓ TestPriorityQueue - PASSED");
                 else
@@ -415,15 +445,17 @@ namespace LuminPackUnitTest
         }
 
         // ImmutableArray Tests
+        /// <summary>Verifies test immutable array.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestImmutableArray(List<string> results)
         {
             try
             {
                 var val = ImmutableArray.Create(1, 2, 3, 4, 5);
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ImmutableArray<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestImmutableArray - PASSED");
                 else
@@ -436,15 +468,17 @@ namespace LuminPackUnitTest
         }
 
         // ImmutableList Tests
+        /// <summary>Verifies test immutable list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestImmutableList(List<string> results)
         {
             try
             {
                 var val = ImmutableList.Create(1, 2, 3, 4, 5);
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ImmutableList<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestImmutableList - PASSED");
                 else
@@ -457,15 +491,17 @@ namespace LuminPackUnitTest
         }
 
         // ImmutableQueue Tests
+        /// <summary>Verifies test immutable queue.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestImmutableQueue(List<string> results)
         {
             try
             {
                 var val = ImmutableQueue.Create(1, 2, 3, 4, 5);
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ImmutableQueue<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestImmutableQueue - PASSED");
                 else
@@ -478,15 +514,17 @@ namespace LuminPackUnitTest
         }
 
         // ImmutableStack Tests
+        /// <summary>Verifies test immutable stack.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestImmutableStack(List<string> results)
         {
             try
             {
                 var val = ImmutableStack.Create(1, 2, 3, 4, 5);
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ImmutableStack<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestImmutableStack - PASSED");
                 else
@@ -499,6 +537,8 @@ namespace LuminPackUnitTest
         }
 
         // ImmutableDictionary Tests
+        /// <summary>Verifies test immutable dictionary.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestImmutableDictionary(List<string> results)
         {
             try
@@ -509,10 +549,10 @@ namespace LuminPackUnitTest
                     KeyValuePair.Create(2, "Two"),
                     KeyValuePair.Create(3, "Three")
                 });
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ImmutableDictionary<int, string>>(buf);
-                
+
                 if (val.Count == result.Count && val.All(kv => result.TryGetValue(kv.Key, out var v) && v == kv.Value))
                     results.Add("✓ TestImmutableDictionary - PASSED");
                 else
@@ -525,15 +565,17 @@ namespace LuminPackUnitTest
         }
 
         // ImmutableHashSet Tests
+        /// <summary>Verifies test immutable hash set.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestImmutableHashSet(List<string> results)
         {
             try
             {
-                var val = ImmutableHashSet.Create(1, 2, 3, 4, 5, 3, 2); // 重复项应被忽略
-                
+                var val = ImmutableHashSet.Create(1, 2, 3, 4, 5, 3, 2); // Ignore duplicate entries.
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ImmutableHashSet<int>>(buf);
-                
+
                 if (val.SetEquals(result))
                     results.Add("✓ TestImmutableHashSet - PASSED");
                 else
@@ -546,6 +588,8 @@ namespace LuminPackUnitTest
         }
 
         // ImmutableSortedDictionary Tests
+        /// <summary>Verifies test immutable sorted dictionary.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestImmutableSortedDictionary(List<string> results)
         {
             try
@@ -556,10 +600,10 @@ namespace LuminPackUnitTest
                     KeyValuePair.Create(1, "One"),
                     KeyValuePair.Create(2, "Two")
                 });
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ImmutableSortedDictionary<int, string>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestImmutableSortedDictionary - PASSED");
                 else
@@ -572,15 +616,17 @@ namespace LuminPackUnitTest
         }
 
         // ImmutableSortedSet Tests
+        /// <summary>Verifies test immutable sorted set.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestImmutableSortedSet(List<string> results)
         {
             try
             {
                 var val = ImmutableSortedSet.Create(5, 1, 3, 2, 4);
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ImmutableSortedSet<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestImmutableSortedSet - PASSED");
                 else
@@ -594,6 +640,8 @@ namespace LuminPackUnitTest
 
 #if NET8_0_OR_GREATER
         // FrozenDictionary Tests (.NET 8+)
+        /// <summary>Verifies test frozen dictionary.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestFrozenDictionary(List<string> results)
         {
             try
@@ -604,10 +652,10 @@ namespace LuminPackUnitTest
                     [2] = "Two",
                     [3] = "Three"
                 }.ToFrozenDictionary();
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<FrozenDictionary<int, string>>(buf);
-                
+
                 if (val.Count == result.Count && val.All(kv => result.TryGetValue(kv.Key, out var v) && v == kv.Value))
                     results.Add("✓ TestFrozenDictionary - PASSED");
                 else
@@ -620,15 +668,17 @@ namespace LuminPackUnitTest
         }
 
         // FrozenSet Tests (.NET 8+)
+        /// <summary>Verifies test frozen set.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestFrozenSet(List<string> results)
         {
             try
             {
                 var val = new HashSet<int> { 1, 2, 3, 4, 5 }.ToFrozenSet();
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<FrozenSet<int>>(buf);
-                
+
                 if (val.SetEquals(result))
                     results.Add("✓ TestFrozenSet - PASSED");
                 else
@@ -641,19 +691,21 @@ namespace LuminPackUnitTest
         }
 #endif
 
-        // 接口类型测试
-        // 使用具体实现进行测试
+        // Interface serialization tests.
+        // Test a concrete implementation.
 
         // IEnumerable Tests
+        /// <summary>Verifies test i enumerable.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIEnumerable(List<string> results)
         {
             try
             {
                 IEnumerable<int> val = new List<int> { 1, 2, 3, 4, 5 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<IEnumerable<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIEnumerable - PASSED");
                 else
@@ -666,15 +718,17 @@ namespace LuminPackUnitTest
         }
 
         // ICollection Tests
+        /// <summary>Verifies test i collection.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestICollection(List<string> results)
         {
             try
             {
                 ICollection<int> val = new List<int> { 1, 2, 3, 4, 5 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ICollection<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestICollection - PASSED");
                 else
@@ -687,15 +741,17 @@ namespace LuminPackUnitTest
         }
 
         // IReadOnlyCollection Tests
+        /// <summary>Verifies test i read only collection.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIReadOnlyCollection(List<string> results)
         {
             try
             {
                 IReadOnlyCollection<int> val = new List<int> { 1, 2, 3, 4, 5 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<IReadOnlyCollection<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIReadOnlyCollection - PASSED");
                 else
@@ -708,15 +764,17 @@ namespace LuminPackUnitTest
         }
 
         // IList Tests
+        /// <summary>Verifies test i list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIList(List<string> results)
         {
             try
             {
                 IList<int> val = new List<int> { 1, 2, 3, 4, 5 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<IList<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIList - PASSED");
                 else
@@ -729,15 +787,17 @@ namespace LuminPackUnitTest
         }
 
         // IReadOnlyList Tests
+        /// <summary>Verifies test i read only list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIReadOnlyList(List<string> results)
         {
             try
             {
                 IReadOnlyList<int> val = new List<int> { 1, 2, 3, 4, 5 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<IReadOnlyList<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIReadOnlyList - PASSED");
                 else
@@ -750,6 +810,8 @@ namespace LuminPackUnitTest
         }
 
         // IDictionary Tests
+        /// <summary>Verifies test i dictionary.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIDictionary(List<string> results)
         {
             try
@@ -760,10 +822,10 @@ namespace LuminPackUnitTest
                     [2] = "Two",
                     [3] = "Three"
                 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<IDictionary<int, string>>(buf);
-                
+
                 if (val.Count == result.Count && val.All(kv => result.ContainsKey(kv.Key) && result[kv.Key] == kv.Value))
                     results.Add("✓ TestIDictionary - PASSED");
                 else
@@ -776,6 +838,8 @@ namespace LuminPackUnitTest
         }
 
         // IReadOnlyDictionary Tests
+        /// <summary>Verifies test i read only dictionary.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIReadOnlyDictionary(List<string> results)
         {
             try
@@ -786,10 +850,10 @@ namespace LuminPackUnitTest
                     [2] = "Two",
                     [3] = "Three"
                 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<IReadOnlyDictionary<int, string>>(buf);
-                
+
                 if (val.Count == result.Count && val.All(kv => result.ContainsKey(kv.Key) && result[kv.Key] == kv.Value))
                     results.Add("✓ TestIReadOnlyDictionary - PASSED");
                 else
@@ -802,6 +866,8 @@ namespace LuminPackUnitTest
         }
 
         // ILookup Tests
+        /// <summary>Verifies test i lookup.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestILookup(List<string> results)
         {
             try
@@ -814,12 +880,12 @@ namespace LuminPackUnitTest
                     new { Key = "C", Value = 4 },
                     new { Key = "B", Value = 5 }
                 };
-                
+
                 ILookup<string, int> val = data.ToLookup(x => x.Key, x => x.Value);
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ILookup<string, int>>(buf);
-                
+
                 bool equal = true;
                 foreach (var group in val)
                 {
@@ -828,14 +894,14 @@ namespace LuminPackUnitTest
                         equal = false;
                         break;
                     }
-                    
+
                     if (!group.SequenceEqual(result[group.Key]))
                     {
                         equal = false;
                         break;
                     }
                 }
-                
+
                 if (equal && val.Count == result.Count)
                     results.Add("✓ TestILookup - PASSED");
                 else
@@ -848,6 +914,8 @@ namespace LuminPackUnitTest
         }
 
         // IGrouping Tests
+        /// <summary>Verifies test i grouping.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIGrouping(List<string> results)
         {
             try
@@ -858,13 +926,13 @@ namespace LuminPackUnitTest
                     new { Key = "A", Value = 2 },
                     new { Key = "A", Value = 3 }
                 };
-                
+
                 var lookup = data.ToLookup(x => x.Key, x => x.Value);
                 IGrouping<string, int> val = lookup.First();
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<IGrouping<string, int>>(buf);
-                
+
                 if (val.Key == result.Key && val.SequenceEqual(result))
                     results.Add("✓ TestIGrouping - PASSED");
                 else
@@ -877,15 +945,17 @@ namespace LuminPackUnitTest
         }
 
         // ISet Tests
+        /// <summary>Verifies test i set.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestISet(List<string> results)
         {
             try
             {
                 ISet<int> val = new HashSet<int> { 1, 2, 3, 4, 5 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<ISet<int>>(buf);
-                
+
                 if (val.SetEquals(result))
                     results.Add("✓ TestISet - PASSED");
                 else
@@ -898,15 +968,17 @@ namespace LuminPackUnitTest
         }
 
         // IReadOnlySet Tests
+        /// <summary>Verifies test i read only set.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIReadOnlySet(List<string> results)
         {
             try
             {
                 IReadOnlySet<int> val = new HashSet<int> { 1, 2, 3, 4, 5 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<IReadOnlySet<int>>(buf);
-                
+
                 if (val.SetEquals(result))
                     results.Add("✓ TestIReadOnlySet - PASSED");
                 else
@@ -918,18 +990,20 @@ namespace LuminPackUnitTest
             }
         }
 
-        // 不可变集合接口测试
+        // Immutable collection interface tests.
 
         // IImmutableList Tests
+        /// <summary>Verifies test i immutable list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIImmutableList(List<string> results)
         {
             try
             {
                 IImmutableList<int> val = ImmutableList.Create(1, 2, 3, 4, 5);
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<IImmutableList<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIImmutableList - PASSED");
                 else
@@ -942,15 +1016,17 @@ namespace LuminPackUnitTest
         }
 
         // IImmutableQueue Tests
+        /// <summary>Verifies test i immutable queue.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIImmutableQueue(List<string> results)
         {
             try
             {
                 IImmutableQueue<int> val = ImmutableQueue.Create(1, 2, 3, 4, 5);
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<IImmutableQueue<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIImmutableQueue - PASSED");
                 else
@@ -963,15 +1039,17 @@ namespace LuminPackUnitTest
         }
 
         // IImmutableStack Tests
+        /// <summary>Verifies test i immutable stack.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIImmutableStack(List<string> results)
         {
             try
             {
                 IImmutableStack<int> val = ImmutableStack.Create(1, 2, 3, 4, 5);
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<IImmutableStack<int>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIImmutableStack - PASSED");
                 else
@@ -984,6 +1062,8 @@ namespace LuminPackUnitTest
         }
 
         // IImmutableDictionary Tests
+        /// <summary>Verifies test i immutable dictionary.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIImmutableDictionary(List<string> results)
         {
             try
@@ -994,10 +1074,10 @@ namespace LuminPackUnitTest
                     KeyValuePair.Create(2, "Two"),
                     KeyValuePair.Create(3, "Three")
                 });
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<IImmutableDictionary<int, string>>(buf);
-                
+
                 if (val.Count == result.Count && val.All(kv => result.TryGetValue(kv.Key, out var v) && v == kv.Value))
                     results.Add("✓ TestIImmutableDictionary - PASSED");
                 else
@@ -1010,15 +1090,17 @@ namespace LuminPackUnitTest
         }
 
         // IImmutableSet Tests
+        /// <summary>Verifies test i immutable set.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIImmutableSet(List<string> results)
         {
             try
             {
                 IImmutableSet<int> val = ImmutableHashSet.Create(1, 2, 3, 4, 5);
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 var result = LuminPackSerializer.Deserialize<IImmutableSet<int>>(buf);
-                
+
                 if (val.SetEquals(result))
                     results.Add("✓ TestIImmutableSet - PASSED");
                 else

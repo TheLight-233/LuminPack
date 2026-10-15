@@ -1,8 +1,4 @@
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -30,6 +26,8 @@ if (args.Contains("--verify-scoped-emission", StringComparer.Ordinal))
     return;
 }
 
+// <summary>Verifies verify read only collection builder.</summary>
+// <param name="references">The references used by this operation.</param>
 static void VerifyReadOnlyCollectionBuilder(MetadataReference[] references)
 {
     // .NET Core removed ReadOnlyCollectionBuilder<T> from the runtime's own
@@ -91,6 +89,8 @@ static void VerifyReadOnlyCollectionBuilder(MetadataReference[] references)
     }
 }
 
+// <summary>Finds the sci netstandard2 dll in the supplied metadata.</summary>
+// <returns>The result of the operation.</returns>
 static string FindSciNetstandard2Dll()
 {
     string root = Path.Combine(
@@ -296,6 +296,8 @@ Console.WriteLine(
     $"Passed {CompilationCount} parallel compilations and " +
     $"{CompilationCount * ValidTypesPerCompilation} valid generated types.");
 
+// <summary>Verifies verify union partial diagnostic.</summary>
+// <param name="references">The references used by this operation.</param>
 static void VerifyUnionPartialDiagnostic(MetadataReference[] references)
 {
     const string source = """
@@ -345,6 +347,8 @@ static void VerifyUnionPartialDiagnostic(MetadataReference[] references)
     }
 }
 
+// <summary>Verifies verify scoped emission.</summary>
+// <param name="references">The references used by this operation.</param>
 static void VerifyScopedEmission(MetadataReference[] references)
 {
     const string source = """
@@ -384,6 +388,8 @@ static void VerifyScopedEmission(MetadataReference[] references)
         "C# 11 / NET8");
 }
 
+// <summary>Verifies verify union auto discovery.</summary>
+// <param name="references">The references used by this operation.</param>
 static void VerifyUnionAutoDiscovery(MetadataReference[] references)
 {
     const string source = """
@@ -493,6 +499,8 @@ static void VerifyUnionAutoDiscovery(MetadataReference[] references)
     }
 }
 
+// <summary>Verifies verify generic union dispatch.</summary>
+// <param name="references">The references used by this operation.</param>
 static void VerifyGenericUnionDispatch(MetadataReference[] references)
 {
     const string source = """
@@ -567,6 +575,8 @@ static void VerifyGenericUnionDispatch(MetadataReference[] references)
     }
 }
 
+// <summary>Verifies verify sealed union dispatch.</summary>
+// <param name="references">The references used by this operation.</param>
 static void VerifySealedUnionDispatch(MetadataReference[] references)
 {
     const string source = """
@@ -649,6 +659,8 @@ static void VerifySealedUnionDispatch(MetadataReference[] references)
     }
 }
 
+// <summary>Verifies verify direct static dispatch.</summary>
+// <param name="platformReferences">The platform references used by this operation.</param>
 static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
 {
     var parseOptions = CSharpParseOptions.Default
@@ -853,6 +865,8 @@ static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
     }
 }
 
+// <summary>Verifies verify light mode.</summary>
+// <param name="platformReferences">The platform references used by this operation.</param>
 static void VerifyLightMode(MetadataReference[] platformReferences)
 {
     var parseOptions = CSharpParseOptions.Default
@@ -993,6 +1007,8 @@ static void VerifyLightMode(MetadataReference[] platformReferences)
     }
 }
 
+// <summary>Verifies verify medium mode.</summary>
+// <param name="platformReferences">The platform references used by this operation.</param>
 static void VerifyMediumMode(MetadataReference[] platformReferences)
 {
     var parseOptions = CSharpParseOptions.Default
@@ -1072,6 +1088,8 @@ static void VerifyMediumMode(MetadataReference[] platformReferences)
     }
 }
 
+// <summary>Verifies verify minimal mode.</summary>
+// <param name="platformReferences">The platform references used by this operation.</param>
 static void VerifyMinimalMode(MetadataReference[] platformReferences)
 {
     var parseOptions = CSharpParseOptions.Default
@@ -1166,10 +1184,15 @@ static void VerifyMinimalMode(MetadataReference[] platformReferences)
     }
 }
 
+// <summary>Verifies run prune mode generators.</summary>
+// <param name="input">The input data to process.</param>
+// <param name="parseOptions">The parse options used by this operation.</param>
+// <returns>The result of the operation.</returns>
 static (Compilation Output, string Generated) RunPruneModeGenerators(
     CSharpCompilation input,
     CSharpParseOptions parseOptions)
-{    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+{
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
         new Microsoft.CodeAnalysis.ISourceGenerator[]
         {
             new LuminPackSourceGenerator().AsSourceGenerator(),
@@ -1191,10 +1214,15 @@ static (Compilation Output, string Generated) RunPruneModeGenerators(
     return (output, generated);
 }
 
+// <summary>Verifies run formatter generators.</summary>
+// <param name="input">The input data to process.</param>
+// <param name="parseOptions">The parse options used by this operation.</param>
+// <returns>The result of the operation.</returns>
 static (Compilation Output, string Generated) RunFormatterGenerators(
     CSharpCompilation input,
     CSharpParseOptions parseOptions)
-{    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+{
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
         new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
         parseOptions: parseOptions);
     driver = driver.RunGeneratorsAndUpdateCompilation(input, out Compilation output, out _);
@@ -1212,6 +1240,10 @@ static (Compilation Output, string Generated) RunFormatterGenerators(
     return (output, generated);
 }
 
+// <summary>Verifies assert no compilation errors.</summary>
+// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+// <param name="scenario">The scenario used by this operation.</param>
+// <param name="ignoreRoslyn43RefReadonlyMismatch">The ignore roslyn43 ref readonly mismatch used by this operation.</param>
 static void AssertNoCompilationErrors(
     Compilation compilation,
     string scenario,
@@ -1236,6 +1268,9 @@ static void AssertNoCompilationErrors(
     }
 }
 
+// <summary>Determines whether the supplied value has the roslyn43 ref readonly mismatch classification.</summary>
+// <param name="diagnostic">The diagnostic used by this operation.</param>
+// <returns>Whether the requested condition or operation succeeded.</returns>
 static bool IsRoslyn43RefReadonlyMismatch(Diagnostic diagnostic)
 {
     if (diagnostic.Id != "CS1620" || diagnostic.Location.SourceTree is not { } tree)
@@ -1246,6 +1281,8 @@ static bool IsRoslyn43RefReadonlyMismatch(Diagnostic diagnostic)
         .Contains("Unsafe.AsRef(in value)", StringComparison.Ordinal);
 }
 
+// <summary>Verifies verify formatter scope.</summary>
+// <param name="references">The references used by this operation.</param>
 static void VerifyFormatterScope(MetadataReference[] references)
 {
     const string runtimeSource = """
@@ -1334,6 +1371,12 @@ static void VerifyFormatterScope(MetadataReference[] references)
     }
 }
 
+// <summary>Verifies run map generator.</summary>
+// <param name="source">The input data to process.</param>
+// <param name="assemblyName">The assembly name used by this operation.</param>
+// <param name="references">The references used by this operation.</param>
+// <param name="parseOptions">The parse options used by this operation.</param>
+// <returns>The result of the operation.</returns>
 static string[] RunMapGenerator(
     string source,
     string assemblyName,
@@ -1356,6 +1399,12 @@ static string[] RunMapGenerator(
         .ToArray();
 }
 
+// <summary>Verifies assert scoped emission.</summary>
+// <param name="source">The input data to process.</param>
+// <param name="references">The references used by this operation.</param>
+// <param name="parseOptions">The parse options used by this operation.</param>
+// <param name="shouldEmitScoped">The should emit scoped used by this operation.</param>
+// <param name="scenario">The scenario used by this operation.</param>
 static void AssertScopedEmission(
     string source,
     MetadataReference[] references,
@@ -1395,6 +1444,9 @@ static void AssertScopedEmission(
     }
 }
 
+// <summary>Verifies build source.</summary>
+// <param name="compilationIndex">The compilation index used by this operation.</param>
+// <returns>The result of the operation.</returns>
 static string BuildSource(int compilationIndex)
 {
     var types = string.Join(
@@ -1429,4 +1481,3 @@ static string BuildSource(int compilationIndex)
         }
         """;
 }
-

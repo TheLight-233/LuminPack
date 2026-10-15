@@ -1,4 +1,3 @@
-using System;
 using System.Text;
 using LuminPack.Code;
 
@@ -9,11 +8,14 @@ using static CodeEmitterRegistry;
 /// <summary>Emits serialization code for the span-backed parser inventory.</summary>
 public static class MemoryEmitter
 {
+    /// <summary>Appends binary writing statements for memory values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string baseType = GetBaseType(fieldData.TypeName);
-		string length = baseType == "global::System.ArraySegment" ? "value.Count" :
-			baseType == "global::System.Buffers.ReadOnlySequence" ? "checked((int)value.Length)" : "value.Length";
+        string length = baseType == "global::System.ArraySegment" ? "value.Count" :
+            baseType == "global::System.Buffers.ReadOnlySequence" ? "checked((int)value.Length)" : "value.Length";
         if (baseType == "global::System.ArraySegment")
         {
             sb.AppendLine("            if (value.Array is null)");
@@ -65,6 +67,9 @@ public static class MemoryEmitter
         sb.AppendLine("            writer.CheckBuffer();");
     }
 
+    /// <summary>Appends binary reading statements for memory values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string baseType = GetBaseType(fieldData.TypeName);
@@ -85,6 +90,9 @@ public static class MemoryEmitter
         AppendArrayAssignment(sb, baseType, elementType);
     }
 
+    /// <summary>Appends JSON writing statements for memory values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string baseType = GetBaseType(fieldData.TypeName);
@@ -132,6 +140,9 @@ public static class MemoryEmitter
         sb.AppendLine("            writer.WriteArrayEnd();");
     }
 
+    /// <summary>Appends JSON reading statements for memory values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string baseType = GetBaseType(fieldData.TypeName);
@@ -157,6 +168,9 @@ public static class MemoryEmitter
         AppendArrayAssignment(sb, baseType, elementType);
     }
 
+    /// <summary>Appends JSON writing statements for memory values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="indent">The indentation level of the generated statements.</param>
     private static void AppendJsonItemWrite(StringBuilder sb, string indent)
     {
         sb.AppendLine(indent + "if (!isFirst) writer.WriteByteRaw((byte)',');");
@@ -166,11 +180,18 @@ public static class MemoryEmitter
         sb.AppendLine(indent + "writer.WriteValue(in temp);");
     }
 
+    /// <summary>Appends binary size evaluation statements for memory values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="baseType">The base type used by this operation.</param>
     private static void AppendNullAssignment(StringBuilder sb, string baseType)
     {
         sb.AppendLine(baseType == "global::System.ArraySegment" ? "                value = default;" : "                value = default;");
     }
 
+    /// <summary>Appends binary size evaluation statements for memory values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="baseType">The base type used by this operation.</param>
+    /// <param name="elementType">The element type used by this operation.</param>
     private static void AppendArrayAssignment(StringBuilder sb, string baseType, string elementType)
     {
         if (baseType == "global::System.ArraySegment")
@@ -181,6 +202,9 @@ public static class MemoryEmitter
             sb.AppendLine("            value = array;");
     }
 
+    /// <summary>Obtains the base type for the supplied input.</summary>
+    /// <param name="typeName">The C# type name to use in generated source.</param>
+    /// <returns>The result of the operation.</returns>
     private static string GetBaseType(string typeName)
     {
         int separator = typeName.IndexOf('<');

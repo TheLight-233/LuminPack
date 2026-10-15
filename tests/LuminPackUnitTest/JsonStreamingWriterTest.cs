@@ -7,8 +7,11 @@ using Xunit;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides json streaming writer test functionality.</summary>
 public class JsonStreamingWriterTest
 {
+    /// <summary>Verifies streaming matches contiguous output across chunks.</summary>
+    /// <param name="encoding">The encoding used by this operation.</param>
     [Theory]
     [InlineData(LuminPackStringEncoding.UTF8)]
     [InlineData(LuminPackStringEncoding.UTF16)]
@@ -18,7 +21,7 @@ public class JsonStreamingWriterTest
         var value = new IBufferModel
         {
             Id = 123,
-            Name = new string('中', 30_000) + "😀\uD800\n\t\"\\" + new string('é', 2000),
+            Name = new string('\u4e2d', 30_000) + "😀\uD800\n\t\"\\" + new string('é', 2000),
             Numbers = Enumerable.Range(0, 2000).ToList()
         };
         using var contiguous = new LuminPack.Utility.LuminBufferWriter(true);
@@ -32,13 +35,15 @@ public class JsonStreamingWriterTest
         Assert.InRange(output.MaxSizeHint, 1, 4096);
     }
 
+    /// <summary>Verifies raw fragments and escaped property names cross chunks.</summary>
+    /// <param name="encoding">The encoding used by this operation.</param>
     [Theory]
     [InlineData(LuminPackStringEncoding.UTF8)]
     [InlineData(LuminPackStringEncoding.UTF16)]
     public void RawFragmentsAndEscapedPropertyNamesCrossChunks(LuminPackStringEncoding encoding)
     {
         var option = new LuminPackSerializerOption { StringEncoding = encoding };
-        string name = new string('中', 4000) + "\"\\\n😀";
+        string name = new string('\u4e2d', 4000) + "\"\\\n😀";
         var value = new Dictionary<string, string> { [name] = new string('x', 9000) + "😀" };
         var output = new ChunkWriter();
         LuminPackSerializer.SerializeJson(value, output, option);
@@ -47,6 +52,7 @@ public class JsonStreamingWriterTest
         Assert.InRange(output.MaxSizeHint, 1, 4096);
     }
 
+    /// <summary>Verifies explicit streaming writer counts and flushes exactly once.</summary>
     [Fact]
     public void ExplicitStreamingWriterCountsAndFlushesExactlyOnce()
     {
@@ -64,30 +70,45 @@ public class JsonStreamingWriterTest
         Assert.Equal(Encoding.UTF8.GetBytes("\"😀\" "), output.ToArray());
     }
 
+    /// <summary>Verifies output failure does not leak serializer operation state.</summary>
     [Fact]
     public void OutputFailureDoesNotLeakSerializerOperationState()
     {
-        var value = new IBufferModel { Id = 7, Name = new string('中', 10_000) };
+        var value = new IBufferModel { Id = 7, Name = new string('\u4e2d', 10_000) };
         Assert.Throws<InvalidOperationException>(() => LuminPackSerializer.SerializeJson(value, new FailingWriter()));
         var output = new ArrayBufferWriter<byte>();
         LuminPackSerializer.SerializeJson(value, output);
         Assert.Equal(Encoding.UTF8.GetBytes(LuminPackSerializer.SerializeJson(value)), output.WrittenSpan.ToArray());
     }
 
+    /// <summary>Provides failing writer functionality.</summary>
     private sealed class FailingWriter : IBufferWriter<byte>
     {
+        /// <summary>Advances the current buffer position by the supplied number of bytes.</summary>
+        /// <param name="count">The number of entries involved in the operation.</param>
         public void Advance(int count) => throw new InvalidOperationException("Injected output failure");
+        /// <summary>Obtains the memory for the supplied input.</summary>
+        /// <param name="sizeHint">The size hint used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         public Memory<byte> GetMemory(int sizeHint = 0) => new byte[Math.Max(1, sizeHint)];
+        /// <summary>Obtains the span for the supplied input.</summary>
+        /// <param name="sizeHint">The size hint used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         public Span<byte> GetSpan(int sizeHint = 0) => GetMemory(sizeHint).Span;
     }
 
+    /// <summary>Provides chunk writer functionality.</summary>
     private sealed class ChunkWriter : IBufferWriter<byte>
     {
         private readonly MemoryStream _committed = new();
         private byte[]? _current;
         private int _capacity;
+        /// <summary>Gets or sets the max size hint.</summary>
         public int MaxSizeHint { get; private set; }
+        /// <summary>Gets or sets the commit count.</summary>
         public int CommitCount { get; private set; }
+        /// <summary>Advances the current buffer position by the supplied number of bytes.</summary>
+        /// <param name="count">The number of entries involved in the operation.</param>
         public void Advance(int count)
         {
             Assert.NotNull(_current);
@@ -98,6 +119,9 @@ public class JsonStreamingWriterTest
             _current = null;
             CommitCount++;
         }
+        /// <summary>Obtains the memory for the supplied input.</summary>
+        /// <param name="sizeHint">The size hint used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         public Memory<byte> GetMemory(int sizeHint = 0)
         {
             Assert.Null(_current);
@@ -106,7 +130,12 @@ public class JsonStreamingWriterTest
             _current = Enumerable.Repeat((byte)0xCC, _capacity + 32).ToArray();
             return _current.AsMemory(16, _capacity);
         }
+        /// <summary>Obtains the span for the supplied input.</summary>
+        /// <param name="sizeHint">The size hint used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         public Span<byte> GetSpan(int sizeHint = 0) => GetMemory(sizeHint).Span;
+        /// <summary>Verifies to array.</summary>
+        /// <returns>The result of the operation.</returns>
         public byte[] ToArray() => _committed.ToArray();
     }
 }

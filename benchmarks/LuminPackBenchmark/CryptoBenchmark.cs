@@ -1,4 +1,3 @@
-using System;
 using System.Security.Cryptography;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
@@ -31,9 +30,11 @@ namespace LuminPackBenchmark
 
         private ChaCha20Poly1305 _bcl;
 
+        /// <summary>Stores the size.</summary>
         [Params(64, 1024, 65536, 1048576)]
         public int Size;
 
+        /// <summary>Updates the up used by the current operation.</summary>
         [GlobalSetup]
         public void Setup()
         {
@@ -56,9 +57,12 @@ namespace LuminPackBenchmark
             _bcl.Encrypt(_nonce, _plain, _cipher, _tag, _aad);
         }
 
+        /// <summary>Measures cleanup for the configured benchmark input.</summary>
         [GlobalCleanup]
         public void Cleanup() => _bcl.Dispose();
 
+        /// <summary>Measures lumin pack encrypt for the configured benchmark input.</summary>
+        /// <returns>The result of the operation.</returns>
         [Benchmark(Baseline = true), BenchmarkCategory("Encrypt")]
         public byte[] LuminPack_Encrypt()
         {
@@ -66,6 +70,8 @@ namespace LuminPackBenchmark
             return _cipher;
         }
 
+        /// <summary>Measures bcl encrypt for the configured benchmark input.</summary>
+        /// <returns>The result of the operation.</returns>
         [Benchmark, BenchmarkCategory("Encrypt")]
         public byte[] Bcl_Encrypt()
         {
@@ -73,6 +79,8 @@ namespace LuminPackBenchmark
             return _cipher;
         }
 
+        /// <summary>Measures lumin pack decrypt for the configured benchmark input.</summary>
+        /// <returns>The result of the operation.</returns>
         [Benchmark(Baseline = true), BenchmarkCategory("Decrypt")]
         public byte[] LuminPack_Decrypt()
         {
@@ -80,6 +88,8 @@ namespace LuminPackBenchmark
             return _recovered;
         }
 
+        /// <summary>Measures bcl decrypt for the configured benchmark input.</summary>
+        /// <returns>The result of the operation.</returns>
         [Benchmark, BenchmarkCategory("Decrypt")]
         public byte[] Bcl_Decrypt()
         {

@@ -3,8 +3,11 @@ using LuminPack;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides queue stack regression test functionality.</summary>
 internal static class QueueStackRegressionTest
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(WrappedUnmanagedQueueKeepsFifoOrder), WrappedUnmanagedQueueKeepsFifoOrder);
@@ -13,6 +16,7 @@ internal static class QueueStackRegressionTest
         RunCase(results, nameof(JsonQueueAndStackUseLogicalOrder), JsonQueueAndStackUseLogicalOrder);
     }
 
+    /// <summary>Verifies wrapped unmanaged queue keeps fifo order.</summary>
     private static void WrappedUnmanagedQueueKeepsFifoOrder()
     {
         var value = new Queue<int>(8);
@@ -34,6 +38,7 @@ internal static class QueueStackRegressionTest
             "A deserialized Queue had invalid head/tail state on the next Enqueue.");
     }
 
+    /// <summary>Verifies wrapped reference queue keeps fifo order.</summary>
     private static void WrappedReferenceQueueKeepsFifoOrder()
     {
         var value = new Queue<string>(6);
@@ -52,6 +57,7 @@ internal static class QueueStackRegressionTest
             "A wrapped reference Queue lost FIFO order during binary round-trip.");
     }
 
+    /// <summary>Verifies empty and null queues stay distinct.</summary>
     private static void EmptyAndNullQueuesStayDistinct()
     {
         var empty = LuminPackSerializer.Deserialize<Queue<int>>(
@@ -64,6 +70,7 @@ internal static class QueueStackRegressionTest
         Assert(nullQueue is null, "A null Queue was decoded as an empty Queue.");
     }
 
+    /// <summary>Verifies json queue and stack use logical order.</summary>
     private static void JsonQueueAndStackUseLogicalOrder()
     {
         var queue = new Queue<int>(5);
@@ -87,6 +94,10 @@ internal static class QueueStackRegressionTest
         Assert(stackValues.SequenceEqual(stack), "Stack JSON used bottom-to-top physical storage order.");
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -100,6 +111,9 @@ internal static class QueueStackRegressionTest
         }
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)

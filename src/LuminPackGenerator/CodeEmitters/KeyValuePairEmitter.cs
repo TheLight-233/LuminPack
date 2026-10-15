@@ -5,14 +5,21 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 
 using static CodeEmitterRegistry;
 
+/// <summary>Provides key value pair emitter functionality.</summary>
 public static class KeyValuePairEmitter
 {
+    /// <summary>Appends binary writing statements for key value pair values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            writer.WriteValue(value.Key);");
         sb.AppendLine("            writer.WriteValue(value.Value);");
     }
 
+    /// <summary>Appends binary reading statements for key value pair values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string keyType = GetFirstGeneric(fieldData.TypeName);
@@ -24,6 +31,9 @@ public static class KeyValuePairEmitter
         sb.AppendLine("            value = new global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">(key, itemValue);");
     }
 
+    /// <summary>Appends statements that calculate the binary payload size.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string keyType = GetFirstGeneric(fieldData.TypeName);
@@ -34,6 +44,9 @@ public static class KeyValuePairEmitter
         sb.AppendLine("            evaluator.CalculateOffset(ref itemValue);");
     }
 
+    /// <summary>Appends JSON writing statements for key value pair values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            writer.WriteArrayStart();");
@@ -45,6 +58,9 @@ public static class KeyValuePairEmitter
         sb.AppendLine("            writer.WriteArrayEnd();");
     }
 
+    /// <summary>Appends JSON reading statements for key value pair values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string keyType = GetFirstGeneric(fieldData.TypeName);

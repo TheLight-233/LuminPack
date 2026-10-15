@@ -1,4 +1,3 @@
-﻿using System;
 using System.Buffers;
 using System.Buffers.Text;
 using System.Runtime.CompilerServices;
@@ -10,6 +9,7 @@ using LuminPack.Utility;
 
 namespace LuminPack.Core
 {
+    /// <summary>Provides number char lookup functionality.</summary>
     internal static class NumberCharLookup
     {
 #if NET8_0_OR_GREATER
@@ -22,7 +22,8 @@ namespace LuminPack.Core
                 .Concat(new char[] { '"', '\\' }).ToArray());
 #endif
     }
-    
+
+    /// <summary>Reads JSON tokens and scalar values with configurable structural validation and UTF encoding.</summary>
     [StructLayout(LayoutKind.Sequential)]
 #if NET8_0_OR_GREATER
     [SkipLocalsInit]
@@ -35,7 +36,7 @@ namespace LuminPack.Core
 #else
         internal byte* _bufferStart;
 #endif
-        
+
         private readonly LuminPackReaderOptionalState _state;
         private readonly bool SerializeStringAsUtf8;
         private readonly int _maxDepth;
@@ -43,10 +44,10 @@ namespace LuminPack.Core
         private readonly bool _validateJsonSyntax;
         private byte[]? _utf8StringScratch;
         private char[]? _utf16StringScratch;
-        
+
         internal int _currentIndex;
         internal int _depth;
-        
+
         // --- RFC 8259 token sequence state -----------------------------------
         // Read() previously skipped ',', ':' unconditionally and never checked
         // which bracket closed which container, so malformed input such as
@@ -58,37 +59,57 @@ namespace LuminPack.Core
         private const byte JsonStateNameOrEnd = 3;   // after '{': a property name or '}'
         private const byte JsonStateColon = 4;       // after a property name: ':' is required
         private const byte JsonStateAfterValue = 5;  // after a value: ',' or the matching closing bracket
-        
+
         private byte _jsonState;
         /// <summary>Bit (depth - 1) is set while the container at that depth is an object.</summary>
         private ulong _containerKindBits;
         /// <summary>Container kinds for depths above 64; allocated only for unusually deep documents.</summary>
         private byte[]? _deepContainerKinds;
-        
+
+        /// <summary>Provides json token type functionality.</summary>
         public enum JsonTokenType : byte
         {
+            /// <summary>Specifies none.</summary>
             None,
+            /// <summary>Specifies object start.</summary>
             ObjectStart,
+            /// <summary>Specifies object end.</summary>
             ObjectEnd,
+            /// <summary>Specifies array start.</summary>
             ArrayStart,
+            /// <summary>Specifies array end.</summary>
             ArrayEnd,
+            /// <summary>Specifies property name.</summary>
             PropertyName,
+            /// <summary>Specifies string.</summary>
             String,
+            /// <summary>Specifies number.</summary>
             Number,
+            /// <summary>Specifies true.</summary>
             True,
+            /// <summary>Specifies false.</summary>
             False,
+            /// <summary>Specifies null.</summary>
             Null
         }
-        
+
+        /// <summary>Gets or sets the current token type.</summary>
         public JsonTokenType CurrentTokenType { get; internal set; }
+        /// <summary>Gets the current index.</summary>
         public int CurrentIndex => _currentIndex;
+        /// <summary>Gets the depth.</summary>
         public int Depth => _depth;
-        
+
+        /// <summary>Gets the option state.</summary>
         public LuminPackReaderOptionalState OptionState => _state;
+        /// <summary>Gets the option.</summary>
         public LuminPackSerializerOption Option => _state.Option;
-        
+
         #region Constructors
-        
+
+        /// <summary>Initializes a new instance of <c>LuminPackJsonReader</c>.</summary>
+        /// <param name="bufferReference">The buffer reference used by this operation.</param>
+        /// <param name="state">The reusable state associated with the operation.</param>
         public LuminPackJsonReader(ref Span<byte> bufferReference, LuminPackReaderOptionalState state)
         {
             _state = state;
@@ -110,7 +131,10 @@ namespace LuminPack.Core
             _utf8StringScratch = null;
             _utf16StringScratch = null;
         }
-        
+
+        /// <summary>Initializes a new instance of <c>LuminPackJsonReader</c>.</summary>
+        /// <param name="bufferReference">The buffer reference used by this operation.</param>
+        /// <param name="state">The reusable state associated with the operation.</param>
         public LuminPackJsonReader(ref ReadOnlySpan<byte> bufferReference, LuminPackReaderOptionalState state)
         {
             _state = state;
@@ -133,6 +157,8 @@ namespace LuminPack.Core
             _utf16StringScratch = null;
         }
 
+        /// <summary>Initializes a new instance of <c>LuminPackJsonReader</c>.</summary>
+        /// <param name="bufferWriter">The writer receiving the output data.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal LuminPackJsonReader(LuminBufferWriter bufferWriter)
         {
@@ -155,11 +181,14 @@ namespace LuminPack.Core
             _utf8StringScratch = null;
             _utf16StringScratch = null;
         }
-        
+
         #endregion
-        
+
         #region Core Methods
-        
+
+        /// <summary>Obtains the span reference for the supplied input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ref byte GetSpanReference(int index) =>
 #if NET8_0_OR_GREATER
@@ -167,7 +196,9 @@ namespace LuminPack.Core
 #else
             ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-        
+
+        /// <summary>Advances the current buffer position by the supplied number of bytes.</summary>
+        /// <param name="count">The number of entries involved in the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance(int count)
         {
@@ -177,7 +208,9 @@ namespace LuminPack.Core
 #endif
             _currentIndex += count;
         }
-        
+
+        /// <summary>Updates the span used by the current operation.</summary>
+        /// <param name="span">The buffer used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetSpan(ref Span<byte> span)
         {
@@ -188,7 +221,8 @@ namespace LuminPack.Core
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
         }
-        
+
+        /// <summary>Publishes pending buffer contents to the configured destination.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Flush()
         {
@@ -205,7 +239,9 @@ namespace LuminPack.Core
             _deepContainerKinds = null;
             CurrentTokenType = JsonTokenType.None;
         }
-        
+
+        /// <summary>Obtains the current span reference for the supplied input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ref byte GetCurrentSpanReference() =>
 #if NET8_0_OR_GREATER
@@ -213,20 +249,25 @@ namespace LuminPack.Core
 #else
             ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-        
+
+        /// <summary>Obtains the span for the supplied input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ReadOnlySpan<byte> GetSpan()
         {
             return _bufferReference[.._currentIndex];
         }
-        
+
+        /// <summary>Obtains the current span offset for the supplied input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ref int GetCurrentSpanOffset() => ref _currentIndex;
-        
+
         #endregion
-        
+
         #region JSON Basic Methods
-        
+
+        /// <summary>Performs the skip whitespace step for the current operation.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void SkipWhitespace()
         {
@@ -253,17 +294,27 @@ namespace LuminPack.Core
                 }
             }
         }
-        
+
+        /// <summary>Determines whether the supplied value has the value state classification.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool IsValueState(byte state) => state <= JsonStateValueOrEnd;
 
+        /// <summary>Determines whether the supplied value has the name state classification.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool IsNameState(byte state) => state == JsonStateName || state == JsonStateNameOrEnd;
 
+        /// <summary>Raises the exception for malformed json.</summary>
+        /// <param name="message">The message describing the failure.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void ThrowMalformedJson(string message) =>
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(message);
 
+        /// <summary>Determines whether the supplied value has the current container object classification.</summary>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool IsCurrentContainerObject()
         {
@@ -274,6 +325,8 @@ namespace LuminPack.Core
                 : _deepContainerKinds![_depth - 1] != 0;
         }
 
+        /// <summary>Performs the push container step for the current operation.</summary>
+        /// <param name="isObject">The is object used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void PushContainer(bool isObject)
         {
@@ -299,6 +352,9 @@ namespace LuminPack.Core
             _jsonState = isObject ? JsonStateNameOrEnd : JsonStateValueOrEnd;
         }
 
+        /// <summary>Updates the deep container kind used by the current operation.</summary>
+        /// <param name="depth">The nesting depth used to distinguish generated local variables.</param>
+        /// <param name="isObject">The is object used by this operation.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void SetDeepContainerKind(int depth, bool isObject)
         {
@@ -313,6 +369,8 @@ namespace LuminPack.Core
             kinds[depth - 1] = isObject ? (byte)1 : (byte)0;
         }
 
+        /// <summary>Performs the pop container step for the current operation.</summary>
+        /// <param name="isObject">The is object used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void PopContainer(bool isObject)
         {
@@ -325,6 +383,8 @@ namespace LuminPack.Core
         }
 
         /// <summary>Re-reads the next character after a separator; returns false at end of input.</summary>
+        /// <param name="c">Receives the c produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryReadCurrentChar(out char c)
         {
@@ -351,6 +411,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>Ensures a number or literal token ends at EOF or at a JSON structural delimiter.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void RequireTokenEndBoundary(int index)
         {
@@ -360,6 +421,9 @@ namespace LuminPack.Core
                 ThrowMalformedJson("Invalid JSON token: expected a value delimiter");
         }
 
+        /// <summary>Determines whether the supplied value has the value delimiter at classification.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool IsValueDelimiterAt(int index)
         {
@@ -388,6 +452,8 @@ namespace LuminPack.Core
         /// and the magnitude must fit in 19 digits / <see cref="long"/> — while every other shape (fractions,
         /// exponents, out-of-range literals) falls through to <see cref="ScanJsonNumber"/>.
         /// </summary>
+        /// <param name="value">Receives the value produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryReadPlainInteger(out long value)
         {
@@ -450,14 +516,17 @@ namespace LuminPack.Core
         }
 
         /// <summary>Digit value at <paramref name="index"/> or 10 when the buffer ends there.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private uint NumberDigitOrNonDigit(int index) =>
             IsNumberAtEnd(index) ? 10u : NumberDigitAt(index);
-        
+
         /// <summary>
         /// Advances to the next JSON token: the original lenient tokenizer when the document is trusted
         /// (option ValidateJsonSyntax = false, the default), the fully validated tokenizer otherwise.
         /// </summary>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool Read() => _validateJsonSyntax ? ReadStrict() : ReadTrusted();
 
@@ -466,6 +535,9 @@ namespace LuminPack.Core
         /// A mismatch leaves the reader unchanged so ordinary property lookup can handle
         /// whitespace, reordered, missing, unknown, duplicate or escaped names.
         /// </summary>
+        /// <param name="utf8Name">The utf8 name used by this operation.</param>
+        /// <param name="utf16Name">The utf16 name used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadPropertyName(ReadOnlySpan<byte> utf8Name, ReadOnlySpan<char> utf16Name)
         {
@@ -514,13 +586,15 @@ namespace LuminPack.Core
             return true;
         }
 
+        /// <summary>Reads the next JSON token using the configured trusted-input path.</summary>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         private bool ReadTrusted()
         {
             SkipWhitespace();
-            
+
             if (_currentIndex >= _bufferReference.Length)
                 return false;
-            
+
             char c;
             if (SerializeStringAsUtf8)
             {
@@ -533,7 +607,7 @@ namespace LuminPack.Core
                     return false;
                 c = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex));
             }
-            
+
             while (true)
             {
                 switch (c)
@@ -545,13 +619,13 @@ namespace LuminPack.Core
                         if (_maxDepth > 0 && _depth > _maxDepth)
                             global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON nesting depth exceeds the configured maximum");
                         return true;
-                        
+
                     case '}':
                         CurrentTokenType = JsonTokenType.ObjectEnd;
                         _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
                         _depth--;
                         return true;
-                        
+
                     case '[':
                         CurrentTokenType = JsonTokenType.ArrayStart;
                         _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
@@ -559,42 +633,42 @@ namespace LuminPack.Core
                         if (_maxDepth > 0 && _depth > _maxDepth)
                             global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON nesting depth exceeds the configured maximum");
                         return true;
-                        
+
                     case ']':
                         CurrentTokenType = JsonTokenType.ArrayEnd;
                         _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
                         _depth--;
                         return true;
-                        
+
                     case '"':
                         CurrentTokenType = JsonTokenType.String;
                         return true;
-                        
+
                     case 't':
                     case 'f':
                         return ReadBoolean();
-                        
+
                     case 'n':
                         return ReadNull();
-                        
+
                     case ',':
                     case ':':
-                    {
-                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
-                        SkipWhitespace();
-                        if (_currentIndex >= _bufferReference.Length)
-                            return false;
-                        if (SerializeStringAsUtf8)
-                            c = (char)_bufferReference[_currentIndex];
-                        else
                         {
-                            if (_currentIndex + 1 >= _bufferReference.Length)
+                            _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                            SkipWhitespace();
+                            if (_currentIndex >= _bufferReference.Length)
                                 return false;
-                            c = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex));
+                            if (SerializeStringAsUtf8)
+                                c = (char)_bufferReference[_currentIndex];
+                            else
+                            {
+                                if (_currentIndex + 1 >= _bufferReference.Length)
+                                    return false;
+                                c = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex));
+                            }
+                            continue;
                         }
-                        continue;
-                    }
-                        
+
                     default:
                         if ((c >= '0' && c <= '9') || c == '-')
                         {
@@ -605,18 +679,20 @@ namespace LuminPack.Core
                 }
             }
         }
-        
+
+        /// <summary>Reads the next JSON token with structural validation enabled.</summary>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         private bool ReadStrict()
         {
             SkipWhitespace();
-            
+
             if (_currentIndex >= _bufferReference.Length)
             {
                 if (_validateJsonSyntax && _depth > 0)
                     ThrowMalformedJson("Unterminated JSON object or array");
                 return false;
             }
-            
+
             char c;
             if (SerializeStringAsUtf8)
             {
@@ -633,11 +709,11 @@ namespace LuminPack.Core
                 }
                 c = Unsafe.ReadUnaligned<char>(ref GetSpanReference(_currentIndex));
             }
-            
+
             while (true)
             {
                 byte state = _jsonState;
-                
+
                 switch (c)
                 {
                     case '{':
@@ -647,7 +723,7 @@ namespace LuminPack.Core
                         PushContainer(true);
                         CurrentTokenType = JsonTokenType.ObjectStart;
                         return true;
-                        
+
                     case '}':
                         if (_validateJsonSyntax && state != JsonStateNameOrEnd && state != JsonStateAfterValue)
                             ThrowMalformedJson("Unexpected '}' in JSON input");
@@ -655,7 +731,7 @@ namespace LuminPack.Core
                         PopContainer(true);
                         CurrentTokenType = JsonTokenType.ObjectEnd;
                         return true;
-                        
+
                     case '[':
                         if (_validateJsonSyntax && !IsValueState(state))
                             ThrowMalformedJson("Expected a JSON value");
@@ -663,7 +739,7 @@ namespace LuminPack.Core
                         PushContainer(false);
                         CurrentTokenType = JsonTokenType.ArrayStart;
                         return true;
-                        
+
                     case ']':
                         if (_validateJsonSyntax && state != JsonStateValueOrEnd && state != JsonStateAfterValue)
                             ThrowMalformedJson("Unexpected ']' in JSON input");
@@ -671,7 +747,7 @@ namespace LuminPack.Core
                         PopContainer(false);
                         CurrentTokenType = JsonTokenType.ArrayEnd;
                         return true;
-                        
+
                     case '"':
                         if (IsNameState(state))
                         {
@@ -685,51 +761,51 @@ namespace LuminPack.Core
                         }
                         CurrentTokenType = JsonTokenType.String;
                         return true;
-                        
+
                     case 't':
                     case 'f':
                         if (_validateJsonSyntax && !IsValueState(state))
                             ThrowMalformedJson("Expected a JSON value");
                         return ReadBoolean();
-                        
+
                     case 'n':
                         if (_validateJsonSyntax && !IsValueState(state))
                             ThrowMalformedJson("Expected a JSON value");
                         return ReadNull();
-                        
+
                     case ',':
-                    {
-                        if (_validateJsonSyntax)
                         {
-                            if (state != JsonStateAfterValue)
-                                ThrowMalformedJson("Unexpected ',' in JSON input");
-                            if (_depth == 0)
-                                ThrowMalformedJson("Unexpected ',' outside a JSON container");
+                            if (_validateJsonSyntax)
+                            {
+                                if (state != JsonStateAfterValue)
+                                    ThrowMalformedJson("Unexpected ',' in JSON input");
+                                if (_depth == 0)
+                                    ThrowMalformedJson("Unexpected ',' outside a JSON container");
+                            }
+                            _jsonState = IsCurrentContainerObject() ? JsonStateName : JsonStateValue;
+                            _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                            SkipWhitespace();
+                            if (!TryReadCurrentChar(out c))
+                            {
+                                ThrowMalformedJson(_depth > 0
+                                    ? "Unterminated JSON object or array"
+                                    : "Unexpected end of JSON input after ','");
+                            }
+                            continue;
                         }
-                        _jsonState = IsCurrentContainerObject() ? JsonStateName : JsonStateValue;
-                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
-                        SkipWhitespace();
-                        if (!TryReadCurrentChar(out c))
-                        {
-                            ThrowMalformedJson(_depth > 0
-                                ? "Unterminated JSON object or array"
-                                : "Unexpected end of JSON input after ','");
-                        }
-                        continue;
-                    }
-                        
+
                     case ':':
-                    {
-                        if (_validateJsonSyntax && state != JsonStateColon)
-                            ThrowMalformedJson("Unexpected ':' in JSON input");
-                        _jsonState = JsonStateValue;
-                        _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
-                        SkipWhitespace();
-                        if (!TryReadCurrentChar(out c))
-                            ThrowMalformedJson("Unexpected end of JSON input after ':'");
-                        continue;
-                    }
-                        
+                        {
+                            if (_validateJsonSyntax && state != JsonStateColon)
+                                ThrowMalformedJson("Unexpected ':' in JSON input");
+                            _jsonState = JsonStateValue;
+                            _currentIndex += SerializeStringAsUtf8 ? 1 : 2;
+                            SkipWhitespace();
+                            if (!TryReadCurrentChar(out c))
+                                ThrowMalformedJson("Unexpected end of JSON input after ':'");
+                            continue;
+                        }
+
                     default:
                         if ((c >= '0' && c <= '9') || c == '-')
                         {
@@ -743,59 +819,64 @@ namespace LuminPack.Core
                 }
             }
         }
-        
+
+        /// <summary>Attempts to consume array start and reports whether it succeeded.</summary>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryConsumeArrayStart()
         {
             if (CurrentTokenType == JsonTokenType.ArrayStart)
                 return true;
-    
+
             if (Read() && CurrentTokenType == JsonTokenType.ArrayStart)
                 return true;
-    
+
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected JSON array");
             return false;
         }
-        
+
+        /// <summary>Determines whether the supplied value has the null classification.</summary>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsNull()
         {
             return CurrentTokenType == JsonTokenType.Null;
         }
-        
+
+        /// <summary>Skips the current JSON value, including any nested containers.</summary>
         public void Skip()
         {
             switch (CurrentTokenType)
             {
                 case JsonTokenType.ObjectStart:
                 case JsonTokenType.ArrayStart:
-                {
-                    int initialDepth = _depth;
-                    while (Read())
                     {
-                        if ((CurrentTokenType == JsonTokenType.ObjectEnd ||
-                             CurrentTokenType == JsonTokenType.ArrayEnd) &&
-                            _depth < initialDepth)
+                        int initialDepth = _depth;
+                        while (Read())
                         {
-                            return;
+                            if ((CurrentTokenType == JsonTokenType.ObjectEnd ||
+                                 CurrentTokenType == JsonTokenType.ArrayEnd) &&
+                                _depth < initialDepth)
+                            {
+                                return;
+                            }
+
+                            SkipScalarToken();
                         }
 
-                        SkipScalarToken();
+                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON object or array");
+                        break;
                     }
 
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON object or array");
-                    break;
-                }
-                    
                 case JsonTokenType.String:
                 case JsonTokenType.PropertyName:
                     SkipStringToken();
                     break;
-                    
+
                 case JsonTokenType.Number:
                     SkipNumberToken();
                     break;
-                    
+
                 case JsonTokenType.True:
                 case JsonTokenType.False:
                 case JsonTokenType.Null:
@@ -803,8 +884,8 @@ namespace LuminPack.Core
             }
         }
 
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         /// <summary>Verifies that no non-whitespace JSON remains after the current top-level value.</summary>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void EnsureEndOfDocument()
         {
             SkipWhitespace();
@@ -812,6 +893,7 @@ namespace LuminPack.Core
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unexpected data after the top-level JSON value");
         }
 
+        /// <summary>Performs the skip scalar token step for the current operation.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SkipScalarToken()
         {
@@ -827,6 +909,7 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Performs the skip string token step for the current operation.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SkipStringToken()
         {
@@ -835,10 +918,15 @@ namespace LuminPack.Core
             else
                 SkipStringUtf16();
         }
-        
+
+        /// <summary>Reads string utf8 from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ReadOnlySpan<byte> ReadStringUtf8() => ReadStringUtf8(true);
 
+        /// <summary>Reads string utf8 from the current input.</summary>
+        /// <param name="unescape">The unescape used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ReadOnlySpan<byte> ReadStringUtf8(bool unescape)
         {
@@ -847,11 +935,11 @@ namespace LuminPack.Core
 
             if (!SerializeStringAsUtf8)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("The reader is configured for UTF-16 JSON");
-            
+
             _currentIndex++;
             int start = _currentIndex;
             int scan = _currentIndex;
-            
+
 #if NET8_0_OR_GREATER
             var remaining = _bufferReference.Slice(_currentIndex);
             int special = remaining.IndexOfAny(NumberCharLookup.StringSpecialBytes);
@@ -872,7 +960,7 @@ namespace LuminPack.Core
             while (scan < _bufferReference.Length)
             {
                 byte b = _bufferReference[scan];
-                
+
                 if (b == '"')
                 {
                     var raw = _bufferReference.Slice(start, scan - start);
@@ -897,11 +985,13 @@ namespace LuminPack.Core
                     scan++;
                 }
             }
-            
+
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
             return default;
         }
-        
+
+        /// <summary>Reads string from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string ReadString()
         {
@@ -924,10 +1014,15 @@ namespace LuminPack.Core
                 return new string(utf16);
             }
         }
-        
+
+        /// <summary>Reads string utf16 from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ReadOnlySpan<char> ReadStringUtf16() => ReadStringUtf16(true);
 
+        /// <summary>Reads string utf16 from the current input.</summary>
+        /// <param name="unescape">The unescape used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ReadOnlySpan<char> ReadStringUtf16(bool unescape)
         {
@@ -936,11 +1031,11 @@ namespace LuminPack.Core
 
             if (SerializeStringAsUtf8)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("The reader is configured for UTF-8 JSON");
-            
+
             _currentIndex += 2;
             int start = _currentIndex;
             int scan = _currentIndex;
-            
+
 #if NET8_0_OR_GREATER
             int available = (_bufferReference.Length - _currentIndex) & ~1;
             var charSpan = MemoryMarshal.Cast<byte, char>(
@@ -996,12 +1091,14 @@ namespace LuminPack.Core
             return default;
         }
 
+        /// <summary>Performs the skip string utf8 step for the current operation.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SkipStringUtf8()
         {
             _ = ReadStringUtf8(false);
         }
 
+        /// <summary>Performs the skip string utf16 step for the current operation.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SkipStringUtf16()
         {
@@ -1010,6 +1107,8 @@ namespace LuminPack.Core
 
         // The shared scanner already checked literal control characters and the closing quote.
         // Skipping still validates every escape, but never creates a scratch buffer.
+        /// <summary>Validates string escapes before the operation continues.</summary>
+        /// <param name="source">The input data to process.</param>
         private static void ValidateStringEscapes(ReadOnlySpan<byte> source)
         {
             int index;
@@ -1022,26 +1121,32 @@ namespace LuminPack.Core
                 source = source.Slice(1);
                 switch (escape)
                 {
-                    case (byte)'"': case (byte)'\\': case (byte)'/':
-                    case (byte)'b': case (byte)'f': case (byte)'n': case (byte)'r': case (byte)'t':
+                    case (byte)'"':
+                    case (byte)'\\':
+                    case (byte)'/':
+                    case (byte)'b':
+                    case (byte)'f':
+                    case (byte)'n':
+                    case (byte)'r':
+                    case (byte)'t':
                         break;
                     case (byte)'u':
-                    {
-                        int codeUnit = ParseHex4(source, 0);
-                        source = source.Slice(4);
-                        if ((uint)(codeUnit - 0xD800) <= 0x3FFu)
                         {
-                            if (source.Length < 6 || source[0] != '\\' || source[1] != 'u')
-                                LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
-                            int low = ParseHex4(source, 2);
-                            if ((uint)(low - 0xDC00) > 0x3FFu)
-                                LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
-                            source = source.Slice(6);
+                            int codeUnit = ParseHex4(source, 0);
+                            source = source.Slice(4);
+                            if ((uint)(codeUnit - 0xD800) <= 0x3FFu)
+                            {
+                                if (source.Length < 6 || source[0] != '\\' || source[1] != 'u')
+                                    LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
+                                int low = ParseHex4(source, 2);
+                                if ((uint)(low - 0xDC00) > 0x3FFu)
+                                    LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
+                                source = source.Slice(6);
+                            }
+                            else if ((uint)(codeUnit - 0xDC00) <= 0x3FFu)
+                                LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
+                            break;
                         }
-                        else if ((uint)(codeUnit - 0xDC00) <= 0x3FFu)
-                            LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
-                        break;
-                    }
                     default:
                         LuminPackExceptionHelper.ThrowFormatException("Invalid JSON escape sequence");
                         break;
@@ -1049,6 +1154,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Validates string escapes before the operation continues.</summary>
+        /// <param name="source">The input data to process.</param>
         private static void ValidateStringEscapes(ReadOnlySpan<char> source)
         {
             int index;
@@ -1061,26 +1168,32 @@ namespace LuminPack.Core
                 source = source.Slice(1);
                 switch (escape)
                 {
-                    case '"': case '\\': case '/':
-                    case 'b': case 'f': case 'n': case 'r': case 't':
+                    case '"':
+                    case '\\':
+                    case '/':
+                    case 'b':
+                    case 'f':
+                    case 'n':
+                    case 'r':
+                    case 't':
                         break;
                     case 'u':
-                    {
-                        int codeUnit = ParseHex4(source, 0);
-                        source = source.Slice(4);
-                        if ((uint)(codeUnit - 0xD800) <= 0x3FFu)
                         {
-                            if (source.Length < 6 || source[0] != '\\' || source[1] != 'u')
-                                LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
-                            int low = ParseHex4(source, 2);
-                            if ((uint)(low - 0xDC00) > 0x3FFu)
-                                LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
-                            source = source.Slice(6);
+                            int codeUnit = ParseHex4(source, 0);
+                            source = source.Slice(4);
+                            if ((uint)(codeUnit - 0xD800) <= 0x3FFu)
+                            {
+                                if (source.Length < 6 || source[0] != '\\' || source[1] != 'u')
+                                    LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
+                                int low = ParseHex4(source, 2);
+                                if ((uint)(low - 0xDC00) > 0x3FFu)
+                                    LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
+                                source = source.Slice(6);
+                            }
+                            else if ((uint)(codeUnit - 0xDC00) <= 0x3FFu)
+                                LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
+                            break;
                         }
-                        else if ((uint)(codeUnit - 0xDC00) <= 0x3FFu)
-                            LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
-                        break;
-                    }
                     default:
                         LuminPackExceptionHelper.ThrowFormatException("Invalid JSON escape sequence");
                         break;
@@ -1088,6 +1201,9 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Performs the unescape utf8 step for the current operation.</summary>
+        /// <param name="source">The input data to process.</param>
+        /// <returns>The result of the operation.</returns>
         private ReadOnlySpan<byte> UnescapeUtf8(ReadOnlySpan<byte> source)
         {
             if (_utf8StringScratch is null || _utf8StringScratch.Length < source.Length)
@@ -1123,33 +1239,33 @@ namespace LuminPack.Core
                     case (byte)'r': destination[destinationIndex++] = (byte)'\r'; break;
                     case (byte)'t': destination[destinationIndex++] = (byte)'\t'; break;
                     case (byte)'u':
-                    {
-                        int scalar = ParseHex4(source, sourceIndex);
-                        sourceIndex += 4;
-
-                        if ((uint)(scalar - 0xD800) <= 0x3FFu)
                         {
-                            if (sourceIndex + 6 > source.Length ||
-                                source[sourceIndex] != '\\' || source[sourceIndex + 1] != 'u')
+                            int scalar = ParseHex4(source, sourceIndex);
+                            sourceIndex += 4;
+
+                            if ((uint)(scalar - 0xD800) <= 0x3FFu)
                             {
-                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
+                                if (sourceIndex + 6 > source.Length ||
+                                    source[sourceIndex] != '\\' || source[sourceIndex + 1] != 'u')
+                                {
+                                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
+                                }
+
+                                int low = ParseHex4(source, sourceIndex + 2);
+                                if ((uint)(low - 0xDC00) > 0x3FFu)
+                                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
+
+                                sourceIndex += 6;
+                                scalar = 0x10000 + ((scalar - 0xD800) << 10) + (low - 0xDC00);
+                            }
+                            else if ((uint)(scalar - 0xDC00) <= 0x3FFu)
+                            {
+                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
                             }
 
-                            int low = ParseHex4(source, sourceIndex + 2);
-                            if ((uint)(low - 0xDC00) > 0x3FFu)
-                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
-
-                            sourceIndex += 6;
-                            scalar = 0x10000 + ((scalar - 0xD800) << 10) + (low - 0xDC00);
+                            WriteUtf8Scalar(destination, ref destinationIndex, scalar);
+                            break;
                         }
-                        else if ((uint)(scalar - 0xDC00) <= 0x3FFu)
-                        {
-                            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
-                        }
-
-                        WriteUtf8Scalar(destination, ref destinationIndex, scalar);
-                        break;
-                    }
                     default:
                         global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON escape sequence");
                         break;
@@ -1159,6 +1275,9 @@ namespace LuminPack.Core
             return _utf8StringScratch.AsSpan(0, destinationIndex);
         }
 
+        /// <summary>Performs the unescape utf16 step for the current operation.</summary>
+        /// <param name="source">The input data to process.</param>
+        /// <returns>The result of the operation.</returns>
         private ReadOnlySpan<char> UnescapeUtf16(ReadOnlySpan<char> source)
         {
             if (_utf16StringScratch is null || _utf16StringScratch.Length < source.Length)
@@ -1194,37 +1313,37 @@ namespace LuminPack.Core
                     case 'r': destination[destinationIndex++] = '\r'; break;
                     case 't': destination[destinationIndex++] = '\t'; break;
                     case 'u':
-                    {
-                        int codeUnit = ParseHex4(source, sourceIndex);
-                        sourceIndex += 4;
-
-                        if ((uint)(codeUnit - 0xD800) <= 0x3FFu)
                         {
-                            if (sourceIndex + 6 > source.Length ||
-                                source[sourceIndex] != '\\' || source[sourceIndex + 1] != 'u')
+                            int codeUnit = ParseHex4(source, sourceIndex);
+                            sourceIndex += 4;
+
+                            if ((uint)(codeUnit - 0xD800) <= 0x3FFu)
                             {
-                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
+                                if (sourceIndex + 6 > source.Length ||
+                                    source[sourceIndex] != '\\' || source[sourceIndex + 1] != 'u')
+                                {
+                                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("A high surrogate must be followed by a low surrogate");
+                                }
+
+                                int low = ParseHex4(source, sourceIndex + 2);
+                                if ((uint)(low - 0xDC00) > 0x3FFu)
+                                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
+
+                                sourceIndex += 6;
+                                destination[destinationIndex++] = (char)codeUnit;
+                                destination[destinationIndex++] = (char)low;
+                            }
+                            else if ((uint)(codeUnit - 0xDC00) <= 0x3FFu)
+                            {
+                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
+                            }
+                            else
+                            {
+                                destination[destinationIndex++] = (char)codeUnit;
                             }
 
-                            int low = ParseHex4(source, sourceIndex + 2);
-                            if ((uint)(low - 0xDC00) > 0x3FFu)
-                                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid low surrogate in JSON string");
-
-                            sourceIndex += 6;
-                            destination[destinationIndex++] = (char)codeUnit;
-                            destination[destinationIndex++] = (char)low;
+                            break;
                         }
-                        else if ((uint)(codeUnit - 0xDC00) <= 0x3FFu)
-                        {
-                            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unexpected low surrogate in JSON string");
-                        }
-                        else
-                        {
-                            destination[destinationIndex++] = (char)codeUnit;
-                        }
-
-                        break;
-                    }
                     default:
                         global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON escape sequence");
                         break;
@@ -1234,6 +1353,10 @@ namespace LuminPack.Core
             return _utf16StringScratch.AsSpan(0, destinationIndex);
         }
 
+        /// <summary>Performs the parse hex4 step for the current operation.</summary>
+        /// <param name="source">The input data to process.</param>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int ParseHex4(ReadOnlySpan<byte> source, int index)
         {
@@ -1251,6 +1374,10 @@ namespace LuminPack.Core
             return result;
         }
 
+        /// <summary>Performs the parse hex4 step for the current operation.</summary>
+        /// <param name="source">The input data to process.</param>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int ParseHex4(ReadOnlySpan<char> source, int index)
         {
@@ -1268,6 +1395,9 @@ namespace LuminPack.Core
             return result;
         }
 
+        /// <summary>Performs the hex value step for the current operation.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int HexValue(int value)
         {
@@ -1277,6 +1407,10 @@ namespace LuminPack.Core
             return -1;
         }
 
+        /// <summary>Writes utf8 scalar to the current output.</summary>
+        /// <param name="destination">The destination receiving the result.</param>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="scalar">The scalar used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void WriteUtf8Scalar(Span<byte> destination, ref int index, int scalar)
         {
@@ -1304,6 +1438,12 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Reads string choice from the current input.</summary>
+        /// <param name="firstUtf8">The first utf8 used by this operation.</param>
+        /// <param name="firstUtf16">The first utf16 used by this operation.</param>
+        /// <param name="secondUtf8">The second utf8 used by this operation.</param>
+        /// <param name="secondUtf16">The second utf16 used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal int ReadStringChoice(
             ReadOnlySpan<byte> firstUtf8,
@@ -1326,10 +1466,11 @@ namespace LuminPack.Core
 
             return 0;
         }
-        
+
         /// <summary>
-        /// 用于嵌套对象 - 如果已经是 ObjectStart 就不再 Read
+        /// For nested objects, reuses an existing ObjectStart token instead of advancing again.
         /// </summary>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryConsumeObjectStart()
         {
@@ -1337,20 +1478,22 @@ namespace LuminPack.Core
             {
                 return true;
             }
-            
+
             if (Read() && CurrentTokenType == JsonTokenType.ObjectStart)
             {
                 return true;
             }
-            
+
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Expected JSON object");
             return false;
         }
-        
+
         #endregion
-        
+
         #region Primitive Types
 
+        /// <summary>Reads next float value from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public float ReadNextFloatValue()
         {
@@ -1359,13 +1502,14 @@ namespace LuminPack.Core
             return ReadFloat();
         }
 
+        /// <summary>Performs the consume array end step for the current operation.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ConsumeArrayEnd()
         {
             if (!Read() || CurrentTokenType != JsonTokenType.ArrayEnd)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Expected the end of a JSON array");
         }
-        
+
         // -----------------------------------------------------------------
         // Strict RFC 8259 number scanning (P0 correctness)
         //
@@ -1390,6 +1534,16 @@ namespace LuminPack.Core
             internal readonly bool HasFraction;
             internal readonly bool HasExponent;
 
+            /// <summary>Initializes a new instance of <c>JsonNumberShape</c>.</summary>
+            /// <param name="end">The end used by this operation.</param>
+            /// <param name="intStart">The int start used by this operation.</param>
+            /// <param name="intEnd">The int end used by this operation.</param>
+            /// <param name="fracStart">The frac start used by this operation.</param>
+            /// <param name="fracEnd">The frac end used by this operation.</param>
+            /// <param name="exponent">The exponent used by this operation.</param>
+            /// <param name="negative">The negative used by this operation.</param>
+            /// <param name="hasFraction">The has fraction used by this operation.</param>
+            /// <param name="hasExponent">The has exponent used by this operation.</param>
             internal JsonNumberShape(int end, int intStart, int intEnd, int fracStart, int fracEnd,
                 int exponent, bool negative, bool hasFraction, bool hasExponent)
             {
@@ -1404,19 +1558,29 @@ namespace LuminPack.Core
                 HasExponent = hasExponent;
             }
 
+            /// <summary>Gets the is integer.</summary>
             internal bool IsInteger => !HasFraction && !HasExponent;
         }
 
+        /// <summary>Determines whether the supplied value has the number at end classification.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool IsNumberAtEnd(int index) =>
             SerializeStringAsUtf8 ? index >= _bufferReference.Length : index + 1 >= _bufferReference.Length;
 
+        /// <summary>Performs the number char at step for the current operation.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private char NumberCharAt(int index) =>
             SerializeStringAsUtf8
                 ? (char)_bufferReference[index]
                 : Unsafe.ReadUnaligned<char>(ref GetSpanReference(index));
 
+        /// <summary>Performs the number digit at step for the current operation.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private uint NumberDigitAt(int index)
         {
@@ -1425,6 +1589,8 @@ namespace LuminPack.Core
         }
 
         /// <summary>Validates a complete number token: [minus] int [frac] [exp] followed by EOF or a value delimiter.</summary>
+        /// <param name="start">The start used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         private JsonNumberShape ScanJsonNumber(int start)
         {
             int step = SerializeStringAsUtf8 ? 1 : 2;
@@ -1521,6 +1687,11 @@ namespace LuminPack.Core
             return new JsonNumberShape(i, intStart, intEnd, fracStart, fracEnd, exponent, negative, hasFraction, hasExponent);
         }
 
+        /// <summary>Performs the parse unsigned digits step for the current operation.</summary>
+        /// <param name="start">The start used by this operation.</param>
+        /// <param name="end">The end used by this operation.</param>
+        /// <param name="error">The error used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ulong ParseUnsignedDigits(int start, int end, string error)
         {
@@ -1544,6 +1715,10 @@ namespace LuminPack.Core
         }
 
         /// <summary>Converts token digits to mantissa * 10^exponent10 without dropping significant digits.</summary>
+        /// <param name="shape">The shape used by this operation.</param>
+        /// <param name="mantissa">Receives the mantissa produced by the operation.</param>
+        /// <param name="exponent10">Receives the exponent10 produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         private bool TryAccumulateDecimalDigits(in JsonNumberShape shape, out ulong mantissa, out int exponent10)
         {
             int step = SerializeStringAsUtf8 ? 1 : 2;
@@ -1606,6 +1781,13 @@ namespace LuminPack.Core
         // Scan and accumulate together. A valid but inexact/long token can go straight
         // to the platform parser, without another grammar scan or digit accumulation.
         // A failed scan leaves the cursor unchanged for the general grammar/error path.
+        /// <summary>Attempts to scan floating point and reports whether it succeeded.</summary>
+        /// <param name="mantissa">Receives the mantissa produced by the operation.</param>
+        /// <param name="exponent10">Receives the exponent10 produced by the operation.</param>
+        /// <param name="negative">Receives the negative produced by the operation.</param>
+        /// <param name="end">Receives the end produced by the operation.</param>
+        /// <param name="exactMantissa">Receives the exact mantissa produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         private bool TryScanFloatingPoint(out ulong mantissa, out int exponent10, out bool negative,
             out int end, out bool exactMantissa)
         {
@@ -1692,6 +1874,9 @@ namespace LuminPack.Core
         /// result equals correct rounding of the decimal literal. Every other input returns false and
         /// is handled by the general-purpose parser.
         /// </summary>
+        /// <param name="shape">The shape used by this operation.</param>
+        /// <param name="value">Receives the value produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryParseDoubleExact(in JsonNumberShape shape, out double value)
         {
@@ -1720,6 +1905,10 @@ namespace LuminPack.Core
             return true;
         }
 
+        /// <summary>Attempts to parse float exact and reports whether it succeeded.</summary>
+        /// <param name="shape">The shape used by this operation.</param>
+        /// <param name="value">Receives the value produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryParseFloatExact(in JsonNumberShape shape, out float value)
         {
@@ -1748,6 +1937,8 @@ namespace LuminPack.Core
             return true;
         }
 
+        /// <summary>Reads int from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadInt()
         {
@@ -1775,6 +1966,8 @@ namespace LuminPack.Core
             return (int)magnitude;
         }
 
+        /// <summary>Reads u int from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public uint ReadUInt()
         {
@@ -1794,6 +1987,8 @@ namespace LuminPack.Core
             return (uint)magnitude;
         }
 
+        /// <summary>Reads byte from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public byte ReadByte()
         {
@@ -1813,6 +2008,8 @@ namespace LuminPack.Core
             return (byte)magnitude;
         }
 
+        /// <summary>Reads s byte from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public sbyte ReadSByte()
         {
@@ -1840,6 +2037,8 @@ namespace LuminPack.Core
             return (sbyte)magnitude;
         }
 
+        /// <summary>Reads short from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public short ReadShort()
         {
@@ -1867,6 +2066,8 @@ namespace LuminPack.Core
             return (short)magnitude;
         }
 
+        /// <summary>Reads u short from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ushort ReadUShort()
         {
@@ -1886,6 +2087,8 @@ namespace LuminPack.Core
             return (ushort)magnitude;
         }
 
+        /// <summary>Reads long from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public long ReadLong()
         {
@@ -1913,6 +2116,8 @@ namespace LuminPack.Core
             return (long)magnitude;
         }
 
+        /// <summary>Reads u long from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ulong ReadULong()
         {
@@ -1929,7 +2134,9 @@ namespace LuminPack.Core
             _currentIndex = shape.End;
             return magnitude;
         }
-        
+
+        /// <summary>Reads float from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public float ReadFloat()
         {
@@ -1967,7 +2174,9 @@ namespace LuminPack.Core
             _currentIndex = shape.End;
             return value;
         }
-        
+
+        /// <summary>Reads double from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public double ReadDouble()
         {
@@ -2005,7 +2214,10 @@ namespace LuminPack.Core
             _currentIndex = shape.End;
             return value;
         }
-        
+
+        /// <summary>Performs the fallback parse float utf8 step for the current operation.</summary>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static float FallbackParseFloatUtf8(ReadOnlySpan<byte> span)
         {
@@ -2015,7 +2227,10 @@ namespace LuminPack.Core
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
         }
-        
+
+        /// <summary>Performs the fallback parse float utf16 step for the current operation.</summary>
+        /// <param name="chars">The chars used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static float FallbackParseFloatUtf16(ReadOnlySpan<char> chars)
         {
@@ -2026,7 +2241,10 @@ namespace LuminPack.Core
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
         }
-        
+
+        /// <summary>Performs the fallback parse double utf8 step for the current operation.</summary>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static double FallbackParseDoubleUtf8(ReadOnlySpan<byte> span)
         {
@@ -2036,7 +2254,10 @@ namespace LuminPack.Core
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
         }
-        
+
+        /// <summary>Performs the fallback parse double utf16 step for the current operation.</summary>
+        /// <param name="chars">The chars used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static double FallbackParseDoubleUtf16(ReadOnlySpan<char> chars)
         {
@@ -2047,7 +2268,9 @@ namespace LuminPack.Core
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
         }
-        
+
+        /// <summary>Reads decimal from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public decimal ReadDecimal()
         {
@@ -2072,7 +2295,9 @@ namespace LuminPack.Core
             _currentIndex = shape.End;
             return value;
         }
-        
+
+        /// <summary>Reads char from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         public char ReadChar()
         {
             if (SerializeStringAsUtf8)
@@ -2080,10 +2305,10 @@ namespace LuminPack.Core
                 var utf8 = ReadStringUtf8();
                 if (utf8.Length == 0)
                     return '\0';
-                
+
                 if (utf8.Length == 1 && utf8[0] <= 0x7F)
                     return (char)utf8[0];
-                
+
                 Span<char> chars = stackalloc char[2];
                 int len = Encoding.UTF8.GetChars(utf8, chars);
                 return len > 0 ? chars[0] : '\0';
@@ -2094,7 +2319,10 @@ namespace LuminPack.Core
                 return utf16.Length > 0 ? utf16[0] : '\0';
             }
         }
-        
+
+        /// <summary>Returns the value represented by the current true or false JSON token.</summary>
+        /// <returns>The current boolean value.</returns>
+        /// <exception cref="InvalidOperationException">The current token is not a boolean.</exception>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool GetBoolean()
         {
@@ -2102,19 +2330,22 @@ namespace LuminPack.Core
                 return true;
             else if (CurrentTokenType == JsonTokenType.False)
                 return false;
-            
+
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException("Current token is not a boolean");
             return false;
         }
-        
+
         /// <summary>Advances past the current number token using the same strict grammar as the numeric readers.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void SkipNumberToken()
         {
             _currentIndex = ScanJsonNumber(_currentIndex).End;
         }
-        
+
         /// <summary>Reinterprets the validated UTF-16 number token as characters (callers only use this in UTF-16 mode).</summary>
+        /// <param name="start">The start used by this operation.</param>
+        /// <param name="end">The end used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private ReadOnlySpan<char> NumberChars(int start, int end)
         {
@@ -2122,7 +2353,9 @@ namespace LuminPack.Core
             ref char charRef = ref Unsafe.As<byte, char>(ref MemoryMarshal.GetReference(byteSpan));
             return MemoryMarshal.CreateReadOnlySpan(ref charRef, (end - start) >> 1);
         }
-        
+
+        /// <summary>Consumes a true or false literal and updates the current token and reader position.</summary>
+        /// <returns>True when a complete boolean literal was consumed.</returns>
         private bool ReadBoolean()
         {
             if (SerializeStringAsUtf8)
@@ -2196,11 +2429,13 @@ namespace LuminPack.Core
                     }
                 }
             }
-            
+
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid boolean value");
             return false;
         }
-        
+
+        /// <summary>Reads null from the current input.</summary>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         private bool ReadNull()
         {
             if (SerializeStringAsUtf8)
@@ -2236,11 +2471,11 @@ namespace LuminPack.Core
                     }
                 }
             }
-            
+
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid null value");
             return false;
         }
-        
+
         #endregion
     }
 }

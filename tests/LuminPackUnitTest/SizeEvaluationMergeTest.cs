@@ -8,46 +8,70 @@ namespace LuminPackUnitTest;
 // A merged run of consecutive mergeable fields mixes numeric literals with types
 // whose size is only known to the runtime. The evaluated size used to drop the
 // latter to zero because the length expression was parsed as an integer.
+/// <summary>Provides merge two guids element functionality.</summary>
 [LuminPackable]
 public sealed partial class MergeTwoGuidsElement
 {
+    /// <summary>Stores the id.</summary>
     public Guid Id;
+    /// <summary>Stores the owner.</summary>
     public Guid Owner;
+    /// <summary>Stores the name.</summary>
     public string Name = "";
 }
 
+/// <summary>Provides merge int and date element functionality.</summary>
 [LuminPackable]
 public sealed partial class MergeIntAndDateElement
 {
+    /// <summary>Stores the count.</summary>
     public int Count;
+    /// <summary>Stores the stamp.</summary>
     public DateTime Stamp;
+    /// <summary>Stores the name.</summary>
     public string Name = "";
 }
 
+/// <summary>Provides merge runtime sized element functionality.</summary>
 [LuminPackable]
 public sealed partial class MergeRuntimeSizedElement
 {
+    /// <summary>Stores the id.</summary>
     public Guid Id;
+    /// <summary>Stores the created.</summary>
     public DateTime Created;
+    /// <summary>Stores the saved at.</summary>
     public DateTimeOffset SavedAt;
+    /// <summary>Stores the elapsed.</summary>
     public TimeSpan Elapsed;
+    /// <summary>Stores the position.</summary>
     public Vector2 Position;
+    /// <summary>Stores the amount.</summary>
     public decimal Amount;
+    /// <summary>Stores the name.</summary>
     public string Name = "";
 }
 
+/// <summary>Provides merge size holder functionality.</summary>
 [LuminPackable]
 public sealed partial class MergeSizeHolder
 {
+    /// <summary>Stores the guids.</summary>
     public List<MergeTwoGuidsElement> Guids = new();
+    /// <summary>Stores the mixed.</summary>
     public List<MergeIntAndDateElement> Mixed = new();
+    /// <summary>Stores the runtime sized.</summary>
     public List<MergeRuntimeSizedElement> RuntimeSized = new();
+    /// <summary>Stores the runtime sized array.</summary>
     public MergeRuntimeSizedElement[] RuntimeSizedArray = Array.Empty<MergeRuntimeSizedElement>();
+    /// <summary>Stores the single.</summary>
     public MergeTwoGuidsElement Single = new();
 }
 
+/// <summary>Provides size evaluation merge test functionality.</summary>
 public class SizeEvaluationMergeTest
 {
+    /// <summary>Verifies evaluated size matches serialized length for merged runs.</summary>
     [Fact]
     public void EvaluatedSizeMatchesSerializedLengthForMergedRuns()
     {
@@ -104,6 +128,7 @@ public class SizeEvaluationMergeTest
         Assert.Equal(holder.Single.Name, roundTrip.Single.Name);
     }
 
+    /// <summary>Verifies single mergeable field stays accurate.</summary>
     [Fact]
     public void SingleMergeableFieldStaysAccurate()
     {
@@ -119,6 +144,9 @@ public class SizeEvaluationMergeTest
         Assert.Equal(LuminPackSerializer.Serialize(element).Length, LuminPackSerializer.Sizeof(element));
     }
 
+    /// <summary>Verifies new runtime sized element.</summary>
+    /// <param name="name">The name used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static MergeRuntimeSizedElement NewRuntimeSizedElement(string name) => new()
     {
         Id = Guid.Parse("01234567-89ab-cdef-0123-456789abcdef"),

@@ -1,14 +1,9 @@
-using System;
 using System.Buffers;
 using System.Buffers.Text;
-using System.Collections.Generic;
-using System.IO;
 using System.Numerics;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
-using System.Threading;
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Order;
@@ -20,7 +15,7 @@ namespace LuminPack.JsonPerfBenchmarks;
 /// No Main method.
 ///
 /// Run:
-/// BenchmarkRunner.Run<LuminPackJsonFinalDecisionBenchmark>();
+/// <c>BenchmarkRunner.Run&lt;LuminPackJsonFinalDecisionBenchmark&gt;();</c>
 ///
 /// This benchmark intentionally tests only unresolved decisions:
 /// 1) type-specialized integer routing and LUT footprint (compact vs aggressive);
@@ -65,6 +60,7 @@ public class LuminPackJsonFinalDecisionBenchmark
     private static int s_validated;
     private static readonly object ValidationLock = new();
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -125,6 +121,8 @@ public class LuminPackJsonFinalDecisionBenchmark
             PrintFloatingSizeDiagnostics();
     }
 
+    /// <summary>Measures ensure validated for the configured benchmark input.</summary>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool EnsureValidated()
     {
         if (Volatile.Read(ref s_validated) != 0)
@@ -161,6 +159,7 @@ public class LuminPackJsonFinalDecisionBenchmark
         }
     }
 
+    /// <summary>Measures print floating size diagnostics for the configured benchmark input.</summary>
     private void PrintFloatingSizeDiagnostics()
     {
         PrintFloatSize("GameLike", _floatGame);
@@ -172,6 +171,9 @@ public class LuminPackJsonFinalDecisionBenchmark
         PrintDoubleSize("TrueAdversarial", _doubleAdversarial);
     }
 
+    /// <summary>Measures print float size for the configured benchmark input.</summary>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="values">The values used by this operation.</param>
     private static void PrintFloatSize(string name, float[] values)
     {
         Span<byte> tmp = stackalloc byte[128];
@@ -190,6 +192,9 @@ public class LuminPackJsonFinalDecisionBenchmark
             $"Guard64Direct={guard64} ({(double)guard64 / dotnet:F4}x), WideIntGuard64={wideGuard64} ({(double)wideGuard64 / dotnet:F4}x)");
     }
 
+    /// <summary>Measures print double size for the configured benchmark input.</summary>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="values">The values used by this operation.</param>
     private static void PrintDoubleSize(string name, double[] values)
     {
         Span<byte> tmp = stackalloc byte[128];
@@ -215,13 +220,18 @@ public class LuminPackJsonFinalDecisionBenchmark
     // Integers
     // ---------------------------------------------------------------------
 
+    /// <summary>Measures integer cases for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     public static IEnumerable<object[]> IntegerCases()
     {
         foreach (IntegerType type in System.Enum.GetValues<IntegerType>())
-        foreach (IntegerDataset data in System.Enum.GetValues<IntegerDataset>())
-            yield return new object[] { new IntegerCase(type, data) };
+            foreach (IntegerDataset data in System.Enum.GetValues<IntegerDataset>())
+                yield return new object[] { new IntegerCase(type, data) };
     }
 
+    /// <summary>Measures integer dot net for the configured benchmark input.</summary>
+    /// <param name="c">The c used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("IntegerFinal")]
     [ArgumentsSource(nameof(IntegerCases))]
@@ -237,6 +247,9 @@ public class LuminPackJsonFinalDecisionBenchmark
         _ => IntegerDotNet(Get(_longSmall, _longMixed, _longBoundary, c.Data))
     };
 
+    /// <summary>Measures integer compact adaptive for the configured benchmark input.</summary>
+    /// <param name="c">The c used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     [BenchmarkCategory("IntegerFinal")]
     [ArgumentsSource(nameof(IntegerCases))]
@@ -252,6 +265,9 @@ public class LuminPackJsonFinalDecisionBenchmark
         _ => IntegerCompact(Get(_longSmall, _longMixed, _longBoundary, c.Data))
     };
 
+    /// <summary>Measures integer aggressive adaptive for the configured benchmark input.</summary>
+    /// <param name="c">The c used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     [BenchmarkCategory("IntegerFinal")]
     [ArgumentsSource(nameof(IntegerCases))]
@@ -267,64 +283,170 @@ public class LuminPackJsonFinalDecisionBenchmark
         _ => IntegerAggressive(Get(_longSmall, _longMixed, _longBoundary, c.Data))
     };
 
+    /// <summary>Obtains the requested value from the supplied input.</summary>
+    /// <param name="small">The small used by this operation.</param>
+    /// <param name="mixed">The mixed used by this operation.</param>
+    /// <param name="boundary">The boundary used by this operation.</param>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     private static T[] Get<T>(T[] small, T[] mixed, T[] boundary, IntegerDataset data) =>
         data == IntegerDataset.Small ? small : data == IntegerDataset.Mixed ? mixed : boundary;
 
+    /// <summary>Measures integer dot net for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerDotNet(byte[] values) { Span<byte> d = _buffer; int p = 0; foreach (byte v in values) { Utf8Formatter.TryFormat(v, d[p..], out int n); p += n; d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer dot net for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerDotNet(sbyte[] values) { Span<byte> d = _buffer; int p = 0; foreach (sbyte v in values) { Utf8Formatter.TryFormat(v, d[p..], out int n); p += n; d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer dot net for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerDotNet(ushort[] values) { Span<byte> d = _buffer; int p = 0; foreach (ushort v in values) { Utf8Formatter.TryFormat(v, d[p..], out int n); p += n; d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer dot net for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerDotNet(short[] values) { Span<byte> d = _buffer; int p = 0; foreach (short v in values) { Utf8Formatter.TryFormat(v, d[p..], out int n); p += n; d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer dot net for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerDotNet(uint[] values) { Span<byte> d = _buffer; int p = 0; foreach (uint v in values) { Utf8Formatter.TryFormat(v, d[p..], out int n); p += n; d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer dot net for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerDotNet(int[] values) { Span<byte> d = _buffer; int p = 0; foreach (int v in values) { Utf8Formatter.TryFormat(v, d[p..], out int n); p += n; d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer dot net for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerDotNet(ulong[] values) { Span<byte> d = _buffer; int p = 0; foreach (ulong v in values) { Utf8Formatter.TryFormat(v, d[p..], out int n); p += n; d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer dot net for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerDotNet(long[] values) { Span<byte> d = _buffer; int p = 0; foreach (long v in values) { Utf8Formatter.TryFormat(v, d[p..], out int n); p += n; d[p++] = (byte)','; } return p; }
 
+    /// <summary>Measures integer compact for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerCompact(byte[] values) { Span<byte> d = _buffer; int p = 0; foreach (byte v in values) { p += FinalCandidateFormatter.WriteByteCompact(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer compact for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerCompact(sbyte[] values) { Span<byte> d = _buffer; int p = 0; foreach (sbyte v in values) { p += FinalCandidateFormatter.WriteSByteCompact(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer compact for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerCompact(ushort[] values) { Span<byte> d = _buffer; int p = 0; foreach (ushort v in values) { p += FinalCandidateFormatter.WriteUInt16Compact(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer compact for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerCompact(short[] values) { Span<byte> d = _buffer; int p = 0; foreach (short v in values) { p += FinalCandidateFormatter.WriteInt16Compact(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer compact for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerCompact(uint[] values) { Span<byte> d = _buffer; int p = 0; foreach (uint v in values) { p += FinalCandidateFormatter.WriteUInt32Compact(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer compact for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerCompact(int[] values) { Span<byte> d = _buffer; int p = 0; foreach (int v in values) { p += FinalCandidateFormatter.WriteInt32Compact(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer compact for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerCompact(ulong[] values) { Span<byte> d = _buffer; int p = 0; foreach (ulong v in values) { p += FinalCandidateFormatter.WriteUInt64Compact(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer compact for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerCompact(long[] values) { Span<byte> d = _buffer; int p = 0; foreach (long v in values) { p += FinalCandidateFormatter.WriteInt64Compact(d[p..], v); d[p++] = (byte)','; } return p; }
 
+    /// <summary>Measures integer aggressive for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerAggressive(byte[] values) { Span<byte> d = _buffer; int p = 0; foreach (byte v in values) { p += FinalCandidateFormatter.WriteByteAggressive(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer aggressive for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerAggressive(sbyte[] values) { Span<byte> d = _buffer; int p = 0; foreach (sbyte v in values) { p += FinalCandidateFormatter.WriteSByteAggressive(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer aggressive for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerAggressive(ushort[] values) { Span<byte> d = _buffer; int p = 0; foreach (ushort v in values) { p += FinalCandidateFormatter.WriteUInt16Aggressive(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer aggressive for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerAggressive(short[] values) { Span<byte> d = _buffer; int p = 0; foreach (short v in values) { p += FinalCandidateFormatter.WriteInt16Aggressive(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer aggressive for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerAggressive(uint[] values) { Span<byte> d = _buffer; int p = 0; foreach (uint v in values) { p += FinalCandidateFormatter.WriteUInt32Aggressive(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer aggressive for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerAggressive(int[] values) { Span<byte> d = _buffer; int p = 0; foreach (int v in values) { p += FinalCandidateFormatter.WriteInt32Aggressive(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer aggressive for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerAggressive(ulong[] values) { Span<byte> d = _buffer; int p = 0; foreach (ulong v in values) { p += FinalCandidateFormatter.WriteUInt64Aggressive(d[p..], v); d[p++] = (byte)','; } return p; }
+    /// <summary>Measures integer aggressive for the configured benchmark input.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int IntegerAggressive(long[] values) { Span<byte> d = _buffer; int p = 0; foreach (long v in values) { p += FinalCandidateFormatter.WriteInt64Aggressive(d[p..], v); d[p++] = (byte)','; } return p; }
 
     // ---------------------------------------------------------------------
     // Float
     // ---------------------------------------------------------------------
 
+    /// <summary>Measures floating cases for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     public static IEnumerable<object[]> FloatingCases()
     {
         foreach (FloatingDataset d in System.Enum.GetValues<FloatingDataset>())
             yield return new object[] { d };
     }
 
+    /// <summary>Obtains the floats for the supplied input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private float[] GetFloats(FloatingDataset d) => d == FloatingDataset.GameLike ? _floatGame : d == FloatingDataset.RandomFinite ? _floatRandom : _floatAdversarial;
+    /// <summary>Obtains the doubles for the supplied input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private double[] GetDoubles(FloatingDataset d) => d == FloatingDataset.GameLike ? _doubleGame : d == FloatingDataset.RandomFinite ? _doubleRandom : _doubleAdversarial;
 
+    /// <summary>Measures float dot net for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true), BenchmarkCategory("FloatFinal"), ArgumentsSource(nameof(FloatingCases))]
     public int Float_DotNet(FloatingDataset d) => FormatFloat(d, 0);
 
+    /// <summary>Measures float direct current for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("FloatFinal"), ArgumentsSource(nameof(FloatingCases))]
     public int Float_DirectCurrent(FloatingDataset d) => FormatFloat(d, 1);
 
+    /// <summary>Measures float guard32 direct for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("FloatFinal"), ArgumentsSource(nameof(FloatingCases))]
     public int Float_Guard32Direct(FloatingDataset d) => FormatFloat(d, 2);
 
+    /// <summary>Measures float guard64 direct for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("FloatFinal"), ArgumentsSource(nameof(FloatingCases))]
     public int Float_Guard64Direct(FloatingDataset d) => FormatFloat(d, 3);
 
+    /// <summary>Measures float wide integral guard64 direct for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("FloatFinal"), ArgumentsSource(nameof(FloatingCases))]
     public int Float_WideIntegralGuard64Direct(FloatingDataset d) => FormatFloat(d, 4);
 
+    /// <summary>Measures format float for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="mode">The mode used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int FormatFloat(FloatingDataset d, int mode)
     {
         float[] values = GetFloats(d); Span<byte> dst = _buffer; int pos = 0;
@@ -341,24 +463,46 @@ public class LuminPackJsonFinalDecisionBenchmark
     // Double
     // ---------------------------------------------------------------------
 
+    /// <summary>Measures double dot net for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true), BenchmarkCategory("DoubleFinal"), ArgumentsSource(nameof(FloatingCases))]
     public int Double_DotNet(FloatingDataset d) => FormatDouble(d, 0);
 
+    /// <summary>Measures double direct current for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("DoubleFinal"), ArgumentsSource(nameof(FloatingCases))]
     public int Double_DirectCurrent(FloatingDataset d) => FormatDouble(d, 1);
 
+    /// <summary>Measures double guard16 direct for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("DoubleFinal"), ArgumentsSource(nameof(FloatingCases))]
     public int Double_Guard16Direct(FloatingDataset d) => FormatDouble(d, 2);
 
+    /// <summary>Measures double guard32 direct for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("DoubleFinal"), ArgumentsSource(nameof(FloatingCases))]
     public int Double_Guard32Direct(FloatingDataset d) => FormatDouble(d, 3);
 
+    /// <summary>Measures double guard64 direct for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("DoubleFinal"), ArgumentsSource(nameof(FloatingCases))]
     public int Double_Guard64Direct(FloatingDataset d) => FormatDouble(d, 4);
 
+    /// <summary>Measures double guard64 hybrid for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("DoubleFinal"), ArgumentsSource(nameof(FloatingCases))]
     public int Double_Guard64Hybrid(FloatingDataset d) => FormatDouble(d, 5);
 
+    /// <summary>Measures format double for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="mode">The mode used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int FormatDouble(FloatingDataset d, int mode)
     {
         double[] values = GetDoubles(d); Span<byte> dst = _buffer; int pos = 0;
@@ -376,23 +520,41 @@ public class LuminPackJsonFinalDecisionBenchmark
     // Decimal
     // ---------------------------------------------------------------------
 
+    /// <summary>Measures decimal cases for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     public static IEnumerable<object[]> DecimalCases()
     {
         foreach (DecimalDataset d in System.Enum.GetValues<DecimalDataset>())
             yield return new object[] { d };
     }
 
+    /// <summary>Obtains the decimals for the supplied input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private decimal[] GetDecimals(DecimalDataset d) => d == DecimalDataset.GameLike ? _decimalGame : d == DecimalDataset.Random ? _decimalRandom : _decimalBoundary;
 
+    /// <summary>Measures decimal dot net for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true), BenchmarkCategory("DecimalFinal"), ArgumentsSource(nameof(DecimalCases))]
     public int Decimal_DotNet(DecimalDataset d) => FormatDecimal(d, 0);
 
+    /// <summary>Measures decimal custom96 for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("DecimalFinal"), ArgumentsSource(nameof(DecimalCases))]
     public int Decimal_Custom96(DecimalDataset d) => FormatDecimal(d, 1);
 
+    /// <summary>Measures decimal combined64 then96 for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("DecimalFinal"), ArgumentsSource(nameof(DecimalCases))]
     public int Decimal_Combined64Then96(DecimalDataset d) => FormatDecimal(d, 2);
 
+    /// <summary>Measures format decimal for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="mode">The mode used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private int FormatDecimal(DecimalDataset d, int mode)
     {
         decimal[] values = GetDecimals(d); Span<byte> dst = _buffer; int pos = 0;
@@ -403,13 +565,19 @@ public class LuminPackJsonFinalDecisionBenchmark
     }
 }
 
+/// <summary>Provides final candidate formatter functionality.</summary>
 internal static class FinalCandidateFormatter
 {
+    /// <summary>Provides packed4 lut functionality.</summary>
     private sealed class Packed4Lut
     {
+        /// <summary>Stores the packed.</summary>
         public readonly uint[] Packed;
+        /// <summary>Stores the lengths.</summary>
         public readonly byte[] Lengths;
 
+        /// <summary>Initializes a new instance of <c>Packed4Lut</c>.</summary>
+        /// <param name="count">The number of entries involved in the operation.</param>
         public Packed4Lut(int count)
         {
             Packed = new uint[count];
@@ -437,6 +605,8 @@ internal static class FinalCandidateFormatter
 
     private static readonly byte[] Pairs = BuildPairs();
 
+    /// <summary>Measures build pairs for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     private static byte[] BuildPairs()
     {
         var p = new byte[200];
@@ -448,6 +618,11 @@ internal static class FinalCandidateFormatter
         return p;
     }
 
+    /// <summary>Writes packed4 to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="lut">The lut used by this operation.</param>
+    /// <param name="index">The position at which the operation starts.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WritePacked4(Span<byte> dest, Packed4Lut lut, int index)
     {
@@ -459,16 +634,36 @@ internal static class FinalCandidateFormatter
     // Type-specialized integer final routes
     // -----------------------------------------------------------------
 
+    /// <summary>Writes byte compact to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteByteCompact(Span<byte> d, byte v) => WritePacked4(d, Lut256, v);
+    /// <summary>Writes byte aggressive to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteByteAggressive(Span<byte> d, byte v) => WritePacked4(d, Lut256, v);
 
+    /// <summary>Writes s byte compact to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteSByteCompact(Span<byte> d, sbyte v) => WriteSBytePacked(d, v);
+    /// <summary>Writes s byte aggressive to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteSByteAggressive(Span<byte> d, sbyte v) => WriteSBytePacked(d, v);
 
+    /// <summary>Writes s byte packed to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteSBytePacked(Span<byte> d, sbyte v)
     {
@@ -478,6 +673,10 @@ internal static class FinalCandidateFormatter
         return 1 + WritePacked4(d[1..], Lut129, magnitude);
     }
 
+    /// <summary>Writes u int16 compact to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteUInt16Compact(Span<byte> d, ushort v)
     {
@@ -486,6 +685,10 @@ internal static class FinalCandidateFormatter
         return n;
     }
 
+    /// <summary>Writes u int16 aggressive to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteUInt16Aggressive(Span<byte> d, ushort v)
     {
@@ -494,12 +697,25 @@ internal static class FinalCandidateFormatter
         return n;
     }
 
+    /// <summary>Writes int16 compact to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteInt16Compact(Span<byte> d, short v) => WriteInt16Adaptive(d, v, false);
 
+    /// <summary>Writes int16 aggressive to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteInt16Aggressive(Span<byte> d, short v) => WriteInt16Adaptive(d, v, true);
 
+    /// <summary>Writes int16 adaptive to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <param name="aggressive">The aggressive used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteInt16Adaptive(Span<byte> d, short v, bool aggressive)
     {
@@ -520,6 +736,10 @@ internal static class FinalCandidateFormatter
         return p + WriteUInt32PairLinear(d[p..], mag);
     }
 
+    /// <summary>Writes u int32 compact to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteUInt32Compact(Span<byte> d, uint v)
     {
@@ -528,6 +748,10 @@ internal static class FinalCandidateFormatter
         return n;
     }
 
+    /// <summary>Writes u int32 aggressive to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteUInt32Aggressive(Span<byte> d, uint v)
     {
@@ -536,12 +760,25 @@ internal static class FinalCandidateFormatter
         return n;
     }
 
+    /// <summary>Writes int32 compact to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteInt32Compact(Span<byte> d, int v) => WriteInt32Adaptive(d, v, false);
 
+    /// <summary>Writes int32 aggressive to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteInt32Aggressive(Span<byte> d, int v) => WriteInt32Adaptive(d, v, true);
 
+    /// <summary>Writes int32 adaptive to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <param name="aggressive">The aggressive used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteInt32Adaptive(Span<byte> d, int v, bool aggressive)
     {
@@ -567,6 +804,10 @@ internal static class FinalCandidateFormatter
         return written;
     }
 
+    /// <summary>Writes u int64 compact to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteUInt64Compact(Span<byte> d, ulong v)
     {
@@ -574,6 +815,10 @@ internal static class FinalCandidateFormatter
         return WriteUInt64QuadLog2(d, v);
     }
 
+    /// <summary>Writes u int64 aggressive to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteUInt64Aggressive(Span<byte> d, ulong v)
     {
@@ -581,12 +826,25 @@ internal static class FinalCandidateFormatter
         return WriteUInt64QuadLog2(d, v);
     }
 
+    /// <summary>Writes int64 compact to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteInt64Compact(Span<byte> d, long v) => WriteInt64Adaptive(d, v, false);
 
+    /// <summary>Writes int64 aggressive to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteInt64Aggressive(Span<byte> d, long v) => WriteInt64Adaptive(d, v, true);
 
+    /// <summary>Writes int64 adaptive to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="v">The v used by this operation.</param>
+    /// <param name="aggressive">The aggressive used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteInt64Adaptive(Span<byte> d, long v, bool aggressive)
     {
@@ -606,6 +864,10 @@ internal static class FinalCandidateFormatter
         return 1 + WriteUInt64QuadLog2(d[1..], mag);
     }
 
+    /// <summary>Writes u int32 pair linear to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteUInt32PairLinear(Span<byte> dest, uint value)
     {
@@ -667,6 +929,9 @@ internal static class FinalCandidateFormatter
         10_000_000_000_000_000_000UL
     };
 
+    /// <summary>Measures count digits log2 for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CountDigitsLog2(ulong value)
     {
@@ -678,6 +943,10 @@ internal static class FinalCandidateFormatter
         return estimate;
     }
 
+    /// <summary>Writes u int64 quad log2 to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteUInt64QuadLog2(Span<byte> dest, ulong value)
     {
@@ -740,6 +1009,9 @@ internal static class FinalCandidateFormatter
         return digits;
     }
 
+    /// <summary>Writes 4 digits to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void Write4Digits(Span<byte> dest, uint value)
     {
@@ -757,6 +1029,11 @@ internal static class FinalCandidateFormatter
     // Floating candidates
     // -----------------------------------------------------------------
 
+    /// <summary>Measures float guarded direct for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="halfWidth">The half width used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int FloatGuardedDirect(Span<byte> dest, float value, int halfWidth)
     {
@@ -775,6 +1052,11 @@ internal static class FinalCandidateFormatter
         return PrimitiveFormatter.FloatDotNet(dest, value);
     }
 
+    /// <summary>Measures double guarded direct for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="halfWidth">The half width used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int DoubleGuardedDirect(Span<byte> dest, double value, int halfWidth)
     {
@@ -793,6 +1075,10 @@ internal static class FinalCandidateFormatter
         return PrimitiveFormatter.DoubleDotNet(dest, value);
     }
 
+    /// <summary>Measures float wide integral guard64 direct for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int FloatWideIntegralGuard64Direct(Span<byte> dest, float value)
     {
@@ -820,6 +1106,9 @@ internal static class FinalCandidateFormatter
         return FloatGuardedDirect(dest, value, 64);
     }
 
+    /// <summary>Determines whether the supplied value has the integral float classification.</summary>
+    /// <param name="absBits">The abs bits used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsIntegralFloat(uint absBits)
     {
@@ -831,6 +1120,9 @@ internal static class FinalCandidateFormatter
         return (absBits & mask) == 0;
     }
 
+    /// <summary>Creates true adversarial floats from the supplied input.</summary>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static float[] CreateTrueAdversarialFloats(int count)
     {
         float[] fixedValues =
@@ -862,6 +1154,9 @@ internal static class FinalCandidateFormatter
         return result;
     }
 
+    /// <summary>Creates true adversarial doubles from the supplied input.</summary>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static double[] CreateTrueAdversarialDoubles(int count)
     {
         double[] fixedValues =
@@ -900,6 +1195,10 @@ internal static class FinalCandidateFormatter
     // Decimal: compose the best 64-bit fast path with full custom96
     // -----------------------------------------------------------------
 
+    /// <summary>Measures decimal combined64 then96 for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [SkipLocalsInit]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int DecimalCombined64Then96(Span<byte> dest, decimal value)
@@ -927,6 +1226,12 @@ internal static class FinalCandidateFormatter
         return WriteDecimalDigits(dest, digits[..digitCount], scale, negative96);
     }
 
+    /// <summary>Writes decimal u int64 fixed to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="coefficient">The coefficient used by this operation.</param>
+    /// <param name="scale">The scale used by this operation.</param>
+    /// <param name="negative">The negative used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [SkipLocalsInit]
     private static int WriteDecimalUInt64Fixed(Span<byte> dest, ulong coefficient, int scale, bool negative)
     {
@@ -963,6 +1268,12 @@ internal static class FinalCandidateFormatter
     }
 
 
+    /// <summary>Writes decimal digits to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="digits">The digits used by this operation.</param>
+    /// <param name="scale">The scale used by this operation.</param>
+    /// <param name="negative">The negative used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteDecimalDigits(Span<byte> dest, ReadOnlySpan<byte> digits, int scale, bool negative)
     {
@@ -994,6 +1305,12 @@ internal static class FinalCandidateFormatter
         return pos + digits.Length;
     }
 
+    /// <summary>Writes u int96 digits to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="hi">The hi used by this operation.</param>
+    /// <param name="mid">The mid used by this operation.</param>
+    /// <param name="lo">The lo used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [SkipLocalsInit]
     private static int WriteUInt96Digits(Span<byte> dest, uint hi, uint mid, uint lo)
     {
@@ -1020,6 +1337,11 @@ internal static class FinalCandidateFormatter
         return pos;
     }
 
+    /// <summary>Measures div96 by1 billion for the configured benchmark input.</summary>
+    /// <param name="hi">The hi used by this operation.</param>
+    /// <param name="mid">The mid used by this operation.</param>
+    /// <param name="lo">The lo used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static uint Div96By1Billion(ref uint hi, ref uint mid, ref uint lo)
     {
@@ -1044,6 +1366,9 @@ internal static class FinalCandidateFormatter
         return (uint)rem;
     }
 
+    /// <summary>Writes nine digits to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteNineDigits(Span<byte> dest, uint value)
     {
@@ -1064,6 +1389,7 @@ internal static class FinalCandidateFormatter
     // Validation
     // -----------------------------------------------------------------
 
+    /// <summary>Validates  before the operation continues.</summary>
     public static void Validate()
     {
         Span<byte> expected = stackalloc byte[128];
@@ -1110,6 +1436,10 @@ internal static class FinalCandidateFormatter
         Console.WriteLine("LuminPack JSON final-decision candidate validation: OK");
     }
 
+    /// <summary>Validates u64 before the operation continues.</summary>
+    /// <param name="v">The v used by this operation.</param>
+    /// <param name="e">The e used by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
     private static void ValidateU64(ulong v, Span<byte> e, Span<byte> a)
     {
         Utf8Formatter.TryFormat(v, e, out int en);
@@ -1121,6 +1451,10 @@ internal static class FinalCandidateFormatter
         if (n != en || !a[..n].SequenceEqual(e[..en])) throw new InvalidOperationException($"u64 aggressive mismatch: {v}");
     }
 
+    /// <summary>Validates i64 before the operation continues.</summary>
+    /// <param name="v">The v used by this operation.</param>
+    /// <param name="e">The e used by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
     private static void ValidateI64(long v, Span<byte> e, Span<byte> a)
     {
         Utf8Formatter.TryFormat(v, e, out int en);
@@ -1132,6 +1466,10 @@ internal static class FinalCandidateFormatter
         if (n != en || !a[..n].SequenceEqual(e[..en])) throw new InvalidOperationException($"i64 aggressive mismatch: {v}");
     }
 
+    /// <summary>Validates u32 before the operation continues.</summary>
+    /// <param name="v">The v used by this operation.</param>
+    /// <param name="e">The e used by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
     private static void ValidateU32(uint v, Span<byte> e, Span<byte> a)
     {
         Utf8Formatter.TryFormat(v, e, out int en);
@@ -1143,6 +1481,10 @@ internal static class FinalCandidateFormatter
         if (n != en || !a[..n].SequenceEqual(e[..en])) throw new InvalidOperationException($"u32 aggressive mismatch: {v}");
     }
 
+    /// <summary>Validates i32 before the operation continues.</summary>
+    /// <param name="v">The v used by this operation.</param>
+    /// <param name="e">The e used by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
     private static void ValidateI32(int v, Span<byte> e, Span<byte> a)
     {
         Utf8Formatter.TryFormat(v, e, out int en);
@@ -1154,6 +1496,7 @@ internal static class FinalCandidateFormatter
         if (n != en || !a[..n].SequenceEqual(e[..en])) throw new InvalidOperationException($"i32 aggressive mismatch: {v}");
     }
 
+    /// <summary>Validates floating before the operation continues.</summary>
     private static void ValidateFloating()
     {
         Span<byte> b = stackalloc byte[128];
@@ -1188,6 +1531,9 @@ internal static class FinalCandidateFormatter
             ValidateDouble(v, b);
     }
 
+    /// <summary>Validates float before the operation continues.</summary>
+    /// <param name="v">The v used by this operation.</param>
+    /// <param name="b">The b used by this operation.</param>
     private static void ValidateFloat(float v, Span<byte> b)
     {
         uint expectedBits = BitConverter.SingleToUInt32Bits(v);
@@ -1202,6 +1548,10 @@ internal static class FinalCandidateFormatter
         ValidateFloatRoundTrip(b[..n], expectedBits, "WideIntegralGuard64Direct");
     }
 
+    /// <summary>Validates float round trip before the operation continues.</summary>
+    /// <param name="text">The text used by this operation.</param>
+    /// <param name="expectedBits">The expected bits used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
     private static void ValidateFloatRoundTrip(ReadOnlySpan<byte> text, uint expectedBits, string name)
     {
         if (!Utf8Parser.TryParse(text, out float parsed, out int consumed) ||
@@ -1210,6 +1560,9 @@ internal static class FinalCandidateFormatter
             throw new InvalidOperationException($"float {name} mismatch 0x{expectedBits:X8}");
     }
 
+    /// <summary>Validates double before the operation continues.</summary>
+    /// <param name="v">The v used by this operation.</param>
+    /// <param name="b">The b used by this operation.</param>
     private static void ValidateDouble(double v, Span<byte> b)
     {
         ulong expectedBits = BitConverter.DoubleToUInt64Bits(v);
@@ -1224,6 +1577,10 @@ internal static class FinalCandidateFormatter
         ValidateDoubleRoundTrip(b[..n], expectedBits, "Guard64Direct");
     }
 
+    /// <summary>Validates double round trip before the operation continues.</summary>
+    /// <param name="text">The text used by this operation.</param>
+    /// <param name="expectedBits">The expected bits used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
     private static void ValidateDoubleRoundTrip(ReadOnlySpan<byte> text, ulong expectedBits, string name)
     {
         if (!Utf8Parser.TryParse(text, out double parsed, out int consumed) ||
@@ -1232,6 +1589,7 @@ internal static class FinalCandidateFormatter
             throw new InvalidOperationException($"double {name} mismatch 0x{expectedBits:X16}");
     }
 
+    /// <summary>Validates decimal before the operation continues.</summary>
     private static void ValidateDecimal()
     {
         Span<byte> expected = stackalloc byte[128];
@@ -1262,6 +1620,10 @@ internal static class FinalCandidateFormatter
         }
     }
 
+    /// <summary>Validates decimal one before the operation continues.</summary>
+    /// <param name="v">The v used by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
+    /// <param name="actual">The actual used by this operation.</param>
     private static void ValidateDecimalOne(decimal v, Span<byte> expected, Span<byte> actual)
     {
         Utf8Formatter.TryFormat(v, expected, out int en);
@@ -1276,27 +1638,150 @@ internal static class FinalCandidateFormatter
     }
 }
 
+/// <summary>Provides integer case functionality.</summary>
 public readonly struct IntegerCase
 {
+    /// <summary>Stores the type.</summary>
     public readonly IntegerType Type;
+    /// <summary>Stores the data.</summary>
     public readonly IntegerDataset Data;
 
+    /// <summary>Initializes a new instance of <c>IntegerCase</c>.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <param name="data">The metadata describing the serializable type.</param>
     public IntegerCase(IntegerType type, IntegerDataset data) { Type = type; Data = data; }
+    /// <summary>Measures to string for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     public override string ToString() => $"{Type}_{Data}";
 }
 
-public enum IntegerType : byte { Byte, SByte, UInt16, Int16, UInt32, Int32, UInt64, Int64 }
-public enum IntegerDataset : byte { Small, Mixed, Boundary }
-public enum FloatingDataset : byte { GameLike, RandomFinite, Adversarial }
-public enum DecimalDataset : byte { GameLike, Random, Boundary }
-public enum TokenCase : byte { True, False, Null, MixedBool }
+/// <summary>Provides integer type functionality.</summary>
+public enum IntegerType : byte {
+/// <summary>Specifies byte.</summary>
+Byte,
+/// <summary>Specifies s byte.</summary>
+SByte,
+/// <summary>Specifies u int16.</summary>
+UInt16,
+/// <summary>Specifies int16.</summary>
+Int16,
+/// <summary>Specifies u int32.</summary>
+UInt32,
+/// <summary>Specifies int32.</summary>
+Int32,
+/// <summary>Specifies u int64.</summary>
+UInt64,
+/// <summary>Specifies int64.</summary>
+Int64 }
+/// <summary>Provides integer dataset functionality.</summary>
+public enum IntegerDataset : byte {
+/// <summary>Specifies small.</summary>
+Small,
+/// <summary>Specifies mixed.</summary>
+Mixed,
+/// <summary>Specifies boundary.</summary>
+Boundary }
+/// <summary>Provides floating dataset functionality.</summary>
+public enum FloatingDataset : byte {
+/// <summary>Specifies game like.</summary>
+GameLike,
+/// <summary>Specifies random finite.</summary>
+RandomFinite,
+/// <summary>Specifies adversarial.</summary>
+Adversarial }
+/// <summary>Provides decimal dataset functionality.</summary>
+public enum DecimalDataset : byte {
+/// <summary>Specifies game like.</summary>
+GameLike,
+/// <summary>Specifies random.</summary>
+Random,
+/// <summary>Specifies boundary.</summary>
+Boundary }
+/// <summary>Provides token case functionality.</summary>
+public enum TokenCase : byte {
+/// <summary>Specifies true.</summary>
+True,
+/// <summary>Specifies false.</summary>
+False,
+/// <summary>Specifies null.</summary>
+Null,
+/// <summary>Specifies mixed bool.</summary>
+MixedBool }
 
-internal enum IntegerAlgorithm : byte { DigitPairLinear, DigitPairBinary, DigitQuadBinary, Lut1KThenQuad, Lut10KThenQuad }
-internal enum FloatAlgorithm : byte { DotNet, CurrentLumin, DirectCurrent, IntegralOnlyQuad, HybridPair, HybridQuad, Guard16, Guard32, Guard64, CommonAdaptive32 }
-internal enum DoubleAlgorithm : byte { DotNet, CurrentLumin, DirectCurrent, IntegralOnlyQuad, HybridPair, HybridQuad, Guard16, Guard32, Guard64, CommonAdaptive32 }
-internal enum DecimalAlgorithm : byte { DotNet, Fast64Scale4, Custom96Quad }
-internal enum TokenAlgorithm : byte { CurrentScalar, PackedSafe, Packed8Overstore }
+/// <summary>Provides integer algorithm functionality.</summary>
+internal enum IntegerAlgorithm : byte {
+/// <summary>Specifies digit pair linear.</summary>
+DigitPairLinear,
+/// <summary>Specifies digit pair binary.</summary>
+DigitPairBinary,
+/// <summary>Specifies digit quad binary.</summary>
+DigitQuadBinary,
+/// <summary>Specifies lut1 k then quad.</summary>
+Lut1KThenQuad,
+/// <summary>Specifies lut10 k then quad.</summary>
+Lut10KThenQuad }
+/// <summary>Provides float algorithm functionality.</summary>
+internal enum FloatAlgorithm : byte {
+/// <summary>Specifies dot net.</summary>
+DotNet,
+/// <summary>Specifies current lumin.</summary>
+CurrentLumin,
+/// <summary>Specifies direct current.</summary>
+DirectCurrent,
+/// <summary>Specifies integral only quad.</summary>
+IntegralOnlyQuad,
+/// <summary>Specifies hybrid pair.</summary>
+HybridPair,
+/// <summary>Specifies hybrid quad.</summary>
+HybridQuad,
+/// <summary>Specifies guard16.</summary>
+Guard16,
+/// <summary>Specifies guard32.</summary>
+Guard32,
+/// <summary>Specifies guard64.</summary>
+Guard64,
+/// <summary>Specifies common adaptive32.</summary>
+CommonAdaptive32 }
+/// <summary>Provides double algorithm functionality.</summary>
+internal enum DoubleAlgorithm : byte {
+/// <summary>Specifies dot net.</summary>
+DotNet,
+/// <summary>Specifies current lumin.</summary>
+CurrentLumin,
+/// <summary>Specifies direct current.</summary>
+DirectCurrent,
+/// <summary>Specifies integral only quad.</summary>
+IntegralOnlyQuad,
+/// <summary>Specifies hybrid pair.</summary>
+HybridPair,
+/// <summary>Specifies hybrid quad.</summary>
+HybridQuad,
+/// <summary>Specifies guard16.</summary>
+Guard16,
+/// <summary>Specifies guard32.</summary>
+Guard32,
+/// <summary>Specifies guard64.</summary>
+Guard64,
+/// <summary>Specifies common adaptive32.</summary>
+CommonAdaptive32 }
+/// <summary>Provides decimal algorithm functionality.</summary>
+internal enum DecimalAlgorithm : byte {
+/// <summary>Specifies dot net.</summary>
+DotNet,
+/// <summary>Specifies fast64 scale4.</summary>
+Fast64Scale4,
+/// <summary>Specifies custom96 quad.</summary>
+Custom96Quad }
+/// <summary>Provides token algorithm functionality.</summary>
+internal enum TokenAlgorithm : byte {
+/// <summary>Specifies current scalar.</summary>
+CurrentScalar,
+/// <summary>Specifies packed safe.</summary>
+PackedSafe,
+/// <summary>Specifies packed8 overstore.</summary>
+Packed8Overstore }
 
+/// <summary>Provides primitive formatter functionality.</summary>
 internal static class PrimitiveFormatter
 {
     private static readonly StandardFormat FloatG = new('G');
@@ -1307,6 +1792,7 @@ internal static class PrimitiveFormatter
     private static readonly double[] DoublePow10D = { 1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17 };
     private static readonly long[] DoublePow10L = { 1L, 10L, 100L, 1_000L, 10_000L, 100_000L, 1_000_000L, 10_000_000L, 100_000_000L, 1_000_000_000L, 10_000_000_000L, 100_000_000_000L, 1_000_000_000_000L, 10_000_000_000_000L, 100_000_000_000_000L, 1_000_000_000_000_000L, 10_000_000_000_000_000L, 100_000_000_000_000_000L };
 
+    /// <summary>Gets the digit pairs.</summary>
     private static ReadOnlySpan<byte> DigitPairs =>
         "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899"u8;
 
@@ -1315,6 +1801,11 @@ internal static class PrimitiveFormatter
 
     // ----------------------------- Integer routing -----------------------------
 
+    /// <summary>Writes unsigned to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteUnsigned(Span<byte> dest, ulong value, IntegerAlgorithm a) => a switch
     {
@@ -1325,6 +1816,11 @@ internal static class PrimitiveFormatter
         _ => WriteUInt64Lut10K(dest, value)
     };
 
+    /// <summary>Writes signed to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteSigned(Span<byte> dest, long value, IntegerAlgorithm a)
     {
@@ -1336,17 +1832,41 @@ internal static class PrimitiveFormatter
         return 1 + WriteUnsigned(dest[1..], magnitude, a);
     }
 
+    /// <summary>Writes unsigned pair linear to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteUnsignedPairLinear(Span<byte> dest, ulong value) => WriteUInt64DigitPairLinear(dest, value);
+    /// <summary>Writes unsigned pair binary to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteUnsignedPairBinary(Span<byte> dest, ulong value) => WriteUInt64DigitPairBinary(dest, value);
+    /// <summary>Writes unsigned quad binary to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteUnsignedQuadBinary(Span<byte> dest, ulong value) => WriteUInt64DigitQuadBinary(dest, value);
+    /// <summary>Writes unsigned lut1 k to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteUnsignedLut1K(Span<byte> dest, ulong value) => WriteUInt64Lut1K(dest, value);
+    /// <summary>Writes unsigned lut10 k to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteUnsignedLut10K(Span<byte> dest, ulong value) => WriteUInt64Lut10K(dest, value);
 
+    /// <summary>Writes signed pair linear to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteSignedPairLinear(Span<byte> dest, long value)
     {
@@ -1355,6 +1875,10 @@ internal static class PrimitiveFormatter
         ulong magnitude = (ulong)(-(value + 1)) + 1UL;
         return 1 + WriteUInt64DigitPairLinear(dest[1..], magnitude);
     }
+    /// <summary>Writes signed pair binary to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteSignedPairBinary(Span<byte> dest, long value)
     {
@@ -1363,6 +1887,10 @@ internal static class PrimitiveFormatter
         ulong magnitude = (ulong)(-(value + 1)) + 1UL;
         return 1 + WriteUInt64DigitPairBinary(dest[1..], magnitude);
     }
+    /// <summary>Writes signed quad binary to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteSignedQuadBinary(Span<byte> dest, long value)
     {
@@ -1371,6 +1899,10 @@ internal static class PrimitiveFormatter
         ulong magnitude = (ulong)(-(value + 1)) + 1UL;
         return 1 + WriteUInt64DigitQuadBinary(dest[1..], magnitude);
     }
+    /// <summary>Writes signed lut1 k to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteSignedLut1K(Span<byte> dest, long value)
     {
@@ -1379,6 +1911,10 @@ internal static class PrimitiveFormatter
         ulong magnitude = (ulong)(-(value + 1)) + 1UL;
         return 1 + WriteUInt64Lut1K(dest[1..], magnitude);
     }
+    /// <summary>Writes signed lut10 k to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteSignedLut10K(Span<byte> dest, long value)
     {
@@ -1387,6 +1923,10 @@ internal static class PrimitiveFormatter
         ulong magnitude = (ulong)(-(value + 1)) + 1UL;
         return 1 + WriteUInt64Lut10K(dest[1..], magnitude);
     }
+    /// <summary>Writes u int64 digit pair linear to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteUInt64DigitPairLinear(Span<byte> dest, ulong value)
     {
@@ -1395,6 +1935,10 @@ internal static class PrimitiveFormatter
         return WritePairsBackwards(dest, value, digits);
     }
 
+    /// <summary>Writes u int64 digit pair binary to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteUInt64DigitPairBinary(Span<byte> dest, ulong value)
     {
@@ -1403,6 +1947,11 @@ internal static class PrimitiveFormatter
         return WritePairsBackwards(dest, value, digits);
     }
 
+    /// <summary>Writes pairs backwards to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="digits">The digits used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WritePairsBackwards(Span<byte> dest, ulong value, int digits)
     {
@@ -1429,6 +1978,10 @@ internal static class PrimitiveFormatter
         return digits;
     }
 
+    /// <summary>Writes u int64 digit quad binary to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteUInt64DigitQuadBinary(Span<byte> dest, ulong value)
     {
@@ -1458,6 +2011,9 @@ internal static class PrimitiveFormatter
         return digits;
     }
 
+    /// <summary>Writes leading up to4 to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteLeadingUpTo4(Span<byte> dest, uint value)
     {
@@ -1488,6 +2044,10 @@ internal static class PrimitiveFormatter
         }
     }
 
+    /// <summary>Writes u int64 lut1 k to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteUInt64Lut1K(Span<byte> dest, ulong value)
     {
@@ -1500,6 +2060,10 @@ internal static class PrimitiveFormatter
         return WriteUInt64DigitQuadBinary(dest, value);
     }
 
+    /// <summary>Writes u int64 lut10 k to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteUInt64Lut10K(Span<byte> dest, ulong value)
     {
@@ -1512,6 +2076,9 @@ internal static class PrimitiveFormatter
         return WriteUInt64DigitQuadBinary(dest, value);
     }
 
+    /// <summary>Measures build small packed for the configured benchmark input.</summary>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static SmallLut BuildSmallPacked(int count)
     {
         var packed = new ulong[count];
@@ -1528,13 +2095,22 @@ internal static class PrimitiveFormatter
         return new SmallLut(packed, lengths);
     }
 
+    /// <summary>Provides small lut functionality.</summary>
     private readonly struct SmallLut
     {
+        /// <summary>Stores the packed.</summary>
         public readonly ulong[] Packed;
+        /// <summary>Stores the lengths.</summary>
         public readonly byte[] Lengths;
+        /// <summary>Initializes a new instance of <c>SmallLut</c>.</summary>
+        /// <param name="packed">The packed used by this operation.</param>
+        /// <param name="lengths">The lengths used by this operation.</param>
         public SmallLut(ulong[] packed, byte[] lengths) { Packed = packed; Lengths = lengths; }
     }
 
+    /// <summary>Measures count digits linear for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CountDigitsLinear(ulong value)
     {
@@ -1560,6 +2136,9 @@ internal static class PrimitiveFormatter
         return 20;
     }
 
+    /// <summary>Measures count digits binary for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CountDigitsBinary(ulong value)
     {
@@ -1596,28 +2175,113 @@ internal static class PrimitiveFormatter
 
     // ----------------------------- Float / Double -----------------------------
 
+    /// <summary>Measures float dot net for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int FloatDotNet(Span<byte> dest, float value) => DotNetFloat(value, dest);
+    /// <summary>Measures float current lumin for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int FloatCurrentLumin(Span<byte> dest, float value) => CurrentLuminFloat(value, dest);
+    /// <summary>Measures float direct current for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int FloatDirectCurrent(Span<byte> dest, float value) => DirectCurrentFloat(value, dest);
+    /// <summary>Measures float integral only quad for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int FloatIntegralOnlyQuad(Span<byte> dest, float value) => IntegralOnlyFloat(value, dest);
+    /// <summary>Measures float hybrid pair for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int FloatHybridPair(Span<byte> dest, float value) => HybridFloat(value, dest, false);
+    /// <summary>Measures float hybrid quad for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int FloatHybridQuad(Span<byte> dest, float value) => HybridFloat(value, dest, true);
+    /// <summary>Measures float guard16 for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int FloatGuard16(Span<byte> dest, float value) => GuardedFloat(value, dest, 16);
+    /// <summary>Measures float guard32 for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int FloatGuard32(Span<byte> dest, float value) => GuardedFloat(value, dest, 32);
+    /// <summary>Measures float guard64 for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int FloatGuard64(Span<byte> dest, float value) => GuardedFloat(value, dest, 64);
+    /// <summary>Measures float common adaptive32 for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int FloatCommonAdaptive32(Span<byte> dest, float value) => CommonAdaptiveFloat(value, dest);
 
+    /// <summary>Measures double dot net for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int DoubleDotNet(Span<byte> dest, double value) => DotNetDouble(value, dest);
+    /// <summary>Measures double current lumin for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int DoubleCurrentLumin(Span<byte> dest, double value) => CurrentLuminDouble(value, dest);
+    /// <summary>Measures double direct current for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int DoubleDirectCurrent(Span<byte> dest, double value) => DirectCurrentDouble(value, dest);
+    /// <summary>Measures double integral only quad for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int DoubleIntegralOnlyQuad(Span<byte> dest, double value) => IntegralOnlyDouble(value, dest);
+    /// <summary>Measures double hybrid pair for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int DoubleHybridPair(Span<byte> dest, double value) => HybridDouble(value, dest, false);
+    /// <summary>Measures double hybrid quad for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int DoubleHybridQuad(Span<byte> dest, double value) => HybridDouble(value, dest, true);
+    /// <summary>Measures double guard16 for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int DoubleGuard16(Span<byte> dest, double value) => GuardedDouble(value, dest, 16);
+    /// <summary>Measures double guard32 for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int DoubleGuard32(Span<byte> dest, double value) => GuardedDouble(value, dest, 32);
+    /// <summary>Measures double guard64 for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int DoubleGuard64(Span<byte> dest, double value) => GuardedDouble(value, dest, 64);
+    /// <summary>Measures double common adaptive32 for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)] public static int DoubleCommonAdaptive32(Span<byte> dest, double value) => CommonAdaptiveDouble(value, dest);
 
+    /// <summary>Writes float to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteFloat(Span<byte> dest, float value, FloatAlgorithm a) => a switch
     {
@@ -1633,6 +2297,11 @@ internal static class PrimitiveFormatter
         _ => CommonAdaptiveFloat(value, dest)
     };
 
+    /// <summary>Writes double to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteDouble(Span<byte> dest, double value, DoubleAlgorithm a) => a switch
     {
@@ -1648,11 +2317,23 @@ internal static class PrimitiveFormatter
         _ => CommonAdaptiveDouble(value, dest)
     };
 
+    /// <summary>Measures dot net float for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int DotNetFloat(float value, Span<byte> dest) { Utf8Formatter.TryFormat(value, dest, out int n, FloatG); return n; }
+    /// <summary>Measures dot net double for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int DotNetDouble(double value, Span<byte> dest) { Utf8Formatter.TryFormat(value, dest, out int n, DoubleG); return n; }
 
+    /// <summary>Measures current lumin float for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [SkipLocalsInit]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CurrentLuminFloat(float value, Span<byte> dest)
@@ -1663,6 +2344,10 @@ internal static class PrimitiveFormatter
         return DotNetFloat(value, dest);
     }
 
+    /// <summary>Measures current lumin double for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [SkipLocalsInit]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CurrentLuminDouble(double value, Span<byte> dest)
@@ -1673,6 +2358,10 @@ internal static class PrimitiveFormatter
         return DotNetDouble(value, dest);
     }
 
+    /// <summary>Measures direct current float for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int DirectCurrentFloat(float value, Span<byte> dest)
     {
@@ -1680,6 +2369,10 @@ internal static class PrimitiveFormatter
         return n > 0 ? n : DotNetFloat(value, dest);
     }
 
+    /// <summary>Measures direct current double for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int DirectCurrentDouble(double value, Span<byte> dest)
     {
@@ -1687,6 +2380,10 @@ internal static class PrimitiveFormatter
         return n > 0 ? n : DotNetDouble(value, dest);
     }
 
+    /// <summary>Measures integral only float for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int IntegralOnlyFloat(float value, Span<byte> dest)
     {
@@ -1701,6 +2398,10 @@ internal static class PrimitiveFormatter
         return pos + WriteUInt64DigitQuadBinary(dest[pos..], (ulong)d);
     }
 
+    /// <summary>Measures integral only double for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int IntegralOnlyDouble(double value, Span<byte> dest)
     {
@@ -1715,6 +2416,11 @@ internal static class PrimitiveFormatter
         return pos + WriteUInt64DigitQuadBinary(dest[pos..], (ulong)d);
     }
 
+    /// <summary>Measures hybrid float for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="quad">The quad used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int HybridFloat(float value, Span<byte> dest, bool quad)
     {
@@ -1740,6 +2446,11 @@ internal static class PrimitiveFormatter
         return DotNetFloat(value, dest);
     }
 
+    /// <summary>Measures hybrid double for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="quad">The quad used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int HybridDouble(double value, Span<byte> dest, bool quad)
     {
@@ -1765,6 +2476,11 @@ internal static class PrimitiveFormatter
         return DotNetDouble(value, dest);
     }
 
+    /// <summary>Measures guarded float for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="halfWidth">The half width used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int GuardedFloat(float value, Span<byte> dest, int halfWidth)
     {
@@ -1777,6 +2493,11 @@ internal static class PrimitiveFormatter
         return DotNetFloat(value, dest);
     }
 
+    /// <summary>Measures guarded double for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="halfWidth">The half width used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int GuardedDouble(double value, Span<byte> dest, int halfWidth)
     {
@@ -1789,6 +2510,10 @@ internal static class PrimitiveFormatter
         return DotNetDouble(value, dest);
     }
 
+    /// <summary>Measures common adaptive float for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CommonAdaptiveFloat(float value, Span<byte> dest)
     {
@@ -1801,6 +2526,10 @@ internal static class PrimitiveFormatter
         return DotNetFloat(value, dest);
     }
 
+    /// <summary>Measures common adaptive double for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CommonAdaptiveDouble(double value, Span<byte> dest)
     {
@@ -1813,6 +2542,10 @@ internal static class PrimitiveFormatter
         return DotNetDouble(value, dest);
     }
 
+    /// <summary>Attempts to write common float bits and reports whether it succeeded.</summary>
+    /// <param name="bits">The bits used by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int TryWriteCommonFloatBits(uint bits, Span<byte> dest)
     {
@@ -1829,6 +2562,10 @@ internal static class PrimitiveFormatter
         }
     }
 
+    /// <summary>Attempts to write common double bits and reports whether it succeeded.</summary>
+    /// <param name="bits">The bits used by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int TryWriteCommonDoubleBits(ulong bits, Span<byte> dest)
     {
@@ -1845,6 +2582,10 @@ internal static class PrimitiveFormatter
         }
     }
 
+    /// <summary>Writes common float bits to the current output.</summary>
+    /// <param name="bits">The bits used by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteCommonFloatBits(uint bits, Span<byte> dest)
     {
@@ -1853,6 +2594,10 @@ internal static class PrimitiveFormatter
         dest[0] = (byte)'0'; return 1;
     }
 
+    /// <summary>Writes common double bits to the current output.</summary>
+    /// <param name="bits">The bits used by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteCommonDoubleBits(ulong bits, Span<byte> dest)
     {
@@ -1861,6 +2606,15 @@ internal static class PrimitiveFormatter
         dest[0] = (byte)'0'; return 1;
     }
 
+    /// <summary>Attempts to scaled float and reports whether it succeeded.</summary>
+    /// <param name="original">The original used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="decimals">The decimals used by this operation.</param>
+    /// <param name="scale">The scale used by this operation.</param>
+    /// <param name="scaleInt">The scale int used by this operation.</param>
+    /// <param name="quad">The quad used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int TryScaledFloat(float original, double value, Span<byte> dest, int decimals, double scale, ulong scaleInt, bool quad)
     {
@@ -1871,6 +2625,14 @@ internal static class PrimitiveFormatter
         return WriteScaledUInt(dest, scaled, decimals, scaleInt, quad);
     }
 
+    /// <summary>Attempts to scaled double and reports whether it succeeded.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="decimals">The decimals used by this operation.</param>
+    /// <param name="scale">The scale used by this operation.</param>
+    /// <param name="scaleInt">The scale int used by this operation.</param>
+    /// <param name="quad">The quad used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int TryScaledDouble(double value, Span<byte> dest, int decimals, double scale, ulong scaleInt, bool quad)
     {
@@ -1881,6 +2643,13 @@ internal static class PrimitiveFormatter
         return WriteScaledUInt(dest, scaled, decimals, scaleInt, quad);
     }
 
+    /// <summary>Writes scaled u int to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="scaled">The scaled used by this operation.</param>
+    /// <param name="decimals">The decimals used by this operation.</param>
+    /// <param name="scale">The scale used by this operation.</param>
+    /// <param name="quad">The quad used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteScaledUInt(Span<byte> dest, ulong scaled, int decimals, ulong scale, bool quad)
     {
@@ -1895,25 +2664,28 @@ internal static class PrimitiveFormatter
         {
             case 1: dest[pos++] = (byte)('0' + frac); break;
             case 2:
-            {
-                ulong q = frac / 10; dest[pos++] = (byte)('0' + q); dest[pos++] = (byte)('0' + (frac - q * 10)); break;
-            }
+                {
+                    ulong q = frac / 10; dest[pos++] = (byte)('0' + q); dest[pos++] = (byte)('0' + (frac - q * 10)); break;
+                }
             case 3:
-            {
-                ulong h = frac / 100; ulong rem = frac - h * 100; ulong t = rem / 10;
-                dest[pos++] = (byte)('0' + h); dest[pos++] = (byte)('0' + t); dest[pos++] = (byte)('0' + (rem - t * 10)); break;
-            }
+                {
+                    ulong h = frac / 100; ulong rem = frac - h * 100; ulong t = rem / 10;
+                    dest[pos++] = (byte)('0' + h); dest[pos++] = (byte)('0' + t); dest[pos++] = (byte)('0' + (rem - t * 10)); break;
+                }
             default:
-            {
-                uint v = (uint)frac; uint hi = v / 100; uint lo = v - hi * 100; ReadOnlySpan<byte> pairs = DigitPairs;
-                int hp = (int)hi << 1; int lp = (int)lo << 1;
-                dest[pos++] = pairs[hp]; dest[pos++] = pairs[hp + 1]; dest[pos++] = pairs[lp]; dest[pos++] = pairs[lp + 1]; break;
-            }
+                {
+                    uint v = (uint)frac; uint hi = v / 100; uint lo = v - hi * 100; ReadOnlySpan<byte> pairs = DigitPairs;
+                    int hp = (int)hi << 1; int lp = (int)lo << 1;
+                    dest[pos++] = pairs[hp]; dest[pos++] = pairs[hp + 1]; dest[pos++] = pairs[lp]; dest[pos++] = pairs[lp + 1]; break;
+                }
         }
         while (pos > start && dest[pos - 1] == (byte)'0') pos--;
         return pos;
     }
 
+    /// <summary>Determines whether the supplied value has the integral float classification.</summary>
+    /// <param name="absBits">The abs bits used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsIntegralFloat(uint absBits)
     {
@@ -1924,6 +2696,9 @@ internal static class PrimitiveFormatter
         return (absBits & mask) == 0;
     }
 
+    /// <summary>Determines whether the supplied value has the integral double classification.</summary>
+    /// <param name="absBits">The abs bits used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsIntegralDouble(ulong absBits)
     {
@@ -1935,6 +2710,10 @@ internal static class PrimitiveFormatter
     }
 
     // Current Lumin equivalent used only for A/B.
+    /// <summary>Attempts to float current and reports whether it succeeded.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [SkipLocalsInit]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int TryFloatCurrent(float value, Span<byte> dest)
@@ -1963,6 +2742,10 @@ internal static class PrimitiveFormatter
         return 0;
     }
 
+    /// <summary>Attempts to double current and reports whether it succeeded.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [SkipLocalsInit]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int TryDoubleCurrent(double value, Span<byte> dest)
@@ -1990,6 +2773,10 @@ internal static class PrimitiveFormatter
         return 0;
     }
 
+    /// <summary>Writes u int64 current to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteUInt64Current(Span<byte> dest, ulong value)
     {
@@ -2001,13 +2788,30 @@ internal static class PrimitiveFormatter
 
     // ----------------------------- Decimal -----------------------------
 
+    /// <summary>Measures decimal dot net for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int DecimalDotNet(Span<byte> dest, decimal value) { Utf8Formatter.TryFormat(value, dest, out int n); return n; }
+    /// <summary>Measures decimal fast64 scale4 for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int DecimalFast64Scale4(Span<byte> dest, decimal value) => Decimal64Scale4Fast(value, dest);
+    /// <summary>Measures decimal custom96 quad for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int DecimalCustom96Quad(Span<byte> dest, decimal value) => Decimal96Quad(value, dest);
 
+    /// <summary>Writes decimal to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int WriteDecimal(Span<byte> dest, decimal value, DecimalAlgorithm a)
     {
@@ -2020,6 +2824,10 @@ internal static class PrimitiveFormatter
         return Decimal96Quad(value, dest);
     }
 
+    /// <summary>Measures decimal64 scale4 fast for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [SkipLocalsInit]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Decimal64Scale4Fast(decimal value, Span<byte> dest)
@@ -2037,6 +2845,10 @@ internal static class PrimitiveFormatter
         Utf8Formatter.TryFormat(value, dest, out int n); return n;
     }
 
+    /// <summary>Measures decimal96 quad for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [SkipLocalsInit]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int Decimal96Quad(decimal value, Span<byte> dest)
@@ -2052,6 +2864,12 @@ internal static class PrimitiveFormatter
         return WriteDecimalDigits(dest, digits[..digitCount], scale, negative);
     }
 
+    /// <summary>Writes decimal u int64 fixed to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="coefficient">The coefficient used by this operation.</param>
+    /// <param name="scale">The scale used by this operation.</param>
+    /// <param name="negative">The negative used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [SkipLocalsInit]
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteDecimalUInt64Fixed(Span<byte> dest, ulong coefficient, int scale, bool negative)
@@ -2061,6 +2879,12 @@ internal static class PrimitiveFormatter
         return WriteDecimalDigits(dest, digits[..count], scale, negative);
     }
 
+    /// <summary>Writes decimal digits to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="digits">The digits used by this operation.</param>
+    /// <param name="scale">The scale used by this operation.</param>
+    /// <param name="negative">The negative used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteDecimalDigits(Span<byte> dest, ReadOnlySpan<byte> digits, int scale, bool negative)
     {
@@ -2087,6 +2911,12 @@ internal static class PrimitiveFormatter
         digits.CopyTo(dest[pos..]); return pos + digits.Length;
     }
 
+    /// <summary>Writes u int96 digits to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="hi">The hi used by this operation.</param>
+    /// <param name="mid">The mid used by this operation.</param>
+    /// <param name="lo">The lo used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [SkipLocalsInit]
     private static int WriteUInt96Digits(Span<byte> dest, uint hi, uint mid, uint lo)
     {
@@ -2110,6 +2940,11 @@ internal static class PrimitiveFormatter
         return pos;
     }
 
+    /// <summary>Measures div96 by1 billion for the configured benchmark input.</summary>
+    /// <param name="hi">The hi used by this operation.</param>
+    /// <param name="mid">The mid used by this operation.</param>
+    /// <param name="lo">The lo used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static uint Div96By1Billion(ref uint hi, ref uint mid, ref uint lo)
     {
@@ -2130,6 +2965,9 @@ internal static class PrimitiveFormatter
         return (uint)rem;
     }
 
+    /// <summary>Writes nine digits to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteNineDigits(Span<byte> dest, uint value)
     {
@@ -2148,20 +2986,49 @@ internal static class PrimitiveFormatter
 
     // ----------------------------- Fixed JSON tokens -----------------------------
 
+    /// <summary>Writes bool token scalar to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="pos">The pos used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteBoolTokenScalar(Span<byte> dest, ref int pos, bool value) { if (value) WriteTrueScalar(dest, ref pos); else WriteFalseScalar(dest, ref pos); }
+    /// <summary>Writes bool token packed safe to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="pos">The pos used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteBoolTokenPackedSafe(Span<byte> dest, ref int pos, bool value) { if (value) WriteTruePackedSafe(dest, ref pos); else WriteFalsePackedSafe(dest, ref pos); }
+    /// <summary>Writes bool token packed8 to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="pos">The pos used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteBoolTokenPacked8(Span<byte> dest, ref int pos, bool value) { if (value) WriteTruePacked8(dest, ref pos); else WriteFalsePacked8(dest, ref pos); }
 
+    /// <summary>Writes fixed token scalar to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="pos">The pos used by this operation.</param>
+    /// <param name="token">The token used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteFixedTokenScalar(Span<byte> dest, ref int pos, TokenCase token) { if (token == TokenCase.True) WriteTrueScalar(dest, ref pos); else if (token == TokenCase.False) WriteFalseScalar(dest, ref pos); else WriteNullScalar(dest, ref pos); }
+    /// <summary>Writes fixed token packed safe to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="pos">The pos used by this operation.</param>
+    /// <param name="token">The token used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteFixedTokenPackedSafe(Span<byte> dest, ref int pos, TokenCase token) { if (token == TokenCase.True) WriteTruePackedSafe(dest, ref pos); else if (token == TokenCase.False) WriteFalsePackedSafe(dest, ref pos); else WriteNullPackedSafe(dest, ref pos); }
+    /// <summary>Writes fixed token packed8 to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="pos">The pos used by this operation.</param>
+    /// <param name="token">The token used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteFixedTokenPacked8(Span<byte> dest, ref int pos, TokenCase token) { if (token == TokenCase.True) WriteTruePacked8(dest, ref pos); else if (token == TokenCase.False) WriteFalsePacked8(dest, ref pos); else WriteNullPacked8(dest, ref pos); }
 
+    /// <summary>Writes bool token to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="pos">The pos used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteBoolToken(Span<byte> dest, ref int pos, bool value, TokenAlgorithm a)
     {
@@ -2179,6 +3046,11 @@ internal static class PrimitiveFormatter
         }
     }
 
+    /// <summary>Writes fixed token to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="pos">The pos used by this operation.</param>
+    /// <param name="token">The token used by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void WriteFixedToken(Span<byte> dest, ref int pos, TokenCase token, TokenAlgorithm a)
     {
@@ -2189,6 +3061,10 @@ internal static class PrimitiveFormatter
         else WriteNullPacked8(dest, ref pos);
     }
 
+    /// <summary>Writes byte raw sim to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="pos">The pos used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteByteRawSim(Span<byte> dest, ref int pos, byte value)
     {
@@ -2196,30 +3072,65 @@ internal static class PrimitiveFormatter
         dest[pos++] = value;
     }
 
+    /// <summary>Measures ensure sim for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="pos">The pos used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void EnsureSim(Span<byte> dest, int pos, int count)
     {
         if ((uint)count > (uint)(dest.Length - pos)) throw new InvalidOperationException();
     }
 
+    /// <summary>Writes true scalar to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="p">The p used by this operation.</param>
     private static void WriteTrueScalar(Span<byte> d, ref int p) { WriteByteRawSim(d, ref p, (byte)'t'); WriteByteRawSim(d, ref p, (byte)'r'); WriteByteRawSim(d, ref p, (byte)'u'); WriteByteRawSim(d, ref p, (byte)'e'); }
+    /// <summary>Writes false scalar to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="p">The p used by this operation.</param>
     private static void WriteFalseScalar(Span<byte> d, ref int p) { WriteByteRawSim(d, ref p, (byte)'f'); WriteByteRawSim(d, ref p, (byte)'a'); WriteByteRawSim(d, ref p, (byte)'l'); WriteByteRawSim(d, ref p, (byte)'s'); WriteByteRawSim(d, ref p, (byte)'e'); }
+    /// <summary>Writes null scalar to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="p">The p used by this operation.</param>
     private static void WriteNullScalar(Span<byte> d, ref int p) { WriteByteRawSim(d, ref p, (byte)'n'); WriteByteRawSim(d, ref p, (byte)'u'); WriteByteRawSim(d, ref p, (byte)'l'); WriteByteRawSim(d, ref p, (byte)'l'); }
 
+    /// <summary>Writes true packed safe to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="p">The p used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTruePackedSafe(Span<byte> d, ref int p) { EnsureSim(d, p, 4); Unsafe.WriteUnaligned(ref d[p], 0x65757274u); p += 4; }
+    /// <summary>Writes null packed safe to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="p">The p used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteNullPackedSafe(Span<byte> d, ref int p) { EnsureSim(d, p, 4); Unsafe.WriteUnaligned(ref d[p], 0x6C6C756Eu); p += 4; }
+    /// <summary>Writes false packed safe to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="p">The p used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteFalsePackedSafe(Span<byte> d, ref int p) { EnsureSim(d, p, 5); Unsafe.WriteUnaligned(ref d[p], 0x736C6166u); d[p + 4] = (byte)'e'; p += 5; }
 
+    /// <summary>Writes true packed8 to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="p">The p used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTruePacked8(Span<byte> d, ref int p) { EnsureSim(d, p, 8); Unsafe.WriteUnaligned(ref d[p], 0x0000000065757274UL); p += 4; }
+    /// <summary>Writes null packed8 to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="p">The p used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteNullPacked8(Span<byte> d, ref int p) { EnsureSim(d, p, 8); Unsafe.WriteUnaligned(ref d[p], 0x000000006C6C756EUL); p += 4; }
+    /// <summary>Writes false packed8 to the current output.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="p">The p used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteFalsePacked8(Span<byte> d, ref int p) { EnsureSim(d, p, 8); Unsafe.WriteUnaligned(ref d[p], 0x00000065736C6166UL); p += 5; }
 
+    /// <summary>Writes ascii packed to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="packed">The packed used by this operation.</param>
+    /// <param name="logicalLength">The logical length used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteAsciiPacked(Span<byte> dest, ulong packed, int logicalLength)
     {
@@ -2228,6 +3139,7 @@ internal static class PrimitiveFormatter
 
     // ----------------------------- Correctness gate -----------------------------
 
+    /// <summary>Validates all candidates before the operation continues.</summary>
     public static void ValidateAllCandidates()
     {
         ValidateIntegerCandidates();
@@ -2238,6 +3150,7 @@ internal static class PrimitiveFormatter
         Console.WriteLine("LuminPack JSON primitive candidate correctness validation: OK");
     }
 
+    /// <summary>Validates integer candidates before the operation continues.</summary>
     private static void ValidateIntegerCandidates()
     {
         Span<byte> expected = stackalloc byte[64];
@@ -2256,6 +3169,10 @@ internal static class PrimitiveFormatter
         }
     }
 
+    /// <summary>Validates unsigned before the operation continues.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
+    /// <param name="actual">The actual used by this operation.</param>
     private static void ValidateUnsigned(ulong value, Span<byte> expected, Span<byte> actual)
     {
         Utf8Formatter.TryFormat(value, expected, out int en);
@@ -2266,6 +3183,10 @@ internal static class PrimitiveFormatter
         }
     }
 
+    /// <summary>Validates signed before the operation continues.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
+    /// <param name="actual">The actual used by this operation.</param>
     private static void ValidateSigned(long value, Span<byte> expected, Span<byte> actual)
     {
         Utf8Formatter.TryFormat(value, expected, out int en);
@@ -2276,6 +3197,7 @@ internal static class PrimitiveFormatter
         }
     }
 
+    /// <summary>Validates float candidates before the operation continues.</summary>
     private static void ValidateFloatCandidates()
     {
         Span<byte> buf = stackalloc byte[64];
@@ -2291,6 +3213,9 @@ internal static class PrimitiveFormatter
         }
     }
 
+    /// <summary>Validates float value before the operation continues.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="buf">The buf used by this operation.</param>
     private static void ValidateFloatValue(float value, Span<byte> buf)
     {
         FloatAlgorithm[] candidates = { FloatAlgorithm.DirectCurrent, FloatAlgorithm.IntegralOnlyQuad, FloatAlgorithm.HybridPair, FloatAlgorithm.HybridQuad, FloatAlgorithm.Guard16, FloatAlgorithm.Guard32, FloatAlgorithm.Guard64, FloatAlgorithm.CommonAdaptive32 };
@@ -2303,6 +3228,7 @@ internal static class PrimitiveFormatter
         }
     }
 
+    /// <summary>Validates double candidates before the operation continues.</summary>
     private static void ValidateDoubleCandidates()
     {
         Span<byte> buf = stackalloc byte[64];
@@ -2318,6 +3244,9 @@ internal static class PrimitiveFormatter
         }
     }
 
+    /// <summary>Validates double value before the operation continues.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="buf">The buf used by this operation.</param>
     private static void ValidateDoubleValue(double value, Span<byte> buf)
     {
         DoubleAlgorithm[] candidates = { DoubleAlgorithm.DirectCurrent, DoubleAlgorithm.IntegralOnlyQuad, DoubleAlgorithm.HybridPair, DoubleAlgorithm.HybridQuad, DoubleAlgorithm.Guard16, DoubleAlgorithm.Guard32, DoubleAlgorithm.Guard64, DoubleAlgorithm.CommonAdaptive32 };
@@ -2330,6 +3259,7 @@ internal static class PrimitiveFormatter
         }
     }
 
+    /// <summary>Validates decimal candidates before the operation continues.</summary>
     private static void ValidateDecimalCandidates()
     {
         Span<byte> buf = stackalloc byte[64];
@@ -2343,6 +3273,9 @@ internal static class PrimitiveFormatter
         }
     }
 
+    /// <summary>Validates decimal value before the operation continues.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="buf">The buf used by this operation.</param>
     private static void ValidateDecimalValue(decimal value, Span<byte> buf)
     {
         Span<byte> expected = stackalloc byte[64];
@@ -2360,6 +3293,7 @@ internal static class PrimitiveFormatter
         }
     }
 
+    /// <summary>Validates token candidates before the operation continues.</summary>
     private static void ValidateTokenCandidates()
     {
         Span<byte> buf = stackalloc byte[32];
@@ -2375,8 +3309,14 @@ internal static class PrimitiveFormatter
     }
 }
 
+/// <summary>Provides integer data functionality.</summary>
 internal static class IntegerData
 {
+    /// <summary>Creates bytes from the supplied input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static byte[] CreateBytes(IntegerDataset d, int count, ref JsonBenchSplitMix64 rng)
     {
         var a = new byte[count];
@@ -2384,6 +3324,11 @@ internal static class IntegerData
         return a;
     }
 
+    /// <summary>Creates s bytes from the supplied input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static sbyte[] CreateSBytes(IntegerDataset d, int count, ref JsonBenchSplitMix64 rng)
     {
         var a = new sbyte[count];
@@ -2391,6 +3336,11 @@ internal static class IntegerData
         return a;
     }
 
+    /// <summary>Creates u shorts from the supplied input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static ushort[] CreateUShorts(IntegerDataset d, int count, ref JsonBenchSplitMix64 rng)
     {
         var a = new ushort[count];
@@ -2398,6 +3348,11 @@ internal static class IntegerData
         return a;
     }
 
+    /// <summary>Creates shorts from the supplied input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static short[] CreateShorts(IntegerDataset d, int count, ref JsonBenchSplitMix64 rng)
     {
         var a = new short[count];
@@ -2405,6 +3360,11 @@ internal static class IntegerData
         return a;
     }
 
+    /// <summary>Creates u ints from the supplied input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static uint[] CreateUInts(IntegerDataset d, int count, ref JsonBenchSplitMix64 rng)
     {
         var a = new uint[count];
@@ -2412,6 +3372,11 @@ internal static class IntegerData
         return a;
     }
 
+    /// <summary>Creates ints from the supplied input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static int[] CreateInts(IntegerDataset d, int count, ref JsonBenchSplitMix64 rng)
     {
         var a = new int[count];
@@ -2419,6 +3384,11 @@ internal static class IntegerData
         return a;
     }
 
+    /// <summary>Creates u longs from the supplied input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static ulong[] CreateULongs(IntegerDataset d, int count, ref JsonBenchSplitMix64 rng)
     {
         var a = new ulong[count];
@@ -2426,6 +3396,11 @@ internal static class IntegerData
         return a;
     }
 
+    /// <summary>Creates longs from the supplied input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static long[] CreateLongs(IntegerDataset d, int count, ref JsonBenchSplitMix64 rng)
     {
         var a = new long[count];
@@ -2442,18 +3417,47 @@ internal static class IntegerData
     private static readonly ulong[] ULongBounds = { 0, 1, 9, 10, 99, 100, 999, 1000, 9999, 10000, 99999, 100000, 9999999999UL, 10000000000UL, 999999999999999999UL, 1000000000000000000UL, 9999999999999999999UL, 10000000000000000000UL, ulong.MaxValue };
     private static readonly long[] LongBounds = { long.MinValue, -1000000000000000000L, -999999999999999999L, -10000000000L, -9999999999L, -10000, -9999, -1000, -999, -100, -99, -10, -9, -1, 0, 1, 9, 10, 99, 100, 999, 1000, 9999, 10000, 9999999999L, 10000000000L, 999999999999999999L, 1000000000000000000L, long.MaxValue };
 
+    /// <summary>Measures boundary byte for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static byte BoundaryByte(int i) => ByteBounds[i % ByteBounds.Length];
+    /// <summary>Measures boundary s byte for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static sbyte BoundarySByte(int i) => SByteBounds[i % SByteBounds.Length];
+    /// <summary>Measures boundary u short for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static ushort BoundaryUShort(int i) => UShortBounds[i % UShortBounds.Length];
+    /// <summary>Measures boundary short for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static short BoundaryShort(int i) => ShortBounds[i % ShortBounds.Length];
+    /// <summary>Measures boundary u int for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static uint BoundaryUInt(int i) => UIntBounds[i % UIntBounds.Length];
+    /// <summary>Measures boundary int for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static int BoundaryInt(int i) => IntBounds[i % IntBounds.Length];
+    /// <summary>Measures boundary u long for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static ulong BoundaryULong(int i) => ULongBounds[i % ULongBounds.Length];
+    /// <summary>Measures boundary long for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static long BoundaryLong(int i) => LongBounds[i % LongBounds.Length];
 }
 
+/// <summary>Provides floating data functionality.</summary>
 internal static class FloatingData
 {
+    /// <summary>Creates floats from the supplied input.</summary>
+    /// <param name="kind">The kind used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static float[] CreateFloats(FloatingDataset kind, int count)
     {
         var data = new float[count]; var rng = new JsonBenchSplitMix64(0x1234_5678_9ABC_DEF0UL);
@@ -2461,6 +3465,10 @@ internal static class FloatingData
         return data;
     }
 
+    /// <summary>Creates doubles from the supplied input.</summary>
+    /// <param name="kind">The kind used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static double[] CreateDoubles(FloatingDataset kind, int count)
     {
         var data = new double[count]; var rng = new JsonBenchSplitMix64(0x0FED_CBA9_8765_4321UL);
@@ -2468,27 +3476,49 @@ internal static class FloatingData
         return data;
     }
 
+    /// <summary>Measures game float for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static float GameFloat(int i, ref JsonBenchSplitMix64 rng)
     {
         int n = (i % 2001) - 1000;
         return (i & 15) switch { 0 => 0f, 1 => 1f, 2 => -1f, 3 => n, 4 => n / 10f, 5 => n / 100f, 6 => n / 1000f, 7 => 0.5f, 8 => 0.25f, 9 => 0.75f, 10 => 60f, 11 => 1920f, 12 => 0.016666668f, 13 => MathF.PI, 14 => 123456.75f, _ => ((int)(rng.Next() % 200_001) - 100_000) / 100f };
     }
 
+    /// <summary>Measures game double for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static double GameDouble(int i, ref JsonBenchSplitMix64 rng)
     {
         int n = (i % 2001) - 1000;
         return (i & 15) switch { 0 => 0d, 1 => 1d, 2 => -1d, 3 => n, 4 => n / 10d, 5 => n / 100d, 6 => n / 1000d, 7 => 0.5d, 8 => 0.25d, 9 => 0.75d, 10 => 60d, 11 => 1920d, 12 => 1.0 / 60.0, 13 => Math.PI, 14 => 123456789.125d, _ => ((long)(rng.Next() % 20_000_001) - 10_000_000) / 1000d };
     }
 
+    /// <summary>Measures random finite float for the configured benchmark input.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static float RandomFiniteFloat(ref JsonBenchSplitMix64 rng) { while (true) { uint bits = (uint)rng.Next(); if ((bits & 0x7F80_0000u) != 0x7F80_0000u) return BitConverter.UInt32BitsToSingle(bits); } }
+    /// <summary>Measures random finite double for the configured benchmark input.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static double RandomFiniteDouble(ref JsonBenchSplitMix64 rng) { while (true) { ulong bits = rng.Next(); if ((bits & 0x7FF0_0000_0000_0000UL) != 0x7FF0_0000_0000_0000UL) return BitConverter.UInt64BitsToDouble(bits); } }
 
+    /// <summary>Measures adversarial float for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static float AdversarialFloat(int i, ref JsonBenchSplitMix64 rng)
     {
         ReadOnlySpan<float> fixedValues = [float.Epsilon, -float.Epsilon, float.MaxValue, float.MinValue, 1e-37f, 1e-20f, 1e-10f, 1e10f, 1e20f, 1e37f, 1.17549435E-38f, 3.4028235E+38f, 16_777_215f, 16_777_216f, 16_777_218f, 0.99999994f, 1.0000001f, 1677721.4f];
         return i < fixedValues.Length ? fixedValues[i] : RandomFiniteFloat(ref rng);
     }
 
+    /// <summary>Measures adversarial double for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static double AdversarialDouble(int i, ref JsonBenchSplitMix64 rng)
     {
         ReadOnlySpan<double> fixedValues = [double.Epsilon, -double.Epsilon, double.MaxValue, double.MinValue, 1e-300, 1e-200, 1e-100, 1e100, 1e200, 1e300, 2.2250738585072014E-308, 1.7976931348623157E+308, 9_007_199_254_740_991d, 9_007_199_254_740_992d, 9_007_199_254_740_994d, 0.9999999999999999d, 1.0000000000000002d];
@@ -2496,8 +3526,13 @@ internal static class FloatingData
     }
 }
 
+/// <summary>Provides decimal data functionality.</summary>
 internal static class DecimalData
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="kind">The kind used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static decimal[] Create(DecimalDataset kind, int count)
     {
         var data = new decimal[count]; var rng = new JsonBenchSplitMix64(0x1357_9BDF_2468_ACE0UL);
@@ -2513,26 +3548,51 @@ internal static class DecimalData
         return data;
     }
 
+    /// <summary>Measures game for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static decimal Game(int i, ref JsonBenchSplitMix64 rng)
     {
         int n = (i % 2001) - 1000;
         return (i & 15) switch
         {
-            0 => 0m, 1 => 1m, 2 => -1m, 3 => n, 4 => n / 10m, 5 => n / 100m, 6 => n / 1000m,
-            7 => 0.5m, 8 => 0.25m, 9 => 0.75m, 10 => 60m, 11 => 1920m, 12 => 16.6667m,
-            13 => 123456.75m, 14 => 1.2300m, _ => ((long)(rng.Next() % 20_000_001) - 10_000_000) / 1000m
+            0 => 0m,
+            1 => 1m,
+            2 => -1m,
+            3 => n,
+            4 => n / 10m,
+            5 => n / 100m,
+            6 => n / 1000m,
+            7 => 0.5m,
+            8 => 0.25m,
+            9 => 0.75m,
+            10 => 60m,
+            11 => 1920m,
+            12 => 16.6667m,
+            13 => 123456.75m,
+            14 => 1.2300m,
+            _ => ((long)(rng.Next() % 20_000_001) - 10_000_000) / 1000m
         };
     }
 
     private static readonly decimal[] Bounds = { 0m, 1m, -1m, 0.1m, 1.2300m, 0.0000000000000000000000000001m, 79228162514264337593543950335m, -79228162514264337593543950335m, 7922816251426433759354395.0335m, -7922816251426433759354395.0335m };
+    /// <summary>Measures boundary for the configured benchmark input.</summary>
+    /// <param name="i">The i used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static decimal Boundary(int i) => Bounds[i % Bounds.Length];
 }
 
+/// <summary>Provides json bench split mix64 functionality.</summary>
 internal struct JsonBenchSplitMix64
 {
     private ulong _state;
+    /// <summary>Initializes a new instance of <c>JsonBenchSplitMix64</c>.</summary>
+    /// <param name="seed">The seed used by this operation.</param>
     public JsonBenchSplitMix64(ulong seed) => _state = seed;
 
+    /// <summary>Measures next for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ulong Next()
     {

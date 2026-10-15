@@ -8,22 +8,29 @@ using System.Buffers;
 using System.Text;
 using System.Text.Unicode;
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Order;
 using LuminPack.Utility;
 
+/// <summary>Provides string benchmark data functionality.</summary>
 public abstract class StringBenchmarkData
 {
+    /// <summary>Gets or sets the length.</summary>
     [Params(4096)]
     public int Length { get; set; }
 
+    /// <summary>Gets or sets the character set.</summary>
     [Params("ASCII", "Latin2", "CJK3", "Emoji4", "Mixed", "CJK_SparseASCII")]
     public string CharacterSet { get; set; } = "ASCII";
 
+    /// <summary>Stores the text.</summary>
     protected string Text = string.Empty;
+    /// <summary>Stores the utf8 bytes.</summary>
     protected byte[] Utf8Bytes = Array.Empty<byte>();
+    /// <summary>Stores the encode destination.</summary>
     protected byte[] EncodeDestination = Array.Empty<byte>();
+    /// <summary>Stores the decode destination.</summary>
     protected char[] DecodeDestination = Array.Empty<char>();
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -84,6 +91,10 @@ public abstract class StringBenchmarkData
         }
     }
 
+    /// <summary>Creates input from the supplied input.</summary>
+    /// <param name="kind">The kind used by this operation.</param>
+    /// <param name="length">The number of bytes or elements to process.</param>
+    /// <returns>The result of the operation.</returns>
     private static string CreateInput(string kind, int length)
     {
         if (length < 0) throw new ArgumentOutOfRangeException(nameof(length));
@@ -99,11 +110,11 @@ public abstract class StringBenchmarkData
 
         string pattern = kind switch
         {
-            "ASCII"  => "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
+            "ASCII" => "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ",
             "Latin2" => "ПриветмирЖизньДанныеТест", // U+0080..U+07FF -> 2 UTF-8 bytes
-            "CJK3"   => "中文世界高性能字符串序列化基准测试", // BMP -> 3 UTF-8 bytes
+            "CJK3" => "\u4E2D\u6587\u4E16\u754C\u9AD8\u6027\u80FD\u5B57\u7B26\u4E32\u5E8F\u5217\u5316\u57FA\u51C6\u6D4B\u8BD5", // BMP -> 3 UTF-8 bytes
             "Emoji4" => "😀🚀🎮🔥🧠🌟💡🤖", // surrogate pairs -> 4 UTF-8 bytes
-            "Mixed"  => "Hello中文Привет🚀World测试123!",
+            "Mixed" => "Hello\u4E2D\u6587\u041F\u0440\u0438\u0432\u0435\u0442\uD83D\uDE80World\u6D4B\u8BD5123!",
             _ => throw new ArgumentOutOfRangeException(nameof(kind), kind, "Unknown character set")
         };
 
@@ -144,6 +155,7 @@ public abstract class StringBenchmarkData
     }
 }
 
+/// <summary>Provides string benchmark functionality.</summary>
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MinColumn, MaxColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -153,6 +165,8 @@ public abstract class StringBenchmarkData
 public class StringBenchmark : StringBenchmarkData
 {
     // The baseline is the BCL span-based transcoder, not the allocating GetBytes(string).
+    /// <summary>Measures dot net utf8 from utf16 for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true)]
     public int DotNet_Utf8_FromUtf16()
     {
@@ -161,10 +175,14 @@ public class StringBenchmark : StringBenchmarkData
         return bytesWritten;
     }
 
+    /// <summary>Measures dot net encoding get bytes for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public int DotNet_Encoding_GetBytes()
         => Encoding.UTF8.GetBytes(Text.AsSpan(), EncodeDestination.AsSpan());
 
+    /// <summary>Measures lumin pack serialize for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public int LuminPack_Serialize()
     {
@@ -174,6 +192,7 @@ public class StringBenchmark : StringBenchmarkData
     }
 }
 
+/// <summary>Provides string deserialize benchmark functionality.</summary>
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MinColumn, MaxColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -182,6 +201,8 @@ public class StringBenchmark : StringBenchmarkData
 [GcServer]
 public class StringDeserializeBenchmark : StringBenchmarkData
 {
+    /// <summary>Measures dot net utf8 to utf16 for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true)]
     public int DotNet_Utf8_ToUtf16()
     {
@@ -190,10 +211,14 @@ public class StringDeserializeBenchmark : StringBenchmarkData
         return charsWritten;
     }
 
+    /// <summary>Measures dot net encoding get chars for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public int DotNet_Encoding_GetChars()
         => Encoding.UTF8.GetChars(Utf8Bytes.AsSpan(), DecodeDestination.AsSpan());
 
+    /// <summary>Measures lumin pack deserialize for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public int LuminPack_Deserialize()
     {

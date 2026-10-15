@@ -9,14 +9,13 @@ namespace LuminPackBenchmark;
 /// <summary>
 /// Gives every concrete union payload a unique JIT method name. The generated
 /// extension overloads otherwise all appear as LuminPackExtensions:(byref,byref)
-/// in diffable disassembly, which makes recursive call-chain attribution
-
-/// ambiguous.
+/// in diffable disassembly, which makes recursive call-chain attribution ambiguous.
 /// </summary>
 internal static class CharacterSaveDataConcreteJitProbe
 {
     private const int Iterations = 100_000;
 
+    /// <summary>Measures run for the configured benchmark input.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static void Run()
     {
@@ -78,6 +77,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         }
     }
 
+    /// <summary>Measures round trip weapon for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static WeaponItem RoundTripWeapon(LuminBufferWriter buffer, WeaponItem value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -89,6 +92,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip armor for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static ArmorItem RoundTripArmor(LuminBufferWriter buffer, ArmorItem value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -100,6 +107,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip consumable for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static ConsumableItem RoundTripConsumable(LuminBufferWriter buffer, ConsumableItem value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -111,6 +122,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip mount for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static MountItem RoundTripMount(LuminBufferWriter buffer, MountItem value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -122,6 +137,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip quest for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static QuestItem RoundTripQuest(LuminBufferWriter buffer, QuestItem value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -133,6 +152,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip pet for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static PetItem RoundTripPet(LuminBufferWriter buffer, PetItem value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -144,6 +167,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip relic for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static RelicItem RoundTripRelic(LuminBufferWriter buffer, RelicItem value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -155,6 +182,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip active skill for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static ActiveSkill RoundTripActiveSkill(LuminBufferWriter buffer, ActiveSkill value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -166,6 +197,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip passive skill for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static PassiveSkill RoundTripPassiveSkill(LuminBufferWriter buffer, PassiveSkill value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -177,6 +212,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip ultimate skill for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static UltimateSkill RoundTripUltimateSkill(LuminBufferWriter buffer, UltimateSkill value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -188,6 +227,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip support skill for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static SupportSkill RoundTripSupportSkill(LuminBufferWriter buffer, SupportSkill value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -199,6 +242,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip combat event for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static CombatEventLog RoundTripCombatEvent(LuminBufferWriter buffer, CombatEventLog value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -210,6 +257,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip crafting event for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static CraftingEventLog RoundTripCraftingEvent(LuminBufferWriter buffer, CraftingEventLog value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -221,6 +272,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip trade event for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static TradeEventLog RoundTripTradeEvent(LuminBufferWriter buffer, TradeEventLog value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -232,6 +287,10 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Measures round trip achievement event for the configured benchmark input.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static AchievementEventLog RoundTripAchievementEvent(LuminBufferWriter buffer, AchievementEventLog value)
     {
         var writer = new LuminPackWriter(buffer);
@@ -243,22 +302,70 @@ internal static class CharacterSaveDataConcreteJitProbe
         return result;
     }
 
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeWeapon(ref LuminPackWriter writer, WeaponItem value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeArmor(ref LuminPackWriter writer, ArmorItem value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeConsumable(ref LuminPackWriter writer, ConsumableItem value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeMount(ref LuminPackWriter writer, MountItem value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeQuest(ref LuminPackWriter writer, QuestItem value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializePet(ref LuminPackWriter writer, PetItem value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeRelic(ref LuminPackWriter writer, RelicItem value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeActiveSkill(ref LuminPackWriter writer, ActiveSkill value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializePassiveSkill(ref LuminPackWriter writer, PassiveSkill value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeUltimateSkill(ref LuminPackWriter writer, UltimateSkill value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeSupportSkill(ref LuminPackWriter writer, SupportSkill value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeCombatEvent(ref LuminPackWriter writer, CombatEventLog value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeCraftingEvent(ref LuminPackWriter writer, CraftingEventLog value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeTradeEvent(ref LuminPackWriter writer, TradeEventLog value) => writer.WritePolymorphismValue(value);
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void SerializeAchievementEvent(ref LuminPackWriter writer, AchievementEventLog value) => writer.WritePolymorphismValue(value);
 
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void SerializeItemList(LuminBufferWriter buffer, List<ItemBase> value)
     {
@@ -266,6 +373,9 @@ internal static class CharacterSaveDataConcreteJitProbe
         writer.WriteValue(value);
     }
 
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void SerializeSkillList(LuminBufferWriter buffer, List<SkillBase> value)
     {
@@ -273,6 +383,9 @@ internal static class CharacterSaveDataConcreteJitProbe
         writer.WriteValue(value);
     }
 
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void SerializeEventList(LuminBufferWriter buffer, List<EventLogBase> value)
     {
@@ -280,6 +393,9 @@ internal static class CharacterSaveDataConcreteJitProbe
         writer.WriteValue(value);
     }
 
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void SerializeIntDictionary(LuminBufferWriter buffer, Dictionary<int, int> value)
     {
@@ -287,6 +403,9 @@ internal static class CharacterSaveDataConcreteJitProbe
         writer.WriteValue(value);
     }
 
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void SerializeStringDictionary(LuminBufferWriter buffer, Dictionary<string, long> value)
     {
@@ -294,19 +413,64 @@ internal static class CharacterSaveDataConcreteJitProbe
         writer.WriteValue(value);
     }
 
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeWeapon(ref LuminPackReader reader, ref WeaponItem value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeArmor(ref LuminPackReader reader, ref ArmorItem value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeConsumable(ref LuminPackReader reader, ref ConsumableItem value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeMount(ref LuminPackReader reader, ref MountItem value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeQuest(ref LuminPackReader reader, ref QuestItem value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializePet(ref LuminPackReader reader, ref PetItem value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeRelic(ref LuminPackReader reader, ref RelicItem value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeActiveSkill(ref LuminPackReader reader, ref ActiveSkill value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializePassiveSkill(ref LuminPackReader reader, ref PassiveSkill value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeUltimateSkill(ref LuminPackReader reader, ref UltimateSkill value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeSupportSkill(ref LuminPackReader reader, ref SupportSkill value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeCombatEvent(ref LuminPackReader reader, ref CombatEventLog value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeCraftingEvent(ref LuminPackReader reader, ref CraftingEventLog value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeTradeEvent(ref LuminPackReader reader, ref TradeEventLog value) => reader.ReadPolymorphismValue(ref value);
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)] private static void DeserializeAchievementEvent(ref LuminPackReader reader, ref AchievementEventLog value) => reader.ReadPolymorphismValue(ref value);
 }

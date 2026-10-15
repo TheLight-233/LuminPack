@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator.CodeEmitters;
 
+/// <summary>Provides emitter type traits functionality.</summary>
 internal static class EmitterTypeTraits
 {
     /// <summary>
@@ -11,6 +12,9 @@ internal static class EmitterTypeTraits
     /// An unmanaged-constrained type parameter is already definitive; other open
     /// types must keep the RuntimeHelpers fallback for each closed instantiation.
     /// </summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <param name="isUnmanaged">Receives the is unmanaged produced by the operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     public static bool TryGetIsUnmanaged(ITypeSymbol type, out bool isUnmanaged)
     {
         if (type?.IsUnmanagedType == true)
@@ -35,11 +39,17 @@ internal static class EmitterTypeTraits
         return true;
     }
 
+    /// <summary>Obtains the first type argument for the supplied input.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <returns>The result of the operation.</returns>
     public static ITypeSymbol GetFirstTypeArgument(LuminLocalFieldData fieldData)
     {
         return GetCollectionElementType(fieldData.TypeSymbol);
     }
 
+    /// <summary>Obtains the collection element type for the supplied input.</summary>
+    /// <param name="collectionType">The collection type used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static ITypeSymbol GetCollectionElementType(ITypeSymbol collectionType)
     {
         return collectionType switch
@@ -50,6 +60,10 @@ internal static class EmitterTypeTraits
         };
     }
 
+    /// <summary>Obtains the array pool clear expression for the supplied input.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="elementType">The element type used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static string GetArrayPoolClearExpression(LuminLocalFieldData fieldData, string elementType)
     {
         if (TryGetIsUnmanaged(GetFirstTypeArgument(fieldData), out bool isUnmanaged))
@@ -61,6 +75,9 @@ internal static class EmitterTypeTraits
                elementType + ">()";
     }
 
+    /// <summary>Determines whether the metadata contains undetermined type parameter.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool ContainsUndeterminedTypeParameter(ITypeSymbol type)
     {
         return type switch

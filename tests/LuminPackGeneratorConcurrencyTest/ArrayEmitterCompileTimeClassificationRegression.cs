@@ -4,8 +4,11 @@ using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
+/// <summary>Provides array emitter compile time classification regression functionality.</summary>
 internal static class ArrayEmitterCompileTimeClassificationRegression
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="references">The references used by this operation.</param>
     public static void Run(MetadataReference[] references)
     {
         const string source = """
@@ -109,6 +112,9 @@ internal static class ArrayEmitterCompileTimeClassificationRegression
         AssertDoesNotContain(nullableCompressedWrite, "RuntimeHelpers.IsReferenceOrContainsReferences", "Closed nullable unmanaged arrays must be classified at generation time.");
     }
 
+    /// <summary>Verifies assert bulk unmanaged.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void AssertBulkUnmanaged(LuminLocalFieldData field, string scenario)
     {
         string write = Generate(field, ArrayEmitter.GenerateSerializeCode);
@@ -120,6 +126,8 @@ internal static class ArrayEmitterCompileTimeClassificationRegression
         AssertDoesNotContain(write, "WriteNotNullObjectHeader", scenario + " unexpectedly emitted an element object header.");
     }
 
+    /// <summary>Verifies assert closed managed.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
     private static void AssertClosedManaged(LuminLocalFieldData field)
     {
         string write = Generate(field, ArrayEmitter.GenerateSerializeCode);
@@ -131,6 +139,8 @@ internal static class ArrayEmitterCompileTimeClassificationRegression
         AssertDoesNotContain(write, "DangerousWriteUnmanagedArray", "Closed managed arrays were incorrectly classified as raw-copy arrays.");
     }
 
+    /// <summary>Verifies assert fresh managed array always allocates.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
     private static void AssertFreshManagedArrayAlwaysAllocates(LuminLocalFieldData field)
     {
         string read = Generate(field, ArrayEmitter.GenerateFreshDeserializeCode);
@@ -139,6 +149,11 @@ internal static class ArrayEmitterCompileTimeClassificationRegression
         AssertDoesNotContain(read, "value is null || value.Length != length", "Fresh array readers must not carry the reusable-array branch.");
     }
 
+    /// <summary>Obtains the field for the supplied input.</summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="containingType">The containing type used by this operation.</param>
+    /// <param name="fieldName">The field name used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static LuminLocalFieldData GetField(Compilation compilation, string containingType, string fieldName)
     {
         INamedTypeSymbol type = compilation.GetTypeByMetadataName(containingType)
@@ -153,6 +168,10 @@ internal static class ArrayEmitterCompileTimeClassificationRegression
         };
     }
 
+    /// <summary>Captures the source produced by the code emitter under test.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="generator">The generator used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string Generate(
         LuminLocalFieldData field,
         Action<LuminLocalFieldData, StringBuilder> generator)
@@ -162,6 +181,10 @@ internal static class ArrayEmitterCompileTimeClassificationRegression
         return builder.ToString();
     }
 
+    /// <summary>Verifies assert contains.</summary>
+    /// <param name="text">The text used by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void AssertContains(string text, string expected, string message)
     {
         if (!text.Contains(expected, StringComparison.Ordinal))
@@ -170,6 +193,10 @@ internal static class ArrayEmitterCompileTimeClassificationRegression
         }
     }
 
+    /// <summary>Verifies assert does not contain.</summary>
+    /// <param name="text">The text used by this operation.</param>
+    /// <param name="unexpected">The unexpected used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void AssertDoesNotContain(string text, string unexpected, string message)
     {
         if (text.Contains(unexpected, StringComparison.Ordinal))

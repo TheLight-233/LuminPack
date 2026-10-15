@@ -1,6 +1,4 @@
-using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.IO.Pipelines;
 using System.Text;
 using LuminPack;
@@ -8,16 +6,23 @@ using LuminPack.Attribute;
 
 namespace LuminPackUnitTest
 {
+    /// <summary>Provides i buffer model functionality.</summary>
     [LuminPackable]
     public partial class IBufferModel
     {
+        /// <summary>Gets or sets the id.</summary>
         public int Id { get; set; }
+        /// <summary>Gets or sets the name.</summary>
         public string Name { get; set; } = "";
+        /// <summary>Gets or sets the numbers.</summary>
         public List<int> Numbers { get; set; } = new();
     }
 
+    /// <summary>Provides i buffer writer interop test functionality.</summary>
     public static class IBufferWriterInteropTest
     {
+        /// <summary>Verifies run.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void Run(List<string> results)
         {
             var value = new IBufferModel { Id = 5, Name = "pipe", Numbers = new List<int> { 1, 2, 3 } };
@@ -72,6 +77,10 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies equals model.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         private static bool EqualsModel(IBufferModel a, IBufferModel b)
             => a.Id == b.Id && a.Name == b.Name && a.Numbers.Count == b.Numbers.Count &&
                a.Numbers[0] == b.Numbers[0] && a.Numbers[1] == b.Numbers[1] && a.Numbers[2] == b.Numbers[2];

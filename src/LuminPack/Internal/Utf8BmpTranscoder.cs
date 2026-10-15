@@ -7,6 +7,7 @@ using System.Runtime.Intrinsics.X86;
 namespace LuminPack.Internal;
 
 // An exact-store prefix kernel. Other code points and all tails use the platform transcoder.
+/// <summary>Provides utf8 bmp transcoder functionality.</summary>
 internal static unsafe class Utf8BmpTranscoder
 {
     private const byte Z = 0x80;
@@ -17,6 +18,11 @@ internal static unsafe class Utf8BmpTranscoder
     private static readonly Vector128<byte> Second1 = Vector128.Create((byte)5, Z, Z, (byte)6, Z, Z, (byte)7, Z, Z, Z, Z, Z, Z, Z, Z, Z);
     private static readonly Vector128<byte> Second2 = Vector128.Create(Z, (byte)5, Z, Z, (byte)6, Z, Z, (byte)7, Z, Z, Z, Z, Z, Z, Z, Z);
 
+    /// <summary>Performs the transcode prefix step for the current operation.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="charsRead">Receives the chars read produced by the operation.</param>
+    /// <param name="bytesWritten">Receives the bytes written produced by the operation.</param>
     internal static void TranscodePrefix(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten)
     {
         charsRead = 0;

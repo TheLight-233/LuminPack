@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LuminPack.Code;
@@ -8,7 +7,7 @@ using static LuminPack.Code.LuminPackMarshal;
 
 namespace LuminPack.Core
 {
-    public unsafe ref partial struct LuminPackReader
+        public unsafe ref partial struct LuminPackReader
     {
 
         /// <summary>
@@ -21,6 +20,10 @@ namespace LuminPack.Core
         /// <paramref name="compressedLen"/> is 0 — caller should short-circuit to
         /// <c>Array.Empty&lt;T&gt;()</c>.
         /// </summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="elementCount">Receives the element count produced by the operation.</param>
+        /// <param name="compressedLen">Receives the compressed len produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private bool TryReadCompressedCollectionHead(int index, out int elementCount, out int compressedLen)
         {
@@ -28,7 +31,7 @@ namespace LuminPack.Core
 
             if (elementCount == LuminPackCode.NullCollection)
             {
-                elementCount  = 0;
+                elementCount = 0;
                 compressedLen = 0;
                 return false; // null
             }
@@ -49,6 +52,10 @@ namespace LuminPack.Core
         /// <paramref name="destRef"/> / <paramref name="decompressedByteLen"/> bytes.
         /// No intermediate allocation — LuminZ decompresses in a single pass.
         /// </summary>
+        /// <param name="compressedDataOffset">The compressed data offset used by this operation.</param>
+        /// <param name="compressedLen">The compressed len used by this operation.</param>
+        /// <param name="destRef">The dest ref used by this operation.</param>
+        /// <param name="decompressedByteLen">The decompressed byte len used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void DecompressFromBuffer(int compressedDataOffset, int compressedLen, ref byte destRef, int decompressedByteLen)
         {
@@ -57,6 +64,9 @@ namespace LuminPack.Core
             LuminCompressor.Decompress(src, dst);
         }
 
+        /// <summary>Reads unmanaged array with compress using the caller-validated buffer layout.</summary>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedArrayWithCompress<T>(scoped ref T[]? array)
         {
@@ -84,6 +94,10 @@ namespace LuminPack.Core
                 elementCount * Unsafe.SizeOf<T>());
         }
 
+        /// <summary>Reads unmanaged array with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedArrayWithCompress<T>(scoped ref int index, ref T[]? array)
         {
@@ -109,19 +123,24 @@ namespace LuminPack.Core
                 elementCount * Unsafe.SizeOf<T>());
         }
 
+        /// <summary>Reads unmanaged array with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedArrayWithCompress<T>(scoped ref int index, ref T[]? array, out int spanOffset)
         {
             if (!TryReadCompressedCollectionHead(index, out var elementCount, out var compressedLen))
             {
-                array     = null;
+                array = null;
                 spanOffset = 4;
                 return;
             }
 
             if (elementCount == 0)
             {
-                array      = Array.Empty<T>();
+                array = Array.Empty<T>();
                 spanOffset = 4;
                 return;
             }
@@ -138,6 +157,11 @@ namespace LuminPack.Core
             spanOffset = 8 + compressedLen;
         }
 
+        /// <summary>Reads unmanaged array with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedArrayWithOutHeaderWithCompress<T>(scoped ref int index, ref T[]? array, int length)
         {
@@ -164,20 +188,26 @@ namespace LuminPack.Core
                 ref LuminPackMarshal.GetArrayDataReference(array),
                 length * Unsafe.SizeOf<T>());
         }
-        
+
+        /// <summary>Reads unmanaged array with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedArrayWithOutHeaderWithCompress<T>(scoped ref int index, ref T[]? array, int length, out int spanOffset)
         {
             if (length == LuminPackCode.NullCollection)
             {
-                array      = null;
+                array = null;
                 spanOffset = 0;
                 return;
             }
 
             if (length == 0)
             {
-                array      = Array.Empty<T>();
+                array = Array.Empty<T>();
                 spanOffset = 0;
                 return;
             }
@@ -195,7 +225,10 @@ namespace LuminPack.Core
 
             spanOffset = 4 + compressedLen;
         }
-        
+
+        /// <summary>Reads unmanaged span with compress using the caller-validated buffer layout.</summary>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedSpanWithCompress<T>(scoped ref Span<T> span)
         {
@@ -223,6 +256,10 @@ namespace LuminPack.Core
                 elementCount * Unsafe.SizeOf<T>());
         }
 
+        /// <summary>Reads unmanaged span with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedSpanWithCompress<T>(scoped ref int index, scoped ref Span<T> span)
         {
@@ -247,20 +284,25 @@ namespace LuminPack.Core
                 ref Unsafe.As<T, byte>(ref span.GetPinnableReference()),
                 elementCount * Unsafe.SizeOf<T>());
         }
-        
+
+        /// <summary>Reads unmanaged span with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedSpanWithCompress<T>(scoped ref int index, scoped ref Span<T> span, out int spanOffset)
         {
             if (!TryReadCompressedCollectionHead(index, out var elementCount, out var compressedLen))
             {
-                span       = default;
+                span = default;
                 spanOffset = 4;
                 return;
             }
 
             if (elementCount == 0)
             {
-                span       = Span<T>.Empty;
+                span = Span<T>.Empty;
                 spanOffset = 4;
                 return;
             }
@@ -277,6 +319,11 @@ namespace LuminPack.Core
             spanOffset = 8 + compressedLen;
         }
 
+        /// <summary>Reads unmanaged span with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedSpanWithOutHeaderWithCompress<T>(scoped ref int index, scoped ref Span<T> span, int length)
         {
@@ -304,19 +351,25 @@ namespace LuminPack.Core
                 length * Unsafe.SizeOf<T>());
         }
 
+        /// <summary>Reads unmanaged span with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedSpanWithOutHeaderWithCompress<T>(scoped ref int index, scoped ref Span<T> span, int length, out int spanOffset)
         {
             if (length == LuminPackCode.NullCollection)
             {
-                span       = default;
+                span = default;
                 spanOffset = 0;
                 return;
             }
 
             if (length == 0)
             {
-                span       = Span<T>.Empty;
+                span = Span<T>.Empty;
                 spanOffset = 0;
                 return;
             }

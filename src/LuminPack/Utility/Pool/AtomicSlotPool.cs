@@ -1,6 +1,3 @@
-using System;
-using System.Threading;
-
 namespace LuminPack.Utility;
 
 using System.Runtime.CompilerServices;
@@ -9,6 +6,7 @@ using System.Runtime.CompilerServices;
 /// Fixed-capacity, unordered storage for shared object-pool overflow.
 /// Every slot independently transitions between null and an object.
 /// </summary>
+/// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
 internal sealed class AtomicSlotPool<T> where T : class
 {
     private const int ProbeIncrement = unchecked((int)0x9E3779B9);
@@ -19,6 +17,8 @@ internal sealed class AtomicSlotPool<T> where T : class
     private readonly T?[] _slots;
     private readonly int _indexMask;
 
+    /// <summary>Initializes a new instance of <c>AtomicSlotPool</c>.</summary>
+    /// <param name="capacity">The requested storage capacity.</param>
     internal AtomicSlotPool(int capacity)
     {
         if (capacity <= 0)
@@ -28,6 +28,7 @@ internal sealed class AtomicSlotPool<T> where T : class
         _indexMask = (capacity & (capacity - 1)) == 0 ? capacity - 1 : -1;
     }
 
+    /// <summary>Gets the capacity.</summary>
     internal int Capacity => _slots.Length;
 
     /// <summary>
@@ -48,6 +49,8 @@ internal sealed class AtomicSlotPool<T> where T : class
         }
     }
 
+    /// <summary>Attempts to take and reports whether it succeeded.</summary>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal T? TryTake()
     {
@@ -67,6 +70,9 @@ internal sealed class AtomicSlotPool<T> where T : class
         return null;
     }
 
+    /// <summary>Attempts to store and reports whether it succeeded.</summary>
+    /// <param name="item">The entry to process.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal bool TryStore(T item)
     {
@@ -85,6 +91,8 @@ internal sealed class AtomicSlotPool<T> where T : class
         return false;
     }
 
+    /// <summary>Performs the drain step for the current operation.</summary>
+    /// <param name="consume">The consume used by this operation.</param>
     internal void Drain(Action<T> consume)
     {
         if (consume is null)
@@ -98,6 +106,8 @@ internal sealed class AtomicSlotPool<T> where T : class
         }
     }
 
+    /// <summary>Performs the next probe step for the current operation.</summary>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int NextProbe()
     {
@@ -110,6 +120,9 @@ internal sealed class AtomicSlotPool<T> where T : class
         return probe;
     }
 
+    /// <summary>Obtains the index for the supplied input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private int GetIndex(int value) => _indexMask >= 0
         ? value & _indexMask

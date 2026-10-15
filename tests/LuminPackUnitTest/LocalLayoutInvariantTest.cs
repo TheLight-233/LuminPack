@@ -1,45 +1,53 @@
-using System;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 
 namespace LuminPackUnitTest
 {
     // ─────────────────────────────────────────────────────────────────────────
-    //  布局不变量回归测试
+    //  Layout invariant regression tests.
     //
-    //  LuminPack 通过"Local 镜像类"访问 private/protected 槽位：镜像的字段序列必须与真实类型的
-    //  内存布局逐槽对齐，否则 Unsafe.As 重解释后会读到错误的槽位（表现为内存访问违规）。
+    //  LuminPack accesses private and protected storage through Local mirrors; mirror fields must match the original
+    //  Match every storage slot; otherwise Unsafe.As reinterprets incorrect offsets and can cause access violations.
     //
-    //  这里固化一条实测结论：镜像必须复刻真实类型的**继承层级**。把基类字段与派生类字段平铺到
-    //  同一个类里（即使显式标注 LayoutKind.Sequential）与真实布局并不等价——运行时会为基类与派生类
-    //  分别计算布局，平铺声明对不上。生成器因此始终按层级生成镜像。
+    //  Mirrors must reproduce the original inheritance hierarchy. Flattening base and derived fields into
+    //  A flattened class, even with Sequential layout, differs because the runtime lays out base and derived classes
+    //  Each inheritance level has its own layout; emit hierarchical mirrors instead of flattening declarations.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>Provides layout base functionality.</summary>
     public class LayoutBase
     {
+        /// <summary>Gets or sets the base value.</summary>
         public int BaseValue { get; set; }
     }
 
+    /// <summary>Provides layout derived functionality.</summary>
     public class LayoutDerived : LayoutBase
     {
+        /// <summary>Gets or sets the additional value.</summary>
         public int AdditionalValue { get; set; }
+        /// <summary>Gets or sets the items.</summary>
         public List<int> Items { get; set; } = new();
     }
 
-    // 正确形态：复刻继承层级（生成器实际采用的形态）
+    // Preserve the inheritance hierarchy, matching the generator's mirror strategy.
+    /// <summary>Provides mirror chain base functionality.</summary>
     internal class MirrorChainBase
     {
         internal int BaseValue;
     }
 
+    /// <summary>Provides mirror chain functionality.</summary>
     internal class MirrorChain : MirrorChainBase
     {
         internal int AdditionalValue;
         internal List<int>? Items;
     }
 
+    /// <summary>Provides local layout invariant test functionality.</summary>
     public static class LocalLayoutInvariantTest
     {
+        /// <summary>Verifies run.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void Run(List<string> results)
         {
             try

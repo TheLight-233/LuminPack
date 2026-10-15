@@ -1,6 +1,5 @@
 using System.Linq;
 using System.Text;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
@@ -19,6 +18,8 @@ public static class LuminPackUnionCodeGenerator
     /// instantiation (e.g. <c>CaseMap&lt;UnionCat&gt;</c>), so <c>typeof(Some&lt;T&gt;)</c> resolves
     /// to the concrete closed case type without enumerating project usage.
     /// </summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateCaseMapStruct(LuminDataInfo data, StringBuilder sb)
     {
         string suffix = LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(data.TypeSymbol.OriginalDefinition);
@@ -81,6 +82,8 @@ public static class LuminPackUnionCodeGenerator
     /// case-type subtypes.  Generic unions fall back to the linear <c>is</c> chain because a static
     /// map cannot name the open type parameter.
     /// </summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCodeStruct(LuminDataInfo data, StringBuilder sb)
     {
         string suffix = LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(data.TypeSymbol.OriginalDefinition);
@@ -127,6 +130,10 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("            }");
     }
 
+    /// <summary>Appends binary serialization statements for the analyzed type.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="wide">The wide used by this operation.</param>
     private static void AppendCaseFallbackSerialize(LuminDataInfo data, StringBuilder sb, bool wide)
     {
         foreach (LuminUnionMemberInfo member in data.UnionMembers)
@@ -144,6 +151,8 @@ public static class LuminPackUnionCodeGenerator
     }
 
     /// <summary>Binary deserialize for a .NET 11 union struct.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCodeStruct(LuminDataInfo data, StringBuilder sb)
     {
         ushort maxTag = data.UnionMembers.Count == 0 ? (ushort)0 : data.UnionMembers.Max(static member => member.Id);
@@ -180,6 +189,9 @@ public static class LuminPackUnionCodeGenerator
     }
 
     /// <summary>Size calculation for a .NET 11 union struct.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="classGlobalName">The class global name used by this operation.</param>
     public static void GenerateCalculateOffsetCodeStruct(
         LuminDataInfo data,
         StringBuilder sb,
@@ -231,6 +243,10 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("            }");
     }
 
+    /// <summary>Appends JSON serialization statements for the analyzed type.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="classGlobalName">The class global name used by this operation.</param>
     public static void GenerateSerializeJsonCodeStruct(
         LuminDataInfo data,
         StringBuilder sb,
@@ -302,6 +318,9 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("            }");
     }
 
+    /// <summary>Appends binary serialization statements for the analyzed type.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb)
     {
         string classGlobalName = data.classFullName;
@@ -339,6 +358,9 @@ public static class LuminPackUnionCodeGenerator
         }
     }
 
+    /// <summary>Appends binary deserialization statements for the analyzed type.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb)
     {
         string classGlobalName = data.classFullName;
@@ -389,6 +411,10 @@ public static class LuminPackUnionCodeGenerator
         }
     }
 
+    /// <summary>Appends statements that calculate the binary payload size.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="classGlobalName">The class global name used by this operation.</param>
     public static void GenerateCalculateOffsetCode(
         LuminDataInfo data,
         StringBuilder sb,
@@ -409,6 +435,10 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine();
     }
 
+    /// <summary>Appends JSON serialization statements for the analyzed type.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="classGlobalName">The class global name used by this operation.</param>
     public static void GenerateSerializeJsonCode(
         LuminDataInfo data,
         StringBuilder sb,
@@ -445,6 +475,10 @@ public static class LuminPackUnionCodeGenerator
         }
     }
 
+    /// <summary>Obtains the member type for the supplied input.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="member">The member used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string GetMemberType(LuminDataInfo data, LuminUnionMemberInfo member)
     {
         if (!member.Type.IsUnboundGenericType)

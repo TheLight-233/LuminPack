@@ -8,8 +8,11 @@ using LuminPack.Utility;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides buffer writer serialization test functionality.</summary>
 internal static class BufferWriterSerializationTest
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(ExternalBinarySerializationPublishesExactLength),
@@ -38,9 +41,10 @@ internal static class BufferWriterSerializationTest
             Utf16TokenSizeMatchesSerializedLength);
     }
 
+    /// <summary>Verifies external binary serialization publishes exact length.</summary>
     private static void ExternalBinarySerializationPublishesExactLength()
     {
-        const string value = "external-writer-亮度";
+        const string value = "external-writer-\u4EAE\u5EA6";
         var expected = LuminPackSerializer.Serialize(value);
 
         using var writer = new LuminBufferWriter(true);
@@ -56,6 +60,7 @@ internal static class BufferWriterSerializationTest
             "Published payload could not be deserialized.");
     }
 
+    /// <summary>Verifies reused binary writer drops old tail.</summary>
     private static void ReusedBinaryWriterDropsOldTail()
     {
         var longValue = new string('L', 16 * 1024) + "-long-tail";
@@ -79,6 +84,7 @@ internal static class BufferWriterSerializationTest
             "Short payload from the reused writer could not be deserialized.");
     }
 
+    /// <summary>Verifies external json serialization publishes exact length.</summary>
     private static void ExternalJsonSerializationPublishesExactLength()
     {
         var longValue = new string('J', 8 * 1024) + "-json-tail";
@@ -100,6 +106,7 @@ internal static class BufferWriterSerializationTest
             "Reused JSON writer retained data from the previous payload.");
     }
 
+    /// <summary>Verifies to array and reset returns exact payload and clears.</summary>
     private static void ToArrayAndResetReturnsExactPayloadAndClears()
     {
         const string value = "to-array-and-reset";
@@ -119,9 +126,10 @@ internal static class BufferWriterSerializationTest
             "ToArrayAndReset payload could not be deserialized.");
     }
 
+    /// <summary>Writes to and reset async writes published payload to the current output.</summary>
     private static void WriteToAndResetAsyncWritesPublishedPayload()
     {
-        const string value = "async-stream-payload-亮度";
+        const string value = "async-stream-payload-\u4EAE\u5EA6";
         var expected = LuminPackSerializer.Serialize(value);
 
         using var writer = new LuminBufferWriter(true);
@@ -135,6 +143,7 @@ internal static class BufferWriterSerializationTest
             "WriteToAndResetAsync did not reset the published length after a successful write.");
     }
 
+    /// <summary>Writes to and reset copies published payload to the current output.</summary>
     private static void WriteToAndResetCopiesPublishedPayload()
     {
         const string value = "sync-writer-payload";
@@ -153,6 +162,7 @@ internal static class BufferWriterSerializationTest
             "WriteToAndReset did not reset the source after a successful copy.");
     }
 
+    /// <summary>Verifies pool return rent clears published length.</summary>
     private static void PoolReturnRentClearsPublishedLength()
     {
         var writer = LuminBufferWriterPool.Rent();
@@ -179,6 +189,7 @@ internal static class BufferWriterSerializationTest
         }
     }
 
+    /// <summary>Verifies reset clears published payload and allows reuse.</summary>
     private static void ResetClearsPublishedPayloadAndAllowsReuse()
     {
         using var writer = new LuminBufferWriter(true);
@@ -195,6 +206,7 @@ internal static class BufferWriterSerializationTest
             "Buffer writer could not be reused after Reset released its buffer.");
     }
 
+    /// <summary>Verifies in place compression round trips published payload.</summary>
     private static void InPlaceCompressionRoundTripsPublishedPayload()
     {
         var value = new string('A', 12 * 1024) + new string('B', 4 * 1024);
@@ -222,6 +234,7 @@ internal static class BufferWriterSerializationTest
             "Decompressed payload could not be deserialized.");
     }
 
+    /// <summary>Verifies aliased and reset operations are rejected.</summary>
     private static void AliasedAndResetOperationsAreRejected()
     {
         using var writer = new LuminBufferWriter(true);
@@ -241,6 +254,7 @@ internal static class BufferWriterSerializationTest
             "Rejected aliased DecompressToAndReset cleared or changed the source.");
     }
 
+    /// <summary>Verifies null unmanaged array round trips.</summary>
     private static void NullUnmanagedArrayRoundTrips()
     {
         int[]? value = null;
@@ -249,6 +263,7 @@ internal static class BufferWriterSerializationTest
         Assert(result is null, "A null unmanaged array was not preserved.");
     }
 
+    /// <summary>Verifies utf16 token size matches serialized length.</summary>
     private static void Utf16TokenSizeMatchesSerializedLength()
     {
         var option = LuminPackSerializerOption.Token with
@@ -256,7 +271,7 @@ internal static class BufferWriterSerializationTest
             StringEncoding = LuminPackStringEncoding.UTF16
         };
 
-        foreach (var value in new string?[] { null, string.Empty, "A", "亮度", "emoji😀" })
+        foreach (var value in new string?[] { null, string.Empty, "A", "\u4EAE\u5EA6", "emoji😀" })
         {
             var payload = LuminPackSerializer.Serialize(value, option);
             var size = LuminPackSerializer.Sizeof(value, option);
@@ -267,6 +282,7 @@ internal static class BufferWriterSerializationTest
         }
     }
 
+    /// <summary>Checks that generated fixed-size writes validate capacity before modifying the destination.</summary>
     private static void GeneratedFixedBlockChecksSpanBeforeWriting()
     {
         var value = new FixedBlockSafetyModel
@@ -312,6 +328,10 @@ internal static class BufferWriterSerializationTest
             "Generated fixed block overwrote a short-span canary before throwing.");
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -325,12 +345,18 @@ internal static class BufferWriterSerializationTest
         }
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)
             throw new InvalidOperationException(message);
     }
 
+    /// <summary>Verifies assert throws.</summary>
+    /// <param name="action">The action used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void AssertThrows(Action action, string message)
     {
         try
@@ -346,10 +372,14 @@ internal static class BufferWriterSerializationTest
     }
 }
 
+/// <summary>Provides fixed block safety model functionality.</summary>
 [LuminPackable]
 public sealed class FixedBlockSafetyModel
 {
+    /// <summary>Gets or sets the first.</summary>
     public int First { get; set; }
+    /// <summary>Gets or sets the second.</summary>
     public long Second { get; set; }
+    /// <summary>Gets or sets the third.</summary>
     public short Third { get; set; }
 }

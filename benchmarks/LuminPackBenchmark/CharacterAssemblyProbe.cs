@@ -5,9 +5,11 @@ using LuminPack.Utility;
 
 namespace LuminPackBenchmark;
 
+/// <summary>Provides character assembly probe functionality.</summary>
 internal static class CharacterAssemblyProbe
 {
     private static readonly LuminPackSerializerOption Strict = new() { ValidateJsonSyntax = true };
+    /// <summary>Measures run fixed fields for the configured benchmark input.</summary>
     internal static void RunFixedFields()
     {
         if (OperatingSystem.IsWindows())
@@ -30,9 +32,13 @@ internal static class CharacterAssemblyProbe
         Console.WriteLine($"Fixed-field assembly probe OK: {bytes} output bytes observed.");
     }
 
+    /// <summary>Writes fixed fields to the current output.</summary>
+    /// <param name="benchmark">The benchmark used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static byte[] WriteFixedFields(CharacterFixedFieldsRatioBenchmark benchmark) => benchmark.LuminPackWrite();
 
+    /// <summary>Measures run for the configured benchmark input.</summary>
     internal static void Run()
     {
         var data = OptimizationBenchmark.CreateDeterministicData();
@@ -56,12 +62,24 @@ internal static class CharacterAssemblyProbe
         finally { LuminBufferWriterPool.Return(writer); }
     }
 
+    /// <summary>Writes binary to the current output.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="data">The metadata describing the serializable type.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static void WriteBinary(LuminBufferWriter writer, CharacterSaveData data) => LuminPackSerializer.Serialize(data, writer);
+    /// <summary>Reads binary from the current input.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static CharacterSaveData ReadBinary(byte[] data) => LuminPackSerializer.Deserialize<CharacterSaveData>(data);
+    /// <summary>Writes json to the current output.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="data">The metadata describing the serializable type.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static void WriteJson(LuminBufferWriter writer, CharacterSaveData data) => LuminPackSerializer.SerializeJson(data, writer);
+    /// <summary>Reads json from the current input.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static CharacterSaveData ReadJson(byte[] data) => LuminPackSerializer.DeserializeJson<CharacterSaveData>(data, Strict);
 }

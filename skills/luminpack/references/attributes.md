@@ -1,84 +1,74 @@
-# LuminPack 属性目录
+# LuminPack attribute catalog
 
-命名空间：`LuminPack.Attribute`（`using LuminPack;` 通常已引入类型，特性位于 `LuminPack.Attribute`）。
+Attributes are declared in `LuminPack.Attribute`.
 
-## 类型级
+## Type and assembly attributes
 
-| 特性 | 目标 | 说明 |
+| Attribute | Target | Behavior |
 | --- | --- | --- |
-| `[LuminPackable(GeneratorType g = Object)]` | class / struct / interface | 标记类型参与源码生成。`GeneratorType`：`Object`（默认）、`VersionTolerant`、`CircleReference`、`NonGenerator`、`Custom`。 |
-| `[LuminPackUnion]` / `[LuminPackUnion(ushort tag, Type type)]` | interface / abstract class | 多态 union。无参形式自动收集 `[LuminPackable]` 派生类型；带参形式手动注册派生类型与 tag。tag 支持 0~65535，250 以下性能更佳。 |
-| `[LuminPackWideTag]` | class / interface | 该类型启用宽 tag（union tag 超过 255 时使用）。 |
-| `[LuminPackGeneratorOptions(mode, register = Auto)]` | 程序集（assembly） | 设置生成模式 `LuminPackGenerationMode`（Full/Medium/Light/Minimal）与 Register 模式 `LuminPackRegisterMode`（Auto/Disabled）。 |
+| `LuminPackable(GeneratorType)` | Class, struct, interface | Enables `Object`, `VersionTolerant`, `CircleReference`, `NonGenerator`, or `Custom` generation. |
+| `LuminPackUnion` | Interface or abstract class | Discovers annotated derived types. The `(ushort tag, Type type)` form declares a member explicitly. Tags below 250 use the short representation. |
+| `LuminPackWideTag` | Class or interface | Enables the wide union-tag representation. |
+| `LuminPackGeneratorOptions` | Assembly | Configures `Full`, `Medium`, `Light`, or `Minimal` generation and `Auto` or `Disabled` registration. |
 
-## 成员级
+## Member attributes
 
-| 特性 | 目标 | 说明 |
+| Attribute | Behavior |
+| --- | --- |
+| `LuminPackOrder(uint)` | Specifies member order. Required for every serialized member in version-tolerant and circular-reference contracts. |
+| `LuminPackIgnore` | Excludes a member from ordinary member serialization. Unmanaged whole-storage copying follows its separate storage contract. |
+| `LuminPackInclude` | Includes non-public storage through generated accessors and Local mirrors, including nested access on .NET Standard and modern .NET. |
+| `LuminPackableObject` | Dispatches through the member type's own formatter instead of inlining its members. |
+| `LuminPackDelegate(instanceName, methodName)` | Delegates a member operation to a named instance method. |
+| `LuminPackStaticDelegate(type, methodName)` | Delegates a member operation to a static method. |
+| `LuminPackSingletonDelegate(type, singletonFieldName, methodName)` | Uses the method on a singleton field. Overloads omitting the field name use `Instance`. |
+| `LuminPackFixedLength(uint)` | Declares a fixed collection length for supported shapes. |
+| `LuminPackCompress` | Applies LZ compression to supported unmanaged arrays or spans. Managed elements are rejected by LuminPack034. |
+
+## Callbacks and construction
+
+| Attribute | Target | Behavior |
 | --- | --- | --- |
-| `[LuminPackOrder(uint order)]` | field / property | 显式指定成员顺序。`CircleReference` / `VersionTolerant` 模式下每个成员必填。 |
-| `[LuminPackIgnore]` | field / property | 从序列化目标中排除。 |
-| `[LuminPackInclude]` | field / property | 把私有成员提升为序列化目标。所有平台（含 `netstandard2.1`）均生效，嵌套层数不受限。 |
-| `[LuminPackableObject]` | field / property | 不内联解析该成员，改经注册表派发到目标类型自己的 formatter（约损失 30% 性能）。用于生成器无法正确内联的嵌套类型。 |
-| `[LuminPackDelegate(string instanceName, string methodName)]` | field / property | 成员序列化委托给某实例上的方法。 |
-| `[LuminPackStaticDelegate(Type typeName, string methodName)]` | field / property | 成员序列化委托给静态方法。 |
-| `[LuminPackSingletonDelegate(Type typeName, string singletonFieldName, string methodName)]` | field / property | 委托给单例字段上的方法；单参重载默认单例字段名为 `Instance`。 |
-| `[LuminPackFixedLength(uint fixedLength)]` | field / property | 定长数组。 |
-| `[LuminPackCompress]` | field / property | 对非托管数组/跨度使用 LZ 压缩。托管类型数组不可用（诊断 LuminPack034）。 |
-
-## 方法与构造函数级
-
-| 特性 | 目标 | 说明 |
-| --- | --- | --- |
-| `[LuminPackOnSerializing]` | method | 序列化前回调，static 或实例均可。 |
-| `[LuminPackOnSerialized]` | method | 序列化后回调。 |
-| `[LuminPackOnDeserializing]` | method | 反序列化前回调。 |
-| `[LuminPackOnDeserialized]` | method | 反序列化后回调。 |
-| `[LuminPackPoolRent]` | static method | 标记返回类型实例的 `Rent()` 方法，启用反序列化缓存池。用户自行实现池并负责 Return。 |
-| `[LuminPackConstructor]` | constructor | 指定反序列化使用的构造函数（默认不依赖构造函数）。 |
-
-## LuminMapper 映射特性（`LuminPack.Attribute`）
-
-| 特性 | 目标 | 说明 |
-| --- | --- | --- |
-| `[LuminMapTo(typeof(TDest))]` | class / struct（源类型） | 自动路径。生成器自动产出 `{SourceTypeName}Mapper` 静态类：`ToDto` / `MapIntoDto` / `ToDtoArray` / `ToDtoList`。可重复标记实现一对多。可选 `MethodSuffix`、`GenerateCollectionMethods`。 |
-| `[LuminMapper]` | static partial class | 手动路径。用户声明 `static partial` 方法，生成器实现方法体：`ToXxx(in TSource)`、`MapIntoXxx(in TSource, ref TDest)`、`ToXxxArray`、`ToXxxList`。 |
-| `[LuminMapIgnore]` | field / property（目标类型） | 映射时跳过该成员。 |
-| `[LuminMapFromMember("SourceMemberName")]` | field / property（目标类型） | 指定目标成员从不同名的源成员读取。 |
-| `[LuminMapUsing(Type converterType, string methodName)]` | field / property（目标类型） | 目标成员用静态转换方法映射（参数为源字段类型，返回目标字段类型）。 |
-| `[LuminMapCondition(Type conditionType, string methodName)]` | field / property（目标类型） | 静态条件 `bool Method(in TSource)`，返回 false 时目标成员保持默认值。 |
-| `[LuminMapConstant(object? value)]` | field / property（目标类型） | 用编译期常量填充目标成员（仅 string/bool/int/long/float/double/null）。 |
-
-## 常见组合
-
-- 私有嵌套类型需要解析私有字段时：逐层标 `[LuminPackInclude]` 即可，任意层数都生效（经 Local 布局镜像访问），无需再叠加 `[LuminPackableObject]`。
-- 版本容忍 / 循环引用：类型标 `[LuminPackable(GenerateType.VersionTolerant / CircleReference)]`，每个成员标 `[LuminPackOrder]`。
-- 压缩热数据数组：成员标 `[LuminPackCompress]`（配合 `LuminPackSerializer.Compress/Decompress` 或原生数组快速路径）。
-
-## 手写方法示例
-
-### 反序列化缓存池 [LuminPackPoolRent]
+| `LuminPackOnSerializing` | Method | Runs before serialization. |
+| `LuminPackOnSerialized` | Method | Runs after serialization. |
+| `LuminPackOnDeserializing` | Method | Runs before deserialization. |
+| `LuminPackOnDeserialized` | Method | Runs after deserialization. |
+| `LuminPackPoolRent` | Static method | Supplies deserialization instances. The application owns the pool and returns instances. |
+| `LuminPackConstructor` | Constructor | Selects the constructor used by the generated construction path. |
 
 ```csharp
-// 标在静态方法上，返回该类型实例；生成器用此方法替代 new 进行反序列化
+// The application implements the pool and return lifecycle.
 [LuminPackPoolRent]
-public static SimpleClass Rent()
-{
-    return SimpleClassPool.Shared.Rent();   // 池由用户自行实现
-}
+public static SimpleClass Rent() => SimpleClassPool.Shared.Rent();
 ```
 
-### 委托成员 [LuminPackStaticDelegate] / [LuminPackSingletonDelegate]
+## Mapping attributes
+
+| Attribute | Target | Behavior |
+| --- | --- | --- |
+| `LuminMapTo(typeof(TDestination))` | Source class or struct | Generates creating, in-place, and optional collection mappings. Repeat for multiple destinations. `MethodSuffix` overrides naming; `GenerateCollectionMethods` controls collection overloads. |
+| `LuminMapper` | Static partial class | Implements declared static partial mapping methods with application-selected names and signatures. |
+| `LuminMapIgnore` | Destination member | Skips assignment. |
+| `LuminMapFromMember("SourceName")` | Destination member | Reads a differently named source member. |
+| `LuminMapUsing(type, methodName)` | Destination member | Calls a static conversion from the source member type to the destination member type. |
+| `LuminMapCondition(type, methodName)` | Destination member | Calls `static bool Method(in TSource source)` before assignment. |
+| `LuminMapConstant(value)` | Destination member | Embeds a supported compile-time string, boolean, numeric, or null value. |
+
+## Combining attributes
+
+Include private members at each nesting level with `LuminPackInclude`. A generated mirror preserves the original inheritance and storage layout. Use `LuminPackableObject` when independent formatter dispatch is required.
+
+Version-tolerant and circular-reference types combine the corresponding `LuminPackable` mode with explicit member orders.
+
+Delegate members must use signatures matching their actual member type:
 
 ```csharp
-// 成员序列化交给外部类型的静态方法
 [LuminPackStaticDelegate(typeof(MySerializer), nameof(MySerializer.WriteSpecial))]
-public SpecialData data;
-```
+public SpecialData Data;
 
-```csharp
-// 成员序列化交给单例实例上的方法（单参重载默认单例字段名 Instance）
 [LuminPackSingletonDelegate(typeof(MySerializer), nameof(MySerializer.Instance), nameof(MySerializer.WriteSpecial))]
-public SpecialData data;
-```
+public SpecialData OtherData;
 
-委托方法的签名与对应成员读写一致：`WriteSpecial(ref LuminPackWriter writer, in SpecialData value)` 等，由你手写并保持与字段类型匹配。
+// Implement the required formatter signature, for example:
+// static void WriteSpecial(ref LuminPackWriter writer, in SpecialData value)
+```

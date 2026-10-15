@@ -2,8 +2,11 @@ using LuminPack;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides interface collection read regression test functionality.</summary>
 internal static class InterfaceCollectionReadRegressionTest
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(IListReferenceElementsRoundTrip), IListReferenceElementsRoundTrip);
@@ -12,6 +15,7 @@ internal static class InterfaceCollectionReadRegressionTest
         RunCase(results, nameof(InterfaceDictionariesRoundTrip), InterfaceDictionariesRoundTrip);
     }
 
+    /// <summary>Verifies i list reference elements round trip.</summary>
     private static void IListReferenceElementsRoundTrip()
     {
         IList<string> source = new List<string> { "alpha", null!, "gamma", "delta" };
@@ -29,6 +33,7 @@ internal static class InterfaceCollectionReadRegressionTest
             "A fresh-list backing-array fill left mutation/version tracking invalid.");
     }
 
+    /// <summary>Verifies i list value elements round trip.</summary>
     private static void IListValueElementsRoundTrip()
     {
         IList<int> source = new List<int> { 1, 2, 3, 5, 8, 13 };
@@ -38,6 +43,7 @@ internal static class InterfaceCollectionReadRegressionTest
         Assert(value.SequenceEqual(source), "IList<int> lost a value element during direct backing-array fill.");
     }
 
+    /// <summary>Verifies i list null and empty stay distinct.</summary>
     private static void IListNullAndEmptyStayDistinct()
     {
         IList<string> empty = new List<string>();
@@ -51,6 +57,7 @@ internal static class InterfaceCollectionReadRegressionTest
         Assert(nullRoundTrip is null, "A null IList<T> was decoded as an empty collection.");
     }
 
+    /// <summary>Verifies interface dictionaries round trip.</summary>
     private static void InterfaceDictionariesRoundTrip()
     {
         IDictionary<string, int> source = new Dictionary<string, int>
@@ -82,6 +89,10 @@ internal static class InterfaceCollectionReadRegressionTest
         Assert(nullRoundTrip is null, "A null IDictionary<TKey,TValue> was decoded as an empty dictionary.");
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -95,6 +106,10 @@ internal static class InterfaceCollectionReadRegressionTest
         }
     }
 
+    /// <summary>Verifies assert throws.</summary>
+    /// <param name="action">The action used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
+    /// <typeparam name="TException">The type represented by <c>TException</c>.</typeparam>
     private static void AssertThrows<TException>(Action action, string message)
         where TException : Exception
     {
@@ -110,6 +125,9 @@ internal static class InterfaceCollectionReadRegressionTest
         throw new InvalidOperationException(message);
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)

@@ -6,61 +6,82 @@ using LuminPack.Attribute;
 
 namespace LuminPackUnitTest
 {
+    /// <summary>Provides union cat functionality.</summary>
     [LuminPackable]
     public partial class UnionCat
     {
+        /// <summary>Stores the id.</summary>
         public int Id;
     }
 
+    /// <summary>Provides union dog functionality.</summary>
     [LuminPackable]
     public partial class UnionDog
     {
+        /// <summary>Stores the name.</summary>
         public string Name = "";
     }
 
     // C# 15 / .NET 11 union declaration.  The generator auto-recognizes it as a LuminPack union
     // root and dispatches on the case type (same wire format as [LuminPackUnion] class unions).
+    /// <summary>Provides net11 pet functionality.</summary>
     [LuminPackable]
     public union Net11Pet(UnionCat, UnionDog);
 
+    /// <summary>Provides some functionality.</summary>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     [LuminPackable]
     public partial class Some<T>
     {
+        /// <summary>Stores the data.</summary>
         public T Data = default!;
     }
 
+    /// <summary>Provides none functionality.</summary>
     [LuminPackable]
     public partial class None
     {
     }
 
+    /// <summary>Provides net11 option functionality.</summary>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     [LuminPackable]
     public union Net11Option<T>(None, Some<T>);
 
+    /// <summary>Provides net11 maybe functionality.</summary>
     [LuminPackable]
     public union Net11Maybe(int, string);
 
     // Existing abstract-class polymorphism must keep working on .NET 11.
+    /// <summary>Provides net11 animal functionality.</summary>
     [LuminPackable]
     public abstract partial class Net11Animal
     {
+        /// <summary>Stores the legs.</summary>
         public int Legs;
     }
 
+    /// <summary>Provides net11 dog functionality.</summary>
     [LuminPackable]
     public sealed partial class Net11Dog : Net11Animal
     {
+        /// <summary>Stores the bark.</summary>
         public string Bark = "";
     }
 
+    /// <summary>Provides net11 cat functionality.</summary>
     [LuminPackable]
     public sealed partial class Net11Cat : Net11Animal
     {
+        /// <summary>Stores the meow.</summary>
         public string Meow = "";
     }
 
+    /// <summary>Provides net11 union test functionality.</summary>
     public static class Net11UnionTest
     {
+        /// <summary>Verifies run.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void Run(List<string> results)
         {
             // C# union binary round-trip

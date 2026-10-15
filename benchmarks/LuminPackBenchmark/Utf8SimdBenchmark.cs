@@ -1,7 +1,6 @@
-using System;
 using System.Buffers;
-using System.Runtime.CompilerServices;
 using System.Numerics;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
@@ -13,14 +12,20 @@ using BenchmarkDotNet.Jobs;
 
 namespace LuminPackBenchmark;
 
+/// <summary>Provides utf8 benchmark data functionality.</summary>
 public enum Utf8BenchmarkData
 {
+    /// <summary>Specifies ascii.</summary>
     Ascii,
+    /// <summary>Specifies chinese.</summary>
     Chinese,
+    /// <summary>Specifies mixed.</summary>
     Mixed,
+    /// <summary>Specifies emoji mixed.</summary>
     EmojiMixed,
 }
 
+/// <summary>Provides utf8 simd benchmark functionality.</summary>
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MinColumn, MaxColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByParams)]
@@ -35,6 +40,7 @@ public unsafe class Utf8SimdBenchmark
     private string _value = null!;
     private byte[] _destination = null!;
 
+    /// <summary>Gets or sets the data.</summary>
     [Params(
         Utf8BenchmarkData.Ascii,
         Utf8BenchmarkData.Chinese,
@@ -42,6 +48,7 @@ public unsafe class Utf8SimdBenchmark
         Utf8BenchmarkData.EmojiMixed)]
     public Utf8BenchmarkData Data { get; set; }
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -54,13 +61,13 @@ public unsafe class Utf8SimdBenchmark
                 "LuminPack-HighPerformance-Serialization-0123456789-ABCDEFGHIJKLMNOPQRSTUVWXYZ-", TargetChars),
 
             Utf8BenchmarkData.Chinese => BuildToLength(
-                "极致性能序列化框架字符串编码解码中文数据测试游戏客户端资源加载网络同步性能优化", TargetChars),
+                "\u6781\u81F4\u6027\u80FD\u5E8F\u5217\u5316\u6846\u67B6\u5B57\u7B26\u4E32\u7F16\u7801\u89E3\u7801\u4E2D\u6587\u6570\u636E\u6D4B\u8BD5\u6E38\u620F\u5BA2\u6237\u7AEF\u8D44\u6E90\u52A0\u8F7D\u7F51\u7EDC\u540C\u6B65\u6027\u80FD\u4F18\u5316", TargetChars),
 
             Utf8BenchmarkData.Mixed => BuildToLength(
-                "LuminPack极致性能Serialization序列化UTF8编码1234567890游戏Game网络Network数据Data", TargetChars),
+                "LuminPack\u6781\u81F4\u6027\u80FDSerialization\u5E8F\u5217\u5316UTF8\u7F16\u78011234567890\u6E38\u620FGame\u7F51\u7EDCNetwork\u6570\u636EData", TargetChars),
 
             Utf8BenchmarkData.EmojiMixed => BuildToLength(
-                "LuminPack🚀🔥🎮性能测试🌟UTF8中文🙂Serialization💻数据🌍Game🎯", TargetChars),
+                "LuminPack\uD83D\uDE80\uD83D\uDD25\uD83C\uDFAE\u6027\u80FD\u6D4B\u8BD5\uD83C\uDF1FUTF8\u4E2D\u6587\uD83D\uDE42Serialization\uD83D\uDCBB\u6570\u636E\uD83C\uDF0DGame\uD83C\uDFAF", TargetChars),
 
             _ => throw new ArgumentOutOfRangeException()
         };
@@ -93,6 +100,8 @@ public unsafe class Utf8SimdBenchmark
         }
     }
 
+    /// <summary>Measures encoding utf8 get bytes for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true, OperationsPerInvoke = RepeatCount)]
     public int EncodingUtf8_GetBytes()
     {
@@ -106,6 +115,8 @@ public unsafe class Utf8SimdBenchmark
         return total;
     }
 
+    /// <summary>Measures utf8 from utf16 for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(OperationsPerInvoke = RepeatCount)]
     public int Utf8_FromUtf16()
     {
@@ -132,6 +143,8 @@ public unsafe class Utf8SimdBenchmark
         return total;
     }
 
+    /// <summary>Measures lumin utf8 simd v3 for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(OperationsPerInvoke = RepeatCount)]
     public int LuminUtf8_SIMD_V3()
     {
@@ -145,11 +158,19 @@ public unsafe class Utf8SimdBenchmark
         return total;
     }
 
+    /// <summary>Raises the exception for utf8 failure.</summary>
+    /// <param name="status">The status used by this operation.</param>
+    /// <param name="charsRead">The chars read used by this operation.</param>
+    /// <param name="expectedChars">The expected chars used by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowUtf8Failure(OperationStatus status, int charsRead, int expectedChars)
         => throw new InvalidOperationException(
             $"Utf8.FromUtf16 failed. Status={status}, chars={charsRead}/{expectedChars}");
 
+    /// <summary>Measures build to length for the configured benchmark input.</summary>
+    /// <param name="pattern">The pattern used by this operation.</param>
+    /// <param name="length">The number of bytes or elements to process.</param>
+    /// <returns>The result of the operation.</returns>
     private static string BuildToLength(string pattern, int length)
     {
         var builder = new StringBuilder(length + pattern.Length);
@@ -167,17 +188,18 @@ public unsafe class Utf8SimdBenchmark
     }
 }
 
+/// <summary>Provides lumin utf8 simd v3 functionality.</summary>
 internal static unsafe class LuminUtf8SimdV3
 {
     // Mixed 4-lane kernel:
-    // 每个 UTF-16 char 先展开到一个 4-byte lane：
+    // Expand each UTF-16 character into a four-byte lane:
     // ASCII: [a, -, -, -]
     // 3-byte BMP: [b0, b1, b2, -]
     //
-    // 4 个 lane 只有 16 种 ASCII/CJK 组合。
-    // pshufb LUT 将 16-byte expanded vector 直接压成 4..12 bytes。
-    // Pure 8-char 3-byte BMP kernel 的固定 shuffle。
-    // 保留 V2 已验证的全 SIMD 路径，不让 mixed LUT 影响纯中文性能。
+    // Four lanes have only 16 ASCII/CJK combinations.
+    // The pshufb table packs a 16-byte expanded vector into 4 to 12 bytes.
+    // Fixed shuffle for the pure eight-character, three-byte BMP kernel.
+    // Keep the verified full-SIMD path so the mixed lookup table does not slow uniform CJK input.
     private const byte Z = 0x80;
 
     private static readonly Vector128<byte> s_cjkFirstB0 = Vector128.Create(
@@ -230,6 +252,10 @@ internal static unsafe class LuminUtf8SimdV3
     private static readonly Vector128<ushort> s_lead3_16 = Vector128.Create((ushort)0x00E0);
     private static readonly Vector128<ushort> s_cont16 = Vector128.Create((ushort)0x0080);
 
+    /// <summary>Measures encode for the configured benchmark input.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveOptimization)]
     public static int Encode(ReadOnlySpan<char> source, Span<byte> destination)
     {
@@ -245,7 +271,7 @@ internal static unsafe class LuminUtf8SimdV3
                 uint ch = *src;
                 nint remaining = (nint)(srcEnd - src);
 
-                // 长纯 ASCII：继续走最高吞吐的 AVX2 path。
+                // Use the high-throughput AVX2 path for long uniform ASCII input.
                 if (ch <= 0x7F)
                 {
                     if (Avx2.IsSupported)
@@ -257,9 +283,9 @@ internal static unsafe class LuminUtf8SimdV3
                             continue;
                     }
 
-                    // 如果没有足够长的纯 ASCII run，优先尝试 ASCII+CJK 混合 kernel。
-                    // V3 destination 在 benchmark 中额外预留 32-byte padding，
-                    // 因此允许 16-byte SIMD over-store，逻辑长度仍严格正确。
+                    // Try the mixed ASCII/CJK kernel when the pure ASCII run is too short.
+                    // The benchmark reserves 32 additional padding bytes in the V3 destination,
+                    // A 16-byte SIMD over-store is permitted while the logical output length stays exact.
                     if (Sse41.IsSupported &&
                         Ssse3.IsSupported &&
                         remaining >= 8 &&
@@ -272,7 +298,7 @@ internal static unsafe class LuminUtf8SimdV3
                     continue;
                 }
 
-                // 长纯 3-byte BMP / CJK。
+                // A long uniform three-byte BMP/CJK sequence.
                 if (ch >= 0x0800 && (ch < 0xD800 || ch > 0xDFFF))
                 {
                     if (Ssse3.IsSupported)
@@ -290,7 +316,7 @@ internal static unsafe class LuminUtf8SimdV3
                         }
                     }
 
-                    // 短 CJK run 与 ASCII 交错时同样交给 mixed kernel。
+                    // Use the mixed kernel for short CJK runs interleaved with ASCII.
                     if (Sse41.IsSupported &&
                         Ssse3.IsSupported &&
                         remaining >= 8 &&
@@ -320,6 +346,10 @@ internal static unsafe class LuminUtf8SimdV3
     // ASCII
     // -------------------------
 
+    /// <summary>Attempts to encode32 ascii and reports whether it succeeded.</summary>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="dst">The destination receiving the result.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool TryEncode32Ascii(ref char* src, ref byte* dst)
     {
@@ -344,6 +374,10 @@ internal static unsafe class LuminUtf8SimdV3
         return true;
     }
 
+    /// <summary>Attempts to encode16 ascii and reports whether it succeeded.</summary>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="dst">The destination receiving the result.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool TryEncode16Ascii(ref char* src, ref byte* dst)
     {
@@ -367,6 +401,9 @@ internal static unsafe class LuminUtf8SimdV3
         return true;
     }
 
+    /// <summary>Measures store16 ascii for the configured benchmark input.</summary>
+    /// <param name="chars">The chars used by this operation.</param>
+    /// <param name="dst">The destination receiving the result.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void Store16Ascii(Vector256<ushort> chars, byte* dst)
     {
@@ -381,6 +418,10 @@ internal static unsafe class LuminUtf8SimdV3
     // Pure 3-byte BMP / CJK
     // -------------------------
 
+    /// <summary>Attempts to encode16 three byte bmp and reports whether it succeeded.</summary>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="dst">The destination receiving the result.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool TryEncode16ThreeByteBmp(ref char* src, ref byte* dst)
     {
@@ -401,6 +442,10 @@ internal static unsafe class LuminUtf8SimdV3
         return true;
     }
 
+    /// <summary>Attempts to encode8 three byte bmp and reports whether it succeeded.</summary>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="dst">The destination receiving the result.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool TryEncode8ThreeByteBmp(ref char* src, ref byte* dst)
     {
@@ -416,6 +461,9 @@ internal static unsafe class LuminUtf8SimdV3
         return true;
     }
 
+    /// <summary>Measures all eight are three byte bmp for the configured benchmark input.</summary>
+    /// <param name="chars">The chars used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool AllEightAreThreeByteBmp(Vector128<ushort> chars)
     {
@@ -435,6 +483,9 @@ internal static unsafe class LuminUtf8SimdV3
         return Sse2.MoveMask(surrogate.AsByte()) == 0;
     }
 
+    /// <summary>Measures encode8 three byte bmp unchecked for the configured benchmark input.</summary>
+    /// <param name="chars">The chars used by this operation.</param>
+    /// <param name="dst">The destination receiving the result.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void Encode8ThreeByteBmpUnchecked(Vector128<ushort> chars, byte* dst)
     {
@@ -479,6 +530,10 @@ internal static unsafe class LuminUtf8SimdV3
     // ASCII + 3-byte BMP mixed SIMD
     // -------------------------
 
+    /// <summary>Attempts to encode8 ascii or three byte bmp mixed and reports whether it succeeded.</summary>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="dst">The destination receiving the result.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool TryEncode8AsciiOrThreeByteBmpMixed(
         ref char* src,
@@ -500,8 +555,8 @@ internal static unsafe class LuminUtf8SimdV3
             return false;
         }
 
-        // 允许 over-store：第二个 store 从第一个逻辑尾部开始，
-        // 覆盖前一个 store 的垃圾尾部。
+        // Allow an over-store: the second write starts at the logical end of the first,
+        // Overwrite the unused tail of the previous store.
         Sse2.Store(dst, out0);
         Sse2.Store(dst + len0, out1);
 
@@ -510,6 +565,11 @@ internal static unsafe class LuminUtf8SimdV3
         return true;
     }
 
+    /// <summary>Attempts to pack four ascii or three byte bmp and reports whether it succeeded.</summary>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="output">Receives the output produced by the operation.</param>
+    /// <param name="bytesWritten">Receives the bytes written produced by the operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool TryPackFourAsciiOrThreeByteBmp(
         char* src,
@@ -530,7 +590,7 @@ internal static unsafe class LuminUtf8SimdV3
             Vector128.Create(0x800),
             chars);
 
-        // U+0080..U+07FF 不属于这个 kernel。
+        // This kernel excludes U+0080 through U+07FF.
         Vector128<int> twoByteMask = Sse2.AndNot(
             asciiMask,
             below0800);
@@ -578,8 +638,8 @@ internal static unsafe class LuminUtf8SimdV3
                 Sse2.ShiftLeftLogical(b1, 8)),
             Sse2.ShiftLeftLogical(b2, 16));
 
-        // ASCII lane 保留 chars 低 byte；
-        // 3-byte lane 使用 [b0,b1,b2,0]。
+        // Keep the low byte of each character in ASCII lanes.
+        // A three-byte lane uses [b0,b1,b2,0].
         Vector128<uint> selected = Sse2.Or(
             Sse2.And(asciiMask.AsUInt32(), u),
             Sse2.AndNot(asciiMask.AsUInt32(), packed3));
@@ -591,6 +651,9 @@ internal static unsafe class LuminUtf8SimdV3
         return true;
     }
 
+    /// <summary>Measures load mixed shuffle for the configured benchmark input.</summary>
+    /// <param name="mask">The mask used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static Vector128<byte> LoadMixedShuffle(int mask)
     {
@@ -603,6 +666,10 @@ internal static unsafe class LuminUtf8SimdV3
     // Scalar short / uncommon paths
     // -------------------------
 
+    /// <summary>Measures encode short ascii run for the configured benchmark input.</summary>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="srcEnd">The src end used by this operation.</param>
+    /// <param name="dst">The destination receiving the result.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void EncodeShortAsciiRun(ref char* src, char* srcEnd, ref byte* dst)
     {
@@ -613,6 +680,10 @@ internal static unsafe class LuminUtf8SimdV3
         while (src < srcEnd && *src <= 0x7F);
     }
 
+    /// <summary>Measures encode short three byte run for the configured benchmark input.</summary>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="srcEnd">The src end used by this operation.</param>
+    /// <param name="dst">The destination receiving the result.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void EncodeShortThreeByteRun(ref char* src, char* srcEnd, ref byte* dst)
     {
@@ -633,6 +704,10 @@ internal static unsafe class LuminUtf8SimdV3
         while (src < srcEnd);
     }
 
+    /// <summary>Measures encode two byte run for the configured benchmark input.</summary>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="srcEnd">The src end used by this operation.</param>
+    /// <param name="dst">The destination receiving the result.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void EncodeTwoByteRun(ref char* src, char* srcEnd, ref byte* dst)
     {
@@ -652,6 +727,10 @@ internal static unsafe class LuminUtf8SimdV3
         while (src < srcEnd);
     }
 
+    /// <summary>Measures encode surrogate or invalid for the configured benchmark input.</summary>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="srcEnd">The src end used by this operation.</param>
+    /// <param name="dst">The destination receiving the result.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void EncodeSurrogateOrInvalid(ref char* src, char* srcEnd, ref byte* dst)
     {

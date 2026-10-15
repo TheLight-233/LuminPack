@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using LuminPack;
 using LuminPack.Core;
 using LuminPack.Generated;
@@ -14,6 +12,8 @@ namespace LuminPackUnitTest
     /// </summary>
     public static class ManualRegistrationTest
     {
+        /// <summary>Verifies run.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void Run(List<string> results)
         {
             RegisterAll();
@@ -22,18 +22,27 @@ namespace LuminPackUnitTest
             RunCase(results, nameof(DuplicateRegistrationThrows), DuplicateRegistrationThrows);
         }
 
+        /// <summary>Provides manual registered type functionality.</summary>
         public sealed class ManualRegisteredType
         {
+            /// <summary>Stores the id.</summary>
             public int Id;
+            /// <summary>Stores the name.</summary>
             public string Name = "";
         }
 
+        /// <summary>Writes manual to the current output.</summary>
+        /// <param name="writer">The writer receiving the output data.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         private static void WriteManual(ref LuminPackWriter writer, in ManualRegisteredType value)
         {
             writer.WriteValue(value.Id);
             writer.WriteValue(value.Name);
         }
 
+        /// <summary>Reads manual from the current input.</summary>
+        /// <param name="reader">The reader supplying the input data.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         private static void ReadManual(ref LuminPackReader reader, ref ManualRegisteredType value)
         {
             value = new ManualRegisteredType();
@@ -41,6 +50,9 @@ namespace LuminPackUnitTest
             reader.ReadValue(ref value.Name);
         }
 
+        /// <summary>Writes manual json to the current output.</summary>
+        /// <param name="writer">The writer receiving the output data.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         private static void WriteManualJson(ref LuminPackJsonWriter writer, in ManualRegisteredType value)
         {
             writer.WriteObjectStart();
@@ -51,6 +63,9 @@ namespace LuminPackUnitTest
             writer.WriteObjectEnd();
         }
 
+        /// <summary>Reads manual json from the current input.</summary>
+        /// <param name="reader">The reader supplying the input data.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         private static void ReadManualJson(ref LuminPackJsonReader reader, ref ManualRegisteredType value)
         {
             value = new ManualRegisteredType();
@@ -76,6 +91,7 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies manual registration round trips binary.</summary>
         private static void ManualRegistrationRoundTripsBinary()
         {
             var original = new ManualRegisteredType { Id = 42, Name = "manual-binary" };
@@ -85,6 +101,7 @@ namespace LuminPackUnitTest
                 "Manual binary round-trip produced different values.");
         }
 
+        /// <summary>Verifies manual registration round trips json.</summary>
         private static void ManualRegistrationRoundTripsJson()
         {
             var original = new ManualRegisteredType { Id = 7, Name = "manual-json" };
@@ -94,6 +111,7 @@ namespace LuminPackUnitTest
                 "Manual JSON round-trip produced different values.");
         }
 
+        /// <summary>Verifies duplicate registration throws.</summary>
         private static void DuplicateRegistrationThrows()
         {
             bool threw = false;
@@ -111,11 +129,16 @@ namespace LuminPackUnitTest
             Assert(threw, "Registering the same type twice did not throw ArgumentException.");
         }
 
+        /// <summary>Verifies register all.</summary>
         private static unsafe void RegisterAll()
         {
             LuminPackSerializer.Register<ManualRegisteredType>(&WriteManual, &ReadManual, &WriteManualJson, &ReadManualJson);
         }
 
+        /// <summary>Verifies run case.</summary>
+        /// <param name="results">The results used by this operation.</param>
+        /// <param name="name">The name used by this operation.</param>
+        /// <param name="test">The test used by this operation.</param>
         private static void RunCase(List<string> results, string name, Action test)
         {
             try
@@ -129,6 +152,9 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies assert.</summary>
+        /// <param name="condition">The condition used by this operation.</param>
+        /// <param name="message">The message describing the failure.</param>
         private static void Assert(bool condition, string message)
         {
             if (!condition) throw new InvalidOperationException(message);

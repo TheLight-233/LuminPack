@@ -5,8 +5,13 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.Code.Core;
 
+/// <summary>Provides lumin pack union dispatch utilities functionality.</summary>
 internal static class LuminPackUnionDispatchUtilities
 {
+    /// <summary>Performs the can generate partial step for the current operation.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     public static bool CanGeneratePartial(INamedTypeSymbol type, Compilation compilation)
     {
         var definition = type.OriginalDefinition;
@@ -31,6 +36,10 @@ internal static class LuminPackUnionDispatchUtilities
         return true;
     }
 
+    /// <summary>Determines whether the supplied value has the current compilation classification.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     public static bool IsCurrentCompilation(INamedTypeSymbol type, Compilation compilation) =>
         SymbolEqualityComparer.Default.Equals(type.OriginalDefinition.ContainingAssembly, compilation.Assembly);
 }

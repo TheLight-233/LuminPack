@@ -6,8 +6,11 @@ using LuminPack.Option;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides reader boundary validation test functionality.</summary>
 internal static class ReaderBoundaryValidationTest
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunDebugOnlyCase(results, nameof(TruncatedCollectionHeaderIsRejected), TruncatedCollectionHeaderIsRejected);
@@ -34,11 +37,14 @@ internal static class ReaderBoundaryValidationTest
             TruncatedMultiDimensionalArrayPayloadIsRejected);
     }
 
+    /// <summary>Verifies truncated collection header is rejected.</summary>
     private static void TruncatedCollectionHeaderIsRejected()
     {
         AssertThrows(() => ReadCollectionHeader(new byte[3]),
             "A three-byte collection header was accepted.");
 
+        // <summary>Reads collection header from the current input.</summary>
+        // <param name="bytes">The bytes used by this operation.</param>
         static void ReadCollectionHeader(byte[] bytes)
         {
             ReadOnlySpan<byte> span = bytes;
@@ -48,11 +54,14 @@ internal static class ReaderBoundaryValidationTest
         }
     }
 
+    /// <summary>Verifies negative collection count is rejected.</summary>
     private static void NegativeCollectionCountIsRejected()
     {
         AssertThrows(() => ReadCollectionHeader(BitConverter.GetBytes(-2)),
             "A negative collection count other than the null marker was accepted.");
 
+        // <summary>Reads collection header from the current input.</summary>
+        // <param name="bytes">The bytes used by this operation.</param>
         static void ReadCollectionHeader(byte[] bytes)
         {
             ReadOnlySpan<byte> span = bytes;
@@ -62,6 +71,7 @@ internal static class ReaderBoundaryValidationTest
         }
     }
 
+    /// <summary>Verifies utf8 token without terminator is rejected.</summary>
     private static void Utf8TokenWithoutTerminatorIsRejected()
     {
         var option = LuminPackSerializerOption.Token with { StringEncoding = LuminPackStringEncoding.UTF8 };
@@ -69,6 +79,7 @@ internal static class ReaderBoundaryValidationTest
             "An unterminated UTF-8 token string was accepted.");
     }
 
+    /// <summary>Verifies utf16 token without terminator is rejected.</summary>
     private static void Utf16TokenWithoutTerminatorIsRejected()
     {
         var option = LuminPackSerializerOption.Token with { StringEncoding = LuminPackStringEncoding.UTF16 };
@@ -76,6 +87,9 @@ internal static class ReaderBoundaryValidationTest
             "An unterminated/odd-sized UTF-16 token string was accepted.");
     }
 
+    /// <summary>Verifies scan token.</summary>
+    /// <param name="bytes">The bytes used by this operation.</param>
+    /// <param name="option">The configuration to apply to this operation.</param>
     private static void ScanToken(byte[] bytes, LuminPackSerializerOption option)
     {
         using var state = new LuminPackReaderOptionalState(option);
@@ -85,12 +99,15 @@ internal static class ReaderBoundaryValidationTest
         reader.ReadStringLength(ref index, out _);
     }
 
+    /// <summary>Verifies oversized unmanaged payload is rejected before allocation.</summary>
     private static void OversizedUnmanagedPayloadIsRejectedBeforeAllocation()
     {
         byte[] bytes = BitConverter.GetBytes(int.MaxValue);
         AssertThrows(() => ReadArray(bytes),
             "An overflowing unmanaged-array byte count was accepted.");
 
+        // <summary>Reads array from the current input.</summary>
+        // <param name="bytes">The bytes used by this operation.</param>
         static void ReadArray(byte[] bytes)
         {
             ReadOnlySpan<byte> span = bytes;
@@ -101,6 +118,7 @@ internal static class ReaderBoundaryValidationTest
         }
     }
 
+    /// <summary>Verifies headerless payload starts at supplied index.</summary>
     private static void HeaderlessPayloadStartsAtSuppliedIndex()
     {
         const int expected = 0x12345678;
@@ -120,6 +138,7 @@ internal static class ReaderBoundaryValidationTest
             "Headerless read skipped or re-read the four-byte collection header.");
     }
 
+    /// <summary>Verifies union ref index overload uses supplied index.</summary>
     private static void UnionRefIndexOverloadUsesSuppliedIndex()
     {
         ReadOnlySpan<byte> span = new byte[] { LuminPackCode.NullObject, 42, 7 };
@@ -132,11 +151,14 @@ internal static class ReaderBoundaryValidationTest
         Assert(index == 3, $"Union index advanced to {index}; expected 3.");
     }
 
+    /// <summary>Verifies truncated wide union tag is rejected.</summary>
     private static void TruncatedWideUnionTagIsRejected()
     {
         AssertThrows(() => ReadWideTag(new byte[] { LuminPackCode.WideTag }),
             "A wide-union marker without its ushort payload was accepted.");
 
+        // <summary>Reads wide tag from the current input.</summary>
+        // <param name="bytes">The bytes used by this operation.</param>
         static void ReadWideTag(byte[] bytes)
         {
             ReadOnlySpan<byte> span = bytes;
@@ -145,6 +167,7 @@ internal static class ReaderBoundaryValidationTest
         }
     }
 
+    /// <summary>Verifies invalid compressed length is rejected before allocation.</summary>
     private static void InvalidCompressedLengthIsRejectedBeforeAllocation()
     {
         byte[] bytes = new byte[8];
@@ -154,6 +177,8 @@ internal static class ReaderBoundaryValidationTest
         AssertThrows(() => ReadCompressed(bytes),
             "An out-of-range compressed payload length was accepted.");
 
+        // <summary>Reads compressed from the current input.</summary>
+        // <param name="bytes">The bytes used by this operation.</param>
         static void ReadCompressed(byte[] bytes)
         {
             ReadOnlySpan<byte> span = bytes;
@@ -164,10 +189,13 @@ internal static class ReaderBoundaryValidationTest
         }
     }
 
+    /// <summary>Verifies negative advance is rejected.</summary>
     private static void NegativeAdvanceIsRejected()
     {
         AssertThrows(() => Advance(new byte[1]), "A negative reader advance was accepted.");
 
+        // <summary>Advances the current buffer position by the supplied number of bytes.</summary>
+        // <param name="bytes">The bytes used by this operation.</param>
         static void Advance(byte[] bytes)
         {
             ReadOnlySpan<byte> span = bytes;
@@ -176,6 +204,7 @@ internal static class ReaderBoundaryValidationTest
         }
     }
 
+    /// <summary>Verifies null length string round trips.</summary>
     private static void NullLengthStringRoundTrips()
     {
         byte[] bytes = new byte[sizeof(int) * 2];
@@ -193,9 +222,10 @@ internal static class ReaderBoundaryValidationTest
             $"Null string consumed {reader.GetCurrentSpanIndex()} bytes; expected {bytes.Length}.");
     }
 
+    /// <summary>Verifies length strings round trip.</summary>
     private static void LengthStringsRoundTrip()
     {
-        const string value = "ASCII 中文 😀";
+        const string value = "ASCII \u4E2D\u6587 \uD83D\uDE00";
 
         foreach (var option in new[] { LuminPackSerializerOption.Utf8, LuminPackSerializerOption.Utf16WithLength })
         {
@@ -205,6 +235,7 @@ internal static class ReaderBoundaryValidationTest
         }
     }
 
+    /// <summary>Verifies length string payload bounds are validated.</summary>
     private static void LengthStringPayloadBoundsAreValidated()
     {
         AssertThrows(() => ReadForgedStringLength(CreateLengthString(100, 0, utf8: true, prefix: 5),
@@ -216,6 +247,7 @@ internal static class ReaderBoundaryValidationTest
             "A UTF-16 string payload missing one byte was accepted.");
     }
 
+    /// <summary>Verifies negative string lengths are rejected.</summary>
     private static void NegativeStringLengthsAreRejected()
     {
         foreach (int length in new[] { -2, int.MinValue })
@@ -226,6 +258,7 @@ internal static class ReaderBoundaryValidationTest
         }
     }
 
+    /// <summary>Verifies overflowing string length is rejected.</summary>
     private static void OverflowingStringLengthIsRejected()
     {
         const int prefix = 16;
@@ -234,6 +267,12 @@ internal static class ReaderBoundaryValidationTest
             "A string length whose index/header/length sum overflows Int32 was accepted.");
     }
 
+    /// <summary>Creates length string from the supplied input.</summary>
+    /// <param name="length">The number of bytes or elements to process.</param>
+    /// <param name="payloadLength">The payload length used by this operation.</param>
+    /// <param name="utf8">The utf8 used by this operation.</param>
+    /// <param name="prefix">The prefix used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static byte[] CreateLengthString(int length, int payloadLength, bool utf8, int prefix = 0)
     {
         int headerSize = utf8 ? sizeof(int) * 2 : sizeof(int);
@@ -242,6 +281,10 @@ internal static class ReaderBoundaryValidationTest
         return bytes;
     }
 
+    /// <summary>Reads forged string length from the current input.</summary>
+    /// <param name="bytes">The bytes used by this operation.</param>
+    /// <param name="option">The configuration to apply to this operation.</param>
+    /// <param name="index">The position at which the operation starts.</param>
     private static void ReadForgedStringLength(byte[] bytes, LuminPackSerializerOption option, int index)
     {
         using var state = new LuminPackReaderOptionalState(option);
@@ -250,6 +293,7 @@ internal static class ReaderBoundaryValidationTest
         reader.ReadStringLength(ref index, out _);
     }
 
+    /// <summary>Verifies multi segment sequence is read completely.</summary>
     private static void MultiSegmentSequenceIsReadCompletely()
     {
         byte[] payload =
@@ -276,6 +320,7 @@ internal static class ReaderBoundaryValidationTest
             $"Multi-segment sequence consumed {reader.GetCurrentSpanIndex()} bytes; expected {payload.Length}.");
     }
 
+    /// <summary>Verifies multi dimensional array header and lengths are validated.</summary>
     private static void MultiDimensionalArrayHeaderAndLengthsAreValidated()
     {
         var value = new int[255, 1];
@@ -321,6 +366,7 @@ internal static class ReaderBoundaryValidationTest
 
     }
 
+    /// <summary>Verifies truncated multi dimensional array payload is rejected.</summary>
     private static void TruncatedMultiDimensionalArrayPayloadIsRejected()
     {
         var payload = LuminPackSerializer.Serialize(new int[255, 1]);
@@ -328,6 +374,9 @@ internal static class ReaderBoundaryValidationTest
             "A truncated multidimensional array payload was read past the input boundary.");
     }
 
+    /// <summary>Verifies assert throws.</summary>
+    /// <param name="action">The action used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void AssertThrows(Action action, string message)
     {
         try
@@ -342,6 +391,10 @@ internal static class ReaderBoundaryValidationTest
         throw new InvalidOperationException(message);
     }
 
+    /// <summary>Verifies assert format exception.</summary>
+    /// <param name="action">The action used by this operation.</param>
+    /// <param name="expectedMessage">The expected message used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void AssertFormatException(Action action, string expectedMessage, string message)
     {
         try
@@ -365,6 +418,9 @@ internal static class ReaderBoundaryValidationTest
         throw new InvalidOperationException(message);
     }
 
+    /// <summary>Verifies assert invalid data.</summary>
+    /// <param name="action">The action used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void AssertInvalidData(Action action, string message)
     {
         try
@@ -379,6 +435,10 @@ internal static class ReaderBoundaryValidationTest
         throw new InvalidOperationException(message);
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -392,6 +452,10 @@ internal static class ReaderBoundaryValidationTest
         }
     }
 
+    /// <summary>Verifies run debug only case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunDebugOnlyCase(List<string> results, string name, Action test)
     {
 #if DEBUG
@@ -401,19 +465,28 @@ internal static class ReaderBoundaryValidationTest
 #endif
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)
             throw new InvalidOperationException(message);
     }
 
+    /// <summary>Provides test sequence segment functionality.</summary>
     private sealed class TestSequenceSegment : ReadOnlySequenceSegment<byte>
     {
+        /// <summary>Initializes a new instance of <c>TestSequenceSegment</c>.</summary>
+        /// <param name="memory">The memory used by this operation.</param>
         public TestSequenceSegment(ReadOnlyMemory<byte> memory)
         {
             Memory = memory;
         }
 
+        /// <summary>Verifies append.</summary>
+        /// <param name="memory">The memory used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         public TestSequenceSegment Append(ReadOnlyMemory<byte> memory)
         {
             var next = new TestSequenceSegment(memory)

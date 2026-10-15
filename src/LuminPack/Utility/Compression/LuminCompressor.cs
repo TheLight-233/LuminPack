@@ -73,9 +73,7 @@
 //  Last sequence: token + literals only (no offset).
 // ============================================================
 
-using System;
 using System.Buffers;
-using System.IO;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LuminPack.Code;
@@ -98,16 +96,20 @@ namespace LuminPack.Utility;
 public static class LuminCompressor
 {
     private const uint Magic = 0x5A4D554C; // "LUMZ" LE
-    private const int  HeaderSize = 8;
-    private const int  OffsetBytes = 2;           // 16-bit offset → 64 KB window
-    private const int  MaxOffset = 0xFFFF;
-    private const int  MinMatch = 4;
-    private const int  LastLiterals = 5;
-    private const int  MatchGuard = 12;
+    private const int HeaderSize = 8;
+    private const int OffsetBytes = 2;           // 16-bit offset → 64 KB window
+    private const int MaxOffset = 0xFFFF;
+    private const int MinMatch = 4;
+    private const int LastLiterals = 5;
+    private const int MatchGuard = 12;
 
     // Knuth multiplicative hash — same constant as LZ4 / Snappy
     private const uint HashMul4 = 2654435761u;
 
+    /// <summary>Performs the h4 step for the current operation.</summary>
+    /// <param name="v">The v used by this operation.</param>
+    /// <param name="shift">The shift used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int H4(uint v, int shift) => (int)((v * HashMul4) >> shift);
 
@@ -128,6 +130,8 @@ public static class LuminCompressor
     private static ushort[]? _ht;
 
     /// <summary>Maximum compressed-output size for a given uncompressed length.</summary>
+    /// <param name="sourceLength">The source length used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetMaxCompressedSize(int sourceLength)
     {
@@ -148,6 +152,8 @@ public static class LuminCompressor
     }
 
     /// <summary>Original uncompressed size stored in a LuminZ header.</summary>
+    /// <param name="compressed">The compressed used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static int GetDecompressedSize(ReadOnlySpan<byte> compressed)
     {
         if (compressed.Length < HeaderSize) ThrowInvalidData();
@@ -159,6 +165,9 @@ public static class LuminCompressor
         return len;
     }
 
+    /// <summary>Compresses the input using the LuminPack compression format.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <returns>The result of the operation.</returns>
     public static byte[] Compress(ReadOnlySpan<byte> source)
     {
         int maxLen = GetMaxCompressedSize(source.Length);
@@ -179,6 +188,9 @@ public static class LuminCompressor
         finally { ArrayPool<byte>.Shared.Return(tmp); }
     }
 
+    /// <summary>Restores the uncompressed bytes from a LuminPack compression frame.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <returns>The result of the operation.</returns>
     public static byte[] Decompress(ReadOnlySpan<byte> source)
     {
         int origLen = GetDecompressedSize(source);
@@ -192,6 +204,10 @@ public static class LuminCompressor
         return result;
     }
 
+    /// <summary>Compresses the input using the LuminPack compression format.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     public static int Compress(ReadOnlySpan<byte> source, Span<byte> destination)
     {
         if (destination.Length < GetMaxCompressedSize(source.Length))
@@ -213,6 +229,10 @@ public static class LuminCompressor
         return HeaderSize + bodyLen;
     }
 
+    /// <summary>Restores the uncompressed bytes from a LuminPack compression frame.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     public static int Decompress(ReadOnlySpan<byte> source, Span<byte> destination)
     {
         if (source.Length < HeaderSize) ThrowInvalidData();
@@ -230,6 +250,10 @@ public static class LuminCompressor
         return DecompressCore(ref Unsafe.Add(ref src, HeaderSize), source.Length - HeaderSize, ref dst, origLen);
     }
 
+    /// <summary>Compresses the input using the LuminPack compression format.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     public static int Compress(LuminBufferWriter source, LuminBufferWriter destination)
     {
         ReadOnlySpan<byte> srcSpan = source.GetSpan();
@@ -246,6 +270,10 @@ public static class LuminCompressor
         return written;
     }
 
+    /// <summary>Restores the uncompressed bytes from a LuminPack compression frame.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     public static int Decompress(LuminBufferWriter source, LuminBufferWriter destination)
     {
         ReadOnlySpan<byte> srcSpan = source.GetSpan();
@@ -265,6 +293,11 @@ public static class LuminCompressor
         return written;
     }
 
+    /// <summary>Compresses the input using the LuminPack compression format.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="maxLength">The max length used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static int CompressAliased(
         LuminBufferWriter buffer,
@@ -286,6 +319,11 @@ public static class LuminCompressor
         }
     }
 
+    /// <summary>Restores the uncompressed bytes from a LuminPack compression frame.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="decompressedLength">The decompressed length used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static int DecompressAliased(
         LuminBufferWriter buffer,
@@ -307,6 +345,9 @@ public static class LuminCompressor
         }
     }
 
+    /// <summary>Compresses the input using the LuminPack compression format.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="writer">The writer receiving the output data.</param>
     public static void CompressAndWriteTo(ReadOnlySpan<byte> source, ref LuminPackWriter writer)
     {
         if (source.IsEmpty) return;
@@ -334,6 +375,11 @@ public static class LuminCompressor
         finally { ArrayPool<byte>.Shared.Return(rent); }
     }
 
+    /// <summary>Compresses the input using the LuminPack compression format.</summary>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="srcLen">The src len used by this operation.</param>
+    /// <param name="dst">The destination receiving the result.</param>
+    /// <returns>The result of the operation.</returns>
     private static int CompressCore(ref byte src, int srcLen, ref byte dst)
     {
         // ── Compute optimal table size ────────────────────────────
@@ -345,7 +391,7 @@ public static class LuminCompressor
         int tableBits = 8;
         for (int _v = (srcLen - 1) | 1; _v >= (1 << tableBits); tableBits++) { }
 #endif
-        if (tableBits < 8)  tableBits = 8;
+        if (tableBits < 8) tableBits = 8;
         if (tableBits > 15) tableBits = 15;
         int tableSize = 1 << tableBits;
         int hashShift = 32 - tableBits;
@@ -363,14 +409,21 @@ public static class LuminCompressor
         return CompressInner(ref src, srcLen, ref dst, ref ht, hashShift);
     }
 
+    /// <summary>Compresses the input using the LuminPack compression format.</summary>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="srcLen">The src len used by this operation.</param>
+    /// <param name="dst">The destination receiving the result.</param>
+    /// <param name="ht">The ht used by this operation.</param>
+    /// <param name="hashShift">The hash shift used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static int CompressInner(ref byte src, int srcLen, ref byte dst, ref ushort ht, int hashShift)
     {
-        ref byte ip         = ref src;
-        ref byte srcEnd     = ref Unsafe.Add(ref src, srcLen);
-        ref byte op         = ref dst;
-        ref byte anchor     = ref src;
+        ref byte ip = ref src;
+        ref byte srcEnd = ref Unsafe.Add(ref src, srcLen);
+        ref byte op = ref dst;
+        ref byte anchor = ref src;
         ref byte matchLimit = ref Unsafe.Add(ref srcEnd, -MatchGuard);
-        ref byte extLimit   = ref Unsafe.Add(ref srcEnd, -LastLiterals);
+        ref byte extLimit = ref Unsafe.Add(ref srcEnd, -LastLiterals);
 
         if (srcLen < MinMatch + LastLiterals + MatchGuard)
             goto EMIT_LAST;
@@ -391,10 +444,10 @@ public static class LuminCompressor
             // candidate must be initialised before the inner for-loop because
             // C# ref locals require definite assignment; src is a safe placeholder.
             ref byte candidate = ref src;
-            uint  v4;
+            uint v4;
 
             // ── Inner scan: find 4-byte match with skip acceleration ──
-            for (;;)
+            for (; ; )
             {
                 v4 = ReadU32(ref ip);
                 int currentPosition = (int)Unsafe.ByteOffset(ref src, ref ip);
@@ -427,13 +480,13 @@ public static class LuminCompressor
                 && Unsafe.IsAddressGreaterThan(ref candidate, ref src)
                 && Unsafe.Add(ref ip, -1) == Unsafe.Add(ref candidate, -1))
             {
-                ip        = ref Unsafe.Add(ref ip,        -1);
+                ip = ref Unsafe.Add(ref ip, -1);
                 candidate = ref Unsafe.Add(ref candidate, -1);
             }
 
             // ── Forward extension ─────────────────────────────────────
             int matchLen = MinMatch + ExtendMatch(
-                ref Unsafe.Add(ref ip,        MinMatch),
+                ref Unsafe.Add(ref ip, MinMatch),
                 ref Unsafe.Add(ref candidate, MinMatch),
                 ref extLimit);
 
@@ -451,8 +504,8 @@ public static class LuminCompressor
                 ref byte lip = ref Unsafe.Add(ref ip, 1);
                 if (Unsafe.IsAddressLessThan(ref lip, ref matchLimit))
                 {
-                    uint   lv4   = ReadU32(ref lip);
-                    int    lh    = H4(lv4, hashShift);
+                    uint lv4 = ReadU32(ref lip);
+                    int lh = H4(lv4, hashShift);
                     int lazyPosition = (int)Unsafe.ByteOffset(ref src, ref lip);
                     ushort ls = Unsafe.Add(ref ht, lh); // read OLD candidate
                     Unsafe.Add(ref ht, lh) = unchecked((ushort)lazyPosition); // write lip (read-before-write)
@@ -465,23 +518,23 @@ public static class LuminCompressor
                         if (ReadU32(ref lcand) == lv4)
                         {
                             int lazyLen = MinMatch + ExtendMatch(
-                                ref Unsafe.Add(ref lip,   MinMatch),
+                                ref Unsafe.Add(ref lip, MinMatch),
                                 ref Unsafe.Add(ref lcand, MinMatch),
                                 ref extLimit);
                             if (lazyLen > matchLen)
                             {
                                 // The lazy match wins: treat `ip` as one more literal,
                                 // shift the match start forward by 1.
-                                ip        = ref lip;
+                                ip = ref lip;
                                 candidate = ref lcand;
-                                matchLen  = lazyLen;
+                                matchLen = lazyLen;
                                 // Re-run backward extension from the new (lazy) ip.
                                 int backwardLength = 0;
                                 while (Unsafe.IsAddressGreaterThan(ref ip, ref anchor)
                                     && Unsafe.IsAddressGreaterThan(ref candidate, ref src)
                                     && Unsafe.Add(ref ip, -1) == Unsafe.Add(ref candidate, -1))
                                 {
-                                    ip        = ref Unsafe.Add(ref ip,        -1);
+                                    ip = ref Unsafe.Add(ref ip, -1);
                                     candidate = ref Unsafe.Add(ref candidate, -1);
                                     backwardLength++;
                                 }
@@ -492,23 +545,23 @@ public static class LuminCompressor
                 }
             }
 
-            int litLen   = (int)Unsafe.ByteOffset(ref anchor,    ref ip);
+            int litLen = (int)Unsafe.ByteOffset(ref anchor, ref ip);
             int matchOff = (int)Unsafe.ByteOffset(ref candidate, ref ip);
             int matchNib = matchLen - MinMatch;
 
             // ── Emit sequence ─────────────────────────────────────────
-            op = (byte)(((litLen  < 15 ? litLen  : 15) << 4)
-                       | ( matchNib < 15 ? matchNib : 15));
+            op = (byte)(((litLen < 15 ? litLen : 15) << 4)
+                       | (matchNib < 15 ? matchNib : 15));
             op = ref Unsafe.Add(ref op, 1);
-            if (litLen  >= 15) op = ref WriteLSIC(ref op, litLen  - 15);
+            if (litLen >= 15) op = ref WriteLSIC(ref op, litLen - 15);
             Unsafe.CopyBlockUnaligned(ref op, ref anchor, (uint)litLen);
             op = ref Unsafe.Add(ref op, litLen);
-            op                       = (byte) matchOff;
-            Unsafe.Add(ref op, 1)    = (byte)(matchOff >> 8);
+            op = (byte)matchOff;
+            Unsafe.Add(ref op, 1) = (byte)(matchOff >> 8);
             op = ref Unsafe.Add(ref op, OffsetBytes);
             if (matchNib >= 15) op = ref WriteLSIC(ref op, matchNib - 15);
 
-            ip     = ref Unsafe.Add(ref ip, matchLen);
+            ip = ref Unsafe.Add(ref ip, matchLen);
             anchor = ref ip;
 
             if (!Unsafe.IsAddressLessThan(ref ip, ref matchLimit))
@@ -522,7 +575,7 @@ public static class LuminCompressor
                 = unchecked((ushort)(int)Unsafe.ByteOffset(ref src, ref Unsafe.Add(ref ip, -1)));
         }
 
-        EMIT_LAST:
+    EMIT_LAST:
         {
             int litLen = (int)Unsafe.ByteOffset(ref anchor, ref srcEnd);
             op = (byte)((litLen < 15 ? litLen : 15) << 4);
@@ -535,6 +588,10 @@ public static class LuminCompressor
         return (int)Unsafe.ByteOffset(ref dst, ref op);
     }
 
+    /// <summary>Writes lsic to the current output.</summary>
+    /// <param name="op">The op used by this operation.</param>
+    /// <param name="extraLen">The extra len used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ref byte WriteLSIC(ref byte op, int extraLen)
     {
@@ -542,7 +599,7 @@ public static class LuminCompressor
         // Bulk path: drain 255*4 = 1020 per unrolled iteration before the fine loop.
         while (extraLen >= 255 * 4)
         {
-            op                    = 255;
+            op = 255;
             Unsafe.Add(ref op, 1) = 255;
             Unsafe.Add(ref op, 2) = 255;
             Unsafe.Add(ref op, 3) = 255;
@@ -559,20 +616,26 @@ public static class LuminCompressor
         return ref Unsafe.Add(ref op, 1);
     }
 
+    /// <summary>Restores the uncompressed bytes from a LuminPack compression frame.</summary>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="srcLen">The src len used by this operation.</param>
+    /// <param name="dst">The destination receiving the result.</param>
+    /// <param name="origLen">The orig len used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static int DecompressCore(ref byte src, int srcLen, ref byte dst, int origLen)
     {
-        ref byte ip      = ref src;
-        ref byte srcEnd  = ref Unsafe.Add(ref src, srcLen);
-        ref byte op      = ref dst;
+        ref byte ip = ref src;
+        ref byte srcEnd = ref Unsafe.Add(ref src, srcLen);
+        ref byte op = ref dst;
         ref byte dstBase = ref dst;
-        ref byte dstEnd  = ref Unsafe.Add(ref dst, origLen);
+        ref byte dstEnd = ref Unsafe.Add(ref dst, origLen);
 
         while (Unsafe.IsAddressLessThan(ref ip, ref srcEnd))
         {
-            byte token    = ip;
+            byte token = ip;
             ip = ref Unsafe.Add(ref ip, 1);
-            int  litNib   = token >> 4;
-            int  matchNib = token & 0x0F;
+            int litNib = token >> 4;
+            int matchNib = token & 0x0F;
 
             // ── Literal length ────────────────────────────────────
             int litLen = litNib;
@@ -641,6 +704,13 @@ public static class LuminCompressor
         return 0;
     }
 
+    /// <summary>Reads extended length from the current input.</summary>
+    /// <param name="ip">The ip used by this operation.</param>
+    /// <param name="srcEnd">The src end used by this operation.</param>
+    /// <param name="length">The number of bytes or elements to process.</param>
+    /// <param name="maxLength">The max length used by this operation.</param>
+    /// <param name="decodedLength">Receives the decoded length produced by the operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ref byte ReadExtendedLength(
         ref byte ip,
@@ -669,6 +739,11 @@ public static class LuminCompressor
         return ref ip;
     }
 
+    /// <summary>Copies match to the supplied destination.</summary>
+    /// <param name="dst">The destination receiving the result.</param>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="len">The len used by this operation.</param>
+    /// <param name="offset">The position at which the operation starts.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CopyMatch(ref byte dst, ref byte src, int len, int offset)
     {
@@ -705,6 +780,9 @@ public static class LuminCompressor
     }
 
     /// <summary>8-byte wild-copy bulk path (offset ≥ 8), plus byte tail.</summary>
+    /// <param name="dst">The destination receiving the result.</param>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="end">The end used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CopyMatchCore8(ref byte dst, ref byte src, ref byte end)
     {
@@ -727,6 +805,9 @@ public static class LuminCompressor
 
 #if NET8_0_OR_GREATER
     /// <summary>64-byte wild copy (offset ≥ 64); delegates the residual to the 32-byte path.</summary>
+    /// <param name="dst">The destination receiving the result.</param>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="end">The end used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CopyMatch512(ref byte dst, ref byte src, ref byte end)
     {
@@ -740,6 +821,9 @@ public static class LuminCompressor
     }
 
     /// <summary>32-byte wild copy (offset ≥ 32); delegates the residual to the 16-byte path.</summary>
+    /// <param name="dst">The destination receiving the result.</param>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="end">The end used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CopyMatch256(ref byte dst, ref byte src, ref byte end)
     {
@@ -753,6 +837,9 @@ public static class LuminCompressor
     }
 
     /// <summary>16-byte wild copy (offset ≥ 16); delegates the residual to the 8-byte path.</summary>
+    /// <param name="dst">The destination receiving the result.</param>
+    /// <param name="src">The input data to process.</param>
+    /// <param name="end">The end used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void CopyMatch128(ref byte dst, ref byte src, ref byte end)
     {
@@ -766,6 +853,11 @@ public static class LuminCompressor
     }
 
     /// <summary>SIMD match extension, 64-byte stride (Vector512; needs AVX512BW).</summary>
+    /// <param name="a">The a used by this operation.</param>
+    /// <param name="b">The b used by this operation.</param>
+    /// <param name="start">The start used by this operation.</param>
+    /// <param name="limit">The limit used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static int ExtendMatch512(ref byte a, ref byte b, ref byte start, ref byte limit)
     {
@@ -786,6 +878,11 @@ public static class LuminCompressor
     }
 
     /// <summary>SIMD match extension, 32-byte stride (Vector256 / AVX2).</summary>
+    /// <param name="a">The a used by this operation.</param>
+    /// <param name="b">The b used by this operation.</param>
+    /// <param name="start">The start used by this operation.</param>
+    /// <param name="limit">The limit used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static int ExtendMatch256(ref byte a, ref byte b, ref byte start, ref byte limit)
     {
@@ -806,6 +903,11 @@ public static class LuminCompressor
     }
 
     /// <summary>SIMD match extension, 16-byte stride (Vector128 / SSE2).</summary>
+    /// <param name="a">The a used by this operation.</param>
+    /// <param name="b">The b used by this operation.</param>
+    /// <param name="start">The start used by this operation.</param>
+    /// <param name="limit">The limit used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static int ExtendMatch128(ref byte a, ref byte b, ref byte start, ref byte limit)
     {
@@ -828,18 +930,23 @@ public static class LuminCompressor
 #endif
 
     /// <summary>Scalar 16-byte-unrolled + 8-byte + 1-byte match extension (shared netstandard2.1 path).</summary>
+    /// <param name="a">The a used by this operation.</param>
+    /// <param name="b">The b used by this operation.</param>
+    /// <param name="start">The start used by this operation.</param>
+    /// <param name="limit">The limit used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int ExtendMatchScalar(ref byte a, ref byte b, ref byte start, ref byte limit)
     {
         // 16-byte unrolled loop: two ulong XOR per iteration.
         while (!Unsafe.IsAddressGreaterThan(ref Unsafe.Add(ref a, 16), ref limit))
         {
-            ulong d0 = ReadU64(ref a)                    ^ ReadU64(ref b);
+            ulong d0 = ReadU64(ref a) ^ ReadU64(ref b);
             ulong d1 = ReadU64(ref Unsafe.Add(ref a, 8)) ^ ReadU64(ref Unsafe.Add(ref b, 8));
             if ((d0 | d1) != 0)
             {
-                if (d0 != 0) return (int)Unsafe.ByteOffset(ref start, ref a)     + TrailingZeroBytes(d0);
-                return             (int)Unsafe.ByteOffset(ref start, ref a) + 8  + TrailingZeroBytes(d1);
+                if (d0 != 0) return (int)Unsafe.ByteOffset(ref start, ref a) + TrailingZeroBytes(d0);
+                return (int)Unsafe.ByteOffset(ref start, ref a) + 8 + TrailingZeroBytes(d1);
             }
             a = ref Unsafe.Add(ref a, 16);
             b = ref Unsafe.Add(ref b, 16);
@@ -861,6 +968,11 @@ public static class LuminCompressor
         return (int)Unsafe.ByteOffset(ref start, ref a);
     }
 
+    /// <summary>Performs the extend match step for the current operation.</summary>
+    /// <param name="a">The a used by this operation.</param>
+    /// <param name="b">The b used by this operation.</param>
+    /// <param name="limit">The limit used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int ExtendMatch(ref byte a, ref byte b, ref byte limit)
     {
@@ -889,9 +1001,15 @@ public static class LuminCompressor
     //  UTILITY
     // ══════════════════════════════════════════════════════════════
 
+    /// <summary>Reads u32 from the current input.</summary>
+    /// <param name="p">The p used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static uint  ReadU32(ref byte p) => Unsafe.ReadUnaligned<uint>(ref p);
+    private static uint ReadU32(ref byte p) => Unsafe.ReadUnaligned<uint>(ref p);
 
+    /// <summary>Reads u64 from the current input.</summary>
+    /// <param name="p">The p used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static ulong ReadU64(ref byte p)
     {
@@ -902,6 +1020,9 @@ public static class LuminCompressor
         return value;
     }
 
+    /// <summary>Performs the trailing zero bytes step for the current operation.</summary>
+    /// <param name="v">The v used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int TrailingZeroBytes(ulong v)
     {
@@ -909,16 +1030,22 @@ public static class LuminCompressor
         return BitOperations.TrailingZeroCount(v) >> 3;
 #else
         if (v == 0) return 8;
-        int n = 0; while ((v & 0xFF) == 0) { v >>= 8; n++; } return n;
+        int n = 0; while ((v & 0xFF) == 0) { v >>= 8; n++; }
+        return n;
 #endif
     }
 
+    /// <summary>Validates empty frame before the operation continues.</summary>
+    /// <param name="sourceLength">The source length used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ValidateEmptyFrame(int sourceLength)
     {
         if (sourceLength != HeaderSize) ThrowInvalidData();
     }
 
+    /// <summary>Validates declared output size before the operation continues.</summary>
+    /// <param name="sourceLength">The source length used by this operation.</param>
+    /// <param name="decompressedLength">The decompressed length used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void ValidateDeclaredOutputSize(int sourceLength, int decompressedLength)
     {
@@ -936,16 +1063,19 @@ public static class LuminCompressor
             ThrowInvalidData();
     }
 
+    /// <summary>Raises the exception for insufficient buffer.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowInsufficientBuffer()
         => global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException("Destination buffer is too small for LuminZ operation.");
 
+    /// <summary>Raises the exception for source too large.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowSourceTooLarge()
         => global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(
             "sourceLength",
             "Source is too large to represent a bounded LuminZ output in a single Span<byte>.");
 
+    /// <summary>Raises the exception for invalid data.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ThrowInvalidData()
         => global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidDataException("LuminZ: compressed data is invalid or corrupted.");

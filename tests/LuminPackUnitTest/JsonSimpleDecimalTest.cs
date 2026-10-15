@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Text.Json;
 using LuminPack;
@@ -8,8 +6,12 @@ using Xunit;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides json simple decimal test functionality.</summary>
 public class JsonSimpleDecimalTest
 {
+    /// <summary>Verifies decimal fast path and fallback agree bit for bit with system text json.</summary>
+    /// <param name="encoding">The encoding used by this operation.</param>
+    /// <param name="strict">The strict used by this operation.</param>
     [Theory]
     [InlineData(LuminPackStringEncoding.UTF8, false)]
     [InlineData(LuminPackStringEncoding.UTF8, true)]

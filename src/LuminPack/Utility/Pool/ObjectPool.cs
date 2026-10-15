@@ -4,15 +4,29 @@ using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 #if NET8_0_OR_GREATER
+/// <summary>Provides i pooled object policy functionality.</summary>
+/// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
 public interface IPooledObjectPolicy<T> where T : class
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     static abstract T Create();
+    /// <summary>Returns an instance to the pool for reuse.</summary>
+    /// <param name="obj">The obj used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     static abstract bool Return(T obj);
 }
 #else
+/// <summary>Provides i pooled object policy functionality.</summary>
+/// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
 public interface IPooledObjectPolicy<T> where T : class
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     T Create();
+    /// <summary>Returns an instance to the pool for reuse.</summary>
+    /// <param name="obj">The obj used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     bool Return(T obj);
 }
 #endif
@@ -22,6 +36,7 @@ public interface IPooledObjectPolicy<T> where T : class
 /// Central slots use sequence numbers so an item is published only after its
 /// value is visible and cannot be reused until the consumer releases the slot.
 /// </summary>
+/// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
 public sealed class ObjectPool<T>
 #if NET8_0_OR_GREATER
     where T : class, IPooledObjectPolicy<T>, IDisposable
@@ -47,6 +62,14 @@ public sealed class ObjectPool<T>
     private readonly IPooledObjectPolicy<T> _policy;
 #endif
 
+#if !NET8_0_OR_GREATER
+    /// <summary>Initializes a pool with the supplied policy and maximum retained capacity.</summary>
+    /// <param name="policy">The policy used by this operation.</param>
+    /// <param name="maxSize">The max size used by this operation.</param>
+#else
+    /// <summary>Initializes a pool with the maximum retained capacity.</summary>
+    /// <param name="maxSize">The maximum number of instances retained by the shared pool.</param>
+#endif
     public ObjectPool(
 #if !NET8_0_OR_GREATER
         IPooledObjectPolicy<T>? policy,
@@ -73,6 +96,8 @@ public sealed class ObjectPool<T>
 #endif
     }
 
+    /// <summary>Obtains a reusable instance from the pool, creating one when needed.</summary>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public T Rent()
     {
@@ -87,6 +112,8 @@ public sealed class ObjectPool<T>
         return RentSlow();
     }
 
+    /// <summary>Obtains a reusable instance from the pool, creating one when needed.</summary>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private T RentSlow()
     {
@@ -100,6 +127,8 @@ public sealed class ObjectPool<T>
 #endif
     }
 
+    /// <summary>Returns an instance to the pool for reuse.</summary>
+    /// <param name="item">The entry to process.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Return(T item)
     {
@@ -123,6 +152,8 @@ public sealed class ObjectPool<T>
         ReturnSlow(item);
     }
 
+    /// <summary>Returns an instance to the pool for reuse.</summary>
+    /// <param name="item">The entry to process.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void ReturnSlow(T item)
     {
@@ -139,6 +170,7 @@ public sealed class ObjectPool<T>
         item.Dispose();
     }
 
+    /// <summary>Performs the clear thread local cache step for the current operation.</summary>
     public static void ClearThreadLocalCache()
     {
         s_threadLocalItem?.Dispose();
@@ -146,7 +178,9 @@ public sealed class ObjectPool<T>
         s_threadLocalPoolId = 0;
     }
 
+    /// <summary>Gets the available count.</summary>
     public int AvailableCount => Volatile.Read(ref _ring).Count;
+    /// <summary>Gets the max size.</summary>
     public int MaxSize => Volatile.Read(ref _maxSize);
 
     /// <summary>
@@ -154,6 +188,7 @@ public sealed class ObjectPool<T>
     /// is a quiescent operation and must not run concurrently with Rent/Return.
     /// The hot Rent/Return paths never acquire a lock.
     /// </summary>
+    /// <param name="newSize">The new size used by this operation.</param>
     public void Resize(int newSize)
     {
         if (newSize < 0)
@@ -179,8 +214,11 @@ public sealed class ObjectPool<T>
         Volatile.Write(ref _ring, newRing);
     }
 
+    /// <summary>Obtains the all items for the supplied input.</summary>
+    /// <returns>The result of the operation.</returns>
     public T?[] GetAllItems() => Volatile.Read(ref _ring).Snapshot();
 
+    /// <summary>Provides ring buffer functionality.</summary>
     private sealed class RingBuffer
     {
         private readonly Slot[] _slots;
@@ -190,6 +228,8 @@ public sealed class ObjectPool<T>
         private PaddedCounter _enqueuePosition;
         private PaddedCounter _dequeuePosition;
 
+        /// <summary>Initializes a new instance of <c>RingBuffer</c>.</summary>
+        /// <param name="capacity">The requested storage capacity.</param>
         internal RingBuffer(int capacity)
         {
             _capacity = capacity;
@@ -200,6 +240,7 @@ public sealed class ObjectPool<T>
                 _slots[i].Sequence = i;
         }
 
+        /// <summary>Gets the count.</summary>
         internal int Count
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -216,6 +257,9 @@ public sealed class ObjectPool<T>
             }
         }
 
+        /// <summary>Attempts to enqueue and reports whether it succeeded.</summary>
+        /// <param name="item">The entry to process.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal bool TryEnqueue(T item)
         {
@@ -249,6 +293,9 @@ public sealed class ObjectPool<T>
             }
         }
 
+        /// <summary>Attempts to dequeue and reports whether it succeeded.</summary>
+        /// <param name="item">Receives the item produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal bool TryDequeue(out T item)
         {
@@ -287,6 +334,8 @@ public sealed class ObjectPool<T>
             }
         }
 
+        /// <summary>Performs the snapshot step for the current operation.</summary>
+        /// <returns>The result of the operation.</returns>
         internal T?[] Snapshot()
         {
             if (_capacity == 1)
@@ -319,6 +368,9 @@ public sealed class ObjectPool<T>
             return result;
         }
 
+        /// <summary>Obtains the index for the supplied input.</summary>
+        /// <param name="position">The position used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int GetIndex(long position) => _indexMask >= 0
             ? (int)position & _indexMask
@@ -327,6 +379,7 @@ public sealed class ObjectPool<T>
 
     // Sequence and item live on their own cache line. Adjacent producers and
     // consumers therefore do not bounce an unrelated slot between CPU cores.
+    /// <summary>Provides slot functionality.</summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct Slot
     {
@@ -338,6 +391,7 @@ public sealed class ObjectPool<T>
 #pragma warning restore CS0169
     }
 
+    /// <summary>Provides padded counter functionality.</summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct PaddedCounter
     {

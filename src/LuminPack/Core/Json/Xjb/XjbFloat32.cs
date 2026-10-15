@@ -1,5 +1,3 @@
-using System.Runtime.CompilerServices;
-
 namespace LuminPack.Core
 {
     /// <summary>
@@ -18,6 +16,9 @@ namespace LuminPack.Core
         private const int Bit = 36;
 
         /// <summary>Converts a finite binary32 bit pattern to the shortest decimal <c>digits * 10^exponent10</c>.</summary>
+        /// <param name="bits">The bits used by this operation.</param>
+        /// <param name="digits">Receives the digits produced by the operation.</param>
+        /// <param name="exponent10">Receives the exponent10 produced by the operation.</param>
         internal static void Convert(uint bits, out ulong digits, out int exponent10)
         {
             uint sig = bits & ((1u << 23) - 1);

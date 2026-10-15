@@ -10,6 +10,9 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 /// </summary>
 public static class CollectionEvaluatorEmitter
 {
+    /// <summary>Appends binary size evaluation statements for collection evaluator values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateArrayCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string elementType = fieldData.TypeName.Substring(0, fieldData.TypeName.LastIndexOf("[]", System.StringComparison.Ordinal));
@@ -43,11 +46,17 @@ public static class CollectionEvaluatorEmitter
         AppendManagedArrayOffset(sb);
     }
 
+    /// <summary>Appends binary size evaluation statements for collection evaluator values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="elementType">The element type used by this operation.</param>
+    /// <param name="indentSuffix">The indent suffix used by this operation.</param>
     private static void AppendUnmanagedArrayOffset(StringBuilder sb, string elementType, string indentSuffix = "")
     {
         sb.AppendLine("            " + indentSuffix + "evaluator += checked(sizeof(int) + value.Length * global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + elementType + ">());");
     }
 
+    /// <summary>Appends binary size evaluation statements for collection evaluator values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
     private static void AppendManagedArrayOffset(StringBuilder sb)
     {
         sb.AppendLine("            evaluator += sizeof(int);");
@@ -57,6 +66,9 @@ public static class CollectionEvaluatorEmitter
         sb.AppendLine("            }");
     }
 
+    /// <summary>Appends binary size evaluation statements for collection evaluator values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateEnumerableCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string elementType = CodeEmitterRegistry.GetFirstGeneric(fieldData.TypeName);
@@ -74,6 +86,9 @@ public static class CollectionEvaluatorEmitter
         sb.AppendLine("            }");
     }
 
+    /// <summary>Appends binary size evaluation statements for collection evaluator values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateValueEnumerableCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string elementType = CodeEmitterRegistry.GetFirstGeneric(fieldData.TypeName);
@@ -85,6 +100,9 @@ public static class CollectionEvaluatorEmitter
         sb.AppendLine("            }");
     }
 
+    /// <summary>Appends binary size evaluation statements for collection evaluator values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDictionaryCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string keyType = CodeEmitterRegistry.GetFirstGeneric(fieldData.TypeName);
@@ -105,6 +123,9 @@ public static class CollectionEvaluatorEmitter
         sb.AppendLine("            }");
     }
 
+    /// <summary>Appends binary size evaluation statements for collection evaluator values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateQueueCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string elementType = CodeEmitterRegistry.GetFirstGeneric(fieldData.TypeName);

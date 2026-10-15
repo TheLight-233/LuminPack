@@ -3,8 +3,12 @@ using LuminPack.Code;
 
 namespace LuminPack.SourceGenerator.CodeEmitters;
 
+/// <summary>Provides bit array emitter functionality.</summary>
 public static class BitArrayEmitter
 {
+    /// <summary>Appends binary writing statements for bit array values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
@@ -42,7 +46,10 @@ public static class BitArrayEmitter
         sb.AppendLine("            writer.Advance(4 + offset);");
         sb.AppendLine("            writer.CheckBuffer();");
     }
-    
+
+    /// <summary>Appends binary reading statements for bit array values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
@@ -72,6 +79,9 @@ public static class BitArrayEmitter
         sb.AppendLine("#endif");
     }
 
+    /// <summary>Appends JSON writing statements for bit array values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            if (value == null)");
@@ -93,6 +103,9 @@ public static class BitArrayEmitter
         sb.AppendLine("            writer.WriteArrayEnd();");
     }
 
+    /// <summary>Appends JSON reading statements for bit array values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            if (reader.IsNull())");

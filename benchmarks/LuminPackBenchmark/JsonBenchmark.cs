@@ -6,21 +6,21 @@ using LuminPack;
 using LuminPack.Option;
 using LuminPack.Utility;
 using Newtonsoft.Json;
-using REDox.Json;
 
 namespace LuminPackBenchmark;
 
 // ────────────────────────────────────────────────────────────────────────────
-// STJ 源生成器 Context
-// 注册 CharacterSaveData 的完整类型图（含多态派生类）
+// System.Text.Json source generation context.
+// Register the complete CharacterSaveData type graph, including polymorphic members.
 // ────────────────────────────────────────────────────────────────────────────
 
+/// <summary>Provides character save data json context functionality.</summary>
 [JsonSourceGenerationOptions(
-    PropertyNameCaseInsensitive = false,                                  // 精确匹配更快；写/读都是 PascalCase
-    IncludeFields               = true,                                   // 数据模型是字段
-    WriteIndented               = false,
-    DefaultIgnoreCondition      = JsonIgnoreCondition.WhenWritingDefault, // 与 Newtonsoft/RE:Dox 的 DefaultValueHandling.Ignore 对齐，同时少写字节
-    DefaultBufferSize           = 64 * 1024                               // 一次容下 ~35KB 输出，省掉缓冲扩容
+    PropertyNameCaseInsensitive = false,                                  // Use exact PascalCase matching for both writing and reading.
+    IncludeFields = true,                                   // The data model uses fields.
+    WriteIndented = false,
+    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault, // Match DefaultValueHandling.Ignore and reduce the written payload.
+    DefaultBufferSize = 64 * 1024                               // Reserve about 35 KB to avoid buffer growth.
 )]
 [JsonSerializable(typeof(CharacterSaveData))]
 [JsonSerializable(typeof(CharacterStats))]
@@ -37,6 +37,7 @@ internal partial class CharacterSaveDataJsonContext : JsonSerializerContext { }
 // Benchmark
 // ────────────────────────────────────────────────────────────────────────────
 
+/// <summary>Provides json benchmark functionality.</summary>
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MinColumn, MaxColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -55,43 +56,43 @@ public class JsonBenchmark
 
     private LuminBufferWriter _bufferWriter = LuminBufferWriterPool.Rent();
 
-    // STJ 源生成器选项
+    // System.Text.Json source generation options.
     private static readonly System.Text.Json.JsonSerializerOptions StjOptions =
         CharacterSaveDataJsonContext.Default.Options;
 
-    // Newtonsoft 配置
+    // Newtonsoft configuration.
     private static readonly JsonSerializerSettings NjSettings = new()
     {
-        NullValueHandling    = NullValueHandling.Ignore,
+        NullValueHandling = NullValueHandling.Ignore,
         DefaultValueHandling = DefaultValueHandling.Ignore,
-        Formatting           = Formatting.None,
-        TypeNameHandling     = TypeNameHandling.Auto,   // 支持多态
-        ConstructorHandling  = ConstructorHandling.AllowNonPublicDefaultConstructor,
-        DateParseHandling    = DateParseHandling.None,  // 模型里没有 DateTime 成员，跳过字符串的日期嗅探
+        Formatting = Formatting.None,
+        TypeNameHandling = TypeNameHandling.Auto,   // Enable polymorphic handling.
+        ConstructorHandling = ConstructorHandling.AllowNonPublicDefaultConstructor,
+        DateParseHandling = DateParseHandling.None,  // Skip date detection because the model has no DateTime members.
     };
 
-    // RE:Dox 配置：
-    //  · 语义对齐 Newtonsoft（保证与 Newtonsoft 行可比）
-    //  · 多态由 AutoTypeNameDoxSettings 提供，等价于 TypeNameHandling.Auto
-    //  · 性能项：写缓冲一次到位 + 打开并行反序列化
+    // RE:Dox configuration:
+    //  Match Newtonsoft semantics for a comparable benchmark.
+    //  Polymorphism uses AutoTypeNameDoxSettings, equivalent to TypeNameHandling.Auto.
+    //  Preallocate the write buffer and enable parallel deserialization.
     private static readonly AutoTypeNameDoxSettings RedoxSettings = new()
     {
-        NullValueHandling    = REDox.Serialization.NullValueHandling.Ignore,
+        NullValueHandling = REDox.Serialization.NullValueHandling.Ignore,
         DefaultValueHandling = REDox.Serialization.DefaultValueHandling.Ignore,
-        ConstructorHandling  = REDox.Serialization.ConstructorHandling.AllowNonPublicDefaultConstructor,
-        FloatFormatHandling  = REDox.Serialization.FloatFormatHandling.AlwaysIncludeDecimal,   // 对齐 Newtonsoft 的 "200.0" 写法
+        ConstructorHandling = REDox.Serialization.ConstructorHandling.AllowNonPublicDefaultConstructor,
+        FloatFormatHandling = REDox.Serialization.FloatFormatHandling.AlwaysIncludeDecimal,   // Match Newtonsoft's "200.0" representation.
 
-        // 一次容纳 ~35KB 输出，省掉字符串缓冲 16K→32K→64K 的多次扩容
+        // Reserve about 35 KB to avoid repeated 16 KB to 32 KB to 64 KB string buffer growth.
         DefaultBufferSize = 64 * 1024,
 
-        // 并行反序列化：只对一维数组生效（本数据集里是 ActiveBuff[100]）
-        // 判定条件（库内 ParallelSzArrayConverter）：元素数 ≥ MinimumNumberOfElements 且 该数组 token 跨度 ≥ MinimumNumberOfTokens
+        // Parallel deserialization applies to one-dimensional arrays, here ActiveBuff[100].
+        // ParallelSzArrayConverter requires both the minimum element count and minimum token span.
         ParallelOptions = new REDox.Serialization.ParallelDeserializeOptions
         {
             ParallelDeserializeEnabled = true,
-            MaxDegreeOfParallelism     = Environment.ProcessorCount,
-            MinimumNumberOfElements    = 4,     // 库默认值
-            MinimumNumberOfTokens      = 256,   // 库默认 1000 对 35KB 数据集偏保守，调低以确保数组真正走并行分支
+            MaxDegreeOfParallelism = Environment.ProcessorCount,
+            MinimumNumberOfElements = 4,     // Library default.
+            MinimumNumberOfTokens = 256,   // Lower the default 1000-element threshold so the 35 KB dataset exercises parallel array reading.
         },
     };
 
@@ -100,38 +101,47 @@ public class JsonBenchmark
         StringEncoding = LuminPackStringEncoding.UTF8,
     };
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void SetUp()
     {
         _bufferWriter.Option.StringEncoding = _luminOptions.StringEncoding;
         _bufferWriter.Option.StringRecording = _luminOptions.StringRecording;
         _bufferWriter.Option.StandardFormat = _luminOptions.StandardFormat;
-        _luminPackJson  = LuminPackSerializer.SerializeJson(_data, _luminOptions);
+        _luminPackJson = LuminPackSerializer.SerializeJson(_data, _luminOptions);
         _systemTextJson = System.Text.Json.JsonSerializer.Serialize(_data, StjOptions);
         _newtonsoftJson = JsonConvert.SerializeObject(_data, NjSettings);
         _redoxJson = REDox.Json.JsonSerializer.Serialize(_data, RedoxSettings);
     }
 
+    /// <summary>Measures clean up for the configured benchmark input.</summary>
     [GlobalCleanup]
     public void CleanUp() => _bufferWriter.Dispose();
 
     // ── Serialize ────────────────────────────────────────────────────────────
 
+    /// <summary>Measures lumin pack serialize to json for the configured benchmark input.</summary>
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Serialize")]
     public void LuminPackSerializeToJson()
         => LuminPackSerializer.SerializeJson(_data, _bufferWriter);
 
+    /// <summary>Measures system text json serialize for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     [BenchmarkCategory("Serialize")]
     public string SystemTextJsonSerialize()
         => System.Text.Json.JsonSerializer.Serialize(_data, StjOptions);
 
+    /// <summary>Measures newtonsoft json serialize for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     [BenchmarkCategory("Serialize")]
     public string NewtonsoftJsonSerialize()
         => JsonConvert.SerializeObject(_data, NjSettings);
 
+    /// <summary>Measures re do x json serialize for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     [BenchmarkCategory("Serialize")]
     public string ReDoXJsonSerialize()
@@ -139,21 +149,29 @@ public class JsonBenchmark
 
     // ── Deserialize ──────────────────────────────────────────────────────────
 
+    /// <summary>Measures lumin pack deserialize from json for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Deserialize")]
     public CharacterSaveData LuminPackDeserializeFromJson()
         => LuminPackSerializer.DeserializeJson<CharacterSaveData>(_luminPackJson, _luminOptions);
 
+    /// <summary>Measures system text json deserialize for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     [BenchmarkCategory("Deserialize")]
     public CharacterSaveData SystemTextJsonDeserialize()
         => System.Text.Json.JsonSerializer.Deserialize<CharacterSaveData>(_systemTextJson, StjOptions);
 
+    /// <summary>Measures newtonsoft json deserialize for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     [BenchmarkCategory("Deserialize")]
     public CharacterSaveData NewtonsoftJsonDeserialize()
         => JsonConvert.DeserializeObject<CharacterSaveData>(_newtonsoftJson, NjSettings);
 
+    /// <summary>Measures re do x json deserialize for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     [BenchmarkCategory("Deserialize")]
     public CharacterSaveData ReDoXJsonDeserialize()
@@ -161,28 +179,36 @@ public class JsonBenchmark
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// RE:Dox 多态设置（纯 core 实现，等价 Newtonsoft 的 TypeNameHandling.Auto）
-// 核心包默认不写 $type，且派生类型字段会被静默丢弃（反序列化得到 null）；
-// 通过覆写契约解析：
-//   1) 每个类型契约标记 IsPolymorphic；
-//   2) 每个类型带自己的判别名（"命名空间.类型, 程序集"，与 Newtonsoft 的 $type 写法一致）；
-//   3) 反序列化时按 $type 名称反射还原具体类型。
+// RE:Dox core polymorphism settings, equivalent to Newtonsoft TypeNameHandling.Auto.
+// The default core serializer omits $type and loses derived members; deserialization yields null.
+// Resolve polymorphic contracts by overriding the contract configuration:
+//   Mark each type contract as IsPolymorphic.
+//   Give each type a discriminator name in Newtonsoft's $type format: namespace.type, assembly.
+//   Resolve concrete types from $type names during deserialization.
 // ────────────────────────────────────────────────────────────────────────────
 
+/// <summary>Provides auto type name dox settings functionality.</summary>
 internal sealed class AutoTypeNameDoxSettings : REDox.DoxSerializerSettings
 {
+    /// <summary>Measures resolve contract for the configured benchmark input.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>The result of the operation.</returns>
     protected override REDox.Serialization.Metadata.DataContract ResolveContract(Type type)
     {
         var contract = base.ResolveContract(type);
 
         return contract with
         {
-            IsPolymorphic     = true,
+            IsPolymorphic = true,
             TypeDiscriminator = new REDox.Serialization.Metadata.TypeDiscriminator(
                 new REDox.Serialization.Utf8Symbol(GetSimpleTypeName(type))),
         };
     }
 
+    /// <summary>Measures resolve contract for the configured benchmark input.</summary>
+    /// <param name="baseType">The base type used by this operation.</param>
+    /// <param name="typeDiscriminatorSymbol">The type discriminator symbol used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     protected override REDox.Serialization.Metadata.DataContract ResolveContract(
         REDox.Serialization.Metadata.DataContract baseType, ReadOnlySpan<byte> typeDiscriminatorSymbol)
     {
@@ -192,6 +218,9 @@ internal sealed class AutoTypeNameDoxSettings : REDox.DoxSerializerSettings
         return type != null ? GetContract(type) : base.ResolveContract(baseType, typeDiscriminatorSymbol);
     }
 
+    /// <summary>Obtains the simple type name for the supplied input.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>The result of the operation.</returns>
     private static string GetSimpleTypeName(Type type)
     {
         var aqn = type.AssemblyQualifiedName!;

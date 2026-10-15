@@ -1,19 +1,19 @@
-﻿// Auto-generated code
+// Auto-generated code
 
-using System;
 using System.Runtime.CompilerServices;
 using LuminPack.Utility.ViewModel;
 
 namespace LuminPack.Core
 {
+    /// <summary>Reads LuminPack binary values while tracking the current input position and operation state.</summary>
     public unsafe ref partial struct LuminPackReader
     {
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1>(out T1 value1)
             where T1 : unmanaged
@@ -25,27 +25,27 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 return Unsafe.SizeOf<T1>();
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 value1 = default!;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
                 return Unsafe.SizeOf<T1>();
             }
         }
-        
+
         /// <summary>
-        /// 反序列化值类型并前进读取位置
+        /// Reads an unmanaged value and advances the input position.
         /// </summary>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <returns>反序列化的值</returns>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <returns>The deserialized value.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T1 ReadUnmanaged<T1>()
             where T1 : unmanaged
@@ -56,31 +56,31 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             T1 value1;
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 value1 = default!;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
             }
-            
+
             Advance(size);
             return value1;
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1>(ref int index, out T1 value1)
             where T1 : unmanaged
@@ -90,16 +90,16 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 return Unsafe.SizeOf<T1>();
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 value1 = default!;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
                 return Unsafe.SizeOf<T1>();
@@ -107,13 +107,13 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2>(out T1 value1, out T2 value2)
             where T1 : unmanaged where T2 : unmanaged
@@ -124,17 +124,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>();
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2>>());
                 view.Deconstruct(out value1, out value2);
@@ -143,14 +143,14 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2>(ref int index, out T1 value1, out T2 value2)
             where T1 : unmanaged where T2 : unmanaged
@@ -160,17 +160,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>();
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2>>());
                 view.Deconstruct(out value1, out value2);
@@ -179,15 +179,15 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3>(out T1 value1, out T2 value2, out T3 value3)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged
@@ -198,10 +198,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -209,7 +209,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3>>());
                 view.Deconstruct(out value1, out value2, out value3);
@@ -218,16 +218,16 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3>(ref int index, out T1 value1, out T2 value2, out T3 value3)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged
@@ -237,10 +237,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -248,7 +248,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3>>());
                 view.Deconstruct(out value1, out value2, out value3);
@@ -257,17 +257,17 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4>(out T1 value1, out T2 value2, out T3 value3, out T4 value4)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged
@@ -278,10 +278,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -290,7 +290,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4);
@@ -299,18 +299,18 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged
@@ -320,10 +320,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -332,7 +332,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4);
@@ -341,19 +341,19 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged
@@ -364,10 +364,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -377,7 +377,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5);
@@ -386,20 +386,20 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged
@@ -409,10 +409,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -422,7 +422,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5);
@@ -431,21 +431,21 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged
@@ -456,10 +456,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -470,7 +470,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6);
@@ -479,22 +479,22 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged
@@ -504,10 +504,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -518,7 +518,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6);
@@ -527,23 +527,23 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged
@@ -554,10 +554,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -569,7 +569,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7);
@@ -578,24 +578,24 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged
@@ -605,10 +605,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -620,7 +620,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7);
@@ -629,25 +629,25 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged
@@ -658,10 +658,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -674,7 +674,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8);
@@ -683,26 +683,26 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged
@@ -712,10 +712,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -728,7 +728,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8);
@@ -737,27 +737,27 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged
@@ -768,10 +768,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -785,7 +785,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9);
@@ -794,28 +794,28 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged
@@ -825,10 +825,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -842,7 +842,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9);
@@ -851,29 +851,29 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged where T10 : unmanaged
@@ -884,10 +884,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -902,7 +902,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10);
@@ -911,30 +911,30 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged where T10 : unmanaged
@@ -944,10 +944,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -962,7 +962,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10);
@@ -971,31 +971,31 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged where T10 : unmanaged where T11 : unmanaged
@@ -1006,10 +1006,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1025,7 +1025,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11);
@@ -1034,32 +1034,32 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged where T10 : unmanaged where T11 : unmanaged
@@ -1069,10 +1069,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1088,7 +1088,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11);
@@ -1097,33 +1097,33 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged where T10 : unmanaged where T11 : unmanaged where T12 : unmanaged
@@ -1134,10 +1134,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1154,7 +1154,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12);
@@ -1163,34 +1163,34 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged where T10 : unmanaged where T11 : unmanaged where T12 : unmanaged
@@ -1200,10 +1200,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1220,7 +1220,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12);
@@ -1229,35 +1229,35 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged where T10 : unmanaged where T11 : unmanaged where T12 : unmanaged where T13 : unmanaged
@@ -1268,10 +1268,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1289,7 +1289,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13);
@@ -1298,36 +1298,36 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged where T10 : unmanaged where T11 : unmanaged where T12 : unmanaged where T13 : unmanaged
@@ -1337,10 +1337,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1358,7 +1358,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13);
@@ -1367,37 +1367,37 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged where T10 : unmanaged where T11 : unmanaged where T12 : unmanaged where T13 : unmanaged where T14 : unmanaged
@@ -1408,10 +1408,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1430,7 +1430,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14);
@@ -1439,38 +1439,38 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged where T10 : unmanaged where T11 : unmanaged where T12 : unmanaged where T13 : unmanaged where T14 : unmanaged
@@ -1480,10 +1480,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1502,7 +1502,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14);
@@ -1511,39 +1511,39 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <param name="value15">输出值 15</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
-        /// <typeparam name="T15">值类型 15</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <param name="value15">Output value 15</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
+        /// <typeparam name="T15">Unmanaged type 15</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14, out T15 value15)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged where T10 : unmanaged where T11 : unmanaged where T12 : unmanaged where T13 : unmanaged where T14 : unmanaged where T15 : unmanaged
@@ -1554,10 +1554,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1577,7 +1577,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14, out value15);
@@ -1586,40 +1586,40 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <param name="value15">输出值 15</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
-        /// <typeparam name="T15">值类型 15</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <param name="value15">Output value 15</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
+        /// <typeparam name="T15">Unmanaged type 15</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14, out T15 value15)
             where T1 : unmanaged where T2 : unmanaged where T3 : unmanaged where T4 : unmanaged where T5 : unmanaged where T6 : unmanaged where T7 : unmanaged where T8 : unmanaged where T9 : unmanaged where T10 : unmanaged where T11 : unmanaged where T12 : unmanaged where T13 : unmanaged where T14 : unmanaged where T15 : unmanaged
@@ -1629,10 +1629,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1652,7 +1652,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14, out value15);
@@ -1662,10 +1662,10 @@ namespace LuminPack.Core
 
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1>(out T1 value1)
         {
@@ -1674,26 +1674,26 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 Unsafe.SkipInit(out value1);
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
             }
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1>(ref int index, out T1 value1)
         {
@@ -1702,27 +1702,27 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 Unsafe.SkipInit(out value1);
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
             }
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2>(out T1 value1, out T2 value2)
         {
@@ -1731,16 +1731,16 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2>>());
                 view.Deconstruct(out value1, out value2);
@@ -1748,13 +1748,13 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2>(ref int index, out T1 value1, out T2 value2)
         {
@@ -1763,16 +1763,16 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2>>());
                 view.Deconstruct(out value1, out value2);
@@ -1780,14 +1780,14 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3>(out T1 value1, out T2 value2, out T3 value3)
         {
@@ -1796,17 +1796,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3>>());
                 view.Deconstruct(out value1, out value2, out value3);
@@ -1814,15 +1814,15 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3>(ref int index, out T1 value1, out T2 value2, out T3 value3)
         {
@@ -1831,17 +1831,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3>>());
                 view.Deconstruct(out value1, out value2, out value3);
@@ -1849,16 +1849,16 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4>(out T1 value1, out T2 value2, out T3 value3, out T4 value4)
         {
@@ -1867,10 +1867,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1878,7 +1878,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4);
@@ -1886,17 +1886,17 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4)
         {
@@ -1905,10 +1905,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1916,7 +1916,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4);
@@ -1924,18 +1924,18 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5)
         {
@@ -1944,10 +1944,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1956,7 +1956,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5);
@@ -1964,19 +1964,19 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5)
         {
@@ -1985,10 +1985,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -1997,7 +1997,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5);
@@ -2005,20 +2005,20 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6)
         {
@@ -2027,10 +2027,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2040,7 +2040,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6);
@@ -2048,21 +2048,21 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6)
         {
@@ -2071,10 +2071,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2084,7 +2084,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6);
@@ -2092,22 +2092,22 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7)
         {
@@ -2116,10 +2116,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2130,7 +2130,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7);
@@ -2138,23 +2138,23 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7)
         {
@@ -2163,10 +2163,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2177,7 +2177,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7);
@@ -2185,24 +2185,24 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8)
         {
@@ -2211,10 +2211,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2226,7 +2226,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8);
@@ -2234,25 +2234,25 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8)
         {
@@ -2261,10 +2261,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2276,7 +2276,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8);
@@ -2284,26 +2284,26 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9)
         {
@@ -2312,10 +2312,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2328,7 +2328,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9);
@@ -2336,27 +2336,27 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9)
         {
@@ -2365,10 +2365,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2381,7 +2381,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9);
@@ -2389,28 +2389,28 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10)
         {
@@ -2419,10 +2419,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2436,7 +2436,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10);
@@ -2444,29 +2444,29 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10)
         {
@@ -2475,10 +2475,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2492,7 +2492,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10);
@@ -2500,30 +2500,30 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11)
         {
@@ -2532,10 +2532,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2550,7 +2550,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11);
@@ -2558,31 +2558,31 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11)
         {
@@ -2591,10 +2591,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2609,7 +2609,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11);
@@ -2617,32 +2617,32 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12)
         {
@@ -2651,10 +2651,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2670,7 +2670,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12);
@@ -2678,33 +2678,33 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12)
         {
@@ -2713,10 +2713,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2732,7 +2732,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12);
@@ -2740,34 +2740,34 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13)
         {
@@ -2776,10 +2776,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2796,7 +2796,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13);
@@ -2804,35 +2804,35 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13)
         {
@@ -2841,10 +2841,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2861,7 +2861,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13);
@@ -2869,36 +2869,36 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14)
         {
@@ -2907,10 +2907,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2928,7 +2928,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14);
@@ -2936,37 +2936,37 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14)
         {
@@ -2975,10 +2975,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -2996,7 +2996,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14);
@@ -3004,38 +3004,38 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <param name="value15">输出值 15</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
-        /// <typeparam name="T15">值类型 15</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <param name="value15">Output value 15</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
+        /// <typeparam name="T15">Unmanaged type 15</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14, out T15 value15)
         {
@@ -3044,10 +3044,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3066,7 +3066,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14, out value15);
@@ -3074,39 +3074,39 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <param name="value15">输出值 15</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
-        /// <typeparam name="T15">值类型 15</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <param name="value15">Output value 15</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
+        /// <typeparam name="T15">Unmanaged type 15</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14, out T15 value15)
         {
@@ -3115,10 +3115,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3137,7 +3137,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14, out value15);
@@ -3146,11 +3146,11 @@ namespace LuminPack.Core
 
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1>(out T1 value1)
         {
@@ -3160,16 +3160,16 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 return Unsafe.SizeOf<T1>();
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 Unsafe.SkipInit(out value1);
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
                 return Unsafe.SizeOf<T1>();
@@ -3177,12 +3177,12 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1>(ref int index, out T1 value1)
         {
@@ -3191,16 +3191,16 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 return Unsafe.SizeOf<T1>();
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 Unsafe.SkipInit(out value1);
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
                 return Unsafe.SizeOf<T1>();
@@ -3208,13 +3208,13 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2>(out T1 value1, out T2 value2)
         {
@@ -3224,17 +3224,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>();
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2>>());
                 view.Deconstruct(out value1, out value2);
@@ -3243,14 +3243,14 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2>(ref int index, out T1 value1, out T2 value2)
         {
@@ -3259,17 +3259,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 return Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>();
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2>>());
                 view.Deconstruct(out value1, out value2);
@@ -3278,15 +3278,15 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3>(out T1 value1, out T2 value2, out T3 value3)
         {
@@ -3296,10 +3296,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3307,7 +3307,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3>>());
                 view.Deconstruct(out value1, out value2, out value3);
@@ -3316,16 +3316,16 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3>(ref int index, out T1 value1, out T2 value2, out T3 value3)
         {
@@ -3334,10 +3334,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3345,7 +3345,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3>>());
                 view.Deconstruct(out value1, out value2, out value3);
@@ -3354,17 +3354,17 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4>(out T1 value1, out T2 value2, out T3 value3, out T4 value4)
         {
@@ -3374,10 +3374,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3386,7 +3386,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4);
@@ -3395,18 +3395,18 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4)
         {
@@ -3415,10 +3415,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3427,7 +3427,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4);
@@ -3436,19 +3436,19 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5)
         {
@@ -3458,10 +3458,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3471,7 +3471,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5);
@@ -3480,20 +3480,20 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5)
         {
@@ -3502,10 +3502,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3515,7 +3515,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5);
@@ -3524,21 +3524,21 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6)
         {
@@ -3548,10 +3548,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3562,7 +3562,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6);
@@ -3571,22 +3571,22 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6)
         {
@@ -3595,10 +3595,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3609,7 +3609,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6);
@@ -3618,23 +3618,23 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7)
         {
@@ -3644,10 +3644,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3659,7 +3659,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7);
@@ -3668,24 +3668,24 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7)
         {
@@ -3694,10 +3694,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3709,7 +3709,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7);
@@ -3718,25 +3718,25 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8)
         {
@@ -3746,10 +3746,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3762,7 +3762,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8);
@@ -3771,26 +3771,26 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8)
         {
@@ -3799,10 +3799,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3815,7 +3815,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8);
@@ -3824,27 +3824,27 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9)
         {
@@ -3854,10 +3854,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3871,7 +3871,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9);
@@ -3880,28 +3880,28 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9)
         {
@@ -3910,10 +3910,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3927,7 +3927,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9);
@@ -3936,29 +3936,29 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10)
         {
@@ -3968,10 +3968,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -3986,7 +3986,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10);
@@ -3995,30 +3995,30 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10)
         {
@@ -4027,10 +4027,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -4045,7 +4045,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10);
@@ -4054,31 +4054,31 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11)
         {
@@ -4088,10 +4088,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -4107,7 +4107,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11);
@@ -4116,32 +4116,32 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11)
         {
@@ -4150,10 +4150,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -4169,7 +4169,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11);
@@ -4178,33 +4178,33 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12)
         {
@@ -4214,10 +4214,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -4234,7 +4234,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12);
@@ -4243,34 +4243,34 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12)
         {
@@ -4279,10 +4279,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -4299,7 +4299,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12);
@@ -4308,35 +4308,35 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13)
         {
@@ -4346,10 +4346,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -4367,7 +4367,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13);
@@ -4376,36 +4376,36 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13)
         {
@@ -4414,10 +4414,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -4435,7 +4435,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13);
@@ -4444,37 +4444,37 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14)
         {
@@ -4484,10 +4484,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -4506,7 +4506,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14);
@@ -4515,38 +4515,38 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14)
         {
@@ -4555,10 +4555,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -4577,7 +4577,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14);
@@ -4586,39 +4586,39 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <param name="value15">输出值 15</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
-        /// <typeparam name="T15">值类型 15</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <param name="value15">Output value 15</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
+        /// <typeparam name="T15">Unmanaged type 15</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14, out T15 value15)
         {
@@ -4628,10 +4628,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -4651,7 +4651,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14, out value15);
@@ -4660,40 +4660,40 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <param name="value15">输出值 15</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
-        /// <typeparam name="T15">值类型 15</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <param name="value15">Output value 15</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
+        /// <typeparam name="T15">Unmanaged type 15</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14, out T15 value15)
         {
@@ -4702,10 +4702,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -4725,7 +4725,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14, out value15);
@@ -4735,10 +4735,10 @@ namespace LuminPack.Core
 
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1>(out T1 value1)
         {
@@ -4747,26 +4747,26 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 Unsafe.SkipInit(out value1);
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
             }
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1>(ref int index, out T1 value1)
         {
@@ -4775,27 +4775,27 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 Unsafe.SkipInit(out value1);
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
             }
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2>(out T1 value1, out T2 value2)
         {
@@ -4804,16 +4804,16 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2>>());
                 view.Deconstruct(out value1, out value2);
@@ -4821,13 +4821,13 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2>(ref int index, out T1 value1, out T2 value2)
         {
@@ -4836,16 +4836,16 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2>>());
                 view.Deconstruct(out value1, out value2);
@@ -4853,14 +4853,14 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3>(out T1 value1, out T2 value2, out T3 value3)
         {
@@ -4869,17 +4869,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3>>());
                 view.Deconstruct(out value1, out value2, out value3);
@@ -4887,15 +4887,15 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3>(ref int index, out T1 value1, out T2 value2, out T3 value3)
         {
@@ -4904,17 +4904,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3>>());
                 view.Deconstruct(out value1, out value2, out value3);
@@ -4922,16 +4922,16 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4>(out T1 value1, out T2 value2, out T3 value3, out T4 value4)
         {
@@ -4940,10 +4940,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -4951,7 +4951,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4);
@@ -4959,17 +4959,17 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4)
         {
@@ -4978,10 +4978,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -4989,7 +4989,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4);
@@ -4997,18 +4997,18 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5)
         {
@@ -5017,10 +5017,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5029,7 +5029,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5);
@@ -5037,19 +5037,19 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5)
         {
@@ -5058,10 +5058,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5070,7 +5070,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5);
@@ -5078,20 +5078,20 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6)
         {
@@ -5100,10 +5100,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5113,7 +5113,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6);
@@ -5121,21 +5121,21 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6)
         {
@@ -5144,10 +5144,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5157,7 +5157,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6);
@@ -5165,22 +5165,22 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7)
         {
@@ -5189,10 +5189,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5203,7 +5203,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7);
@@ -5211,23 +5211,23 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7)
         {
@@ -5236,10 +5236,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5250,7 +5250,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7);
@@ -5258,24 +5258,24 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8)
         {
@@ -5284,10 +5284,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5299,7 +5299,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8);
@@ -5307,25 +5307,25 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8)
         {
@@ -5334,10 +5334,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5349,7 +5349,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8);
@@ -5357,26 +5357,26 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9)
         {
@@ -5385,10 +5385,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5401,7 +5401,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9);
@@ -5409,27 +5409,27 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9)
         {
@@ -5438,10 +5438,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5454,7 +5454,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9);
@@ -5462,28 +5462,28 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10)
         {
@@ -5492,10 +5492,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5509,7 +5509,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10);
@@ -5517,29 +5517,29 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10)
         {
@@ -5548,10 +5548,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5565,7 +5565,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10);
@@ -5573,30 +5573,30 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11)
         {
@@ -5605,10 +5605,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5623,7 +5623,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11);
@@ -5631,31 +5631,31 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11)
         {
@@ -5664,10 +5664,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5682,7 +5682,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11);
@@ -5690,32 +5690,32 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12)
         {
@@ -5724,10 +5724,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5743,7 +5743,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12);
@@ -5751,33 +5751,33 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12)
         {
@@ -5786,10 +5786,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5805,7 +5805,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12);
@@ -5813,34 +5813,34 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13)
         {
@@ -5849,10 +5849,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5869,7 +5869,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13);
@@ -5877,35 +5877,35 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13)
         {
@@ -5914,10 +5914,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -5934,7 +5934,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13);
@@ -5942,36 +5942,36 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14)
         {
@@ -5980,10 +5980,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -6001,7 +6001,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14);
@@ -6009,37 +6009,37 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14)
         {
@@ -6048,10 +6048,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -6069,7 +6069,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14);
@@ -6077,38 +6077,38 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <param name="value15">输出值 15</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
-        /// <typeparam name="T15">值类型 15</typeparam>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <param name="value15">Output value 15</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
+        /// <typeparam name="T15">Unmanaged type 15</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14, out T15 value15)
         {
@@ -6117,10 +6117,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -6139,7 +6139,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14, out value15);
@@ -6147,39 +6147,39 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <param name="value2">输出值 2</param>
-        /// <param name="value3">输出值 3</param>
-        /// <param name="value4">输出值 4</param>
-        /// <param name="value5">输出值 5</param>
-        /// <param name="value6">输出值 6</param>
-        /// <param name="value7">输出值 7</param>
-        /// <param name="value8">输出值 8</param>
-        /// <param name="value9">输出值 9</param>
-        /// <param name="value10">输出值 10</param>
-        /// <param name="value11">输出值 11</param>
-        /// <param name="value12">输出值 12</param>
-        /// <param name="value13">输出值 13</param>
-        /// <param name="value14">输出值 14</param>
-        /// <param name="value15">输出值 15</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <typeparam name="T2">值类型 2</typeparam>
-        /// <typeparam name="T3">值类型 3</typeparam>
-        /// <typeparam name="T4">值类型 4</typeparam>
-        /// <typeparam name="T5">值类型 5</typeparam>
-        /// <typeparam name="T6">值类型 6</typeparam>
-        /// <typeparam name="T7">值类型 7</typeparam>
-        /// <typeparam name="T8">值类型 8</typeparam>
-        /// <typeparam name="T9">值类型 9</typeparam>
-        /// <typeparam name="T10">值类型 10</typeparam>
-        /// <typeparam name="T11">值类型 11</typeparam>
-        /// <typeparam name="T12">值类型 12</typeparam>
-        /// <typeparam name="T13">值类型 13</typeparam>
-        /// <typeparam name="T14">值类型 14</typeparam>
-        /// <typeparam name="T15">值类型 15</typeparam>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <param name="value2">Output value 2</param>
+        /// <param name="value3">Output value 3</param>
+        /// <param name="value4">Output value 4</param>
+        /// <param name="value5">Output value 5</param>
+        /// <param name="value6">Output value 6</param>
+        /// <param name="value7">Output value 7</param>
+        /// <param name="value8">Output value 8</param>
+        /// <param name="value9">Output value 9</param>
+        /// <param name="value10">Output value 10</param>
+        /// <param name="value11">Output value 11</param>
+        /// <param name="value12">Output value 12</param>
+        /// <param name="value13">Output value 13</param>
+        /// <param name="value14">Output value 14</param>
+        /// <param name="value15">Output value 15</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <typeparam name="T2">Unmanaged type 2</typeparam>
+        /// <typeparam name="T3">Unmanaged type 3</typeparam>
+        /// <typeparam name="T4">Unmanaged type 4</typeparam>
+        /// <typeparam name="T5">Unmanaged type 5</typeparam>
+        /// <typeparam name="T6">Unmanaged type 6</typeparam>
+        /// <typeparam name="T7">Unmanaged type 7</typeparam>
+        /// <typeparam name="T8">Unmanaged type 8</typeparam>
+        /// <typeparam name="T9">Unmanaged type 9</typeparam>
+        /// <typeparam name="T10">Unmanaged type 10</typeparam>
+        /// <typeparam name="T11">Unmanaged type 11</typeparam>
+        /// <typeparam name="T12">Unmanaged type 12</typeparam>
+        /// <typeparam name="T13">Unmanaged type 13</typeparam>
+        /// <typeparam name="T14">Unmanaged type 14</typeparam>
+        /// <typeparam name="T15">Unmanaged type 15</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedWithoutSizeReturn<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(ref int index, out T1 value1, out T2 value2, out T3 value3, out T4 value4, out T5 value5, out T6 value6, out T7 value7, out T8 value8, out T9 value9, out T10 value10, out T11 value11, out T12 value12, out T13 value13, out T14 value14, out T15 value15)
         {
@@ -6188,10 +6188,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 value2 = Unsafe.ReadUnaligned<T2>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>()));
                 value3 = Unsafe.ReadUnaligned<T3>(ref Unsafe.Add(ref spanRef, Unsafe.SizeOf<T1>() + Unsafe.SizeOf<T2>()));
@@ -6210,7 +6210,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> view = default;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>>());
                 view.Deconstruct(out value1, out value2, out value3, out value4, out value5, out value6, out value7, out value8, out value9, out value10, out value11, out value12, out value13, out value14, out value15);

@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.IO;
 using LuminPack.Utility;
 
 namespace LuminPackUnitTest;
@@ -9,6 +8,8 @@ namespace LuminPackUnitTest;
 /// </summary>
 internal static class CompressionSafetyPerfTest
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(LargeWindowMaintainsCompressionAndRoundTrips),
@@ -27,6 +28,7 @@ internal static class CompressionSafetyPerfTest
             ImplausibleOutputIsRejectedBeforeBufferGrowth);
     }
 
+    /// <summary>Verifies large window maintains compression and round trips.</summary>
     private static void LargeWindowMaintainsCompressionAndRoundTrips()
     {
         // Short, locally repeated records force the matcher to keep scanning
@@ -49,6 +51,7 @@ internal static class CompressionSafetyPerfTest
             "Large-window compression round-trip changed the payload.");
     }
 
+    /// <summary>Verifies aliased writer round trips without overwriting input.</summary>
     private static void AliasedWriterRoundTripsWithoutOverwritingInput()
     {
         byte[] payload = BuildLargeWindowPayload(96 * 1024);
@@ -65,6 +68,7 @@ internal static class CompressionSafetyPerfTest
             "Using the same LuminBufferWriter as source and destination corrupted the payload.");
     }
 
+    /// <summary>Verifies every truncated prefix is rejected.</summary>
     private static void EveryTruncatedPrefixIsRejected()
     {
         byte[] payload = BuildPseudoRandomPayload(257);
@@ -87,6 +91,7 @@ internal static class CompressionSafetyPerfTest
             "The complete frame round-trip changed the payload.");
     }
 
+    /// <summary>Verifies declared output mismatch is rejected.</summary>
     private static void DeclaredOutputMismatchIsRejected()
     {
         byte[] payload = BuildPseudoRandomPayload(511);
@@ -102,6 +107,7 @@ internal static class CompressionSafetyPerfTest
         ExpectInvalidFrame(tooShort, "A frame that produced more bytes than declared was accepted.");
     }
 
+    /// <summary>Verifies empty frame with trailing body is rejected.</summary>
     private static void EmptyFrameWithTrailingBodyIsRejected()
     {
         byte[] frame =
@@ -114,6 +120,7 @@ internal static class CompressionSafetyPerfTest
         ExpectInvalidFrame(frame, "An empty frame with a trailing body byte was accepted.");
     }
 
+    /// <summary>Verifies extended length cannot exceed declared output.</summary>
     private static void ExtendedLengthCannotExceedDeclaredOutput()
     {
         byte[] frame = new byte[8 + 1 + 64];
@@ -129,6 +136,7 @@ internal static class CompressionSafetyPerfTest
             "A literal-length chain larger than the declared output was accepted.");
     }
 
+    /// <summary>Verifies implausible output is rejected before buffer growth.</summary>
     private static void ImplausibleOutputIsRejectedBeforeBufferGrowth()
     {
         byte[] frame =
@@ -148,6 +156,9 @@ internal static class CompressionSafetyPerfTest
             "The destination grew before the implausible output length was rejected.");
     }
 
+    /// <summary>Compresses the input using the LuminPack compression format.</summary>
+    /// <param name="payload">The payload used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static byte[] Compress(byte[] payload)
     {
         using var source = CreateWriter(payload);
@@ -156,6 +167,9 @@ internal static class CompressionSafetyPerfTest
         return destination.GetSpan().ToArray();
     }
 
+    /// <summary>Verifies expect invalid frame.</summary>
+    /// <param name="frame">The frame used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void ExpectInvalidFrame(byte[] frame, string message)
     {
         using var source = CreateWriter(frame);
@@ -163,6 +177,9 @@ internal static class CompressionSafetyPerfTest
         ExpectInvalidData(() => source.DecompressTo(destination), message);
     }
 
+    /// <summary>Verifies expect invalid data.</summary>
+    /// <param name="action">The action used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void ExpectInvalidData(Action action, string message)
     {
         try
@@ -177,6 +194,9 @@ internal static class CompressionSafetyPerfTest
         throw new InvalidOperationException(message);
     }
 
+    /// <summary>Verifies build large window payload.</summary>
+    /// <param name="length">The number of bytes or elements to process.</param>
+    /// <returns>The result of the operation.</returns>
     private static byte[] BuildLargeWindowPayload(int length)
     {
         const int RecordSize = 32;
@@ -202,6 +222,9 @@ internal static class CompressionSafetyPerfTest
         return payload;
     }
 
+    /// <summary>Verifies build pseudo random payload.</summary>
+    /// <param name="length">The number of bytes or elements to process.</param>
+    /// <returns>The result of the operation.</returns>
     private static byte[] BuildPseudoRandomPayload(int length)
     {
         byte[] payload = new byte[length];
@@ -217,6 +240,9 @@ internal static class CompressionSafetyPerfTest
         return payload;
     }
 
+    /// <summary>Creates writer from the supplied input.</summary>
+    /// <param name="payload">The payload used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static LuminBufferWriter CreateWriter(ReadOnlySpan<byte> payload)
     {
         var writer = new LuminBufferWriter(true);
@@ -226,6 +252,9 @@ internal static class CompressionSafetyPerfTest
         return writer;
     }
 
+    /// <summary>Verifies publish length.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="length">The number of bytes or elements to process.</param>
     private static void PublishLength(LuminBufferWriter writer, int length)
     {
         var method = typeof(LuminBufferWriter).GetMethod(
@@ -236,6 +265,10 @@ internal static class CompressionSafetyPerfTest
         method.Invoke(writer, [length]);
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -249,6 +282,9 @@ internal static class CompressionSafetyPerfTest
         }
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException(message);

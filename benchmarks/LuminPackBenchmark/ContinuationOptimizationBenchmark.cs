@@ -7,6 +7,7 @@ using LuminPack.Utility;
 
 namespace LuminPackBenchmark;
 
+/// <summary>Provides continuation optimization benchmark functionality.</summary>
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 2, warmupCount: 8, iterationCount: 10)]
 [MemoryDiagnoser]
 public class ContinuationOptimizationBenchmark
@@ -17,6 +18,7 @@ public class ContinuationOptimizationBenchmark
     private LuminBufferWriter _writer = null!;
     private static readonly LuminPackSerializerOption Strict = new() { ValidateJsonSyntax = true };
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -31,15 +33,27 @@ public class ContinuationOptimizationBenchmark
         Console.WriteLine($"Full graph: binary={_binary.Length}, JSON={_json.Length}");
     }
 
+    /// <summary>Measures cleanup for the configured benchmark input.</summary>
     [GlobalCleanup] public void Cleanup() => LuminBufferWriterPool.Return(_writer);
+    /// <summary>Measures binary write for the configured benchmark input.</summary>
     [Benchmark] public void BinaryWrite() => LuminPackSerializer.Serialize(_data, _writer);
+    /// <summary>Measures binary read for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData BinaryRead() => LuminPackSerializer.Deserialize<CharacterSaveData>(_binary);
+    /// <summary>Measures json write for the configured benchmark input.</summary>
     [Benchmark] public void JsonWrite() => LuminPackSerializer.SerializeJson(_data, _writer);
+    /// <summary>Measures json write string for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public string JsonWriteString() => LuminPackSerializer.SerializeJson(_data);
+    /// <summary>Measures json read for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData JsonRead() => LuminPackSerializer.DeserializeJson<CharacterSaveData>(_json);
+    /// <summary>Measures json read strict for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData JsonReadStrict() => LuminPackSerializer.DeserializeJson<CharacterSaveData>(_json, Strict);
 }
 
+/// <summary>Provides medium string optimization benchmark functionality.</summary>
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 2, warmupCount: 8, iterationCount: 10)]
 [MemoryDiagnoser]
 public class MediumStringOptimizationBenchmark
@@ -49,6 +63,7 @@ public class MediumStringOptimizationBenchmark
     private byte[] _json = null!;
     private LuminBufferWriter _writer = null!;
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -67,9 +82,16 @@ public class MediumStringOptimizationBenchmark
         Console.WriteLine($"Medium strings: binary={_binary.Length}, JSON={_json.Length}");
     }
 
+    /// <summary>Measures cleanup for the configured benchmark input.</summary>
     [GlobalCleanup] public void Cleanup() => LuminBufferWriterPool.Return(_writer);
+    /// <summary>Measures binary write for the configured benchmark input.</summary>
     [Benchmark] public void BinaryWrite() => LuminPackSerializer.Serialize(_data, _writer);
+    /// <summary>Measures binary read for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public BinaryStringBatch BinaryRead() => LuminPackSerializer.Deserialize<BinaryStringBatch>(_binary);
+    /// <summary>Measures json write for the configured benchmark input.</summary>
     [Benchmark] public void JsonWrite() => LuminPackSerializer.SerializeJson(_data, _writer);
+    /// <summary>Measures json read for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public BinaryStringBatch JsonRead() => LuminPackSerializer.DeserializeJson<BinaryStringBatch>(_json);
 }

@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using LuminPack.Code.Core;
@@ -10,12 +9,15 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator;
 
+/// <summary>Provides lumin map source generator functionality.</summary>
 [Generator(LanguageNames.CSharp)]
 public sealed class LuminMapSourceGenerator : IIncrementalGenerator
 {
-    private const string LuminMapToAttr  = "LuminPack.Attribute.LuminMapToAttribute";
+    private const string LuminMapToAttr = "LuminPack.Attribute.LuminMapToAttribute";
     private const string LuminMapperAttr = "LuminPack.Attribute.LuminMapperAttribute";
 
+    /// <summary>Registers the incremental analysis and source production pipeline with Roslyn.</summary>
+    /// <param name="context">The context used for analysis, source production, or initialization.</param>
     public void Initialize(IncrementalGeneratorInitializationContext context)
     {
         var metaProvider = context.ParseOptionsProvider
@@ -23,7 +25,7 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
             .Select((pair, _) =>
             {
                 var (opts, compilation) = pair;
-                var cs   = (CSharpParseOptions)opts;
+                var cs = (CSharpParseOptions)opts;
                 var net8 = cs.PreprocessorSymbolNames.Contains("NET8_0_OR_GREATER");
                 var net9_OR_GREATER = cs.PreprocessorSymbolNames.Contains("NET9_0_OR_GREATER");
                 var allowUnsafe = compilation.Options is CSharpCompilationOptions csharpOptions
@@ -62,7 +64,7 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                 {
                     var code = LuminAutoMapCodeGenerator.GenerateAutoMapperClass(info, meta);
                     if (string.IsNullOrEmpty(code)) return;
-                    spc.AddSource($"{SafeFileName(info.SourceFullName)}Mapper.g.cs", code);
+                    spc.AddSource($"{SafeFileName(info.SourceFullName)}Mapper.g.cs", GeneratedSourceDocumentation.Complete(code, meta.ParseOptions));
                 }
                 catch (Exception ex)
                 {
@@ -99,7 +101,7 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                 {
                     var code = LuminMapCodeGenerator.GenerateMapperImpl(info, meta);
                     if (string.IsNullOrEmpty(code)) return;
-                    spc.AddSource($"{SafeFileName(info.ClassFullName)}.Mapper.g.cs", code);
+                    spc.AddSource($"{SafeFileName(info.ClassFullName)}.Mapper.g.cs", GeneratedSourceDocumentation.Complete(code, meta.ParseOptions));
                 }
                 catch (Exception ex)
                 {
@@ -110,7 +112,7 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                 }
             });
 
-        var allAuto   = autoMapDeclarations.Collect();
+        var allAuto = autoMapDeclarations.Collect();
         var allManual = manualMapDeclarations.Collect();
 
         context.RegisterSourceOutput(
@@ -129,8 +131,8 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                 if (!CompilationTypeAnalysisCache.GetOrCreate(compilation).UsesLuminPack)
                     return;
 
-                // 没有 [LuminPackable] 类型且没有任何 Mapper 声明，不生成
-                bool hasMappers  = !autoInfos.IsEmpty || !manualInfos.IsEmpty;
+                // Skip emission when there are no packable types or mapper declarations.
+                bool hasMappers = !autoInfos.IsEmpty || !manualInfos.IsEmpty;
 
                 try
                 {
@@ -156,14 +158,14 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                             meta,
                             TypeMetaChecker.IsUnityProject(compilation));
                         if (!string.IsNullOrEmpty(customCode))
-                            spc.AddSource("LuminPackCustomFormatterRegistry.g.cs", customCode);
+                            spc.AddSource("LuminPackCustomFormatterRegistry.g.cs", GeneratedSourceDocumentation.Complete(customCode, meta.ParseOptions));
                     }
 
                     if (hasMappers)
                     {
                         var code = GenerateMappersRegistry(autoInfos!, manualInfos, compilation, meta);
                         if (!string.IsNullOrEmpty(code))
-                            spc.AddSource("GeneratedMappersRegistry.g.cs", code);
+                            spc.AddSource("GeneratedMappersRegistry.g.cs", GeneratedSourceDocumentation.Complete(code, meta.ParseOptions));
                     }
 
                     LuminPackGenerationTier propertyTier = mode;
@@ -176,7 +178,7 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
 
                     var formatterSupport = LuminPackExtensionGenerator.GenerateSerializerInvocationSupport(compilation, meta, reachability);
                     if (!string.IsNullOrEmpty(formatterSupport))
-                        spc.AddSource("LuminPack.SerializerInvocation.Extension.g.cs", formatterSupport);
+                        spc.AddSource("LuminPack.SerializerInvocation.Extension.g.cs", GeneratedSourceDocumentation.Complete(formatterSupport, meta.ParseOptions));
 
                     var serializer = LuminPackSerializerGenerator.GenerateSerializerClass(compilation, meta, reachability);
                     if (!string.IsNullOrEmpty(serializer))
@@ -193,15 +195,21 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
             });
     }
 
+    /// <summary>Builds the mappers registry source from the supplied metadata.</summary>
+    /// <param name="autoInfos">The auto infos used by this operation.</param>
+    /// <param name="manualInfos">The manual infos used by this operation.</param>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="meta">The meta used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string GenerateMappersRegistry(
         System.Collections.Immutable.ImmutableArray<AutoMapSourceInfo> autoInfos,
         System.Collections.Immutable.ImmutableArray<LuminMapperClassInfo> manualInfos,
         Compilation compilation,
         MetaInfo meta)
     {
-        bool   isUnity  = TypeMetaChecker.IsUnityProject(compilation);
-        string asmRaw   = compilation.AssemblyName ?? "Unknown";
-        string asmSafe  = SanitizeId(asmRaw);
+        bool isUnity = TypeMetaChecker.IsUnityProject(compilation);
+        string asmRaw = compilation.AssemblyName ?? "Unknown";
+        string asmSafe = SanitizeId(asmRaw);
 
         string registryFqn = asmSafe == "Unknown"
             ? "global::GeneratedMappersRegistry"
@@ -237,8 +245,8 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
             sb.AppendLine("#if NET5_0_OR_GREATER");
             sb.AppendLine("        [System.Runtime.CompilerServices.ModuleInitializerAttribute]");
             sb.AppendLine("#else");
-            sb.AppendLine("        // 需要手动调用初始化");
-            sb.AppendLine($"        // 请在程序入口调用 {registryFqn}.Initialize()");
+            sb.AppendLine("        // Initialization must be invoked explicitly.");
+            sb.AppendLine($"        // Call from the application entry point: {registryFqn}.Initialize()");
             sb.AppendLine("#endif");
         }
         sb.AppendLine("        public static void Initialize()");
@@ -266,6 +274,10 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
         return sb.ToString();
     }
 
+    /// <summary>Obtains the type with attribute for the supplied input.</summary>
+    /// <param name="context">The context used for analysis, source production, or initialization.</param>
+    /// <param name="metadataName">The metadata name used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static INamedTypeSymbol? GetTypeWithAttribute(
         GeneratorSyntaxContext context,
         string metadataName)
@@ -287,9 +299,15 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
         return null;
     }
 
+    /// <summary>Performs the safe file name step for the current operation.</summary>
+    /// <param name="fqn">The fqn used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string SafeFileName(string fqn)
         => fqn.Replace("global::", "").Replace(".", "_").Replace("<", "_").Replace(">", "_");
 
+    /// <summary>Performs the sanitize id step for the current operation.</summary>
+    /// <param name="name">The name used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string SanitizeId(string name)
     {
         if (string.IsNullOrEmpty(name)) return "Unknown";

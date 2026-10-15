@@ -1,4 +1,3 @@
-using System;
 using System.Text;
 using System.Text.Json;
 using LuminPack;
@@ -7,8 +6,12 @@ using Xunit;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides json fused string scanner test functionality.</summary>
 public class JsonFusedStringScannerTest
 {
+    /// <summary>Verifies escapes controls and truncations agree across scan boundaries.</summary>
+    /// <param name="encoding">The encoding used by this operation.</param>
+    /// <param name="strict">The strict used by this operation.</param>
     [Theory]
     [InlineData(LuminPackStringEncoding.UTF8, false)]
     [InlineData(LuminPackStringEncoding.UTF8, true)]

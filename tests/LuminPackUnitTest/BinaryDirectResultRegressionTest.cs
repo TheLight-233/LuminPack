@@ -2,59 +2,82 @@ using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Code;
 using LuminPack.Core;
-using LuminPack.Generated;
-using LuminPack.Utility;
 
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides binary direct nested model functionality.</summary>
 [LuminPackable]
 public partial class BinaryDirectNestedModel
 {
+    /// <summary>Stores the value.</summary>
     public int Value;
+    /// <summary>Stores the numbers.</summary>
     public List<int>? Numbers;
+    /// <summary>Stores the labels.</summary>
     public Dictionary<int, string>? Labels;
 }
 
+/// <summary>Provides binary direct envelope functionality.</summary>
+/// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
 [LuminPackable]
 public partial class BinaryDirectEnvelope<T>
 {
+    /// <summary>Stores the sequence.</summary>
     public long Sequence;
+    /// <summary>Stores the payload.</summary>
     public T? Payload;
+    /// <summary>Stores the samples.</summary>
     public int[]? Samples;
 }
 
+/// <summary>Provides binary direct root model functionality.</summary>
 [LuminPackable]
 public partial class BinaryDirectRootModel
 {
+    /// <summary>Stores the id.</summary>
     public int Id;
+    /// <summary>Stores the nested.</summary>
     public BinaryDirectNestedModel? Nested;
+    /// <summary>Stores the envelope.</summary>
     public BinaryDirectEnvelope<BinaryDirectNestedModel>? Envelope;
+    /// <summary>Stores the tail.</summary>
     public string? Tail;
 }
 
+/// <summary>Provides binary direct reference element functionality.</summary>
 [LuminPackable]
 public partial class BinaryDirectReferenceElement
 {
+    /// <summary>Stores the value.</summary>
     public int Value;
 }
 
+/// <summary>Provides binary direct reference collection root functionality.</summary>
 [LuminPackable]
 public partial class BinaryDirectReferenceCollectionRoot
 {
+    /// <summary>Stores the items.</summary>
     public List<BinaryDirectReferenceElement?>? Items;
+    /// <summary>Stores the elements.</summary>
     public BinaryDirectReferenceElement?[]? Elements;
 }
 
+/// <summary>Provides binary direct dictionary mutation value functionality.</summary>
 [LuminPackable]
 public partial class BinaryDirectDictionaryMutationValue
 {
+    /// <summary>Stores the mutation trigger.</summary>
     public Lazy<int>? MutationTrigger;
+    /// <summary>Stores the value.</summary>
     public int Value;
 }
 
+/// <summary>Provides binary direct result regression test functionality.</summary>
 internal static class BinaryDirectResultRegressionTest
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(SmallNestedGenericAndFreshCollectionsRoundTrip),
@@ -75,6 +98,7 @@ internal static class BinaryDirectResultRegressionTest
             DictionaryDenseMutationIsRejected);
     }
 
+    /// <summary>Verifies verify dictionary layout regression.</summary>
     public static void VerifyDictionaryLayoutRegression()
     {
         FreshDictionaryBuilderPreservesDictionarySemantics();
@@ -83,21 +107,26 @@ internal static class BinaryDirectResultRegressionTest
         DictionaryDenseMutationIsRejected();
     }
 
+    /// <summary>Verifies small nested generic and fresh collections round trip.</summary>
     private static void SmallNestedGenericAndFreshCollectionsRoundTrip()
     {
         var nested = new BinaryDirectNestedModel
         {
-            Value = 17,Numbers = [1, 2, 3, 5, 8],
+            Value = 17,
+            Numbers = [1, 2, 3, 5, 8],
             Labels = new Dictionary<int, string> { [1] = "one", [2] = "two" }
         };
         var value = new BinaryDirectRootModel
         {
-            Id = 42,Nested = nested,
+            Id = 42,
+            Nested = nested,
             Envelope = new BinaryDirectEnvelope<BinaryDirectNestedModel>
-            {Sequence = 99,
+            {
+                Sequence = 99,
                 Payload = new BinaryDirectNestedModel
                 {
-                    Value = 23,Numbers = [13, 21],
+                    Value = 23,
+                    Numbers = [13, 21],
                     Labels = new Dictionary<int, string> { [3] = "three" }
                 },
                 Samples = [4, 9, 16, 25]
@@ -110,19 +139,22 @@ internal static class BinaryDirectResultRegressionTest
 
         Assert(result is not null && result.Id == 42 && result.Tail == "complete",
             "Small direct-result DTO did not round-trip scalar fields.");
-        Assert(result.Nested is not null && result.Nested.Value == 17 &&result.Nested.Numbers is not null && result.Nested.Numbers.SequenceEqual([1, 2, 3, 5, 8]) &&result.Nested.Labels is not null && result.Nested.Labels[2] == "two",
+        Assert(result.Nested is not null && result.Nested.Value == 17 && result.Nested.Numbers is not null && result.Nested.Numbers.SequenceEqual([1, 2, 3, 5, 8]) && result.Nested.Labels is not null && result.Nested.Labels[2] == "two",
             "named nested direct-result DTO did not round-trip fresh collections.");
-        Assert(result.Envelope is not null && result.Envelope.Sequence == 99 &&result.Envelope.Samples is not null && result.Envelope.Samples.SequenceEqual([4, 9, 16, 25]) &&result.Envelope.Payload is not null && result.Envelope.Payload.Value == 23 &&result.Envelope.Payload.Numbers is not null && result.Envelope.Payload.Numbers.SequenceEqual([13, 21]),
+        Assert(result.Envelope is not null && result.Envelope.Sequence == 99 && result.Envelope.Samples is not null && result.Envelope.Samples.SequenceEqual([4, 9, 16, 25]) && result.Envelope.Payload is not null && result.Envelope.Payload.Value == 23 && result.Envelope.Payload.Numbers is not null && result.Envelope.Payload.Numbers.SequenceEqual([13, 21]),
             "Generic direct-result DTO on fresh unmanaged array did not round-trip.");
     }
 
+    /// <summary>Verifies partially read fresh result is not published.</summary>
     private static void PartiallyReadFreshResultIsNotPublished()
     {
         var payload = LuminPackSerializer.Serialize(new BinaryDirectRootModel
         {
-            Id = 7,Nested = new BinaryDirectNestedModel { Value = 11 },
+            Id = 7,
+            Nested = new BinaryDirectNestedModel { Value = 11 },
             Envelope = new BinaryDirectEnvelope<BinaryDirectNestedModel>
-            {Sequence = 13,
+            {
+                Sequence = 13,
                 Payload = new BinaryDirectNestedModel { Value = 17 },
                 Samples = [19, 23]
             },
@@ -150,6 +182,7 @@ internal static class BinaryDirectResultRegressionTest
             "Binary direct-result parsing published a partially initialized object after failure.");
     }
 
+    /// <summary>Verifies array sizeof matches serialized length.</summary>
     private static void ArraySizeofMatchesSerializedLength()
     {
         int[] unmanaged = [1, 2, 3, 5, 8];
@@ -161,6 +194,7 @@ internal static class BinaryDirectResultRegressionTest
             "Reference array CalculateOffset did not match serialized length.");
     }
 
+    /// <summary>Verifies null class elements consume their wire header.</summary>
     private static void NullClassElementsConsumeTheirWireHeader()
     {
         var value = new BinaryDirectReferenceCollectionRoot
@@ -182,6 +216,7 @@ internal static class BinaryDirectResultRegressionTest
             "A null class element corrupted the following generated array element.");
     }
 
+    /// <summary>Verifies unmanaged dictionary pairs remain compact.</summary>
     private static void UnmanagedDictionaryPairsRemainCompact()
     {
         var byteLong = new Dictionary<byte, long> { [7] = 0x0102030405060708L };
@@ -199,6 +234,7 @@ internal static class BinaryDirectResultRegressionTest
             "Dictionary<long, byte> introduced trailing padding in an unmanaged key/value pair.");
     }
 
+    /// <summary>Verifies dictionary architecture fallbacks round trip.</summary>
     private static void DictionaryArchitectureFallbacksRoundTrip()
     {
         var value = new Dictionary<int, long>
@@ -241,6 +277,7 @@ internal static class BinaryDirectResultRegressionTest
             "The architecture-safe JSON Dictionary path did not round-trip.");
     }
 
+    /// <summary>Verifies dictionary dense mutation is rejected.</summary>
     private static void DictionaryDenseMutationIsRejected()
     {
         if (IntPtr.Size != 8)
@@ -275,6 +312,9 @@ internal static class BinaryDirectResultRegressionTest
             "Dense Dictionary serialization did not reject Clear after the version snapshot.");
     }
 
+    /// <summary>Verifies assert dictionary mutation throws.</summary>
+    /// <param name="dictionary">The dictionary used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void AssertDictionaryMutationThrows(
         Dictionary<int, BinaryDirectDictionaryMutationValue> dictionary,
         string message)
@@ -294,6 +334,7 @@ internal static class BinaryDirectResultRegressionTest
         Assert(threw, message);
     }
 
+    /// <summary>Verifies fresh dictionary builder preserves dictionary semantics.</summary>
     private static void FreshDictionaryBuilderPreservesDictionarySemantics()
     {
         var value = new Dictionary<int, string>();
@@ -368,6 +409,10 @@ internal static class BinaryDirectResultRegressionTest
             "The fresh Dictionary bucket builder did not preserve duplicate-key rejection.");
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -381,6 +426,9 @@ internal static class BinaryDirectResultRegressionTest
         }
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)

@@ -11,6 +11,9 @@ namespace LuminPack.SourceGenerator;
 /// </summary>
 public static class EvaluatorEmitterRegistry
 {
+    /// <summary>Obtains the emitter for the supplied input.</summary>
+    /// <param name="typeName">The C# type name to use in generated source.</param>
+    /// <returns>The result of the operation.</returns>
     public static Action<LuminLocalFieldData, StringBuilder> GetEmitter(string typeName)
     {
         if (typeName.EndsWith("[]", StringComparison.Ordinal))

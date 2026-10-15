@@ -8,8 +8,10 @@ using Xunit;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides generated fixed field write test functionality.</summary>
 public class GeneratedFixedFieldWriteTest
 {
+    /// <summary>Verifies direct field reads preserve an existing root instance.</summary>
     [Fact]
     public void DirectFieldReadsPreserveAnExistingRootInstance()
     {
@@ -24,6 +26,7 @@ public class GeneratedFixedFieldWriteTest
     }
 
 #if DEBUG
+    /// <summary>Verifies truncated fixed group does not publish partial root fields.</summary>
     [Fact]
     public void TruncatedFixedGroupDoesNotPublishPartialRootFields()
     {
@@ -39,6 +42,8 @@ public class GeneratedFixedFieldWriteTest
     }
 #endif
 
+    /// <summary>Verifies mixed widths keep existing wire bytes and offset bounds.</summary>
+    /// <param name="encoding">The encoding used by this operation.</param>
     [Theory]
     [InlineData(LuminPackStringEncoding.UTF8)]
     [InlineData(LuminPackStringEncoding.UTF16)]
@@ -71,6 +76,7 @@ public class GeneratedFixedFieldWriteTest
         }
     }
 
+    /// <summary>Verifies nested arrays and lists keep headers nulls and field offsets.</summary>
     [Fact]
     public void NestedArraysAndListsKeepHeadersNullsAndFieldOffsets()
     {
@@ -96,6 +102,7 @@ public class GeneratedFixedFieldWriteTest
             LuminPackSerializer.Deserialize<FixedPrimitiveWriteContainer>(payload)));
     }
 
+    /// <summary>Verifies large structs and properties keep existing in parameter behavior.</summary>
     [Fact]
     public void LargeStructsAndPropertiesKeepExistingInParameterBehavior()
     {
@@ -108,6 +115,7 @@ public class GeneratedFixedFieldWriteTest
         Assert.Equal(expected, LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<FixedPrimitiveWriteFallback>(expected)));
     }
 
+    /// <summary>Verifies nested fallback blocks advance the collection offset.</summary>
     [Fact]
     public void NestedFallbackBlocksAdvanceTheCollectionOffset()
     {
@@ -136,6 +144,10 @@ public class GeneratedFixedFieldWriteTest
             LuminPackSerializer.Deserialize<FixedPrimitiveFallbackCollection>(payload)));
     }
 
+    /// <summary>Verifies reference write.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="option">The configuration to apply to this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static byte[] ReferenceWrite(FixedPrimitiveWriteModel value, LuminPackSerializerOption option)
     {
         Span<byte> span = new byte[1024];
@@ -151,87 +163,153 @@ public class GeneratedFixedFieldWriteTest
         return writer.GetSpan().ToArray();
     }
 
+    /// <summary>Creates value from the supplied input.</summary>
+    /// <returns>The result of the operation.</returns>
     private static FixedPrimitiveWriteModel CreateValue() => new()
     {
-        Id = -123, Prefix = "prefix_中文", U8 = byte.MaxValue, I8 = sbyte.MinValue, Flag = true,
-        I16 = short.MinValue, U16 = ushort.MaxValue, Character = '\ud800', I32 = int.MinValue,
-        U32 = uint.MaxValue, I64 = long.MinValue, U64 = ulong.MaxValue,
-        F32 = BitConverter.Int32BitsToSingle(unchecked((int)0xFFC01234)), F64 = -0.0,
-        Decimal = new decimal(12345, 0, 0, true, 4), Small = (FixedByteEnum)255,
-        Medium = (FixedUShortEnum)65535, Wide = (FixedULongEnum)ulong.MaxValue,
-        Suffix = "tail_😀", Marker = 12345, End = long.MaxValue
+        Id = -123,
+        Prefix = "prefix_\u4E2D\u6587",
+        U8 = byte.MaxValue,
+        I8 = sbyte.MinValue,
+        Flag = true,
+        I16 = short.MinValue,
+        U16 = ushort.MaxValue,
+        Character = '\ud800',
+        I32 = int.MinValue,
+        U32 = uint.MaxValue,
+        I64 = long.MinValue,
+        U64 = ulong.MaxValue,
+        F32 = BitConverter.Int32BitsToSingle(unchecked((int)0xFFC01234)),
+        F64 = -0.0,
+        Decimal = new decimal(12345, 0, 0, true, 4),
+        Small = (FixedByteEnum)255,
+        Medium = (FixedUShortEnum)65535,
+        Wide = (FixedULongEnum)ulong.MaxValue,
+        Suffix = "tail_😀",
+        Marker = 12345,
+        End = long.MaxValue
     };
 }
 
-public enum FixedByteEnum : byte { Zero }
-public enum FixedUShortEnum : ushort { Zero }
-public enum FixedULongEnum : ulong { Zero }
+/// <summary>Provides fixed byte enum functionality.</summary>
+public enum FixedByteEnum : byte {
+/// <summary>Specifies zero.</summary>
+Zero }
+/// <summary>Provides fixed u short enum functionality.</summary>
+public enum FixedUShortEnum : ushort {
+/// <summary>Specifies zero.</summary>
+Zero }
+/// <summary>Provides fixed u long enum functionality.</summary>
+public enum FixedULongEnum : ulong {
+/// <summary>Specifies zero.</summary>
+Zero }
 
+/// <summary>Provides fixed primitive write model functionality.</summary>
 [LuminPackable]
 public sealed partial class FixedPrimitiveWriteModel
 {
+    /// <summary>Stores the id.</summary>
     public int Id;
+    /// <summary>Stores the prefix.</summary>
     public string Prefix = null!;
+    /// <summary>Stores the u8.</summary>
     public byte U8;
+    /// <summary>Stores the i8.</summary>
     public sbyte I8;
+    /// <summary>Stores the flag.</summary>
     public bool Flag;
+    /// <summary>Stores the i16.</summary>
     public short I16;
+    /// <summary>Stores the u16.</summary>
     public ushort U16;
+    /// <summary>Stores the character.</summary>
     public char Character;
+    /// <summary>Stores the i32.</summary>
     public int I32;
+    /// <summary>Stores the u32.</summary>
     public uint U32;
+    /// <summary>Stores the i64.</summary>
     public long I64;
+    /// <summary>Stores the u64.</summary>
     public ulong U64;
+    /// <summary>Stores the f32.</summary>
     public float F32;
+    /// <summary>Stores the f64.</summary>
     public double F64;
+    /// <summary>Stores the decimal.</summary>
     public decimal Decimal;
+    /// <summary>Stores the small.</summary>
     public FixedByteEnum Small;
+    /// <summary>Stores the medium.</summary>
     public FixedUShortEnum Medium;
+    /// <summary>Stores the wide.</summary>
     public FixedULongEnum Wide;
+    /// <summary>Stores the suffix.</summary>
     public string Suffix = null!;
+    /// <summary>Stores the marker.</summary>
     public int Marker;
+    /// <summary>Stores the end.</summary>
     public long End;
 }
 
+/// <summary>Provides fixed primitive write container functionality.</summary>
 [LuminPackable]
 public sealed partial class FixedPrimitiveWriteContainer
 {
+    /// <summary>Stores the array.</summary>
     public FixedPrimitiveWriteModel[] Array = null!;
+    /// <summary>Stores the list.</summary>
     public List<FixedPrimitiveWriteModel> List = null!;
 }
 
+/// <summary>Provides fixed primitive guard model functionality.</summary>
 [LuminPackable]
 public sealed partial class FixedPrimitiveGuardModel
 {
+    /// <summary>Stores the first.</summary>
     public int First;
+    /// <summary>Stores the second.</summary>
     public ulong Second;
+    /// <summary>Stores the third.</summary>
     public decimal Third;
+    /// <summary>Stores the fourth.</summary>
     public bool Fourth;
 }
 
+/// <summary>Provides fixed primitive write large value functionality.</summary>
 [StructLayout(LayoutKind.Sequential, Size = 256)]
 public struct FixedPrimitiveWriteLargeValue
 {
+    /// <summary>Stores the value.</summary>
     public long Value;
 }
 
+/// <summary>Provides fixed primitive write fallback functionality.</summary>
 [LuminPackable]
 public sealed partial class FixedPrimitiveWriteFallback
 {
+    /// <summary>Stores the id.</summary>
     public int Id;
+    /// <summary>Stores the large.</summary>
     public FixedPrimitiveWriteLargeValue Large;
+    /// <summary>Gets or sets the value.</summary>
     public long Value { get; set; }
 }
 
+/// <summary>Provides fixed primitive fallback element functionality.</summary>
 [LuminPackable]
 public sealed partial class FixedPrimitiveFallbackElement
 {
+    /// <summary>Stores the child.</summary>
     public FixedPrimitiveWriteFallback Child = null!;
+    /// <summary>Stores the trailer.</summary>
     public long Trailer;
 }
 
+/// <summary>Provides fixed primitive fallback collection functionality.</summary>
 [LuminPackable]
 public sealed partial class FixedPrimitiveFallbackCollection
 {
+    /// <summary>Stores the items.</summary>
     public List<FixedPrimitiveFallbackElement> Items = null!;
 }

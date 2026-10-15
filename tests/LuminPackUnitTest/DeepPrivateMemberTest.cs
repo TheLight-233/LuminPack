@@ -1,70 +1,85 @@
-using System;
-using System.Collections.Generic;
 using LuminPack;
 using LuminPack.Attribute;
 
 namespace LuminPackUnitTest
 {
     // ─────────────────────────────────────────────────────────────────────────
-    //  多层嵌套 private 成员链回归测试
+    //  Regression coverage for deeply nested private member chains.
     //
     //  DeepRoot ->(private) DeepLevel1 ->(private) DeepLevel2 ->(private) DeepLevel3
     //
-    //  每一层都通过 [LuminPackInclude] 要求序列化 private 成员。改动前私有成员由
-    //  [UnsafeAccessor] + in 参数访问：对引用类型它返回的 ref 不指向真实字段，表现为读到垃圾值、
-    //  写入丢失，反复写入最终触发 AccessViolation（并非层级上限所致）；改动后所有私有访问都经
-    //  Local 镜像派发，不再区分引用类型与值类型。
+    //  Every level includes private members through LuminPackInclude. Previously, those members used
+    //  For reference types, UnsafeAccessor with an in parameter returns a reference that does not identify the actual field, causing invalid reads,
+    //  Writes can be lost and eventually cause access violations; all private member access now uses
+    //  Local mirror dispatch for both reference types and unmanaged types.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>Provides deep root functionality.</summary>
     [LuminPackable]
     public class DeepRoot
     {
+        /// <summary>Stores the root value.</summary>
         public int RootValue;
 
         [LuminPackInclude]
         private DeepLevel1 _level1 = new();
 
+        /// <summary>Gets the level1.</summary>
         public DeepLevel1 Level1 => _level1;
     }
 
     // Each level is itself [LuminPackable]: the JSON writer dispatches a nested object through its own
     // formatter rather than inlining it, so a level without one would fail on the JSON path.
+    /// <summary>Provides deep level1 functionality.</summary>
     [LuminPackable]
     public class DeepLevel1
     {
+        /// <summary>Stores the value1.</summary>
         public int Value1;
 
         [LuminPackInclude]
         private DeepLevel2 _level2 = new();
 
+        /// <summary>Gets the level2.</summary>
         public DeepLevel2 Level2 => _level2;
     }
 
+    /// <summary>Provides deep level2 functionality.</summary>
     [LuminPackable]
     public class DeepLevel2
     {
+        /// <summary>Stores the value2.</summary>
         public int Value2;
 
         [LuminPackInclude]
         private DeepLevel3 _level3 = new();
 
+        /// <summary>Gets the level3.</summary>
         public DeepLevel3 Level3 => _level3;
     }
 
+    /// <summary>Provides deep level3 functionality.</summary>
     [LuminPackable]
     public class DeepLevel3
     {
+        /// <summary>Stores the value3.</summary>
         public int Value3;
 
         [LuminPackInclude]
         private int _secret = 42;
 
+        /// <summary>Gets the secret.</summary>
         public int Secret => _secret;
+        /// <summary>Updates the secret used by the current operation.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         public void SetSecret(int value) => _secret = value;
     }
 
+    /// <summary>Provides deep private member test functionality.</summary>
     public static class DeepPrivateMemberTest
     {
+        /// <summary>Verifies run.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void Run(List<string> results)
         {
             try

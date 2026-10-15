@@ -11,18 +11,25 @@ namespace LuminPackBenchmark;
 
 // Serial builds also work on hosts that cannot start MSBuild worker nodes.
 // This changes the build process, not the runtime benchmark job.
+/// <summary>Provides character ratio build config functionality.</summary>
 public sealed class CharacterRatioBuildConfig : ManualConfig
 {
+    /// <summary>Initializes a new instance of <c>CharacterRatioBuildConfig</c>.</summary>
     public CharacterRatioBuildConfig() => AddJob(Job.Default
         .WithMsBuildArguments("/m:1", "/p:NuGetAudit=false", "/p:RestoreIgnoreFailedSources=true")
         .AsMutator());
 }
 
+/// <summary>Provides character ratio fixture functionality.</summary>
 public abstract class CharacterRatioFixture
 {
+    /// <summary>Stores the data.</summary>
     protected CharacterSaveData Data = null!;
+    /// <summary>Stores the lumin binary.</summary>
     protected byte[] LuminBinary = null!, MemoryBinary = null!, LuminJson = null!, StjJson = null!;
+    /// <summary>Stores the strict.</summary>
     protected static readonly LuminPackSerializerOption Strict = new() { ValidateJsonSyntax = true };
+    /// <summary>Stores the context.</summary>
     private protected static readonly OptimizationJsonContext Context = new(new JsonSerializerOptions
     {
         IncludeFields = true,
@@ -31,6 +38,7 @@ public abstract class CharacterRatioFixture
         DefaultBufferSize = 64 * 1024
     });
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -53,6 +61,7 @@ public abstract class CharacterRatioFixture
     }
 }
 
+/// <summary>Provides character binary ratio benchmark functionality.</summary>
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 2, warmupCount: 32, iterationCount: 10)]
 [InvocationCount(65536)]
 [MemoryDiagnoser, CategoriesColumn]
@@ -60,16 +69,25 @@ public abstract class CharacterRatioFixture
 [Config(typeof(CharacterRatioBuildConfig))]
 public class CharacterBinaryRatioBenchmark : CharacterRatioFixture
 {
+    /// <summary>Measures memory pack write for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true), BenchmarkCategory("WriteArray")]
     public byte[] MemoryPackWrite() => MemoryPack.MemoryPackSerializer.Serialize(Data);
+    /// <summary>Measures lumin pack write for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("WriteArray")]
     public byte[] LuminPackWrite() => LuminPackSerializer.Serialize(Data);
+    /// <summary>Measures memory pack read for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true), BenchmarkCategory("ReadNewObject")]
     public CharacterSaveData MemoryPackRead() => MemoryPack.MemoryPackSerializer.Deserialize<CharacterSaveData>(MemoryBinary)!;
+    /// <summary>Measures lumin pack read for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("ReadNewObject")]
     public CharacterSaveData LuminPackRead() => LuminPackSerializer.Deserialize<CharacterSaveData>(LuminBinary);
 }
 
+/// <summary>Provides character json ratio benchmark functionality.</summary>
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 2, warmupCount: 32, iterationCount: 10)]
 [InvocationCount(8192)]
 [MemoryDiagnoser, CategoriesColumn]
@@ -77,18 +95,29 @@ public class CharacterBinaryRatioBenchmark : CharacterRatioFixture
 [Config(typeof(CharacterRatioBuildConfig))]
 public class CharacterJsonRatioBenchmark : CharacterRatioFixture
 {
+    /// <summary>Measures stj write for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true), BenchmarkCategory("WriteString")]
     public string StjWrite() => JsonSerializer.Serialize(Data, Context.CharacterSaveData);
+    /// <summary>Measures lumin pack write for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("WriteString")]
     public string LuminPackWrite() => LuminPackSerializer.SerializeJson(Data);
+    /// <summary>Measures stj read for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true), BenchmarkCategory("ReadNewObject")]
     public CharacterSaveData StjRead() => JsonSerializer.Deserialize(StjJson, Context.CharacterSaveData)!;
+    /// <summary>Measures lumin pack read strict for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("ReadNewObject")]
     public CharacterSaveData LuminPackReadStrict() => LuminPackSerializer.DeserializeJson<CharacterSaveData>(LuminJson, Strict);
+    /// <summary>Measures lumin pack read default for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("ReadNewObject")]
     public CharacterSaveData LuminPackReadDefault() => LuminPackSerializer.DeserializeJson<CharacterSaveData>(LuminJson);
 }
 
+/// <summary>Provides character fixed fields ratio benchmark functionality.</summary>
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 2, warmupCount: 32, iterationCount: 10)]
 [InvocationCount(65536)]
 [MemoryDiagnoser, CategoriesColumn]
@@ -99,15 +128,26 @@ public class CharacterFixedFieldsRatioBenchmark
     private CharacterFixedFieldsBatch _data = null!;
     private byte[] _luminBinary = null!, _memoryBinary = null!;
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
-        _data = new CharacterFixedFieldsBatch { Values = Enumerable.Range(0, 512).Select(i => new CharacterStats
+        _data = new CharacterFixedFieldsBatch
         {
-            Hp = 1000 + i, MaxHp = 50000, Mp = i, MaxMp = 10000,
-            Attack = 123.5f + i, Defense = 78.25f + i, Speed = 100.5f,
-            CritRate = 0.25f, CritDamage = 1.5f, Level = 1 + i % 200
-        }).ToArray() };
+            Values = Enumerable.Range(0, 512).Select(i => new CharacterStats
+            {
+                Hp = 1000 + i,
+                MaxHp = 50000,
+                Mp = i,
+                MaxMp = 10000,
+                Attack = 123.5f + i,
+                Defense = 78.25f + i,
+                Speed = 100.5f,
+                CritRate = 0.25f,
+                CritDamage = 1.5f,
+                Level = 1 + i % 200
+            }).ToArray()
+        };
         string expected = LuminPackSerializer.SerializeJson(_data);
         byte[] lumin = LuminPackSerializer.Serialize(_data);
         byte[] memory = MemoryPack.MemoryPackSerializer.Serialize(_data);
@@ -119,18 +159,28 @@ public class CharacterFixedFieldsRatioBenchmark
         Console.WriteLine($"Fixed-field fixture: 512 records, LP={lumin.Length}, MP={memory.Length} binary bytes.");
     }
 
+    /// <summary>Measures memory pack write for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true), BenchmarkCategory("WriteArray")]
     public byte[] MemoryPackWrite() => MemoryPack.MemoryPackSerializer.Serialize(_data);
+    /// <summary>Measures lumin pack write for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("WriteArray")]
     public byte[] LuminPackWrite() => LuminPackSerializer.Serialize(_data);
+    /// <summary>Measures memory pack read for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true), BenchmarkCategory("ReadNewObject")]
     public CharacterFixedFieldsBatch MemoryPackRead() => MemoryPack.MemoryPackSerializer.Deserialize<CharacterFixedFieldsBatch>(_memoryBinary)!;
+    /// <summary>Measures lumin pack read for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("ReadNewObject")]
     public CharacterFixedFieldsBatch LuminPackRead() => LuminPackSerializer.Deserialize<CharacterFixedFieldsBatch>(_luminBinary);
 }
 
+/// <summary>Provides character fixed fields batch functionality.</summary>
 [LuminPack.Attribute.LuminPackable, MemoryPack.MemoryPackable]
 public sealed partial class CharacterFixedFieldsBatch
 {
+    /// <summary>Stores the values.</summary>
     public CharacterStats[] Values = null!;
 }

@@ -1,28 +1,30 @@
-
-
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Option;
 
 namespace LuminPackUnitTest
 {
+    /// <summary>Provides test enum val functionality.</summary>
     public enum TestEnumVal : short
     {
+        /// <summary>Specifies a.</summary>
         A = Int16.MinValue,
+        /// <summary>Specifies b.</summary>
         B = Int16.MaxValue,
     }
 
+    /// <summary>Provides empty struct functionality.</summary>
     [LuminPackable]
     public struct EmptyStruct
     {
     }
 
+    /// <summary>Provides primitives serialization test functionality.</summary>
     public class PrimitivesSerializationTest
     {
 
+        /// <summary>Verifies test empty struct.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestEmptyStruct(List<string> results)
         {
             try
@@ -30,7 +32,7 @@ namespace LuminPackUnitTest
                 var val = new EmptyStruct();
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 EmptyStruct val2 = LuminPackSerializer.Deserialize<EmptyStruct>(buf);
-                
+
                 // For empty structs, we just check if deserialization succeeds
                 results.Add("✓ TestEmptyStruct - PASSED");
             }
@@ -40,6 +42,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test enum.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestEnum(List<string> results)
         {
             try
@@ -47,7 +51,7 @@ namespace LuminPackUnitTest
                 TestEnumVal val = TestEnumVal.B;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 TestEnumVal val2 = LuminPackSerializer.Deserialize<TestEnumVal>(buf);
-                
+
                 if (val == val2 && val2 == TestEnumVal.B)
                     results.Add("✓ TestEnum - PASSED");
                 else
@@ -59,6 +63,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test byte.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestByte(List<string> results)
         {
             try
@@ -66,7 +72,7 @@ namespace LuminPackUnitTest
                 byte val = 10;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 byte result = LuminPackSerializer.Deserialize<byte>(buf);
-                
+
                 if (val == result && result == 10)
                     results.Add("✓ TestByte - PASSED");
                 else
@@ -78,6 +84,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test s byte.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestSByte(List<string> results)
         {
             try
@@ -85,7 +93,7 @@ namespace LuminPackUnitTest
                 sbyte val = -95;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 sbyte result = LuminPackSerializer.Deserialize<sbyte>(buf);
-                
+
                 if (val == result && result == -95)
                     results.Add("✓ TestSByte - PASSED");
                 else
@@ -97,6 +105,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test short.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestShort(List<string> results)
         {
             try
@@ -104,7 +114,7 @@ namespace LuminPackUnitTest
                 short val = short.MinValue;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 short result = LuminPackSerializer.Deserialize<short>(buf);
-                
+
                 if (val == result && result == short.MinValue)
                     results.Add("✓ TestShort - PASSED");
                 else
@@ -116,6 +126,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test u short.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestUShort(List<string> results)
         {
             try
@@ -123,7 +135,7 @@ namespace LuminPackUnitTest
                 ushort val = ushort.MaxValue;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 ushort result = LuminPackSerializer.Deserialize<ushort>(buf);
-                
+
                 if (val == result && result == ushort.MaxValue)
                     results.Add("✓ TestUShort - PASSED");
                 else
@@ -135,6 +147,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test int.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestInt(List<string> results)
         {
             try
@@ -142,7 +156,7 @@ namespace LuminPackUnitTest
                 int val = int.MinValue;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 int result = LuminPackSerializer.Deserialize<int>(buf);
-                
+
                 if (val == result && result == int.MinValue)
                     results.Add("✓ TestInt - PASSED");
                 else
@@ -154,6 +168,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test u int.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestUInt(List<string> results)
         {
             try
@@ -161,7 +177,7 @@ namespace LuminPackUnitTest
                 uint val = uint.MaxValue;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 uint result = LuminPackSerializer.Deserialize<uint>(buf);
-                
+
                 if (val == result && result == uint.MaxValue)
                     results.Add("✓ TestUInt - PASSED");
                 else
@@ -173,6 +189,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test long.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestLong(List<string> results)
         {
             try
@@ -180,7 +198,7 @@ namespace LuminPackUnitTest
                 long val = long.MinValue;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 long result = LuminPackSerializer.Deserialize<long>(buf);
-                
+
                 if (val == result && result == long.MinValue)
                     results.Add("✓ TestLong - PASSED");
                 else
@@ -192,6 +210,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test u long.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestULong(List<string> results)
         {
             try
@@ -199,7 +219,7 @@ namespace LuminPackUnitTest
                 ulong val = ulong.MaxValue;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 ulong result = LuminPackSerializer.Deserialize<ulong>(buf);
-                
+
                 if (val == result && result == ulong.MaxValue)
                     results.Add("✓ TestULong - PASSED");
                 else
@@ -211,6 +231,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test string.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestString(List<string> results)
         {
             try
@@ -218,7 +240,7 @@ namespace LuminPackUnitTest
                 string val = "test";
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 string result = LuminPackSerializer.Deserialize<string>(buf);
-                
+
                 if (val == result && result == "test")
                     results.Add("✓ TestString - PASSED");
                 else
@@ -230,6 +252,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test string null and empty.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestStringNullAndEmpty(List<string> results)
         {
             try
@@ -259,12 +283,14 @@ namespace LuminPackUnitTest
                 results.Add($"✗ TestStringNullAndEmpty - ERROR: {ex.Message}");
             }
         }
-        
+
+        /// <summary>Verifies test string utf8 token.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestStringUtf8Token(List<string> results)
         {
             try
             {
-                string val = "嗨嗨Test！";
+                string val = "\u55E8\u55E8Test\uFF01";
                 byte[] buf = LuminPackSerializer.Serialize(val, new LuminPackSerializerOption()
                 {
                     StringEncoding = LuminPackStringEncoding.UTF8,
@@ -275,8 +301,8 @@ namespace LuminPackUnitTest
                     StringEncoding = LuminPackStringEncoding.UTF8,
                     StringRecording = LuminPackStringRecording.Token
                 });
-                
-                if (val == result && result == "嗨嗨Test！")
+
+                if (val == result && result == "\u55E8\u55E8Test\uFF01")
                     results.Add("✓ TestStringUtf8Token - PASSED");
                 else
                     results.Add("✗ TestStringUtf8Token - FAILED");
@@ -286,12 +312,14 @@ namespace LuminPackUnitTest
                 results.Add($"✗ TestStringUtf8Token - ERROR: {ex.Message}");
             }
         }
-        
+
+        /// <summary>Verifies test string utf16.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestStringUtf16(List<string> results)
         {
             try
             {
-                string val = "嗨嗨Test！";
+                string val = "\u55E8\u55E8Test\uFF01";
                 byte[] buf = LuminPackSerializer.Serialize(val, new LuminPackSerializerOption()
                 {
                     StringEncoding = LuminPackStringEncoding.UTF16,
@@ -302,8 +330,8 @@ namespace LuminPackUnitTest
                     StringEncoding = LuminPackStringEncoding.UTF16,
                     StringRecording = LuminPackStringRecording.Length
                 });
-                
-                if (val == result && result == "嗨嗨Test！")
+
+                if (val == result && result == "\u55E8\u55E8Test\uFF01")
                     results.Add("✓ TestStringUtf16 - PASSED");
                 else
                     results.Add("✗ TestStringUtf16 - FAILED");
@@ -314,6 +342,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test bool.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestBool(List<string> results)
         {
             try
@@ -321,7 +351,7 @@ namespace LuminPackUnitTest
                 bool val = true;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 bool result = LuminPackSerializer.Deserialize<bool>(buf);
-                
+
                 if (val == result && result == true)
                     results.Add("✓ TestBool - PASSED");
                 else
@@ -333,6 +363,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test decimal.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestDecimal(List<string> results)
         {
             try
@@ -340,7 +372,7 @@ namespace LuminPackUnitTest
                 decimal val = decimal.MaxValue;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 decimal result = LuminPackSerializer.Deserialize<decimal>(buf);
-                
+
                 if (val == result && result == decimal.MaxValue)
                     results.Add("✓ TestDecimal - PASSED");
                 else
@@ -352,6 +384,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test double.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestDouble(List<string> results)
         {
             try
@@ -359,7 +393,7 @@ namespace LuminPackUnitTest
                 double val = double.MaxValue;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 double result = LuminPackSerializer.Deserialize<double>(buf);
-                
+
                 if (val == result && result == double.MaxValue)
                     results.Add("✓ TestDouble - PASSED");
                 else
@@ -371,6 +405,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test float.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestFloat(List<string> results)
         {
             try
@@ -378,7 +414,7 @@ namespace LuminPackUnitTest
                 float val = float.MaxValue;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 float result = LuminPackSerializer.Deserialize<float>(buf);
-                
+
                 if (val == result && result == float.MaxValue)
                     results.Add("✓ TestFloat - PASSED");
                 else
@@ -390,6 +426,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test char.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestChar(List<string> results)
         {
             try
@@ -397,7 +435,7 @@ namespace LuminPackUnitTest
                 char val = 'a';
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 char result = LuminPackSerializer.Deserialize<char>(buf);
-                
+
                 if (val == result && result == 'a')
                     results.Add("✓ TestChar - PASSED");
                 else
@@ -409,6 +447,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test date time.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestDateTime(List<string> results)
         {
             try
@@ -416,7 +456,7 @@ namespace LuminPackUnitTest
                 DateTime val = new DateTime(2000, 1, 1);
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 DateTime result = LuminPackSerializer.Deserialize<DateTime>(buf);
-                
+
                 if (val == result && result == new DateTime(2000, 1, 1))
                     results.Add("✓ TestDateTime - PASSED");
                 else
@@ -428,6 +468,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test enum arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestEnumArr(List<string> results)
         {
             try
@@ -435,7 +477,7 @@ namespace LuminPackUnitTest
                 TestEnumVal[] val = new[] { TestEnumVal.A, TestEnumVal.B };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 TestEnumVal[] result = LuminPackSerializer.Deserialize<TestEnumVal[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { TestEnumVal.A, TestEnumVal.B }))
                     results.Add("✓ TestEnumArr - PASSED");
                 else
@@ -447,6 +489,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test byte arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestByteArr(List<string> results)
         {
             try
@@ -454,7 +498,7 @@ namespace LuminPackUnitTest
                 byte[] val = new byte[] { 1, 2, 3, 4, 5 };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 byte[] result = LuminPackSerializer.Deserialize<byte[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new byte[] { 1, 2, 3, 4, 5 }))
                     results.Add("✓ TestByteArr - PASSED");
                 else
@@ -466,6 +510,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test s byte arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestSByteArr(List<string> results)
         {
             try
@@ -473,7 +519,7 @@ namespace LuminPackUnitTest
                 sbyte[] val = new sbyte[] { -1, -2, -3, -4, -5 };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 sbyte[] result = LuminPackSerializer.Deserialize<sbyte[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new sbyte[] { -1, -2, -3, -4, -5 }))
                     results.Add("✓ TestSByteArr - PASSED");
                 else
@@ -485,6 +531,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test short arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestShortArr(List<string> results)
         {
             try
@@ -492,7 +540,7 @@ namespace LuminPackUnitTest
                 short[] val = new[] { short.MinValue, short.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 short[] result = LuminPackSerializer.Deserialize<short[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { short.MinValue, short.MaxValue }))
                     results.Add("✓ TestShortArr - PASSED");
                 else
@@ -504,6 +552,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test u short arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestUShortArr(List<string> results)
         {
             try
@@ -511,7 +561,7 @@ namespace LuminPackUnitTest
                 ushort[] val = new[] { ushort.MinValue, ushort.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 ushort[] result = LuminPackSerializer.Deserialize<ushort[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { ushort.MinValue, ushort.MaxValue }))
                     results.Add("✓ TestUShortArr - PASSED");
                 else
@@ -523,6 +573,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test int arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIntArr(List<string> results)
         {
             try
@@ -530,7 +582,7 @@ namespace LuminPackUnitTest
                 int[] val = new[] { int.MinValue, int.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 int[] result = LuminPackSerializer.Deserialize<int[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { int.MinValue, int.MaxValue }))
                     results.Add("✓ TestIntArr - PASSED");
                 else
@@ -542,6 +594,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test u int arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestUIntArr(List<string> results)
         {
             try
@@ -549,7 +603,7 @@ namespace LuminPackUnitTest
                 uint[] val = new[] { uint.MinValue, uint.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 uint[] result = LuminPackSerializer.Deserialize<uint[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { uint.MinValue, uint.MaxValue }))
                     results.Add("✓ TestUIntArr - PASSED");
                 else
@@ -561,6 +615,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test long arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestLongArr(List<string> results)
         {
             try
@@ -568,7 +624,7 @@ namespace LuminPackUnitTest
                 long[] val = new[] { long.MinValue, long.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 long[] result = LuminPackSerializer.Deserialize<long[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { long.MinValue, long.MaxValue }))
                     results.Add("✓ TestLongArr - PASSED");
                 else
@@ -580,6 +636,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test u long arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestULongArr(List<string> results)
         {
             try
@@ -587,7 +645,7 @@ namespace LuminPackUnitTest
                 ulong[] val = new[] { ulong.MinValue, ulong.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 ulong[] result = LuminPackSerializer.Deserialize<ulong[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { ulong.MinValue, ulong.MaxValue }))
                     results.Add("✓ TestULongArr - PASSED");
                 else
@@ -599,6 +657,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test string arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestStringArr(List<string> results)
         {
             try
@@ -606,7 +666,7 @@ namespace LuminPackUnitTest
                 string[] val = new[] { "a", "b", "c", "d", "e" };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 string[] result = LuminPackSerializer.Deserialize<string[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { "a", "b", "c", "d", "e" }))
                     results.Add("✓ TestStringArr - PASSED");
                 else
@@ -618,6 +678,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test bool arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestBoolArr(List<string> results)
         {
             try
@@ -625,7 +687,7 @@ namespace LuminPackUnitTest
                 bool[] val = new[] { true, false };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 bool[] result = LuminPackSerializer.Deserialize<bool[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { true, false }))
                     results.Add("✓ TestBoolArr - PASSED");
                 else
@@ -637,6 +699,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test float arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestFloatArr(List<string> results)
         {
             try
@@ -644,7 +708,7 @@ namespace LuminPackUnitTest
                 float[] val = new[] { float.MinValue, float.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 float[] result = LuminPackSerializer.Deserialize<float[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { float.MinValue, float.MaxValue }))
                     results.Add("✓ TestFloatArr - PASSED");
                 else
@@ -656,6 +720,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test double arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestDoubleArr(List<string> results)
         {
             try
@@ -663,7 +729,7 @@ namespace LuminPackUnitTest
                 double[] val = new[] { double.MinValue, double.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 double[] result = LuminPackSerializer.Deserialize<double[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { double.MinValue, double.MaxValue }))
                     results.Add("✓ TestDoubleArr - PASSED");
                 else
@@ -675,6 +741,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test char arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestCharArr(List<string> results)
         {
             try
@@ -682,7 +750,7 @@ namespace LuminPackUnitTest
                 char[] val = new[] { 'a', 'b', 'c', 'd', 'e' };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 char[] result = LuminPackSerializer.Deserialize<char[]>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { 'a', 'b', 'c', 'd', 'e' }))
                     results.Add("✓ TestCharArr - PASSED");
                 else
@@ -694,6 +762,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test date time arr.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestDateTimeArr(List<string> results)
         {
             try
@@ -701,7 +771,7 @@ namespace LuminPackUnitTest
                 DateTime[] val = new[] { DateTime.Today, DateTime.Today.AddDays(-1234) };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 DateTime[] result = LuminPackSerializer.Deserialize<DateTime[]>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestDateTimeArr - PASSED");
                 else
@@ -713,6 +783,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test enum list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestEnumList(List<string> results)
         {
             try
@@ -720,7 +792,7 @@ namespace LuminPackUnitTest
                 List<TestEnumVal> val = new List<TestEnumVal>() { TestEnumVal.A, TestEnumVal.B };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<TestEnumVal> result = LuminPackSerializer.Deserialize<List<TestEnumVal>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<TestEnumVal>() { TestEnumVal.A, TestEnumVal.B }))
                     results.Add("✓ TestEnumList - PASSED");
                 else
@@ -732,6 +804,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test byte list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestByteList(List<string> results)
         {
             try
@@ -739,7 +813,7 @@ namespace LuminPackUnitTest
                 List<byte> val = new List<byte> { byte.MinValue, byte.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<byte> result = LuminPackSerializer.Deserialize<List<byte>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<byte> { byte.MinValue, byte.MaxValue }))
                     results.Add("✓ TestByteList - PASSED");
                 else
@@ -751,6 +825,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test s byte list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestSByteList(List<string> results)
         {
             try
@@ -758,7 +834,7 @@ namespace LuminPackUnitTest
                 List<sbyte> val = new List<sbyte> { sbyte.MinValue, sbyte.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<sbyte> result = LuminPackSerializer.Deserialize<List<sbyte>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<sbyte> { sbyte.MinValue, sbyte.MaxValue }))
                     results.Add("✓ TestSByteList - PASSED");
                 else
@@ -770,6 +846,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test short list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestShortList(List<string> results)
         {
             try
@@ -777,7 +855,7 @@ namespace LuminPackUnitTest
                 List<short> val = new List<short> { short.MinValue, short.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<short> result = LuminPackSerializer.Deserialize<List<short>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<short> { short.MinValue, short.MaxValue }))
                     results.Add("✓ TestShortList - PASSED");
                 else
@@ -789,6 +867,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test u short list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestUShortList(List<string> results)
         {
             try
@@ -796,7 +876,7 @@ namespace LuminPackUnitTest
                 List<ushort> val = new List<ushort> { ushort.MinValue, ushort.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<ushort> result = LuminPackSerializer.Deserialize<List<ushort>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<ushort> { ushort.MinValue, ushort.MaxValue }))
                     results.Add("✓ TestUShortList - PASSED");
                 else
@@ -808,6 +888,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test int list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestIntList(List<string> results)
         {
             try
@@ -815,7 +897,7 @@ namespace LuminPackUnitTest
                 List<int> val = new List<int> { int.MinValue, int.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<int> result = LuminPackSerializer.Deserialize<List<int>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<int> { int.MinValue, int.MaxValue }))
                     results.Add("✓ TestIntList - PASSED");
                 else
@@ -827,6 +909,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test u int list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestUIntList(List<string> results)
         {
             try
@@ -834,7 +918,7 @@ namespace LuminPackUnitTest
                 List<uint> val = new List<uint> { uint.MinValue, uint.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<uint> result = LuminPackSerializer.Deserialize<List<uint>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<uint> { uint.MinValue, uint.MaxValue }))
                     results.Add("✓ TestUIntList - PASSED");
                 else
@@ -846,6 +930,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test long list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestLongList(List<string> results)
         {
             try
@@ -853,7 +939,7 @@ namespace LuminPackUnitTest
                 List<long> val = new List<long> { long.MinValue, long.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<long> result = LuminPackSerializer.Deserialize<List<long>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<long> { long.MinValue, long.MaxValue }))
                     results.Add("✓ TestLongList - PASSED");
                 else
@@ -865,6 +951,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test u long list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestULongList(List<string> results)
         {
             try
@@ -872,7 +960,7 @@ namespace LuminPackUnitTest
                 List<ulong> val = new List<ulong> { ulong.MinValue, ulong.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<ulong> result = LuminPackSerializer.Deserialize<List<ulong>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<ulong> { ulong.MinValue, ulong.MaxValue }))
                     results.Add("✓ TestULongList - PASSED");
                 else
@@ -884,6 +972,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test float list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestFloatList(List<string> results)
         {
             try
@@ -891,7 +981,7 @@ namespace LuminPackUnitTest
                 List<float> val = new List<float> { float.MinValue, float.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<float> result = LuminPackSerializer.Deserialize<List<float>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<float> { float.MinValue, float.MaxValue }))
                     results.Add("✓ TestFloatList - PASSED");
                 else
@@ -903,6 +993,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test double list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestDoubleList(List<string> results)
         {
             try
@@ -910,7 +1002,7 @@ namespace LuminPackUnitTest
                 List<double> val = new List<double> { double.MinValue, double.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<double> result = LuminPackSerializer.Deserialize<List<double>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<double> { double.MinValue, double.MaxValue }))
                     results.Add("✓ TestDoubleList - PASSED");
                 else
@@ -922,6 +1014,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test decimal list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestDecimalList(List<string> results)
         {
             try
@@ -929,7 +1023,7 @@ namespace LuminPackUnitTest
                 List<decimal> val = new List<decimal> { decimal.MinValue, decimal.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<decimal> result = LuminPackSerializer.Deserialize<List<decimal>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<decimal> { decimal.MinValue, decimal.MaxValue }))
                     results.Add("✓ TestDecimalList - PASSED");
                 else
@@ -941,6 +1035,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test char list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestCharList(List<string> results)
         {
             try
@@ -948,7 +1044,7 @@ namespace LuminPackUnitTest
                 List<char> val = new List<char> { char.MinValue, char.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<char> result = LuminPackSerializer.Deserialize<List<char>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<char> { char.MinValue, char.MaxValue }))
                     results.Add("✓ TestCharList - PASSED");
                 else
@@ -960,6 +1056,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test string list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestStringList(List<string> results)
         {
             try
@@ -967,7 +1065,7 @@ namespace LuminPackUnitTest
                 List<string> val = new List<string> { "Hello", "World" };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<string> result = LuminPackSerializer.Deserialize<List<string>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<string> { "Hello", "World" }))
                     results.Add("✓ TestStringList - PASSED");
                 else
@@ -979,6 +1077,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test bool list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestBoolList(List<string> results)
         {
             try
@@ -986,7 +1086,7 @@ namespace LuminPackUnitTest
                 List<bool> val = new List<bool> { true, false };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<bool> result = LuminPackSerializer.Deserialize<List<bool>>(buf);
-                
+
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<bool> { true, false }))
                     results.Add("✓ TestBoolList - PASSED");
                 else
@@ -998,6 +1098,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test date time list.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestDateTimeList(List<string> results)
         {
             try
@@ -1005,7 +1107,7 @@ namespace LuminPackUnitTest
                 List<DateTime> val = new List<DateTime> { DateTime.Today, DateTime.Today.AddDays(-1234) };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 List<DateTime> result = LuminPackSerializer.Deserialize<List<DateTime>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestDateTimeList - PASSED");
                 else
@@ -1017,6 +1119,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test byte int dict.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestByteIntDict(List<string> results)
         {
             try
@@ -1025,7 +1129,7 @@ namespace LuminPackUnitTest
                     { { byte.MinValue, int.MinValue }, { byte.MaxValue, int.MaxValue } };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Dictionary<byte, int> result = LuminPackSerializer.Deserialize<Dictionary<byte, int>>(buf);
-                
+
                 if (val[byte.MinValue] == result[byte.MinValue] && val[byte.MaxValue] == result[byte.MaxValue])
                     results.Add("✓ TestByteIntDict - PASSED");
                 else
@@ -1037,6 +1141,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test string short dict.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestStringShortDict(List<string> results)
         {
             try
@@ -1045,7 +1151,7 @@ namespace LuminPackUnitTest
                     { { "Hello", short.MinValue }, { "World", short.MaxValue } };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Dictionary<string, short> result = LuminPackSerializer.Deserialize<Dictionary<string, short>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestStringShortDict - PASSED");
                 else
@@ -1057,6 +1163,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test string string dict.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestStringStringDict(List<string> results)
         {
             try
@@ -1065,7 +1173,7 @@ namespace LuminPackUnitTest
                     { { "Hello", "World" }, { "World", "Hello" } };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Dictionary<string, string> result = LuminPackSerializer.Deserialize<Dictionary<string, string>>(buf);
-                
+
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestStringStringDict - PASSED");
                 else
@@ -1077,6 +1185,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test nullable.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestNullable(List<string> results)
         {
             try
@@ -1084,13 +1194,13 @@ namespace LuminPackUnitTest
                 int? val = 123;
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 int? result = LuminPackSerializer.Deserialize<int?>(buf);
-                
+
                 if (val == result)
                 {
                     val = null;
                     buf = LuminPackSerializer.Serialize(val);
                     result = LuminPackSerializer.Deserialize<int?>(buf);
-                    
+
                     if (val == result)
                         results.Add("✓ TestNullable - PASSED");
                     else
@@ -1107,6 +1217,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test hash set.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestHashSet(List<string> results)
         {
             try
@@ -1114,7 +1226,7 @@ namespace LuminPackUnitTest
                 HashSet<int> val = new HashSet<int> { 1, 2, 3, 4, 5 };
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 HashSet<int> result = LuminPackSerializer.Deserialize<HashSet<int>>(buf);
-                
+
                 if (val.SetEquals(result) && result.SetEquals(new HashSet<int> { 1, 2, 3, 4, 5 }))
                     results.Add("✓ TestHashSet - PASSED");
                 else

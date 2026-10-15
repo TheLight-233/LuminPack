@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 
 namespace LuminPack.Core
@@ -11,6 +10,10 @@ namespace LuminPack.Core
     internal static class XjbUIntMath
     {
         /// <summary>Full 64x64 -> 128 bit product split into a high and a low word.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <param name="hi">Receives the hi produced by the operation.</param>
+        /// <param name="lo">Receives the lo produced by the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static void Mul64x64(ulong a, ulong b, out ulong hi, out ulong lo)
         {
@@ -26,6 +29,10 @@ namespace LuminPack.Core
         /// Portable 64x64 -> 128 bit product. Compiled on every target, so the tests always cover the
         /// netstandard2.1 / IL2CPP code path even on modern runtimes.
         /// </summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <param name="hi">Receives the hi produced by the operation.</param>
+        /// <param name="lo">Receives the lo produced by the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static void Mul64x64Portable(ulong a, ulong b, out ulong hi, out ulong lo)
         {
@@ -45,6 +52,9 @@ namespace LuminPack.Core
         }
 
         /// <summary>High 64 bits of a 64x64 product.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static ulong MulHi64(ulong a, ulong b)
         {
@@ -57,6 +67,8 @@ namespace LuminPack.Core
         }
 
         /// <summary>Removes insignificant trailing zeros from the xjb result (value = digits * 10^exponent10).</summary>
+        /// <param name="digits">The digits used by this operation.</param>
+        /// <param name="exponent10">The exponent10 used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static void NormalizeDecimal(ref ulong digits, ref int exponent10)
         {

@@ -5,10 +5,16 @@ using System.Runtime.Intrinsics;
 
 namespace LuminPack.Internal;
 
+/// <summary>Provides short ascii transcoder functionality.</summary>
 internal static class ShortAsciiTranscoder
 {
     // Two overlapping loads/stores cover 4..32 characters without touching bytes
     // outside either span. Check the entire input before writing anything.
+    /// <summary>Attempts to encode and reports whether it succeeded.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="escapeJson">The escape json used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static bool TryEncode(ReadOnlySpan<char> source, Span<byte> destination, bool escapeJson)
     {
@@ -55,6 +61,11 @@ internal static class ShortAsciiTranscoder
         return true;
     }
 
+    /// <summary>Attempts to encode medium and reports whether it succeeded.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="escapeJson">The escape json used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static bool TryEncodeMedium(ReadOnlySpan<char> source, Span<byte> destination, bool escapeJson)
     {
@@ -83,6 +94,10 @@ internal static class ShortAsciiTranscoder
 
     // Callers supply a bounded payload. Reject non-ASCII before allocating or
     // publishing a string, so their original validating/replacing decoder can run.
+    /// <summary>Attempts to decode medium and reports whether it succeeded.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="length">The number of bytes or elements to process.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static string? TryDecodeMedium(ref byte source, int length)
     {
@@ -112,6 +127,9 @@ internal static class ShortAsciiTranscoder
         return result;
     }
 
+    /// <summary>Performs the needs json escape step for the current operation.</summary>
+    /// <param name="bytes">The bytes used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool NeedsJsonEscape(Vector128<byte> bytes)
     {

@@ -5,87 +5,370 @@ namespace LuminPack.Utility.ViewModel;
 
 #pragma warning disable CS0168
 
+/// <summary>Provides unmanaged view model functionality.</summary>
 internal static class UnmanagedViewModel
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1> Create<T1>(in T1 value1)
         => new UnmanagedViewModel<T1>(value1);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2> Create<T1, T2>(in T1 value1, in T2 value2)
         => new UnmanagedViewModel<T1, T2>(value1, value2);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2, T3> Create<T1, T2, T3>(in T1 value1, in T2 value2, in T3 value3)
         => new UnmanagedViewModel<T1, T2, T3>(value1, value2, value3);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+    /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2, T3, T4> Create<T1, T2, T3, T4>(in T1 value1, in T2 value2, in T3 value3, in T4 value4)
         => new UnmanagedViewModel<T1, T2, T3, T4>(value1, value2, value3, value4);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+    /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+    /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2, T3, T4, T5> Create<T1, T2, T3, T4, T5>(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5)
         => new UnmanagedViewModel<T1, T2, T3, T4, T5>(value1, value2, value3, value4, value5);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+    /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+    /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+    /// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6> Create<T1, T2, T3, T4, T5, T6>(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6)
         => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6>(value1, value2, value3, value4, value5, value6);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+    /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+    /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+    /// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+    /// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7> Create<T1, T2, T3, T4, T5, T6, T7>(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7)
         => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>(value1, value2, value3, value4, value5, value6, value7);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+    /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+    /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+    /// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+    /// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+    /// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8> Create<T1, T2, T3, T4, T5, T6, T7, T8>(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8)
         => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>(value1, value2, value3, value4, value5, value6, value7, value8);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+    /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+    /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+    /// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+    /// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+    /// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+    /// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9>(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9)
         => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>(value1, value2, value3, value4, value5, value6, value7, value8, value9);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
+    /// <param name="value10">The value10 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+    /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+    /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+    /// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+    /// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+    /// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+    /// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
+    /// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9, in T10 value10)
         => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
+    /// <param name="value10">The value10 used by this operation.</param>
+    /// <param name="value11">The value11 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+    /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+    /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+    /// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+    /// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+    /// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+    /// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
+    /// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
+    /// <typeparam name="T11">The type represented by <c>T11</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9, in T10 value10, in T11 value11)
         => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
+    /// <param name="value10">The value10 used by this operation.</param>
+    /// <param name="value11">The value11 used by this operation.</param>
+    /// <param name="value12">The value12 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+    /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+    /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+    /// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+    /// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+    /// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+    /// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
+    /// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
+    /// <typeparam name="T11">The type represented by <c>T11</c>.</typeparam>
+    /// <typeparam name="T12">The type represented by <c>T12</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9, in T10 value10, in T11 value11, in T12 value12)
         => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
+    /// <param name="value10">The value10 used by this operation.</param>
+    /// <param name="value11">The value11 used by this operation.</param>
+    /// <param name="value12">The value12 used by this operation.</param>
+    /// <param name="value13">The value13 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+    /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+    /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+    /// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+    /// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+    /// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+    /// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
+    /// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
+    /// <typeparam name="T11">The type represented by <c>T11</c>.</typeparam>
+    /// <typeparam name="T12">The type represented by <c>T12</c>.</typeparam>
+    /// <typeparam name="T13">The type represented by <c>T13</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9, in T10 value10, in T11 value11, in T12 value12, in T13 value13)
         => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
+    /// <param name="value10">The value10 used by this operation.</param>
+    /// <param name="value11">The value11 used by this operation.</param>
+    /// <param name="value12">The value12 used by this operation.</param>
+    /// <param name="value13">The value13 used by this operation.</param>
+    /// <param name="value14">The value14 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+    /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+    /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+    /// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+    /// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+    /// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+    /// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
+    /// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
+    /// <typeparam name="T11">The type represented by <c>T11</c>.</typeparam>
+    /// <typeparam name="T12">The type represented by <c>T12</c>.</typeparam>
+    /// <typeparam name="T13">The type represented by <c>T13</c>.</typeparam>
+    /// <typeparam name="T14">The type represented by <c>T14</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9, in T10 value10, in T11 value11, in T12 value12, in T13 value13, in T14 value14)
         => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14);
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
+    /// <param name="value10">The value10 used by this operation.</param>
+    /// <param name="value11">The value11 used by this operation.</param>
+    /// <param name="value12">The value12 used by this operation.</param>
+    /// <param name="value13">The value13 used by this operation.</param>
+    /// <param name="value14">The value14 used by this operation.</param>
+    /// <param name="value15">The value15 used by this operation.</param>
+    /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+    /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+    /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+    /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+    /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+    /// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+    /// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+    /// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+    /// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
+    /// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
+    /// <typeparam name="T11">The type represented by <c>T11</c>.</typeparam>
+    /// <typeparam name="T12">The type represented by <c>T12</c>.</typeparam>
+    /// <typeparam name="T13">The type represented by <c>T13</c>.</typeparam>
+    /// <typeparam name="T14">The type represented by <c>T14</c>.</typeparam>
+    /// <typeparam name="T15">The type represented by <c>T15</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15> Create<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9, in T10 value10, in T11 value11, in T12 value12, in T13 value13, in T14 value14, in T15 value15)
         => new UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>(value1, value2, value3, value4, value5, value6, value7, value8, value9, value10, value11, value12, value13, value14, value15);
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1>
 {
     private readonly T1 Value1;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1) => Value1 = value1;
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1) => item1 = Value1;
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 public readonly record struct UnmanagedViewModel<T1, T2>
 {
     private readonly T1 Value1;
     private readonly T2 Value2;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2)
     {
@@ -93,6 +376,9 @@ public readonly record struct UnmanagedViewModel<T1, T2>
         Value2 = value2;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2)
     {
@@ -101,6 +387,10 @@ public readonly record struct UnmanagedViewModel<T1, T2>
     }
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+/// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3>
 {
@@ -108,6 +398,10 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3>
     private readonly T2 Value2;
     private readonly T3 Value3;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2, in T3 value3)
     {
@@ -116,6 +410,10 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3>
         Value3 = value3;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
+    /// <param name="item3">Receives the item3 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3)
     {
@@ -125,6 +423,11 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3>
     }
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+/// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+/// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4>
 {
@@ -133,6 +436,11 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4>
     private readonly T3 Value3;
     private readonly T4 Value4;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2, in T3 value3, in T4 value4)
     {
@@ -142,6 +450,11 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4>
         Value4 = value4;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
+    /// <param name="item3">Receives the item3 produced by the operation.</param>
+    /// <param name="item4">Receives the item4 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4)
     {
@@ -152,6 +465,12 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4>
     }
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+/// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+/// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+/// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5>
 {
@@ -161,6 +480,12 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5>
     private readonly T4 Value4;
     private readonly T5 Value5;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5)
     {
@@ -171,6 +496,12 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5>
         Value5 = value5;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
+    /// <param name="item3">Receives the item3 produced by the operation.</param>
+    /// <param name="item4">Receives the item4 produced by the operation.</param>
+    /// <param name="item5">Receives the item5 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5)
     {
@@ -182,6 +513,13 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5>
     }
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+/// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+/// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+/// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+/// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6>
 {
@@ -192,6 +530,13 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6>
     private readonly T5 Value5;
     private readonly T6 Value6;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6)
     {
@@ -203,6 +548,13 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6>
         Value6 = value6;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
+    /// <param name="item3">Receives the item3 produced by the operation.</param>
+    /// <param name="item4">Receives the item4 produced by the operation.</param>
+    /// <param name="item5">Receives the item5 produced by the operation.</param>
+    /// <param name="item6">Receives the item6 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6)
     {
@@ -215,6 +567,14 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6>
     }
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+/// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+/// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+/// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+/// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+/// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>
 {
@@ -226,6 +586,14 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>
     private readonly T6 Value6;
     private readonly T7 Value7;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7)
     {
@@ -238,6 +606,14 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>
         Value7 = value7;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
+    /// <param name="item3">Receives the item3 produced by the operation.</param>
+    /// <param name="item4">Receives the item4 produced by the operation.</param>
+    /// <param name="item5">Receives the item5 produced by the operation.</param>
+    /// <param name="item6">Receives the item6 produced by the operation.</param>
+    /// <param name="item7">Receives the item7 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7)
     {
@@ -251,6 +627,15 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>
     }
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+/// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+/// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+/// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+/// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+/// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+/// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>
 {
@@ -263,6 +648,15 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     private readonly T7 Value7;
     private readonly T8 Value8;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8)
     {
@@ -276,6 +670,15 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
         Value8 = value8;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
+    /// <param name="item3">Receives the item3 produced by the operation.</param>
+    /// <param name="item4">Receives the item4 produced by the operation.</param>
+    /// <param name="item5">Receives the item5 produced by the operation.</param>
+    /// <param name="item6">Receives the item6 produced by the operation.</param>
+    /// <param name="item7">Receives the item7 produced by the operation.</param>
+    /// <param name="item8">Receives the item8 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8)
     {
@@ -290,6 +693,16 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     }
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+/// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+/// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+/// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+/// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+/// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+/// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+/// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>
 {
@@ -303,6 +716,16 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     private readonly T8 Value8;
     private readonly T9 Value9;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9)
     {
@@ -317,6 +740,16 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
         Value9 = value9;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
+    /// <param name="item3">Receives the item3 produced by the operation.</param>
+    /// <param name="item4">Receives the item4 produced by the operation.</param>
+    /// <param name="item5">Receives the item5 produced by the operation.</param>
+    /// <param name="item6">Receives the item6 produced by the operation.</param>
+    /// <param name="item7">Receives the item7 produced by the operation.</param>
+    /// <param name="item8">Receives the item8 produced by the operation.</param>
+    /// <param name="item9">Receives the item9 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9)
     {
@@ -332,6 +765,17 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     }
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+/// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+/// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+/// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+/// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+/// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+/// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+/// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
+/// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
 {
@@ -346,6 +790,17 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     private readonly T9 Value9;
     private readonly T10 Value10;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
+    /// <param name="value10">The value10 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9, in T10 value10)
     {
@@ -361,6 +816,17 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
         Value10 = value10;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
+    /// <param name="item3">Receives the item3 produced by the operation.</param>
+    /// <param name="item4">Receives the item4 produced by the operation.</param>
+    /// <param name="item5">Receives the item5 produced by the operation.</param>
+    /// <param name="item6">Receives the item6 produced by the operation.</param>
+    /// <param name="item7">Receives the item7 produced by the operation.</param>
+    /// <param name="item8">Receives the item8 produced by the operation.</param>
+    /// <param name="item9">Receives the item9 produced by the operation.</param>
+    /// <param name="item10">Receives the item10 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9, out T10 item10)
     {
@@ -377,6 +843,18 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     }
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+/// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+/// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+/// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+/// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+/// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+/// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+/// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
+/// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
+/// <typeparam name="T11">The type represented by <c>T11</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
 {
@@ -392,6 +870,18 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     private readonly T10 Value10;
     private readonly T11 Value11;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
+    /// <param name="value10">The value10 used by this operation.</param>
+    /// <param name="value11">The value11 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9, in T10 value10, in T11 value11)
     {
@@ -408,6 +898,18 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
         Value11 = value11;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
+    /// <param name="item3">Receives the item3 produced by the operation.</param>
+    /// <param name="item4">Receives the item4 produced by the operation.</param>
+    /// <param name="item5">Receives the item5 produced by the operation.</param>
+    /// <param name="item6">Receives the item6 produced by the operation.</param>
+    /// <param name="item7">Receives the item7 produced by the operation.</param>
+    /// <param name="item8">Receives the item8 produced by the operation.</param>
+    /// <param name="item9">Receives the item9 produced by the operation.</param>
+    /// <param name="item10">Receives the item10 produced by the operation.</param>
+    /// <param name="item11">Receives the item11 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9, out T10 item10, out T11 item11)
     {
@@ -425,6 +927,19 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     }
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+/// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+/// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+/// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+/// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+/// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+/// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+/// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
+/// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
+/// <typeparam name="T11">The type represented by <c>T11</c>.</typeparam>
+/// <typeparam name="T12">The type represented by <c>T12</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>
 {
@@ -441,6 +956,19 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     private readonly T11 Value11;
     private readonly T12 Value12;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
+    /// <param name="value10">The value10 used by this operation.</param>
+    /// <param name="value11">The value11 used by this operation.</param>
+    /// <param name="value12">The value12 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9, in T10 value10, in T11 value11, in T12 value12)
     {
@@ -458,6 +986,19 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
         Value12 = value12;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
+    /// <param name="item3">Receives the item3 produced by the operation.</param>
+    /// <param name="item4">Receives the item4 produced by the operation.</param>
+    /// <param name="item5">Receives the item5 produced by the operation.</param>
+    /// <param name="item6">Receives the item6 produced by the operation.</param>
+    /// <param name="item7">Receives the item7 produced by the operation.</param>
+    /// <param name="item8">Receives the item8 produced by the operation.</param>
+    /// <param name="item9">Receives the item9 produced by the operation.</param>
+    /// <param name="item10">Receives the item10 produced by the operation.</param>
+    /// <param name="item11">Receives the item11 produced by the operation.</param>
+    /// <param name="item12">Receives the item12 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9, out T10 item10, out T11 item11, out T12 item12)
     {
@@ -476,6 +1017,20 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     }
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+/// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+/// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+/// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+/// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+/// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+/// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+/// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
+/// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
+/// <typeparam name="T11">The type represented by <c>T11</c>.</typeparam>
+/// <typeparam name="T12">The type represented by <c>T12</c>.</typeparam>
+/// <typeparam name="T13">The type represented by <c>T13</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>
 {
@@ -493,6 +1048,20 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     private readonly T12 Value12;
     private readonly T13 Value13;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
+    /// <param name="value10">The value10 used by this operation.</param>
+    /// <param name="value11">The value11 used by this operation.</param>
+    /// <param name="value12">The value12 used by this operation.</param>
+    /// <param name="value13">The value13 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9, in T10 value10, in T11 value11, in T12 value12, in T13 value13)
     {
@@ -511,6 +1080,20 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
         Value13 = value13;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
+    /// <param name="item3">Receives the item3 produced by the operation.</param>
+    /// <param name="item4">Receives the item4 produced by the operation.</param>
+    /// <param name="item5">Receives the item5 produced by the operation.</param>
+    /// <param name="item6">Receives the item6 produced by the operation.</param>
+    /// <param name="item7">Receives the item7 produced by the operation.</param>
+    /// <param name="item8">Receives the item8 produced by the operation.</param>
+    /// <param name="item9">Receives the item9 produced by the operation.</param>
+    /// <param name="item10">Receives the item10 produced by the operation.</param>
+    /// <param name="item11">Receives the item11 produced by the operation.</param>
+    /// <param name="item12">Receives the item12 produced by the operation.</param>
+    /// <param name="item13">Receives the item13 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9, out T10 item10, out T11 item11, out T12 item12, out T13 item13)
     {
@@ -530,6 +1113,21 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     }
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+/// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+/// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+/// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+/// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+/// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+/// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+/// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
+/// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
+/// <typeparam name="T11">The type represented by <c>T11</c>.</typeparam>
+/// <typeparam name="T12">The type represented by <c>T12</c>.</typeparam>
+/// <typeparam name="T13">The type represented by <c>T13</c>.</typeparam>
+/// <typeparam name="T14">The type represented by <c>T14</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>
 {
@@ -548,6 +1146,21 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     private readonly T13 Value13;
     private readonly T14 Value14;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
+    /// <param name="value10">The value10 used by this operation.</param>
+    /// <param name="value11">The value11 used by this operation.</param>
+    /// <param name="value12">The value12 used by this operation.</param>
+    /// <param name="value13">The value13 used by this operation.</param>
+    /// <param name="value14">The value14 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9, in T10 value10, in T11 value11, in T12 value12, in T13 value13, in T14 value14)
     {
@@ -567,6 +1180,21 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
         Value14 = value14;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
+    /// <param name="item3">Receives the item3 produced by the operation.</param>
+    /// <param name="item4">Receives the item4 produced by the operation.</param>
+    /// <param name="item5">Receives the item5 produced by the operation.</param>
+    /// <param name="item6">Receives the item6 produced by the operation.</param>
+    /// <param name="item7">Receives the item7 produced by the operation.</param>
+    /// <param name="item8">Receives the item8 produced by the operation.</param>
+    /// <param name="item9">Receives the item9 produced by the operation.</param>
+    /// <param name="item10">Receives the item10 produced by the operation.</param>
+    /// <param name="item11">Receives the item11 produced by the operation.</param>
+    /// <param name="item12">Receives the item12 produced by the operation.</param>
+    /// <param name="item13">Receives the item13 produced by the operation.</param>
+    /// <param name="item14">Receives the item14 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9, out T10 item10, out T11 item11, out T12 item12, out T13 item13, out T14 item14)
     {
@@ -587,6 +1215,22 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     }
 }
 
+/// <summary>Provides unmanaged view model functionality.</summary>
+/// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
+/// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
+/// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
+/// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
+/// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
+/// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
+/// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
+/// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
+/// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
+/// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
+/// <typeparam name="T11">The type represented by <c>T11</c>.</typeparam>
+/// <typeparam name="T12">The type represented by <c>T12</c>.</typeparam>
+/// <typeparam name="T13">The type represented by <c>T13</c>.</typeparam>
+/// <typeparam name="T14">The type represented by <c>T14</c>.</typeparam>
+/// <typeparam name="T15">The type represented by <c>T15</c>.</typeparam>
 [StructLayout(LayoutKind.Sequential)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>
 {
@@ -606,6 +1250,22 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
     private readonly T14 Value14;
     private readonly T15 Value15;
 
+    /// <summary>Initializes a new instance of <c>UnmanagedViewModel</c>.</summary>
+    /// <param name="value1">The value consumed or produced by this operation.</param>
+    /// <param name="value2">The value2 used by this operation.</param>
+    /// <param name="value3">The value3 used by this operation.</param>
+    /// <param name="value4">The value4 used by this operation.</param>
+    /// <param name="value5">The value5 used by this operation.</param>
+    /// <param name="value6">The value6 used by this operation.</param>
+    /// <param name="value7">The value7 used by this operation.</param>
+    /// <param name="value8">The value8 used by this operation.</param>
+    /// <param name="value9">The value9 used by this operation.</param>
+    /// <param name="value10">The value10 used by this operation.</param>
+    /// <param name="value11">The value11 used by this operation.</param>
+    /// <param name="value12">The value12 used by this operation.</param>
+    /// <param name="value13">The value13 used by this operation.</param>
+    /// <param name="value14">The value14 used by this operation.</param>
+    /// <param name="value15">The value15 used by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public UnmanagedViewModel(in T1 value1, in T2 value2, in T3 value3, in T4 value4, in T5 value5, in T6 value6, in T7 value7, in T8 value8, in T9 value9, in T10 value10, in T11 value11, in T12 value12, in T13 value13, in T14 value14, in T15 value15)
     {
@@ -626,6 +1286,22 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
         Value15 = value15;
     }
 
+    /// <summary>Performs the deconstruct step for the current operation.</summary>
+    /// <param name="item1">Receives the item1 produced by the operation.</param>
+    /// <param name="item2">Receives the item2 produced by the operation.</param>
+    /// <param name="item3">Receives the item3 produced by the operation.</param>
+    /// <param name="item4">Receives the item4 produced by the operation.</param>
+    /// <param name="item5">Receives the item5 produced by the operation.</param>
+    /// <param name="item6">Receives the item6 produced by the operation.</param>
+    /// <param name="item7">Receives the item7 produced by the operation.</param>
+    /// <param name="item8">Receives the item8 produced by the operation.</param>
+    /// <param name="item9">Receives the item9 produced by the operation.</param>
+    /// <param name="item10">Receives the item10 produced by the operation.</param>
+    /// <param name="item11">Receives the item11 produced by the operation.</param>
+    /// <param name="item12">Receives the item12 produced by the operation.</param>
+    /// <param name="item13">Receives the item13 produced by the operation.</param>
+    /// <param name="item14">Receives the item14 produced by the operation.</param>
+    /// <param name="item15">Receives the item15 produced by the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Deconstruct(out T1 item1, out T2 item2, out T3 item3, out T4 item4, out T5 item5, out T6 item6, out T7 item7, out T8 item8, out T9 item9, out T10 item10, out T11 item11, out T12 item12, out T13 item13, out T14 item14, out T15 item15)
     {

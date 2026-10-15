@@ -1,27 +1,27 @@
-using System;
 using System.Collections;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Numerics;
 using System.Text;
 using LuminPack;
 
 namespace LuminPackUnitTest
 {
+    /// <summary>Provides special types serialization test functionality.</summary>
     public class SpecialTypesSerializationTest
     {
         // Uri Tests
+        /// <summary>Verifies test uri.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestUri(List<string> results)
         {
             try
             {
                 Uri val = new Uri("https://example.com/path?query=value");
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Uri result = LuminPackSerializer.Deserialize<Uri>(buf);
-                
+
                 if (val.ToString() == result.ToString())
                     results.Add("✓ TestUri - PASSED");
                 else
@@ -34,16 +34,18 @@ namespace LuminPackUnitTest
         }
 
         // Version Tests
+        /// <summary>Verifies test version.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestVersion(List<string> results)
         {
             try
             {
                 Version val = new Version(1, 2, 3, 4);
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Version result = LuminPackSerializer.Deserialize<Version>(buf);
-                
+
                 if (val.Equals(result))
                     results.Add("✓ TestVersion - PASSED");
                 else
@@ -56,16 +58,18 @@ namespace LuminPackUnitTest
         }
 
         // BigInteger Tests
+        /// <summary>Verifies test big integer.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestBigInteger(List<string> results)
         {
             try
             {
                 BigInteger val = BigInteger.Parse("123456789012345678901234567890");
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 BigInteger result = LuminPackSerializer.Deserialize<BigInteger>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestBigInteger - PASSED");
                 else
@@ -78,16 +82,18 @@ namespace LuminPackUnitTest
         }
 
         // BitArray Tests
+        /// <summary>Verifies test bit array.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestBitArray(List<string> results)
         {
             try
             {
                 BitArray val = new BitArray(new bool[] { true, false, true, false, true });
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 BitArray result = LuminPackSerializer.Deserialize<BitArray>(buf);
-                
+
                 bool equal = true;
                 for (int i = 0; i < val.Count; i++)
                 {
@@ -97,7 +103,7 @@ namespace LuminPackUnitTest
                         break;
                     }
                 }
-                
+
                 if (equal)
                     results.Add("✓ TestBitArray - PASSED");
                 else
@@ -110,16 +116,18 @@ namespace LuminPackUnitTest
         }
 
         // CultureInfo Tests
+        /// <summary>Verifies test culture info.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestCultureInfo(List<string> results)
         {
             try
             {
                 CultureInfo val = CultureInfo.GetCultureInfo("en-US");
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 CultureInfo result = LuminPackSerializer.Deserialize<CultureInfo>(buf);
-                
+
                 if (val.Name == result.Name)
                     results.Add("✓ TestCultureInfo - PASSED");
                 else
@@ -132,16 +140,18 @@ namespace LuminPackUnitTest
         }
 
         // TimeZoneInfo Tests
+        /// <summary>Verifies test time zone info.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestTimeZoneInfo(List<string> results)
         {
             try
             {
                 TimeZoneInfo val = TimeZoneInfo.Local;
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 TimeZoneInfo result = LuminPackSerializer.Deserialize<TimeZoneInfo>(buf);
-                
+
                 if (val.Id == result.Id)
                     results.Add("✓ TestTimeZoneInfo - PASSED");
                 else
@@ -154,16 +164,18 @@ namespace LuminPackUnitTest
         }
 
         // Type Tests
+        /// <summary>Verifies test type.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestType(List<string> results)
         {
             try
             {
                 Type val = typeof(string);
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Type result = LuminPackSerializer.Deserialize<Type>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestType - PASSED");
                 else
@@ -176,16 +188,18 @@ namespace LuminPackUnitTest
         }
 
         // StringBuilder Tests
+        /// <summary>Verifies test string builder.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestStringBuilder(List<string> results)
         {
             try
             {
                 StringBuilder val = new StringBuilder("Hello World");
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 StringBuilder result = LuminPackSerializer.Deserialize<StringBuilder>(buf);
-                
+
                 if (val.ToString() == result.ToString())
                     results.Add("✓ TestStringBuilder - PASSED");
                 else
@@ -198,17 +212,19 @@ namespace LuminPackUnitTest
         }
 
         // Lazy Tests
+        /// <summary>Verifies test lazy.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestLazy(List<string> results)
         {
             try
             {
                 Lazy<int> val = new Lazy<int>(() => 42);
                 _ = val.Value; // Force evaluation
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Lazy<int> result = LuminPackSerializer.Deserialize<Lazy<int>>(buf);
-                
+
                 if (val.Value == result.Value && result.Value == 42)
                     results.Add("✓ TestLazy - PASSED");
                 else
@@ -221,16 +237,18 @@ namespace LuminPackUnitTest
         }
 
         // Tuple Tests
+        /// <summary>Verifies test tuple.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestTuple(List<string> results)
         {
             try
             {
                 Tuple<int, string, bool> val = Tuple.Create(42, "Hello", true);
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Tuple<int, string, bool> result = LuminPackSerializer.Deserialize<Tuple<int, string, bool>>(buf);
-                
+
                 if (val.Item1 == result.Item1 && val.Item2 == result.Item2 && val.Item3 == result.Item3)
                     results.Add("✓ TestTuple - PASSED");
                 else
@@ -243,16 +261,18 @@ namespace LuminPackUnitTest
         }
 
         // ValueTuple Tests
+        /// <summary>Verifies test value tuple.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestValueTuple(List<string> results)
         {
             try
             {
                 ValueTuple<int, string, bool> val = (42, "Hello", true);
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 ValueTuple<int, string, bool> result = LuminPackSerializer.Deserialize<ValueTuple<int, string, bool>>(buf);
-                
+
                 if (val.Item1 == result.Item1 && val.Item2 == result.Item2 && val.Item3 == result.Item3)
                     results.Add("✓ TestValueTuple - PASSED");
                 else
@@ -265,16 +285,18 @@ namespace LuminPackUnitTest
         }
 
         // System.Numerics Types Tests
+        /// <summary>Verifies test complex.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestComplex(List<string> results)
         {
             try
             {
                 Complex val = new Complex(3.0, 4.0);
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Complex result = LuminPackSerializer.Deserialize<Complex>(buf);
-                
+
                 if (val.Real == result.Real && val.Imaginary == result.Imaginary)
                     results.Add("✓ TestComplex - PASSED");
                 else
@@ -286,16 +308,18 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test vector2.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestVector2(List<string> results)
         {
             try
             {
                 Vector2 val = new Vector2(1.5f, 2.5f);
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Vector2 result = LuminPackSerializer.Deserialize<Vector2>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestVector2 - PASSED");
                 else
@@ -307,16 +331,18 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test vector3.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestVector3(List<string> results)
         {
             try
             {
                 Vector3 val = new Vector3(1.5f, 2.5f, 3.5f);
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Vector3 result = LuminPackSerializer.Deserialize<Vector3>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestVector3 - PASSED");
                 else
@@ -328,16 +354,18 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test vector4.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestVector4(List<string> results)
         {
             try
             {
                 Vector4 val = new Vector4(1.5f, 2.5f, 3.5f, 4.5f);
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Vector4 result = LuminPackSerializer.Deserialize<Vector4>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestVector4 - PASSED");
                 else
@@ -349,16 +377,18 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test quaternion.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestQuaternion(List<string> results)
         {
             try
             {
                 Quaternion val = new Quaternion(1.0f, 2.0f, 3.0f, 4.0f);
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Quaternion result = LuminPackSerializer.Deserialize<Quaternion>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestQuaternion - PASSED");
                 else
@@ -370,16 +400,18 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test matrix3x2.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestMatrix3x2(List<string> results)
         {
             try
             {
                 Matrix3x2 val = new Matrix3x2(1, 2, 3, 4, 5, 6);
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Matrix3x2 result = LuminPackSerializer.Deserialize<Matrix3x2>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestMatrix3x2 - PASSED");
                 else
@@ -391,16 +423,18 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test matrix4x4.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestMatrix4x4(List<string> results)
         {
             try
             {
                 Matrix4x4 val = Matrix4x4.Identity;
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Matrix4x4 result = LuminPackSerializer.Deserialize<Matrix4x4>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestMatrix4x4 - PASSED");
                 else
@@ -412,16 +446,18 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test plane.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestPlane(List<string> results)
         {
             try
             {
                 Plane val = new Plane(1.0f, 2.0f, 3.0f, 4.0f);
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Plane result = LuminPackSerializer.Deserialize<Plane>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestPlane - PASSED");
                 else
@@ -435,16 +471,18 @@ namespace LuminPackUnitTest
 
 #if NET8_0_OR_GREATER
         // .NET 8+ Types
+        /// <summary>Verifies test half.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestHalf(List<string> results)
         {
             try
             {
                 Half val = (Half)3.14;
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Half result = LuminPackSerializer.Deserialize<Half>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestHalf - PASSED");
                 else
@@ -456,16 +494,18 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test int128.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestInt128(List<string> results)
         {
             try
             {
                 Int128 val = Int128.MaxValue;
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 Int128 result = LuminPackSerializer.Deserialize<Int128>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestInt128 - PASSED");
                 else
@@ -477,16 +517,18 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test u int128.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestUInt128(List<string> results)
         {
             try
             {
                 UInt128 val = UInt128.MaxValue;
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 UInt128 result = LuminPackSerializer.Deserialize<UInt128>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestUInt128 - PASSED");
                 else
@@ -498,16 +540,18 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test date only.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestDateOnly(List<string> results)
         {
             try
             {
                 DateOnly val = DateOnly.FromDateTime(DateTime.Today);
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 DateOnly result = LuminPackSerializer.Deserialize<DateOnly>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestDateOnly - PASSED");
                 else
@@ -519,16 +563,18 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test time only.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestTimeOnly(List<string> results)
         {
             try
             {
                 TimeOnly val = TimeOnly.FromDateTime(DateTime.Now);
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 TimeOnly result = LuminPackSerializer.Deserialize<TimeOnly>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestTimeOnly - PASSED");
                 else
@@ -540,16 +586,18 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test rune.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestRune(List<string> results)
         {
             try
             {
                 System.Text.Rune val = new System.Text.Rune('A');
-                
+
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 System.Text.Rune result = LuminPackSerializer.Deserialize<System.Text.Rune>(buf);
-                
+
                 if (val == result)
                     results.Add("✓ TestRune - PASSED");
                 else

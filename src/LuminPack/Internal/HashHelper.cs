@@ -7,6 +7,7 @@ namespace LuminPack.Internal;
 
 using System.Runtime.CompilerServices;
 
+/// <summary>Provides hash helpers functionality.</summary>
 internal static class HashHelpers
 {
     private static readonly int[] Primes = {
@@ -17,6 +18,9 @@ internal static class HashHelpers
         1674319, 2009191, 2411033, 2893249, 3471899, 4166287, 4999559, 5999471, 7199369
     };
 
+    /// <summary>Finds a prime capacity at least as large as the supplied minimum.</summary>
+    /// <param name="min">The min used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int GetPrime(int min)
     {
@@ -25,17 +29,20 @@ internal static class HashHelpers
             if (prime >= min)
                 return prime;
         }
-            
+
         // Fallback for large primes
         for (int i = min | 1; i < int.MaxValue; i += 2)
         {
             if (IsPrime(i))
                 return i;
         }
-            
+
         return min;
     }
 
+    /// <summary>Chooses a prime capacity for growing the hash table.</summary>
+    /// <param name="oldSize">The old size used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static int ExpandPrime(int oldSize)
     {
@@ -43,9 +50,17 @@ internal static class HashHelpers
         return (uint)newSize > 0x7FEFFFFD && 0x7FEFFFFD > oldSize ? 0x7FEFFFFD : GetPrime(newSize);
     }
 
+    /// <summary>Computes the reciprocal multiplier used by the fast remainder calculation.</summary>
+    /// <param name="divisor">The divisor used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static ulong GetFastModMultiplier(uint divisor) => divisor is 0 ? 0 : ulong.MaxValue / divisor + 1;
 
+    /// <summary>Calculates the remainder using the precomputed reciprocal multiplier.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="divisor">The divisor used by this operation.</param>
+    /// <param name="multiplier">The multiplier used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static uint FastMod(uint value, uint divisor, ulong multiplier)
     {
@@ -54,39 +69,21 @@ internal static class HashHelpers
         return (uint)(((((multiplier * value) >> 32) + 1) * divisor) >> 32);
     }
 
+    /// <summary>Determines whether the supplied positive candidate is prime.</summary>
+    /// <param name="candidate">The candidate used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsPrime(int candidate)
     {
         if ((candidate & 1) == 0)
             return candidate == 2;
-            
+
         int limit = (int)Math.Sqrt(candidate);
         for (int divisor = 3; divisor <= limit; divisor += 2)
         {
             if (candidate % divisor == 0)
                 return false;
         }
-            
+
         return true;
-    }
-}
-
-internal static class ThrowHelpers
-{
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void ThrowKeyNotFoundException<TKey>(TKey key)
-    {
-        throw new KeyNotFoundException($"The given key '{key}' was not present in the dictionary.");
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void ThrowInvalidOperationException(string message)
-    {
-        throw new InvalidOperationException(message);
-    }
-
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void ThrowArgumentException(string message)
-    {
-        throw new ArgumentException(message);
     }
 }

@@ -8,8 +8,10 @@ using LuminPack.Utility;
 
 namespace LuminPackBenchmark;
 
+/// <summary>Provides buffer writer pool jit probe functionality.</summary>
 internal static class BufferWriterPoolJitProbe
 {
+    /// <summary>Measures run for the configured benchmark input.</summary>
     internal static void Run()
     {
         LegacyRingWriterPool.Return(LegacyRingWriterPool.Rent());
@@ -23,6 +25,8 @@ internal static class BufferWriterPoolJitProbe
         LuminBufferWriterPool.ClearThreadLocalCache();
     }
 
+    /// <summary>Measures legacy round trip for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static LuminBufferWriter LegacyRoundTrip()
     {
@@ -31,6 +35,8 @@ internal static class BufferWriterPoolJitProbe
         return writer;
     }
 
+    /// <summary>Measures dedicated round trip for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static LuminBufferWriter DedicatedRoundTrip()
     {
@@ -40,6 +46,7 @@ internal static class BufferWriterPoolJitProbe
     }
 }
 
+/// <summary>Provides buffer writer pool hot path benchmark functionality.</summary>
 [MemoryDiagnoser]
 [DisassemblyDiagnoser(maxDepth: 4, printSource: true, printInstructionAddresses: true)]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -49,6 +56,7 @@ public class BufferWriterPoolHotPathBenchmark
 {
     private const int Operations = 1_000_000;
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -65,6 +73,7 @@ public class BufferWriterPoolHotPathBenchmark
         DoubleTlsWriterPool.Return(first);
     }
 
+    /// <summary>Measures cleanup for the configured benchmark input.</summary>
     [GlobalCleanup]
     public void Cleanup()
     {
@@ -73,6 +82,7 @@ public class BufferWriterPoolHotPathBenchmark
         DoubleTlsWriterPool.ClearThreadLocalCache();
     }
 
+    /// <summary>Measures legacy generic shape tls for the configured benchmark input.</summary>
     [Benchmark(Baseline = true, OperationsPerInvoke = Operations)]
     [BenchmarkCategory("TLS")]
     public void LegacyGenericShapeTls()
@@ -84,6 +94,7 @@ public class BufferWriterPoolHotPathBenchmark
         }
     }
 
+    /// <summary>Measures dedicated tls for the configured benchmark input.</summary>
     [Benchmark(OperationsPerInvoke = Operations)]
     [BenchmarkCategory("TLS")]
     public void DedicatedTls()
@@ -95,6 +106,7 @@ public class BufferWriterPoolHotPathBenchmark
         }
     }
 
+    /// <summary>Measures dedicated single tls nested for the configured benchmark input.</summary>
     [Benchmark(Baseline = true, OperationsPerInvoke = Operations * 2)]
     [BenchmarkCategory("Nested")]
     public void DedicatedSingleTlsNested()
@@ -108,6 +120,7 @@ public class BufferWriterPoolHotPathBenchmark
         }
     }
 
+    /// <summary>Measures compile time double tls nested for the configured benchmark input.</summary>
     [Benchmark(OperationsPerInvoke = Operations * 2)]
     [BenchmarkCategory("Nested")]
     public void CompileTimeDoubleTlsNested()
@@ -122,11 +135,13 @@ public class BufferWriterPoolHotPathBenchmark
     }
 }
 
+/// <summary>Provides buffer writer pool assembly benchmark functionality.</summary>
 [MemoryDiagnoser]
 [DisassemblyDiagnoser(maxDepth: 5, printSource: true, printInstructionAddresses: true)]
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 5, iterationCount: 10)]
 public class BufferWriterPoolAssemblyBenchmark
 {
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -136,6 +151,7 @@ public class BufferWriterPoolAssemblyBenchmark
         LuminBufferWriterPool.Return(LuminBufferWriterPool.Rent());
     }
 
+    /// <summary>Measures cleanup for the configured benchmark input.</summary>
     [GlobalCleanup]
     public void Cleanup()
     {
@@ -143,6 +159,8 @@ public class BufferWriterPoolAssemblyBenchmark
         LuminBufferWriterPool.ClearThreadLocalCache();
     }
 
+    /// <summary>Measures legacy tls round trip for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true)]
     public LuminBufferWriter LegacyTlsRoundTrip()
     {
@@ -151,6 +169,8 @@ public class BufferWriterPoolAssemblyBenchmark
         return writer;
     }
 
+    /// <summary>Measures dedicated tls round trip for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public LuminBufferWriter DedicatedTlsRoundTrip()
     {
@@ -160,11 +180,13 @@ public class BufferWriterPoolAssemblyBenchmark
     }
 }
 
+/// <summary>Provides atomic slot probe benchmark functionality.</summary>
 [MemoryDiagnoser]
 [DisassemblyDiagnoser(maxDepth: 3, printSource: true, printInstructionAddresses: true)]
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 5, iterationCount: 10)]
 public class AtomicSlotProbeBenchmark
 {
+    /// <summary>Gets or sets the occupied.</summary>
     [Params(0, 8, 16, 24, 32)]
     public int Occupied { get; set; }
 
@@ -174,6 +196,7 @@ public class AtomicSlotProbeBenchmark
     private ProbeSlots _storeDirect = null!;
     private readonly ProbeItem _candidate = new();
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -183,6 +206,8 @@ public class AtomicSlotProbeBenchmark
         _storeDirect = new ProbeSlots(Occupied);
     }
 
+    /// <summary>Measures take volatile read then exchange for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true)]
     public ProbeItem? TakeVolatileReadThenExchange()
     {
@@ -192,6 +217,8 @@ public class AtomicSlotProbeBenchmark
         return item;
     }
 
+    /// <summary>Measures take direct exchange for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public ProbeItem? TakeDirectExchange()
     {
@@ -201,6 +228,8 @@ public class AtomicSlotProbeBenchmark
         return item;
     }
 
+    /// <summary>Measures store volatile read then cas for the configured benchmark input.</summary>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [Benchmark]
     public bool StoreVolatileReadThenCas()
     {
@@ -210,6 +239,8 @@ public class AtomicSlotProbeBenchmark
         return stored;
     }
 
+    /// <summary>Measures store direct cas for the configured benchmark input.</summary>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [Benchmark]
     public bool StoreDirectCas()
     {
@@ -219,10 +250,12 @@ public class AtomicSlotProbeBenchmark
         return stored;
     }
 
+    /// <summary>Provides probe item functionality.</summary>
     public sealed class ProbeItem
     {
     }
 
+    /// <summary>Provides probe slots functionality.</summary>
     private sealed class ProbeSlots
     {
         private const int Mask = 31;
@@ -230,6 +263,8 @@ public class AtomicSlotProbeBenchmark
         private readonly ProbeItem?[] _slots = new ProbeItem?[32];
         private int _probe;
 
+        /// <summary>Initializes a new instance of <c>ProbeSlots</c>.</summary>
+        /// <param name="occupied">The occupied used by this operation.</param>
         internal ProbeSlots(int occupied)
         {
             for (var i = 0; i < occupied; i++)
@@ -237,6 +272,9 @@ public class AtomicSlotProbeBenchmark
             _probe = Environment.CurrentManagedThreadId * Increment;
         }
 
+        /// <summary>Attempts to take pre read and reports whether it succeeded.</summary>
+        /// <param name="takenIndex">Receives the taken index produced by the operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal ProbeItem? TryTakePreRead(out int takenIndex)
         {
@@ -258,6 +296,9 @@ public class AtomicSlotProbeBenchmark
             return null;
         }
 
+        /// <summary>Attempts to take direct and reports whether it succeeded.</summary>
+        /// <param name="takenIndex">Receives the taken index produced by the operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal ProbeItem? TryTakeDirect(out int takenIndex)
         {
@@ -276,6 +317,10 @@ public class AtomicSlotProbeBenchmark
             return null;
         }
 
+        /// <summary>Attempts to store pre read and reports whether it succeeded.</summary>
+        /// <param name="item">The entry to process.</param>
+        /// <param name="storedIndex">Receives the stored index produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal bool TryStorePreRead(ProbeItem item, out int storedIndex)
         {
@@ -296,6 +341,10 @@ public class AtomicSlotProbeBenchmark
             return false;
         }
 
+        /// <summary>Attempts to store direct and reports whether it succeeded.</summary>
+        /// <param name="item">The entry to process.</param>
+        /// <param name="storedIndex">Receives the stored index produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         internal bool TryStoreDirect(ProbeItem item, out int storedIndex)
         {
@@ -313,9 +362,16 @@ public class AtomicSlotProbeBenchmark
             return false;
         }
 
+        /// <summary>Measures restore for the configured benchmark input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="item">The entry to process.</param>
         internal void Restore(int index, ProbeItem item) => Volatile.Write(ref _slots[index], item);
+        /// <summary>Removes the entry matching the supplied key or value.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
         internal void Remove(int index) => Volatile.Write(ref _slots[index], null);
 
+        /// <summary>Measures next probe for the configured benchmark input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int NextProbe()
         {
@@ -325,12 +381,14 @@ public class AtomicSlotProbeBenchmark
     }
 }
 
+/// <summary>Provides buffer writer pool contention benchmark functionality.</summary>
 [MemoryDiagnoser]
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 3, iterationCount: 5)]
 public class BufferWriterPoolContentionBenchmark
 {
     private const int TotalPairs = 1_048_576;
 
+    /// <summary>Gets or sets the thread count.</summary>
     [Params(2, 4, 8, 16, 32)]
     public int ThreadCount { get; set; }
 
@@ -340,6 +398,7 @@ public class BufferWriterPoolContentionBenchmark
     private volatile bool _stop;
     private int _mode;
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -354,6 +413,7 @@ public class BufferWriterPoolContentionBenchmark
         _ready.Wait();
     }
 
+    /// <summary>Measures cleanup for the configured benchmark input.</summary>
     [GlobalCleanup]
     public void Cleanup()
     {
@@ -365,12 +425,16 @@ public class BufferWriterPoolContentionBenchmark
         _ready.Dispose();
     }
 
+    /// <summary>Measures legacy ring nested for the configured benchmark input.</summary>
     [Benchmark(Baseline = true, OperationsPerInvoke = TotalPairs)]
     public void LegacyRingNested() => Run(0);
 
+    /// <summary>Measures atomic slots nested for the configured benchmark input.</summary>
     [Benchmark(OperationsPerInvoke = TotalPairs)]
     public void AtomicSlotsNested() => Run(1);
 
+    /// <summary>Measures run for the configured benchmark input.</summary>
+    /// <param name="mode">The mode used by this operation.</param>
     private void Run(int mode)
     {
         Volatile.Write(ref _mode, mode);
@@ -378,6 +442,7 @@ public class BufferWriterPoolContentionBenchmark
         _barrier.SignalAndWait();
     }
 
+    /// <summary>Measures worker for the configured benchmark input.</summary>
     private void Worker()
     {
         WarmWorkerCaches();
@@ -418,6 +483,7 @@ public class BufferWriterPoolContentionBenchmark
         LuminBufferWriterPool.ClearThreadLocalCache();
     }
 
+    /// <summary>Measures warm worker caches for the configured benchmark input.</summary>
     private static void WarmWorkerCaches()
     {
         for (var i = 0; i < 20_000; i++)
@@ -435,11 +501,14 @@ public class BufferWriterPoolContentionBenchmark
     }
 }
 
+/// <summary>Provides double tls writer pool functionality.</summary>
 internal static class DoubleTlsWriterPool
 {
     [ThreadStatic] private static LuminBufferWriter? t_first;
     [ThreadStatic] private static LuminBufferWriter? t_second;
 
+    /// <summary>Obtains a reusable instance from the pool, creating one when needed.</summary>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static LuminBufferWriter Rent()
     {
@@ -458,6 +527,8 @@ internal static class DoubleTlsWriterPool
         return new LuminBufferWriter(true);
     }
 
+    /// <summary>Returns an instance to the pool for reuse.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void Return(LuminBufferWriter writer)
     {
@@ -481,6 +552,7 @@ internal static class DoubleTlsWriterPool
         writer.Dispose();
     }
 
+    /// <summary>Measures clear thread local cache for the configured benchmark input.</summary>
     internal static void ClearThreadLocalCache()
     {
         var first = t_first;
@@ -491,6 +563,7 @@ internal static class DoubleTlsWriterPool
     }
 }
 
+/// <summary>Provides legacy ring writer pool functionality.</summary>
 internal static class LegacyRingWriterPool
 {
     private const int Capacity = LuminBufferWriterPool.MaxPoolSize;
@@ -499,6 +572,8 @@ internal static class LegacyRingWriterPool
 
     [ThreadStatic] private static LuminBufferWriter? t_first;
 
+    /// <summary>Obtains a reusable instance from the pool, creating one when needed.</summary>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static LuminBufferWriter Rent()
     {
@@ -511,9 +586,13 @@ internal static class LegacyRingWriterPool
         return RentSlow();
     }
 
+    /// <summary>Obtains a reusable instance from the pool, creating one when needed.</summary>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static LuminBufferWriter RentSlow() => s_ring.TryTake() ?? new LuminBufferWriter(true);
 
+    /// <summary>Returns an instance to the pool for reuse.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal static void Return(LuminBufferWriter writer)
     {
@@ -532,6 +611,8 @@ internal static class LegacyRingWriterPool
         ReturnSlow(writer);
     }
 
+    /// <summary>Returns an instance to the pool for reuse.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void ReturnSlow(LuminBufferWriter writer)
     {
@@ -539,6 +620,7 @@ internal static class LegacyRingWriterPool
             writer.Dispose();
     }
 
+    /// <summary>Measures clear thread local cache for the configured benchmark input.</summary>
     internal static void ClearThreadLocalCache()
     {
         var item = t_first;
@@ -546,18 +628,24 @@ internal static class LegacyRingWriterPool
         item?.Dispose();
     }
 
+    /// <summary>Provides legacy ring functionality.</summary>
     private sealed class LegacyRing
     {
         private readonly Slot[] _slots = new Slot[Capacity];
         private PaddedCounter _enqueue;
         private PaddedCounter _dequeue;
 
+        /// <summary>Initializes a new instance of <c>LegacyRing</c>.</summary>
+        /// <param name="capacity">The requested storage capacity.</param>
         internal LegacyRing(int capacity)
         {
             for (var i = 0; i < capacity; i++)
                 _slots[i].Sequence = i;
         }
 
+        /// <summary>Attempts to store and reports whether it succeeded.</summary>
+        /// <param name="item">The entry to process.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         internal bool TryStore(LuminBufferWriter item)
         {
             var position = Volatile.Read(ref _enqueue.Value);
@@ -582,6 +670,8 @@ internal static class LegacyRingWriterPool
             }
         }
 
+        /// <summary>Attempts to take and reports whether it succeeded.</summary>
+        /// <returns>The result of the operation.</returns>
         internal LuminBufferWriter? TryTake()
         {
             var position = Volatile.Read(ref _dequeue.Value);
@@ -608,6 +698,7 @@ internal static class LegacyRingWriterPool
         }
     }
 
+    /// <summary>Provides slot functionality.</summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct Slot
     {
@@ -619,6 +710,7 @@ internal static class LegacyRingWriterPool
 #pragma warning restore CS0169
     }
 
+    /// <summary>Provides padded counter functionality.</summary>
     [StructLayout(LayoutKind.Sequential)]
     private struct PaddedCounter
     {

@@ -1,15 +1,17 @@
 using System.Diagnostics;
-using System.Globalization;
 using System.Runtime.CompilerServices;
 
 namespace LuminPackBenchmark;
 
 // An exploratory, alternating-library probe. Final claims are also checked with
 // BenchmarkDotNet. Keep all raw samples, including GC and scheduling outliers.
+/// <summary>Provides binary paired probe functionality.</summary>
 internal static class BinaryPairedProbe
 {
     private static object? _sink;
 
+    /// <summary>Measures run for the configured benchmark input.</summary>
+    /// <param name="scope">The scope used by this operation.</param>
     internal static void Run(string scope)
     {
         if (OperatingSystem.IsWindows())
@@ -49,6 +51,10 @@ internal static class BinaryPairedProbe
         GC.KeepAlive(_sink);
     }
 
+    /// <summary>Measures measure for the configured benchmark input.</summary>
+    /// <param name="action">The action used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static (double Ns, double Bytes) Measure(Func<object> action, int count)
     {

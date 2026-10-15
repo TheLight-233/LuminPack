@@ -7,13 +7,17 @@ using LuminPack.Utility;
 
 namespace LuminPack.Core
 {
-    public unsafe ref partial struct LuminPackWriter
+        public unsafe ref partial struct LuminPackWriter
     {
         /// <summary>
         /// Compresses <paramref name="rawBytes"/> into a rented temp buffer and writes
         /// [int32: element_count][int32: compressedLen][compressed_data] at <paramref name="dest"/>.
         /// Returns compressedLen.
         /// </summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="rawBytes">The raw bytes used by this operation.</param>
+        /// <param name="elementCount">The element count used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int WriteCompressedBlock(
             ref byte dest,
@@ -21,7 +25,7 @@ namespace LuminPack.Core
             int elementCount)
         {
             int maxCompLen = LuminCompressor.GetMaxCompressedSize(rawBytes.Length);
-            byte[] tempBuf  = ArrayPool<byte>.Shared.Rent(maxCompLen);
+            byte[] tempBuf = ArrayPool<byte>.Shared.Rent(maxCompLen);
             try
             {
                 int compressedLen = LuminCompressor.Compress(rawBytes, tempBuf.AsSpan(0, maxCompLen));
@@ -40,13 +44,16 @@ namespace LuminPack.Core
         /// [int32: compressedLen][compressed_data] at <paramref name="dest"/> (no element_count).
         /// Returns compressedLen.
         /// </summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="rawBytes">The raw bytes used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int WriteCompressedBlockWithoutHeader(
             ref byte dest,
             ReadOnlySpan<byte> rawBytes)
         {
             int maxCompLen = LuminCompressor.GetMaxCompressedSize(rawBytes.Length);
-            byte[] tempBuf  = ArrayPool<byte>.Shared.Rent(maxCompLen);
+            byte[] tempBuf = ArrayPool<byte>.Shared.Rent(maxCompLen);
             try
             {
                 int compressedLen = LuminCompressor.Compress(rawBytes, tempBuf.AsSpan(0, maxCompLen));
@@ -59,6 +66,9 @@ namespace LuminPack.Core
             finally { ArrayPool<byte>.Shared.Return(tempBuf); }
         }
 
+        /// <summary>Writes unmanaged array with compress using the caller-validated buffer layout.</summary>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedArrayWithCompress<T>(scoped ref T[]? array)
         {
@@ -81,6 +91,9 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Writes unmanaged array with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedArrayWithOutHeaderWithCompress<T>(scoped ref T[]? array)
         {
@@ -100,6 +113,10 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Writes unmanaged array with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedArrayWithCompress<T>(scoped ref int index, T[]? array)
         {
@@ -120,6 +137,10 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Writes unmanaged array with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedArrayWithOutHeaderWithCompress<T>(scoped ref int index, T[]? array)
         {
@@ -137,6 +158,11 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Writes unmanaged array with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedArrayWithCompress<T>(scoped ref int index, T[]? array, out int spanOffset)
         {
@@ -159,6 +185,11 @@ namespace LuminPack.Core
             spanOffset = 8 + compressedLen;
         }
 
+        /// <summary>Writes unmanaged array with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedArrayWithOutHeaderWithCompress<T>(scoped ref int index, T[]? array, out int spanOffset)
         {
@@ -180,6 +211,12 @@ namespace LuminPack.Core
             spanOffset = 4 + compressedLen;
         }
 
+        /// <summary>Writes unmanaged array with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedArrayWithCompress<T>(scoped ref int index, T[]? array, int length, out int spanOffset)
         {
@@ -202,6 +239,12 @@ namespace LuminPack.Core
             spanOffset = 8 + compressedLen;
         }
 
+        /// <summary>Writes unmanaged array with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedArrayWithOutHeaderWithCompress<T>(scoped ref int index, T[]? array, int length, out int spanOffset)
         {
@@ -222,8 +265,12 @@ namespace LuminPack.Core
 #endif
             spanOffset = 4 + compressedLen;
         }
-        
 
+
+        /// <summary>Writes unmanaged span with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithCompress<T>(scoped ref int index, scoped Span<T> span)
         {
@@ -244,6 +291,10 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Writes unmanaged span with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithCompress<T>(scoped ref int index, scoped ReadOnlySpan<T> span)
         {
@@ -264,6 +315,10 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Writes unmanaged span with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithOutHeaderWithCompress<T>(scoped ref int index, scoped Span<T> span)
         {
@@ -281,6 +336,10 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Writes unmanaged span with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithOutHeaderWithCompress<T>(scoped ref int index, scoped ReadOnlySpan<T> span)
         {
@@ -298,6 +357,11 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Writes unmanaged span with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithCompress<T>(scoped ref int index, scoped Span<T> span, out int spanOffset)
         {
@@ -320,6 +384,11 @@ namespace LuminPack.Core
             spanOffset = 8 + compressedLen;
         }
 
+        /// <summary>Writes unmanaged span with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithCompress<T>(scoped ref int index, scoped ReadOnlySpan<T> span, out int spanOffset)
         {
@@ -342,6 +411,11 @@ namespace LuminPack.Core
             spanOffset = 8 + compressedLen;
         }
 
+        /// <summary>Writes unmanaged span with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithOutHeaderWithCompress<T>(scoped ref int index, scoped Span<T> span, out int spanOffset)
         {
@@ -363,6 +437,11 @@ namespace LuminPack.Core
             spanOffset = 4 + compressedLen;
         }
 
+        /// <summary>Writes unmanaged span with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithOutHeaderWithCompress<T>(scoped ref int index, scoped ReadOnlySpan<T> span, out int spanOffset)
         {
@@ -384,6 +463,12 @@ namespace LuminPack.Core
             spanOffset = 4 + compressedLen;
         }
 
+        /// <summary>Writes unmanaged span with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithCompress<T>(scoped ref int index, scoped Span<T> span, int length, out int spanOffset)
         {
@@ -405,7 +490,13 @@ namespace LuminPack.Core
 #endif
             spanOffset = 8 + compressedLen;
         }
-        
+
+        /// <summary>Writes unmanaged span with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithCompress<T>(scoped ref int index, scoped ReadOnlySpan<T> span, int length, out int spanOffset)
         {
@@ -428,6 +519,12 @@ namespace LuminPack.Core
             spanOffset = 8 + compressedLen;
         }
 
+        /// <summary>Writes unmanaged span with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithOutHeaderWithCompress<T>(scoped ref int index, scoped Span<T> span, int length, out int spanOffset)
         {
@@ -449,6 +546,12 @@ namespace LuminPack.Core
             spanOffset = 4 + compressedLen;
         }
 
+        /// <summary>Writes unmanaged span with out header with compress using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithOutHeaderWithCompress<T>(scoped ref int index, scoped ReadOnlySpan<T> span, int length, out int spanOffset)
         {

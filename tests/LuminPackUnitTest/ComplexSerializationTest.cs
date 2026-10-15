@@ -1,36 +1,36 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using LuminPack;
 using LuminPack.Attribute;
 
 namespace LuminPackUnitTest
 {
+    /// <summary>Provides complex serialization test functionality.</summary>
     public class ComplexSerializationTest
     {
 
+        /// <summary>Verifies test complex data serialization.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestComplexDataSerialization(List<string> results)
         {
             try
             {
                 Console.WriteLine("Testing ComplexData serialization...");
-                
+
                 // Create complex test data
                 var original = new ComplexData
                 {
-                    A = new int[][] 
+                    A = new int[][]
                     {
                         new int[] { 1, 2, 3 },
                         new int[] { 4, 5, 6 },
                         new int[] { 7, 8, 9 }
                     },
-                    B = new List<int[]> 
+                    B = new List<int[]>
                     {
                         new int[] { 10, 11 },
                         new int[] { 12, 13, 14 },
                         new int[] { 15 }
                     },
-                    C = new List<int>[] 
+                    C = new List<int>[]
                     {
                         new List<int> { 16, 17 },
                         new List<int> { 18, 19, 20 },
@@ -39,7 +39,7 @@ namespace LuminPackUnitTest
                     D = new Dictionary<string, Dictionary<string, int>>
                     {
                         {
-                            "dict1", 
+                            "dict1",
                             new Dictionary<string, int>
                             {
                                 { "key1", 100 },
@@ -48,7 +48,7 @@ namespace LuminPackUnitTest
                             }
                         },
                         {
-                            "dict2", 
+                            "dict2",
                             new Dictionary<string, int>
                             {
                                 { "keyA", 400 },
@@ -176,7 +176,7 @@ namespace LuminPackUnitTest
 
                 // Verify all data
                 bool success = CompareComplexData(original, deserialized);
-                
+
                 if (success)
                     results.Add("✓ TestComplexDataSerialization - PASSED");
                 else
@@ -188,12 +188,14 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test nested data serialization.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestNestedDataSerialization(List<string> results)
         {
             try
             {
                 Console.WriteLine("Testing NestedData serialization...");
-                
+
                 var original = new NestedData
                 {
                     Name = "TestNested",
@@ -212,7 +214,7 @@ namespace LuminPackUnitTest
                 // Verify data
                 bool success = original.Name == deserialized.Name &&
                               original.Ps.Length == deserialized.Ps.Length;
-                
+
                 if (success)
                 {
                     for (int i = 0; i < original.Ps.Length; i++)
@@ -236,12 +238,14 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test complex data with null values.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestComplexDataWithNullValues(List<string> results)
         {
             try
             {
                 Console.WriteLine("Testing ComplexData with null values...");
-                
+
                 var original = new ComplexData
                 {
                     A = null,
@@ -283,12 +287,14 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test complex data with empty collections.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestComplexDataWithEmptyCollections(List<string> results)
         {
             try
             {
                 Console.WriteLine("Testing ComplexData with empty collections...");
-                
+
                 var original = new ComplexData
                 {
                     A = new int[0][],
@@ -331,6 +337,10 @@ namespace LuminPackUnitTest
         }
 
         // Helper methods for comparison
+        /// <summary>Verifies compare complex data.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareComplexData(ComplexData a, ComplexData b)
         {
             if (a == null && b == null) return true;
@@ -348,6 +358,10 @@ namespace LuminPackUnitTest
                    CompareArrayOfDataArrayLists(a.J, b.J);
         }
 
+        /// <summary>Verifies compare jagged array.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareJaggedArray(int[][] a, int[][] b)
         {
             if (a == null && b == null) return true;
@@ -362,6 +376,10 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies compare list of arrays.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareListOfArrays(List<int[]> a, List<int[]> b)
         {
             if (a == null && b == null) return true;
@@ -376,6 +394,10 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies compare array of lists.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareArrayOfLists(List<int>[] a, List<int>[] b)
         {
             if (a == null && b == null) return true;
@@ -390,6 +412,10 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies compare nested dictionary.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareNestedDictionary(Dictionary<string, Dictionary<string, int>> a, Dictionary<string, Dictionary<string, int>> b)
         {
             if (a == null && b == null) return true;
@@ -404,6 +430,10 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies compare complex array.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareComplexArray(Dictionary<string, Dictionary<string, int[][]>>[] a, Dictionary<string, Dictionary<string, int[][]>>[] b)
         {
             if (a == null && b == null) return true;
@@ -418,6 +448,10 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies compare nested dictionary with arrays.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareNestedDictionaryWithArrays(Dictionary<string, Dictionary<string, int[][]>> a, Dictionary<string, Dictionary<string, int[][]>> b)
         {
             if (a == null && b == null) return true;
@@ -427,12 +461,12 @@ namespace LuminPackUnitTest
             foreach (var outerKey in a.Keys)
             {
                 if (!b.ContainsKey(outerKey)) return false;
-                
+
                 var innerDictA = a[outerKey];
                 var innerDictB = b[outerKey];
-                
+
                 if (innerDictA.Count != innerDictB.Count) return false;
-                
+
                 foreach (var innerKey in innerDictA.Keys)
                 {
                     if (!innerDictB.ContainsKey(innerKey)) return false;
@@ -442,6 +476,10 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies compare jagged data array.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareJaggedDataArray(Data[][] a, Data[][] b)
         {
             if (a == null && b == null) return true;
@@ -456,6 +494,10 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies compare list of data arrays.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareListOfDataArrays(List<Data[]> a, List<Data[]> b)
         {
             if (a == null && b == null) return true;
@@ -470,6 +512,10 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies compare3 d data array.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool Compare3DDataArray(Data[][][] a, Data[][][] b)
         {
             if (a == null && b == null) return true;
@@ -484,6 +530,10 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies compare array of data lists.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareArrayOfDataLists(List<Data>[] a, List<Data>[] b)
         {
             if (a == null && b == null) return true;
@@ -498,6 +548,10 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies compare array of data array lists.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareArrayOfDataArrayLists(List<Data[]>[] a, List<Data[]>[] b)
         {
             if (a == null && b == null) return true;
@@ -512,6 +566,10 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies compare data array.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareDataArray(Data[] a, Data[] b)
         {
             if (a == null && b == null) return true;
@@ -526,6 +584,10 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies compare data list.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareDataList(List<Data> a, List<Data> b)
         {
             if (a == null && b == null) return true;
@@ -540,6 +602,10 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies compare data.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool CompareData(Data a, Data b)
         {
             if (a == null && b == null) return true;
@@ -556,12 +622,17 @@ namespace LuminPackUnitTest
         }
 
         // Generic collection comparison helpers
+        /// <summary>Verifies arrays equal.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool ArraysEqual<T>(T[] a, T[] b)
         {
             if (a == null && b == null) return true;
             if (a == null || b == null) return false;
             if (a.Length != b.Length) return false;
-            
+
             for (int i = 0; i < a.Length; i++)
             {
                 if (!EqualityComparer<T>.Default.Equals(a[i], b[i]))
@@ -570,12 +641,17 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies lists equal.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool ListsEqual<T>(List<T> a, List<T> b)
         {
             if (a == null && b == null) return true;
             if (a == null || b == null) return false;
             if (a.Count != b.Count) return false;
-            
+
             for (int i = 0; i < a.Count; i++)
             {
                 if (!EqualityComparer<T>.Default.Equals(a[i], b[i]))
@@ -584,6 +660,12 @@ namespace LuminPackUnitTest
             return true;
         }
 
+        /// <summary>Verifies dictionaries equal.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <typeparam name="TKey">The type represented by <c>TKey</c>.</typeparam>
+        /// <typeparam name="TValue">The type represented by <c>TValue</c>.</typeparam>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool DictionariesEqual<TKey, TValue>(Dictionary<TKey, TValue> a, Dictionary<TKey, TValue> b)
         {
             if (a == null && b == null) return true;
@@ -599,20 +681,33 @@ namespace LuminPackUnitTest
         }
     }
 
+    /// <summary>Provides complex data functionality.</summary>
     [LuminPackable]
     public class ComplexData
     {
+        /// <summary>Stores the a.</summary>
         [LuminPackOrder(0)] public int[][]? A;
+        /// <summary>Stores the b.</summary>
         [LuminPackOrder(1)] public List<int[]>? B;
+        /// <summary>Stores the c.</summary>
         [LuminPackOrder(2)] public List<int>[]? C;
+        /// <summary>Stores the d.</summary>
         [LuminPackOrder(3)] public Dictionary<string, Dictionary<string, int>>? D;
+        /// <summary>Stores the e.</summary>
         [LuminPackOrder(4)] public Dictionary<string, Dictionary<string, int[][]>>[]? E;
+        /// <summary>Stores the f.</summary>
         [LuminPackOrder(5)] public Data[][]? F;
+        /// <summary>Stores the g.</summary>
         [LuminPackOrder(6)] public List<Data[]>? G;
+        /// <summary>Stores the h.</summary>
         [LuminPackOrder(7)] public Data[][][]? H;
+        /// <summary>Stores the i.</summary>
         [LuminPackOrder(8)] public List<Data>[]? I;
+        /// <summary>Stores the j.</summary>
         [LuminPackOrder(9)] public List<Data[]>[]? J;
 
+        /// <summary>Verifies to string.</summary>
+        /// <returns>The result of the operation.</returns>
         public override string ToString()
         {
             return $"{string.Join(",", A?.SelectMany(x => x).ToArray() ?? Array.Empty<int>())},\n" +
@@ -627,6 +722,11 @@ namespace LuminPackUnitTest
                    $"{string.Join(",\n", J?.SelectMany(x => x).Select(x => x)?.SelectMany(x => x)?.Select(x => x) ?? Array.Empty<Data>())}\n";
         }
 
+        /// <summary>Obtains the dict string for the supplied input.</summary>
+        /// <param name="ddd">The ddd used by this operation.</param>
+        /// <typeparam name="Tk">The type represented by <c>Tk</c>.</typeparam>
+        /// <typeparam name="Tv">The type represented by <c>Tv</c>.</typeparam>
+        /// <returns>The result of the operation.</returns>
         private string GetDictString<Tk, Tv>(Dictionary<Tk, Dictionary<Tk, Tv>>? ddd)
         {
             if (ddd == null) return "null";
@@ -635,31 +735,47 @@ namespace LuminPackUnitTest
                    $"   {string.Join(",", ddd.Values.ToList().SelectMany(k => k?.Values ?? Enumerable.Empty<Tv>()))}";
         }
     }
-    
+
+    /// <summary>Provides data functionality.</summary>
     [LuminPackable]
     public class Data
     {
+        /// <summary>Stores the x.</summary>
         [LuminPackOrder(1)] public int X;
+        /// <summary>Stores the y.</summary>
         [LuminPackOrder(2)] public short Y;
+        /// <summary>Stores the z.</summary>
         [LuminPackOrder(3)] public long Z;
+        /// <summary>Stores the f.</summary>
         [LuminPackOrder(4)] public decimal F;
+        /// <summary>Stores the d.</summary>
         [LuminPackOrder(5)] public float D;
+        /// <summary>Stores the db.</summary>
         [LuminPackOrder(6)] public double Db;
+        /// <summary>Stores the bo.</summary>
         [LuminPackOrder(7)] public bool Bo;
+        /// <summary>Stores the name.</summary>
         [LuminPackOrder(8)] public string Name;
 
+        /// <summary>Verifies to string.</summary>
+        /// <returns>The result of the operation.</returns>
         public override string ToString()
         {
             return $"{X},{Y},{Z},{F},{D},{Db},{Bo},{Name}";
         }
     }
 
+    /// <summary>Provides nested data functionality.</summary>
     [LuminPackable]
     public class NestedData
     {
+        /// <summary>Stores the name.</summary>
         public string Name;
+        /// <summary>Stores the ps.</summary>
         public Data[] Ps;
 
+        /// <summary>Verifies to string.</summary>
+        /// <returns>The result of the operation.</returns>
         public override string ToString()
         {
             return $"{Name},{Ps[0]}";

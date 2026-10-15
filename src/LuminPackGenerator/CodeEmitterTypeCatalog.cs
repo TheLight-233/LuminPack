@@ -2,11 +2,13 @@ using System.Collections.Generic;
 
 namespace LuminPack.SourceGenerator;
 
+/// <summary>Provides code emitter type catalog functionality.</summary>
 internal static class CodeEmitterTypeCatalog
 {
+    /// <summary>Stores the supported metadata names.</summary>
     public static readonly HashSet<string> SupportedMetadataNames = new HashSet<string>()
     {
-        // 基础类型
+        // Primitive types.
         "nint",
         "nuint",
         "System.IntPtr",
@@ -19,7 +21,7 @@ internal static class CodeEmitterTypeCatalog
         "System.Collections.BitArray",
         "System.Globalization.CultureInfo",
         "System.Numerics.BigInteger",
-        "System.Guid", "System.DateTime", 
+        "System.Guid", "System.DateTime",
         "System.DateTimeOffset", "System.TimeSpan",
         "System.Numerics.Complex",
         "System.Numerics.Matrix3x2",
@@ -29,23 +31,23 @@ internal static class CodeEmitterTypeCatalog
         "System.Numerics.Vector2",
         "System.Numerics.Vector3",
         "System.Numerics.Vector4",
-        
+
         // .Net8+
         "global::System.Half", "global::System.Int128", "global::System.UInt128",
         "global::System.DateOnly", "global::System.TimeOnly", "global::System.Text.Rune",
-        
-        // 内存/数组相关
+
+        // Memory and array helpers.
         "System.Memory`1",
         "System.ReadOnlyMemory`1",
         "System.ArraySegment`1",
         "System.Buffers.ReadOnlySequence`1",
 
-        // 泛型包装类型
+        // Generic wrapper type.
         "System.Nullable`1",
         "System.Lazy`1",
         "System.Collections.Generic.KeyValuePair`2",
 
-        // 元组（1-7元）
+        // Tuples with one to seven elements.
         "System.Tuple`1",
         "System.Tuple`2",
         "System.Tuple`3",
@@ -62,7 +64,7 @@ internal static class CodeEmitterTypeCatalog
         "System.ValueTuple`6",
         "System.ValueTuple`7",
 
-        // 集合类
+        // Collection classes.
         //"System.Collections.Generic.List`1",
         "System.Collections.Generic.LinkedList`1",
         "System.Collections.Generic.Queue`1",
@@ -70,24 +72,24 @@ internal static class CodeEmitterTypeCatalog
         "System.Collections.Generic.HashSet`1",
         "System.Collections.Generic.SortedSet`1",
         "System.Collections.Generic.PriorityQueue`2",
-        
-        //Frozen集合
+
+        //Frozen collections.
         "System.Collections.Frozen.FrozenDictionary`2",
         "System.Collections.Frozen.FrozenSet`1",
 
-        // 字典类
+        // Dictionary types.
         "System.Collections.Generic.Dictionary`2",
         "System.Collections.Generic.SortedList`2",
         "System.Collections.Generic.SortedDictionary`2",
         "System.Collections.ObjectModel.ReadOnlyDictionary`2",
 
-        // 集合基类
+        // Collection base types.
         "System.Collections.ObjectModel.Collection`1",
         "System.Collections.ObjectModel.ReadOnlyCollection`1",
         "System.Collections.ObjectModel.ObservableCollection`1",
         "System.Collections.ObjectModel.ReadOnlyObservableCollection`1",
 
-        // 集合接口
+        // Collection interfaces.
         "System.Collections.Generic.IEnumerable`1",
         "System.Collections.Generic.ICollection`1",
         "System.Collections.Generic.IReadOnlyCollection`1",
@@ -96,14 +98,14 @@ internal static class CodeEmitterTypeCatalog
         "System.Collections.Generic.IDictionary`2",
         "System.Collections.Generic.IReadOnlyDictionary`2",
 
-        // 并发集合
+        // Concurrent collections.
         "System.Collections.Concurrent.ConcurrentBag`1",
         "System.Collections.Concurrent.ConcurrentQueue`1",
         "System.Collections.Concurrent.ConcurrentStack`1",
         "System.Collections.Concurrent.ConcurrentDictionary`2",
         "System.Collections.Concurrent.BlockingCollection`1",
 
-        // 不可变集合
+        // Immutable collections.
         "System.Collections.Immutable.ImmutableList`1",
         "System.Collections.Immutable.ImmutableDictionary`2",
         "System.Collections.Immutable.ImmutableArray`1",
@@ -118,6 +120,6 @@ internal static class CodeEmitterTypeCatalog
         "System.Collections.Immutable.IImmutableQueue`1",
         "System.Collections.Immutable.IImmutableStack`1",
         "System.Collections.Immutable.ReadOnlyCollectionBuilder`1",
-        
+
     };
 }

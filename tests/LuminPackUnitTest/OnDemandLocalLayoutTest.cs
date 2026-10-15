@@ -1,51 +1,62 @@
-using System;
-using System.Collections.Generic;
 using LuminPack;
 using LuminPack.Attribute;
 
 namespace LuminPackUnitTest
 {
     // ─────────────────────────────────────────────────────────────────────────
-    //  Local 按需生成的覆盖性回归测试
+    //  Regression coverage for on-demand Local generation.
     //
-    //  Local 镜像不是"有 private 才需要"：VersionTolerant 与 CircleReference 布局在根上无条件绑定
-    //  镜像（它们经镜像访问所有成员），带 [LuminPackPoolRent] 的类型在 JSON 读取路径上也会经镜像
-    //  回填所有字段。只要漏掉一处，生成代码就会引用到不存在的 Local 类型（CS0246）。
+    //  Local mirrors are also required at VersionTolerant and CircleReference roots, which always bind
+    //  mirrors for all members; LuminPackPoolRent types also use mirrors during JSON reading
+    //  Populate every field; missing one can leave generated references to nonexistent Local types (CS0246).
     //
-    //  下面三个模型刻意只使用 public 字段——既没有 private 成员也没有自动属性，正是最容易漏判的形态。
+    //  These three models use only public fields, covering the easily missed shape without private fields or auto-properties.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>Provides public field circle node functionality.</summary>
     [LuminPackable(GeneratorType.CircleReference)]
     public class PublicFieldCircleNode
     {
+        /// <summary>Stores the id.</summary>
         [LuminPackOrder(0)]
         public int Id;
 
+        /// <summary>Stores the next.</summary>
         [LuminPackOrder(1)]
         public PublicFieldCircleNode? Next;
     }
 
+    /// <summary>Provides public field version tolerant functionality.</summary>
     [LuminPackable(GeneratorType.VersionTolerant)]
     public class PublicFieldVersionTolerant
     {
+        /// <summary>Stores the a.</summary>
         [LuminPackOrder(0)]
         public int A;
 
+        /// <summary>Stores the name.</summary>
         [LuminPackOrder(1)]
         public string? Name;
     }
 
+    /// <summary>Provides public field pooled functionality.</summary>
     [LuminPackable]
     public class PublicFieldPooled
     {
+        /// <summary>Stores the a.</summary>
         public int A;
 
+        /// <summary>Obtains a reusable instance from the pool, creating one when needed.</summary>
+        /// <returns>The result of the operation.</returns>
         [LuminPackPoolRent]
         public static PublicFieldPooled Rent() => new PublicFieldPooled();
     }
 
+    /// <summary>Provides on demand local layout test functionality.</summary>
     public static class OnDemandLocalLayoutTest
     {
+        /// <summary>Verifies run.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void Run(List<string> results)
         {
             TestCircleReference(results);
@@ -53,6 +64,8 @@ namespace LuminPackUnitTest
             TestPooled(results);
         }
 
+        /// <summary>Verifies test circle reference.</summary>
+        /// <param name="results">The results used by this operation.</param>
         private static void TestCircleReference(List<string> results)
         {
             try
@@ -85,6 +98,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test version tolerant.</summary>
+        /// <param name="results">The results used by this operation.</param>
         private static void TestVersionTolerant(List<string> results)
         {
             try
@@ -111,6 +126,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test pooled.</summary>
+        /// <param name="results">The results used by this operation.</param>
         private static void TestPooled(List<string> results)
         {
             try

@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Option;
@@ -6,16 +6,20 @@ using Xunit;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides number syntax probe functionality.</summary>
 [LuminPackable]
 public sealed partial class NumberSyntaxProbe
 {
+    /// <summary>Gets or sets the age.</summary>
     public int Age { get; set; }
+    /// <summary>Gets or sets the values.</summary>
     public int[] Values { get; set; } = System.Array.Empty<int>();
 }
 
 // RFC 8259 number grammar, token boundaries and IEEE-754 correct rounding for the JSON reader.
 // Both encodings run the same contract: numbers written by LuminPack round-trip bit for bit and
 // malformed numbers are rejected instead of being truncated.
+/// <summary>Provides json number syntax test functionality.</summary>
 public class JsonNumberSyntaxTest
 {
     private static readonly LuminPackSerializerOption s_strictUtf8 =
@@ -23,6 +27,7 @@ public class JsonNumberSyntaxTest
     private static readonly LuminPackSerializerOption s_strictUtf16 =
         LuminPackSerializerOption.Utf16 with { ValidateJsonSyntax = true };
 
+    /// <summary>Gets the integer literals.</summary>
     public static TheoryData<string> IntegerLiterals => new()
     {
         "0", "-0", "1", "-1", "9", "10", "99", "123456789",
@@ -30,6 +35,7 @@ public class JsonNumberSyntaxTest
         "9223372036854775807", "-9223372036854775808", "18446744073709551615"
     };
 
+    /// <summary>Gets the unsigned literals.</summary>
     public static TheoryData<string> UnsignedLiterals => new()
     {
         "0", "1", "9", "10", "99", "123456789",
@@ -37,6 +43,7 @@ public class JsonNumberSyntaxTest
         "9223372036854775807", "18446744073709551615"
     };
 
+    /// <summary>Gets the signed literals.</summary>
     public static TheoryData<string> SignedLiterals => new()
     {
         "0", "-0", "1", "-1", "9", "10", "99", "123456789",
@@ -44,6 +51,8 @@ public class JsonNumberSyntaxTest
         "9223372036854775807", "-9223372036854775808"
     };
 
+    /// <summary>Verifies invalid integer tokens are rejected.</summary>
+    /// <param name="literal">The literal used by this operation.</param>
     [Theory]
     [InlineData("1.5"), InlineData("1e2"), InlineData("1E2"), InlineData("01"), InlineData("-01"),
     InlineData("00"), InlineData("1."), InlineData("1e"), InlineData("1e+"), InlineData("+1"),
@@ -56,6 +65,8 @@ public class JsonNumberSyntaxTest
         Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<int>(literal, s_strictUtf16));
     }
 
+    /// <summary>Verifies malformed structures are rejected.</summary>
+    /// <param name="json">The json used by this operation.</param>
     [Theory]
     [InlineData("[1 2]")]
     [InlineData("[1,]")]
@@ -77,6 +88,8 @@ public class JsonNumberSyntaxTest
         Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<NumberSyntaxProbe>(json, s_strictUtf16));
     }
 
+    /// <summary>Verifies malformed literals are rejected.</summary>
+    /// <param name="json">The json used by this operation.</param>
     [Theory]
     [InlineData("truex")]
     [InlineData("nullx")]
@@ -89,6 +102,9 @@ public class JsonNumberSyntaxTest
         Assert.ThrowsAny<System.Exception>(() => LuminPackSerializer.DeserializeJson<bool>(json, s_strictUtf16));
     }
 
+    /// <summary>Verifies valid numbers still parse.</summary>
+    /// <param name="json">The json used by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
     [Theory]
     [InlineData("[1,2,3]", new[] { 1, 2, 3 })]
     public void ValidNumbersStillParse(string json, int[] expected)
@@ -97,6 +113,9 @@ public class JsonNumberSyntaxTest
         Assert.Equal(expected, LuminPackSerializer.DeserializeJson<int[]>(json, s_strictUtf16));
     }
 
+    /// <summary>Verifies valid double tokens parse.</summary>
+    /// <param name="literal">The literal used by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
     [Theory]
     [InlineData("0", 0)]
     [InlineData("-0", 0)]
@@ -113,6 +132,9 @@ public class JsonNumberSyntaxTest
         Assert.Equal(expected, LuminPackSerializer.DeserializeJson<double>(literal, s_strictUtf16));
     }
 
+    /// <summary>Verifies valid integer tokens parse.</summary>
+    /// <param name="literal">The literal used by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
     [Theory]
     [InlineData("0", 0)]
     [InlineData("-1", -1)]
@@ -125,6 +147,7 @@ public class JsonNumberSyntaxTest
         Assert.Equal(expected, LuminPackSerializer.DeserializeJson<int>(literal, s_strictUtf16));
     }
 
+    /// <summary>Verifies negative zero keeps its sign bit.</summary>
     [Fact]
     public void NegativeZeroKeepsItsSignBit()
     {
@@ -137,6 +160,7 @@ public class JsonNumberSyntaxTest
         }
     }
 
+    /// <summary>Verifies double conversion matches the reference parser bit for bit.</summary>
     [Fact]
     public void DoubleConversionMatchesTheReferenceParserBitForBit()
     {
@@ -160,6 +184,7 @@ public class JsonNumberSyntaxTest
         }
     }
 
+    /// <summary>Verifies single conversion matches the reference parser bit for bit.</summary>
     [Fact]
     public void SingleConversionMatchesTheReferenceParserBitForBit()
     {
@@ -182,6 +207,7 @@ public class JsonNumberSyntaxTest
         }
     }
 
+    /// <summary>Verifies random double literals match the reference parser.</summary>
     [Fact]
     public void RandomDoubleLiteralsMatchTheReferenceParser()
     {
@@ -197,6 +223,7 @@ public class JsonNumberSyntaxTest
         }
     }
 
+    /// <summary>Verifies random single literals match the reference parser.</summary>
     [Fact]
     public void RandomSingleLiteralsMatchTheReferenceParser()
     {
@@ -219,6 +246,7 @@ public class JsonNumberSyntaxTest
         }
     }
 
+    /// <summary>Verifies integer boundaries round trip.</summary>
     [Fact]
     public void IntegerBoundariesRoundTrip()
     {
@@ -239,6 +267,10 @@ public class JsonNumberSyntaxTest
         }
     }
 
+    /// <summary>Verifies random literal.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="maxDigits">The max digits used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string RandomLiteral(System.Random rng, int maxDigits)
     {
         int digits = 1 + rng.Next(maxDigits);
@@ -252,6 +284,8 @@ public class JsonNumberSyntaxTest
         return mantissa + "e" + exponent.ToString(CultureInfo.InvariantCulture);
     }
 
+    /// <summary>Verifies double literals.</summary>
+    /// <returns>The result of the operation.</returns>
     private static string[] DoubleLiterals() => new[]
     {
         "0", "-0", "1", "-1",
@@ -268,6 +302,8 @@ public class JsonNumberSyntaxTest
         "1e-320", "1e-310", "1.23e-45", "4.9406564584124654e-324"
     };
 
+    /// <summary>Verifies single literals.</summary>
+    /// <returns>The result of the operation.</returns>
     private static string[] SingleLiterals() => new[]
     {
         "0", "-0", "1", "-1",

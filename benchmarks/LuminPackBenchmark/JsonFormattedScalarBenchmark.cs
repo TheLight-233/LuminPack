@@ -8,6 +8,7 @@ namespace LuminPackBenchmark;
 // Isolates the formatted-scalar change: both rows run the same writer code path
 // and differ only in whether the text comes from an allocated string or from a
 // stack buffer.
+/// <summary>Provides json formatted scalar benchmark functionality.</summary>
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 6, iterationCount: 12)]
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MemoryDiagnoser]
@@ -24,6 +25,7 @@ public class JsonFormattedScalarBenchmark
     private TimeSpan[] _spans = null!;
     private byte[] _buffer = null!;
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -42,6 +44,8 @@ public class JsonFormattedScalarBenchmark
         _buffer = GC.AllocateUninitializedArray<byte>(Count * 96 + 64);
     }
 
+    /// <summary>Measures date time offset to string then write string for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true)]
     public int DateTimeOffset_ToStringThenWriteString()
     {
@@ -53,6 +57,8 @@ public class JsonFormattedScalarBenchmark
         return writer.CurrentIndex;
     }
 
+    /// <summary>Measures date time offset direct format for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public int DateTimeOffset_DirectFormat()
     {
@@ -64,6 +70,8 @@ public class JsonFormattedScalarBenchmark
         return writer.CurrentIndex;
     }
 
+    /// <summary>Measures date time to string then write string for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public int DateTime_ToStringThenWriteString()
     {
@@ -75,6 +83,8 @@ public class JsonFormattedScalarBenchmark
         return writer.CurrentIndex;
     }
 
+    /// <summary>Measures date time direct format for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public int DateTime_DirectFormat()
     {
@@ -86,6 +96,8 @@ public class JsonFormattedScalarBenchmark
         return writer.CurrentIndex;
     }
 
+    /// <summary>Measures guid to string then write string for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public int Guid_ToStringThenWriteString()
     {
@@ -97,6 +109,8 @@ public class JsonFormattedScalarBenchmark
         return writer.CurrentIndex;
     }
 
+    /// <summary>Measures guid direct format for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public int Guid_DirectFormat()
     {
@@ -108,6 +122,8 @@ public class JsonFormattedScalarBenchmark
         return writer.CurrentIndex;
     }
 
+    /// <summary>Measures time span to string then write string for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public int TimeSpan_ToStringThenWriteString()
     {
@@ -119,6 +135,8 @@ public class JsonFormattedScalarBenchmark
         return writer.CurrentIndex;
     }
 
+    /// <summary>Measures time span direct format for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public int TimeSpan_DirectFormat()
     {
@@ -130,6 +148,8 @@ public class JsonFormattedScalarBenchmark
         return writer.CurrentIndex;
     }
 
+    /// <summary>Measures date time offset direct format utf16 for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public int DateTimeOffset_DirectFormat_Utf16()
     {

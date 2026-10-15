@@ -1,88 +1,122 @@
 using LuminPack;
 using LuminPack.Attribute;
-using System.Collections.Generic;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides generic serialization test functionality.</summary>
 public partial class GenericSerializationTest
 {
+    /// <summary>Provides generic class functionality.</summary>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     [LuminPackable]
     public class GenericClass<T>
     {
+        /// <summary>Gets or sets the value.</summary>
         public T Value { get; set; }
+        /// <summary>Gets or sets the list.</summary>
         public List<T> List { get; set; }
+        /// <summary>Gets or sets the generic class2.</summary>
         public GenericClass2<int> GenericClass2 { get; set; }
+        /// <summary>Gets or sets the set.</summary>
         public IReadOnlySet<int> Set { get; set; }
     }
 
+    /// <summary>Provides generic class2 functionality.</summary>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     [LuminPackable]
     public class GenericClass2<T> where T : unmanaged
     {
+        /// <summary>Gets or sets the value.</summary>
         public T Value { get; set; }
+        /// <summary>Gets or sets the value2.</summary>
         public T Value2 { get; set; }
     }
 
-    // 抽象泛型基类
+    // Abstract generic base type.
+    /// <summary>Provides abstract generic base functionality.</summary>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     [LuminPackable]
     [LuminPackUnion(3, typeof(NumericGenericClass<double>))]
     [LuminPackUnion(4, typeof(NumericGenericClass<int>))]
     public abstract partial class AbstractGenericBase<T>
     {
+        /// <summary>Gets or sets the base value.</summary>
         [LuminPackOrder(0)]
         public T BaseValue { get; set; }
-        
+
+        /// <summary>Obtains the type info for the supplied input.</summary>
+        /// <returns>The result of the operation.</returns>
         public abstract string GetTypeInfo();
     }
 
-    // 可以被收集
+    // Include this type in discovery.
+    /// <summary>Provides concrete generic class functionality.</summary>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     [LuminPackable]
     public partial class ConcreteGenericClass<T> : AbstractGenericBase<T>
     {
+        /// <summary>Gets or sets the additional value.</summary>
         [LuminPackOrder(2)]
         public T AdditionalValue { get; set; }
-        
+
+        /// <summary>Gets or sets the items.</summary>
         [LuminPackOrder(3)]
         public List<T> Items { get; set; }
 
+        /// <summary>Obtains the type info for the supplied input.</summary>
+        /// <returns>The result of the operation.</returns>
         public override string GetTypeInfo()
         {
             return $"ConcreteGenericClass<{typeof(T).Name}>";
         }
     }
 
-    // 可以被收集
+    // Include this type in discovery.
+    /// <summary>Provides concrete generic class2 functionality.</summary>
     [LuminPackable]
     public partial class ConcreteGenericClass2 : AbstractGenericBase<int>
     {
-        
+
+        /// <summary>Gets or sets the name.</summary>
         public string Name { get; set; }
-        
+
+        /// <summary>Obtains the type info for the supplied input.</summary>
+        /// <returns>The result of the operation.</returns>
         public override string GetTypeInfo()
         {
             return $"ConcreteGenericClass<int>";
         }
     }
 
-    // 具体实现类2 - 带约束的泛型
-    // 不能被收集
+    // Second concrete implementation with generic constraints.
+    // Exclude this type from discovery.
+    /// <summary>Provides numeric generic class functionality.</summary>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     [LuminPackable]
     public partial class NumericGenericClass<T> : AbstractGenericBase<T> where T : struct
     {
+        /// <summary>Gets or sets the min value.</summary>
         [LuminPackOrder(2)]
         public T MinValue { get; set; }
-        
+
+        /// <summary>Gets or sets the max value.</summary>
         [LuminPackOrder(3)]
         public T MaxValue { get; set; }
-        
+
+        /// <summary>Gets or sets the range.</summary>
         [LuminPackOrder(4)]
         public T[] Range { get; set; }
 
+        /// <summary>Obtains the type info for the supplied input.</summary>
+        /// <returns>The result of the operation.</returns>
         public override string GetTypeInfo()
         {
             return $"NumericGenericClass<{typeof(T).Name}>";
         }
     }
 
+    /// <summary>Verifies test generic int serialization.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestGenericIntSerialization(List<string> output)
     {
         try
@@ -119,13 +153,18 @@ public partial class GenericSerializationTest
         }
     }
 
+    /// <summary>Provides simple generic functionality.</summary>
     [LuminPackable]
     public class SimpleGeneric
     {
+        /// <summary>Gets or sets the name.</summary>
         public string Name { get; set; }
+        /// <summary>Gets or sets the age.</summary>
         public int Age { get; set; }
     }
 
+    /// <summary>Verifies test generic class serialization.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestGenericClassSerialization(List<string> output)
     {
         try
@@ -166,6 +205,8 @@ public partial class GenericSerializationTest
         }
     }
 
+    /// <summary>Verifies test generic double serialization.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestGenericDoubleSerialization(List<string> output)
     {
         try
@@ -200,6 +241,8 @@ public partial class GenericSerializationTest
         }
     }
 
+    /// <summary>Verifies test nested generic serialization.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestNestedGenericSerialization(List<string> output)
     {
         try
@@ -244,6 +287,8 @@ public partial class GenericSerializationTest
         }
     }
 
+    /// <summary>Verifies test generic class2 serialization.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestGenericClass2Serialization(List<string> output)
     {
         try
@@ -274,6 +319,8 @@ public partial class GenericSerializationTest
         }
     }
 
+    /// <summary>Verifies test generic polymorphism with string.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestGenericPolymorphismWithString(List<string> output)
     {
         try
@@ -308,6 +355,8 @@ public partial class GenericSerializationTest
         }
     }
 
+    /// <summary>Verifies test generic polymorphism with int.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestGenericPolymorphismWithInt(List<string> output)
     {
         try
@@ -342,6 +391,8 @@ public partial class GenericSerializationTest
         }
     }
 
+    /// <summary>Verifies test numeric generic polymorphism.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestNumericGenericPolymorphism(List<string> output)
     {
         try
@@ -378,11 +429,13 @@ public partial class GenericSerializationTest
         }
     }
 
+    /// <summary>Verifies test complex generic polymorphism.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestComplexGenericPolymorphism(List<string> output)
     {
         try
         {
-            // 测试更复杂的场景：泛型类中包含多态泛型
+            // Cover polymorphic generic members inside a generic class.
             var container = new GenericClass<AbstractGenericBase<int>>
             {
                 Value = new ConcreteGenericClass<int>
@@ -421,6 +474,8 @@ public partial class GenericSerializationTest
         }
     }
 
+    /// <summary>Verifies run all tests.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void RunAllTests(List<string> output)
     {
         TestGenericIntSerialization(output);

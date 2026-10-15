@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using LuminPack;
 using LuminPack.Attribute;
 
@@ -15,29 +14,46 @@ namespace LuminPackUnitTest
     {
         // Only reachable through the generic wrapper methods below (never passed to
         // LuminPackSerializer.Serialize directly elsewhere).
+        /// <summary>Provides wrapper payload functionality.</summary>
         [LuminPackable]
         public sealed class WrapperPayload
         {
+            /// <summary>Stores the id.</summary>
             public int Id;
+            /// <summary>Stores the name.</summary>
             public string Name = "";
+            /// <summary>Stores the numbers.</summary>
             public List<int> Numbers = new();
         }
 
+        /// <summary>Verifies save.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         private static void Save<T>(T value)
         {
             _ = LuminPackSerializer.Serialize(value);
         }
 
+        /// <summary>Verifies save return.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>The result of the operation.</returns>
         private static byte[] SaveReturn<T>(T value)
         {
             return LuminPackSerializer.Serialize(value);
         }
 
+        /// <summary>Verifies restore.</summary>
+        /// <param name="bytes">The bytes used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>The result of the operation.</returns>
         private static T Restore<T>(byte[] bytes)
         {
             return LuminPackSerializer.Deserialize<T>(bytes);
         }
 
+        /// <summary>Verifies run.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void Run(List<string> results)
         {
             var original = new WrapperPayload

@@ -18,14 +18,14 @@ namespace LuminPack.Core
     public unsafe ref partial struct LuminPackWriter
     {
 
-<# for (int i = 1; i <= maxTypeParams; i++) { 
+<# for (int i = 1; i <= maxTypeParams; i++) {
     var typeParams = string.Join(", ", Enumerable.Range(1, i).Select(n => $"T{n}"));
-    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, i).Select(n => $"        /// <typeparam name=\"T{n}\">值类型 {n}</typeparam>"));
+    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, i).Select(n => $"        /// <typeparam name=\"T{n}\">Unmanaged type {n}</typeparam>"));
     var typeConstraints = string.Join(" ", Enumerable.Range(1, i).Select(n => $"where T{n} : unmanaged"));
     var sizeCalculation = string.Join(" + ", Enumerable.Range(1, i).Select(n => $"Unsafe.SizeOf<T{n}>()"));
     var writeStatements64 = new List<string>();
     var writeStatements32 = new List<string>();
-    
+
     for (int j = 1; j <= i; j++)
     {
         if (j == 1)
@@ -38,21 +38,21 @@ namespace LuminPack.Core
             writeStatements64.Add($"Unsafe.WriteUnaligned(ref Unsafe.Add(ref spanRef, {offset}), value{j});");
         }
     }
-    
-    // 32位版本使用UnmanagedViewModel
+
+    // Use UnmanagedViewModel on 32-bit processes.
     writeStatements32.Add($"var view = UnmanagedViewModel.Create({string.Join(", ", Enumerable.Range(1, i).Select(n => $"value{n}"))});");
     writeStatements32.Add($"Unsafe.CopyBlockUnaligned(ref spanRef, ref Unsafe.As<UnmanagedViewModel<{typeParams}>, byte>(ref view), (uint)Unsafe.SizeOf<UnmanagedViewModel<{typeParams}>>());");
 #>
         /// <summary>
-        /// 序列化值类型
+        /// SerializeUnmanaged type
         /// </summary>
 <# for (int j = 1; j <= i; j++) { #>
-        /// <param name="value<#= j #>">值 <#= j #></param>
+        /// <param name="value<#= j #>">Value <#= j #></param>
 <# } #>
 <#= typeParamDocs #>
-        /// <returns>写入的字节数</returns>
+        /// <returns>The number of bytes written.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int WriteUnmanaged<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>) 
+        public int WriteUnmanaged<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>)
             <#= typeConstraints #>
         {
 #if NET8_0_OR_GREATER
@@ -60,10 +60,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var statement in writeStatements64) { #>
                 <#= statement #>
 <# } #>
@@ -71,23 +71,23 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var statement in writeStatements32) { #>
                 <#= statement #>
 <# } #>
                 return Unsafe.SizeOf<UnmanagedViewModel<<#= typeParams #>>>();
             }
         }
-        
+
         /// <summary>
-        /// 序列化已知值类型
+        /// Writes unmanaged values.
         /// </summary>
 <# for (int j = 1; j <= i; j++) { #>
-        /// <param name="value<#= j #>">值 <#= j #></param>
+        /// <param name="value<#= j #>">Value <#= j #></param>
 <# } #>
 <#= typeParamDocs #>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedWithoutSizeReturn<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>) 
+        public void WriteUnmanagedWithoutSizeReturn<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>)
             <#= typeConstraints #>
         {
 #if NET8_0_OR_GREATER
@@ -95,17 +95,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var statement in writeStatements64) { #>
                 <#= statement #>
 <# } #>
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var statement in writeStatements32) { #>
                 <#= statement #>
 <# } #>
@@ -113,13 +113,13 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 序列化值类型（无类型约束检查）
+        /// Writes a value without an unmanaged type constraint.
         /// </summary>
 <# for (int j = 1; j <= i; j++) { #>
-        /// <param name="value<#= j #>">值 <#= j #></param>
+        /// <param name="value<#= j #>">Value <#= j #></param>
 <# } #>
 <#= typeParamDocs #>
-        /// <returns>写入的字节数</returns>
+        /// <returns>The number of bytes written.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousWriteUnmanaged<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>)
         {
@@ -128,10 +128,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var statement in writeStatements64) { #>
                 <#= statement #>
 <# } #>
@@ -139,19 +139,19 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var statement in writeStatements32) { #>
                 <#= statement #>
 <# } #>
                 return Unsafe.SizeOf<UnmanagedViewModel<<#= typeParams #>>>();
             }
         }
-        
+
         /// <summary>
-        /// 序列化已知值类型（无类型约束检查）
+        /// Writes values without an unmanaged type constraint.
         /// </summary>
 <# for (int j = 1; j <= i; j++) { #>
-        /// <param name="value<#= j #>">值 <#= j #></param>
+        /// <param name="value<#= j #>">Value <#= j #></param>
 <# } #>
 <#= typeParamDocs #>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -162,17 +162,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var statement in writeStatements64) { #>
                 <#= statement #>
 <# } #>
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var statement in writeStatements32) { #>
                 <#= statement #>
 <# } #>
@@ -180,16 +180,16 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 序列化值类型
+        /// SerializeUnmanaged type
         /// </summary>
-        /// <param name="index">写入起始索引</param>
+        /// <param name="index">The initial write offset.</param>
 <# for (int j = 1; j <= i; j++) { #>
-        /// <param name="value<#= j #>">值 <#= j #></param>
+        /// <param name="value<#= j #>">Value <#= j #></param>
 <# } #>
 <#= typeParamDocs #>
-        /// <returns>写入的字节数</returns>
+        /// <returns>The number of bytes written.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public int WriteUnmanaged<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>) 
+        public int WriteUnmanaged<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>)
             <#= typeConstraints #>
         {
 #if NET8_0_OR_GREATER
@@ -197,10 +197,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var statement in writeStatements64) { #>
                 <#= statement #>
 <# } #>
@@ -208,24 +208,24 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var statement in writeStatements32) { #>
                 <#= statement #>
 <# } #>
                 return Unsafe.SizeOf<UnmanagedViewModel<<#= typeParams #>>>();
             }
         }
-        
+
         /// <summary>
-        /// 序列化已知值类型
+        /// Writes unmanaged values.
         /// </summary>
-        /// <param name="index">写入起始索引</param>
+        /// <param name="index">The initial write offset.</param>
 <# for (int j = 1; j <= i; j++) { #>
-        /// <param name="value<#= j #>">值 <#= j #></param>
+        /// <param name="value<#= j #>">Value <#= j #></param>
 <# } #>
 <#= typeParamDocs #>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedWithoutSizeReturn<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>) 
+        public void WriteUnmanagedWithoutSizeReturn<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>)
             <#= typeConstraints #>
         {
 #if NET8_0_OR_GREATER
@@ -233,17 +233,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var statement in writeStatements64) { #>
                 <#= statement #>
 <# } #>
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var statement in writeStatements32) { #>
                 <#= statement #>
 <# } #>
@@ -251,14 +251,14 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 序列化值类型（无类型约束检查）
+        /// Writes a value without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">写入起始索引</param>
+        /// <param name="index">The initial write offset.</param>
 <# for (int j = 1; j <= i; j++) { #>
-        /// <param name="value<#= j #>">值 <#= j #></param>
+        /// <param name="value<#= j #>">Value <#= j #></param>
 <# } #>
 <#= typeParamDocs #>
-        /// <returns>写入的字节数</returns>
+        /// <returns>The number of bytes written.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousWriteUnmanaged<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, i).Select(n => $"in T{n} value{n}")) #>)
         {
@@ -267,10 +267,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var statement in writeStatements64) { #>
                 <#= statement #>
 <# } #>
@@ -278,20 +278,20 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var statement in writeStatements32) { #>
                 <#= statement #>
 <# } #>
                 return Unsafe.SizeOf<UnmanagedViewModel<<#= typeParams #>>>();
             }
         }
-        
+
         /// <summary>
-        /// 序列化已知值类型（无类型约束检查）
+        /// Writes values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">写入起始索引</param>
+        /// <param name="index">The initial write offset.</param>
 <# for (int j = 1; j <= i; j++) { #>
-        /// <param name="value<#= j #>">值 <#= j #></param>
+        /// <param name="value<#= j #>">Value <#= j #></param>
 <# } #>
 <#= typeParamDocs #>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -302,17 +302,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var statement in writeStatements64) { #>
                 <#= statement #>
 <# } #>
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var statement in writeStatements32) { #>
                 <#= statement #>
 <# } #>
@@ -320,6 +320,6 @@ namespace LuminPack.Core
         }
 
 <# } #>
-     
+
     }
 }

@@ -5,8 +5,11 @@ using LuminPack.Utility;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides string serializer fallback test functionality.</summary>
 internal static class StringSerializerFallbackTest
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(ValidUtf16MatchesPlatformTranscoder), ValidUtf16MatchesPlatformTranscoder);
@@ -17,28 +20,30 @@ internal static class StringSerializerFallbackTest
         RunCase(results, nameof(EmojiFourByteSequenceIsAccepted), EmojiFourByteSequenceIsAccepted);
     }
 
+    /// <summary>Verifies valid utf16 matches platform transcoder.</summary>
     private static void ValidUtf16MatchesPlatformTranscoder()
     {
         string[] values =
         {
             string.Empty,
             "ASCII",
-            "中文",
+            "\u4E2D\u6587",
             "😀",
-            "LuminPack-中文-😀-end",
-            "aé中😀z",
+            "LuminPack-\u4E2D\u6587-\uD83D\uDE00-end",
+            "a\u00E9\u4E2D\uD83D\uDE00z",
         };
 
         foreach (string value in values)
         {
             int required = Encoding.UTF8.GetByteCount(value);
             foreach (int destinationLength in Capacities(required))
-            foreach (bool finalBlock in new[] { false, true })
-            foreach (bool replace in new[] { false, true })
-                CompareFromUtf16(value, destinationLength, replace, finalBlock);
+                foreach (bool finalBlock in new[] { false, true })
+                    foreach (bool replace in new[] { false, true })
+                        CompareFromUtf16(value, destinationLength, replace, finalBlock);
         }
     }
 
+    /// <summary>Verifies invalid utf16 matches platform transcoder.</summary>
     private static void InvalidUtf16MatchesPlatformTranscoder()
     {
         string[] values =
@@ -52,34 +57,36 @@ internal static class StringSerializerFallbackTest
         };
 
         foreach (string value in values)
-        foreach (int destinationLength in new[] { 0, 1, 2, 3, 4, 5, 6, 8 })
-        foreach (bool finalBlock in new[] { false, true })
-        foreach (bool replace in new[] { false, true })
-            CompareFromUtf16(value, destinationLength, replace, finalBlock);
+            foreach (int destinationLength in new[] { 0, 1, 2, 3, 4, 5, 6, 8 })
+                foreach (bool finalBlock in new[] { false, true })
+                    foreach (bool replace in new[] { false, true })
+                        CompareFromUtf16(value, destinationLength, replace, finalBlock);
     }
 
+    /// <summary>Verifies valid utf8 matches platform transcoder.</summary>
     private static void ValidUtf8MatchesPlatformTranscoder()
     {
         string[] values =
         {
             string.Empty,
             "ASCII",
-            "中文",
+            "\u4E2D\u6587",
             "😀",
-            "LuminPack-中文-😀-end",
-            "aé中😀z",
+            "LuminPack-\u4E2D\u6587-\uD83D\uDE00-end",
+            "a\u00E9\u4E2D\uD83D\uDE00z",
         };
 
         foreach (string value in values)
         {
             byte[] source = Encoding.UTF8.GetBytes(value);
             foreach (int destinationLength in Capacities(value.Length))
-            foreach (bool finalBlock in new[] { false, true })
-            foreach (bool replace in new[] { false, true })
-                CompareToUtf16(source, destinationLength, replace, finalBlock);
+                foreach (bool finalBlock in new[] { false, true })
+                    foreach (bool replace in new[] { false, true })
+                        CompareToUtf16(source, destinationLength, replace, finalBlock);
         }
     }
 
+    /// <summary>Verifies invalid utf8 matches platform transcoder.</summary>
     private static void InvalidUtf8MatchesPlatformTranscoder()
     {
         byte[][] values =
@@ -101,15 +108,16 @@ internal static class StringSerializerFallbackTest
         };
 
         foreach (byte[] value in values)
-        foreach (int destinationLength in new[] { 0, 1, 2, 3, 4, 5, 8 })
-        foreach (bool finalBlock in new[] { false, true })
-        foreach (bool replace in new[] { false, true })
-            CompareToUtf16(value, destinationLength, replace, finalBlock);
+            foreach (int destinationLength in new[] { 0, 1, 2, 3, 4, 5, 8 })
+                foreach (bool finalBlock in new[] { false, true })
+                    foreach (bool replace in new[] { false, true })
+                        CompareToUtf16(value, destinationLength, replace, finalBlock);
     }
 
+    /// <summary>Verifies encoding utf8 round trips match.</summary>
     private static void EncodingUtf8RoundTripsMatch()
     {
-        const string value = "ASCII-中文-😀-é";
+        const string value = "ASCII-\u4E2D\u6587-\uD83D\uDE00-\u00E9";
         byte[] expectedBytes = Encoding.UTF8.GetBytes(value);
         byte[] actualBytes = new byte[expectedBytes.Length];
 
@@ -129,6 +137,7 @@ internal static class StringSerializerFallbackTest
             "Fallback UTF-8 to UTF-16 output differs from Encoding.UTF8.");
     }
 
+    /// <summary>Verifies emoji four byte sequence is accepted.</summary>
     private static void EmojiFourByteSequenceIsAccepted()
     {
         byte[] emoji = [0xF0, 0x9F, 0x98, 0x80];
@@ -142,6 +151,11 @@ internal static class StringSerializerFallbackTest
             "A legal four-byte UTF-8 emoji was rejected by the fallback decoder.");
     }
 
+    /// <summary>Verifies compare from utf16.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destinationLength">The destination length used by this operation.</param>
+    /// <param name="replaceInvalidSequences">The replace invalid sequences used by this operation.</param>
+    /// <param name="isFinalBlock">The is final block used by this operation.</param>
     private static void CompareFromUtf16(
         string source,
         int destinationLength,
@@ -167,6 +181,11 @@ internal static class StringSerializerFallbackTest
             $"actual={actualStatus}/{actualRead}/{actualWritten}.");
     }
 
+    /// <summary>Verifies compare to utf16.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destinationLength">The destination length used by this operation.</param>
+    /// <param name="replaceInvalidSequences">The replace invalid sequences used by this operation.</param>
+    /// <param name="isFinalBlock">The is final block used by this operation.</param>
     private static void CompareToUtf16(
         byte[] source,
         int destinationLength,
@@ -192,6 +211,9 @@ internal static class StringSerializerFallbackTest
             $"actual={actualStatus}/{actualRead}/{actualWritten}.");
     }
 
+    /// <summary>Verifies capacities.</summary>
+    /// <param name="required">The required used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static IEnumerable<int> Capacities(int required)
     {
         yield return 0;
@@ -201,11 +223,18 @@ internal static class StringSerializerFallbackTest
         yield return required + 1;
     }
 
+    /// <summary>Verifies escape.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string Escape(string value)
         => string.Concat(value.Select(character => char.IsSurrogate(character)
             ? $"\\u{(int)character:X4}"
             : character.ToString()));
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -219,6 +248,9 @@ internal static class StringSerializerFallbackTest
         }
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)

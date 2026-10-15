@@ -1,7 +1,4 @@
-using System;
 using System.Globalization;
-using System.IO;
-using System.Threading.Tasks;
 using LuminPack.Cryptography;
 using Xunit;
 
@@ -18,6 +15,9 @@ namespace LuminPackUnitTest
     /// </summary>
     public class ChaCha20Poly1305Test
     {
+        /// <summary>Verifies from hex.</summary>
+        /// <param name="hex">The hex used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         private static byte[] FromHex(string hex)
         {
             hex = hex.Replace(" ", "", StringComparison.Ordinal)
@@ -29,6 +29,7 @@ namespace LuminPackUnitTest
             return result;
         }
 
+        /// <summary>Verifies cha cha20 keystream rfc8439 2 3 2.</summary>
         [Fact]
         public void ChaCha20_Keystream_Rfc8439_2_3_2()
         {
@@ -57,6 +58,7 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies cross check against bcl twelve byte nonce.</summary>
         [Fact]
         public void CrossCheck_AgainstBcl_TwelveByteNonce()
         {
@@ -82,6 +84,7 @@ namespace LuminPackUnitTest
             Assert.Equal(bclTag, myTag);
         }
 
+        /// <summary>Verifies cross check against bcl empty plaintext.</summary>
         [Fact]
         public void CrossCheck_AgainstBcl_EmptyPlaintext()
         {
@@ -102,6 +105,7 @@ namespace LuminPackUnitTest
             Assert.Equal(bclTag, myTag);
         }
 
+        /// <summary>Verifies cross check against bcl multiple of16.</summary>
         [Fact]
         public void CrossCheck_AgainstBcl_MultipleOf16()
         {
@@ -126,6 +130,7 @@ namespace LuminPackUnitTest
             Assert.Equal(bclTag, myTag);
         }
 
+        /// <summary>Verifies rejects tampered tag.</summary>
         [Fact]
         public void Rejects_TamperedTag()
         {
@@ -147,6 +152,7 @@ namespace LuminPackUnitTest
             Assert.False(LuminChaCha20Poly1305.Decrypt(key, nonce, aad, ct, wrongTag, recovered));
         }
 
+        /// <summary>Verifies rejects tampered ciphertext.</summary>
         [Fact]
         public void Rejects_TamperedCiphertext()
         {
@@ -168,6 +174,7 @@ namespace LuminPackUnitTest
             Assert.False(LuminChaCha20Poly1305.Decrypt(key, nonce, aad, tampered, tag, recovered));
         }
 
+        /// <summary>Verifies rejects wrong aad.</summary>
         [Fact]
         public void Rejects_WrongAad()
         {
@@ -186,6 +193,7 @@ namespace LuminPackUnitTest
             Assert.False(LuminChaCha20Poly1305.Decrypt(key, nonce, new byte[] { 1, 2, 3, 4 }, ct, tag, recovered));
         }
 
+        /// <summary>Verifies round trip twelve byte nonce random payload.</summary>
         [Fact]
         public void RoundTrip_TwelveByteNonce_RandomPayload()
         {
@@ -207,6 +215,7 @@ namespace LuminPackUnitTest
             Assert.Equal(pt, recovered);
         }
 
+        /// <summary>Verifies block2 matches two sequential blocks.</summary>
         [Fact]
         public unsafe void Block2_Matches_TwoSequentialBlocks()
         {
@@ -247,6 +256,7 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies block4 matches four sequential blocks.</summary>
         [Fact]
         public unsafe void Block4_Matches_FourSequentialBlocks()
         {
@@ -282,6 +292,7 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies simd matches scalar.</summary>
         [Fact]
         public unsafe void Simd_Matches_Scalar()
         {
@@ -308,6 +319,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies async stream encrypt decrypt round trip.</summary>
+        /// <returns>The result of the operation.</returns>
         [Fact]
         public async Task AsyncStream_EncryptDecrypt_RoundTrip()
         {

@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Threading;
+using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
@@ -27,12 +27,15 @@ public enum LuminPackGenerationTier
     Minimal = 3,
 }
 
+/// <summary>Provides lumin pack generation tier resolver functionality.</summary>
 internal static class LuminPackGenerationTierResolver
 {
     private const string GeneratorOptionsAttr = "LuminPack.Attribute.LuminPackGeneratorOptionsAttribute";
     private const string GenerationModeProperty = "build_property.LuminPackGenerationMode";
 
     /// <summary>Maps the MSBuild property value (including legacy names) to a tier.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     internal static LuminPackGenerationTier FromProperty(string? value) => value switch
     {
         "Medium" or "Compatible" or "PrunePublic" => LuminPackGenerationTier.Medium,
@@ -42,6 +45,8 @@ internal static class LuminPackGenerationTierResolver
     };
 
     /// <summary>Maps an assembly-level <c>[LuminPackGeneratorOptions]</c> attribute to a tier.</summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <returns>The result of the operation.</returns>
     internal static LuminPackGenerationTier FromAssembly(Compilation compilation)
     {
         foreach (var attribute in compilation.Assembly.GetAttributes())
@@ -73,6 +78,8 @@ internal static class LuminPackGenerationTierResolver
     }
 
     /// <summary>Maps the optional <c>[LuminPackGeneratorOptions]</c> Register argument to a register mode.</summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <returns>The result of the operation.</returns>
     internal static LuminPackRegisterMode RegisterModeFromAssembly(Compilation compilation)
     {
         foreach (var attribute in compilation.Assembly.GetAttributes())
@@ -122,6 +129,11 @@ public sealed class ReachabilityAnalysis
     private readonly ImmutableHashSet<ISymbol> _emittedPackableDefinitions;
     private readonly LuminPackGenerationTier _tier;
 
+    /// <summary>Initializes a new instance of <c>ReachabilityAnalysis</c>.</summary>
+    /// <param name="tier">The tier used by this operation.</param>
+    /// <param name="reachableNoOwnerTypes">The reachable no owner types used by this operation.</param>
+    /// <param name="emittedTypes">The emitted types used by this operation.</param>
+    /// <param name="emittedPackableDefinitions">The emitted packable definitions used by this operation.</param>
     internal ReachabilityAnalysis(
         LuminPackGenerationTier tier,
         ImmutableArray<ITypeSymbol> reachableNoOwnerTypes,
@@ -149,20 +161,28 @@ public sealed class ReachabilityAnalysis
     /// <see cref="LuminPackGenerationTier.Minimal"/> skips packables that are not reachable from any
     /// serializer call site; the other tiers always emit every packable.
     /// </summary>
+    /// <param name="packable">The packable used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     internal bool ShouldEmitPackable(ITypeSymbol packable)
         => _tier != LuminPackGenerationTier.Minimal ||
            _emittedPackableDefinitions.Contains(packable.OriginalDefinition);
 }
 
+/// <summary>Provides reachability analysis cache functionality.</summary>
 internal static class ReachabilityAnalysisCache
 {
     private const string SerializerTypeName = "LuminPack.LuminPackSerializer";
     private const string UnionAttributeName = "LuminPack.Attribute.LuminPackUnionAttribute";
 
+    /// <summary>Provides holder functionality.</summary>
     private sealed class Holder
     {
         private readonly Lazy<ReachabilityAnalysis>[] _byTier = new Lazy<ReachabilityAnalysis>[4];
 
+        /// <summary>Obtains the requested value from the supplied input.</summary>
+        /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+        /// <param name="tier">The tier used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         internal ReachabilityAnalysis Get(Compilation compilation, LuminPackGenerationTier tier)
         {
             int index = (int)tier;
@@ -179,9 +199,17 @@ internal static class ReachabilityAnalysisCache
 
     private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Compilation, Holder> Cache = new();
 
+    /// <summary>Obtains the or create for the supplied input.</summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="tier">The tier used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     internal static ReachabilityAnalysis GetOrCreate(Compilation compilation, LuminPackGenerationTier tier)
         => Cache.GetValue(compilation, static value => new Holder()).Get(compilation, tier);
 
+    /// <summary>Analyzes  and records the resulting metadata or diagnostics.</summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="tier">The tier used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static ReachabilityAnalysis Analyze(Compilation compilation, LuminPackGenerationTier tier)
     {
         CompilationTypeAnalysis analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
@@ -397,12 +425,19 @@ internal static class ReachabilityAnalysisCache
             emittedPackableDefinitions.ToImmutableHashSet(SymbolEqualityComparer.Default));
     }
 
+    /// <summary>Determines whether the supplied value has the reachable no owner classification.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <param name="analysis">The analysis used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsReachableNoOwner(ITypeSymbol type, CompilationTypeAnalysis analysis)
         => !analysis.HasOwner(type) &&
            !LuminPackExtensionGenerator.ContainsTypeParameter(type) &&
            LuminPackExtensionGenerator.IsAotVisible(type) &&
            LuminPackExtensionGenerator.IsStaticFormatterCandidate(type);
 
+    /// <summary>Determines whether the supplied value has the publicly accessible type classification.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsPubliclyAccessibleType(ITypeSymbol type)
     {
         INamedTypeSymbol? named = type switch
@@ -431,6 +466,10 @@ internal static class ReachabilityAnalysisCache
     /// elements, generic arguments, containing types) and, when it is a <c>[LuminPackable]</c> type,
     /// its serialized member graphs and union members.
     /// </summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <param name="types">The types used by this operation.</param>
+    /// <param name="analysis">The analysis used by this operation.</param>
     private static void ExpandType(Compilation compilation, ITypeSymbol type, ISet<ITypeSymbol> types, CompilationTypeAnalysis analysis)
     {
         if (type is null || type.TypeKind == TypeKind.Error || type is ITypeParameterSymbol)
@@ -473,6 +512,10 @@ internal static class ReachabilityAnalysisCache
     /// This keeps union members reachable in <see cref="LuminPackGenerationTier.Minimal"/> even when
     /// they are never individually passed to a serializer call.
     /// </summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="packable">The packable used by this operation.</param>
+    /// <param name="types">The types used by this operation.</param>
+    /// <param name="analysis">The analysis used by this operation.</param>
     private static void ExpandUnionMembers(Compilation compilation, INamedTypeSymbol packable, ISet<ITypeSymbol> types, CompilationTypeAnalysis analysis)
     {
         bool isLuminUnion = packable.TypeKind == TypeKind.Interface ||
@@ -526,6 +569,10 @@ internal static class ReachabilityAnalysisCache
         }
     }
 
+    /// <summary>Determines whether the supplied value has the cs11 union classification.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsCs11Union(INamedTypeSymbol type, Compilation compilation)
     {
         INamedTypeSymbol? unionAttribute = compilation.GetTypeByMetadataName("System.Runtime.CompilerServices.UnionAttribute");
@@ -548,6 +595,10 @@ internal static class ReachabilityAnalysisCache
         return false;
     }
 
+    /// <summary>Performs the collect cs11 union case types step for the current operation.</summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="packable">The packable used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static IEnumerable<ITypeSymbol> CollectCs11UnionCaseTypes(Compilation compilation, INamedTypeSymbol packable)
     {
         var cases = new List<ITypeSymbol>();
@@ -621,6 +672,10 @@ internal static class ReachabilityAnalysisCache
         return cases;
     }
 
+    /// <summary>Determines whether the supplied value has the derived from classification.</summary>
+    /// <param name="derived">The derived used by this operation.</param>
+    /// <param name="baseDef">The base def used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsDerivedFrom(INamedTypeSymbol derived, INamedTypeSymbol baseDef)
     {
         if (baseDef.TypeKind == TypeKind.Interface)
@@ -650,6 +705,8 @@ internal static class ReachabilityAnalysisCache
     /// formatters serialize inherited base members and reference the base's local class structure, so
     /// base packables must be emitted even when they are never serialized directly.
     /// </summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="definitions">The definitions used by this operation.</param>
     private static void AddBasePackableChain(Compilation compilation, ISet<ITypeSymbol> definitions)
     {
         var pending = new Queue<INamedTypeSymbol>();
@@ -678,6 +735,11 @@ internal static class ReachabilityAnalysisCache
         }
     }
 
+    /// <summary>Performs the expand packable members step for the current operation.</summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="packable">The packable used by this operation.</param>
+    /// <param name="types">The types used by this operation.</param>
+    /// <param name="analysis">The analysis used by this operation.</param>
     private static void ExpandPackableMembers(Compilation compilation, INamedTypeSymbol packable, ISet<ITypeSymbol> types, CompilationTypeAnalysis analysis)
     {
         foreach (ISymbol member in packable.GetMembers())
@@ -711,26 +773,41 @@ internal static class ReachabilityAnalysisCache
         }
     }
 
+    /// <summary>Determines whether the supplied value has the auto property classification.</summary>
+    /// <param name="property">The property used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsAutoProperty(IPropertySymbol property)
         => property.ContainingType.GetMembers().OfType<IFieldSymbol>().Any(f =>
             f.IsImplicitlyDeclared &&
             f.AssociatedSymbol is IPropertySymbol p &&
             SymbolEqualityComparer.Default.Equals(p, property));
 
+    /// <summary>Determines whether the supplied value has the serialized field classification.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsSerializedField(IFieldSymbol field)
         => !TypeMetaChecker.TryCheckIgnoreAttribute(field) &&
            (TypeMetaChecker.TryCheckIncludeAttribute(field) || IsPubliclyAccessible(field.DeclaredAccessibility));
 
+    /// <summary>Determines whether the supplied value has the serialized property classification.</summary>
+    /// <param name="property">The property used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsSerializedProperty(IPropertySymbol property)
         => !TypeMetaChecker.TryCheckIgnoreAttribute(property) &&
            (TypeMetaChecker.TryCheckIncludeAttribute(property) || IsPubliclyAccessible(property.DeclaredAccessibility));
 
+    /// <summary>Determines whether the supplied value has the publicly accessible classification.</summary>
+    /// <param name="accessibility">The accessibility used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsPubliclyAccessible(Accessibility accessibility)
         => accessibility is not (
             Accessibility.Private or
             Accessibility.ProtectedAndInternal or
             Accessibility.Protected);
 
+    /// <summary>Determines whether packable attribute are present.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool HasPackableAttribute(ITypeSymbol type)
         => type.GetAttributes().Any(static attribute =>
             attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE);
@@ -742,6 +819,9 @@ internal static class ReachabilityAnalysisCache
         "WritePolymorphismValue", "ReadPolymorphismValue",
     };
 
+    /// <summary>Determines whether the supplied value has the generated formatter method classification.</summary>
+    /// <param name="method">The method used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsGeneratedFormatterMethod(IMethodSymbol method)
     {
         if (method.IsGenericMethod)
@@ -764,6 +844,10 @@ internal static class ReachabilityAnalysisCache
     /// Adds a payload type as a seed, or, when it still contains source-declared type parameters,
     /// enqueues a slot for each distinct generic owner so concrete instantiations can resolve it.
     /// </summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="payload">The payload used by this operation.</param>
+    /// <param name="seeds">The seeds used by this operation.</param>
+    /// <param name="pending">The pending used by this operation.</param>
     private static void CollectPayload(
         Compilation compilation,
         ITypeSymbol payload,
@@ -801,6 +885,9 @@ internal static class ReachabilityAnalysisCache
         }
     }
 
+    /// <summary>Performs the enumerate type parameters step for the current operation.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>The result of the operation.</returns>
     private static IEnumerable<ITypeParameterSymbol> EnumerateTypeParameters(ITypeSymbol type)
     {
         switch (type)
@@ -836,6 +923,10 @@ internal static class ReachabilityAnalysisCache
         }
     }
 
+    /// <summary>Performs the build map step for the current operation.</summary>
+    /// <param name="slot">The slot used by this operation.</param>
+    /// <param name="invoked">The invoked used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static Dictionary<ITypeParameterSymbol, ITypeSymbol> BuildMap(TypeParamSlot slot, IMethodSymbol invoked)
     {
         var map = new Dictionary<ITypeParameterSymbol, ITypeSymbol>(SymbolEqualityComparer.Default);
@@ -864,6 +955,11 @@ internal static class ReachabilityAnalysisCache
         return map;
     }
 
+    /// <summary>Performs the substitute step for the current operation.</summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <param name="map">The map used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static ITypeSymbol Substitute(
         Compilation compilation,
         ITypeSymbol type,
@@ -884,6 +980,11 @@ internal static class ReachabilityAnalysisCache
         }
     }
 
+    /// <summary>Performs the substitute named step for the current operation.</summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="named">The named used by this operation.</param>
+    /// <param name="map">The map used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static ITypeSymbol SubstituteNamed(
         Compilation compilation,
         INamedTypeSymbol named,
@@ -931,8 +1032,13 @@ internal static class ReachabilityAnalysisCache
         return nestedDef.TypeParameters.Length == 0 ? nestedDef : nestedDef.Construct(args);
     }
 
+    /// <summary>Provides type param slot functionality.</summary>
     private readonly struct TypeParamSlot : IEquatable<TypeParamSlot>
     {
+        /// <summary>Initializes a new instance of <c>TypeParamSlot</c>.</summary>
+        /// <param name="ownerMethod">The owner method used by this operation.</param>
+        /// <param name="ownerType">The owner type used by this operation.</param>
+        /// <param name="payloadType">The payload type used by this operation.</param>
         internal TypeParamSlot(IMethodSymbol? ownerMethod, INamedTypeSymbol? ownerType, ITypeSymbol payloadType)
         {
             OwnerMethod = ownerMethod;
@@ -940,10 +1046,16 @@ internal static class ReachabilityAnalysisCache
             PayloadType = payloadType;
         }
 
+        /// <summary>Gets the owner method.</summary>
         internal IMethodSymbol? OwnerMethod { get; }
+        /// <summary>Gets the owner type.</summary>
         internal INamedTypeSymbol? OwnerType { get; }
+        /// <summary>Gets the payload type.</summary>
         internal ITypeSymbol PayloadType { get; }
 
+        /// <summary>Performs the matches step for the current operation.</summary>
+        /// <param name="invoked">The invoked used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         internal bool Matches(IMethodSymbol invoked)
         {
             if (OwnerMethod is not null)
@@ -956,13 +1068,21 @@ internal static class ReachabilityAnalysisCache
                 SymbolEqualityComparer.Default.Equals(invoked.ContainingType.OriginalDefinition, OwnerType);
         }
 
+        /// <summary>Determines whether the supplied value is equal to the current value.</summary>
+        /// <param name="other">The other used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         public bool Equals(TypeParamSlot other) =>
             SymbolEqualityComparer.Default.Equals(OwnerMethod, other.OwnerMethod) &&
             SymbolEqualityComparer.Default.Equals(OwnerType, other.OwnerType) &&
             SymbolEqualityComparer.Default.Equals(PayloadType, other.PayloadType);
 
+        /// <summary>Determines whether the supplied value is equal to the current value.</summary>
+        /// <param name="obj">The obj used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         public override bool Equals(object? obj) => obj is TypeParamSlot other && Equals(other);
 
+        /// <summary>Computes the hash code used by the configured lookup or equality strategy.</summary>
+        /// <returns>The result of the operation.</returns>
         public override int GetHashCode()
         {
             unchecked

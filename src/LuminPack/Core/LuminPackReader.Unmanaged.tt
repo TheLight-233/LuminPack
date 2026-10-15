@@ -18,11 +18,11 @@ namespace LuminPack.Core
     public unsafe ref partial struct LuminPackReader
     {
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1>(out T1 value1)
             where T1 : unmanaged
@@ -34,27 +34,27 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 return Unsafe.SizeOf<T1>();
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 value1 = default!;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
                 return Unsafe.SizeOf<T1>();
             }
         }
-        
+
         /// <summary>
-        /// 反序列化值类型并前进读取位置
+        /// Reads an unmanaged value and advances the input position.
         /// </summary>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <returns>反序列化的值</returns>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <returns>The deserialized value.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T1 ReadUnmanaged<T1>()
             where T1 : unmanaged
@@ -65,31 +65,31 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             T1 value1;
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 value1 = default!;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
             }
-            
+
             Advance(size);
             return value1;
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<T1>(ref int index, out T1 value1)
             where T1 : unmanaged
@@ -99,31 +99,31 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 return Unsafe.SizeOf<T1>();
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 value1 = default!;
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
                 return Unsafe.SizeOf<T1>();
             }
         }
 
-<# for (int count = 2; count <= maxTypeParams; count++) { 
+<# for (int count = 2; count <= maxTypeParams; count++) {
     var typeParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"T{i}"));
-    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, count).Select(i => $"        /// <typeparam name=\"T{i}\">值类型 {i}</typeparam>"));
+    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, count).Select(i => $"        /// <typeparam name=\"T{i}\">Unmanaged type {i}</typeparam>"));
     var constraints = string.Join(" ", Enumerable.Range(1, count).Select(i => $"where T{i} : unmanaged"));
     var sizeOfSum = string.Join(" + ", Enumerable.Range(1, count).Select(i => $"Unsafe.SizeOf<T{i}>()"));
-    
+
     var readOperations64 = new List<string>();
     var readOperations32 = new List<string>();
-    
+
     for (int i = 1; i <= count; i++)
     {
         if (i == 1)
@@ -134,20 +134,20 @@ namespace LuminPack.Core
             readOperations64.Add($"value{i} = Unsafe.ReadUnaligned<T{i}>(ref Unsafe.Add(ref spanRef, {offset}));");
         }
     }
-    
+
     var outParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"out value{i}"));
     readOperations32.Add($"UnmanagedViewModel<{typeParams}> view = default;");
     readOperations32.Add($"Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<{typeParams}>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<{typeParams}>>());");
     readOperations32.Add($"view.Deconstruct({outParams});");
 #>
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
 <# for (int i = 1; i <= count; i++) { #>
-        /// <param name="value<#= i #>">输出值 <#= i #></param>
+        /// <param name="value<#= i #>">Output value <#= i #></param>
 <# } #>
 <#= typeParamDocs #>
-        /// <returns>读取的字节数</returns>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, count).Select(i => $"out T{i} value{i}")) #>)
             <#= constraints #>
@@ -158,10 +158,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var operation in readOperations64) { #>
                 <#= operation #>
 <# } #>
@@ -169,7 +169,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var operation in readOperations32) { #>
                 <#= operation #>
 <# } #>
@@ -178,14 +178,14 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型
+        /// Reads unmanaged values.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
+        /// <param name="index">The initial read offset.</param>
 <# for (int i = 1; i <= count; i++) { #>
-        /// <param name="value<#= i #>">输出值 <#= i #></param>
+        /// <param name="value<#= i #>">Output value <#= i #></param>
 <# } #>
 <#= typeParamDocs #>
-        /// <returns>读取的字节数</returns>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadUnmanaged<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, count).Select(i => $"out T{i} value{i}")) #>)
             <#= constraints #>
@@ -195,10 +195,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var operation in readOperations64) { #>
                 <#= operation #>
 <# } #>
@@ -206,7 +206,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var operation in readOperations32) { #>
                 <#= operation #>
 <# } #>
@@ -216,13 +216,13 @@ namespace LuminPack.Core
 
 <# } #>
 
-<# for (int count = 1; count <= maxTypeParams; count++) { 
+<# for (int count = 1; count <= maxTypeParams; count++) {
     var typeParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"T{i}"));
-    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, count).Select(i => $"        /// <typeparam name=\"T{i}\">值类型 {i}</typeparam>"));
-    
+    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, count).Select(i => $"        /// <typeparam name=\"T{i}\">Unmanaged type {i}</typeparam>"));
+
     var readOperations64 = new List<string>();
     var readOperations32 = new List<string>();
-    
+
     for (int i = 1; i <= count; i++)
     {
         if (i == 1)
@@ -233,7 +233,7 @@ namespace LuminPack.Core
             readOperations64.Add($"value{i} = Unsafe.ReadUnaligned<T{i}>(ref Unsafe.Add(ref spanRef, {offset}));");
         }
     }
-    
+
     if (count == 1)
     {
         readOperations32.Add("Unsafe.SkipInit(out value1);");
@@ -248,10 +248,10 @@ namespace LuminPack.Core
     }
 #>
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
 <# for (int i = 1; i <= count; i++) { #>
-        /// <param name="value<#= i #>">输出值 <#= i #></param>
+        /// <param name="value<#= i #>">Output value <#= i #></param>
 <# } #>
 <#= typeParamDocs #>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -262,17 +262,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var operation in readOperations64) { #>
                 <#= operation #>
 <# } #>
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var operation in readOperations32) { #>
                 <#= operation #>
 <# } #>
@@ -280,11 +280,11 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（不返回读取大小）
+        /// Reads unmanaged values without returning the byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
+        /// <param name="index">The initial read offset.</param>
 <# for (int i = 1; i <= count; i++) { #>
-        /// <param name="value<#= i #>">输出值 <#= i #></param>
+        /// <param name="value<#= i #>">Output value <#= i #></param>
 <# } #>
 <#= typeParamDocs #>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -295,17 +295,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var operation in readOperations64) { #>
                 <#= operation #>
 <# } #>
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var operation in readOperations32) { #>
                 <#= operation #>
 <# } #>
@@ -315,11 +315,11 @@ namespace LuminPack.Core
 <# } #>
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="value1">输出值 1</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="value1">Output value 1</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1>(out T1 value1)
         {
@@ -329,16 +329,16 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 return Unsafe.SizeOf<T1>();
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 Unsafe.SkipInit(out value1);
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
                 return Unsafe.SizeOf<T1>();
@@ -346,12 +346,12 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
-        /// <param name="value1">输出值 1</param>
-        /// <typeparam name="T1">值类型 1</typeparam>
-        /// <returns>读取的字节数</returns>
+        /// <param name="index">The initial read offset.</param>
+        /// <param name="value1">Output value 1</param>
+        /// <typeparam name="T1">Unmanaged type 1</typeparam>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<T1>(ref int index, out T1 value1)
         {
@@ -360,30 +360,30 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
                 value1 = Unsafe.ReadUnaligned<T1>(ref spanRef);
                 return Unsafe.SizeOf<T1>();
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
                 Unsafe.SkipInit(out value1);
                 Unsafe.CopyBlockUnaligned(ref Unsafe.As<T1, byte>(ref value1), ref spanRef, (uint)Unsafe.SizeOf<T1>());
                 return Unsafe.SizeOf<T1>();
             }
         }
 
-<# for (int count = 2; count <= maxTypeParams; count++) { 
+<# for (int count = 2; count <= maxTypeParams; count++) {
     var typeParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"T{i}"));
-    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, count).Select(i => $"        /// <typeparam name=\"T{i}\">值类型 {i}</typeparam>"));
+    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, count).Select(i => $"        /// <typeparam name=\"T{i}\">Unmanaged type {i}</typeparam>"));
     var sizeOfSum = string.Join(" + ", Enumerable.Range(1, count).Select(i => $"Unsafe.SizeOf<T{i}>()"));
-    
+
     var readOperations64 = new List<string>();
     var readOperations32 = new List<string>();
-    
+
     for (int i = 1; i <= count; i++)
     {
         if (i == 1)
@@ -394,20 +394,20 @@ namespace LuminPack.Core
             readOperations64.Add($"value{i} = Unsafe.ReadUnaligned<T{i}>(ref Unsafe.Add(ref spanRef, {offset}));");
         }
     }
-    
+
     var outParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"out value{i}"));
     readOperations32.Add($"UnmanagedViewModel<{typeParams}> view = default;");
     readOperations32.Add($"Unsafe.CopyBlockUnaligned(ref Unsafe.As<UnmanagedViewModel<{typeParams}>, byte>(ref view), ref spanRef, (uint)Unsafe.SizeOf<UnmanagedViewModel<{typeParams}>>());");
     readOperations32.Add($"view.Deconstruct({outParams});");
 #>
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
 <# for (int i = 1; i <= count; i++) { #>
-        /// <param name="value<#= i #>">输出值 <#= i #></param>
+        /// <param name="value<#= i #>">Output value <#= i #></param>
 <# } #>
 <#= typeParamDocs #>
-        /// <returns>读取的字节数</returns>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<<#= typeParams #>>(<#= string.Join(", ", Enumerable.Range(1, count).Select(i => $"out T{i} value{i}")) #>)
         {
@@ -417,10 +417,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var operation in readOperations64) { #>
                 <#= operation #>
 <# } #>
@@ -428,7 +428,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var operation in readOperations32) { #>
                 <#= operation #>
 <# } #>
@@ -437,14 +437,14 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查）
+        /// Reads values without an unmanaged type constraint.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
+        /// <param name="index">The initial read offset.</param>
 <# for (int i = 1; i <= count; i++) { #>
-        /// <param name="value<#= i #>">输出值 <#= i #></param>
+        /// <param name="value<#= i #>">Output value <#= i #></param>
 <# } #>
 <#= typeParamDocs #>
-        /// <returns>读取的字节数</returns>
+        /// <returns>The number of bytes read.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int DangerousReadUnmanaged<<#= typeParams #>>(ref int index, <#= string.Join(", ", Enumerable.Range(1, count).Select(i => $"out T{i} value{i}")) #>)
         {
@@ -453,10 +453,10 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var operation in readOperations64) { #>
                 <#= operation #>
 <# } #>
@@ -464,7 +464,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var operation in readOperations32) { #>
                 <#= operation #>
 <# } #>
@@ -474,13 +474,13 @@ namespace LuminPack.Core
 
 <# } #>
 
-<# for (int count = 1; count <= maxTypeParams; count++) { 
+<# for (int count = 1; count <= maxTypeParams; count++) {
     var typeParams = string.Join(", ", Enumerable.Range(1, count).Select(i => $"T{i}"));
-    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, count).Select(i => $"        /// <typeparam name=\"T{i}\">值类型 {i}</typeparam>"));
-    
+    var typeParamDocs = string.Join("\r\n", Enumerable.Range(1, count).Select(i => $"        /// <typeparam name=\"T{i}\">Unmanaged type {i}</typeparam>"));
+
     var readOperations64 = new List<string>();
     var readOperations32 = new List<string>();
-    
+
     for (int i = 1; i <= count; i++)
     {
         if (i == 1)
@@ -491,7 +491,7 @@ namespace LuminPack.Core
             readOperations64.Add($"value{i} = Unsafe.ReadUnaligned<T{i}>(ref Unsafe.Add(ref spanRef, {offset}));");
         }
     }
-    
+
     if (count == 1)
     {
         readOperations32.Add("Unsafe.SkipInit(out value1);");
@@ -506,10 +506,10 @@ namespace LuminPack.Core
     }
 #>
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
 <# for (int i = 1; i <= count; i++) { #>
-        /// <param name="value<#= i #>">输出值 <#= i #></param>
+        /// <param name="value<#= i #>">Output value <#= i #></param>
 <# } #>
 <#= typeParamDocs #>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -520,17 +520,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var operation in readOperations64) { #>
                 <#= operation #>
 <# } #>
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var operation in readOperations32) { #>
                 <#= operation #>
 <# } #>
@@ -538,11 +538,11 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化值类型（无类型约束检查，不返回读取大小）
+        /// Reads values without an unmanaged type constraint or a returned byte count.
         /// </summary>
-        /// <param name="index">读取起始索引</param>
+        /// <param name="index">The initial read offset.</param>
 <# for (int i = 1; i <= count; i++) { #>
-        /// <param name="value<#= i #>">输出值 <#= i #></param>
+        /// <param name="value<#= i #>">Output value <#= i #></param>
 <# } #>
 <#= typeParamDocs #>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -553,17 +553,17 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             if (Environment.Is64BitProcess)
             {
-                // 64位优化版本
+                // Optimized path for 64-bit processes.
 <# foreach (var operation in readOperations64) { #>
                 <#= operation #>
 <# } #>
             }
             else
             {
-                // 32位兼容版本
+                // Compatibility path for 32-bit processes.
 <# foreach (var operation in readOperations32) { #>
                 <#= operation #>
 <# } #>

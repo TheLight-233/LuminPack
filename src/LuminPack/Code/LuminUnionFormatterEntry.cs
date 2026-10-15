@@ -8,9 +8,14 @@ namespace LuminPack.Code;
 /// </summary>
 public struct LuminUnionFormatterEntry
 {
+    /// <summary>Stores the tag.</summary>
     public int Tag;
+    /// <summary>Stores the write value.</summary>
     public nint WriteValue;
+    /// <summary>Stores the read value.</summary>
     public nint ReadValue;
+    /// <summary>Stores the write value json.</summary>
     public nint WriteValueJson;
+    /// <summary>Stores the read value json.</summary>
     public nint ReadValueJson;
 }

@@ -3,8 +3,12 @@ using LuminPack.Code;
 
 namespace LuminPack.SourceGenerator.CodeEmitters;
 
+/// <summary>Provides big integer emitter functionality.</summary>
 public static class BigIntegerEmitter
 {
+    /// <summary>Appends binary writing statements for big integer values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
@@ -32,7 +36,10 @@ public static class BigIntegerEmitter
         sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("            }");
     }
-    
+
+    /// <summary>Appends binary reading statements for big integer values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
@@ -54,11 +61,17 @@ public static class BigIntegerEmitter
         sb.AppendLine("            reader.Advance(length);");
     }
 
+    /// <summary>Appends JSON writing statements for big integer values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            writer.WriteString(value.ToString());");
     }
 
+    /// <summary>Appends JSON reading statements for big integer values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            var str = reader.ReadString();");

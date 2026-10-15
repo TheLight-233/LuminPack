@@ -1,80 +1,110 @@
+using System.Text;
 using LuminPack;
+using LuminPack.Attribute;
 using LuminPack.Code;
 using LuminPack.Core;
-using LuminPack.Utility;
-using LuminPack.Attribute;
 using LuminPack.Option;
-using System.Text;
+using LuminPack.Utility;
 
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides generator identifier model functionality.</summary>
 [LuminPackable]
 public partial class GeneratorIdentifierModel
 {
+    /// <summary>Stores the event.</summary>
     public int @event;
+    /// <summary>Stores the class.</summary>
     public string @class = string.Empty;
-    public string 中文字段 = string.Empty;
+    /// <summary>Stores a value in the Unicode-name regression fixture.</summary>
+    public string \u4e2d\u6587\u5b57\u6bb5 = string.Empty;
 }
 
+/// <summary>Provides json fresh nested model functionality.</summary>
 [LuminPackable]
 public partial class JsonFreshNestedModel
 {
+    /// <summary>Stores the value.</summary>
     public int Value = 91;
+    /// <summary>Stores the name.</summary>
     public string? Name = "constructor-nested";
 }
 
+/// <summary>Provides json fresh scalar model functionality.</summary>
 [LuminPackable]
 public partial class JsonFreshScalarModel
 {
+    /// <summary>Stores the missing number.</summary>
     public int MissingNumber = 73;
+    /// <summary>Stores the value.</summary>
     public long Value = 91;
 }
 
+/// <summary>Provides json fresh small model functionality.</summary>
 [LuminPackable]
 public partial class JsonFreshSmallModel
 {
+    /// <summary>Stores the missing number.</summary>
     public int MissingNumber = 73;
+    /// <summary>Stores the nested.</summary>
     public JsonFreshNestedModel? Nested = new();
 }
 
+/// <summary>Provides json fresh managed nested model functionality.</summary>
 [LuminPackable]
 public partial class JsonFreshManagedNestedModel
 {
+    /// <summary>Stores the value.</summary>
     public int Value;
+    /// <summary>Stores the name.</summary>
     public string? Name;
 }
 
+/// <summary>Provides json fresh managed base model functionality.</summary>
 public class JsonFreshManagedBaseModel
 {
+    /// <summary>Stores the label.</summary>
     public string? Label;
+    /// <summary>Stores the numbers.</summary>
     public List<int>? Numbers;
 }
 
+/// <summary>Provides json fresh managed derived model functionality.</summary>
 [LuminPackable]
 public partial class JsonFreshManagedDerivedModel : JsonFreshManagedBaseModel
 {
+    /// <summary>Stores the nested.</summary>
     public JsonFreshManagedNestedModel? Nested;
+    /// <summary>Stores the values.</summary>
     public Dictionary<string, long>? Values;
 }
 
+/// <summary>Provides json fresh initializer base model functionality.</summary>
 public class JsonFreshInitializerBaseModel
 {
+    /// <summary>Stores the base text.</summary>
     public string? BaseText = "base-initializer";
 }
 
+/// <summary>Provides json fresh initializer derived model functionality.</summary>
 [LuminPackable]
 public partial class JsonFreshInitializerDerivedModel : JsonFreshInitializerBaseModel
 {
+    /// <summary>Stores the text.</summary>
     public string? Text;
 }
 
+/// <summary>Provides json fresh explicit constructor model functionality.</summary>
 [LuminPackable]
 public partial class JsonFreshExplicitConstructorModel
 {
+    /// <summary>Stores the constructor calls.</summary>
     public static int ConstructorCalls;
+    /// <summary>Stores the text.</summary>
     public string? Text;
 
+    /// <summary>Initializes a new instance of <c>JsonFreshExplicitConstructorModel</c>.</summary>
     public JsonFreshExplicitConstructorModel()
     {
         ConstructorCalls++;
@@ -82,8 +112,11 @@ public partial class JsonFreshExplicitConstructorModel
     }
 }
 
+/// <summary>Provides confirmed correctness regression test functionality.</summary>
 internal static class ConfirmedCorrectnessRegressionTest
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(ReusedCollectionsGrowBeforeDirectFill), ReusedCollectionsGrowBeforeDirectFill);
@@ -97,6 +130,7 @@ internal static class ConfirmedCorrectnessRegressionTest
         RunCase(results, nameof(JsonFreshResultHonorsConstructorProof), JsonFreshResultHonorsConstructorProof);
     }
 
+    /// <summary>Verifies reused collections grow before direct fill.</summary>
     private static void ReusedCollectionsGrowBeforeDirectFill()
     {
         var expected = Enumerable.Range(1, 8).ToArray();
@@ -117,6 +151,7 @@ internal static class ConfirmedCorrectnessRegressionTest
         Assert(stack.SequenceEqual(sourceStack), "A reused Stack with insufficient capacity was not expanded.");
     }
 
+    /// <summary>Verifies serializing list does not invalidate enumerator.</summary>
     private static void SerializingListDoesNotInvalidateEnumerator()
     {
         var list = new List<int> { 1, 2, 3 };
@@ -129,9 +164,10 @@ internal static class ConfirmedCorrectnessRegressionTest
             "Read-only List serialization changed the collection version.");
     }
 
+    /// <summary>Verifies utf8 char span matches string encoding.</summary>
     private static void Utf8CharSpanMatchesStringEncoding()
     {
-        const string value = "LuminPack-中文-😀";
+        const string value = "LuminPack-\u4E2D\u6587-\uD83D\uDE00";
         Span<byte> stringBuffer = stackalloc byte[256];
         Span<byte> spanBuffer = stackalloc byte[256];
         var stringWriter = new LuminPackWriter(ref stringBuffer);
@@ -152,6 +188,7 @@ internal static class ConfirmedCorrectnessRegressionTest
             "ReadOnlySpan<char> length-prefixed encoding did not match the string overload.");
     }
 
+    /// <summary>Verifies marshal memory helpers preserve data.</summary>
     private static unsafe void MarshalMemoryHelpersPreserveData()
     {
         byte[] left = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
@@ -179,6 +216,7 @@ internal static class ConfirmedCorrectnessRegressionTest
         Assert(threw, "ProcessMemoryBlocks accepted a zero block size and could loop forever.");
     }
 
+    /// <summary>Verifies buffer writer get memory honors written range.</summary>
     private static void BufferWriterGetMemoryHonorsWrittenRange()
     {
         using var writer = new LuminBufferWriter(true);
@@ -189,18 +227,19 @@ internal static class ConfirmedCorrectnessRegressionTest
             "GetMemory ignored its index or exposed unwritten capacity.");
     }
 
+    /// <summary>Verifies generator handles keywords and unicode names.</summary>
     private static void GeneratorHandlesKeywordsAndUnicodeNames()
     {
         var value = new GeneratorIdentifierModel
         {
             @event = 17,
             @class = "keyword",
-            中文字段 = "中文值"
+            \u4e2d\u6587\u5b57\u6bb5 = "\u4E2D\u6587\u503C"
         };
 
         var binary = LuminPackSerializer.Deserialize<GeneratorIdentifierModel>(LuminPackSerializer.Serialize(value));
         Assert(binary is not null && binary.@event == value.@event &&
-               binary.@class == value.@class && binary.中文字段 == value.中文字段,
+               binary.@class == value.@class && binary.\u4e2d\u6587\u5b57\u6bb5 == value.\u4e2d\u6587\u5b57\u6bb5,
             "Generated binary code did not handle escaped identifiers.");
 
         var jsonOption = new LuminPackSerializerOption { StringEncoding = LuminPackStringEncoding.UTF8 };
@@ -210,15 +249,16 @@ internal static class ConfirmedCorrectnessRegressionTest
         jsonBuffer.Option.StandardFormat = jsonOption.StandardFormat;
         LuminPackSerializer.SerializeJson(value, jsonBuffer);
         var json = System.Text.Encoding.UTF8.GetString(jsonBuffer.GetSpan());
-        Assert(json.Contains("\"中文字段\"", StringComparison.Ordinal),
+        Assert(json.Contains("\u0022\u4E2D\u6587\u5B57\u6BB5\u0022", StringComparison.Ordinal),
             "Generated UTF-8 JSON property bytes corrupted a Unicode member name.");
 
         var jsonRoundTrip = LuminPackSerializer.DeserializeJson<GeneratorIdentifierModel>(jsonBuffer);
         Assert(jsonRoundTrip is not null && jsonRoundTrip.@event == value.@event &&
-               jsonRoundTrip.@class == value.@class && jsonRoundTrip.中文字段 == value.中文字段,
+               jsonRoundTrip.@class == value.@class && jsonRoundTrip.\u4e2d\u6587\u5b57\u6bb5 == value.\u4e2d\u6587\u5b57\u6bb5,
             "Generated JSON code did not handle escaped identifiers or Unicode names.");
     }
 
+    /// <summary>Verifies json fresh result preserves missing field semantics.</summary>
     private static void JsonFreshResultPreservesMissingFieldSemantics()
     {
         const string json = "{\"Nested\":{\"Value\":17}}";
@@ -239,6 +279,7 @@ internal static class ConfirmedCorrectnessRegressionTest
             "Scalar direct-result JSON changed missing-field semantics.");
     }
 
+    /// <summary>Verifies json fresh result publishes only after success.</summary>
     private static void JsonFreshResultPublishesOnlyAfterSuccess()
     {
         ReadOnlySpan<byte> json = Encoding.UTF8.GetBytes("{\"Value\":true}");
@@ -268,6 +309,7 @@ internal static class ConfirmedCorrectnessRegressionTest
             "Direct-result JSON published a partially initialized instance after an exception.");
     }
 
+    /// <summary>Verifies json fresh result honors constructor proof.</summary>
     private static void JsonFreshResultHonorsConstructorProof()
     {
         const string managedJson =
@@ -314,6 +356,10 @@ internal static class ConfirmedCorrectnessRegressionTest
             "Explicit-constructor temp-first JSON changed missing-property semantics.");
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -327,6 +373,9 @@ internal static class ConfirmedCorrectnessRegressionTest
         }
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)

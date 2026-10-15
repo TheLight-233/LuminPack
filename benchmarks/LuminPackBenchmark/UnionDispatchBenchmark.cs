@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
@@ -7,13 +6,13 @@ using BenchmarkDotNet.Jobs;
 namespace LuminPackBenchmark;
 
 /// <summary>
-/// 对比 LuminPack 多态序列化的几种运行时分派方式：
-/// 1. 普通 override 虚调用；
-/// 2. sealed override 虚调用；
-/// 3. abstract TypeId 属性 + 原生函数指针表；
-/// 4. 非虚 TypeId 字段 + 原生函数指针表（函数指针方案的理论上限）。
-/// 
-/// 每个 Benchmark 报告的是单次多态分派成本，OperationsPerInvoke 会将整批循环折算为单次操作。
+/// Compares runtime dispatch strategies for polymorphic LuminPack serialization:
+/// 1. Ordinary virtual override dispatch.
+/// 2. Sealed virtual override dispatch.
+/// 3. An abstract TypeId property with a native function pointer table.
+/// 4. A non-virtual TypeId field with a native function pointer table.
+///
+/// OperationsPerInvoke normalizes each batch to the cost of one polymorphic dispatch.
 /// </summary>
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MinColumn, MaxColumn]
@@ -38,6 +37,7 @@ public unsafe class UnionDispatchBenchmark
     private static readonly nint* s_typeIdVirtualTable;
     private static readonly nint* s_typeIdFieldTable;
 
+    /// <summary>Gets or sets the pattern.</summary>
     [Params(
         DispatchPattern.Monomorphic,
         DispatchPattern.Bimorphic,
@@ -45,12 +45,13 @@ public unsafe class UnionDispatchBenchmark
         DispatchPattern.Random20)]
     public DispatchPattern Pattern { get; set; }
 
+    /// <summary>Initializes a new instance of <c>UnionDispatchBenchmark</c>.</summary>
     static UnionDispatchBenchmark()
     {
-        // 使用 TypeAssociatedMemory 建立 256 槽的原生函数指针表：
-        // - TypeId 是 byte，因此无需数组范围检查；
-        // - 生命周期与当前类型一致；
-        // - 避免 delegate 分配和 delegate.Invoke。
+        // Allocate a 256-slot native function pointer table with TypeAssociatedMemory.
+        // A byte TypeId avoids additional array range checks.
+        // Its lifetime matches the owning type.
+        // Avoid delegate allocations and delegate.Invoke.
         s_typeIdVirtualTable = (nint*)RuntimeHelpers.AllocateTypeAssociatedMemory(
             typeof(UnionDispatchBenchmark),
             PointerTableLength * sizeof(nint));
@@ -102,6 +103,7 @@ public unsafe class UnionDispatchBenchmark
         s_typeIdFieldTable[19] = (nint)(delegate* managed<ref DispatchState, TypeIdFieldBase, void>)&WriteTypeIdField19;
     }
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -123,7 +125,7 @@ public unsafe class UnionDispatchBenchmark
                 _ => throw new ArgumentOutOfRangeException()
             };
 
-            // 每个对象的数据不同，避免 JIT 将整个循环化简为常量。
+            // Use different data per object so the JIT cannot reduce the loop to a constant.
             int a = unchecked(i * 31 + 17);
             int b = unchecked(i * 131 + typeId);
 
@@ -134,6 +136,8 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Measures virtual override for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true, OperationsPerInvoke = ItemCount)]
     public int VirtualOverride()
     {
@@ -146,6 +150,8 @@ public unsafe class UnionDispatchBenchmark
         return state.Value;
     }
 
+    /// <summary>Measures sealed override for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(OperationsPerInvoke = ItemCount)]
     public int SealedOverride()
     {
@@ -158,6 +164,8 @@ public unsafe class UnionDispatchBenchmark
         return state.Value;
     }
 
+    /// <summary>Measures abstract type id function pointer for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(OperationsPerInvoke = ItemCount)]
     public int AbstractTypeId_FunctionPointer()
     {
@@ -168,8 +176,8 @@ public unsafe class UnionDispatchBenchmark
         {
             TypeIdVirtualBase value = items[i];
 
-            // 此处精确模拟“基类 abstract byte TypeId + 指针表”：
-            // 先通过虚属性取得 TypeId，再从表中加载函数地址并 calli。
+            // Model an abstract byte TypeId on the base type with a function pointer table.
+            // Read TypeId through the virtual property, then load the function address and invoke calli.
             byte typeId = value.TypeId;
             var write = (delegate* managed<ref DispatchState, TypeIdVirtualBase, void>)
                 s_typeIdVirtualTable[typeId];
@@ -180,6 +188,8 @@ public unsafe class UnionDispatchBenchmark
         return state.Value;
     }
 
+    /// <summary>Measures type id field function pointer for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(OperationsPerInvoke = ItemCount)]
     public int TypeIdField_FunctionPointer()
     {
@@ -190,8 +200,8 @@ public unsafe class UnionDispatchBenchmark
         {
             TypeIdFieldBase value = items[i];
 
-            // 这是函数指针表方案的理论最优版本：
-            // TypeId 为普通只读字段，没有获取 TypeId 的额外虚调用。
+            // This is the minimal-overhead function pointer table variant:
+            // TypeId is a readonly field with no virtual getter overhead.
             byte typeId = value.TypeId;
             var write = (delegate* managed<ref DispatchState, TypeIdFieldBase, void>)
                 s_typeIdFieldTable[typeId];
@@ -202,6 +212,11 @@ public unsafe class UnionDispatchBenchmark
         return state.Value;
     }
 
+    /// <summary>Creates open virtual from the supplied input.</summary>
+    /// <param name="typeId">The type id used by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
+    /// <param name="b">The b used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static OpenVirtualBase CreateOpenVirtual(int typeId, int a, int b)
         => typeId switch
@@ -229,6 +244,11 @@ public unsafe class UnionDispatchBenchmark
             _ => throw new ArgumentOutOfRangeException(nameof(typeId))
         };
 
+    /// <summary>Creates sealed virtual from the supplied input.</summary>
+    /// <param name="typeId">The type id used by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
+    /// <param name="b">The b used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static SealedVirtualBase CreateSealedVirtual(int typeId, int a, int b)
         => typeId switch
@@ -256,6 +276,11 @@ public unsafe class UnionDispatchBenchmark
             _ => throw new ArgumentOutOfRangeException(nameof(typeId))
         };
 
+    /// <summary>Creates type id virtual from the supplied input.</summary>
+    /// <param name="typeId">The type id used by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
+    /// <param name="b">The b used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static TypeIdVirtualBase CreateTypeIdVirtual(int typeId, int a, int b)
         => typeId switch
@@ -283,6 +308,11 @@ public unsafe class UnionDispatchBenchmark
             _ => throw new ArgumentOutOfRangeException(nameof(typeId))
         };
 
+    /// <summary>Creates type id field from the supplied input.</summary>
+    /// <param name="typeId">The type id used by this operation.</param>
+    /// <param name="a">The a used by this operation.</param>
+    /// <param name="b">The b used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static TypeIdFieldBase CreateTypeIdField(int typeId, int a, int b)
         => typeId switch
@@ -310,35 +340,43 @@ public unsafe class UnionDispatchBenchmark
             _ => throw new ArgumentOutOfRangeException(nameof(typeId))
         };
 
+    /// <summary>Provides dispatch pattern functionality.</summary>
     public enum DispatchPattern
     {
-        /// <summary>所有元素都是同一个运行时类型，最利于 PGO 去虚拟化。</summary>
+        /// <summary>Uses one runtime type to give PGO the best opportunity to devirtualize.</summary>
         Monomorphic,
 
-        /// <summary>两个运行时类型交替出现。</summary>
+        /// <summary>Alternates between two runtime types.</summary>
         Bimorphic,
 
-        /// <summary>20 个类型固定轮转，分支规律稳定但调用点高度多态。</summary>
+        /// <summary>Cycles through 20 types in a stable order to measure a highly polymorphic call site.</summary>
         RoundRobin20,
 
-        /// <summary>20 个类型随机分布，最考验间接目标预测。</summary>
+        /// <summary>Randomizes 20 runtime types to stress indirect branch prediction.</summary>
         Random20
     }
 
+    /// <summary>Provides dispatch state functionality.</summary>
     private struct DispatchState
     {
         internal int Value;
 
+        /// <summary>Initializes a new instance of <c>DispatchState</c>.</summary>
+        /// <param name="seed">The seed used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal DispatchState(int seed)
         {
             Value = seed;
         }
 
+        /// <summary>Writes  to the current output.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <param name="typeId">The type id used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void Write(int a, int b, int typeId)
         {
-            // 足够小，仍能观察分派开销；同时模拟序列化中的字段读取和状态更新。
+            // Keep the workload small enough to expose dispatch overhead while reading fields and updating state.
             int value = Value;
             value = unchecked((value * 16_777_619) ^ a);
             value = unchecked((value * 16_777_619) ^ b);
@@ -346,56 +384,78 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides open virtual base functionality.</summary>
     private abstract class OpenVirtualBase
     {
         internal readonly int A;
         internal readonly int B;
 
+        /// <summary>Initializes a new instance of <c>OpenVirtualBase</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         protected OpenVirtualBase(int a, int b)
         {
             A = a;
             B = b;
         }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal abstract void Serialize(ref DispatchState state);
     }
 
+    /// <summary>Provides sealed virtual base functionality.</summary>
     private abstract class SealedVirtualBase
     {
         internal readonly int A;
         internal readonly int B;
 
+        /// <summary>Initializes a new instance of <c>SealedVirtualBase</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         protected SealedVirtualBase(int a, int b)
         {
             A = a;
             B = b;
         }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal abstract void Serialize(ref DispatchState state);
     }
 
+    /// <summary>Provides type id virtual base functionality.</summary>
     private abstract class TypeIdVirtualBase
     {
         internal readonly int A;
         internal readonly int B;
 
+        /// <summary>Initializes a new instance of <c>TypeIdVirtualBase</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         protected TypeIdVirtualBase(int a, int b)
         {
             A = a;
             B = b;
         }
 
+        /// <summary>Gets the type id.</summary>
         internal abstract byte TypeId { get; }
     }
 
+    /// <summary>Provides type id field base functionality.</summary>
     private abstract class TypeIdFieldBase
     {
         internal readonly byte TypeId;
         internal readonly int A;
         internal readonly int B;
 
+        /// <summary>Initializes a new instance of <c>TypeIdFieldBase</c>.</summary>
+        /// <param name="typeId">The type id used by this operation.</param>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         protected TypeIdFieldBase(byte typeId, int a, int b)
         {
             TypeId = typeId;
@@ -405,372 +465,617 @@ public unsafe class UnionDispatchBenchmark
     }
 
 
+    /// <summary>Provides open virtual0 functionality.</summary>
     private class OpenVirtual0 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual0</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual0(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 0);
     }
 
+    /// <summary>Provides open virtual1 functionality.</summary>
     private class OpenVirtual1 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual1</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual1(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 1);
     }
 
+    /// <summary>Provides open virtual2 functionality.</summary>
     private class OpenVirtual2 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual2</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual2(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 2);
     }
 
+    /// <summary>Provides open virtual3 functionality.</summary>
     private class OpenVirtual3 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual3</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual3(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 3);
     }
 
+    /// <summary>Provides open virtual4 functionality.</summary>
     private class OpenVirtual4 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual4</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual4(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 4);
     }
 
+    /// <summary>Provides open virtual5 functionality.</summary>
     private class OpenVirtual5 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual5</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual5(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 5);
     }
 
+    /// <summary>Provides open virtual6 functionality.</summary>
     private class OpenVirtual6 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual6</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual6(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 6);
     }
 
+    /// <summary>Provides open virtual7 functionality.</summary>
     private class OpenVirtual7 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual7</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual7(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 7);
     }
 
+    /// <summary>Provides open virtual8 functionality.</summary>
     private class OpenVirtual8 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual8</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual8(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 8);
     }
 
+    /// <summary>Provides open virtual9 functionality.</summary>
     private class OpenVirtual9 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual9</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual9(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 9);
     }
 
+    /// <summary>Provides open virtual10 functionality.</summary>
     private class OpenVirtual10 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual10</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual10(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 10);
     }
 
+    /// <summary>Provides open virtual11 functionality.</summary>
     private class OpenVirtual11 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual11</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual11(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 11);
     }
 
+    /// <summary>Provides open virtual12 functionality.</summary>
     private class OpenVirtual12 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual12</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual12(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 12);
     }
 
+    /// <summary>Provides open virtual13 functionality.</summary>
     private class OpenVirtual13 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual13</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual13(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 13);
     }
 
+    /// <summary>Provides open virtual14 functionality.</summary>
     private class OpenVirtual14 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual14</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual14(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 14);
     }
 
+    /// <summary>Provides open virtual15 functionality.</summary>
     private class OpenVirtual15 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual15</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual15(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 15);
     }
 
+    /// <summary>Provides open virtual16 functionality.</summary>
     private class OpenVirtual16 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual16</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual16(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 16);
     }
 
+    /// <summary>Provides open virtual17 functionality.</summary>
     private class OpenVirtual17 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual17</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual17(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 17);
     }
 
+    /// <summary>Provides open virtual18 functionality.</summary>
     private class OpenVirtual18 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual18</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual18(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 18);
     }
 
+    /// <summary>Provides open virtual19 functionality.</summary>
     private class OpenVirtual19 : OpenVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>OpenVirtual19</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal OpenVirtual19(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal override void Serialize(ref DispatchState state)
             => state.Write(A, B, 19);
     }
 
 
+    /// <summary>Provides sealed virtual0 functionality.</summary>
     private class SealedVirtual0 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual0</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual0(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 0);
     }
 
+    /// <summary>Provides sealed virtual1 functionality.</summary>
     private class SealedVirtual1 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual1</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual1(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 1);
     }
 
+    /// <summary>Provides sealed virtual2 functionality.</summary>
     private class SealedVirtual2 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual2</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual2(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 2);
     }
 
+    /// <summary>Provides sealed virtual3 functionality.</summary>
     private class SealedVirtual3 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual3</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual3(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 3);
     }
 
+    /// <summary>Provides sealed virtual4 functionality.</summary>
     private class SealedVirtual4 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual4</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual4(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 4);
     }
 
+    /// <summary>Provides sealed virtual5 functionality.</summary>
     private class SealedVirtual5 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual5</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual5(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 5);
     }
 
+    /// <summary>Provides sealed virtual6 functionality.</summary>
     private class SealedVirtual6 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual6</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual6(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 6);
     }
 
+    /// <summary>Provides sealed virtual7 functionality.</summary>
     private class SealedVirtual7 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual7</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual7(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 7);
     }
 
+    /// <summary>Provides sealed virtual8 functionality.</summary>
     private class SealedVirtual8 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual8</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual8(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 8);
     }
 
+    /// <summary>Provides sealed virtual9 functionality.</summary>
     private class SealedVirtual9 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual9</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual9(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 9);
     }
 
+    /// <summary>Provides sealed virtual10 functionality.</summary>
     private class SealedVirtual10 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual10</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual10(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 10);
     }
 
+    /// <summary>Provides sealed virtual11 functionality.</summary>
     private class SealedVirtual11 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual11</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual11(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 11);
     }
 
+    /// <summary>Provides sealed virtual12 functionality.</summary>
     private class SealedVirtual12 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual12</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual12(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 12);
     }
 
+    /// <summary>Provides sealed virtual13 functionality.</summary>
     private class SealedVirtual13 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual13</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual13(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 13);
     }
 
+    /// <summary>Provides sealed virtual14 functionality.</summary>
     private class SealedVirtual14 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual14</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual14(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 14);
     }
 
+    /// <summary>Provides sealed virtual15 functionality.</summary>
     private class SealedVirtual15 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual15</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual15(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 15);
     }
 
+    /// <summary>Provides sealed virtual16 functionality.</summary>
     private class SealedVirtual16 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual16</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual16(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 16);
     }
 
+    /// <summary>Provides sealed virtual17 functionality.</summary>
     private class SealedVirtual17 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual17</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual17(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 17);
     }
 
+    /// <summary>Provides sealed virtual18 functionality.</summary>
     private class SealedVirtual18 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual18</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual18(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 18);
     }
 
+    /// <summary>Provides sealed virtual19 functionality.</summary>
     private class SealedVirtual19 : SealedVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>SealedVirtual19</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal SealedVirtual19(int a, int b) : base(a, b) { }
 
+        /// <summary>Serializes the supplied value using the selected format and options.</summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal sealed override void Serialize(ref DispatchState state)
             => state.Write(A, B, 19);
     }
 
 
+    /// <summary>Provides type id virtual0 functionality.</summary>
     private class TypeIdVirtual0 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual0</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual0(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -778,10 +1083,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual1 functionality.</summary>
     private class TypeIdVirtual1 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual1</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual1(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -789,10 +1099,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual2 functionality.</summary>
     private class TypeIdVirtual2 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual2</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual2(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -800,10 +1115,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual3 functionality.</summary>
     private class TypeIdVirtual3 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual3</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual3(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -811,10 +1131,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual4 functionality.</summary>
     private class TypeIdVirtual4 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual4</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual4(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -822,10 +1147,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual5 functionality.</summary>
     private class TypeIdVirtual5 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual5</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual5(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -833,10 +1163,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual6 functionality.</summary>
     private class TypeIdVirtual6 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual6</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual6(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -844,10 +1179,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual7 functionality.</summary>
     private class TypeIdVirtual7 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual7</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual7(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -855,10 +1195,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual8 functionality.</summary>
     private class TypeIdVirtual8 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual8</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual8(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -866,10 +1211,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual9 functionality.</summary>
     private class TypeIdVirtual9 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual9</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual9(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -877,10 +1227,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual10 functionality.</summary>
     private class TypeIdVirtual10 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual10</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual10(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -888,10 +1243,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual11 functionality.</summary>
     private class TypeIdVirtual11 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual11</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual11(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -899,10 +1259,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual12 functionality.</summary>
     private class TypeIdVirtual12 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual12</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual12(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -910,10 +1275,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual13 functionality.</summary>
     private class TypeIdVirtual13 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual13</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual13(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -921,10 +1291,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual14 functionality.</summary>
     private class TypeIdVirtual14 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual14</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual14(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -932,10 +1307,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual15 functionality.</summary>
     private class TypeIdVirtual15 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual15</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual15(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -943,10 +1323,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual16 functionality.</summary>
     private class TypeIdVirtual16 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual16</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual16(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -954,10 +1339,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual17 functionality.</summary>
     private class TypeIdVirtual17 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual17</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual17(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -965,10 +1355,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual18 functionality.</summary>
     private class TypeIdVirtual18 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual18</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual18(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -976,10 +1371,15 @@ public unsafe class UnionDispatchBenchmark
         }
     }
 
+    /// <summary>Provides type id virtual19 functionality.</summary>
     private class TypeIdVirtual19 : TypeIdVirtualBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdVirtual19</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdVirtual19(int a, int b) : base(a, b) { }
 
+        /// <summary>Gets the type id.</summary>
         internal sealed override byte TypeId
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -988,222 +1388,362 @@ public unsafe class UnionDispatchBenchmark
     }
 
 
+    /// <summary>Provides type id field0 functionality.</summary>
     private sealed class TypeIdField0 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField0</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField0(int a, int b) : base(0, a, b) { }
     }
 
+    /// <summary>Provides type id field1 functionality.</summary>
     private sealed class TypeIdField1 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField1</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField1(int a, int b) : base(1, a, b) { }
     }
 
+    /// <summary>Provides type id field2 functionality.</summary>
     private sealed class TypeIdField2 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField2</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField2(int a, int b) : base(2, a, b) { }
     }
 
+    /// <summary>Provides type id field3 functionality.</summary>
     private sealed class TypeIdField3 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField3</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField3(int a, int b) : base(3, a, b) { }
     }
 
+    /// <summary>Provides type id field4 functionality.</summary>
     private sealed class TypeIdField4 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField4</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField4(int a, int b) : base(4, a, b) { }
     }
 
+    /// <summary>Provides type id field5 functionality.</summary>
     private sealed class TypeIdField5 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField5</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField5(int a, int b) : base(5, a, b) { }
     }
 
+    /// <summary>Provides type id field6 functionality.</summary>
     private sealed class TypeIdField6 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField6</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField6(int a, int b) : base(6, a, b) { }
     }
 
+    /// <summary>Provides type id field7 functionality.</summary>
     private sealed class TypeIdField7 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField7</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField7(int a, int b) : base(7, a, b) { }
     }
 
+    /// <summary>Provides type id field8 functionality.</summary>
     private sealed class TypeIdField8 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField8</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField8(int a, int b) : base(8, a, b) { }
     }
 
+    /// <summary>Provides type id field9 functionality.</summary>
     private sealed class TypeIdField9 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField9</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField9(int a, int b) : base(9, a, b) { }
     }
 
+    /// <summary>Provides type id field10 functionality.</summary>
     private sealed class TypeIdField10 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField10</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField10(int a, int b) : base(10, a, b) { }
     }
 
+    /// <summary>Provides type id field11 functionality.</summary>
     private sealed class TypeIdField11 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField11</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField11(int a, int b) : base(11, a, b) { }
     }
 
+    /// <summary>Provides type id field12 functionality.</summary>
     private sealed class TypeIdField12 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField12</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField12(int a, int b) : base(12, a, b) { }
     }
 
+    /// <summary>Provides type id field13 functionality.</summary>
     private sealed class TypeIdField13 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField13</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField13(int a, int b) : base(13, a, b) { }
     }
 
+    /// <summary>Provides type id field14 functionality.</summary>
     private sealed class TypeIdField14 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField14</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField14(int a, int b) : base(14, a, b) { }
     }
 
+    /// <summary>Provides type id field15 functionality.</summary>
     private sealed class TypeIdField15 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField15</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField15(int a, int b) : base(15, a, b) { }
     }
 
+    /// <summary>Provides type id field16 functionality.</summary>
     private sealed class TypeIdField16 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField16</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField16(int a, int b) : base(16, a, b) { }
     }
 
+    /// <summary>Provides type id field17 functionality.</summary>
     private sealed class TypeIdField17 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField17</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField17(int a, int b) : base(17, a, b) { }
     }
 
+    /// <summary>Provides type id field18 functionality.</summary>
     private sealed class TypeIdField18 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField18</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField18(int a, int b) : base(18, a, b) { }
     }
 
+    /// <summary>Provides type id field19 functionality.</summary>
     private sealed class TypeIdField19 : TypeIdFieldBase
     {
+        /// <summary>Initializes a new instance of <c>TypeIdField19</c>.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
         internal TypeIdField19(int a, int b) : base(19, a, b) { }
     }
 
 
 
+    /// <summary>Writes type id virtual0 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual0(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 0);
 
+    /// <summary>Writes type id virtual1 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual1(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 1);
 
+    /// <summary>Writes type id virtual2 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual2(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 2);
 
+    /// <summary>Writes type id virtual3 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual3(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 3);
 
+    /// <summary>Writes type id virtual4 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual4(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 4);
 
+    /// <summary>Writes type id virtual5 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual5(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 5);
 
+    /// <summary>Writes type id virtual6 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual6(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 6);
 
+    /// <summary>Writes type id virtual7 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual7(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 7);
 
+    /// <summary>Writes type id virtual8 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual8(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 8);
 
+    /// <summary>Writes type id virtual9 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual9(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 9);
 
+    /// <summary>Writes type id virtual10 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual10(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 10);
 
+    /// <summary>Writes type id virtual11 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual11(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 11);
 
+    /// <summary>Writes type id virtual12 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual12(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 12);
 
+    /// <summary>Writes type id virtual13 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual13(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 13);
 
+    /// <summary>Writes type id virtual14 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual14(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 14);
 
+    /// <summary>Writes type id virtual15 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual15(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 15);
 
+    /// <summary>Writes type id virtual16 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual16(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 16);
 
+    /// <summary>Writes type id virtual17 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual17(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 17);
 
+    /// <summary>Writes type id virtual18 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual18(
         ref DispatchState state,
         TypeIdVirtualBase value)
         => state.Write(value.A, value.B, 18);
 
+    /// <summary>Writes type id virtual19 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdVirtual19(
         ref DispatchState state,
@@ -1211,120 +1751,180 @@ public unsafe class UnionDispatchBenchmark
         => state.Write(value.A, value.B, 19);
 
 
+    /// <summary>Writes type id field0 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField0(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 0);
 
+    /// <summary>Writes type id field1 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField1(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 1);
 
+    /// <summary>Writes type id field2 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField2(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 2);
 
+    /// <summary>Writes type id field3 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField3(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 3);
 
+    /// <summary>Writes type id field4 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField4(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 4);
 
+    /// <summary>Writes type id field5 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField5(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 5);
 
+    /// <summary>Writes type id field6 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField6(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 6);
 
+    /// <summary>Writes type id field7 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField7(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 7);
 
+    /// <summary>Writes type id field8 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField8(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 8);
 
+    /// <summary>Writes type id field9 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField9(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 9);
 
+    /// <summary>Writes type id field10 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField10(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 10);
 
+    /// <summary>Writes type id field11 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField11(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 11);
 
+    /// <summary>Writes type id field12 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField12(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 12);
 
+    /// <summary>Writes type id field13 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField13(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 13);
 
+    /// <summary>Writes type id field14 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField14(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 14);
 
+    /// <summary>Writes type id field15 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField15(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 15);
 
+    /// <summary>Writes type id field16 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField16(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 16);
 
+    /// <summary>Writes type id field17 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField17(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 17);
 
+    /// <summary>Writes type id field18 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField18(
         ref DispatchState state,
         TypeIdFieldBase value)
         => state.Write(value.A, value.B, 18);
 
+    /// <summary>Writes type id field19 to the current output.</summary>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WriteTypeIdField19(
         ref DispatchState state,

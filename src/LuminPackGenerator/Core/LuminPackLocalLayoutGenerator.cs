@@ -36,8 +36,11 @@ public static class LuminPackLocalLayoutGenerator
         private readonly HashSet<string> _emitted = new HashSet<string>(StringComparer.Ordinal);
 
         /// <summary>Registers a layout key; returns false when it was already emitted.</summary>
+        /// <param name="key">The key used to identify the entry.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         public bool TryRegister(string key) => _emitted.Add(key);
 
+        /// <summary>Gets the count.</summary>
         public int Count => _emitted.Count;
     }
 
@@ -47,6 +50,8 @@ public static class LuminPackLocalLayoutGenerator
     /// unconditionally at the root (they address every member through it), and the pooled JSON read
     /// path assigns every field through it as well.
     /// </summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool NeedsRootLocal(LuminDataInfo data)
     {
         if (data is null)
@@ -85,6 +90,8 @@ public static class LuminPackLocalLayoutGenerator
     /// Nested members reach only private/protected slots through the mirror; a public member (including
     /// a public auto-property) is named directly, so it never justifies a Local.
     /// </summary>
+    /// <param name="fields">The fields used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool NeedsNestedLocal(IReadOnlyList<LuminDataField> fields)
     {
         if (fields is null)
@@ -107,6 +114,8 @@ public static class LuminPackLocalLayoutGenerator
     /// Local class name used when <em>referencing</em> the mirror (generic arguments preserved), matching
     /// <c>TypeMetaChecker.BuildLocalClassName</c> for root types.
     /// </summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>The result of the operation.</returns>
     public static string GetLocalUsageName(ITypeSymbol type)
     {
         string fullName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -123,11 +132,16 @@ public static class LuminPackLocalLayoutGenerator
     /// non-generic classes with a mangled name so a closed generic member type (<c>Foo&lt;int&gt;</c>)
     /// mirrors its substituted field sequence without needing the original constraints.
     /// </summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>The result of the operation.</returns>
     public static string GetLocalDeclarationName(ITypeSymbol type)
     {
         return "Local" + MangleTypeName(type);
     }
 
+    /// <summary>Performs the mangle type name step for the current operation.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>The result of the operation.</returns>
     private static string MangleTypeName(ITypeSymbol type)
     {
         string fullName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -152,7 +166,9 @@ public static class LuminPackLocalLayoutGenerator
     /// <summary>One level of a mirrored class hierarchy: a named class plus the fields it declares itself.</summary>
     private sealed class LocalLevel
     {
+        /// <summary>Stores the name.</summary>
         public string Name;
+        /// <summary>Stores the own fields.</summary>
         public List<LuminLocalFieldData> OwnFields;
 
         /// <summary>
@@ -162,6 +178,7 @@ public static class LuminPackLocalLayoutGenerator
         /// </summary>
         public StructLayout Layout;
 
+        /// <summary>Stores the is value type.</summary>
         public bool IsValueType;
     }
 
@@ -182,6 +199,10 @@ public static class LuminPackLocalLayoutGenerator
     /// so each level's own fields are selected from it by the names that level declares.
     /// </para>
     /// </summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <param name="flattenedFields">The flattened fields used by this operation.</param>
+    /// <param name="nameSelector">The name selector used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static List<LocalLevel> BuildLevels(
         INamedTypeSymbol type,
         IReadOnlyList<LuminLocalFieldData> flattenedFields,
@@ -240,6 +261,8 @@ public static class LuminPackLocalLayoutGenerator
     }
 
     /// <summary>Names of the storage slots (instance fields and auto-property backing fields) a level declares.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>The result of the operation.</returns>
     private static HashSet<string> GetOwnStorageNames(INamedTypeSymbol type)
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
@@ -264,6 +287,11 @@ public static class LuminPackLocalLayoutGenerator
     }
 
     /// <summary>Emits every level of a mirrored hierarchy, each inheriting the level before it.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="registry">The registry used by this operation.</param>
+    /// <param name="levels">The levels used by this operation.</param>
+    /// <param name="genericParameters">The generic parameters in the current type scope.</param>
+    /// <param name="genericConstraints">The generic constraints used by this operation.</param>
     private static void EmitLevels(
         StringBuilder sb,
         LocalLayoutRegistry registry,
@@ -303,6 +331,10 @@ public static class LuminPackLocalLayoutGenerator
     /// (already flattened into <see cref="LuminDataInfo.localFields"/> base-first, which is the CLR's
     /// own field order).
     /// </summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="registry">The registry used by this operation.</param>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     public static bool AppendRootLocalClass(
         StringBuilder sb,
         LocalLayoutRegistry registry,
@@ -345,6 +377,8 @@ public static class LuminPackLocalLayoutGenerator
     /// Name of a mirrored hierarchy level: the type name without generic arguments, which are appended
     /// separately as the declaration's own type parameter list.
     /// </summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>The result of the operation.</returns>
     private static string MangleDeclarationName(ITypeSymbol type)
     {
         string mangled = MangleTypeName(type);
@@ -380,6 +414,9 @@ public static class LuminPackLocalLayoutGenerator
     /// actually owns private storage. Recurses through the member graph so any nesting depth is
     /// covered.
     /// </summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="registry">The registry used by this operation.</param>
+    /// <param name="fields">The fields used by this operation.</param>
     public static void AppendNestedLocalClasses(
         StringBuilder sb,
         LocalLayoutRegistry registry,
@@ -438,6 +475,9 @@ public static class LuminPackLocalLayoutGenerator
     /// stays a drop-in replacement at every use site.
     /// </para>
     /// </summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="registry">The registry used by this operation.</param>
+    /// <param name="fields">The fields used by this operation.</param>
     public static void AppendLocalMemberAccessors(
         StringBuilder sb,
         LocalLayoutRegistry registry,
@@ -503,6 +543,9 @@ public static class LuminPackLocalLayoutGenerator
         }
     }
 
+    /// <summary>Performs the build generic parameter list step for the current operation.</summary>
+    /// <param name="genericParameters">The generic parameters in the current type scope.</param>
+    /// <returns>The result of the operation.</returns>
     private static string BuildGenericParameterList(IReadOnlyList<string> genericParameters)
     {
         return genericParameters is null || genericParameters.Count == 0
@@ -510,6 +553,15 @@ public static class LuminPackLocalLayoutGenerator
             : "<" + string.Join(", ", genericParameters) + ">";
     }
 
+    /// <summary>Performs the emit local class step for the current operation.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="className">The class name used by this operation.</param>
+    /// <param name="genericParameterList">The generic parameter list used by this operation.</param>
+    /// <param name="baseList">The base list used by this operation.</param>
+    /// <param name="isValueType">The is value type used by this operation.</param>
+    /// <param name="structLayout">The struct layout used by this operation.</param>
+    /// <param name="genericConstraints">The generic constraints used by this operation.</param>
+    /// <param name="fields">The fields used by this operation.</param>
     private static void EmitLocalClass(
         StringBuilder sb,
         string className,
@@ -559,6 +611,9 @@ public static class LuminPackLocalLayoutGenerator
         sb.AppendLine();
     }
 
+    /// <summary>Builds the generic constraints source from the supplied metadata.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="genericConstraints">The generic constraints used by this operation.</param>
     private static void AppendGenericConstraints(
         StringBuilder sb,
         IReadOnlyList<GenericParameterConstraint> genericConstraints)
@@ -600,6 +655,9 @@ public static class LuminPackLocalLayoutGenerator
     /// an assembly declares the same <c>internal static partial</c> class, so a Local emitted here is
     /// visible to all of them.
     /// </summary>
+    /// <param name="body">The body used by this operation.</param>
+    /// <param name="extensionClassName">The extension class name used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static string Wrap(string body, string extensionClassName)
     {
         if (string.IsNullOrEmpty(body))

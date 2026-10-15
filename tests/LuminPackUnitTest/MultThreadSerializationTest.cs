@@ -1,17 +1,19 @@
 using LuminPack;
-using LuminPack.Attribute;
 
 namespace LuminPackUnitTest
 {
+    /// <summary>Provides multi thread serialization test functionality.</summary>
     public class MultiThreadSerializationTest
     {
 
+        /// <summary>Verifies test multi thread code gen serialize.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestMultiThreadCodeGenSerialize(List<string> results)
         {
             try
             {
                 Console.WriteLine("Running MultiThreadCodeGenSerialize test...");
-                
+
                 C c = new C()
                 {
                     Name = "test",
@@ -22,12 +24,13 @@ namespace LuminPackUnitTest
                         new A() { Val = 3 }
                     }
                 };
-                
+
                 int tests = 100;
                 int completedTasks = 0;
                 object lockObj = new object();
                 Exception taskException = null;
 
+                // <summary>Verifies test.</summary>
                 void Test()
                 {
                     try
@@ -36,7 +39,7 @@ namespace LuminPackUnitTest
                         {
                             _ = LuminPackSerializer.Serialize(c);
                         }
-                        
+
                         lock (lockObj)
                         {
                             completedTasks++;
@@ -69,16 +72,16 @@ namespace LuminPackUnitTest
                 // Final verification
                 var buf2 = LuminPackSerializer.Serialize(c);
                 C c2 = LuminPackSerializer.Deserialize<C>(buf2);
-                
-                Console.WriteLine($"c的名字: {c.Name}, c2的名字: {c2.Name}");
-                Console.WriteLine($"c的As数量: {c.As.Count}, c2的As数量: {c2.As.Count}");
-                Console.WriteLine($"c的As[0].Val: {c.As[0].Val}, c2的As[0].Val: {c2.As[0].Val}");
-                Console.WriteLine($"c的As[1].Val: {c.As[1].Val}, c2的As[1].Val: {c2.As[1].Val}");
-                Console.WriteLine($"c的As[2].Val: {c.As[2].Val}, c2的As[2].Val: {c2.As[2].Val}");
-                
+
+                Console.WriteLine($"c\u7684\u540d\u5b57: {c.Name}, c2\u7684\u540d\u5b57: {c2.Name}");
+                Console.WriteLine($"c\u7684As\u6570\u91cf: {c.As.Count}, c2\u7684As\u6570\u91cf: {c2.As.Count}");
+                Console.WriteLine($"c\u7684As[0].Val: {c.As[0].Val}, c2\u7684As[0].Val: {c2.As[0].Val}");
+                Console.WriteLine($"c\u7684As[1].Val: {c.As[1].Val}, c2\u7684As[1].Val: {c2.As[1].Val}");
+                Console.WriteLine($"c\u7684As[2].Val: {c.As[2].Val}, c2\u7684As[2].Val: {c2.As[2].Val}");
+
                 // Verify deserialized data
-                if (c.Name == c2.Name && 
-                    c.As.Count == c2.As.Count && 
+                if (c.Name == c2.Name &&
+                    c.As.Count == c2.As.Count &&
                     c.As[0].Val == c2.As[0].Val &&
                     c.As[1].Val == c2.As[1].Val &&
                     c.As[2].Val == c2.As[2].Val)
@@ -96,12 +99,14 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test multi thread code gen deserialize.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestMultiThreadCodeGenDeserialize(List<string> results)
         {
             try
             {
                 Console.WriteLine("Running MultiThreadCodeGenDeserialize test...");
-                
+
                 C c = new C()
                 {
                     Name = "test",
@@ -112,7 +117,7 @@ namespace LuminPackUnitTest
                         new A() { Val = 3 }
                     }
                 };
-                
+
                 byte[] buf = LuminPackSerializer.Serialize(c);
                 int tests = 100;
                 int completedTasks = 0;
@@ -120,6 +125,7 @@ namespace LuminPackUnitTest
                 Exception taskException = null;
                 bool dataValid = true;
 
+                // <summary>Verifies test.</summary>
                 void Test()
                 {
                     try
@@ -127,10 +133,10 @@ namespace LuminPackUnitTest
                         for (int i = 0; i < tests; i++)
                         {
                             C c2 = LuminPackSerializer.Deserialize<C>(buf);
-                            
+
                             // Verify data in each deserialization
-                            if (c.Name != c2.Name || 
-                                c.As.Count != c2.As.Count || 
+                            if (c.Name != c2.Name ||
+                                c.As.Count != c2.As.Count ||
                                 c.As[0].Val != c2.As[0].Val ||
                                 c.As[1].Val != c2.As[1].Val ||
                                 c.As[2].Val != c2.As[2].Val)
@@ -141,7 +147,7 @@ namespace LuminPackUnitTest
                                 }
                             }
                         }
-                        
+
                         lock (lockObj)
                         {
                             completedTasks++;
@@ -187,12 +193,14 @@ namespace LuminPackUnitTest
         }
 
         // Additional stress test with mixed operations
+        /// <summary>Verifies test mixed multi thread operations.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void TestMixedMultiThreadOperations(List<string> results)
         {
             try
             {
                 Console.WriteLine("Running MixedMultiThreadOperations test...");
-                
+
                 C originalData = new C()
                 {
                     Name = "stress_test",
@@ -211,12 +219,13 @@ namespace LuminPackUnitTest
                 Exception taskException = null;
                 bool allDataValid = true;
 
+                // <summary>Verifies mixed test.</summary>
                 void MixedTest()
                 {
                     try
                     {
                         var random = new Random();
-                        
+
                         for (int i = 0; i < operationCount; i++)
                         {
                             // Randomly choose between serialize and deserialize
@@ -239,8 +248,8 @@ namespace LuminPackUnitTest
                                 // Deserialize operation with verification
                                 byte[] serialized = LuminPackSerializer.Serialize(originalData);
                                 C deserialized = LuminPackSerializer.Deserialize<C>(serialized);
-                                
-                                if (originalData.Name != deserialized.Name || 
+
+                                if (originalData.Name != deserialized.Name ||
                                     originalData.As.Count != deserialized.As.Count)
                                 {
                                     lock (lockObj)
@@ -250,7 +259,7 @@ namespace LuminPackUnitTest
                                 }
                             }
                         }
-                        
+
                         lock (lockObj)
                         {
                             completedTasks++;

@@ -7,35 +7,44 @@ using LuminPackUnionContracts;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides dynamic union base functionality.</summary>
 [LuminPackable]
- [LuminPackUnion(1, typeof(StaticDynamicUnionMember))]
+[LuminPackUnion(1, typeof(StaticDynamicUnionMember))]
 public abstract partial class DynamicUnionBase
 {
 }
 
+/// <summary>Provides static dynamic union member functionality.</summary>
 [LuminPackable]
 public sealed partial class StaticDynamicUnionMember : DynamicUnionBase
 {
+    /// <summary>Stores the value.</summary>
     public int Value;
 }
 
+/// <summary>Provides i fast interface union functionality.</summary>
 [LuminPackable]
 [LuminPackUnion(7, typeof(FastInterfaceUnionMember))]
 public partial interface IFastInterfaceUnion
 {
 }
 
+/// <summary>Provides fast interface union member functionality.</summary>
 [LuminPackable]
 public sealed partial class FastInterfaceUnionMember : IFastInterfaceUnion
 {
+    /// <summary>Stores the value.</summary>
     public int Value;
 }
 
+/// <summary>Provides registered interface union member functionality.</summary>
 public sealed class RegisteredInterfaceUnionMember : IFastInterfaceUnion
 {
+    /// <summary>Stores the value.</summary>
     public int Value;
 }
 
+/// <summary>Provides i wide union functionality.</summary>
 [LuminPackable]
 [LuminPackWideTag]
 [LuminPackUnion(60_000, typeof(WideUnionMember))]
@@ -43,23 +52,32 @@ public partial interface IWideUnion
 {
 }
 
+/// <summary>Provides wide union member functionality.</summary>
 [LuminPackable]
 public sealed partial class WideUnionMember : IWideUnion
 {
+    /// <summary>Stores the value.</summary>
     public int Value;
 }
 
+/// <summary>Provides i generic fast union functionality.</summary>
+/// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
 [LuminPackable]
 public partial interface IGenericFastUnion<T>
 {
 }
 
+/// <summary>Provides generic fast union member functionality.</summary>
+/// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
 [LuminPackable]
 public sealed partial class GenericFastUnionMember<T> : IGenericFastUnion<T>
 {
+    /// <summary>Stores the value.</summary>
     public T Value = default!;
 }
 
+/// <summary>Provides i mixed generic union functionality.</summary>
+/// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
 [LuminPackable]
 [LuminPackUnion(11, typeof(MixedGenericUnionMember<int>))]
 [LuminPackUnion(12, typeof(MixedGenericUnionMember<string>))]
@@ -67,42 +85,56 @@ public partial interface IMixedGenericUnion<T>
 {
 }
 
+/// <summary>Provides mixed generic union member functionality.</summary>
+/// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
 [LuminPackable]
 public sealed partial class MixedGenericUnionMember<T> : IMixedGenericUnion<T>
 {
+    /// <summary>Stores the value.</summary>
     public T Value = default!;
 }
 
+/// <summary>Provides first class union root functionality.</summary>
 [LuminPackable]
 public abstract partial class FirstClassUnionRoot
 {
 }
 
+/// <summary>Provides second class union root functionality.</summary>
 [LuminPackable]
 public abstract partial class SecondClassUnionRoot : FirstClassUnionRoot
 {
 }
 
+/// <summary>Provides multiple class union member functionality.</summary>
 [LuminPackable]
 public sealed partial class MultipleClassUnionMember : SecondClassUnionRoot
 {
+    /// <summary>Stores the value.</summary>
     public int Value;
 }
 
+/// <summary>Provides cross assembly union member functionality.</summary>
 [LuminPackable]
 public sealed partial class CrossAssemblyUnionMember : IExternalUnion
 {
+    /// <summary>Stores the value.</summary>
     public int Value;
 }
 
+/// <summary>Provides cross assembly class union member functionality.</summary>
 [LuminPackable]
 public sealed partial class CrossAssemblyClassUnionMember : ExternalClassUnionRoot
 {
+    /// <summary>Stores the value.</summary>
     public int Value;
 }
 
+/// <summary>Provides binary union safety test functionality.</summary>
 internal static class BinaryUnionSafetyTest
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(BoxedStructUnionRoundTripsAndSizeMatches), BoxedStructUnionRoundTripsAndSizeMatches);
@@ -117,6 +149,7 @@ internal static class BinaryUnionSafetyTest
         RunCase(results, nameof(DynamicUnionRegistrationIsNotAvailable), DynamicUnionRegistrationIsNotAvailable);
     }
 
+    /// <summary>Verifies class union uses static tag dispatch.</summary>
     private static void ClassUnionUsesStaticTagDispatch()
     {
         DynamicUnionBase value = new StaticDynamicUnionMember { Value = 123 };
@@ -130,6 +163,7 @@ internal static class BinaryUnionSafetyTest
             "The class union fast path did not round-trip through the static tag switch.");
     }
 
+    /// <summary>Verifies interface union uses static tag dispatch.</summary>
     private static void InterfaceUnionUsesStaticTagDispatch()
     {
         IFastInterfaceUnion value = new FastInterfaceUnionMember { Value = 456 };
@@ -144,6 +178,7 @@ internal static class BinaryUnionSafetyTest
             "The interface union JSON fast path did not round-trip.");
     }
 
+    /// <summary>Verifies known tag uses static deserialize switch.</summary>
     private static void KnownTagUsesStaticDeserializeSwitch()
     {
         IFastInterfaceUnion value = new FastInterfaceUnionMember { Value = 789 };
@@ -153,6 +188,7 @@ internal static class BinaryUnionSafetyTest
             "A known local tag did not deserialize through the generated switch.");
     }
 
+    /// <summary>Verifies unlisted union member is rejected.</summary>
     private static void UnlistedUnionMemberIsRejected()
     {
         IFastInterfaceUnion value = new RegisteredInterfaceUnionMember { Value = 321 };
@@ -162,6 +198,7 @@ internal static class BinaryUnionSafetyTest
             "An unlisted JSON union member was accepted without a generated tag.");
     }
 
+    /// <summary>Verifies null wide generic and multiple roots round trip.</summary>
     private static void NullWideGenericAndMultipleRootsRoundTrip()
     {
         IFastInterfaceUnion? nullValue = null;
@@ -192,6 +229,7 @@ internal static class BinaryUnionSafetyTest
             "The second independent class-union virtual slot failed.");
     }
 
+    /// <summary>Verifies cross assembly unlisted member is rejected.</summary>
     private static void CrossAssemblyUnlistedMemberIsRejected()
     {
         IExternalUnion value = new CrossAssemblyUnionMember { Value = 654 };
@@ -202,6 +240,7 @@ internal static class BinaryUnionSafetyTest
             "An external class union member without a generated contract tag was accepted.");
     }
 
+    /// <summary>Verifies registered unlisted member round trips.</summary>
     private static void RegisteredUnlistedMemberRoundTrips()
     {
         unsafe
@@ -223,12 +262,18 @@ internal static class BinaryUnionSafetyTest
             "The registered union member did not round-trip through JSON.");
     }
 
+    /// <summary>Writes registered member to the current output.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     private static void WriteRegisteredMember(ref LuminPackWriter writer, ref IFastInterfaceUnion value)
     {
         writer.WriteUnionHeader(100);
         writer.WriteValue(LuminPackMarshal.As<IFastInterfaceUnion, RegisteredInterfaceUnionMember>(ref value).Value);
     }
 
+    /// <summary>Reads registered member from the current input.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     private static void ReadRegisteredMember(ref LuminPackReader reader, ref IFastInterfaceUnion value)
     {
         var v = new RegisteredInterfaceUnionMember();
@@ -236,6 +281,9 @@ internal static class BinaryUnionSafetyTest
         value = LuminPackMarshal.As<RegisteredInterfaceUnionMember, IFastInterfaceUnion>(ref v);
     }
 
+    /// <summary>Writes json registered member to the current output.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     private static void WriteJsonRegisteredMember(ref LuminPackJsonWriter writer, ref IFastInterfaceUnion value)
     {
         writer.WriteObjectStart();
@@ -252,6 +300,9 @@ internal static class BinaryUnionSafetyTest
         writer.WriteObjectEnd();
     }
 
+    /// <summary>Reads json registered member from the current input.</summary>
+    /// <param name="reader">The reader supplying the input data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     private static void ReadJsonRegisteredMember(ref LuminPackJsonReader reader, ref IFastInterfaceUnion value)
     {
         var v = new RegisteredInterfaceUnionMember();
@@ -259,6 +310,7 @@ internal static class BinaryUnionSafetyTest
         value = LuminPackMarshal.As<RegisteredInterfaceUnionMember, IFastInterfaceUnion>(ref v);
     }
 
+    /// <summary>Verifies closed generic tags use constant time dispatch.</summary>
     private static void ClosedGenericTagsUseConstantTimeDispatch()
     {
         IMixedGenericUnion<int> closed = new MixedGenericUnionMember<int> { Value = 91 };
@@ -283,6 +335,7 @@ internal static class BinaryUnionSafetyTest
             "The second explicit closed-generic union member did not round-trip.");
     }
 
+    /// <summary>Verifies boxed struct union round trips and size matches.</summary>
     private static void BoxedStructUnionRoundTripsAndSizeMatches()
     {
         ISerializable value = new Struct1
@@ -309,6 +362,7 @@ internal static class BinaryUnionSafetyTest
             "A boxed struct union did not survive binary round-trip.");
     }
 
+    /// <summary>Verifies dynamic union registration is not available.</summary>
     private static void DynamicUnionRegistrationIsNotAvailable()
     {
         DynamicUnionBase value = new StaticDynamicUnionMember { Value = 1 };
@@ -316,6 +370,9 @@ internal static class BinaryUnionSafetyTest
             "A statically declared union tag did not round-trip without registration.");
     }
 
+    /// <summary>Verifies assert throws.</summary>
+    /// <param name="action">The action used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void AssertThrows(Action action, string message)
     {
         try
@@ -330,6 +387,10 @@ internal static class BinaryUnionSafetyTest
         throw new InvalidOperationException(message);
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -343,6 +404,9 @@ internal static class BinaryUnionSafetyTest
         }
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)

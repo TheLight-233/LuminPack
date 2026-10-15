@@ -5,8 +5,12 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 
 using static CodeEmitterRegistry;
 
+/// <summary>Provides interface enumerable emitter functionality.</summary>
 public static class InterfaceEnumerableEmitter
 {
+    /// <summary>Appends binary writing statements for interface enumerable values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -122,6 +126,9 @@ public static class InterfaceEnumerableEmitter
         sb.AppendLine("            }");
     }
 
+    /// <summary>Appends binary reading statements for interface enumerable values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -130,8 +137,12 @@ public static class InterfaceEnumerableEmitter
     }
 }
 
+/// <summary>Provides interface collection emitter functionality.</summary>
 public static class InterfaceCollectionEmitter
 {
+    /// <summary>Appends binary writing statements for interface collection values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -139,6 +150,9 @@ public static class InterfaceCollectionEmitter
         InterfaceCollectionEmitterHelper.AppendCollectionSerialize(sb, elementType);
     }
 
+    /// <summary>Appends binary reading statements for interface collection values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -147,8 +161,12 @@ public static class InterfaceCollectionEmitter
     }
 }
 
+/// <summary>Provides interface read only collection emitter functionality.</summary>
 public static class InterfaceReadOnlyCollectionEmitter
 {
+    /// <summary>Appends binary writing statements for interface read only collection values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -156,6 +174,9 @@ public static class InterfaceReadOnlyCollectionEmitter
         InterfaceCollectionEmitterHelper.AppendCollectionSerialize(sb, elementType);
     }
 
+    /// <summary>Appends binary reading statements for interface read only collection values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -164,8 +185,12 @@ public static class InterfaceReadOnlyCollectionEmitter
     }
 }
 
+/// <summary>Provides interface list emitter functionality.</summary>
 public static class InterfaceListEmitter
 {
+    /// <summary>Appends binary writing statements for interface list values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -186,6 +211,9 @@ public static class InterfaceListEmitter
         sb.AppendLine("            writer.CheckBuffer();");
     }
 
+    /// <summary>Appends binary reading statements for interface list values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -207,8 +235,12 @@ public static class InterfaceListEmitter
     }
 }
 
+/// <summary>Provides interface read only list emitter functionality.</summary>
 public static class InterfaceReadOnlyListEmitter
 {
+    /// <summary>Appends binary writing statements for interface read only list values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -216,6 +248,9 @@ public static class InterfaceReadOnlyListEmitter
         InterfaceCollectionEmitterHelper.AppendCollectionSerialize(sb, elementType);
     }
 
+    /// <summary>Appends binary reading statements for interface read only list values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -224,8 +259,12 @@ public static class InterfaceReadOnlyListEmitter
     }
 }
 
+/// <summary>Provides interface dictionary emitter functionality.</summary>
 public static class InterfaceDictionaryEmitter
 {
+    /// <summary>Appends binary writing statements for interface dictionary values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
@@ -254,6 +293,9 @@ public static class InterfaceDictionaryEmitter
         sb.AppendLine("            writer.CheckBuffer();");
     }
 
+    /// <summary>Appends binary reading statements for interface dictionary values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
@@ -287,8 +329,12 @@ public static class InterfaceDictionaryEmitter
     }
 }
 
+/// <summary>Provides interface read only dictionary emitter functionality.</summary>
 public static class InterfaceReadOnlyDictionaryEmitter
 {
+    /// <summary>Appends binary writing statements for interface read only dictionary values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
@@ -317,6 +363,9 @@ public static class InterfaceReadOnlyDictionaryEmitter
         sb.AppendLine("            writer.CheckBuffer();");
     }
 
+    /// <summary>Appends binary reading statements for interface read only dictionary values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
@@ -350,8 +399,12 @@ public static class InterfaceReadOnlyDictionaryEmitter
     }
 }
 
+/// <summary>Provides interface lookup emitter functionality.</summary>
 public static class InterfaceLookupEmitter
 {
+    /// <summary>Appends binary writing statements for interface lookup values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
@@ -381,6 +434,9 @@ public static class InterfaceLookupEmitter
         sb.AppendLine("            writer.CheckBuffer();");
     }
 
+    /// <summary>Appends binary reading statements for interface lookup values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
@@ -416,6 +472,9 @@ public static class InterfaceLookupEmitter
         sb.AppendLine($"            value = new global::LuminPack.Utility.LuminPackLookup<{keyType}, {elementType}>(dict);");
     }
 
+    /// <summary>Appends JSON writing statements for interface lookup values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
@@ -439,6 +498,9 @@ public static class InterfaceLookupEmitter
         sb.AppendLine("            writer.WriteArrayEnd();");
     }
 
+    /// <summary>Appends JSON reading statements for interface lookup values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
@@ -464,8 +526,12 @@ public static class InterfaceLookupEmitter
     }
 }
 
+/// <summary>Provides interface grouping emitter functionality.</summary>
 public static class InterfaceGroupingEmitter
 {
+    /// <summary>Appends binary writing statements for interface grouping values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
@@ -487,6 +553,9 @@ public static class InterfaceGroupingEmitter
         sb.AppendLine("            writer.WriteValue(in elements);");
     }
 
+    /// <summary>Appends binary reading statements for interface grouping values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
@@ -518,6 +587,9 @@ public static class InterfaceGroupingEmitter
         sb.AppendLine($"            value = new global::LuminPack.Utility.LuminPackGrouping<{keyType}, {elementType}>(key, values);");
     }
 
+    /// <summary>Appends statements that calculate the binary payload size.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
@@ -533,6 +605,9 @@ public static class InterfaceGroupingEmitter
         sb.AppendLine("            evaluator.CalculateOffset(ref elements);");
     }
 
+    /// <summary>Appends JSON writing statements for interface grouping values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
@@ -552,6 +627,9 @@ public static class InterfaceGroupingEmitter
         sb.AppendLine("            writer.WriteObjectEnd();");
     }
 
+    /// <summary>Appends JSON reading statements for interface grouping values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var keyType = GetFirstGeneric(fieldData.TypeName);
@@ -584,8 +662,12 @@ public static class InterfaceGroupingEmitter
     }
 }
 
+/// <summary>Provides interface set emitter functionality.</summary>
 public static class InterfaceSetEmitter
 {
+    /// <summary>Appends binary writing statements for interface set values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -613,6 +695,9 @@ public static class InterfaceSetEmitter
         sb.AppendLine("            writer.CheckBuffer();");
     }
 
+    /// <summary>Appends binary reading statements for interface set values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -643,8 +728,12 @@ public static class InterfaceSetEmitter
     }
 }
 
+/// <summary>Provides interface read only set emitter functionality.</summary>
 public static class InterfaceReadOnlySetEmitter
 {
+    /// <summary>Appends binary writing statements for interface read only set values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -672,6 +761,9 @@ public static class InterfaceReadOnlySetEmitter
         sb.AppendLine("            writer.CheckBuffer();");
     }
 
+    /// <summary>Appends binary reading statements for interface read only set values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
@@ -702,10 +794,14 @@ public static class InterfaceReadOnlySetEmitter
     }
 }
 
+/// <summary>Provides interface collection emitter helper functionality.</summary>
 internal static class InterfaceCollectionEmitterHelper
 {
-// This is the source-generator form of the interface collection helpers.
-// The emitted code retains its array/List fast paths without runtime dispatch.
+    // This is the source-generator form of the interface collection helpers.
+    // The emitted code retains its array/List fast paths without runtime dispatch.
+    /// <summary>Appends binary writing statements for interface collection helper values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="elementType">The element type used by this operation.</param>
     public static void AppendCollectionSerialize(StringBuilder sb, string elementType)
     {
         sb.AppendLine("            if (value is null)");
@@ -780,6 +876,9 @@ internal static class InterfaceCollectionEmitterHelper
         sb.AppendLine("            writer.CheckBuffer();");
     }
 
+    /// <summary>Appends binary reading statements for interface collection helper values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="elementType">The element type used by this operation.</param>
     public static void AppendArrayDeserialize(StringBuilder sb, string elementType)
     {
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");

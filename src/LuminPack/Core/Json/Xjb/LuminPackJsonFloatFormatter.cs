@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -26,9 +25,13 @@ namespace LuminPack.Core
         private const uint FloatLegacyLowExponent = 95;    // 127 - 32
         private const ulong DoubleLegacyLowExponent = 991; // 1023 - 32
 
+        /// <summary>Gets the digit pairs.</summary>
         private static ReadOnlySpan<byte> DigitPairs =>
             "00010203040506070809101112131415161718192021222324252627282930313233343536373839404142434445464748495051525354555657585960616263646566676869707172737475767778798081828384858687888990919293949596979899"u8;
 
+        /// <summary>Performs the count decimal digits step for the current operation.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int CountDecimalDigits(ulong value)
         {
@@ -71,6 +74,10 @@ namespace LuminPack.Core
             return 20;
         }
 
+        /// <summary>Writes digits utf8 to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int WriteDigitsUtf8(
             Span<byte> dest, ulong value)
@@ -79,12 +86,17 @@ namespace LuminPack.Core
                 dest, value, CountDecimalDigits(value));
         }
 
+        /// <summary>Writes digits utf8 to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <param name="digits">The digits used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int WriteDigitsUtf8(
             Span<byte> dest, ulong value, int digits)
         {
             if (dest.Length < digits)
-                throw new ArgumentException(
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException(
                     "Destination too small", nameof(dest));
 
             ref byte output = ref MemoryMarshal.GetReference(dest);
@@ -125,6 +137,10 @@ namespace LuminPack.Core
             return digits;
         }
 
+        /// <summary>Writes digits utf16 to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int WriteDigitsUtf16(Span<char> dest, ulong value)
         {
@@ -168,6 +184,11 @@ namespace LuminPack.Core
         /// needed at most 9/17 fraction digits; every other value went through Utf8Formatter, whose
         /// layout is the .NET "G" window (fixed for leading exponents in [-4, limit - 1]).
         /// </summary>
+        /// <param name="legacyRange">The legacy range used by this operation.</param>
+        /// <param name="exponent10">The exponent10 used by this operation.</param>
+        /// <param name="digitCount">The digit count used by this operation.</param>
+        /// <param name="isFloat">The is float used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool UseFixedNotation(bool legacyRange, int exponent10, int digitCount, bool isFloat)
         {
@@ -187,6 +208,15 @@ namespace LuminPack.Core
         /// already the shortest form: 2^24 for float, 2^53 for double. Above that limit the xjb core
         /// decides, which is why the emitted text always decodes to the core's canonical digits.</para>
         /// </summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="magnitude">The magnitude used by this operation.</param>
+        /// <param name="absBits">The abs bits used by this operation.</param>
+        /// <param name="exponent">The exponent used by this operation.</param>
+        /// <param name="negative">The negative used by this operation.</param>
+        /// <param name="lowExponent">The low exponent used by this operation.</param>
+        /// <param name="magnitudeLimit">The magnitude limit used by this operation.</param>
+        /// <param name="written">Receives the written produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool TryWriteIntegralUtf8(Span<byte> dest, double magnitude, ulong absBits, ulong exponent, bool negative, ulong lowExponent, double magnitudeLimit, out int written)
         {
@@ -202,6 +232,16 @@ namespace LuminPack.Core
             return true;
         }
 
+        /// <summary>Attempts to write integral utf16 and reports whether it succeeded.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="magnitude">The magnitude used by this operation.</param>
+        /// <param name="absBits">The abs bits used by this operation.</param>
+        /// <param name="exponent">The exponent used by this operation.</param>
+        /// <param name="negative">The negative used by this operation.</param>
+        /// <param name="lowExponent">The low exponent used by this operation.</param>
+        /// <param name="magnitudeLimit">The magnitude limit used by this operation.</param>
+        /// <param name="written">Receives the written produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool TryWriteIntegralUtf16(Span<char> dest, double magnitude, ulong absBits, ulong exponent, bool negative, ulong lowExponent, double magnitudeLimit, out int written)
         {
@@ -232,6 +272,15 @@ namespace LuminPack.Core
         /// pair, which is what caught the float tie candidate 0x48201208 = 163912.125f during
         /// development.</para>
         /// </summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="magnitude">The magnitude used by this operation.</param>
+        /// <param name="absBits">The abs bits used by this operation.</param>
+        /// <param name="exponent">The exponent used by this operation.</param>
+        /// <param name="negative">The negative used by this operation.</param>
+        /// <param name="lowExponent">The low exponent used by this operation.</param>
+        /// <param name="maxDigits">The max digits used by this operation.</param>
+        /// <param name="written">Receives the written produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool TryWriteShortDecimalUtf8(Span<byte> dest, double magnitude, ulong absBits, ulong exponent, bool negative, ulong lowExponent, int maxDigits, out int written)
         {
@@ -283,6 +332,16 @@ namespace LuminPack.Core
             return true;
         }
 
+        /// <summary>Attempts to write short decimal utf16 and reports whether it succeeded.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="magnitude">The magnitude used by this operation.</param>
+        /// <param name="absBits">The abs bits used by this operation.</param>
+        /// <param name="exponent">The exponent used by this operation.</param>
+        /// <param name="negative">The negative used by this operation.</param>
+        /// <param name="lowExponent">The low exponent used by this operation.</param>
+        /// <param name="maxDigits">The max digits used by this operation.</param>
+        /// <param name="written">Receives the written produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool TryWriteShortDecimalUtf16(Span<char> dest, double magnitude, ulong absBits, ulong exponent, bool negative, ulong lowExponent, int maxDigits, out int written)
         {
@@ -327,6 +386,10 @@ namespace LuminPack.Core
             return true;
         }
 
+        /// <summary>Writes float utf8 to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         internal static int WriteFloatUtf8(Span<byte> dest, float value)
         {
             uint bits = Unsafe.As<float, uint>(ref value);
@@ -346,6 +409,10 @@ namespace LuminPack.Core
             return EmitUtf8(dest, digits, exponent10, negative, legacyRange, true);
         }
 
+        /// <summary>Writes double utf8 to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         internal static int WriteDoubleUtf8(Span<byte> dest, double value)
         {
             ulong bits = Unsafe.As<double, ulong>(ref value);
@@ -365,6 +432,10 @@ namespace LuminPack.Core
             return EmitUtf8(dest, digits, exponent10, negative, legacyRange, false);
         }
 
+        /// <summary>Writes float utf16 to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         internal static int WriteFloatUtf16(Span<char> dest, float value)
         {
             uint bits = Unsafe.As<float, uint>(ref value);
@@ -384,6 +455,10 @@ namespace LuminPack.Core
             return EmitUtf16(dest, digits, exponent10, negative, legacyRange, true);
         }
 
+        /// <summary>Writes double utf16 to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         internal static int WriteDoubleUtf16(Span<char> dest, double value)
         {
             ulong bits = Unsafe.As<double, ulong>(ref value);
@@ -403,6 +478,14 @@ namespace LuminPack.Core
             return EmitUtf16(dest, digits, exponent10, negative, legacyRange, false);
         }
 
+        /// <summary>Performs the emit utf8 step for the current operation.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="digits">The digits used by this operation.</param>
+        /// <param name="exponent10">The exponent10 used by this operation.</param>
+        /// <param name="negative">The negative used by this operation.</param>
+        /// <param name="legacyRange">The legacy range used by this operation.</param>
+        /// <param name="isFloat">The is float used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         private static int EmitUtf8(Span<byte> dest, ulong digits, int exponent10, bool negative, bool legacyRange, bool isFloat)
         {
             int pos = 0;
@@ -424,6 +507,14 @@ namespace LuminPack.Core
                 : EmitScientificUtf8(dest.Slice(pos), digits, exponent10, length));
         }
 
+        /// <summary>Performs the emit utf16 step for the current operation.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="digits">The digits used by this operation.</param>
+        /// <param name="exponent10">The exponent10 used by this operation.</param>
+        /// <param name="negative">The negative used by this operation.</param>
+        /// <param name="legacyRange">The legacy range used by this operation.</param>
+        /// <param name="isFloat">The is float used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         private static int EmitUtf16(Span<char> dest, ulong digits, int exponent10, bool negative, bool legacyRange, bool isFloat)
         {
             int pos = 0;
@@ -444,6 +535,12 @@ namespace LuminPack.Core
                 : EmitScientificUtf16(dest.Slice(pos), digits, exponent10, length));
         }
 
+        /// <summary>Performs the emit fixed utf8 step for the current operation.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="digits">The digits used by this operation.</param>
+        /// <param name="exponent10">The exponent10 used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <returns>The result of the operation.</returns>
         private static int EmitFixedUtf8(Span<byte> dest, ulong digits, int exponent10, int length)
         {
             if (exponent10 >= 0)
@@ -474,6 +571,12 @@ namespace LuminPack.Core
             return pos + WriteDigitsUtf8(dest.Slice(pos), digits);
         }
 
+        /// <summary>Performs the emit fixed utf16 step for the current operation.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="digits">The digits used by this operation.</param>
+        /// <param name="exponent10">The exponent10 used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <returns>The result of the operation.</returns>
         private static int EmitFixedUtf16(Span<char> dest, ulong digits, int exponent10, int length)
         {
             if (exponent10 >= 0)
@@ -504,6 +607,12 @@ namespace LuminPack.Core
             return pos + WriteDigitsUtf16(dest.Slice(pos), digits);
         }
 
+        /// <summary>Performs the emit scientific utf8 step for the current operation.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="digits">The digits used by this operation.</param>
+        /// <param name="exponent10">The exponent10 used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <returns>The result of the operation.</returns>
         private static int EmitScientificUtf8(Span<byte> dest, ulong digits, int exponent10, int length)
         {
             int leadingExponent = exponent10 + length - 1;
@@ -528,6 +637,12 @@ namespace LuminPack.Core
             return pos + WriteExponentUtf8(dest.Slice(pos), leadingExponent);
         }
 
+        /// <summary>Performs the emit scientific utf16 step for the current operation.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="digits">The digits used by this operation.</param>
+        /// <param name="exponent10">The exponent10 used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <returns>The result of the operation.</returns>
         private static int EmitScientificUtf16(Span<char> dest, ulong digits, int exponent10, int length)
         {
             int leadingExponent = exponent10 + length - 1;
@@ -551,6 +666,10 @@ namespace LuminPack.Core
             return pos + WriteExponentUtf16(dest.Slice(pos), leadingExponent);
         }
 
+        /// <summary>Writes exponent utf8 to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="leadingExponent">The leading exponent used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         private static int WriteExponentUtf8(Span<byte> dest, int leadingExponent)
         {
             int pos = 0;
@@ -569,6 +688,10 @@ namespace LuminPack.Core
             return pos;
         }
 
+        /// <summary>Writes exponent utf16 to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="leadingExponent">The leading exponent used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         private static int WriteExponentUtf16(Span<char> dest, int leadingExponent)
         {
             int pos = 0;

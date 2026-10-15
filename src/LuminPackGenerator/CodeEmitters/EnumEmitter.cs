@@ -10,12 +10,18 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 /// </summary>
 public static class EnumEmitter
 {
+    /// <summary>Appends binary writing statements for enum values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         sb.AppendLine("            global::System.Runtime.CompilerServices.Unsafe.WriteUnaligned(ref writer.GetCurrentSpanReference(), value);");
         sb.AppendLine("            writer.Advance(global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + data.TypeName + ">());");
     }
 
+    /// <summary>Appends binary reading statements for enum values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         sb.AppendLine("            reader.EnsureReadable(reader.GetCurrentSpanOffset(), global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + data.TypeName + ">());");
@@ -23,17 +29,26 @@ public static class EnumEmitter
         sb.AppendLine("            reader.Advance(global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + data.TypeName + ">());");
     }
 
+    /// <summary>Appends statements that calculate the binary payload size.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateCalculateOffsetCode(LuminLocalFieldData data, StringBuilder sb)
     {
         sb.AppendLine("            evaluator += global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + data.TypeName + ">();");
     }
 
+    /// <summary>Appends JSON writing statements for enum values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         var names = GetJsonEnumTypeNames(data.TypeSymbol);
         sb.AppendLine("            writer." + names.WriteMethod + "((" + names.Keyword + ")value);");
     }
 
+    /// <summary>Appends JSON reading statements for enum values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         var names = GetJsonEnumTypeNames(data.TypeSymbol);
@@ -47,6 +62,8 @@ public static class EnumEmitter
     /// 64-bit-backed enums, and reinterpreting a narrow enum as <c>int</c> read past it.
     /// A symbol that is not a resolvable enum keeps the historical <c>int</c> behavior.
     /// </summary>
+    /// <param name="typeSymbol">The type or symbol to analyze.</param>
+    /// <returns>The result of the operation.</returns>
     internal static (string Keyword, string WriteMethod, string ReadMethod) GetJsonEnumTypeNames(ITypeSymbol? typeSymbol)
     {
         var underlying = typeSymbol is INamedTypeSymbol { TypeKind: TypeKind.Enum } named

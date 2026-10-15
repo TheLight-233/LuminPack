@@ -5,10 +5,12 @@ using LuminPack.Utility;
 
 namespace LuminPackBenchmark;
 
+/// <summary>Provides character save data jit probe functionality.</summary>
 internal static class CharacterSaveDataJitProbe
 {
     private const int Iterations = 100_000;
 
+    /// <summary>Measures run for the configured benchmark input.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static void Run()
     {

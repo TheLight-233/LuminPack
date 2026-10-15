@@ -1,4 +1,3 @@
-using System;
 using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -9,6 +8,7 @@ using LuminPack.Utility;
 
 namespace LuminPack.Core
 {
+    /// <summary>Writes JSON tokens with the configured UTF encoding to a reusable or external buffer.</summary>
     [StructLayout(LayoutKind.Sequential)]
 #if NET8_0_OR_GREATER
     [SkipLocalsInit]
@@ -27,13 +27,15 @@ namespace LuminPack.Core
         private long _committedBytes;
         private readonly LuminPackWriterOptionalState _state;
         private readonly bool SerializeStringAsUtf8;
-        
+
         private int _depth;
         private bool _isFirstElement;
-        
+
+        /// <summary>Gets the option state.</summary>
         public LuminPackWriterOptionalState OptionState => _state;
+        /// <summary>Gets the option.</summary>
         public LuminPackSerializerOption Option => _state.Option;
-        
+
         private const byte OpenBrace = (byte)'{';
         private const byte CloseBrace = (byte)'}';
         private const byte OpenBracket = (byte)'[';
@@ -53,14 +55,19 @@ namespace LuminPack.Core
         private static readonly SearchValues<byte> s_stringEscapeBytes =
             SearchValues.Create(Encoding.UTF8.GetBytes(StringEscapeChars));
 #endif
-        
+
+        /// <summary>Gets the current index.</summary>
         public ref int CurrentIndex => ref _currentIndex;
+        /// <summary>Gets the depth.</summary>
         public int Depth => _depth;
         /// <summary>Gets the total JSON bytes written, including committed output chunks.</summary>
         public long BytesWritten => _committedBytes + _currentIndex;
-        
+
         #region Constructors
-        
+
+        /// <summary>Initializes a new instance of <c>LuminPackJsonWriter</c>.</summary>
+        /// <param name="bufferReference">The buffer reference used by this operation.</param>
+        /// <param name="state">The reusable state associated with the operation.</param>
         public LuminPackJsonWriter(ref Span<byte> bufferReference, LuminPackWriterOptionalState state)
         {
             _state = state;
@@ -78,14 +85,17 @@ namespace LuminPack.Core
             _isFirstElement = true;
             SerializeStringAsUtf8 = _state.Option.StringEncoding is LuminPackStringEncoding.UTF8;
         }
-        
+
+        /// <summary>Initializes a new instance of <c>LuminPackJsonWriter</c>.</summary>
+        /// <param name="bufferWriter">The writer receiving the output data.</param>
+        /// <param name="state">The reusable state associated with the operation.</param>
         public LuminPackJsonWriter(LuminBufferWriter? bufferWriter, LuminPackWriterOptionalState state)
         {
             _state = state;
-            
+
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
-            
+
             _bufferReference = bufferWriter.BeginWrite(ref _currentIndex);
 #if NET8_0_OR_GREATER
             _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
@@ -101,6 +111,8 @@ namespace LuminPack.Core
             SerializeStringAsUtf8 = _state.Option.StringEncoding is LuminPackStringEncoding.UTF8;
         }
 
+        /// <summary>Initializes a new instance of <c>LuminPackJsonWriter</c>.</summary>
+        /// <param name="bufferWriter">The writer receiving the output data.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal LuminPackJsonWriter(LuminBufferWriter bufferWriter)
         {
@@ -122,6 +134,9 @@ namespace LuminPack.Core
 
         /// <summary>Creates a sequential writer which commits JSON directly to an external buffer writer.</summary>
         /// <remarks>CurrentIndex and GetSpan refer to the current chunk. Use BytesWritten for the total and FlushToBufferWriter to commit the final chunk.</remarks>
+        /// <param name="output">The destination receiving the result.</param>
+        /// <param name="state">The reusable state associated with the operation.</param>
+        /// <param name="initialSizeHint">The initial size hint used by this operation.</param>
         public LuminPackJsonWriter(IBufferWriter<byte> output, LuminPackWriterOptionalState state, int initialSizeHint)
         {
             if (output is null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(output));
@@ -162,11 +177,14 @@ namespace LuminPack.Core
             _bufferStart = null;
 #endif
         }
-        
+
         #endregion
-        
+
         #region Core Methods
-        
+
+        /// <summary>Obtains the span reference for the supplied input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ref byte GetSpanReference(int index) =>
 #if NET8_0_OR_GREATER
@@ -174,7 +192,9 @@ namespace LuminPack.Core
 #else
             ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-        
+
+        /// <summary>Advances the current buffer position by the supplied number of bytes.</summary>
+        /// <param name="count">The number of entries involved in the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Advance(int count)
         {
@@ -185,6 +205,8 @@ namespace LuminPack.Core
             _currentIndex += count;
         }
 
+        /// <summary>Ensures that the buffer can accommodate the requested write.</summary>
+        /// <param name="count">The number of entries involved in the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void EnsureCapacity(int count)
         {
@@ -194,6 +216,8 @@ namespace LuminPack.Core
             EnsureCapacitySlow(count);
         }
 
+        /// <summary>Ensures that the buffer can accommodate the requested write.</summary>
+        /// <param name="count">The number of entries involved in the operation.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void EnsureCapacitySlow(int count)
         {
@@ -221,7 +245,9 @@ namespace LuminPack.Core
             _writerBuffer.EnsureCapacity(_currentIndex + count);
             FlushBuffer();
         }
-        
+
+        /// <summary>Updates the span used by the current operation.</summary>
+        /// <param name="span">The buffer used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetSpan(ref Span<byte> span)
         {
@@ -232,7 +258,8 @@ namespace LuminPack.Core
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
         }
-        
+
+        /// <summary>Publishes pending buffer contents to the configured destination.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Flush()
         {
@@ -246,7 +273,8 @@ namespace LuminPack.Core
             _depth = 0;
             _isFirstElement = true;
         }
-        
+
+        /// <summary>Publishes pending buffer contents to the configured destination.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void FlushBuffer()
         {
@@ -260,7 +288,9 @@ namespace LuminPack.Core
 #endif
             }
         }
-        
+
+        /// <summary>Obtains the current span reference for the supplied input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ref byte GetCurrentSpanReference() =>
 #if NET8_0_OR_GREATER
@@ -268,26 +298,34 @@ namespace LuminPack.Core
 #else
             ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)_currentIndex);
 #endif
-        
+
+        /// <summary>Obtains the span for the supplied input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Span<byte> GetSpan()
         {
             return _bufferReference[.._currentIndex];
         }
-        
+
+        /// <summary>Obtains the current span offset for the supplied input.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public ref int GetCurrentSpanOffset() => ref _currentIndex;
-        
+
         #endregion
-        
+
         #region JSON Basic Methods
 
+        /// <summary>Updates the first element used by the current operation.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetFirstElement(bool value)
         {
             _isFirstElement = value;
         }
-        
+
+        /// <summary>Writes byte raw to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteByteRaw(byte value)
         {
@@ -305,7 +343,9 @@ namespace LuminPack.Core
                 Advance(2);
             }
         }
-        
+
+        /// <summary>Writes raw to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteRaw(scoped ReadOnlySpan<byte> value)
         {
@@ -318,7 +358,9 @@ namespace LuminPack.Core
             value.CopyTo(_bufferReference.Slice(_currentIndex, value.Length));
             Advance(value.Length);
         }
-        
+
+        /// <summary>Writes raw to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteRaw(scoped ReadOnlySpan<char> value)
         {
@@ -334,6 +376,8 @@ namespace LuminPack.Core
         }
 
         // Keep segmented-output loops out of each inlined generated JSON prefix.
+        /// <summary>Writes raw to output to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void WriteRawToOutput(scoped ReadOnlySpan<byte> value)
         {
@@ -349,6 +393,9 @@ namespace LuminPack.Core
         }
 
         /// <summary>Generator-only copy of an 8..16-byte literal packed into two overlapping native words.</summary>
+        /// <param name="first">The first used by this operation.</param>
+        /// <param name="last">The last used by this operation.</param>
+        /// <param name="byteCount">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteGeneratedLiteral(ulong first, ulong last, int byteCount)
         {
@@ -364,6 +411,10 @@ namespace LuminPack.Core
         }
 
         /// <summary>Writes a generated native-word UTF-8 property prefix and its integer value.</summary>
+        /// <param name="first">The first used by this operation.</param>
+        /// <param name="last">The last used by this operation.</param>
+        /// <param name="byteCount">The number of bytes or elements to process.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void WriteGeneratedInteger(ulong first, ulong last, int byteCount, int value)
         {
@@ -373,6 +424,10 @@ namespace LuminPack.Core
         }
 
         /// <summary>Writes a generated native-word UTF-8 property prefix and its integer value.</summary>
+        /// <param name="first">The first used by this operation.</param>
+        /// <param name="last">The last used by this operation.</param>
+        /// <param name="byteCount">The number of bytes or elements to process.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void WriteGeneratedInteger(ulong first, ulong last, int byteCount, uint value)
         {
@@ -382,6 +437,10 @@ namespace LuminPack.Core
         }
 
         /// <summary>Writes a generated native-word UTF-8 property prefix and its integer value.</summary>
+        /// <param name="first">The first used by this operation.</param>
+        /// <param name="last">The last used by this operation.</param>
+        /// <param name="byteCount">The number of bytes or elements to process.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void WriteGeneratedInteger(ulong first, ulong last, int byteCount, long value)
         {
@@ -391,6 +450,10 @@ namespace LuminPack.Core
         }
 
         /// <summary>Writes a generated native-word UTF-8 property prefix and its integer value.</summary>
+        /// <param name="first">The first used by this operation.</param>
+        /// <param name="last">The last used by this operation.</param>
+        /// <param name="byteCount">The number of bytes or elements to process.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void WriteGeneratedInteger(ulong first, ulong last, int byteCount, ulong value)
         {
@@ -399,6 +462,12 @@ namespace LuminPack.Core
             _currentIndex += byteCount + written;
         }
 
+        /// <summary>Performs the reserve generated integer prefix step for the current operation.</summary>
+        /// <param name="first">The first used by this operation.</param>
+        /// <param name="last">The last used by this operation.</param>
+        /// <param name="byteCount">The number of bytes or elements to process.</param>
+        /// <param name="maxDigits">The max digits used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private Span<byte> ReserveGeneratedIntegerPrefix(ulong first, ulong last, int byteCount, int maxDigits)
         {
@@ -417,7 +486,8 @@ namespace LuminPack.Core
             _isFirstElement = false;
             return _bufferReference.Slice(_currentIndex + byteCount);
         }
-        
+
+        /// <summary>Writes comma if needed to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteCommaIfNeeded()
         {
@@ -427,11 +497,12 @@ namespace LuminPack.Core
             }
             _isFirstElement = false;
         }
-        
+
         #endregion
-        
+
         #region Object/Array
-        
+
+        /// <summary>Writes object start to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteObjectStart()
         {
@@ -440,7 +511,8 @@ namespace LuminPack.Core
             _depth++;
             _isFirstElement = true;
         }
-        
+
+        /// <summary>Writes object end to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteObjectEnd()
         {
@@ -448,7 +520,8 @@ namespace LuminPack.Core
             _depth--;
             _isFirstElement = false;
         }
-        
+
+        /// <summary>Writes array start to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteArrayStart()
         {
@@ -457,7 +530,8 @@ namespace LuminPack.Core
             _depth++;
             _isFirstElement = true;
         }
-        
+
+        /// <summary>Writes array end to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteArrayEnd()
         {
@@ -465,11 +539,13 @@ namespace LuminPack.Core
             _depth--;
             _isFirstElement = false;
         }
-        
+
         #endregion
-        
+
         #region Property Name
-        
+
+        /// <summary>Writes property name to the current output.</summary>
+        /// <param name="utf8PropertyName">The utf8 property name used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WritePropertyName(ReadOnlySpan<byte> utf8PropertyName)
         {
@@ -483,16 +559,18 @@ namespace LuminPack.Core
 
             WriteByteRaw(Quote);
             WriteByteRaw(Colon);
-            
+
             _isFirstElement = true;
         }
-        
+
+        /// <summary>Writes property name to the current output.</summary>
+        /// <param name="utf16PropertyName">The utf16 property name used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WritePropertyName(ReadOnlySpan<char> utf16PropertyName)
         {
             WriteCommaIfNeeded();
             WriteByteRaw(Quote);
-            
+
             if (SerializeStringAsUtf8)
             {
                 WriteStringContentUtf8(utf16PropertyName);
@@ -501,13 +579,15 @@ namespace LuminPack.Core
             {
                 WriteStringContentUtf16(utf16PropertyName);
             }
-            
+
             WriteByteRaw(Quote);
             WriteByteRaw(Colon);
-            
+
             _isFirstElement = true;
         }
-        
+
+        /// <summary>Writes property name to the current output.</summary>
+        /// <param name="propertyName">The property name used by this operation.</param>
         public void WritePropertyName(string propertyName)
         {
             WriteCommaIfNeeded();
@@ -517,15 +597,15 @@ namespace LuminPack.Core
                 WriteStringContentUtf8(propertyName.AsSpan());
             else
                 WriteStringContentUtf16(propertyName.AsSpan());
-            
+
             WriteByteRaw(Quote);
             WriteByteRaw(Colon);
-            
+
             _isFirstElement = true;
         }
-        
+
         #endregion
-        
+
         #region Formatted Values
 
         /// <summary>
@@ -534,6 +614,7 @@ namespace LuminPack.Core
         /// character that requires JSON escaping, so the content writers only
         /// need to transcode or copy.
         /// </summary>
+        /// <param name="text">The text used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteFormattedValue(ReadOnlySpan<char> text)
         {
@@ -549,6 +630,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>Writes a <see cref="DateTime"/> in its round-trip ("O") form without allocating a string.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         public void WriteDateTime(DateTime value)
         {
             // "yyyy-MM-ddTHH:mm:ss.fffffff" is 27 characters.
@@ -563,6 +645,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>Writes a <see cref="DateTimeOffset"/> in its round-trip ("O") form without allocating a string.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         public void WriteDateTimeOffset(DateTimeOffset value)
         {
             // Round-trip text plus the "+hh:mm" offset is 33 characters.
@@ -577,6 +660,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>Writes a <see cref="Guid"/> in its "D" form without allocating a string.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         public void WriteGuid(Guid value)
         {
             Span<char> buffer = stackalloc char[36];
@@ -590,6 +674,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>Writes a <see cref="TimeSpan"/> in its constant ("c") form without allocating a string.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         public void WriteTimeSpan(TimeSpan value)
         {
             // "-10675199.02:48:05.4775808" is 26 characters.
@@ -606,7 +691,9 @@ namespace LuminPack.Core
         #endregion
 
         #region String
-        
+
+        /// <summary>Writes string to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         public void WriteString(string? value)
         {
             WriteCommaIfNeeded();
@@ -641,7 +728,7 @@ namespace LuminPack.Core
 #endif
 
             WriteByteRaw(Quote);
-            
+
             if (SerializeStringAsUtf8)
             {
                 WriteStringContentUtf8(value.AsSpan());
@@ -650,10 +737,12 @@ namespace LuminPack.Core
             {
                 WriteStringContentUtf16(value.AsSpan());
             }
-            
+
             WriteByteRaw(Quote);
         }
-        
+
+        /// <summary>Writes string content utf8 to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteStringContentUtf8(ReadOnlySpan<char> value)
         {
@@ -697,7 +786,7 @@ namespace LuminPack.Core
                     break;
                 }
             }
-            
+
             if (!needsEscape)
             {
                 EnsureCapacity(value.Length);
@@ -716,6 +805,8 @@ namespace LuminPack.Core
         }
 
 #if NET8_0_OR_GREATER
+        /// <summary>Writes string content utf8 encoded to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         private void WriteStringContentUtf8Encoded(ReadOnlySpan<char> value)
         {
             int escapeIndex = value.IndexOfAny(s_stringEscapeChars);
@@ -725,6 +816,9 @@ namespace LuminPack.Core
                 WriteStringContentUtf8Escaped(value, escapeIndex);
         }
 
+        /// <summary>Writes string content utf8 escaped to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <param name="escapeIndex">The escape index used by this operation.</param>
         private void WriteStringContentUtf8Escaped(ReadOnlySpan<char> value, int escapeIndex)
         {
             while (true)
@@ -769,6 +863,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Writes utf8 string segment to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteUtf8StringSegment(ReadOnlySpan<char> value)
         {
@@ -798,6 +894,9 @@ namespace LuminPack.Core
             Advance(bytesWritten);
         }
 
+        /// <summary>Writes utf8 string segment slow to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private int WriteUtf8StringSegmentSlow(ReadOnlySpan<char> value)
         {
@@ -806,9 +905,14 @@ namespace LuminPack.Core
         }
 #endif
 
+        /// <summary>Performs the needs json escape step for the current operation.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static bool NeedsJsonEscape(char value) => value < 0x20 || value == '"' || value == '\\';
 
+        /// <summary>Writes escaped utf8 char to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         private void WriteEscapedUtf8Char(char value)
         {
             byte escaped = value switch
@@ -834,7 +938,9 @@ namespace LuminPack.Core
             }
             Advance(length);
         }
-        
+
+        /// <summary>Writes string content utf8 raw to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteStringContentUtf8Raw(ReadOnlySpan<byte> value)
         {
@@ -890,6 +996,8 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Writes string content utf8 slow to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         private void WriteStringContentUtf8Slow(ReadOnlySpan<byte> value)
         {
             for (int i = 0; i < value.Length; i++)
@@ -937,6 +1045,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Writes string content utf16 to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteStringContentUtf16(ReadOnlySpan<char> value)
         {
@@ -950,7 +1060,7 @@ namespace LuminPack.Core
                     break;
                 }
             }
-            
+
             if (!needsEscape)
             {
                 if (_output is not null)
@@ -970,21 +1080,23 @@ namespace LuminPack.Core
                 WriteStringContentUtf16Slow(value);
             }
         }
-        
+
+        /// <summary>Writes string content utf16 slow to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         private void WriteStringContentUtf16Slow(ReadOnlySpan<char> value)
         {
             int lastWritten = 0;
-            
+
             for (int i = 0; i < value.Length; i++)
             {
                 char c = value[i];
                 bool needsEscape = false;
-                
+
                 if (c == '"' || c == '\\' || c == '\n' || c == '\r' || c == '\t' || c < 0x20)
                 {
                     needsEscape = true;
                 }
-                
+
                 if (needsEscape)
                 {
                     if (i > lastWritten)
@@ -1004,7 +1116,7 @@ namespace LuminPack.Core
                             Advance(byteCount);
                         }
                     }
-                    
+
                     if (c == '"')
                     {
                         WriteByteRaw(Backslash);
@@ -1039,11 +1151,11 @@ namespace LuminPack.Core
                         WriteUtf16CharDirect(HexCharUtf16((c >> 4) & 0xF));
                         WriteUtf16CharDirect(HexCharUtf16(c & 0xF));
                     }
-                    
+
                     lastWritten = i + 1;
                 }
             }
-            
+
             if (lastWritten < value.Length)
             {
                 var segment = value.Slice(lastWritten);
@@ -1060,7 +1172,9 @@ namespace LuminPack.Core
                 Advance(byteCount);
             }
         }
-        
+
+        /// <summary>Writes utf16 char direct to the current output.</summary>
+        /// <param name="c">The c used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteUtf16CharDirect(char c)
         {
@@ -1069,13 +1183,18 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dst, c);
             Advance(2);
         }
-        
+
+        /// <summary>Performs the hex char utf16 step for the current operation.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static char HexCharUtf16(int value)
         {
             return (char)(value < 10 ? '0' + value : 'a' + (value - 10));
         }
-        
+
+        /// <summary>Writes string content slow to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         private void WriteStringContentSlow(ReadOnlySpan<char> value)
         {
             for (int i = 0; i < value.Length; i++)
@@ -1124,13 +1243,16 @@ namespace LuminPack.Core
                 }
             }
         }
-        
+
+        /// <summary>Performs the hex char step for the current operation.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static byte HexChar(int value)
         {
             return (byte)(value < 10 ? '0' + value : 'a' + (value - 10));
         }
-        
+
         #endregion
 
         #region Fast float/double serialization
@@ -1142,6 +1264,8 @@ namespace LuminPack.Core
         //   2. LuminPackJsonFloatFormatter lays the digits out as JSON (policy documented there and
         //      kept byte compatible with the previous writer);
         //   3. NaN/Infinity still throw the existing exception and -0 keeps its sign bit.
+        /// <summary>Writes float to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET5_0_OR_GREATER
         [SkipLocalsInit]
@@ -1164,7 +1288,9 @@ namespace LuminPack.Core
                     MemoryMarshal.Cast<byte, char>(_bufferReference.Slice(_currentIndex)), value) * 2;
             }
         }
-        
+
+        /// <summary>Writes double to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET5_0_OR_GREATER
         [SkipLocalsInit]
@@ -1189,9 +1315,11 @@ namespace LuminPack.Core
         }
 
         #endregion
-        
+
         #region Primitive Types
-        
+
+        /// <summary>Writes int to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET5_0_OR_GREATER
         [SkipLocalsInit]
@@ -1213,7 +1341,9 @@ namespace LuminPack.Core
                 _currentIndex += written << 1;
             }
         }
-        
+
+        /// <summary>Writes u int to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET5_0_OR_GREATER
         [SkipLocalsInit]
@@ -1235,7 +1365,9 @@ namespace LuminPack.Core
                 _currentIndex += written << 1;
             }
         }
-        
+
+        /// <summary>Writes byte to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET5_0_OR_GREATER
         [SkipLocalsInit]
@@ -1257,7 +1389,9 @@ namespace LuminPack.Core
                 _currentIndex += written << 1;
             }
         }
-        
+
+        /// <summary>Writes s byte to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET5_0_OR_GREATER
         [SkipLocalsInit]
@@ -1279,7 +1413,9 @@ namespace LuminPack.Core
                 _currentIndex += written << 1;
             }
         }
-        
+
+        /// <summary>Writes short to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET5_0_OR_GREATER
         [SkipLocalsInit]
@@ -1301,7 +1437,9 @@ namespace LuminPack.Core
                 _currentIndex += written << 1;
             }
         }
-        
+
+        /// <summary>Writes u short to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET5_0_OR_GREATER
         [SkipLocalsInit]
@@ -1323,7 +1461,9 @@ namespace LuminPack.Core
                 _currentIndex += written << 1;
             }
         }
-        
+
+        /// <summary>Writes long to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET5_0_OR_GREATER
         [SkipLocalsInit]
@@ -1345,7 +1485,9 @@ namespace LuminPack.Core
                 _currentIndex += written << 1;
             }
         }
-        
+
+        /// <summary>Writes u long to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET5_0_OR_GREATER
         [SkipLocalsInit]
@@ -1367,7 +1509,9 @@ namespace LuminPack.Core
                 _currentIndex += written << 1;
             }
         }
-        
+
+        /// <summary>Writes decimal to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET5_0_OR_GREATER
         [SkipLocalsInit]
@@ -1389,18 +1533,9 @@ namespace LuminPack.Core
                 _currentIndex += written << 1;
             }
         }
-        
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void WriteUtf16Chars(scoped ReadOnlySpan<char> chars)
-        {
-            int byteCount = checked(chars.Length * 2);
-            EnsureCapacity(byteCount);
-            ref byte src = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(chars));
-            ref byte dst = ref GetCurrentSpanReference();
-            Unsafe.CopyBlock(ref dst, ref src, (uint)byteCount);
-            Advance(byteCount);
-        }
-        
+
+        /// <summary>Writes char to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET5_0_OR_GREATER
         [SkipLocalsInit]
@@ -1454,10 +1589,12 @@ namespace LuminPack.Core
             {
                 WriteUtf16CharDirect(value);
             }
-            
+
             WriteByteRaw(Quote);
         }
-        
+
+        /// <summary>Writes bool to the current output.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteBool(bool value)
         {
@@ -1500,18 +1637,20 @@ namespace LuminPack.Core
                 WriteByteRaw((byte)'e');
             }
         }
-        
+
         #endregion
-        
+
         #region Null
-        
+
+        /// <summary>Writes null to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteNull()
         {
             WriteCommaIfNeeded();
             WriteNullInternal();
         }
-        
+
+        /// <summary>Writes null internal to the current output.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteNullInternal()
         {
@@ -1529,7 +1668,7 @@ namespace LuminPack.Core
             WriteByteRaw((byte)'l');
             WriteByteRaw((byte)'l');
         }
-        
+
         #endregion
     }
 }

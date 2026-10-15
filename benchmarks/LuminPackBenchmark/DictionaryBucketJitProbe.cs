@@ -3,11 +3,14 @@ using LuminPack.Code;
 
 namespace LuminPackBenchmark;
 
+/// <summary>Provides dictionary bucket jit probe functionality.</summary>
 internal static class DictionaryBucketJitProbe
 {
     private const int Count = 100;
     private const int Iterations = 100_000;
 
+    /// <summary>Measures rebuild int for the configured benchmark input.</summary>
+    /// <param name="dictionary">The dictionary used by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void RebuildInt(Dictionary<int, int> dictionary)
     {
@@ -16,6 +19,8 @@ internal static class DictionaryBucketJitProbe
             Count);
     }
 
+    /// <summary>Measures rebuild string for the configured benchmark input.</summary>
+    /// <param name="dictionary">The dictionary used by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void RebuildString(Dictionary<string, long> dictionary)
     {
@@ -24,6 +29,7 @@ internal static class DictionaryBucketJitProbe
             Count);
     }
 
+    /// <summary>Measures run for the configured benchmark input.</summary>
     internal static void Run()
     {
         var ints = new Dictionary<int, int>(Count);

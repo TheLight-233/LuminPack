@@ -4,6 +4,7 @@ namespace Unity.IL2CPP.CompilerServices
     //
     // When applied to a type this custom attribute will cause any static class constructor to be run eagerly
     // at module load time rather than deferred till just before the class is used.
+    /// <summary>Provides il2 cpp eager static class construction attribute functionality.</summary>
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, Inherited = false, AllowMultiple = false)]
     public class Il2CppEagerStaticClassConstructionAttribute : Attribute
     {

@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
 using LuminPack;
 using LuminPack.Attribute;
@@ -7,18 +5,19 @@ using LuminPack.Attribute;
 namespace LuminPackUnitTest
 {
     // ─────────────────────────────────────────────────────────────────────────
-    //  LayoutKind 镜像一致性回归测试
+    //  Regression coverage for matching mirror LayoutKind.
     //
-    //  Local 镜像必须与真实类型拥有完全一致的继承链与 LayoutKind。若真实类型是 Explicit 而镜像被
-    //  按 Auto 布局，槽位就会落在完全不同的偏移上，重解释后读到垃圾引用并崩溃（或静默写坏内存）。
-    //  这里对 Explicit（类与结构体）与 Sequential 分别做一次往返验证。
+    //  Local mirrors must match the original inheritance chain and LayoutKind. If an Explicit type instead receives
+    //  Auto layout can place slots at different offsets, causing invalid references or memory corruption when reinterpreted.
+    //  Round-trip Explicit classes and structs, plus Sequential layouts.
     // ─────────────────────────────────────────────────────────────────────────
 
-    /// <summary>Explicit 布局的类：私有槽位带 [FieldOffset]，镜像必须原样复刻。</summary>
+    /// <summary>An Explicit-layout class whose private FieldOffset slots must be reproduced by its mirror.</summary>
     [LuminPackable]
     [StructLayout(LayoutKind.Explicit)]
     public class ExplicitLayoutClassRoot
     {
+        /// <summary>Stores the a.</summary>
         [FieldOffset(0)]
         public int A;
 
@@ -26,35 +25,46 @@ namespace LuminPackUnitTest
         [LuminPackInclude]
         private int _b;
 
+        /// <summary>Obtains the b for the supplied input.</summary>
+        /// <returns>The result of the operation.</returns>
         public int GetB() => _b;
+        /// <summary>Updates the b used by the current operation.</summary>
+        /// <param name="b">The b used by this operation.</param>
         public void SetB(int b) => _b = b;
     }
 
-    /// <summary>Sequential 布局的类：非默认布局同样必须被镜像。</summary>
+    /// <summary>A Sequential-layout class whose non-default layout must be preserved by its mirror.</summary>
     [LuminPackable]
     [StructLayout(LayoutKind.Sequential)]
     public class SequentialLayoutClassRoot
     {
+        /// <summary>Stores the a.</summary>
         public int A;
 
         [LuminPackInclude]
         private string _name = string.Empty;
 
+        /// <summary>Obtains the name for the supplied input.</summary>
+        /// <returns>The result of the operation.</returns>
         public string GetName() => _name;
+        /// <summary>Updates the name used by the current operation.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         public void SetName(string value) => _name = value;
     }
 
     /// <summary>
-    /// Explicit 布局的结构体。带引用类型字段是为了避开"纯非托管结构体直接整体拷贝"的快速路径，
-    /// 从而真正走到 Local 镜像。
+    /// An Explicit-layout struct with a reference field so it exercises member reading rather than the unmanaged whole-storage copy path,
+    /// so the test exercises the Local mirror path.
     /// </summary>
     [LuminPackable]
     [StructLayout(LayoutKind.Explicit)]
     public struct ExplicitLayoutStructRoot
     {
+        /// <summary>Stores the a.</summary>
         [FieldOffset(0)]
         public int A;
 
+        /// <summary>Stores the name.</summary>
         [FieldOffset(8)]
         public string Name;
 
@@ -62,24 +72,33 @@ namespace LuminPackUnitTest
         [LuminPackInclude]
         private int _b;
 
+        /// <summary>Obtains the b for the supplied input.</summary>
+        /// <returns>The result of the operation.</returns>
         public int GetB() => _b;
+        /// <summary>Updates the b used by the current operation.</summary>
+        /// <param name="b">The b used by this operation.</param>
         public void SetB(int b) => _b = b;
     }
 
-    /// <summary>嵌套私有槽位指向一个 Explicit 布局类型：走嵌套镜像 + 访问器路径。</summary>
+    /// <summary>A private nested slot references an Explicit-layout type, exercising nested mirrors and accessors.</summary>
     [LuminPackable]
     public class NestedExplicitHolder
     {
+        /// <summary>Stores the outer.</summary>
         public int Outer;
 
         [LuminPackInclude]
         private ExplicitLayoutClassRoot _inner = new();
 
+        /// <summary>Gets the inner.</summary>
         public ExplicitLayoutClassRoot Inner => _inner;
     }
 
+    /// <summary>Provides layout kind private test functionality.</summary>
     public static class LayoutKindPrivateTest
     {
+        /// <summary>Verifies run.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void Run(List<string> results)
         {
             TestExplicitClass(results);
@@ -88,6 +107,8 @@ namespace LuminPackUnitTest
             TestNestedExplicit(results);
         }
 
+        /// <summary>Verifies test explicit class.</summary>
+        /// <param name="results">The results used by this operation.</param>
         private static void TestExplicitClass(List<string> results)
         {
             try
@@ -108,6 +129,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test sequential class.</summary>
+        /// <param name="results">The results used by this operation.</param>
         private static void TestSequentialClass(List<string> results)
         {
             try
@@ -128,6 +151,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test explicit struct.</summary>
+        /// <param name="results">The results used by this operation.</param>
         private static void TestExplicitStruct(List<string> results)
         {
             try
@@ -149,6 +174,8 @@ namespace LuminPackUnitTest
             }
         }
 
+        /// <summary>Verifies test nested explicit.</summary>
+        /// <param name="results">The results used by this operation.</param>
         private static void TestNestedExplicit(List<string> results)
         {
             try

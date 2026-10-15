@@ -5,8 +5,11 @@ using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
+/// <summary>Provides compile time unmanaged specialization regression functionality.</summary>
 internal static class CompileTimeUnmanagedSpecializationRegression
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="references">The references used by this operation.</param>
     public static void Run(MetadataReference[] references)
     {
         const string source = """
@@ -130,6 +133,9 @@ internal static class CompileTimeUnmanagedSpecializationRegression
             ((IArrayTypeSymbol)fields["ClosedReferenceTableTrapArray"].Type).ElementType);
     }
 
+    /// <summary>Verifies verify nullable.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="expected">The expected used by this operation.</param>
     private static void VerifyNullable(IFieldSymbol field, ExpectedKind expected)
     {
         var data = CreateFieldData(field);
@@ -160,6 +166,9 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         }
     }
 
+    /// <summary>Verifies verify array evaluator.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="expected">The expected used by this operation.</param>
     private static void VerifyArrayEvaluator(IFieldSymbol field, ExpectedKind expected)
     {
         var generated = new StringBuilder();
@@ -180,6 +189,9 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         }
     }
 
+    /// <summary>Verifies verify immutable queue.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="expected">The expected used by this operation.</param>
     private static void VerifyImmutableQueue(IFieldSymbol field, ExpectedKind expected)
     {
         var generated = new StringBuilder();
@@ -202,6 +214,10 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         }
     }
 
+    /// <summary>Verifies verify object collection evaluator.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="collectionKind">The collection kind used by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
     private static void VerifyObjectCollectionEvaluator(
         IFieldSymbol field,
         LuminFiledType collectionKind,
@@ -258,6 +274,9 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         }
     }
 
+    /// <summary>Verifies verify core roslyn overrides known value text.</summary>
+    /// <param name="intType">The int type used by this operation.</param>
+    /// <param name="referenceTrapType">The reference trap type used by this operation.</param>
     private static void VerifyCoreRoslynOverridesKnownValueText(
         ITypeSymbol intType,
         ITypeSymbol referenceTrapType)
@@ -295,6 +314,9 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         Require(text, "value.CoreReferenceTrap", "Core CriticalHandle classification");
     }
 
+    /// <summary>Creates field data from the supplied input.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <returns>The result of the operation.</returns>
     private static LuminLocalFieldData CreateFieldData(IFieldSymbol field)
     {
         return new LuminLocalFieldData
@@ -306,6 +328,10 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         };
     }
 
+    /// <summary>Verifies verify runtime fallback.</summary>
+    /// <param name="generated">The generated used by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void VerifyRuntimeFallback(string generated, ExpectedKind expected, string scenario)
     {
         if (expected == ExpectedKind.RuntimeFallback)
@@ -318,6 +344,10 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         }
     }
 
+    /// <summary>Verifies require.</summary>
+    /// <param name="generated">The generated used by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void Require(string generated, string expected, string scenario)
     {
         if (!generated.Contains(expected, StringComparison.Ordinal))
@@ -326,6 +356,10 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         }
     }
 
+    /// <summary>Verifies reject.</summary>
+    /// <param name="generated">The generated used by this operation.</param>
+    /// <param name="unexpected">The unexpected used by this operation.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void Reject(string generated, string unexpected, string scenario)
     {
         if (generated.Contains(unexpected, StringComparison.Ordinal))
@@ -334,10 +368,14 @@ internal static class CompileTimeUnmanagedSpecializationRegression
         }
     }
 
+    /// <summary>Provides expected kind functionality.</summary>
     private enum ExpectedKind
     {
+        /// <summary>Specifies unmanaged.</summary>
         Unmanaged,
+        /// <summary>Specifies managed.</summary>
         Managed,
+        /// <summary>Specifies runtime fallback.</summary>
         RuntimeFallback
     }
 }

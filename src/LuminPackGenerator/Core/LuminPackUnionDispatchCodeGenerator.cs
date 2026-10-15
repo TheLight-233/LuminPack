@@ -2,14 +2,20 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using LuminPack.SourceGenerator;
 
 namespace LuminPack.Code.Core;
 
+/// <summary>Provides lumin pack union dispatch code generator functionality.</summary>
 internal static class LuminPackUnionDispatchCodeGenerator
 {
+    /// <summary>Builds dispatch and registration members for an eligible union root.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="metaInfo">The language, framework, and generation settings.</param>
+    /// <returns>The generated members, or an empty string when union dispatch cannot be emitted.</returns>
     public static string Generate(LuminDataInfo data, Compilation compilation, MetaInfo metaInfo)
     {
         if (!data.isUnion || !data.CanGenerateUnionDispatch || data.TypeSymbol == null)
@@ -46,6 +52,10 @@ internal static class LuminPackUnionDispatchCodeGenerator
         return sb.ToString();
     }
 
+    /// <summary>Determines whether the supplied value has the fast path member classification.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="member">The member used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     internal static bool IsFastPathMember(LuminDataInfo data, LuminUnionMemberInfo member)
     {
         if (!data.CanGenerateUnionDispatch || !member.CanGenerateDispatch)
@@ -54,6 +64,12 @@ internal static class LuminPackUnionDispatchCodeGenerator
         return FindMatchedRoot(member.Type.OriginalDefinition, data.TypeSymbol.OriginalDefinition) != null;
     }
 
+    /// <summary>Builds the root methods source from the supplied metadata.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="indent">The indentation level of the generated statements.</param>
+    /// <param name="root">The root used by this operation.</param>
+    /// <param name="suffix">The suffix used by this operation.</param>
+    /// <param name="metaInfo">The language, framework, and generation settings.</param>
     private static void AppendRootMethods(
         StringBuilder sb,
         int indent,
@@ -146,6 +162,16 @@ internal static class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine($"{padding}}}");
     }
 
+    /// <summary>Builds the member methods source from the supplied metadata.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="indent">The indentation level of the generated statements.</param>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="root">The root used by this operation.</param>
+    /// <param name="matchedRoot">The matched root used by this operation.</param>
+    /// <param name="members">The members used by this operation.</param>
+    /// <param name="suffix">The suffix used by this operation.</param>
+    /// <param name="extensionType">The extension type used by this operation.</param>
+    /// <param name="canSeal">The can seal used by this operation.</param>
     private static void AppendMemberMethods(
         StringBuilder sb,
         int indent,
@@ -192,6 +218,14 @@ internal static class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine($"{padding}}}");
     }
 
+    /// <summary>Builds the member dispatch body source from the supplied metadata.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="padding">The padding used by this operation.</param>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="members">The members used by this operation.</param>
+    /// <param name="rootType">The root type used by this operation.</param>
+    /// <param name="operation">The operation used by this operation.</param>
+    /// <param name="extensionType">The extension type used by this operation.</param>
     private static void AppendMemberDispatchBody(
         StringBuilder sb,
         string padding,
@@ -224,15 +258,28 @@ internal static class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine($"{padding}}}");
     }
 
+    /// <summary>Performs the requires closed generic dispatch step for the current operation.</summary>
+    /// <param name="members">The members used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool RequiresClosedGenericDispatch(IReadOnlyList<LuminUnionMemberInfo> members)
     {
         var definition = members[0].Type.OriginalDefinition;
         return members.Any(member => IsConstructedMember(definition, member));
     }
 
+    /// <summary>Determines whether the supplied value has the constructed member classification.</summary>
+    /// <param name="definition">The definition used by this operation.</param>
+    /// <param name="member">The member used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsConstructedMember(INamedTypeSymbol definition, LuminUnionMemberInfo member) =>
         !SymbolEqualityComparer.Default.Equals(member.Type, definition) && !member.Type.IsUnboundGenericType;
 
+    /// <summary>Builds the closed generic dispatch cache source from the supplied metadata.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="padding">The padding used by this operation.</param>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="members">The members used by this operation.</param>
+    /// <param name="suffix">The suffix used by this operation.</param>
     private static void AppendClosedGenericDispatchCache(
         StringBuilder sb,
         string padding,
@@ -271,6 +318,12 @@ internal static class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine($"{padding}}}");
     }
 
+    /// <summary>Builds the resolver case source from the supplied metadata.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="padding">The padding used by this operation.</param>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="definition">The definition used by this operation.</param>
+    /// <param name="member">The member used by this operation.</param>
     private static void AppendResolverCase(
         StringBuilder sb,
         string padding,
@@ -288,6 +341,10 @@ internal static class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine($"{padding}        return {GetDispatchSlot(data, member)};");
     }
 
+    /// <summary>Obtains the dispatch slot for the supplied input.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="member">The member used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static int GetDispatchSlot(LuminDataInfo data, LuminUnionMemberInfo member)
     {
         for (var index = 0; index < data.UnionMembers.Count; index++)
@@ -303,6 +360,13 @@ internal static class LuminPackUnionDispatchCodeGenerator
         return -1;
     }
 
+    /// <summary>Builds the concrete operation source from the supplied metadata.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="padding">The padding used by this operation.</param>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="member">The member used by this operation.</param>
+    /// <param name="operation">The operation used by this operation.</param>
+    /// <param name="extensionType">The extension type used by this operation.</param>
     private static void AppendConcreteOperation(
         StringBuilder sb,
         string padding,
@@ -373,6 +437,10 @@ internal static class LuminPackUnionDispatchCodeGenerator
         }
     }
 
+    /// <summary>Builds the concrete value local source from the supplied metadata.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="padding">The padding used by this operation.</param>
+    /// <param name="member">The member used by this operation.</param>
     private static void AppendConcreteValueLocal(
         StringBuilder sb,
         string padding,
@@ -391,11 +459,18 @@ internal static class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine($"{padding}ref var concreteValue = ref global::LuminPack.Code.LuminPackMarshal.As<{currentType}, {memberType}>(ref genericValue);");
     }
 
+    /// <summary>Builds the method attribute source from the supplied metadata.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="padding">The padding used by this operation.</param>
     private static void AppendMethodAttribute(StringBuilder sb, string padding)
     {
         sb.AppendLine($"{padding}[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
     }
 
+    /// <summary>Determines whether derived union member are present.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="definition">The definition used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool HasDerivedUnionMember(LuminDataInfo data, INamedTypeSymbol definition)
     {
         foreach (var member in data.UnionMembers)
@@ -410,6 +485,10 @@ internal static class LuminPackUnionDispatchCodeGenerator
         return false;
     }
 
+    /// <summary>Finds the matched root in the supplied metadata.</summary>
+    /// <param name="member">The member used by this operation.</param>
+    /// <param name="root">The root used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static INamedTypeSymbol FindMatchedRoot(INamedTypeSymbol member, INamedTypeSymbol root)
     {
         if (member.IsUnboundGenericType)
@@ -435,6 +514,9 @@ internal static class LuminPackUnionDispatchCodeGenerator
         return null;
     }
 
+    /// <summary>Obtains the slot suffix for the supplied input.</summary>
+    /// <param name="root">The root used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     internal static string GetSlotSuffix(INamedTypeSymbol root)
     {
         var identity = root.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -451,6 +533,9 @@ internal static class LuminPackUnionDispatchCodeGenerator
         return $"{readableName}_{hash:x8}";
     }
 
+    /// <summary>Performs the sanitize assembly name step for the current operation.</summary>
+    /// <param name="assemblyName">The assembly name used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string SanitizeAssemblyName(string assemblyName)
     {
         var builder = new StringBuilder(assemblyName.Length);
@@ -466,6 +551,10 @@ internal static class LuminPackUnionDispatchCodeGenerator
         return builder.Length == 0 ? "Assembly" : builder.ToString();
     }
 
+    /// <summary>Builds the partial type source from the supplied metadata.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <param name="appendBody">The append body used by this operation.</param>
     private static void AppendPartialType(
         StringBuilder sb,
         INamedTypeSymbol type,
@@ -506,6 +595,9 @@ internal static class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine();
     }
 
+    /// <summary>Obtains the partial declaration for the supplied input.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>The result of the operation.</returns>
     private static string GetPartialDeclaration(INamedTypeSymbol type)
     {
         var declaration = new StringBuilder();
@@ -541,6 +633,9 @@ internal static class LuminPackUnionDispatchCodeGenerator
         return declaration.ToString();
     }
 
+    /// <summary>Obtains the accessibility for the supplied input.</summary>
+    /// <param name="accessibility">The accessibility used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string GetAccessibility(Accessibility accessibility) => accessibility switch
     {
         Accessibility.Public => "public",
@@ -552,13 +647,20 @@ internal static class LuminPackUnionDispatchCodeGenerator
         _ => string.Empty,
     };
 
+    /// <summary>Performs the escape identifier step for the current operation.</summary>
+    /// <param name="identifier">The identifier used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string EscapeIdentifier(string identifier) =>
         SyntaxFacts.GetKeywordKind(identifier) == SyntaxKind.None ? identifier : "@" + identifier;
 
+    /// <summary>Provides dispatch operation functionality.</summary>
     private enum DispatchOperation
     {
+        /// <summary>Specifies binary.</summary>
         Binary,
+        /// <summary>Specifies json.</summary>
         Json,
+        /// <summary>Specifies calculate offset.</summary>
         CalculateOffset,
     }
 }

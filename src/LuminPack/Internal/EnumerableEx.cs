@@ -1,7 +1,13 @@
 namespace LuminPack.Internal;
 
+/// <summary>Provides enumerable ex functionality.</summary>
 public static class EnumerableEx
 {
+    /// <summary>Obtains a collection count without enumerating its elements when the shape supports it.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="count">Receives the count produced by the operation.</param>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     public static bool TryGetNonEnumeratedCountEx<T>(this IEnumerable<T> value, out int count)
     {
 #if NET7_0_OR_GREATER

@@ -5,8 +5,12 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 
 using static CodeEmitterRegistry;
 
+/// <summary>Provides read only dictionary emitter functionality.</summary>
 public static class ReadOnlyDictionaryEmitter
 {
+    /// <summary>Appends binary writing statements for read only dictionary values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
@@ -28,6 +32,9 @@ public static class ReadOnlyDictionaryEmitter
         sb.AppendLine("            writer.CheckBuffer();");
     }
 
+    /// <summary>Appends binary reading statements for read only dictionary values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string keyType = GetFirstGeneric(fieldData.TypeName);
@@ -52,9 +59,15 @@ public static class ReadOnlyDictionaryEmitter
         sb.AppendLine("            value = new global::System.Collections.ObjectModel.ReadOnlyDictionary<" + keyType + ", " + valueType + ">(dictionary);");
     }
 
+    /// <summary>Appends JSON writing statements for read only dictionary values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb) =>
         DictionaryEmitter.GenerateJsonDictionarySerializeCode(fieldData, sb);
 
+    /// <summary>Appends JSON reading statements for read only dictionary values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string keyType = GetFirstGeneric(fieldData.TypeName);

@@ -1,6 +1,4 @@
-using System;
 using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
@@ -29,6 +27,10 @@ namespace LuminPack.Cryptography
         /// <summary>
         /// Constant-time quarter round over four state words (no data-dependent branches).
         /// </summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <param name="c">The c used by this operation.</param>
+        /// <param name="d">The d used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void QuarterRound(ref uint a, ref uint b, ref uint c, ref uint d)
         {
@@ -38,14 +40,20 @@ namespace LuminPack.Cryptography
             c += d; b ^= c; b = Rotl(b, 7);
         }
 
+        /// <summary>Performs the rotl step for the current operation.</summary>
+        /// <param name="x">The x used by this operation.</param>
+        /// <param name="n">The n used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static uint Rotl(uint x, int n) => (x << n) | (x >> (32 - n));
 
         /// <summary>
         /// Computes one 64-byte keystream block from the given 16-word state (in place), writing
         /// the 64 output bytes little-endian to <paramref name="output"/>. Dispatches to the
-        /// fastest available implementation (SSE2 via <see cref="BlockSse2"/>, scalar fallback).
+        /// fastest available implementation (SSE2 via <c>BlockSse2</c>, scalar fallback).
         /// </summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
+        /// <param name="output">The destination receiving the result.</param>
         public static unsafe void Block(uint* state, byte* output)
         {
 #if NET8_0_OR_GREATER
@@ -63,6 +71,8 @@ namespace LuminPack.Cryptography
         /// <c>state[12]+1</c>) in one call, writing 128 output bytes to <paramref name="output"/>.
         /// The input <paramref name="state"/> is never modified.
         /// </summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
+        /// <param name="output">The destination receiving the result.</param>
         public static unsafe void Block2(uint* state, byte* output)
         {
 #if NET8_0_OR_GREATER
@@ -85,6 +95,8 @@ namespace LuminPack.Cryptography
         /// <c>state[12]+3</c>) in one call, writing 256 output bytes to <paramref name="output"/>.
         /// The input <paramref name="state"/> is never modified.
         /// </summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
+        /// <param name="output">The destination receiving the result.</param>
         public static unsafe void Block4(uint* state, byte* output)
         {
 #if NET8_0_OR_GREATER
@@ -107,6 +119,8 @@ namespace LuminPack.Cryptography
         /// the 64 output bytes little-endian to <paramref name="output"/>. Scalar 32-bit
         /// implementation (also used for <c>netstandard2.1</c>).
         /// </summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
+        /// <param name="output">The destination receiving the result.</param>
         public static unsafe void BlockScalar(uint* state, byte* output)
         {
             uint x0 = state[0], x1 = state[1], x2 = state[2], x3 = state[3];
@@ -154,10 +168,19 @@ namespace LuminPack.Cryptography
         private static readonly bool UseAvx2 = Avx2.IsSupported;
         private static readonly bool UseSse2 = Sse2.IsSupported;
 
+        /// <summary>Performs the rotl step for the current operation.</summary>
+        /// <param name="v">The v used by this operation.</param>
+        /// <param name="n">The n used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static Vector128<uint> Rotl(Vector128<uint> v, byte n)
             => Sse2.Or(Sse2.ShiftLeftLogical(v, n), Sse2.ShiftRightLogical(v, (byte)(32 - n)));
 
+        /// <summary>Performs the quarter round step for the current operation.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <param name="c">The c used by this operation.</param>
+        /// <param name="d">The d used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void QuarterRound(ref Vector128<uint> a, ref Vector128<uint> b, ref Vector128<uint> c, ref Vector128<uint> d)
         {
@@ -167,10 +190,19 @@ namespace LuminPack.Cryptography
             c = Sse2.Add(c, d); b = Sse2.Xor(b, c); b = Rotl(b, 7);
         }
 
+        /// <summary>Performs the rotl step for the current operation.</summary>
+        /// <param name="v">The v used by this operation.</param>
+        /// <param name="n">The n used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static Vector256<uint> Rotl(Vector256<uint> v, byte n)
             => Avx2.Or(Avx2.ShiftLeftLogical(v, n), Avx2.ShiftRightLogical(v, (byte)(32 - n)));
 
+        /// <summary>Performs the quarter round step for the current operation.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <param name="c">The c used by this operation.</param>
+        /// <param name="d">The d used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void QuarterRound(ref Vector256<uint> a, ref Vector256<uint> b, ref Vector256<uint> c, ref Vector256<uint> d)
         {
@@ -184,8 +216,10 @@ namespace LuminPack.Cryptography
         /// Single-block 4-lane SSE2 implementation. Each of the four 128-bit lanes holds one
         /// column (or diagonal) quarter round operand group, so a quarter round operates on
         /// four quarter rounds in parallel. Transposes between column and diagonal layouts with
-        /// <see cref="Sse2.Shuffle"/> lane rotations (vb: 1, vc: 2, vd: 3).
+        /// <see cref="Sse2.Shuffle(Vector128{uint}, byte)"/> lane rotations (vb: 1, vc: 2, vd: 3).
         /// </summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
+        /// <param name="output">The destination receiving the result.</param>
         private static unsafe void BlockSse2(uint* state, byte* output)
         {
             Vector128<uint> va = Sse2.LoadVector128(state);        // x0..x3
@@ -229,6 +263,8 @@ namespace LuminPack.Cryptography
         /// per-128-bit-half independent — the two halves never mix, so <c>state</c> is only
         /// read and never modified.
         /// </summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
+        /// <param name="output">The destination receiving the result.</param>
         private static unsafe void BlockAvx2x2(uint* state, byte* output)
         {
             Vector256<uint> va = Vector256.Create(state[0], state[1], state[2], state[3],
@@ -273,10 +309,19 @@ namespace LuminPack.Cryptography
             Sse2.Store((uint*)(output + 112), vd.GetUpper());
         }
 
+        /// <summary>Performs the rotl step for the current operation.</summary>
+        /// <param name="v">The v used by this operation.</param>
+        /// <param name="n">The n used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static Vector512<uint> Rotl(Vector512<uint> v, byte n)
             => Avx512F.RotateLeft(v, n);
 
+        /// <summary>Performs the quarter round step for the current operation.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="b">The b used by this operation.</param>
+        /// <param name="c">The c used by this operation.</param>
+        /// <param name="d">The d used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void QuarterRound(ref Vector512<uint> a, ref Vector512<uint> b, ref Vector512<uint> c, ref Vector512<uint> d)
         {
@@ -294,6 +339,8 @@ namespace LuminPack.Cryptography
         /// transposes work per block exactly like the SSE2/AVX2 versions. All operations are
         /// lane-wise — the four blocks never mix, and <c>state</c> is only read, never modified.
         /// </summary>
+        /// <param name="state">The reusable state associated with the operation.</param>
+        /// <param name="output">The destination receiving the result.</param>
         private static unsafe void BlockAvx512x4(uint* state, byte* output)
         {
             Vector128<uint> v0 = Vector128.Create(state[0], state[1], state[2], state[3]);
@@ -390,7 +437,7 @@ namespace LuminPack.Cryptography
             }
             else
             {
-                throw new ArgumentOutOfRangeException(nameof(keyBytes), "ChaCha20 requires a 16 or 32 byte key.");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(keyBytes), "ChaCha20 requires a 16 or 32 byte key.");
             }
 
             if (nonceBytes == 12)
@@ -402,10 +449,14 @@ namespace LuminPack.Cryptography
             }
             else
             {
-                throw new ArgumentOutOfRangeException(nameof(nonceBytes), "ChaCha20 requires a 12 byte nonce.");
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(nonceBytes), "ChaCha20 requires a 12 byte nonce.");
             }
         }
 
+        /// <summary>Performs the load key store step for the current operation.</summary>
+        /// <param name="words">The words used by this operation.</param>
+        /// <param name="key">The key used to identify the entry.</param>
+        /// <param name="offsetBytes">The offset bytes used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe void LoadKeyStore(uint* words, byte* key, int offsetBytes)
         {
@@ -415,9 +466,15 @@ namespace LuminPack.Cryptography
             words[3] = ReadUnaligned(ref key[offsetBytes + 12]);
         }
 
+        /// <summary>Reads unaligned from the current input.</summary>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static uint ReadUnaligned(ref byte b) => Unsafe.ReadUnaligned<uint>(ref b);
 
+        /// <summary>Writes unaligned to the current output.</summary>
+        /// <param name="b">The b used by this operation.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void WriteUnaligned(ref byte b, uint value) => Unsafe.WriteUnaligned(ref b, value);
     }

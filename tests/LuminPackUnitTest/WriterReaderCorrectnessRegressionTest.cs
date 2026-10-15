@@ -1,29 +1,38 @@
 using System.Buffers;
 using LuminPack;
-using LuminPack.Option;
 using LuminPack.Attribute;
 using LuminPack.Code;
 using LuminPack.Core;
+using LuminPack.Option;
 using LuminPack.Utility;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides large array writer model functionality.</summary>
 [LuminPackable]
 public partial class LargeArrayWriterModel
 {
+    /// <summary>Stores the prefix.</summary>
     public int Prefix;
+    /// <summary>Stores the values.</summary>
     public int[] Values = [];
+    /// <summary>Stores the suffix.</summary>
     public int Suffix;
 }
 
+/// <summary>Provides null header probe model functionality.</summary>
 [LuminPackable]
 public partial class NullHeaderProbeModel
 {
+    /// <summary>Stores the value.</summary>
     public int Value;
 }
 
+/// <summary>Provides writer reader correctness regression test functionality.</summary>
 internal static class WriterReaderCorrectnessRegressionTest
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(MultiSegmentUnmanagedSequenceHasNoSegmentGaps),
@@ -35,6 +44,7 @@ internal static class WriterReaderCorrectnessRegressionTest
             NullObjectHeadersAdvanceExactlyOnce);
     }
 
+    /// <summary>Verifies null object headers advance exactly once.</summary>
     private static void NullObjectHeadersAdvanceExactlyOnce()
     {
         NullHeaderProbeModel? model = null;
@@ -80,6 +90,9 @@ internal static class WriterReaderCorrectnessRegressionTest
             "A null generated object consumed the following collection element.");
     }
 
+    /// <summary>Verifies assert single null object header.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="formatter">The formatter used by this operation.</param>
     private static void AssertSingleNullObjectHeader(NullHeaderProbeModel? value, string formatter)
     {
         byte[] payload = LuminPackSerializer.Serialize(in value);
@@ -89,6 +102,9 @@ internal static class WriterReaderCorrectnessRegressionTest
             $"The {formatter} serializer and size evaluator disagree for null.");
     }
 
+    /// <summary>Verifies assert single null object header.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="formatter">The formatter used by this operation.</param>
     private static void AssertSingleNullObjectHeader(ref LuminPackWriter writer, string formatter)
     {
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -96,6 +112,7 @@ internal static class WriterReaderCorrectnessRegressionTest
             $"The {formatter} wrote {payload.Length} bytes for a one-byte null object header.");
     }
 
+    /// <summary>Verifies null and large unmanaged arrays use one safe bulk copy.</summary>
     private static void NullAndLargeUnmanagedArraysUseOneSafeBulkCopy()
     {
         int[]? nullArray = null;
@@ -114,13 +131,14 @@ internal static class WriterReaderCorrectnessRegressionTest
             "A generated large unmanaged array overwrote adjacent fields or exceeded writer capacity.");
     }
 
+    /// <summary>Verifies large utf8 string grows only on slow path.</summary>
     private static void LargeUtf8StringGrowsOnlyOnSlowPath()
     {
         var value = new GeneratorIdentifierModel
         {
             @event = 42,
-            @class = new string('界', 200_000),
-            中文字段 = "tail"
+            @class = new string('\u754c', 200_000),
+            \u4e2d\u6587\u5b57\u6bb5 = "tail"
         };
         var option = new LuminPackSerializerOption
         {
@@ -130,10 +148,11 @@ internal static class WriterReaderCorrectnessRegressionTest
 
         var payload = LuminPackSerializer.Serialize(value, option);
         var roundTrip = LuminPackSerializer.Deserialize<GeneratorIdentifierModel>(payload, option);
-        Assert(roundTrip is not null && roundTrip.@class == value.@class && roundTrip.中文字段 == "tail",
+        Assert(roundTrip is not null && roundTrip.@class == value.@class && roundTrip.\u4e2d\u6587\u5b57\u6bb5 == "tail",
             "A UTF-8 string larger than the initial writer buffer did not grow and round-trip correctly.");
     }
 
+    /// <summary>Verifies multi segment unmanaged sequence has no segment gaps.</summary>
     private static void MultiSegmentUnmanagedSequenceHasNoSegmentGaps()
     {
         var first = new SequenceSegment<int>(new[] { 1, 2, 3 });
@@ -148,10 +167,17 @@ internal static class WriterReaderCorrectnessRegressionTest
             "Multi-segment unmanaged ReadOnlySequence payload contained segment gaps or overwritten bytes.");
     }
 
+    /// <summary>Provides sequence segment functionality.</summary>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     private sealed class SequenceSegment<T> : ReadOnlySequenceSegment<T>
     {
+        /// <summary>Initializes a new instance of <c>SequenceSegment</c>.</summary>
+        /// <param name="memory">The memory used by this operation.</param>
         internal SequenceSegment(ReadOnlyMemory<T> memory) => Memory = memory;
 
+        /// <summary>Verifies append.</summary>
+        /// <param name="memory">The memory used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         internal SequenceSegment<T> Append(ReadOnlyMemory<T> memory)
         {
             var next = new SequenceSegment<T>(memory)
@@ -164,6 +190,10 @@ internal static class WriterReaderCorrectnessRegressionTest
 
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -177,6 +207,9 @@ internal static class WriterReaderCorrectnessRegressionTest
         }
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)

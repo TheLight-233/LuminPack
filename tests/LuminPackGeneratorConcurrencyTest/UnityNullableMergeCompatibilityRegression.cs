@@ -2,8 +2,11 @@ using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
+/// <summary>Provides unity nullable merge compatibility regression functionality.</summary>
 internal static class UnityNullableMergeCompatibilityRegression
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="platformReferences">The platform references used by this operation.</param>
     public static void Run(MetadataReference[] platformReferences)
     {
         const string source = """

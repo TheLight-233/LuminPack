@@ -1,8 +1,5 @@
-using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.Diagnostics;
-using System.IO;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -22,10 +19,11 @@ using static LuminPack.Code.LuminPackMarshal;
 
 namespace LuminPack.Core
 {
+    /// <summary>Reads LuminPack binary values while tracking the current input position and operation state.</summary>
     [StructLayout(LayoutKind.Sequential)]
     public unsafe ref partial struct LuminPackReader
     {
-        
+
         private Span<byte> _bufferReference;
 #if NET8_0_OR_GREATER
         internal ref byte _bufferStart;
@@ -39,20 +37,27 @@ namespace LuminPack.Core
         private readonly bool SerializeStringAsUtf8;
         private readonly bool SerializeStringRecordAsToken;
 
+        /// <summary>Gets the option state.</summary>
         public LuminPackReaderOptionalState OptionState => _optionState;
+        /// <summary>Gets the option.</summary>
         public LuminPackSerializerOption Option => _optionState.Option;
 
+        /// <summary>Initializes a new instance of <c>LuminPackReader</c>.</summary>
+        /// <param name="option">The configuration to apply to this operation.</param>
         public LuminPackReader(LuminPackReaderOptionalState? option = null)
         {
 
             _optionState = option ?? LuminPackReaderOptionalState.NullOption;
             _bufferReference = default;
             _currentIndex = 0;
-            
+
             SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
             SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
         }
 
+        /// <summary>Initializes a new instance of <c>LuminPackReader</c>.</summary>
+        /// <param name="bufferReference">The buffer reference used by this operation.</param>
+        /// <param name="option">The configuration to apply to this operation.</param>
         public LuminPackReader(ref Span<byte> bufferReference, LuminPackReaderOptionalState? option = null)
         {
             _optionState = option ?? LuminPackReaderOptionalState.NullOption;
@@ -67,7 +72,10 @@ namespace LuminPack.Core
             SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
             SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
         }
-        
+
+        /// <summary>Initializes a new instance of <c>LuminPackReader</c>.</summary>
+        /// <param name="bufferReference">The buffer reference used by this operation.</param>
+        /// <param name="option">The configuration to apply to this operation.</param>
         public LuminPackReader(ref ReadOnlySpan<byte> bufferReference, LuminPackReaderOptionalState? option = null)
         {
             _optionState = option ?? LuminPackReaderOptionalState.NullOption;
@@ -82,7 +90,10 @@ namespace LuminPack.Core
             SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
             SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
         }
-        
+
+        /// <summary>Initializes a new instance of <c>LuminPackReader</c>.</summary>
+        /// <param name="bufferReference">The buffer reference used by this operation.</param>
+        /// <param name="option">The configuration to apply to this operation.</param>
         public LuminPackReader(ref ReadOnlySequence<byte> bufferReference, LuminPackReaderOptionalState? option = null)
         {
             _optionState = option ?? LuminPackReaderOptionalState.NullOption;
@@ -102,6 +113,8 @@ namespace LuminPack.Core
             SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
         }
 
+        /// <summary>Initializes a new instance of <c>LuminPackReader</c>.</summary>
+        /// <param name="bufferWriter">The writer receiving the output data.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal LuminPackReader(LuminBufferWriter bufferWriter)
         {
@@ -117,9 +130,9 @@ namespace LuminPack.Core
             SerializeStringRecordAsToken = bufferWriter.Option.StringRecording is LuminPackStringRecording.Token;
         }
 
-        
+
         /// <summary>
-        /// 获取Span数组指针
+        /// Returns a reference to the span's first element.
         /// </summary>
         /// <param name="index"></param>
         /// <returns></returns>
@@ -130,7 +143,10 @@ namespace LuminPack.Core
 #else
             ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-        
+
+        /// <summary>Validates that the requested bytes remain in the input buffer.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="count">The number of entries involved in the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [Conditional("DEBUG")]
         public void EnsureReadable(int index, int count)
@@ -139,9 +155,9 @@ namespace LuminPack.Core
                 (uint)count > (uint)(_bufferReference.Length - index))
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + count));
         }
-        
+
         /// <summary>
-        /// 移动指针
+        /// Advances the target pointer.
         /// </summary>
         /// <param name="count"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -149,11 +165,11 @@ namespace LuminPack.Core
         {
             EnsureReadable(_currentIndex, count);
             _currentIndex += count;
-            
+
         }
 
         /// <summary>
-        /// 设置Span
+        /// Replaces the current buffer span.
         /// </summary>
         /// <param name="span"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -168,7 +184,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 刷新Writer
+        /// Flushes the writer's pending output.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Flush()
@@ -177,9 +193,9 @@ namespace LuminPack.Core
             _bufferStart = default;
             _currentIndex = 0;
         }
-        
+
         /// <summary>
-        /// 获取当前数组指针
+        /// Obtains a reference to the current array data.
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -191,7 +207,7 @@ namespace LuminPack.Core
 #endif
 
         /// <summary>
-        /// 获取Reader持有的Span
+        /// Returns the span currently held by the reader.
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -199,21 +215,21 @@ namespace LuminPack.Core
         {
             return _bufferReference;
         }
-        
+
         /// <summary>
-        /// 获取当前SpanOffset
+        /// Returns a reference to the current buffer offset.
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe ref int GetCurrentSpanOffset()
         {
             //int* ptr = (int*)Unsafe.AsPointer(ref _currentIndex);
-            
+
             return ref _currentIndex;
         }
-        
+
         /// <summary>
-        /// 获取当前SpanOffset
+        /// Returns a reference to the current buffer offset.
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -223,21 +239,30 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 刷新当前SpanOffset
+        /// Publishes the current buffer offset.
         /// </summary>
         /// <returns></returns>
+        /// <param name="offset">The position at which the operation starts.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void FlushCurrentIndex(int offset)
         {
             _currentIndex = offset;
         }
 
+        /// <summary>Determines whether the value type requires managed reference handling.</summary>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsReferenceOrContainsReferences<T>()
         {
             return RuntimeHelpers.IsReferenceOrContainsReferences<T>();
         }
 
+        /// <summary>Creates span from the supplied input.</summary>
+        /// <param name="reference">The reference used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Span<T> CreateSpan<T>(scoped ref T reference, int length)
         {
@@ -245,7 +270,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化集合长度Head
+        /// DeserializeThe collection length.Head
         /// </summary>
         /// <param name="index"></param>
         /// <param name="length"></param>
@@ -266,6 +291,9 @@ namespace LuminPack.Core
             return length is not LuminPackCode.NullCollection;
         }
 
+        /// <summary>Performs the peek is null object step for the current operation.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool PeekIsNullObject(ref int index)
         {
@@ -276,6 +304,9 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Performs the peek is null collection step for the current operation.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool PeekIsNullCollection(ref int index)
         {
@@ -286,19 +317,25 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Performs the peek is null string step for the current operation.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool PeekIsNullString(ref int index)
         {
-            return SerializeStringRecordAsToken 
+            return SerializeStringRecordAsToken
 #if NET8_0_OR_GREATER
-                ? Unsafe.Add(ref _bufferStart, (nint)(uint)index) == 0 
+                ? Unsafe.Add(ref _bufferStart, (nint)(uint)index) == 0
                 : Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index)) == LuminPackCode.NullCollection;
 #else
-                ? Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index) == 0 
+                ? Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index) == 0
                 : Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index)) == LuminPackCode.NullCollection;
 #endif
         }
 
+        /// <summary>Attempts to read object head and reports whether it succeeded.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadObjectHead(ref int index)
         {
@@ -310,7 +347,11 @@ namespace LuminPack.Core
 
             return code is not LuminPackCode.NullObject;
         }
-        
+
+        /// <summary>Attempts to read object head and reports whether it succeeded.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="code">Receives the code produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadObjectHead(ref int index, out byte code)
         {
@@ -324,7 +365,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化字符串长度(Length模式)
+        /// Reads a string length header in length-recording mode.
         /// </summary>
         /// <param name="index"></param>
         /// <param name="length"></param>
@@ -346,6 +387,9 @@ namespace LuminPack.Core
             return length is not LuminPackCode.NullCollection;
         }
 
+        /// <summary>Validates string length before the operation continues.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ValidateStringLength(int index, int length)
         {
@@ -360,7 +404,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 获取二进制字符串编码长度
+        /// Calculates the binary string encoding length.
         /// </summary>
         /// <param name="index"></param>
         /// <param name="length"></param>
@@ -397,8 +441,8 @@ namespace LuminPack.Core
 
                 if (!SerializeStringAsUtf8)
                 {
-                    // UTF-16 Token 模式：扫描第一个 0x0000（ushort 零值）
-                    // 不能按单字节扫，UTF-16 LE 的 ASCII 高字节全是 0x00 会误判
+                    // UTF-16 token mode scans for the first zero-valued ushort.
+                    // Scan UTF-16 code units; scanning bytes would mistake zero high bytes for delimiters.
 #if NET8_0_OR_GREATER
                     if (Vector512.IsHardwareAccelerated)
                     {
@@ -476,20 +520,20 @@ namespace LuminPack.Core
                 {
                     ref byte current = ref start;
                     Vector512<byte> zero = Vector512<byte>.Zero;
-            
+
                     while (true)
                     {
                         Vector512<byte> data = Vector512.LoadUnsafe(ref current);
                         Vector512<byte> equalsZero = Vector512.Equals(data, zero);
                         ulong mask = equalsZero.ExtractMostSignificantBits();
-                
+
                         if (mask != 0)
                         {
                             int position = BitOperations.TrailingZeroCount(mask);
                             length = (int)((nint)Unsafe.ByteOffset(ref start, ref current) + position);
                             return;
                         }
-                
+
                         current = ref Unsafe.Add(ref current, Vector512<byte>.Count);
                     }
                 }
@@ -497,20 +541,20 @@ namespace LuminPack.Core
                 {
                     ref byte current = ref start;
                     Vector256<byte> zero = Vector256<byte>.Zero;
-            
+
                     while (true)
                     {
                         Vector256<byte> data = Vector256.LoadUnsafe(ref current);
                         Vector256<byte> equalsZero = Vector256.Equals(data, zero);
                         uint mask = equalsZero.ExtractMostSignificantBits();
-                
+
                         if (mask != 0)
                         {
                             int position = BitOperations.TrailingZeroCount(mask);
                             length = (int)((nint)Unsafe.ByteOffset(ref start, ref current) + position);
                             return;
                         }
-                
+
                         current = ref Unsafe.Add(ref current, Vector256<byte>.Count);
                     }
                 }
@@ -518,20 +562,20 @@ namespace LuminPack.Core
                 {
                     ref byte current = ref start;
                     Vector128<byte> zero = Vector128<byte>.Zero;
-            
+
                     while (true)
                     {
                         Vector128<byte> data = Vector128.LoadUnsafe(ref current);
                         Vector128<byte> equalsZero = Vector128.Equals(data, zero);
                         uint mask = equalsZero.ExtractMostSignificantBits();
-                
+
                         if (mask != 0)
                         {
                             int position = BitOperations.TrailingZeroCount(mask);
                             length = (int)((nint)Unsafe.ByteOffset(ref start, ref current) + position);
                             return;
                         }
-                
+
                         current = ref Unsafe.Add(ref current, Vector128<byte>.Count);
                     }
                 }
@@ -559,11 +603,13 @@ namespace LuminPack.Core
             }
 
         }
-        
+
+        /// <summary>Returns the size of the string header used by the current recording mode.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int StringRecordLength()
         {
-            // UTF-16 Token 模式用 0x0000 (2字节) 作为终止符，因为 UTF-16 内部含大量单字节 0x00
+            // UTF-16 token mode uses a two-byte 0x0000 terminator because individual zero bytes are common within code units.
             return SerializeStringRecordAsToken ? (SerializeStringAsUtf8 ? 1 : 2) : SerializeStringAsUtf8 ? 8 : 4;
         }
 
@@ -572,6 +618,8 @@ namespace LuminPack.Core
         /// Intended for source-generated parsers so the JIT sees a single call and
         /// does not have to keep the offset live across four string helpers.
         /// </summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public string? ReadStringAndAdvance(ref int index)
         {
@@ -616,6 +664,10 @@ namespace LuminPack.Core
             return value;
         }
 
+        /// <summary>Reads token string and advance from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="isUtf8">The is utf8 used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private string? ReadTokenStringAndAdvance(ref int index, bool isUtf8)
         {
@@ -633,6 +685,10 @@ namespace LuminPack.Core
         /// Generator-only fast path for a list that is known to be newly allocated. It publishes
         /// the final count without running the reusable-list capacity and clearing logic.
         /// </summary>
+        /// <param name="count">The number of entries involved in the operation.</param>
+        /// <param name="value">Receives the value produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Span<T?> CreateFreshListSpan<T>(int count, out List<T?> value)
         {
@@ -644,6 +700,10 @@ namespace LuminPack.Core
         /// Array-returning variant for generated reference-element loops. Keeping the backing
         /// array as one managed reference shortens the live range compared with Span&lt;T&gt;.
         /// </summary>
+        /// <param name="count">The number of entries involved in the operation.</param>
+        /// <param name="value">Receives the value produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T?[] CreateFreshListArray<T>(int count, out List<T?> value)
         {
@@ -656,6 +716,8 @@ namespace LuminPack.Core
         /// This is a generated-parser fast path that keeps collection bookkeeping out of
         /// very large parser methods after their JIT inline budget has been exhausted.
         /// </summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public List<string>? ReadStringListAndAdvance(ref int index)
         {
@@ -678,7 +740,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化字符串
+        /// Reads a serialized string.
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -692,11 +754,12 @@ namespace LuminPack.Core
                 ? ReadUtf16StringWithToken(_currentIndex)
                 : ReadUtf16StringWithLength(_currentIndex);
         }
-        
+
         /// <summary>
-        /// 反序列化字符串(已知长度)
+        /// Reads a string with a known length.
         /// </summary>
         /// <returns></returns>
+        /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string? ReadString(int length)
         {
@@ -710,9 +773,10 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化字符串
+        /// Reads a serialized string.
         /// </summary>
         /// <returns></returns>
+        /// <param name="index">The position at which the operation starts.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string? ReadString(ref int index)
         {
@@ -726,9 +790,11 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 反序列化字符串(已知长度)
+        /// Reads a string with a known length.
         /// </summary>
         /// <returns></returns>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string? ReadString(int index, int length)
         {
@@ -741,20 +807,27 @@ namespace LuminPack.Core
                 : ReadUtf16StringWithLength(index, length);
         }
 
+        /// <summary>Reads utf8 string with token from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf8StringWithToken(int index)
         {
             ReadStringLength(ref index, out var length);
-            
+
 #if NET8_0_OR_GREATER
             ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             return Encoding.UTF8.GetString(CreateSpan(ref spanRef, length));
         }
 
+        /// <summary>Reads utf8 string with token from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf8StringWithToken(int index, int length)
         {
@@ -763,10 +836,13 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             return Encoding.UTF8.GetString(CreateSpan(ref spanRef, length));
         }
 
+        /// <summary>Reads utf16 string with token from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf16StringWithToken(int index)
         {
@@ -777,10 +853,14 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             return Encoding.Unicode.GetString(CreateSpan(ref spanRef, length));
         }
 
+        /// <summary>Reads utf16 string with token from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf16StringWithToken(int index, int length)
         {
@@ -789,10 +869,13 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
-            
+
             return Encoding.Unicode.GetString(CreateSpan(ref spanRef, length));
         }
 
+        /// <summary>Reads utf8 string with length from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf8StringWithLength(int index)
         {
@@ -801,6 +884,10 @@ namespace LuminPack.Core
             return ReadUtf8StringWithLength(index, length);
         }
 
+        /// <summary>Reads utf8 string with length from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf8StringWithLength(int index, int length)
         {
@@ -813,7 +900,7 @@ namespace LuminPack.Core
 #else
             ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index1);
 #endif
-            
+
             var utf16Length = Unsafe.ReadUnaligned<int>(ref spanRef);
 
 #if NETSTANDARD2_1
@@ -824,7 +911,7 @@ namespace LuminPack.Core
             return Encoding.UTF8.GetString(
                 LuminPackMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref spanRef, 4), length));
 #else
-            
+
             if (utf16Length <= 0)
             {
                 var src = LuminPackMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref spanRef, 4), length);
@@ -866,8 +953,11 @@ namespace LuminPack.Core
 #endif
 
         }
-    
 
+
+        /// <summary>Reads utf16 string with length from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf16StringWithLength(int index)
         {
@@ -876,6 +966,10 @@ namespace LuminPack.Core
             return ReadUtf16StringWithLength(index, length);
         }
 
+        /// <summary>Reads utf16 string with length from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf16StringWithLength(int index, int length)
         {
@@ -901,13 +995,19 @@ namespace LuminPack.Core
                 return new string((char*)p, 0, utf16Length);
             }
         }
-        
+
+        /// <summary>Reads object header from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="memberCount">Receives the member count produced by the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadObjectHeader(ref int index, out byte memberCount)
         {
             memberCount = _bufferReference[index];
         }
-        
+
+        /// <summary>Attempts to peek union header and reports whether it succeeded.</summary>
+        /// <param name="tag">Receives the tag produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPeekUnionHeader(out ushort tag)
         {
@@ -920,7 +1020,11 @@ namespace LuminPack.Core
             Advance(1);
             return tag is not LuminPackCode.NullObject;
         }
-        
+
+        /// <summary>Attempts to peek union header and reports whether it succeeded.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="tag">Receives the tag produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPeekUnionHeader(ref int index, out ushort tag)
         {
@@ -933,7 +1037,10 @@ namespace LuminPack.Core
             index += 1;
             return tag is not LuminPackCode.NullObject;
         }
-        
+
+        /// <summary>Attempts to peek wide union header and reports whether it succeeded.</summary>
+        /// <param name="tag">Receives the tag produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPeekWideUnionHeader(out ushort tag)
         {
@@ -963,7 +1070,11 @@ namespace LuminPack.Core
                 return false;
             }
         }
-        
+
+        /// <summary>Attempts to peek wide union header and reports whether it succeeded.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="tag">Receives the tag produced by the operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryPeekWideUnionHeader(ref int index, out ushort tag)
         {
@@ -994,6 +1105,9 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Reads array from the current input.</summary>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public T?[]? ReadArray<T>()
         {
@@ -1002,6 +1116,9 @@ namespace LuminPack.Core
             return value;
         }
 
+        /// <summary>Reads array from the current input.</summary>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadArray<T>(scoped ref T[]? array)
         {
@@ -1010,30 +1127,30 @@ namespace LuminPack.Core
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
                 DangerousReadUnmanagedArray(ref index, ref array!, out var offset);
-                
+
                 Advance(offset);
-                
+
                 return;
             }
 
             if (!TryReadCollectionHead(ref index, out var length))
             {
                 array = null;
-                
+
                 Advance(4);
-                
+
                 return;
             }
 
             Advance(4);
-            
+
             if (length is 0)
             {
                 array = Array.Empty<T>();
-                
+
                 return;
             }
-            
+
             if (array is null || array.Length != length)
             {
                 array = AllocateUninitializedArray<T>(length);
@@ -1042,36 +1159,40 @@ namespace LuminPack.Core
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
 
+        /// <summary>Reads array from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadArray<T>(scoped ref int index, ref T[]? array)
         {
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
                 DangerousReadUnmanagedArray(ref index, ref array!, out var offset);
-                
+
                 Advance(offset);
-                
+
                 return;
             }
 
             if (!TryReadCollectionHead(ref index, out var length))
             {
                 array = null;
-                
+
                 Advance(4);
-                
+
                 return;
             }
 
             Advance(4);
-            
+
             if (length is 0)
             {
                 array = Array.Empty<T>();
-                
+
                 return;
             }
-            
+
             if (array is null || array.Length != length)
             {
                 array = AllocateUninitializedArray<T>(length);
@@ -1080,6 +1201,9 @@ namespace LuminPack.Core
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
 
+        /// <summary>Reads span from the current input.</summary>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadSpan<T>(scoped ref Span<T?> span)
         {
@@ -1088,30 +1212,30 @@ namespace LuminPack.Core
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
                 DangerousReadUnmanagedSpan(ref index, ref span, out var offset);
-                
+
                 Advance(offset);
-                
+
                 return;
             }
 
             if (!TryReadCollectionHead(ref index, out var length))
             {
                 span = null;
-                
+
                 Advance(4);
-                
+
                 return;
             }
 
             Advance(4);
-            
+
             if (length is 0)
             {
                 span = Array.Empty<T>();
-                
+
                 return;
             }
-            
+
             if (span.Length != length)
             {
                 span = AllocateUninitializedArray<T>(length);
@@ -1120,6 +1244,10 @@ namespace LuminPack.Core
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
 
+        /// <summary>Reads span from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadSpan<T>(scoped ref int index, scoped ref Span<T?> span)
         {
@@ -1127,30 +1255,30 @@ namespace LuminPack.Core
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
                 DangerousReadUnmanagedSpan(ref index, ref span, out var offset);
-                
+
                 Advance(offset);
-                
+
                 return;
             }
 
             if (!TryReadCollectionHead(ref index, out var length))
             {
                 span = null;
-                
+
                 Advance(4);
-                
+
                 return;
             }
-            
+
             Advance(4);
 
             if (length is 0)
             {
                 span = Array.Empty<T>();
-                
+
                 return;
             }
-            
+
             if (span.Length != length)
             {
                 span = AllocateUninitializedArray<T>(length);
@@ -1159,25 +1287,30 @@ namespace LuminPack.Core
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
 
+        /// <summary>Reads array from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadArray<T>(scoped ref int index, int length, ref T[]? array)
         {
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
                 DangerousReadUnmanagedArray(ref index, ref array!, length, out var offset);
-                
+
                 Advance(offset);
-                
+
                 return;
             }
 
             if (length is 0)
             {
                 array = Array.Empty<T>();
-                
+
                 return;
             }
-            
+
             if (array is null || array.Length != length)
             {
                 array = AllocateUninitializedArray<T>(length);
@@ -1186,25 +1319,30 @@ namespace LuminPack.Core
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
 
+        /// <summary>Reads span from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadSpan<T>(scoped ref int index, int length, scoped ref Span<T?> span)
         {
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
                 DangerousReadUnmanagedSpan(ref index, ref span, length, out var offset);
-                
+
                 Advance(offset);
-                
+
                 return;
             }
 
             if (length is 0)
             {
                 span = Array.Empty<T>();
-                
+
                 return;
             }
-            
+
             if (span.Length != length)
             {
                 span = AllocateUninitializedArray<T>(length);
@@ -1213,6 +1351,9 @@ namespace LuminPack.Core
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
 
+        /// <summary>Reads unmanaged array from the current input.</summary>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedArray<T>(scoped ref T[]? array)
             where T : struct
@@ -1220,6 +1361,10 @@ namespace LuminPack.Core
             DangerousReadUnmanagedArray(ref _currentIndex, ref array!);
         }
 
+        /// <summary>Reads unmanaged array from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedArray<T>(scoped ref int index, ref T[]? array)
             where T : struct
@@ -1227,6 +1372,10 @@ namespace LuminPack.Core
             DangerousReadUnmanagedArray(ref index, ref array!);
         }
 
+        /// <summary>Reads unmanaged span from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedSpan<T>(scoped ref int index, scoped ref Span<T> span)
             where T : struct
@@ -1234,6 +1383,11 @@ namespace LuminPack.Core
             DangerousReadUnmanagedSpan(ref index, ref span);
         }
 
+        /// <summary>Reads unmanaged array from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedArray<T>(scoped ref int index, ref T[]? array, out int spanOffset)
             where T : struct
@@ -1241,6 +1395,11 @@ namespace LuminPack.Core
             DangerousReadUnmanagedArray(ref index, ref array!, out spanOffset);
         }
 
+        /// <summary>Reads unmanaged span from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedSpan<T>(scoped ref int index, scoped ref Span<T> span, out int spanOffset)
             where T : struct
@@ -1248,6 +1407,11 @@ namespace LuminPack.Core
             DangerousReadUnmanagedSpan(ref index, ref span, out spanOffset);
         }
 
+        /// <summary>Reads unmanaged array from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedArray<T>(scoped ref int index, ref T[]? array, int length)
             where T : struct
@@ -1256,6 +1420,11 @@ namespace LuminPack.Core
             Advance(offset);
         }
 
+        /// <summary>Reads unmanaged span from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedSpan<T>(scoped ref int index, scoped ref Span<T> span, int length)
             where T : struct
@@ -1264,6 +1433,12 @@ namespace LuminPack.Core
             Advance(offset);
         }
 
+        /// <summary>Reads unmanaged array from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedArray<T>(scoped ref int index, ref T[]? array, int length, out int spanOffset)
             where T : struct
@@ -1276,6 +1451,11 @@ namespace LuminPack.Core
         /// validated collection length. The reusable-array null/length/allocation checks are
         /// intentionally omitted because the generated caller owns the fresh destination.
         /// </summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadFreshUnmanagedArray<T>(scoped ref int index, T[] array, int length, out int spanOffset)
             where T : struct
@@ -1292,6 +1472,12 @@ namespace LuminPack.Core
             spanOffset = byteLength;
         }
 
+        /// <summary>Reads unmanaged span from the current input.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadUnmanagedSpan<T>(scoped ref int index, scoped ref Span<T> span, int length, out int spanOffset)
             where T : struct
@@ -1299,6 +1485,9 @@ namespace LuminPack.Core
             DangerousReadUnmanagedSpan(ref index, ref span, length, out spanOffset);
         }
 
+        /// <summary>Reads unmanaged array using the caller-validated buffer layout.</summary>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedArray<T>(scoped ref T[]? array)
         {
@@ -1332,12 +1521,15 @@ namespace LuminPack.Core
             Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)offset), (uint)(length * Unsafe.SizeOf<T>()));
 #endif
         }
-        
+
+        /// <summary>Reads unmanaged span using the caller-validated buffer layout.</summary>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedSpan<T>(scoped ref Span<T> span)
         {
             var index = _currentIndex;
-            
+
             if (!TryReadCollectionHead(ref index, out var length))
             {
                 span = default;
@@ -1349,7 +1541,7 @@ namespace LuminPack.Core
                 span = Span<T>.Empty;
                 return;
             }
-            
+
             if (span.Length != length)
             {
                 span = AllocateUninitializedArray<T>(length);
@@ -1366,6 +1558,10 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Reads unmanaged array using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedArray<T>(scoped ref int index, ref T[]? array)
         {
@@ -1386,7 +1582,7 @@ namespace LuminPack.Core
             {
                 array = AllocateUninitializedArray<T>(length);
             }
-            
+
             var offset = index + 4;
 
             ref var dest = ref LuminPackMarshal.GetArrayDataReference(array);
@@ -1398,6 +1594,10 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Reads unmanaged span using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedSpan<T>(scoped ref int index, scoped ref Span<T> span)
         {
@@ -1413,7 +1613,7 @@ namespace LuminPack.Core
                 span = Span<T>.Empty;
                 return;
             }
-            
+
             if (span.Length != length)
             {
                 span = AllocateUninitializedArray<T>(length);
@@ -1430,6 +1630,11 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Reads unmanaged array using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedArray<T>(scoped ref int index, ref T[]? array, out int spanOffset)
         {
@@ -1452,13 +1657,13 @@ namespace LuminPack.Core
             {
                 array = AllocateUninitializedArray<T>(length);
             }
-            
+
             var offset = index + 4;
 
             ref var dest = ref LuminPackMarshal.GetArrayDataReference(array);
 
             var srcLength = length * Unsafe.SizeOf<T>();
-            
+
 #if NET8_0_OR_GREATER
             Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref _bufferStart, (nint)(uint)offset), (uint)srcLength);
 #else
@@ -1468,6 +1673,11 @@ namespace LuminPack.Core
             spanOffset = srcLength + 4;
         }
 
+        /// <summary>Reads unmanaged span using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedSpan<T>(scoped ref int index, scoped ref Span<T> span, out int spanOffset)
         {
@@ -1490,11 +1700,11 @@ namespace LuminPack.Core
             {
                 span = AllocateUninitializedArray<T>(length);
             }
-            
+
             var offset = index + 4;
 
             ref var dest = ref LuminPackMarshal.GetReference(ref span.GetPinnableReference());
-            
+
             var srcLength = length * Unsafe.SizeOf<T>();
 
 #if NET8_0_OR_GREATER
@@ -1506,6 +1716,11 @@ namespace LuminPack.Core
             spanOffset = srcLength + 4;
         }
 
+        /// <summary>Reads unmanaged array using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedArray<T>(scoped ref int index, ref T[]? array, int length)
         {
@@ -1525,11 +1740,11 @@ namespace LuminPack.Core
             {
                 array = AllocateUninitializedArray<T>(length);
             }
-            
+
             ref var dest = ref LuminPackMarshal.GetArrayDataReference(array);
 
             var offset = length * Unsafe.SizeOf<T>();
-            
+
 #if NET8_0_OR_GREATER
             Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref _bufferStart, (nint)(uint)index), (uint)offset);
 #else
@@ -1537,6 +1752,11 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Reads unmanaged span using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedSpan<T>(scoped ref int index, scoped ref Span<T> span, int length)
         {
@@ -1552,14 +1772,14 @@ namespace LuminPack.Core
                 span = Span<T>.Empty;
                 return;
             }
-            
+
             if (span.Length != length)
             {
                 span = AllocateUninitializedArray<T>(length);
             }
-            
+
             var offset = length * Unsafe.SizeOf<T>();
-            
+
             ref var dest = ref LuminPackMarshal.GetReference(ref span.GetPinnableReference());
 
 #if NET8_0_OR_GREATER
@@ -1570,6 +1790,12 @@ namespace LuminPack.Core
 
         }
 
+        /// <summary>Reads unmanaged array using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedArray<T>(scoped ref int index, ref T[]? array, int length, out int spanOffset)
         {
@@ -1591,9 +1817,9 @@ namespace LuminPack.Core
             {
                 array = AllocateUninitializedArray<T>(length);
             }
-            
+
             ref var dest = ref LuminPackMarshal.GetArrayDataReference(array);
-            
+
             var offset = length * Unsafe.SizeOf<T>();
 
 #if NET8_0_OR_GREATER
@@ -1605,6 +1831,12 @@ namespace LuminPack.Core
             spanOffset = offset;
         }
 
+        /// <summary>Reads unmanaged span using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousReadUnmanagedSpan<T>(scoped ref int index, scoped ref Span<T> span, int length,
             out int spanOffset)
@@ -1627,11 +1859,11 @@ namespace LuminPack.Core
             {
                 span = AllocateUninitializedArray<T>(length);
             }
-            
+
             ref var buffer = ref LuminPackMarshal.GetReference(ref span.GetPinnableReference());
 
             var offset = length * Unsafe.SizeOf<T>();
-            
+
 #if NET8_0_OR_GREATER
             Unsafe.CopyBlockUnaligned(ref buffer, ref Unsafe.Add(ref _bufferStart, (nint)(uint)index), (uint)offset);
 #else
@@ -1640,7 +1872,9 @@ namespace LuminPack.Core
 
             spanOffset = offset;
         }
-        
+
+        /// <summary>Reads var int byte from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         public byte ReadVarIntByte()
         {
             Advance(ReadUnmanaged(out sbyte typeCode));
@@ -1668,6 +1902,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Reads var int s byte from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         public sbyte ReadVarIntSByte()
         {
             Advance(ReadUnmanaged(out sbyte typeCode));
@@ -1695,6 +1931,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Reads var int u int16 from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         public ushort ReadVarIntUInt16()
         {
             Advance(ReadUnmanaged(out sbyte typeCode));
@@ -1722,6 +1960,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Reads var int int16 from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         public short ReadVarIntInt16()
         {
             Advance(ReadUnmanaged(out sbyte typeCode));
@@ -1749,6 +1989,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Reads var int u int32 from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         public uint ReadVarIntUInt32()
         {
             Advance(ReadUnmanaged(out sbyte typeCode));
@@ -1776,10 +2018,12 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Reads var int int32 from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         public int ReadVarIntInt32()
         {
             Advance(ReadUnmanaged(out sbyte typeCode));
-            
+
             switch (typeCode)
             {
                 case VarIntCodes.Byte:
@@ -1803,6 +2047,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Reads var int u int64 from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         public ulong ReadVarIntUInt64()
         {
             Advance(ReadUnmanaged(out sbyte typeCode));
@@ -1830,6 +2076,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Reads var int int64 from the current input.</summary>
+        /// <returns>The result of the operation.</returns>
         public long ReadVarIntInt64()
         {
             Advance(ReadUnmanaged(out sbyte typeCode));
@@ -1859,6 +2107,11 @@ namespace LuminPack.Core
 
         #region Delegate
 
+        /// <summary>Reads action from the current input.</summary>
+        /// <param name="type">The type or symbol to analyze.</param>
+        /// <param name="instance">The instance used by this operation.</param>
+        /// <param name="methodInfo">The method info used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Delegate ReadAction(Type type, object? instance, MethodInfo methodInfo)
         {
@@ -1868,11 +2121,15 @@ namespace LuminPack.Core
         #endregion
 
 #if NET8_0_OR_GREATER
+        /// <summary>Provides utf8 string state functionality.</summary>
         private readonly unsafe struct Utf8StringState
         {
             internal readonly byte* Data;
             internal readonly int Length;
 
+            /// <summary>Initializes a new instance of <c>Utf8StringState</c>.</summary>
+            /// <param name="data">The metadata describing the serializable type.</param>
+            /// <param name="length">The number of bytes or elements to process.</param>
             internal Utf8StringState(byte* data, int length)
             {
                 Data = data;
@@ -1880,11 +2137,15 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Provides ascii string state functionality.</summary>
         private readonly unsafe struct AsciiStringState
         {
             internal readonly byte* Data;
             internal readonly int Length;
 
+            /// <summary>Initializes a new instance of <c>AsciiStringState</c>.</summary>
+            /// <param name="data">The metadata describing the serializable type.</param>
+            /// <param name="length">The number of bytes or elements to process.</param>
             internal AsciiStringState(byte* data, int length)
             {
                 Data = data;
@@ -1892,6 +2153,9 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Performs the decode ascii string step for the current operation.</summary>
+        /// <param name="destination">The destination receiving the result.</param>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void DecodeAsciiString(Span<char> destination, AsciiStringState state)
         {
@@ -1941,6 +2205,10 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Reads short ascii string from the current input.</summary>
+        /// <param name="source">The input data to process.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static string? ReadShortAsciiString(ref byte source, int length)
         {
@@ -1972,6 +2240,9 @@ namespace LuminPack.Core
             return result;
         }
 
+        /// <summary>Performs the decode utf8 string step for the current operation.</summary>
+        /// <param name="destination">The destination receiving the result.</param>
+        /// <param name="state">The reusable state associated with the operation.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static void DecodeUtf8String(Span<char> destination, Utf8StringState state)
         {
@@ -1984,6 +2255,6 @@ namespace LuminPack.Core
             }
         }
 #endif
-        
+
     }
 }

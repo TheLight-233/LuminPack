@@ -7,12 +7,14 @@ using LuminPack.SourceGenerator.CodeEmitters;
 
 namespace LuminPack.SourceGenerator
 {
+    /// <summary>Resolves binary and JSON emitters for supported scalar and collection shapes.</summary>
     public static class CodeEmitterRegistry
     {
+        /// <summary>Stores the emitters.</summary>
         public static readonly Dictionary<string, (Action<LuminLocalFieldData, StringBuilder> Write, Action<LuminLocalFieldData, StringBuilder> Read, Action<LuminLocalFieldData, StringBuilder> WriteJson, Action<LuminLocalFieldData, StringBuilder> ReadJson)> Emitters =
-            new (StringComparer.Ordinal)
+            new(StringComparer.Ordinal)
             {
-                // 基本类型和别名
+                // Primitive types and aliases.
                 ["sbyte"] = (UnmanagedEmitter.GenerateSerializeCode, UnmanagedEmitter.GenerateDeserializeCode, UnmanagedEmitter.GenerateJsonSerializeCode, UnmanagedEmitter.GenerateJsonDeserializeCode),
                 ["global::System.SByte"] = (UnmanagedEmitter.GenerateSerializeCode, UnmanagedEmitter.GenerateDeserializeCode, UnmanagedEmitter.GenerateJsonSerializeCode, UnmanagedEmitter.GenerateJsonDeserializeCode),
                 ["sbyte[]"] = (UnmanagedArrayEmitter.GenerateSerializeCode, UnmanagedArrayEmitter.GenerateDeserializeCode, ArrayEmitter.GenerateJsonSerializeCode, ArrayEmitter.GenerateJsonDeserializeCode),
@@ -88,7 +90,7 @@ namespace LuminPack.SourceGenerator
                 ["nuint[]"] = (UnmanagedArrayEmitter.GenerateSerializeCode, UnmanagedArrayEmitter.GenerateDeserializeCode, ArrayEmitter.GenerateJsonSerializeCode, ArrayEmitter.GenerateJsonDeserializeCode),
                 ["global::System.UIntPtr[]"] = (UnmanagedArrayEmitter.GenerateSerializeCode, UnmanagedArrayEmitter.GenerateDeserializeCode, ArrayEmitter.GenerateJsonSerializeCode, ArrayEmitter.GenerateJsonDeserializeCode),
 
-                // 其他系统类型
+                // Other framework types.
                 ["global::System.Guid"] = (UnmanagedEmitter.GenerateSerializeCode, UnmanagedEmitter.GenerateDeserializeCode, UnmanagedEmitter.GenerateJsonSerializeCode, UnmanagedEmitter.GenerateJsonDeserializeCode),
                 ["global::System.Guid[]"] = (UnmanagedArrayEmitter.GenerateSerializeCode, UnmanagedArrayEmitter.GenerateDeserializeCode, ArrayEmitter.GenerateJsonSerializeCode, ArrayEmitter.GenerateJsonDeserializeCode),
 
@@ -101,7 +103,7 @@ namespace LuminPack.SourceGenerator
                 ["global::System.TimeSpan"] = (UnmanagedEmitter.GenerateSerializeCode, UnmanagedEmitter.GenerateDeserializeCode, UnmanagedEmitter.GenerateJsonSerializeCode, UnmanagedEmitter.GenerateJsonDeserializeCode),
                 ["global::System.TimeSpan[]"] = (UnmanagedArrayEmitter.GenerateSerializeCode, UnmanagedArrayEmitter.GenerateDeserializeCode, ArrayEmitter.GenerateJsonSerializeCode, ArrayEmitter.GenerateJsonDeserializeCode),
 
-                // 数值类型
+                // Numeric value types.
                 ["global::System.Numerics.BigInteger"] = (BigIntegerEmitter.GenerateSerializeCode, BigIntegerEmitter.GenerateDeserializeCode, BigIntegerEmitter.GenerateJsonSerializeCode, BigIntegerEmitter.GenerateJsonDeserializeCode),
                 ["global::System.Numerics.Complex"] = (UnmanagedEmitter.GenerateSerializeCode, UnmanagedEmitter.GenerateDeserializeCode, UnmanagedEmitter.GenerateJsonSerializeCode, UnmanagedEmitter.GenerateJsonDeserializeCode),
                 ["global::System.Numerics.Complex[]"] = (UnmanagedArrayEmitter.GenerateSerializeCode, UnmanagedArrayEmitter.GenerateDeserializeCode, ArrayEmitter.GenerateJsonSerializeCode, ArrayEmitter.GenerateJsonDeserializeCode),
@@ -127,7 +129,7 @@ namespace LuminPack.SourceGenerator
                 ["global::System.Numerics.Vector4"] = (UnmanagedEmitter.GenerateSerializeCode, UnmanagedEmitter.GenerateDeserializeCode, UnmanagedEmitter.GenerateJsonSerializeCode, UnmanagedEmitter.GenerateJsonDeserializeCode),
                 ["global::System.Numerics.Vector4[]"] = (UnmanagedArrayEmitter.GenerateSerializeCode, UnmanagedArrayEmitter.GenerateDeserializeCode, ArrayEmitter.GenerateJsonSerializeCode, ArrayEmitter.GenerateJsonDeserializeCode),
 
-                // .NET 8+ 类型
+                // Types available on .NET 8 and later.
                 ["global::System.Half"] = (UnmanagedEmitter.GenerateSerializeCode, UnmanagedEmitter.GenerateDeserializeCode, UnmanagedEmitter.GenerateJsonSerializeCode, UnmanagedEmitter.GenerateJsonDeserializeCode),
                 ["global::System.Half[]"] = (UnmanagedArrayEmitter.GenerateSerializeCode, UnmanagedArrayEmitter.GenerateDeserializeCode, ArrayEmitter.GenerateJsonSerializeCode, ArrayEmitter.GenerateJsonDeserializeCode),
 
@@ -146,32 +148,32 @@ namespace LuminPack.SourceGenerator
                 ["global::System.Text.Rune"] = (UnmanagedEmitter.GenerateSerializeCode, UnmanagedEmitter.GenerateDeserializeCode, UnmanagedEmitter.GenerateJsonSerializeCode, UnmanagedEmitter.GenerateJsonDeserializeCode),
                 ["global::System.Text.Rune[]"] = (UnmanagedArrayEmitter.GenerateSerializeCode, UnmanagedArrayEmitter.GenerateDeserializeCode, ArrayEmitter.GenerateJsonSerializeCode, ArrayEmitter.GenerateJsonDeserializeCode),
 
-                // 字符串类型
+                // String values.
                 ["string"] = (StringEmitter.GenerateSerializeCode, StringEmitter.GenerateDeserializeCode, StringEmitter.GenerateJsonSerializeCode, StringEmitter.GenerateJsonDeserializeCode),
                 ["global::System.String"] = (StringEmitter.GenerateSerializeCode, StringEmitter.GenerateDeserializeCode, StringEmitter.GenerateJsonSerializeCode, StringEmitter.GenerateJsonDeserializeCode),
 
-                // URI类型
+                // URI values.
                 ["global::System.Uri"] = (UriEmitter.GenerateSerializeCode, UriEmitter.GenerateDeserializeCode, UriEmitter.GenerateJsonSerializeCode, UriEmitter.GenerateJsonDeserializeCode),
 
-                // 版本类型
+                // Version values.
                 ["global::System.Version"] = (VersionEmitter.GenerateSerializeCode, VersionEmitter.GenerateDeserializeCode, VersionEmitter.GenerateJsonSerializeCode, VersionEmitter.GenerateJsonDeserializeCode),
 
-                // 位数组类型
+                // Bit arrays.
                 ["global::System.Collections.BitArray"] = (BitArrayEmitter.GenerateSerializeCode, BitArrayEmitter.GenerateDeserializeCode, BitArrayEmitter.GenerateJsonSerializeCode, BitArrayEmitter.GenerateJsonDeserializeCode),
 
-                // 可空类型
+                // Nullable values.
                 ["global::System.Nullable"] = (NullableEmitter.GenerateSerializeCode, NullableEmitter.GenerateDeserializeCode, NullableEmitter.GenerateJsonSerializeCode, NullableEmitter.GenerateJsonDeserializeCode),
 
-                // StringBuilder类型
+                // StringBuilder values.
                 ["global::System.Text.StringBuilder"] = (StringBuilderEmitter.GenerateSerializeCode, StringBuilderEmitter.GenerateDeserializeCode, StringBuilderEmitter.GenerateJsonSerializeCode, StringBuilderEmitter.GenerateJsonDeserializeCode),
 
-                // 文化信息类型
+                // Culture information.
                 ["global::System.Globalization.CultureInfo"] = (CultureInfoEmitter.GenerateSerializeCode, CultureInfoEmitter.GenerateDeserializeCode, CultureInfoEmitter.GenerateJsonSerializeCode, CultureInfoEmitter.GenerateJsonDeserializeCode),
 
-                // 时区信息类型
+                // Time zone information.
                 ["global::System.TimeZoneInfo"] = (TimeZoneInfoEmitter.GenerateSerializeCode, TimeZoneInfoEmitter.GenerateDeserializeCode, TimeZoneInfoEmitter.GenerateJsonSerializeCode, TimeZoneInfoEmitter.GenerateJsonDeserializeCode),
 
-                // 类型信息
+                // Type metadata.
                 ["global::System.Type"] = (TypeEmitter.GenerateSerializeCode, TypeEmitter.GenerateDeserializeCode, TypeEmitter.GenerateJsonSerializeCode, TypeEmitter.GenerateJsonDeserializeCode),
 
                 ["global::System.Lazy"] = (LazyEmitter.GenerateSerializeCode, LazyEmitter.GenerateDeserializeCode, LazyEmitter.GenerateJsonSerializeCode, LazyEmitter.GenerateJsonDeserializeCode),
@@ -183,7 +185,7 @@ namespace LuminPack.SourceGenerator
                 ["global::System.ReadOnlyMemory"] = (MemoryEmitter.GenerateSerializeCode, MemoryEmitter.GenerateDeserializeCode, MemoryEmitter.GenerateJsonSerializeCode, MemoryEmitter.GenerateJsonDeserializeCode),
                 ["global::System.Buffers.ReadOnlySequence"] = (MemoryEmitter.GenerateSerializeCode, MemoryEmitter.GenerateDeserializeCode, MemoryEmitter.GenerateJsonSerializeCode, MemoryEmitter.GenerateJsonDeserializeCode),
 
-                // 集合类型
+                // Collection types.
                 ["global::System.Collections.Generic.List"] = (ListEmitter.GenerateSerializeCode, ListEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonSerializeCode, ListEmitter.GenerateJsonDeserializeCode),
                 ["global::System.Collections.Generic.Dictionary"] = (DictionaryEmitter.GenerateSerializeCode, DictionaryEmitter.GenerateDeserializeCode, DictionaryEmitter.GenerateJsonSerializeCode, DictionaryEmitter.GenerateJsonDeserializeCode),
                 ["global::System.Collections.Concurrent.ConcurrentDictionary"] = (ConcurrentDictionaryEmitter.GenerateSerializeCode, ConcurrentDictionaryEmitter.GenerateDeserializeCode, DictionaryEmitter.GenerateJsonDictionarySerializeCode, DictionaryEmitter.GenerateJsonDictionaryDeserializeCode),
@@ -195,23 +197,23 @@ namespace LuminPack.SourceGenerator
                 ["global::System.Collections.Generic.SortedSet"] = (SortedSetEmitter.GenerateSerializeCode, SortedSetEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
                 ["global::System.Collections.Generic.SortedList"] = (SortedListEmitter.GenerateSerializeCode, SortedListEmitter.GenerateDeserializeCode, DictionaryEmitter.GenerateJsonDictionarySerializeCode, DictionaryEmitter.GenerateJsonDictionaryDeserializeCode),
                 ["global::System.Collections.ObjectModel.ReadOnlyDictionary"] = (ReadOnlyDictionaryEmitter.GenerateSerializeCode, ReadOnlyDictionaryEmitter.GenerateDeserializeCode, ReadOnlyDictionaryEmitter.GenerateJsonSerializeCode, ReadOnlyDictionaryEmitter.GenerateJsonDeserializeCode),
-    
-                // 并发集合
+
+                // Concurrent collections.
                 ["global::System.Collections.Concurrent.BlockingCollection"] = (BlockingCollectionEmitter.GenerateSerializeCode, BlockingCollectionEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
                 ["global::System.Collections.Concurrent.ConcurrentBag"] = (ConcurrentBagEmitter.GenerateSerializeCode, ConcurrentBagEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
                 ["global::System.Collections.Concurrent.ConcurrentQueue"] = (ConcurrentQueueEmitter.GenerateSerializeCode, ConcurrentQueueEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
                 ["global::System.Collections.Concurrent.ConcurrentStack"] = (ConcurrentStackEmitter.GenerateSerializeCode, ConcurrentStackEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
-    
-                // 只读集合
+
+                // Read-only collections.
                 ["global::System.Collections.ObjectModel.Collection"] = (CollectionEmitter.GenerateSerializeCode, CollectionEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
                 ["global::System.Collections.ObjectModel.ObservableCollection"] = (ObservableCollectionEmitter.GenerateSerializeCode, ObservableCollectionEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
                 ["global::System.Collections.ObjectModel.ReadOnlyCollection"] = (ReadOnlyCollectionEmitter.GenerateSerializeCode, ReadOnlyCollectionEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
                 ["global::System.Collections.ObjectModel.ReadOnlyObservableCollection"] = (ReadOnlyObservableCollectionEmitter.GenerateSerializeCode, ReadOnlyObservableCollectionEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
-    
-                // 优先级队列
+
+                // Priority queues.
                 ["global::System.Collections.Generic.PriorityQueue"] = (PriorityQueueEmitter.GenerateSerializeCode, PriorityQueueEmitter.GenerateDeserializeCode, PriorityQueueEmitter.GenerateJsonSerializeCode, PriorityQueueEmitter.GenerateJsonDeserializeCode),
-    
-                // 不可变集合类型
+
+                // Immutable collection types.
                 ["global::System.Collections.Immutable.ImmutableArray"] = (ImmutableArrayEmitter.GenerateSerializeCode, ImmutableArrayEmitter.GenerateDeserializeCode, ImmutableCollectionEmitterHelper.GenerateJsonSerializeCode, ImmutableCollectionEmitterHelper.GenerateJsonDeserializeCode),
                 ["global::System.Collections.Immutable.ImmutableList"] = (ImmutableListEmitter.GenerateSerializeCode, ImmutableListEmitter.GenerateDeserializeCode, ImmutableCollectionEmitterHelper.GenerateJsonSerializeCode, ImmutableCollectionEmitterHelper.GenerateJsonDeserializeCode),
                 ["global::System.Collections.Immutable.ImmutableQueue"] = (ImmutableQueueEmitter.GenerateSerializeCode, ImmutableQueueEmitter.GenerateDeserializeCode, ImmutableCollectionEmitterHelper.GenerateJsonSerializeCode, ImmutableCollectionEmitterHelper.GenerateJsonDeserializeCode),
@@ -222,11 +224,11 @@ namespace LuminPack.SourceGenerator
                 ["global::System.Collections.Immutable.ImmutableSortedSet"] = (ImmutableSortedSetEmitter.GenerateSerializeCode, ImmutableSortedSetEmitter.GenerateDeserializeCode, ImmutableCollectionEmitterHelper.GenerateJsonSerializeCode, ImmutableCollectionEmitterHelper.GenerateJsonDeserializeCode),
                 ["global::System.Collections.Immutable.ReadOnlyCollectionBuilder"] = (ReadOnlyCollectionBuilderEmitter.GenerateSerializeCode, ReadOnlyCollectionBuilderEmitter.GenerateDeserializeCode, ReadOnlyCollectionBuilderEmitter.GenerateJsonSerializeCode, ReadOnlyCollectionBuilderEmitter.GenerateJsonDeserializeCode),
 
-                // 冻结集合类型 (.NET 8+)
+                // Frozen collections on .NET 8 and later.
                 ["global::System.Collections.Frozen.FrozenDictionary"] = (FrozenDictionaryEmitter.GenerateSerializeCode, FrozenDictionaryEmitter.GenerateDeserializeCode, FrozenDictionaryEmitter.GenerateJsonSerializeCode, FrozenDictionaryEmitter.GenerateJsonDeserializeCode),
                 ["global::System.Collections.Frozen.FrozenSet"] = (FrozenSetEmitter.GenerateSerializeCode, FrozenSetEmitter.GenerateDeserializeCode, FrozenSetEmitter.GenerateJsonSerializeCode, FrozenSetEmitter.GenerateJsonDeserializeCode),
 
-                // 接口类型
+                // Interface types.
                 ["global::System.Collections.Generic.IEnumerable"] = (InterfaceEnumerableEmitter.GenerateSerializeCode, InterfaceEnumerableEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
                 ["global::System.Collections.Generic.ICollection"] = (InterfaceCollectionEmitter.GenerateSerializeCode, InterfaceCollectionEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
                 ["global::System.Collections.Generic.IReadOnlyCollection"] = (InterfaceReadOnlyCollectionEmitter.GenerateSerializeCode, InterfaceReadOnlyCollectionEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
@@ -239,54 +241,58 @@ namespace LuminPack.SourceGenerator
                 ["global::System.Collections.Generic.ISet"] = (InterfaceSetEmitter.GenerateSerializeCode, InterfaceSetEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
                 ["global::System.Collections.Generic.IReadOnlySet"] = (InterfaceReadOnlySetEmitter.GenerateSerializeCode, InterfaceReadOnlySetEmitter.GenerateDeserializeCode, ListEmitter.GenerateJsonEnumerableSerializeCode, ListEmitter.GenerateJsonEnumerableDeserializeCode),
 
-                // 不可变集合接口
+                // Immutable collection interfaces.
                 ["global::System.Collections.Immutable.IImmutableList"] = (InterfaceImmutableListEmitter.GenerateSerializeCode, InterfaceImmutableListEmitter.GenerateDeserializeCode, ImmutableCollectionEmitterHelper.GenerateJsonSerializeCode, ImmutableCollectionEmitterHelper.GenerateJsonDeserializeCode),
                 ["global::System.Collections.Immutable.IImmutableQueue"] = (InterfaceImmutableQueueEmitter.GenerateSerializeCode, InterfaceImmutableQueueEmitter.GenerateDeserializeCode, ImmutableCollectionEmitterHelper.GenerateJsonSerializeCode, ImmutableCollectionEmitterHelper.GenerateJsonDeserializeCode),
                 ["global::System.Collections.Immutable.IImmutableStack"] = (InterfaceImmutableStackEmitter.GenerateSerializeCode, InterfaceImmutableStackEmitter.GenerateDeserializeCode, ImmutableCollectionEmitterHelper.GenerateJsonSerializeCode, ImmutableCollectionEmitterHelper.GenerateJsonDeserializeCode),
                 ["global::System.Collections.Immutable.IImmutableDictionary"] = (InterfaceImmutableDictionaryEmitter.GenerateSerializeCode, InterfaceImmutableDictionaryEmitter.GenerateDeserializeCode, ImmutableCollectionEmitterHelper.GenerateJsonSerializeCode, ImmutableCollectionEmitterHelper.GenerateJsonDeserializeCode),
                 ["global::System.Collections.Immutable.IImmutableSet"] = (InterfaceImmutableSetEmitter.GenerateSerializeCode, InterfaceImmutableSetEmitter.GenerateDeserializeCode, ImmutableCollectionEmitterHelper.GenerateJsonSerializeCode, ImmutableCollectionEmitterHelper.GenerateJsonDeserializeCode),
-                
+
             };
 
-        // KnownType信息
+        // Known type metadata.
+        /// <summary>Stores the known value types.</summary>
         public static readonly HashSet<string> KnownValueTypes = new HashSet<string>(StringComparer.Ordinal)
         {
-            // 基本类型
+            // Primitive types.
             "sbyte", "byte", "short", "ushort", "int", "uint", "long", "ulong",
             "float", "double", "decimal", "bool", "char", "nint", "nuint",
-    
-            // 系统类型别名
-            "global::System.SByte", "global::System.Byte", 
+
+            // Framework type aliases.
+            "global::System.SByte", "global::System.Byte",
             "global::System.Int16", "global::System.UInt16",
             "global::System.Int32", "global::System.UInt32",
             "global::System.Int64", "global::System.UInt64",
-            "global::System.Single", "global::System.Double", 
-            "global::System.Decimal", "global::System.Boolean", 
+            "global::System.Single", "global::System.Double",
+            "global::System.Decimal", "global::System.Boolean",
             "global::System.Char",
             "global::System.IntPtr", "global::System.UIntPtr",
-    
-            // 系统值类型
-            "global::System.Guid", "global::System.DateTime", 
+
+            // Framework unmanaged types.
+            "global::System.Guid", "global::System.DateTime",
             "global::System.DateTimeOffset", "global::System.TimeSpan",
-    
-            // 数值类型
-            "global::System.Numerics.Complex", "global::System.Numerics.Plane", 
-            "global::System.Numerics.Quaternion", "global::System.Numerics.Matrix3x2", 
+
+            // Numeric value types.
+            "global::System.Numerics.Complex", "global::System.Numerics.Plane",
+            "global::System.Numerics.Quaternion", "global::System.Numerics.Matrix3x2",
             "global::System.Numerics.Matrix4x4", "global::System.Numerics.Vector2",
             "global::System.Numerics.Vector3", "global::System.Numerics.Vector4",
-    
-            // .NET 8+ 类型
+
+            // Types available on .NET 8 and later.
             "global::System.Half", "global::System.Int128", "global::System.UInt128",
             "global::System.DateOnly", "global::System.TimeOnly", "global::System.Text.Rune",
-    
-            // 其他已知的Unmanaged类型
+
+            // Other known unmanaged types.
             "global::System.Runtime.InteropServices.GCHandle"
         };
 
+        /// <summary>Obtains the emitter for the supplied input.</summary>
+        /// <param name="typeName">The C# type name to use in generated source.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static (Action<LuminLocalFieldData, StringBuilder> Write, Action<LuminLocalFieldData, StringBuilder> Read, Action<LuminLocalFieldData, StringBuilder> WriteJson, Action<LuminLocalFieldData, StringBuilder> ReadJson) GetEmitter(string typeName)
         {
-            
+
             if (typeName.EndsWith("[]"))
             {
                 return (ArrayEmitter.GenerateSerializeCode, ArrayEmitter.GenerateDeserializeCode,
@@ -298,15 +304,15 @@ namespace LuminPack.SourceGenerator
                 return (MultiDimensionalArrayEmitter.GenerateSerializeCode, MultiDimensionalArrayEmitter.GenerateDeserializeCode,
                     MultiDimensionalArrayEmitter.GenerateJsonSerializeCode, MultiDimensionalArrayEmitter.GenerateJsonDeserializeCode);
             }
-            
+
             string baseTypeName = GetBaseTypeName(typeName);
-            
+
             if (Emitters.TryGetValue(baseTypeName, out var emitter))
             {
                 return emitter;
             }
-            
-            
+
+
 
             return (null, null, null, null);
         }
@@ -318,6 +324,8 @@ namespace LuminPack.SourceGenerator
         /// Scalar unmanaged types → normal unmanaged (no compression at scalar level).
         /// Returns (null, null) when the type has no compress variant.
         /// </summary>
+        /// <param name="typeName">The C# type name to use in generated source.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static (Action<LuminLocalFieldData, StringBuilder>, Action<LuminLocalFieldData, StringBuilder>) GetCompressEmitter(string typeName)
         {
@@ -349,6 +357,9 @@ namespace LuminPack.SourceGenerator
             return (null, null);
         }
 
+        /// <summary>Obtains the base type name for the supplied input.</summary>
+        /// <param name="fullTypeName">The full type name used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         private static string GetBaseTypeName(string fullTypeName)
         {
             int angleBracketIndex = fullTypeName.IndexOf('<');
@@ -363,15 +374,17 @@ namespace LuminPack.SourceGenerator
         }
 
         /// <summary>
-        /// 递归剥离 [] 层，判断最终叶类型是否在 KnownValueTypes 中。
-        /// 用于 WithCompress 格式化器的元素循环：只有叶类型是 KnownValueType 时，
-        /// 元素才能递归调用 WriteValueWithCompress；否则回退到普通 WriteValue。
-        /// 例如：
+        /// Recursively removes array layers and checks the leaf type against KnownValueTypes.
+        /// In WithCompress element loops, only known scalar leaf types
+        /// may recursively call WriteValueWithCompress; other leaves use ordinary WriteValue.
+        /// For example:
         ///   Guid[]     → leaf = Guid     → KnownValueType → true
         ///   Guid[][]   → leaf = Guid     → KnownValueType → true
         ///   IFoo       → leaf = IFoo     → not known      → false
         ///   Transform[]→ leaf = Transform→ not known      → false
         /// </summary>
+        /// <param name="typeName">The C# type name to use in generated source.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         public static bool IsLeafTypeKnownValueType(string typeName)
         {
             string leaf = typeName;
@@ -380,52 +393,61 @@ namespace LuminPack.SourceGenerator
             return KnownValueTypes.Contains(leaf);
         }
 
+        /// <summary>Obtains the first generic for the supplied input.</summary>
+        /// <param name="typeString">The type string used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         public static string GetFirstGeneric(string typeString)
         {
             if (string.IsNullOrEmpty(typeString))
                 return string.Empty;
-            
+
             int startIndex = typeString.IndexOf('<');
             if (startIndex == -1)
                 return string.Empty;
-            
+
             int endIndex = typeString.LastIndexOf('>');
             if (endIndex == -1 || endIndex <= startIndex)
                 return string.Empty;
-            
+
             string genericPart = typeString.Substring(startIndex + 1, endIndex - startIndex - 1);
-            
+
             string[] genericArgs = SplitGenericParameters(genericPart);
-    
+
             if (genericArgs.Length > 0)
                 return genericArgs[0].Trim();
-    
+
             return string.Empty;
         }
 
+        /// <summary>Obtains the second generic for the supplied input.</summary>
+        /// <param name="typeString">The type string used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         public static string GetSecondGeneric(string typeString)
         {
             if (string.IsNullOrEmpty(typeString))
                 return string.Empty;
-            
+
             int startIndex = typeString.IndexOf('<');
             if (startIndex == -1)
                 return string.Empty;
-            
+
             int endIndex = typeString.LastIndexOf('>');
             if (endIndex == -1 || endIndex <= startIndex)
                 return string.Empty;
-            
+
             string genericPart = typeString.Substring(startIndex + 1, endIndex - startIndex - 1);
-            
+
             string[] genericArgs = SplitGenericParameters(genericPart);
-    
+
             if (genericArgs.Length > 1)
                 return genericArgs[1].Trim();
-    
+
             return string.Empty;
         }
 
+        /// <summary>Obtains the generic arguments for the supplied input.</summary>
+        /// <param name="typeString">The type string used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         public static string[] GetGenericArguments(string typeString)
         {
             if (string.IsNullOrEmpty(typeString))
@@ -439,16 +461,19 @@ namespace LuminPack.SourceGenerator
             return SplitGenericParameters(typeString.Substring(startIndex + 1, endIndex - startIndex - 1));
         }
 
+        /// <summary>Performs the split generic parameters step for the current operation.</summary>
+        /// <param name="genericPart">The generic part used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         private static string[] SplitGenericParameters(string genericPart)
         {
             List<string> parameters = new List<string>();
             int bracketCount = 0;
             int start = 0;
-    
+
             for (int i = 0; i < genericPart.Length; i++)
             {
                 char c = genericPart[i];
-        
+
                 if (c == '<')
                     bracketCount++;
                 else if (c == '>')
@@ -459,10 +484,10 @@ namespace LuminPack.SourceGenerator
                     start = i + 1;
                 }
             }
-            
+
             if (start < genericPart.Length)
                 parameters.Add(genericPart.Substring(start));
-    
+
             return parameters.ToArray();
         }
     }

@@ -4,12 +4,9 @@ using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Jobs;
 using LuminPack;
-using LuminPack.Code;
 using LuminPack.Core;
-using LuminPack.Generated;
 using LuminPack.Option;
 using LuminPack.Utility;
-using GeneratorType = LuminPack.Attribute.GeneratorType;
 
 namespace LuminPackBenchmark;
 
@@ -24,6 +21,7 @@ using Nino.Core;
 
 #nullable disable
 
+/// <summary>Provides polymorphism class base functionality.</summary>
 [LuminPackable]
 [NinoType]
 [MemoryPackable]
@@ -32,41 +30,53 @@ using Nino.Core;
 [Union(1, typeof(PolymorphismClass))]
 public abstract partial class PolymorphismClassBase
 {
+    /// <summary>Stores the base id.</summary>
     [Key(10)]
     [LuminPackOrder(0)]
     public int BaseID;
 
+    /// <summary>Writes  to the current output.</summary>
     public abstract void Write();
 }
 
+/// <summary>Provides polymorphism class functionality.</summary>
 [MemoryPackable]
 [MessagePackObject]
 [LuminPackable]
 [NinoType]
 public sealed partial class PolymorphismClass : PolymorphismClassBase, Ifoo
 {
+    /// <summary>Stores the id.</summary>
     [Key(0)]
-    [LuminPackOrder(1)] 
+    [LuminPackOrder(1)]
     public int Id;
+    /// <summary>Stores the tag.</summary>
     [Key(1)]
-    [LuminPackOrder(2)] 
+    [LuminPackOrder(2)]
     public bool Tag;
-    [Key(8)] 
-    [LuminPackOrder(3)] 
+    /// <summary>Stores the numbers.</summary>
+    [Key(8)]
+    [LuminPackOrder(3)]
     public int[] Numbers;
-    [Key(3)] 
-    [LuminPackOrder(4)] 
+    /// <summary>Stores the numbers2.</summary>
+    [Key(3)]
+    [LuminPackOrder(4)]
     public List<IFoo> Numbers2;
-    [Key(4)] 
-    [LuminPackOrder(5)] 
+    /// <summary>Stores the map1.</summary>
+    [Key(4)]
+    [LuminPackOrder(5)]
     public Dictionary<int, IFoo> Map1;
+    /// <summary>Stores the foo.</summary>
     [Key(5)]
-    [LuminPackOrder(6)] 
+    [LuminPackOrder(6)]
     public FooD Foo;
-    [Key(6)] 
-    [LuminPackOrder(7)] 
+    /// <summary>Stores the set.</summary>
+    [Key(6)]
+    [LuminPackOrder(7)]
     public HashSet<int> Set;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static PolymorphismClass Create()
     {
         Random random = new Random();
@@ -99,14 +109,16 @@ public sealed partial class PolymorphismClass : PolymorphismClassBase, Ifoo
                 CardD = new Transform(random.Next(), random.Next(), random.Next()),
             },
             Set = new HashSet<int>(Enumerable.Range(0, 100).Select(_ => random.Next()).ToList())
-            
+
         };
     }
-    
+
+    /// <summary>Writes  to the current output.</summary>
     public override void Write() => Console.WriteLine("Yeah！！！");
 }
 
 
+/// <summary>Provides i foo functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [MemoryPackUnion(1, typeof(FooA))]
@@ -153,404 +165,474 @@ public sealed partial class PolymorphismClass : PolymorphismClassBase, Ifoo
 [Union(20, typeof(FooZ))]
 public abstract partial class IFoo
 {
+    /// <summary>Stores the id.</summary>
     [Key(0)] public int Id;
 
+    /// <summary>Measures benchmark legacy union serialize for the configured benchmark input.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
     internal virtual void __BenchmarkLegacyUnionSerialize(ref LuminPackWriter writer)
         => throw new NotSupportedException();
 }
 
+/// <summary>Provides foo a functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooA : IFoo
 {
-    [Key(1)] 
+    /// <summary>Stores the card.</summary>
+    [Key(1)]
     public Transform Card;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooA Create()
     {
         return new FooA()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo b functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooB : FooA
 {
-    [Key(2)] 
+    /// <summary>Stores the card b.</summary>
+    [Key(2)]
     public Transform CardB;
-    
+
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooB Create()
     {
         return new FooB()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo c functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooC : FooB
 {
-    [Key(3)] 
+    /// <summary>Stores the card c.</summary>
+    [Key(3)]
     public Transform CardC;
-    
+
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooC Create()
     {
         return new FooC()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo d functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooD : FooC
 {
-    [Key(4)] 
+    /// <summary>Stores the card d.</summary>
+    [Key(4)]
     public Transform CardD;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooD Create()
     {
         return new FooD()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo e functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooE : FooD
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooE Create()
     {
         return new FooE()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo f functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooF : FooE
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooF Create()
     {
         return new FooF()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo h functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooH : FooF
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooH Create()
     {
         return new FooH()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo g functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooG : FooH
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooG Create()
     {
         return new FooG()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo i functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooI : FooH
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooI Create()
     {
         return new FooI()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo j functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooJ : FooH
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooJ Create()
     {
         return new FooJ()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo k functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooK : FooH
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooK Create()
     {
         return new FooK()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo l functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooL : FooH
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooL Create()
     {
         return new FooL()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo m functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooM : FooH
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooM Create()
     {
         return new FooM()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo n functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooN : FooH
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooN Create()
     {
         return new FooN()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo o functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooO : FooH
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooO Create()
     {
         return new FooO()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo p functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooP : FooH
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooP Create()
     {
         return new FooP()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo q functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooQ : FooH
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooQ Create()
     {
         return new FooQ()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo r functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooR : FooH
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooR Create()
     {
         return new FooR()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo s functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooS : FooH
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooS Create()
     {
         return new FooS()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides foo z functionality.</summary>
 [NinoType]
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
 public partial class FooZ : FooH
 {
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static FooZ Create()
     {
         return new FooZ()
         {
             Id = 1000,
-            Card = new Transform {x = 1, y = 2, z = 3},
-            CardB = new Transform {x = 1, y = 2, z = 3},
-            CardC = new Transform {x = 1, y = 2, z = 3},
-            CardD = new Transform {x = 1, y = 2, z = 3},
+            Card = new Transform { x = 1, y = 2, z = 3 },
+            CardB = new Transform { x = 1, y = 2, z = 3 },
+            CardC = new Transform { x = 1, y = 2, z = 3 },
+            CardD = new Transform { x = 1, y = 2, z = 3 },
         };
     }
 }
 
+/// <summary>Provides ifoo functionality.</summary>
 public interface Ifoo
 {
+    /// <summary>Writes  to the current output.</summary>
     public void Write();
 }
 
 
+/// <summary>Provides polymorphism benchmark functionality.</summary>
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MinColumn, MaxColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
@@ -562,12 +644,12 @@ public interface Ifoo
 public class PolymorphismBenchmark
 {
     private PolymorphismClassBase myClass = PolymorphismClass.Create();
-    
+
     private LuminBufferWriter luminBufferWriter = LuminBufferWriterPool.Rent();
     private MemoryPack.Internal.ReusableLinkedArrayBufferWriter memoryBufferWriter = MemoryPack.Internal.ReusableLinkedArrayBufferWriterPool.Rent();
     private NinoArrayBufferWriter ninoBufferWriter = new NinoArrayBufferWriter(100000);
     private ArrayBufferWriter<byte> messageArrayBufferWriter = new ArrayBufferWriter<byte>(100000);
-    
+
     private byte[] buffer1;
     private byte[] buffer2;
     private byte[] buffer3;
@@ -578,7 +660,8 @@ public class PolymorphismBenchmark
         StringEncoding = LuminPackStringEncoding.UTF16,
         StringRecording = LuminPackStringRecording.Length
     };
-    
+
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void SetUp()
     {
@@ -586,29 +669,29 @@ public class PolymorphismBenchmark
         {
             switch (i % 20)
             {
-                case 0 : ((PolymorphismClass)myClass).Numbers2.Add(FooA.Create()); break;
-                case 1 : ((PolymorphismClass)myClass).Numbers2.Add(FooB.Create()); break;
-                case 2 : ((PolymorphismClass)myClass).Numbers2.Add(FooC.Create()); break;
-                case 3 : ((PolymorphismClass)myClass).Numbers2.Add(FooD.Create()); break;
-                case 4 : ((PolymorphismClass)myClass).Numbers2.Add(FooE.Create()); break;
-                case 5 : ((PolymorphismClass)myClass).Numbers2.Add(FooF.Create()); break;
-                case 6 : ((PolymorphismClass)myClass).Numbers2.Add(FooG.Create()); break;
-                case 7 : ((PolymorphismClass)myClass).Numbers2.Add(FooH.Create()); break;
-                case 8 : ((PolymorphismClass)myClass).Numbers2.Add(FooI.Create()); break;
-                case 9 : ((PolymorphismClass)myClass).Numbers2.Add(FooJ.Create()); break;
-                case 10 : ((PolymorphismClass)myClass).Numbers2.Add(FooK.Create()); break;
-                case 11 : ((PolymorphismClass)myClass).Numbers2.Add(FooL.Create()); break;
-                case 12 : ((PolymorphismClass)myClass).Numbers2.Add(FooM.Create()); break;
-                case 13 : ((PolymorphismClass)myClass).Numbers2.Add(FooN.Create()); break;
-                case 14 : ((PolymorphismClass)myClass).Numbers2.Add(FooO.Create()); break;
-                case 15 : ((PolymorphismClass)myClass).Numbers2.Add(FooP.Create()); break;
-                case 16 : ((PolymorphismClass)myClass).Numbers2.Add(FooQ.Create()); break;
-                case 17 : ((PolymorphismClass)myClass).Numbers2.Add(FooR.Create()); break;
-                case 18 : ((PolymorphismClass)myClass).Numbers2.Add(FooS.Create()); break;
-                case 19 : ((PolymorphismClass)myClass).Numbers2.Add(FooZ.Create()); break;
+                case 0: ((PolymorphismClass)myClass).Numbers2.Add(FooA.Create()); break;
+                case 1: ((PolymorphismClass)myClass).Numbers2.Add(FooB.Create()); break;
+                case 2: ((PolymorphismClass)myClass).Numbers2.Add(FooC.Create()); break;
+                case 3: ((PolymorphismClass)myClass).Numbers2.Add(FooD.Create()); break;
+                case 4: ((PolymorphismClass)myClass).Numbers2.Add(FooE.Create()); break;
+                case 5: ((PolymorphismClass)myClass).Numbers2.Add(FooF.Create()); break;
+                case 6: ((PolymorphismClass)myClass).Numbers2.Add(FooG.Create()); break;
+                case 7: ((PolymorphismClass)myClass).Numbers2.Add(FooH.Create()); break;
+                case 8: ((PolymorphismClass)myClass).Numbers2.Add(FooI.Create()); break;
+                case 9: ((PolymorphismClass)myClass).Numbers2.Add(FooJ.Create()); break;
+                case 10: ((PolymorphismClass)myClass).Numbers2.Add(FooK.Create()); break;
+                case 11: ((PolymorphismClass)myClass).Numbers2.Add(FooL.Create()); break;
+                case 12: ((PolymorphismClass)myClass).Numbers2.Add(FooM.Create()); break;
+                case 13: ((PolymorphismClass)myClass).Numbers2.Add(FooN.Create()); break;
+                case 14: ((PolymorphismClass)myClass).Numbers2.Add(FooO.Create()); break;
+                case 15: ((PolymorphismClass)myClass).Numbers2.Add(FooP.Create()); break;
+                case 16: ((PolymorphismClass)myClass).Numbers2.Add(FooQ.Create()); break;
+                case 17: ((PolymorphismClass)myClass).Numbers2.Add(FooR.Create()); break;
+                case 18: ((PolymorphismClass)myClass).Numbers2.Add(FooS.Create()); break;
+                case 19: ((PolymorphismClass)myClass).Numbers2.Add(FooZ.Create()); break;
             }
         }
-        
+
         buffer1 = LuminPackSerializer.Serialize(myClass, _option);
         luminBufferWriter.Option.StringEncoding = _option.StringEncoding;
         luminBufferWriter.Option.StringRecording = _option.StringRecording;
@@ -618,57 +701,66 @@ public class PolymorphismBenchmark
         buffer4 = NinoSerializer.Serialize(myClass);
     }
 
+    /// <summary>Measures clean up for the configured benchmark input.</summary>
     [GlobalCleanup]
     public void CleanUp()
     {
         luminBufferWriter.Dispose();
     }
 
+    /// <summary>Measures lumin pack serialize for the configured benchmark input.</summary>
     [Benchmark]
     public void LuminPackSerialize()
     {
         LuminPackSerializer.Serialize(myClass, luminBufferWriter);
     }
-    
+
+    /// <summary>Measures memory pack serialize for the configured benchmark input.</summary>
     [Benchmark]
     public void MemoryPackSerialize()
     {
         memoryBufferWriter.Reset();
         MemoryPackSerializer.Serialize(memoryBufferWriter, myClass);
     }
-    
+
+    /// <summary>Measures message pack serialize for the configured benchmark input.</summary>
     [Benchmark]
     public void MessagePackSerialize()
     {
         messageArrayBufferWriter.ResetWrittenCount();
         MessagePackSerializer.Serialize(messageArrayBufferWriter, myClass);
     }
-    
+
+    /// <summary>Measures nino serialize for the configured benchmark input.</summary>
     [Benchmark]
     public void NinoSerialize()
     {
         ninoBufferWriter.ResetWrittenCount();
         NinoSerializer.Serialize(myClass, ninoBufferWriter);
     }
-    
+
+    /// <summary>Measures lumin pack deserialize for the configured benchmark input.</summary>
     [Benchmark]
     public void LuminPackDeserialize()
     {
         var res = LuminPackSerializer.Deserialize<PolymorphismClassBase>(buffer1, _option);
     }
-    
+
+    /// <summary>Measures memory pack deserialize for the configured benchmark input.</summary>
     [Benchmark]
     public void MemoryPackDeserialize()
     {
         var res = MemoryPackSerializer.Deserialize<PolymorphismClassBase>(buffer2);
     }
-    
+
+    /// <summary>Measures message pack deserialize for the configured benchmark input.</summary>
     [Benchmark]
     public void MessagePackDeserialize()
     {
         var res = MessagePackSerializer.Deserialize<PolymorphismClassBase>(buffer3);
     }
-    
+
+    /// <summary>Measures nino deserialize for the configured benchmark input.</summary>
     [Benchmark]
     public void NinoDeserialize()
     {

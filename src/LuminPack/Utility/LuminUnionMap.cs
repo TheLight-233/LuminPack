@@ -4,13 +4,18 @@ using LuminPack.Code;
 
 namespace LuminPack.Utility;
 
+/// <summary>Provides lumin union map functionality.</summary>
+/// <typeparam name="TValue">The type represented by <c>TValue</c>.</typeparam>
 public sealed class LuminUnionMap<TValue>
 {
     private const int MIN_CAPACITY = 8;
 
+    /// <summary>Provides entry functionality.</summary>
     internal struct Entry
     {
+        /// <summary>Stores the key.</summary>
         public nint Key;
+        /// <summary>Stores the value.</summary>
         public TValue Value;
     }
 
@@ -19,10 +24,14 @@ public sealed class LuminUnionMap<TValue>
     internal int _count;
     internal nint _capacityMask;
 
+    /// <summary>Gets the count.</summary>
     public int Count => _count;
+    /// <summary>Gets the capacity.</summary>
     public int Capacity => _capacity;
+    /// <summary>Gets the is created.</summary>
     public bool IsCreated => _table != null;
 
+    /// <summary>Initializes a new instance of <c>LuminUnionMap</c>.</summary>
     public LuminUnionMap()
     {
         _capacity = MIN_CAPACITY;
@@ -30,6 +39,8 @@ public sealed class LuminUnionMap<TValue>
         InitializeTable();
     }
 
+    /// <summary>Initializes a new instance of <c>LuminUnionMap</c>.</summary>
+    /// <param name="capacity">The requested storage capacity.</param>
     public LuminUnionMap(int capacity)
     {
         if (capacity < 0) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
@@ -38,6 +49,9 @@ public sealed class LuminUnionMap<TValue>
         InitializeTable();
     }
 
+    /// <summary>Calculates the serialized size contribution of capacity.</summary>
+    /// <param name="capacity">The requested storage capacity.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CalculateCapacity(int capacity)
     {
@@ -53,6 +67,7 @@ public sealed class LuminUnionMap<TValue>
         return capacity + 1;
     }
 
+    /// <summary>Performs the initialize table step for the current operation.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void InitializeTable()
     {
@@ -60,6 +75,10 @@ public sealed class LuminUnionMap<TValue>
         _table = new Entry[_capacity];
     }
 
+    /// <summary>Looks up a key and reports whether an associated value was found.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <param name="value">Receives the value produced by the operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryGetValue(in nint key, out TValue value)
     {
@@ -73,10 +92,16 @@ public sealed class LuminUnionMap<TValue>
         return true;
     }
 
+    /// <summary>Obtains the value ref for the supplied input.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref TValue GetValueRef(in nint key)
         => ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), GetIndex(key)).Value;
-    
+
+    /// <summary>Attempts to get value ref and reports whether it succeeded.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref TValue TryGetValueRef(in nint key)
     {
@@ -86,6 +111,9 @@ public sealed class LuminUnionMap<TValue>
         return ref entry.Value;
     }
 
+    /// <summary>Performs the register step for the current operation.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public void Register(in nint key, TValue value)
     {
@@ -93,6 +121,10 @@ public sealed class LuminUnionMap<TValue>
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException($"An item with the same key has already been added. Key: {key}");
     }
 
+    /// <summary>Attempts to register and reports whether it succeeded.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryRegister(in nint key, TValue value)
     {
@@ -112,6 +144,10 @@ public sealed class LuminUnionMap<TValue>
         return CuckooInsert(key, value);
     }
 
+    /// <summary>Performs the cuckoo insert step for the current operation.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private bool CuckooInsert(in nint key, TValue value)
     {
@@ -130,16 +166,19 @@ public sealed class LuminUnionMap<TValue>
                 return true;
             }
 
-            // 踢出当前条目
+            // Displace the current entry.
             (currentKey, entry.Key) = (entry.Key, currentKey);
             (currentValue, entry.Value) = (entry.Value, currentValue);
         }
 
-        // 超过最大踢出次数，扩容
+        // Resize after reaching the maximum number of cuckoo displacements.
         Resize();
         return TryRegister(currentKey, currentValue);
     }
 
+    /// <summary>Obtains the index for the supplied input.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private nint GetIndex(nint key)
     {
@@ -150,9 +189,12 @@ public sealed class LuminUnionMap<TValue>
         return (nint)(hash & (nuint)_capacityMask);
     }
 
+    /// <summary>Performs the resize step for the current operation.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void Resize() => Resize(_capacity * 2);
 
+    /// <summary>Performs the resize step for the current operation.</summary>
+    /// <param name="newCapacity">The new capacity used by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void Resize(int newCapacity)
     {
@@ -188,13 +230,17 @@ public sealed class LuminUnionMap<TValue>
 /// MethodTable-keyed maps should use <see cref="LuminUnionMap{TValue}"/>,
 /// which drops guaranteed pointer-alignment bits before indexing.
 /// </summary>
+/// <typeparam name="TValue">The type represented by <c>TValue</c>.</typeparam>
 public sealed class LuminRawUnionMap<TValue>
 {
     private const int MIN_CAPACITY = 8;
 
+    /// <summary>Provides entry functionality.</summary>
     private struct Entry
     {
+        /// <summary>Stores the key.</summary>
         public nint Key;
+        /// <summary>Stores the value.</summary>
         public TValue Value;
     }
 
@@ -203,9 +249,13 @@ public sealed class LuminRawUnionMap<TValue>
     private int _count;
     private nint _capacityMask;
 
+    /// <summary>Gets the count.</summary>
     public int Count => _count;
+    /// <summary>Gets the capacity.</summary>
     public int Capacity => _capacity;
 
+    /// <summary>Initializes a new instance of <c>LuminRawUnionMap</c>.</summary>
+    /// <param name="capacity">The requested storage capacity.</param>
     public LuminRawUnionMap(int capacity)
     {
         if (capacity < 0) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(capacity));
@@ -213,6 +263,10 @@ public sealed class LuminRawUnionMap<TValue>
         InitializeTable();
     }
 
+    /// <summary>Looks up a key and reports whether an associated value was found.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <param name="value">Receives the value produced by the operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryGetValue(in nint key, out TValue value)
     {
@@ -227,6 +281,10 @@ public sealed class LuminRawUnionMap<TValue>
         return true;
     }
 
+    /// <summary>Attempts to register and reports whether it succeeded.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryRegister(in nint key, TValue value)
     {
@@ -245,6 +303,10 @@ public sealed class LuminRawUnionMap<TValue>
         return CuckooInsert(key, value);
     }
 
+    /// <summary>Performs the cuckoo insert step for the current operation.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private bool CuckooInsert(in nint key, TValue value)
     {
@@ -270,6 +332,7 @@ public sealed class LuminRawUnionMap<TValue>
         return TryRegister(currentKey, currentValue);
     }
 
+    /// <summary>Performs the resize step for the current operation.</summary>
     private void Resize()
     {
         Entry[] oldTable = _table;
@@ -290,6 +353,7 @@ public sealed class LuminRawUnionMap<TValue>
         }
     }
 
+    /// <summary>Performs the initialize table step for the current operation.</summary>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private void InitializeTable()
     {
@@ -297,6 +361,9 @@ public sealed class LuminRawUnionMap<TValue>
         _table = new Entry[_capacity];
     }
 
+    /// <summary>Calculates the serialized size contribution of capacity.</summary>
+    /// <param name="capacity">The requested storage capacity.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CalculateCapacity(int capacity)
     {
@@ -313,11 +380,16 @@ public sealed class LuminRawUnionMap<TValue>
     }
 }
 
+/// <summary>Provides lumin frozen union map functionality.</summary>
+/// <typeparam name="TValue">The type represented by <c>TValue</c>.</typeparam>
 public sealed class LuminFrozenUnionMap<TValue>
 {
+    /// <summary>Provides entry functionality.</summary>
     internal struct Entry
     {
+        /// <summary>Stores the key.</summary>
         public nint Key;
+        /// <summary>Stores the value.</summary>
         public TValue Value;
     }
 
@@ -327,10 +399,16 @@ public sealed class LuminFrozenUnionMap<TValue>
     private nint _seed;
     private const int MAX_SEED_SEARCH = 100_000;
 
+    /// <summary>Gets the capacity.</summary>
     public int Capacity => _capacity;
-    
+
+    /// <summary>Initializes a new instance of <c>LuminFrozenUnionMap</c>.</summary>
     private LuminFrozenUnionMap() { }
 
+    /// <summary>Creates from from the supplied input.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="maxSeedSearch">The max seed search used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static LuminFrozenUnionMap<TValue> CreateFrom(LuminUnionMap<TValue> source, int maxSeedSearch = MAX_SEED_SEARCH)
     {
         if (source == null || source._count == 0)
@@ -353,10 +431,14 @@ public sealed class LuminFrozenUnionMap<TValue>
             }
         }
 
-        global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException($"无法找到完美哈希种子: Keys={source._count}");
+        global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException($"Could not find a perfect hash seed: Keys={source._count}");
         return frozen;
     }
 
+    /// <summary>Determines whether h are present.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <param name="seed">The seed used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static nint Hash(nint key, nint seed)
     {
@@ -364,6 +446,11 @@ public sealed class LuminFrozenUnionMap<TValue>
         return key ^ (key >> 27);
     }
 
+    /// <summary>Attempts to find perfect seed and reports whether it succeeded.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="maxSeedSearch">The max seed search used by this operation.</param>
+    /// <param name="foundSeed">Receives the found seed produced by the operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private bool TryFindPerfectSeed(LuminUnionMap<TValue> source, int maxSeedSearch, out nint foundSeed)
     {
         Span<bool> used = stackalloc bool[_capacity];
@@ -402,6 +489,9 @@ public sealed class LuminFrozenUnionMap<TValue>
         return false;
     }
 
+    /// <summary>Calculates the serialized size contribution of capacity.</summary>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int CalculateCapacity(int count)
     {
@@ -410,11 +500,14 @@ public sealed class LuminFrozenUnionMap<TValue>
         return capacity;
     }
 
+    /// <summary>Performs the allocate table step for the current operation.</summary>
     private void AllocateTable()
     {
         _table = new Entry[_capacity];
     }
 
+    /// <summary>Performs the populate from step for the current operation.</summary>
+    /// <param name="source">The input data to process.</param>
     private void PopulateFrom(LuminUnionMap<TValue> source)
     {
         for (int i = 0; i < source._capacity; i++)
@@ -438,6 +531,9 @@ public sealed class LuminFrozenUnionMap<TValue>
         }
     }
 
+    /// <summary>Obtains the value ref for the supplied input.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref TValue GetValueRef(in nint key)
     {
@@ -445,6 +541,9 @@ public sealed class LuminFrozenUnionMap<TValue>
         return ref Unsafe.Add(ref LuminPackMarshal.GetNotNullArrayReference(_table), idx).Value;
     }
 
+    /// <summary>Attempts to get value ref and reports whether it succeeded.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public ref TValue TryGetValueRef(in nint key)
     {
@@ -455,6 +554,10 @@ public sealed class LuminFrozenUnionMap<TValue>
         return ref entry.Value;
     }
 
+    /// <summary>Looks up a key and reports whether an associated value was found.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <param name="value">Receives the value produced by the operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public bool TryGetValue(in nint key, out TValue value)
     {
@@ -468,7 +571,11 @@ public sealed class LuminFrozenUnionMap<TValue>
         value = entry.Value;
         return true;
     }
-    
+
+    /// <summary>Attempts to register and reports whether it succeeded.</summary>
+    /// <param name="key">The key used to identify the entry.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     public bool TryRegister(nint key, TValue value)
     {
         var tempMap = new LuminUnionMap<TValue>(_capacity);
@@ -491,12 +598,12 @@ public sealed class LuminFrozenUnionMap<TValue>
             return false;
 
         var newFrozen = CreateFrom(tempMap);
-        
+
         this._table = newFrozen._table;
         this._capacity = newFrozen._capacity;
         this._capacityMask = newFrozen._capacityMask;
         this._seed = newFrozen._seed;
-        
+
         newFrozen._table = null!;
 
         return true;

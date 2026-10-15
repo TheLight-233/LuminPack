@@ -5,18 +5,24 @@ using LuminPack.Option;
 
 namespace LuminPackBenchmark;
 
+/// <summary>Provides json initializer jit control functionality.</summary>
 [LuminPackable]
 public sealed partial class JsonInitializerJitControl
 {
+    /// <summary>Stores the number.</summary>
     public int Number = 42;
+    /// <summary>Stores the text.</summary>
     public string? Text = "initializer";
+    /// <summary>Stores the values.</summary>
     public List<int>? Values = new();
 }
 
+/// <summary>Provides character save data json jit probe functionality.</summary>
 internal static class CharacterSaveDataJsonJitProbe
 {
     private const int Iterations = 20_000;
 
+    /// <summary>Measures run for the configured benchmark input.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static void Run()
     {
@@ -63,6 +69,7 @@ internal static class CharacterSaveDataJsonJitProbe
         Console.WriteLine($"Character JSON JIT probe complete: {result.CharacterId}");
     }
 
+    /// <summary>Measures run initializer control for the configured benchmark input.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static void RunInitializerControl()
     {

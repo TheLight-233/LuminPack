@@ -2,8 +2,10 @@ using System.Text;
 using LuminPack.Code;
 using LuminPack.SourceGenerator.CodeEmitters;
 
+/// <summary>Provides interface read emitter shape regression functionality.</summary>
 internal static class InterfaceReadEmitterShapeRegression
 {
+    /// <summary>Verifies run.</summary>
     public static void Run()
     {
         string listRead = Generate(
@@ -32,6 +34,10 @@ internal static class InterfaceReadEmitterShapeRegression
             "IReadOnlyDictionary<TKey, TValue>");
     }
 
+    /// <summary>Verifies assert dictionary capacity.</summary>
+    /// <param name="typeName">The C# type name to use in generated source.</param>
+    /// <param name="generator">The generator used by this operation.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void AssertDictionaryCapacity(
         string typeName,
         Action<LuminLocalFieldData, StringBuilder> generator,
@@ -48,6 +54,10 @@ internal static class InterfaceReadEmitterShapeRegression
             scenario + " must retain Add so duplicate-key behavior remains unchanged.");
     }
 
+    /// <summary>Captures the source produced by the code emitter under test.</summary>
+    /// <param name="typeName">The C# type name to use in generated source.</param>
+    /// <param name="generator">The generator used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string Generate(
         string typeName,
         Action<LuminLocalFieldData, StringBuilder> generator)
@@ -57,6 +67,10 @@ internal static class InterfaceReadEmitterShapeRegression
         return builder.ToString();
     }
 
+    /// <summary>Verifies assert contains.</summary>
+    /// <param name="text">The text used by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void AssertContains(string text, string expected, string message)
     {
         if (!text.Contains(expected, StringComparison.Ordinal))
@@ -65,6 +79,10 @@ internal static class InterfaceReadEmitterShapeRegression
         }
     }
 
+    /// <summary>Verifies assert does not contain.</summary>
+    /// <param name="text">The text used by this operation.</param>
+    /// <param name="unexpected">The unexpected used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void AssertDoesNotContain(string text, string unexpected, string message)
     {
         if (text.Contains(unexpected, StringComparison.Ordinal))

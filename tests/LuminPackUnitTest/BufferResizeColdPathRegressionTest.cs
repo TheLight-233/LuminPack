@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text;
 using System.Text.Json;
 using LuminPack;
 using LuminPack.Attribute;
@@ -9,10 +8,13 @@ using LuminPack.Utility;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides buffer resize cold path regression test functionality.</summary>
 internal static class BufferResizeColdPathRegressionTest
 {
     private const int GrowthBlockLength = 230_000;
 
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(CapacityPolicyUses32KiBAndFiftyPercentGrowth),
@@ -27,6 +29,7 @@ internal static class BufferResizeColdPathRegressionTest
             LargeGeneratedStringAndArrayRoundTripAfterGrowth);
     }
 
+    /// <summary>Verifies capacity policy uses32 ki b and fifty percent growth.</summary>
     private static void CapacityPolicyUses32KiBAndFiftyPercentGrowth()
     {
         using var buffer = new LuminBufferWriter(true);
@@ -49,6 +52,7 @@ internal static class BufferResizeColdPathRegressionTest
             "A direct large reservation retained excessive headroom.");
     }
 
+    /// <summary>Verifies lazy initial allocation occurs once and preserves bytes.</summary>
     private static void LazyInitialAllocationOccursOnceAndPreservesBytes()
     {
         using var buffer = new LuminBufferWriter(false);
@@ -66,6 +70,7 @@ internal static class BufferResizeColdPathRegressionTest
             "An existing buffer was reallocated or cleared by a later GetFullSpan call.");
     }
 
+    /// <summary>Verifies binary check preserves bytes across multiple growths.</summary>
     private static void BinaryCheckPreservesBytesAcrossMultipleGrowths()
     {
         using var buffer = new LuminBufferWriter(true);
@@ -90,6 +95,7 @@ internal static class BufferResizeColdPathRegressionTest
             "Binary growth lost or changed bytes written before a native-buffer relocation.");
     }
 
+    /// <summary>Verifies json check preserves valid payload across multiple growths.</summary>
     private static void JsonCheckPreservesValidPayloadAcrossMultipleGrowths()
     {
         using var buffer = new LuminBufferWriter(true);
@@ -122,11 +128,12 @@ internal static class BufferResizeColdPathRegressionTest
             "JSON growth corrupted a string written before or after a native-buffer relocation.");
     }
 
+    /// <summary>Verifies large generated string and array round trip after growth.</summary>
     private static void LargeGeneratedStringAndArrayRoundTripAfterGrowth()
     {
         var value = new MultiGrowthPayload
         {
-            Prefix = new string('界', 100_000),
+            Prefix = new string('\u754c', 100_000),
             Values = Enumerable.Range(0, 200_000).ToArray(),
             Suffix = new string('Z', 230_000)
         };
@@ -149,6 +156,10 @@ internal static class BufferResizeColdPathRegressionTest
             "A generated payload containing both a large string and a large array failed after growth.");
     }
 
+    /// <summary>Writes block and check to the current output.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     private static void WriteBlockAndCheck(ref LuminPackWriter writer, int count, byte value)
     {
         writer.EnsureAdditionalCapacity(count);
@@ -157,6 +168,10 @@ internal static class BufferResizeColdPathRegressionTest
         writer.CheckBuffer();
     }
 
+    /// <summary>Verifies all equal.</summary>
+    /// <param name="bytes">The bytes used by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool AllEqual(ReadOnlySpan<byte> bytes, byte expected)
     {
         foreach (var value in bytes)
@@ -168,6 +183,10 @@ internal static class BufferResizeColdPathRegressionTest
         return true;
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -181,6 +200,9 @@ internal static class BufferResizeColdPathRegressionTest
         }
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)
@@ -188,10 +210,14 @@ internal static class BufferResizeColdPathRegressionTest
     }
 }
 
+/// <summary>Provides multi growth payload functionality.</summary>
 [LuminPackable]
 public sealed partial class MultiGrowthPayload
 {
+    /// <summary>Gets or sets the prefix.</summary>
     public string Prefix { get; set; } = string.Empty;
+    /// <summary>Gets or sets the values.</summary>
     public int[] Values { get; set; } = [];
+    /// <summary>Gets or sets the suffix.</summary>
     public string Suffix { get; set; } = string.Empty;
 }

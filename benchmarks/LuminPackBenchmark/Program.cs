@@ -1,16 +1,12 @@
-using System;
-using System.Buffers;
-using System.Runtime.CompilerServices;
-using System.Threading;
 using BenchmarkDotNet.Running;
-using JetBrains.Profiler.SelfApi;
-using LuminPack;
 using LuminPack.Option;
-using LuminPack.Utility;
 using LuminPackBenchmark;
 
+/// <summary>Provides program functionality.</summary>
 class Program
 {
+    /// <summary>Measures main for the configured benchmark input.</summary>
+    /// <param name="args">The args used by this operation.</param>
     static void Main(string[] args)
     {
         if (args.Length == 2 && args[0] == "--binary-paired-probe")

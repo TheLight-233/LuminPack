@@ -1,98 +1,132 @@
 // ═══════════════════════════════════════════════════════════════════════════
-//  LuminMapper 完整使用示例
-//  展示零样板「自动路径」与自定义「手动路径」
+//  Complete LuminMapper usage example.
+//  Demonstrates automatic mapping and custom manual declarations.
 // ═══════════════════════════════════════════════════════════════════════════
 
 using LuminPack.Attribute;
 using LuminPack.Mapping;
-using System.Collections.Generic;
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  转换器 & 条件检查（供特性引用）
+//  Conversion and condition methods referenced by attributes.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// <summary>Provides level converters functionality.</summary>
 public static class LevelConverters
 {
+    /// <summary>Measures int to string for the configured benchmark input.</summary>
+    /// <param name="level">The level used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static string IntToString(int level) => $"Lv.{level}";
 }
 
+/// <summary>Provides date converters functionality.</summary>
 public static class DateConverters
 {
+    /// <summary>Measures parse date for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static System.DateTime ParseDate(string value)
         => System.DateTime.TryParse(value, out var dt) ? dt : System.DateTime.MinValue;
 }
 
+/// <summary>Provides player conditions functionality.</summary>
 public static class PlayerConditions
 {
-    // [LuminMapCondition] 要求签名 static bool Method(in TSource source)
+    // [LuminMapCondition] requires static bool Method(in TSource source).
+    /// <summary>Determines whether the supplied value has the active classification.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     public static bool IsActive(in PlayerData source) => source.IsActive;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  路径①：自动路径 — 用户只需在源类型上标 [LuminMapTo]，0 样板代码
-//           源生成器自动产出 PlayerDataMapper.g.cs，内含完整 Mapper 类
+//  Automatic mapping: annotate the source with LuminMapTo; no mapper declaration is required.
+//           The generator emits the complete mapper in PlayerDataMapper.g.cs.
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// <summary>Provides player data functionality.</summary>
 [LuminPackable]
-[LuminMapTo(typeof(PlayerDto), MethodSuffix = "Dto", GenerateCollectionMethods = true)]    // ← 唯一需要写的东西
+[LuminMapTo(typeof(PlayerDto), MethodSuffix = "Dto", GenerateCollectionMethods = true)]    // ← The only required handwritten declaration.
 [LuminMapTo(typeof(PlayerSnapshot), MethodSuffix = "Snapshot", GenerateCollectionMethods = false)]
 public class PlayerData
 {
-    public int    Id          { get; set; }
-    public string Name        { get; set; } = "";
-    public string NickName    { get; set; } = "";
-    public string Password    { get; set; } = "";
-    public float  Health      { get; set; }
-    public int    LevelRaw    { get; set; }
+    /// <summary>Gets or sets the id.</summary>
+    public int Id { get; set; }
+    /// <summary>Gets or sets the name.</summary>
+    public string Name { get; set; } = "";
+    /// <summary>Gets or sets the nick name.</summary>
+    public string NickName { get; set; } = "";
+    /// <summary>Gets or sets the password.</summary>
+    public string Password { get; set; } = "";
+    /// <summary>Gets or sets the health.</summary>
+    public float Health { get; set; }
+    /// <summary>Gets or sets the level raw.</summary>
+    public int LevelRaw { get; set; }
+    /// <summary>Gets or sets the birthday str.</summary>
     public string BirthdayStr { get; set; } = "";
-    public bool   IsActive    { get; set; }
+    /// <summary>Gets or sets the is active.</summary>
+    public bool IsActive { get; set; }
 }
 
-// 目标类型：通过成员特性精细控制字段映射
+// Configure destination member mapping through attributes.
+/// <summary>Provides player dto functionality.</summary>
 [LuminPackable]
 public class PlayerDto
 {
-    public int    Id           { get; set; }
-    public string Name         { get; set; } = "";
+    /// <summary>Gets or sets the id.</summary>
+    public int Id { get; set; }
+    /// <summary>Gets or sets the name.</summary>
+    public string Name { get; set; } = "";
 
-    [LuminMapFromMember("NickName")]              // 源字段改名
-    public string DisplayName  { get; set; } = "";
+    /// <summary>Gets or sets the display name.</summary>
+    [LuminMapFromMember("NickName")]              // Rename the source member.
+    public string DisplayName { get; set; } = "";
 
-    [LuminMapIgnore]                              // 不从源映射
-    public string Password     { get; set; } = "";
+    /// <summary>Gets or sets the password.</summary>
+    [LuminMapIgnore]                              // Do not map from the source.
+    public string Password { get; set; } = "";
 
-    public float  Health       { get; set; }
+    /// <summary>Gets or sets the health.</summary>
+    public float Health { get; set; }
 
+    /// <summary>Gets or sets the level.</summary>
     [LuminMapFromMember("LevelRaw")]
     [LuminMapUsing(typeof(LevelConverters), nameof(LevelConverters.IntToString))]
-    public string Level        { get; set; } = "";   // int → string 转换
+    public string Level { get; set; } = "";   // Convert int to string.
 
+    /// <summary>Gets or sets the birth date.</summary>
     [LuminMapFromMember("BirthdayStr")]
     [LuminMapUsing(typeof(DateConverters), nameof(DateConverters.ParseDate))]
-    public System.DateTime BirthDate { get; set; }   // 改名 + 类型转换
+    public System.DateTime BirthDate { get; set; }   // Rename and convert the member.
 
+    /// <summary>Gets or sets the active health.</summary>
     [LuminMapFromMember("Health")]
     [LuminMapCondition(typeof(PlayerConditions), nameof(PlayerConditions.IsActive))]
-    public float  ActiveHealth { get; set; }          // 条件映射
+    public float ActiveHealth { get; set; }          // Conditional mapping.
 
-    [LuminMapConstant("v2")]                      // 常量填充
+    /// <summary>Gets or sets the schema version.</summary>
+    [LuminMapConstant("v2")]                      // Assign a constant value.
     public string SchemaVersion { get; set; } = "";
 }
 
+/// <summary>Provides player snapshot functionality.</summary>
 [LuminPackable]
 public class PlayerSnapshot
 {
-    public int    Id     { get; set; }
-    public string Name   { get; set; } = "";
-    public float  Health { get; set; }
+    /// <summary>Gets or sets the id.</summary>
+    public int Id { get; set; }
+    /// <summary>Gets or sets the name.</summary>
+    public string Name { get; set; } = "";
+    /// <summary>Gets or sets the health.</summary>
+    public float Health { get; set; }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  源生成器自动产出 PlayerDataMapper.g.cs（节选）：
+//  Excerpt from generated PlayerDataMapper.g.cs:
 //
-//  namespace MyGame           // 与 PlayerData 同命名空间
+//  namespace MyGame           // Same namespace as PlayerData.
 //  {
-//      public static class PlayerDataMapper   // 全部由生成器产出，用户无需写任何内容
+//      public static class PlayerDataMapper   // Entirely generated; no handwritten implementation is required.
 //      {
 //          [Preserve, MethodImpl(AggressiveInlining)]
 //          public static PlayerDto ToDto(scoped in PlayerData source)
@@ -128,81 +162,121 @@ public class PlayerSnapshot
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  路径②：手动路径 — 需要自定义方法名 / 多对多映射 / 非常规签名时使用
-//           用户声明 partial 方法签名，生成器补全方法体
+//  Manual mapping for custom names, multiple type pairs, or specialized signatures.
+//           The user declares partial signatures and the generator supplies their bodies.
 // ═══════════════════════════════════════════════════════════════════════════
 
-[LuminMapper]   // ← 仍需手写这个 partial class，但只需声明签名，方法体由生成器产出
+/// <summary>Provides game object mapper functionality.</summary>
+[LuminMapper]   // ← Declare the partial class and method signatures; the generator supplies method bodies.
 public static partial class GameObjectMapper
 {
-    // 自定义方法名（不想用 PlayerDataMapper 的默认命名）
-    public static partial PlayerDto       ConvertPlayer   (PlayerData    source);
-    public static partial void            FillPlayer      (PlayerData    source, ref PlayerDto     dest);
+    // Custom method names instead of PlayerDataMapper defaults.
+    /// <summary>Converts the supplied input to the player representation.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <returns>The result of the operation.</returns>
+    public static partial PlayerDto ConvertPlayer(PlayerData source);
+    /// <summary>Measures fill player for the configured benchmark input.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    public static partial void FillPlayer(PlayerData source, ref PlayerDto dest);
 
-    // 跨类型的统一 Mapper（多对多）
-    public static partial PlayerSnapshot  ToSnapshot      (PlayerData    source);
-    public static partial EnemySnapshot   ToEnemySnapshot (EnemyData     source);
-    public static partial void            FillEnemy       (EnemyData     source, ref EnemySnapshot dest);
+    // A shared mapper for multiple source and destination types.
+    /// <summary>Measures to snapshot for the configured benchmark input.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <returns>The result of the operation.</returns>
+    public static partial PlayerSnapshot ToSnapshot(PlayerData source);
+    /// <summary>Measures to enemy snapshot for the configured benchmark input.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <returns>The result of the operation.</returns>
+    public static partial EnemySnapshot ToEnemySnapshot(EnemyData source);
+    /// <summary>Measures fill enemy for the configured benchmark input.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="dest">The destination receiving the result.</param>
+    public static partial void FillEnemy(EnemyData source, ref EnemySnapshot dest);
 
-    // 集合映射
-    public static partial List<PlayerDto> BatchConvert    (List<PlayerData> sources);
-    
+    // Collection mapping.
+    /// <summary>Measures batch convert for the configured benchmark input.</summary>
+    /// <param name="sources">The sources used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
+    public static partial List<PlayerDto> BatchConvert(List<PlayerData> sources);
+
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-//  两个测试用辅助类型
+//  Two helper types used by the tests.
 // ─────────────────────────────────────────────────────────────────────────────
 
+/// <summary>Provides enemy data functionality.</summary>
 [LuminPackable]
-public class EnemyData   { public int Id { get; set; } public string Name { get; set; } = ""; public float Damage { get; set; } }
+public class EnemyData {
+    /// <summary>Gets or sets the id.</summary>
+    public int Id { get; set; }
+    /// <summary>Gets or sets the name.</summary>
+    public string Name { get; set; } = "";
+    /// <summary>Gets or sets the damage.</summary>
+    public float Damage { get; set; } }
 
+/// <summary>Provides enemy snapshot functionality.</summary>
 [LuminPackable]
 public class EnemySnapshot
 {
-    public int    Id     { get; set; }
-    public string Name   { get; set; } = "";
+    /// <summary>Gets or sets the id.</summary>
+    public int Id { get; set; }
+    /// <summary>Gets or sets the name.</summary>
+    public string Name { get; set; } = "";
 
+    /// <summary>Gets or sets the dmg.</summary>
     [LuminMapFromMember("Damage")]    // EnemyData.Damage → EnemySnapshot.Dmg
-    public float  Dmg    { get; set; }
+    public float Dmg { get; set; }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  运行时调用（两条路径产出的 API 完全等价）
+//  Runtime calls use equivalent APIs for both mapping paths.
 // ═══════════════════════════════════════════════════════════════════════════
 
+/// <summary>Provides usage examples functionality.</summary>
 class UsageExamples
 {
+    /// <summary>Measures demo for the configured benchmark input.</summary>
     public static void Demo()
     {
-        var player = new PlayerData { Id = 1, Name = "Alice", NickName = "Ace",
-            Password = "secret", Health = 100f, LevelRaw = 42,
-            BirthdayStr = "1990-05-15", IsActive = true };
+        var player = new PlayerData
+        {
+            Id = 1,
+            Name = "Alice",
+            NickName = "Ace",
+            Password = "secret",
+            Health = 100f,
+            LevelRaw = 42,
+            BirthdayStr = "1990-05-15",
+            IsActive = true
+        };
 
-        // ── 自动路径（路径①）生成的 API ──────────────────────────────────
+        // ── API generated by automatic mapping declarations. ──────────────────────────────────
 
-        // 创建型：仅 new PlayerDto() 一次分配
+        // Creating mapping: one PlayerDto allocation.
         PlayerDto dto = PlayerDataMapper.ToDto(in player);
 
-        // 就地型：完全 0 GC（对象池场景）
+        // In-place mapping: no allocations when reusing a pooled instance.
         PlayerDto pooled = Pool<PlayerDto>.Rent();
         PlayerDataMapper.MapIntoDto(in player, ref pooled);
         Pool<PlayerDto>.Return(pooled);
 
-        // 集合映射
-        PlayerDto[] arr  = PlayerDataMapper.ToDtoArray(new[] { player });
+        // Collection mapping.
+        PlayerDto[] arr = PlayerDataMapper.ToDtoArray(new[] { player });
         List<PlayerDto> list = PlayerDataMapper.ToDtoList(new List<PlayerData> { player });
 
-        // 多目标（第二个 [LuminMapTo]）
+        // A second LuminMapTo destination.
         PlayerSnapshot snap = PlayerDataMapper.ToSnapshot(in player);
 
-        // ── 手动路径（路径②）生成的 API ──────────────────────────────────
+        // ── API generated by manual mapping declarations. ──────────────────────────────────
 
         PlayerDto dto2 = GameObjectMapper.ConvertPlayer(player);
         GameObjectMapper.FillPlayer(player, ref pooled);
 
-        // ── 动态分发（类型在运行时确定时使用）────────────────────────────
-        // 两条路径生成的 Mapper 都会注册到 LuminMapper，可通过统一入口调用
-        // 内部：一次静态泛型字段读取 O(1) + 一次委托调用，无反射无字典查找
+        // ── Dynamic dispatch when the type is determined at runtime.────────────────────────────
+        // Both mapping paths register with LuminMapper and share the same entry point.
+        // One O(1) generic static field read and one delegate call; no reflection or dictionary lookup.
         PlayerDto dtoD = LuminMapper.Map<PlayerData, PlayerDto>(in player);
         LuminMapper.MapInto(in player, ref pooled);
 
@@ -210,31 +284,37 @@ class UsageExamples
         Console.WriteLine(ok);
     }
 
+    /// <summary>Provides pool functionality.</summary>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     static class Pool<T> where T : new()
     {
         static readonly System.Collections.Concurrent.ConcurrentBag<T> _bag = new();
+        /// <summary>Obtains a reusable instance from the pool, creating one when needed.</summary>
+        /// <returns>The result of the operation.</returns>
         public static T Rent() => _bag.TryTake(out var v) ? v : new T();
+        /// <summary>Returns an instance to the pool for reuse.</summary>
+        /// <param name="v">The v used by this operation.</param>
         public static void Return(T v) => _bag.Add(v);
     }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
-//  性能特性一览
+//  Performance characteristics.
 // ═══════════════════════════════════════════════════════════════════════════
 /*
   ┌─────────────────────────────────────────┬──────────┬──────────────────────┐
-  │ 调用路径                                 │ GC 分配   │ 说明                 │
+  │ Call path                                 │ GC allocations   │ Description                 │
   ├─────────────────────────────────────────┼──────────┼──────────────────────┤
-  │ PlayerDataMapper.ToDto(in src)          │ 1× new() │ 目标 class 本身      │
-  │ PlayerDataMapper.ToDto(in src) [struct] │ 0        │ 值类型目标           │
-  │ PlayerDataMapper.MapIntoDto(in, ref)    │ 0        │ 就地写入             │
-  │ PlayerDataMapper.ToDtoArray(arr)        │ 1× arr   │ 结果数组             │
-  │ LuminMapper.Map<S,D>(in src)            │ 0*       │ *委托仅注册时分配一次 │
+  │ PlayerDataMapper.ToDto(in src)          │ 1× new() │ Destination class      │
+  │ PlayerDataMapper.ToDto(in src) [struct] │ 0        │ Unmanaged destination           │
+  │ PlayerDataMapper.MapIntoDto(in, ref)    │ 0        │ In-place write             │
+  │ PlayerDataMapper.ToDtoArray(arr)        │ 1× arr   │ Result array             │
+  │ LuminMapper.Map<S,D>(in src)            │ 0*       │ *Delegate allocated once during registration │
   └─────────────────────────────────────────┴──────────┴──────────────────────┘
 
-  生成代码特征：
-  ─ [MethodImpl(AggressiveInlining)] 标记，JIT 可完全内联
-  ─ .NET 8+ 使用 scoped in，防止防御性拷贝
-  ─ 无反射、无表达式树、无字典查找
-  ─ 集合映射用 for/foreach，无 LINQ 开销
+  Generated code characteristics:
+  - AggressiveInlining allows the JIT to inline generated methods.
+  - .NET 8 and later use scoped in for compatible declarations.
+  - Generated mappings avoid reflection, expression trees, and dictionary lookup.
+  - Collection mappings use for or foreach loops without LINQ.
 */

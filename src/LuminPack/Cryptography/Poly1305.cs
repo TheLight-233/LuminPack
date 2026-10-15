@@ -1,4 +1,3 @@
-using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
@@ -26,6 +25,9 @@ namespace LuminPack.Cryptography
         private fixed byte _leftover[16];
         private int _leftoverLength;
 
+        /// <summary>Performs the load32 step for the current operation.</summary>
+        /// <param name="b">The b used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static uint Load32(ref byte b) => Unsafe.ReadUnaligned<uint>(ref b);
 
@@ -33,6 +35,7 @@ namespace LuminPack.Cryptography
         /// Initializes the authenticator with a 32-byte Poly1305 key
         /// (<c>r</c> = first 16 bytes, <c>s</c> = last 16 bytes).
         /// </summary>
+        /// <param name="key">The key used to identify the entry.</param>
         public void Initialize(byte* key)
         {
             _r0 = Load32(ref key[0]) & 0x3ffffff;
@@ -54,6 +57,7 @@ namespace LuminPack.Cryptography
         }
 
         /// <summary>Processes a message segment (any length).</summary>
+        /// <param name="data">The metadata describing the serializable type.</param>
         public void Update(ReadOnlySpan<byte> data)
         {
             fixed (byte* m = &MemoryMarshal.GetReference(data))
@@ -63,8 +67,11 @@ namespace LuminPack.Cryptography
         }
 
         /// <summary>Appends zero padding so the total length processed is a multiple of 16 (AEAD block padding).</summary>
+        /// <param name="length">The number of bytes or elements to process.</param>
         public void PadTo16(int length) => PadToMultipleOf16(length);
 
+        /// <summary>Performs the pad to multiple of16 step for the current operation.</summary>
+        /// <param name="length">The number of bytes or elements to process.</param>
         private void PadToMultipleOf16(int length)
         {
             int rem = length & 15;
@@ -77,6 +84,7 @@ namespace LuminPack.Cryptography
         }
 
         /// <summary>Processes an 8-byte little-endian length field (used by ChaCha20-Poly1305 AEAD).</summary>
+        /// <param name="length">The number of bytes or elements to process.</param>
         public void UpdateLength(ulong length)
         {
             Span<byte> tmp = stackalloc byte[8];
@@ -85,6 +93,7 @@ namespace LuminPack.Cryptography
         }
 
         /// <summary>Finishes and writes the 16-byte tag using constant-time selection.</summary>
+        /// <param name="tag">The tag used by this operation.</param>
         public void Finish(Span<byte> tag)
         {
             // Flush any buffered partial block (1..15 bytes): embed 0x01 padding bit and
@@ -151,6 +160,9 @@ namespace LuminPack.Cryptography
             Unsafe.WriteUnaligned(ref tag[8], high);
         }
 
+        /// <summary>Performs the update step for the current operation.</summary>
+        /// <param name="m">The m used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
         private void Update(byte* m, int length)
         {
             // Drain any buffered partial block first.

@@ -1,5 +1,3 @@
-﻿using System;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
@@ -20,6 +18,7 @@ namespace LuminPackUnitTest;
 //   * the reader must never accept a document the oracle rejects;
 //   * where the reader is deliberately stricter than System.Text.Json (leading zeros, "1." and the other
 //     shapes the task book lists as must-reject), that is allowed and counted.
+/// <summary>Provides json reader differential test functionality.</summary>
 public class JsonReaderDifferentialTest
 {
     private static readonly LuminPackSerializerOption s_strictUtf8 =
@@ -29,6 +28,7 @@ public class JsonReaderDifferentialTest
 
     private const int CaseCount = 4000;
 
+    /// <summary>Verifies number documents agree with system text json.</summary>
     [Fact]
     public void NumberDocumentsAgreeWithSystemTextJson()
     {
@@ -77,6 +77,8 @@ public class JsonReaderDifferentialTest
     }
 
     /// <summary>True when the oracle's values are non-finite, i.e. the document overflowed double.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool LooksLikeOverflow(double[] values)
     {
         foreach (double value in values)
@@ -88,6 +90,7 @@ public class JsonReaderDifferentialTest
         return false;
     }
 
+    /// <summary>Verifies integer documents agree with system text json.</summary>
     [Fact]
     public void IntegerDocumentsAgreeWithSystemTextJson()
     {
@@ -108,6 +111,7 @@ public class JsonReaderDifferentialTest
         }
     }
 
+    /// <summary>Verifies mutated documents never accepted when the oracle rejects them.</summary>
     [Fact]
     public void MutatedDocumentsNeverAcceptedWhenTheOracleRejectsThem()
     {
@@ -138,6 +142,7 @@ public class JsonReaderDifferentialTest
             $"the reader was stricter than the oracle in {readerStricter} of {CaseCount} cases, which needs review");
     }
 
+    /// <summary>Verifies malformed numbers are rejected by the reader.</summary>
     [Fact]
     public void MalformedNumbersAreRejectedByTheReader()
     {
@@ -154,6 +159,7 @@ public class JsonReaderDifferentialTest
         }
     }
 
+    /// <summary>Verifies string documents agree with system text json.</summary>
     [Fact]
     public void StringDocumentsAgreeWithSystemTextJson()
     {
@@ -214,6 +220,8 @@ public class JsonReaderDifferentialTest
     }
 
     /// <summary>Walks the whole document with the raw reader and requires the end of the document.</summary>
+    /// <param name="json">The json used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool TryReaderWalk(string json)
     {
         try
@@ -235,6 +243,10 @@ public class JsonReaderDifferentialTest
 
     // ---------------------------------------------------------------- oracle / reader
 
+    /// <summary>Attempts to oracle doubles and reports whether it succeeded.</summary>
+    /// <param name="json">The json used by this operation.</param>
+    /// <param name="values">Receives the values produced by the operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool TryOracleDoubles(string json, out double[] values)
     {
         values = Array.Empty<double>();
@@ -261,6 +273,10 @@ public class JsonReaderDifferentialTest
         }
     }
 
+    /// <summary>Attempts to oracle longs and reports whether it succeeded.</summary>
+    /// <param name="json">The json used by this operation.</param>
+    /// <param name="values">Receives the values produced by the operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool TryOracleLongs(string json, out long[] values)
     {
         values = Array.Empty<long>();
@@ -287,6 +303,10 @@ public class JsonReaderDifferentialTest
         }
     }
 
+    /// <summary>Attempts to reader doubles and reports whether it succeeded.</summary>
+    /// <param name="json">The json used by this operation.</param>
+    /// <param name="values">Receives the values produced by the operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool TryReaderDoubles(string json, out double[] values)
     {
         try
@@ -301,6 +321,10 @@ public class JsonReaderDifferentialTest
         }
     }
 
+    /// <summary>Attempts to reader longs and reports whether it succeeded.</summary>
+    /// <param name="json">The json used by this operation.</param>
+    /// <param name="values">Receives the values produced by the operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool TryReaderLongs(string json, out long[] values)
     {
         try
@@ -317,6 +341,10 @@ public class JsonReaderDifferentialTest
 
     // ---------------------------------------------------------------- generators
 
+    /// <summary>Verifies random numbers.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string[] RandomNumbers(Random rng, int count)
     {
         var result = new string[count];
@@ -326,6 +354,8 @@ public class JsonReaderDifferentialTest
     }
 
     /// <summary>Generates a number token that is strict-clean in both parsers (no leading zero, digits after '.' and 'e').</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string RandomNumber(Random rng)
     {
         int digits = 1 + rng.Next(20);
@@ -364,6 +394,10 @@ public class JsonReaderDifferentialTest
         return builder.ToString();
     }
 
+    /// <summary>Verifies random integers.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string[] RandomIntegers(Random rng, int count)
     {
         var result = new string[count];
@@ -390,6 +424,9 @@ public class JsonReaderDifferentialTest
         return result;
     }
 
+    /// <summary>Verifies build random document.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string BuildRandomDocument(Random rng)
     {
         int valueCount = 1 + rng.Next(4);
@@ -399,7 +436,7 @@ public class JsonReaderDifferentialTest
             if (i > 0)
                 builder.Append(',');
 
-            string key = (i & 1) == 0 ? "k" + i : "键" + i;
+            string key = (i & 1) == 0 ? "k" + i : "\u952E" + i;
             builder.Append('"').Append(key).Append("\":");
 
             switch (rng.Next(4))
@@ -422,6 +459,9 @@ public class JsonReaderDifferentialTest
         return builder.Append('}').ToString();
     }
 
+    /// <summary>Verifies random string.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string RandomString(Random rng)
     {
         int length = rng.Next(8);
@@ -437,7 +477,7 @@ public class JsonReaderDifferentialTest
                     builder.Append((char)('0' + rng.Next(10)));
                     break;
                 case 2:
-                    builder.Append('中');
+                    builder.Append('\u4e2d');
                     break;
                 case 3:
                     builder.Append('\\');
@@ -451,9 +491,16 @@ public class JsonReaderDifferentialTest
         return builder.ToString();
     }
 
+    /// <summary>Verifies escape for json.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string EscapeForJson(string value) =>
         value.Replace("\\", "\\\\").Replace("\"", "\\\"");
 
+    /// <summary>Verifies mutate.</summary>
+    /// <param name="json">The json used by this operation.</param>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string Mutate(string json, Random rng)
     {
         if (json.Length == 0)
@@ -473,6 +520,9 @@ public class JsonReaderDifferentialTest
         }
     }
 
+    /// <summary>Verifies flatten strings.</summary>
+    /// <param name="element">The element used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string?[] FlattenStrings(JsonElement element)
     {
         var values = new List<string?>();
@@ -480,6 +530,9 @@ public class JsonReaderDifferentialTest
         return values.ToArray();
     }
 
+    /// <summary>Verifies collect.</summary>
+    /// <param name="element">The element used by this operation.</param>
+    /// <param name="values">The values used by this operation.</param>
     private static void Collect(JsonElement element, List<string?> values)
     {
         switch (element.ValueKind)

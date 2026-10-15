@@ -4,8 +4,11 @@ using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
+/// <summary>Provides collection emitter compile time classification regression functionality.</summary>
 internal static class CollectionEmitterCompileTimeClassificationRegression
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="references">The references used by this operation.</param>
     public static void Run(MetadataReference[] references)
     {
         const string source = """
@@ -116,6 +119,9 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
         AssertDoesNotContain(nullableRead, "RuntimeHelpers.IsReferenceOrContainsReferences", "Closed nullable unmanaged lists retained a runtime branch.");
     }
 
+    /// <summary>Verifies assert list unmanaged.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void AssertListUnmanaged(LuminLocalFieldData field, string scenario)
     {
         string write = Generate(field, ListEmitter.GenerateSerializeCode);
@@ -125,6 +131,9 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
         AssertNoRuntimeClassification(write, read, scenario);
     }
 
+    /// <summary>Verifies assert list managed.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void AssertListManaged(LuminLocalFieldData field, string scenario)
     {
         string write = Generate(field, ListEmitter.GenerateSerializeCode);
@@ -135,6 +144,9 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
         AssertNoRuntimeClassification(write, read, scenario);
     }
 
+    /// <summary>Verifies assert stack unmanaged.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void AssertStackUnmanaged(LuminLocalFieldData field, string scenario)
     {
         string write = Generate(field, StackEmitter.GenerateSerializeCode);
@@ -144,6 +156,9 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
         AssertNoRuntimeClassification(write, read, scenario);
     }
 
+    /// <summary>Verifies assert stack managed.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void AssertStackManaged(LuminLocalFieldData field, string scenario)
     {
         string write = Generate(field, StackEmitter.GenerateSerializeCode);
@@ -154,6 +169,9 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
         AssertNoRuntimeClassification(write, read, scenario);
     }
 
+    /// <summary>Verifies assert queue unmanaged.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void AssertQueueUnmanaged(LuminLocalFieldData field, string scenario)
     {
         string write = Generate(field, QueueEmitter.GenerateSerializeCode);
@@ -163,6 +181,9 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
         AssertNoRuntimeClassification(write, read, scenario);
     }
 
+    /// <summary>Verifies assert queue managed.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void AssertQueueManaged(LuminLocalFieldData field, string scenario)
     {
         string write = Generate(field, QueueEmitter.GenerateSerializeCode);
@@ -173,6 +194,10 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
         AssertNoRuntimeClassification(write, read, scenario);
     }
 
+    /// <summary>Verifies assert concurrent stack clear.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="expected">The expected used by this operation.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void AssertConcurrentStackClear(
         LuminLocalFieldData field, string expected, string scenario)
     {
@@ -181,6 +206,11 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
         AssertDoesNotContain(write, "RuntimeHelpers.IsReferenceOrContainsReferences", scenario + " retained a runtime ArrayPool clearing branch.");
     }
 
+    /// <summary>Verifies assert open fallback.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="writeGenerator">The write generator used by this operation.</param>
+    /// <param name="readGenerator">The read generator used by this operation.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void AssertOpenFallback(
         LuminLocalFieldData field,
         Action<LuminLocalFieldData, StringBuilder> writeGenerator,
@@ -197,12 +227,21 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
             scenario + " must retain its runtime read fallback.");
     }
 
+    /// <summary>Verifies assert no runtime classification.</summary>
+    /// <param name="write">The write used by this operation.</param>
+    /// <param name="read">The read used by this operation.</param>
+    /// <param name="scenario">The scenario used by this operation.</param>
     private static void AssertNoRuntimeClassification(string write, string read, string scenario)
     {
         AssertDoesNotContain(write, "RuntimeHelpers.IsReferenceOrContainsReferences", scenario + " retained a runtime write branch.");
         AssertDoesNotContain(read, "RuntimeHelpers.IsReferenceOrContainsReferences", scenario + " retained a runtime read branch.");
     }
 
+    /// <summary>Obtains the field for the supplied input.</summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="containingType">The containing type used by this operation.</param>
+    /// <param name="fieldName">The field name used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static LuminLocalFieldData GetField(Compilation compilation, string containingType, string fieldName)
     {
         INamedTypeSymbol type = compilation.GetTypeByMetadataName(containingType)
@@ -217,6 +256,10 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
         };
     }
 
+    /// <summary>Captures the source produced by the code emitter under test.</summary>
+    /// <param name="field">The metadata describing the field being processed.</param>
+    /// <param name="generator">The generator used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string Generate(
         LuminLocalFieldData field,
         Action<LuminLocalFieldData, StringBuilder> generator)
@@ -226,6 +269,10 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
         return builder.ToString();
     }
 
+    /// <summary>Verifies assert contains.</summary>
+    /// <param name="text">The text used by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void AssertContains(string text, string expected, string message)
     {
         if (!text.Contains(expected, StringComparison.Ordinal))
@@ -234,6 +281,10 @@ internal static class CollectionEmitterCompileTimeClassificationRegression
         }
     }
 
+    /// <summary>Verifies assert does not contain.</summary>
+    /// <param name="text">The text used by this operation.</param>
+    /// <param name="unexpected">The unexpected used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void AssertDoesNotContain(string text, string unexpected, string message)
     {
         if (text.Contains(unexpected, StringComparison.Ordinal))

@@ -1,33 +1,39 @@
-using System;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 
 namespace LuminPack.Internal
 {
+    /// <summary>Provides xx hash3 functionality.</summary>
     public static class XxHash3
     {
         private const ulong Prime64_1 = 0x9E3779B185EBCA87UL;
         private const ulong Prime64_3 = 0x165667B19E3779F9UL;
-        
+
+        /// <summary>Determines whether h64 utf8 are present.</summary>
+        /// <param name="data">The metadata describing the serializable type.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe ulong Hash64Utf8(ReadOnlySpan<byte> data)
         {
             if (data.Length == 0)
                 return Prime64_3 ^ 11400714819323198485UL ^ 2870177450012600261UL;
-            
+
             ref byte dataRef = ref MemoryMarshal.GetReference(data);
             fixed (byte* ptr = &dataRef)
             {
                 return ComputeHash(ptr, data.Length);
             }
         }
-        
+
+        /// <summary>Determines whether h64 utf16 are present.</summary>
+        /// <param name="chars">The chars used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static unsafe ulong Hash64Utf16(ReadOnlySpan<char> chars)
         {
             if (chars.Length == 0)
                 return Prime64_3 ^ 11400714819323198485UL ^ 2870177450012600261UL;
-            
+
             ref char charRef = ref MemoryMarshal.GetReference(chars);
             ref byte byteRef = ref Unsafe.As<char, byte>(ref charRef);
             fixed (byte* ptr = &byteRef)
@@ -35,13 +41,17 @@ namespace LuminPack.Internal
                 return ComputeHash(ptr, chars.Length * 2);
             }
         }
-        
+
+        /// <summary>Performs the compute hash step for the current operation.</summary>
+        /// <param name="input">The input data to process.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe ulong ComputeHash(byte* input, int length)
         {
             if (length == 0)
                 return Prime64_3 ^ 11400714819323198485UL ^ 2870177450012600261UL;
-                
+
             if (length <= 16)
             {
                 if (length > 8)
@@ -54,7 +64,7 @@ namespace LuminPack.Internal
                     hash ^= hash >> 32;
                     return hash;
                 }
-                
+
                 if (length >= 4)
                 {
                     ulong val1 = *(uint*)input;
@@ -65,7 +75,7 @@ namespace LuminPack.Internal
                     hash ^= hash >> 32;
                     return hash;
                 }
-                
+
                 byte c1 = input[0];
                 byte c2 = input[length >> 1];
                 byte c3 = input[length - 1];
@@ -76,11 +86,11 @@ namespace LuminPack.Internal
                 hash2 ^= hash2 >> 32;
                 return hash2;
             }
-            
+
             ulong acc = (ulong)length * Prime64_1;
             int remaining = length;
             byte* ptr = input;
-            
+
             while (remaining >= 16)
             {
                 ulong v1 = *(ulong*)ptr;
@@ -90,7 +100,7 @@ namespace LuminPack.Internal
                 ptr += 16;
                 remaining -= 16;
             }
-            
+
             if (remaining > 0)
             {
                 if (remaining >= 8)
@@ -112,7 +122,7 @@ namespace LuminPack.Internal
                     remaining--;
                 }
             }
-            
+
             acc ^= acc >> 37;
             acc *= Prime64_3;
             acc ^= acc >> 32;

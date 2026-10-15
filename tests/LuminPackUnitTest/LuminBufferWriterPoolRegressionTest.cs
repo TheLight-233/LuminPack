@@ -4,8 +4,11 @@ using LuminPack.Utility;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides lumin buffer writer pool regression test functionality.</summary>
 internal static class LuminBufferWriterPoolRegressionTest
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(TlsRoundTripResetsAndReusesWriter), TlsRoundTripResetsAndReusesWriter);
@@ -16,6 +19,7 @@ internal static class LuminBufferWriterPoolRegressionTest
         RunCase(results, nameof(WriterPoolNeverDoubleRentsOrReturnsDisposedWriter), WriterPoolNeverDoubleRentsOrReturnsDisposedWriter);
     }
 
+    /// <summary>Verifies tls round trip resets and reuses writer.</summary>
     private static void TlsRoundTripResetsAndReusesWriter()
     {
         ClearPool();
@@ -32,6 +36,7 @@ internal static class LuminBufferWriterPoolRegressionTest
         ClearPool();
     }
 
+    /// <summary>Verifies tls hot path allocates nothing.</summary>
     private static void TlsHotPathAllocatesNothing()
     {
         ClearPool();
@@ -56,6 +61,7 @@ internal static class LuminBufferWriterPoolRegressionTest
         ClearPool();
     }
 
+    /// <summary>Verifies central slots are bounded and unordered.</summary>
     private static void CentralSlotsAreBoundedAndUnordered()
     {
         ClearPool();
@@ -92,6 +98,7 @@ internal static class LuminBufferWriterPoolRegressionTest
         ClearPool();
     }
 
+    /// <summary>Verifies oversized writer is disposed instead of cached.</summary>
     private static void OversizedWriterIsDisposedInsteadOfCached()
     {
         ClearPool();
@@ -110,6 +117,7 @@ internal static class LuminBufferWriterPoolRegressionTest
         ClearPool();
     }
 
+    /// <summary>Verifies atomic slots never duplicate an item.</summary>
     private static void AtomicSlotsNeverDuplicateAnItem()
     {
         var pool = new AtomicSlotPool<SlotItem>(32);
@@ -135,6 +143,7 @@ internal static class LuminBufferWriterPoolRegressionTest
         pool.Drain(static _ => { });
     }
 
+    /// <summary>Writes r pool never double rents or returns disposed writer to the current output.</summary>
     private static void WriterPoolNeverDoubleRentsOrReturnsDisposedWriter()
     {
         ClearPool();
@@ -183,26 +192,40 @@ internal static class LuminBufferWriterPoolRegressionTest
         ClearPool();
     }
 
+    /// <summary>Verifies clear pool.</summary>
     private static void ClearPool()
     {
         LuminBufferWriterPool.ClearThreadLocalCache();
         LuminBufferWriterPool.ClearCentralCache();
     }
 
+    /// <summary>Provides slot item functionality.</summary>
     private sealed class SlotItem
     {
         internal int InUse;
     }
 
+    /// <summary>Provides reference comparer functionality.</summary>
     private sealed class ReferenceComparer : IEqualityComparer<LuminBufferWriter>
     {
         internal static readonly ReferenceComparer Instance = new();
 
+        /// <summary>Determines whether the supplied value is equal to the current value.</summary>
+        /// <param name="x">The x used by this operation.</param>
+        /// <param name="y">The y used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         public bool Equals(LuminBufferWriter? x, LuminBufferWriter? y) => ReferenceEquals(x, y);
 
+        /// <summary>Computes the hash code used by the configured lookup or equality strategy.</summary>
+        /// <param name="obj">The obj used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         public int GetHashCode(LuminBufferWriter obj) => RuntimeHelpers.GetHashCode(obj);
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -216,6 +239,9 @@ internal static class LuminBufferWriterPoolRegressionTest
         }
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)

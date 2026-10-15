@@ -1,7 +1,4 @@
-using System;
 using System.Buffers;
-using System.Collections.Generic;
-using System.Linq;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Jobs;
@@ -18,13 +15,73 @@ namespace LuminPackBenchmark;
 #nullable disable
 
 
-public enum CharacterClass : int { Warrior = 0, Mage = 1, Rogue = 2, Paladin = 3, Ranger = 4 }
-public enum EquipSlot    : int { Head = 0, Chest = 1, Legs = 2, Boots = 3, Weapon = 4, Offhand = 5, Ring = 6, Amulet = 7 }
-public enum BuffType     : int { Strength = 0, Defense = 1, Speed = 2, Regen = 3, Critical = 4 }
-public enum SkillTier    : byte { Common = 0, Rare = 1, Epic = 2, Legendary = 3 }
-public enum EventCategory : int { Combat = 0, Crafting = 1, Trade = 2, Social = 3, System = 4 }
+/// <summary>Provides character class functionality.</summary>
+public enum CharacterClass : int {
+/// <summary>Specifies warrior.</summary>
+Warrior = 0,
+/// <summary>Specifies mage.</summary>
+Mage = 1,
+/// <summary>Specifies rogue.</summary>
+Rogue = 2,
+/// <summary>Specifies paladin.</summary>
+Paladin = 3,
+/// <summary>Specifies ranger.</summary>
+Ranger = 4 }
+/// <summary>Provides equip slot functionality.</summary>
+public enum EquipSlot : int {
+/// <summary>Specifies head.</summary>
+Head = 0,
+/// <summary>Specifies chest.</summary>
+Chest = 1,
+/// <summary>Specifies legs.</summary>
+Legs = 2,
+/// <summary>Specifies boots.</summary>
+Boots = 3,
+/// <summary>Specifies weapon.</summary>
+Weapon = 4,
+/// <summary>Specifies offhand.</summary>
+Offhand = 5,
+/// <summary>Specifies ring.</summary>
+Ring = 6,
+/// <summary>Specifies amulet.</summary>
+Amulet = 7 }
+/// <summary>Provides buff type functionality.</summary>
+public enum BuffType : int {
+/// <summary>Specifies strength.</summary>
+Strength = 0,
+/// <summary>Specifies defense.</summary>
+Defense = 1,
+/// <summary>Specifies speed.</summary>
+Speed = 2,
+/// <summary>Specifies regen.</summary>
+Regen = 3,
+/// <summary>Specifies critical.</summary>
+Critical = 4 }
+/// <summary>Provides skill tier functionality.</summary>
+public enum SkillTier : byte {
+/// <summary>Specifies common.</summary>
+Common = 0,
+/// <summary>Specifies rare.</summary>
+Rare = 1,
+/// <summary>Specifies epic.</summary>
+Epic = 2,
+/// <summary>Specifies legendary.</summary>
+Legendary = 3 }
+/// <summary>Provides event category functionality.</summary>
+public enum EventCategory : int {
+/// <summary>Specifies combat.</summary>
+Combat = 0,
+/// <summary>Specifies crafting.</summary>
+Crafting = 1,
+/// <summary>Specifies trade.</summary>
+Trade = 2,
+/// <summary>Specifies social.</summary>
+Social = 3,
+/// <summary>Specifies system.</summary>
+System = 4 }
 
 
+/// <summary>Provides item base functionality.</summary>
 [LuminPackable]
 [MemoryPackable]
 [MemoryPackUnion(0, typeof(WeaponItem))]
@@ -43,179 +100,291 @@ public enum EventCategory : int { Combat = 0, Crafting = 1, Trade = 2, Social = 
 [Union(6, typeof(RelicItem))]
 [NinoType]
 [System.Text.Json.Serialization.JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(WeaponItem),      "WeaponItem")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(ArmorItem),       "ArmorItem")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(ConsumableItem),  "ConsumableItem")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(MountItem),       "MountItem")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(QuestItem),       "QuestItem")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(PetItem),         "PetItem")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(RelicItem),       "RelicItem")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(WeaponItem), "WeaponItem")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(ArmorItem), "ArmorItem")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(ConsumableItem), "ConsumableItem")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(MountItem), "MountItem")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(QuestItem), "QuestItem")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(PetItem), "PetItem")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(RelicItem), "RelicItem")]
 public abstract partial class ItemBase
 {
-    [Key(0)] public int    ItemId;
+    /// <summary>Stores the item id.</summary>
+    [Key(0)] public int ItemId;
+    /// <summary>Stores the item name.</summary>
     [Key(1)] public string ItemName;
-    [Key(2)] public int    Rarity;
-    [Key(3)] public long   ObtainedAt;
-    [Key(4)] public bool   IsLocked;
+    /// <summary>Stores the rarity.</summary>
+    [Key(2)] public int Rarity;
+    /// <summary>Stores the obtained at.</summary>
+    [Key(3)] public long ObtainedAt;
+    /// <summary>Stores the is locked.</summary>
+    [Key(4)] public bool IsLocked;
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides weapon item functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class WeaponItem : ItemBase
 {
-    [Key(5)]  public float    AttackPower;
-    [Key(6)]  public float    CritRate;
-    [Key(7)]  public int      Durability;
-    [Key(8)]  public EquipSlot Slot;
-    [Key(9)]  public string   GemSocketA;
-    [Key(10)] public string   GemSocketB;
+    /// <summary>Stores the attack power.</summary>
+    [Key(5)] public float AttackPower;
+    /// <summary>Stores the crit rate.</summary>
+    [Key(6)] public float CritRate;
+    /// <summary>Stores the durability.</summary>
+    [Key(7)] public int Durability;
+    /// <summary>Stores the slot.</summary>
+    [Key(8)] public EquipSlot Slot;
+    /// <summary>Stores the gem socket a.</summary>
+    [Key(9)] public string GemSocketA;
+    /// <summary>Stores the gem socket b.</summary>
+    [Key(10)] public string GemSocketB;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static WeaponItem Create(Random rng, int id) => new()
     {
-        ItemId = id, ItemName = $"Weapon_{id:D3}", Rarity = rng.Next(1, 6),
+        ItemId = id,
+        ItemName = $"Weapon_{id:D3}",
+        Rarity = rng.Next(1, 6),
         ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 100000),
         IsLocked = id % 4 == 0,
         AttackPower = (float)Math.Round(rng.NextDouble() * 5000, 2),
-        CritRate    = (float)Math.Round(rng.NextDouble() * 0.5, 4),
-        Durability  = rng.Next(0, 100),
-        Slot        = rng.Next(2) == 0 ? EquipSlot.Weapon : EquipSlot.Offhand,
-        GemSocketA  = rng.Next(2) == 0 ? $"Gem_{rng.Next(1, 20)}" : null,
-        GemSocketB  = rng.Next(3) == 0 ? $"Gem_{rng.Next(1, 20)}" : null,
+        CritRate = (float)Math.Round(rng.NextDouble() * 0.5, 4),
+        Durability = rng.Next(0, 100),
+        Slot = rng.Next(2) == 0 ? EquipSlot.Weapon : EquipSlot.Offhand,
+        GemSocketA = rng.Next(2) == 0 ? $"Gem_{rng.Next(1, 20)}" : null,
+        GemSocketB = rng.Next(3) == 0 ? $"Gem_{rng.Next(1, 20)}" : null,
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides armor item functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class ArmorItem : ItemBase
 {
-    [Key(5)] public float    Defense;
-    [Key(6)] public float    MagicResist;
-    [Key(7)] public int      Durability;
+    /// <summary>Stores the defense.</summary>
+    [Key(5)] public float Defense;
+    /// <summary>Stores the magic resist.</summary>
+    [Key(6)] public float MagicResist;
+    /// <summary>Stores the durability.</summary>
+    [Key(7)] public int Durability;
+    /// <summary>Stores the slot.</summary>
     [Key(8)] public EquipSlot Slot;
-    [Key(9)] public int      SetId;
+    /// <summary>Stores the set id.</summary>
+    [Key(9)] public int SetId;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static ArmorItem Create(Random rng, int id) => new()
     {
-        ItemId = id + 1000, ItemName = $"Armor_{id:D3}", Rarity = rng.Next(1, 6),
+        ItemId = id + 1000,
+        ItemName = $"Armor_{id:D3}",
+        Rarity = rng.Next(1, 6),
         ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 100000),
         IsLocked = id % 5 == 0,
-        Defense     = (float)Math.Round(rng.NextDouble() * 3000, 2),
+        Defense = (float)Math.Round(rng.NextDouble() * 3000, 2),
         MagicResist = (float)Math.Round(rng.NextDouble() * 2000, 2),
-        Durability  = rng.Next(0, 100),
-        Slot        = (EquipSlot)(id % 4),
-        SetId       = rng.Next(0, 10),
+        Durability = rng.Next(0, 100),
+        Slot = (EquipSlot)(id % 4),
+        SetId = rng.Next(0, 10),
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides consumable item functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class ConsumableItem : ItemBase
 {
-    [Key(5)] public int    Count;
-    [Key(6)] public int    MaxStack;
-    [Key(7)] public float  HealAmount;
-    [Key(8)] public float  ManaAmount;
+    /// <summary>Stores the count.</summary>
+    [Key(5)] public int Count;
+    /// <summary>Stores the max stack.</summary>
+    [Key(6)] public int MaxStack;
+    /// <summary>Stores the heal amount.</summary>
+    [Key(7)] public float HealAmount;
+    /// <summary>Stores the mana amount.</summary>
+    [Key(8)] public float ManaAmount;
+    /// <summary>Stores the effect.</summary>
     [Key(9)] public string Effect;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static ConsumableItem Create(Random rng, int id) => new()
     {
-        ItemId = id + 2000, ItemName = $"Potion_{id:D3}", Rarity = rng.Next(1, 4),
+        ItemId = id + 2000,
+        ItemName = $"Potion_{id:D3}",
+        Rarity = rng.Next(1, 4),
         ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 50000),
         IsLocked = false,
-        Count = rng.Next(1, 99), MaxStack = 99,
+        Count = rng.Next(1, 99),
+        MaxStack = 99,
         HealAmount = (float)Math.Round(rng.NextDouble() * 1000, 1),
         ManaAmount = (float)Math.Round(rng.NextDouble() * 500, 1),
         Effect = rng.Next(2) == 0 ? "Haste" : null,
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides mount item functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class MountItem : ItemBase
 {
-    [Key(5)] public float  SpeedBonus;
-    [Key(6)] public bool   CanFly;
+    /// <summary>Stores the speed bonus.</summary>
+    [Key(5)] public float SpeedBonus;
+    /// <summary>Stores the can fly.</summary>
+    [Key(6)] public bool CanFly;
+    /// <summary>Stores the mount skin.</summary>
     [Key(7)] public string MountSkin;
-    [Key(8)] public int    StaminaPool;
+    /// <summary>Stores the stamina pool.</summary>
+    [Key(8)] public int StaminaPool;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static MountItem Create(Random rng, int id) => new()
     {
-        ItemId = id + 3000, ItemName = $"Mount_{id:D3}", Rarity = rng.Next(3, 6),
+        ItemId = id + 3000,
+        ItemName = $"Mount_{id:D3}",
+        Rarity = rng.Next(3, 6),
         ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 200000),
         IsLocked = true,
-        SpeedBonus  = (float)Math.Round(rng.NextDouble() * 0.6 + 0.2, 3),
-        CanFly      = rng.Next(3) == 0,
-        MountSkin   = $"Skin_{rng.Next(1, 30)}",
+        SpeedBonus = (float)Math.Round(rng.NextDouble() * 0.6 + 0.2, 3),
+        CanFly = rng.Next(3) == 0,
+        MountSkin = $"Skin_{rng.Next(1, 30)}",
         StaminaPool = rng.Next(100, 500),
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides quest item functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class QuestItem : ItemBase
 {
-    [Key(5)] public int    QuestId;
+    /// <summary>Stores the quest id.</summary>
+    [Key(5)] public int QuestId;
+    /// <summary>Stores the objective name.</summary>
     [Key(6)] public string ObjectiveName;
-    [Key(7)] public bool   IsKeyItem;
-    [Key(8)] public int    RequiredCount;
+    /// <summary>Stores the is key item.</summary>
+    [Key(7)] public bool IsKeyItem;
+    /// <summary>Stores the required count.</summary>
+    [Key(8)] public int RequiredCount;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static QuestItem Create(Random rng, int id) => new()
     {
-        ItemId = id + 4000, ItemName = $"QuestItem_{id:D3}", Rarity = 1,
+        ItemId = id + 4000,
+        ItemName = $"QuestItem_{id:D3}",
+        Rarity = 1,
         ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 30000),
         IsLocked = true,
-        QuestId       = rng.Next(1, 200),
+        QuestId = rng.Next(1, 200),
         ObjectiveName = $"Collect_{id}_DragonScale",
-        IsKeyItem     = id % 3 == 0,
+        IsKeyItem = id % 3 == 0,
         RequiredCount = rng.Next(1, 10),
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides pet item functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class PetItem : ItemBase
 {
+    /// <summary>Stores the pet name.</summary>
     [Key(5)] public string PetName;
-    [Key(6)] public int    Loyalty;
-    [Key(7)] public float  ExpMultiplier;
-    [Key(8)] public int    PetLevel;
-    [Key(9)] public bool   IsAwakened;
+    /// <summary>Stores the loyalty.</summary>
+    [Key(6)] public int Loyalty;
+    /// <summary>Stores the exp multiplier.</summary>
+    [Key(7)] public float ExpMultiplier;
+    /// <summary>Stores the pet level.</summary>
+    [Key(8)] public int PetLevel;
+    /// <summary>Stores the is awakened.</summary>
+    [Key(9)] public bool IsAwakened;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static PetItem Create(Random rng, int id) => new()
     {
-        ItemId = id + 5000, ItemName = $"Pet_{id:D3}", Rarity = rng.Next(2, 6),
+        ItemId = id + 5000,
+        ItemName = $"Pet_{id:D3}",
+        Rarity = rng.Next(2, 6),
         ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 500000),
         IsLocked = rng.Next(2) == 0,
-        PetName       = $"Spirit_{id}",
-        Loyalty       = rng.Next(0, 100),
+        PetName = $"Spirit_{id}",
+        Loyalty = rng.Next(0, 100),
         ExpMultiplier = (float)Math.Round(1.0 + rng.NextDouble() * 2.0, 2),
-        PetLevel      = rng.Next(1, 50),
-        IsAwakened    = rng.Next(4) == 0,
+        PetLevel = rng.Next(1, 50),
+        IsAwakened = rng.Next(4) == 0,
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides relic item functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class RelicItem : ItemBase
 {
-    [Key(5)] public int    SetId;
-    [Key(6)] public float  PowerLevel;
-    [Key(7)] public int    SocketCount;
+    /// <summary>Stores the set id.</summary>
+    [Key(5)] public int SetId;
+    /// <summary>Stores the power level.</summary>
+    [Key(6)] public float PowerLevel;
+    /// <summary>Stores the socket count.</summary>
+    [Key(7)] public int SocketCount;
+    /// <summary>Stores the main stat.</summary>
     [Key(8)] public string MainStat;
+    /// <summary>Stores the sub stat a.</summary>
     [Key(9)] public string SubStatA;
+    /// <summary>Stores the sub stat b.</summary>
     [Key(10)] public string SubStatB;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static RelicItem Create(Random rng, int id) => new()
     {
-        ItemId = id + 6000, ItemName = $"Relic_{id:D3}", Rarity = rng.Next(3, 6),
+        ItemId = id + 6000,
+        ItemName = $"Relic_{id:D3}",
+        Rarity = rng.Next(3, 6),
         ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 300000),
         IsLocked = rng.Next(2) == 0,
-        SetId       = rng.Next(0, 20),
-        PowerLevel  = (float)Math.Round(rng.NextDouble() * 100, 2),
+        SetId = rng.Next(0, 20),
+        PowerLevel = (float)Math.Round(rng.NextDouble() * 100, 2),
         SocketCount = rng.Next(0, 4),
-        MainStat    = $"ATK+{rng.Next(100, 999)}",
-        SubStatA    = $"HP+{rng.Next(50, 500)}",
-        SubStatB    = rng.Next(2) == 0 ? $"CritRate+{rng.Next(1, 10)}%" : null,
+        MainStat = $"ATK+{rng.Next(100, 999)}",
+        SubStatA = $"HP+{rng.Next(50, 500)}",
+        SubStatB = rng.Next(2) == 0 ? $"CritRate+{rng.Next(1, 10)}%" : null,
     };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// 多态层2：技能（4种子类）
+// Polymorphism level 2: skills with four derived types.
 // ────────────────────────────────────────────────────────────────────────────
 
+/// <summary>Provides skill base functionality.</summary>
 [LuminPackable]
 [MemoryPackable]
 [MemoryPackUnion(0, typeof(ActiveSkill))]
@@ -228,103 +397,171 @@ public sealed partial class RelicItem : ItemBase
 [Union(3, typeof(SupportSkill))]
 [NinoType]
 [System.Text.Json.Serialization.JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(ActiveSkill),   "ActiveSkill")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(PassiveSkill),  "PassiveSkill")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(ActiveSkill), "ActiveSkill")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(PassiveSkill), "PassiveSkill")]
 [System.Text.Json.Serialization.JsonDerivedType(typeof(UltimateSkill), "UltimateSkill")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(SupportSkill),  "SupportSkill")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(SupportSkill), "SupportSkill")]
 public abstract partial class SkillBase
 {
-    [Key(0)] public int       SkillId;
-    [Key(1)] public string    SkillName;
-    [Key(2)] public int       Level;
+    /// <summary>Stores the skill id.</summary>
+    [Key(0)] public int SkillId;
+    /// <summary>Stores the skill name.</summary>
+    [Key(1)] public string SkillName;
+    /// <summary>Stores the level.</summary>
+    [Key(2)] public int Level;
+    /// <summary>Stores the tier.</summary>
     [Key(3)] public SkillTier Tier;
-    [Key(4)] public bool      IsUnlocked;
+    /// <summary>Stores the is unlocked.</summary>
+    [Key(4)] public bool IsUnlocked;
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides active skill functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class ActiveSkill : SkillBase
 {
-    [Key(5)] public float  CastTime;
-    [Key(6)] public float  Cooldown;
-    [Key(7)] public int    ManaCost;
+    /// <summary>Stores the cast time.</summary>
+    [Key(5)] public float CastTime;
+    /// <summary>Stores the cooldown.</summary>
+    [Key(6)] public float Cooldown;
+    /// <summary>Stores the mana cost.</summary>
+    [Key(7)] public int ManaCost;
+    /// <summary>Stores the target type.</summary>
     [Key(8)] public string TargetType;
-    [Key(9)] public float  BaseDamage;
+    /// <summary>Stores the base damage.</summary>
+    [Key(9)] public float BaseDamage;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static ActiveSkill Create(Random rng, int id) => new()
     {
-        SkillId = id, SkillName = $"Active_{id}", Level = rng.Next(1, 10),
-        Tier = (SkillTier)(id % 4), IsUnlocked = rng.Next(2) == 0,
-        CastTime   = (float)Math.Round(rng.NextDouble() * 3, 2),
-        Cooldown   = (float)Math.Round(rng.NextDouble() * 30, 1),
-        ManaCost   = rng.Next(10, 300),
+        SkillId = id,
+        SkillName = $"Active_{id}",
+        Level = rng.Next(1, 10),
+        Tier = (SkillTier)(id % 4),
+        IsUnlocked = rng.Next(2) == 0,
+        CastTime = (float)Math.Round(rng.NextDouble() * 3, 2),
+        Cooldown = (float)Math.Round(rng.NextDouble() * 30, 1),
+        ManaCost = rng.Next(10, 300),
         TargetType = rng.Next(2) == 0 ? "Single" : "AOE",
         BaseDamage = (float)Math.Round(rng.NextDouble() * 5000 + 100, 2),
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides passive skill functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class PassiveSkill : SkillBase
 {
-    [Key(5)] public float  TriggerChance;
+    /// <summary>Stores the trigger chance.</summary>
+    [Key(5)] public float TriggerChance;
+    /// <summary>Stores the trigger condition.</summary>
     [Key(6)] public string TriggerCondition;
-    [Key(7)] public float  StatBonus;
+    /// <summary>Stores the stat bonus.</summary>
+    [Key(7)] public float StatBonus;
+    /// <summary>Stores the affected stat.</summary>
     [Key(8)] public string AffectedStat;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static PassiveSkill Create(Random rng, int id) => new()
     {
-        SkillId = id + 100, SkillName = $"Passive_{id}", Level = rng.Next(1, 5),
-        Tier = (SkillTier)(id % 4), IsUnlocked = true,
-        TriggerChance    = (float)Math.Round(rng.NextDouble() * 0.5, 3),
+        SkillId = id + 100,
+        SkillName = $"Passive_{id}",
+        Level = rng.Next(1, 5),
+        Tier = (SkillTier)(id % 4),
+        IsUnlocked = true,
+        TriggerChance = (float)Math.Round(rng.NextDouble() * 0.5, 3),
         TriggerCondition = rng.Next(2) == 0 ? "OnHit" : "OnKill",
-        StatBonus        = (float)Math.Round(rng.NextDouble() * 30, 2),
-        AffectedStat     = rng.Next(2) == 0 ? "ATK" : "DEF",
+        StatBonus = (float)Math.Round(rng.NextDouble() * 30, 2),
+        AffectedStat = rng.Next(2) == 0 ? "ATK" : "DEF",
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides ultimate skill functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class UltimateSkill : SkillBase
 {
-    [Key(5)] public float  ChargeRate;
-    [Key(6)] public int    ChargeMax;
-    [Key(7)] public float  UltimateDamage;
-    [Key(8)] public int    ActiveDuration;
-    [Key(9)] public bool   HasTransformation;
+    /// <summary>Stores the charge rate.</summary>
+    [Key(5)] public float ChargeRate;
+    /// <summary>Stores the charge max.</summary>
+    [Key(6)] public int ChargeMax;
+    /// <summary>Stores the ultimate damage.</summary>
+    [Key(7)] public float UltimateDamage;
+    /// <summary>Stores the active duration.</summary>
+    [Key(8)] public int ActiveDuration;
+    /// <summary>Stores the has transformation.</summary>
+    [Key(9)] public bool HasTransformation;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static UltimateSkill Create(Random rng, int id) => new()
     {
-        SkillId = id + 200, SkillName = $"Ultimate_{id}", Level = rng.Next(1, 3),
-        Tier = SkillTier.Legendary, IsUnlocked = rng.Next(3) == 0,
-        ChargeRate        = (float)Math.Round(rng.NextDouble() * 10 + 1, 2),
-        ChargeMax         = rng.Next(50, 200),
-        UltimateDamage    = (float)Math.Round(rng.NextDouble() * 20000 + 5000, 2),
-        ActiveDuration    = rng.Next(5, 30),
+        SkillId = id + 200,
+        SkillName = $"Ultimate_{id}",
+        Level = rng.Next(1, 3),
+        Tier = SkillTier.Legendary,
+        IsUnlocked = rng.Next(3) == 0,
+        ChargeRate = (float)Math.Round(rng.NextDouble() * 10 + 1, 2),
+        ChargeMax = rng.Next(50, 200),
+        UltimateDamage = (float)Math.Round(rng.NextDouble() * 20000 + 5000, 2),
+        ActiveDuration = rng.Next(5, 30),
         HasTransformation = rng.Next(2) == 0,
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides support skill functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class SupportSkill : SkillBase
 {
-    [Key(5)] public float  HealPower;
-    [Key(6)] public float  ShieldAmount;
-    [Key(7)] public int    BuffDuration;
+    /// <summary>Stores the heal power.</summary>
+    [Key(5)] public float HealPower;
+    /// <summary>Stores the shield amount.</summary>
+    [Key(6)] public float ShieldAmount;
+    /// <summary>Stores the buff duration.</summary>
+    [Key(7)] public int BuffDuration;
+    /// <summary>Stores the applied buff.</summary>
     [Key(8)] public string AppliedBuff;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static SupportSkill Create(Random rng, int id) => new()
     {
-        SkillId = id + 300, SkillName = $"Support_{id}", Level = rng.Next(1, 8),
-        Tier = (SkillTier)(id % 3), IsUnlocked = rng.Next(2) == 0,
-        HealPower    = (float)Math.Round(rng.NextDouble() * 3000, 2),
+        SkillId = id + 300,
+        SkillName = $"Support_{id}",
+        Level = rng.Next(1, 8),
+        Tier = (SkillTier)(id % 3),
+        IsUnlocked = rng.Next(2) == 0,
+        HealPower = (float)Math.Round(rng.NextDouble() * 3000, 2),
         ShieldAmount = (float)Math.Round(rng.NextDouble() * 2000, 2),
         BuffDuration = rng.Next(5, 60),
-        AppliedBuff  = rng.Next(2) == 0 ? "Regeneration" : "Barrier",
+        AppliedBuff = rng.Next(2) == 0 ? "Regeneration" : "Barrier",
     };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// 多态层3：事件日志（4种子类）
+// Polymorphism level 3: event logs with four derived types.
 // ────────────────────────────────────────────────────────────────────────────
 
+/// <summary>Provides event log base functionality.</summary>
 [LuminPackable]
 [MemoryPackable]
 [MemoryPackUnion(0, typeof(CombatEventLog))]
@@ -337,183 +574,295 @@ public sealed partial class SupportSkill : SkillBase
 [Union(3, typeof(AchievementEventLog))]
 [NinoType]
 [System.Text.Json.Serialization.JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(CombatEventLog),      "CombatEventLog")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(CraftingEventLog),     "CraftingEventLog")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(TradeEventLog),        "TradeEventLog")]
-[System.Text.Json.Serialization.JsonDerivedType(typeof(AchievementEventLog),  "AchievementEventLog")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(CombatEventLog), "CombatEventLog")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(CraftingEventLog), "CraftingEventLog")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(TradeEventLog), "TradeEventLog")]
+[System.Text.Json.Serialization.JsonDerivedType(typeof(AchievementEventLog), "AchievementEventLog")]
 public abstract partial class EventLogBase
 {
-    [Key(0)] public long          Timestamp;
+    /// <summary>Stores the timestamp.</summary>
+    [Key(0)] public long Timestamp;
+    /// <summary>Stores the category.</summary>
     [Key(1)] public EventCategory Category;
-    [Key(2)] public string        Summary;
+    /// <summary>Stores the summary.</summary>
+    [Key(2)] public string Summary;
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides combat event log functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class CombatEventLog : EventLogBase
 {
-    [Key(3)] public int    TargetId;
-    [Key(4)] public int    DamageDealt;
-    [Key(5)] public bool   IsCritical;
+    /// <summary>Stores the target id.</summary>
+    [Key(3)] public int TargetId;
+    /// <summary>Stores the damage dealt.</summary>
+    [Key(4)] public int DamageDealt;
+    /// <summary>Stores the is critical.</summary>
+    [Key(5)] public bool IsCritical;
+    /// <summary>Stores the skill used.</summary>
     [Key(6)] public string SkillUsed;
-    [Key(7)] public bool   IsKillingBlow;
+    /// <summary>Stores the is killing blow.</summary>
+    [Key(7)] public bool IsKillingBlow;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static CombatEventLog Create(Random rng, int id) => new()
     {
         Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 86400),
-        Category  = EventCategory.Combat,
-        Summary   = $"Combat with Enemy_{id}",
-        TargetId  = rng.Next(1, 9999),
-        DamageDealt    = rng.Next(100, 99999),
-        IsCritical     = rng.Next(4) == 0,
-        SkillUsed      = $"Skill_{rng.Next(1, 50)}",
-        IsKillingBlow  = rng.Next(3) == 0,
+        Category = EventCategory.Combat,
+        Summary = $"Combat with Enemy_{id}",
+        TargetId = rng.Next(1, 9999),
+        DamageDealt = rng.Next(100, 99999),
+        IsCritical = rng.Next(4) == 0,
+        SkillUsed = $"Skill_{rng.Next(1, 50)}",
+        IsKillingBlow = rng.Next(3) == 0,
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides crafting event log functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class CraftingEventLog : EventLogBase
 {
-    [Key(3)] public int    RecipeId;
+    /// <summary>Stores the recipe id.</summary>
+    [Key(3)] public int RecipeId;
+    /// <summary>Stores the item name.</summary>
     [Key(4)] public string ItemName;
-    [Key(5)] public bool   Success;
-    [Key(6)] public int    MaterialsUsed;
+    /// <summary>Stores the success.</summary>
+    [Key(5)] public bool Success;
+    /// <summary>Stores the materials used.</summary>
+    [Key(6)] public int MaterialsUsed;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static CraftingEventLog Create(Random rng, int id) => new()
     {
         Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 86400),
-        Category  = EventCategory.Crafting,
-        Summary   = $"Crafted item #{id}",
-        RecipeId      = rng.Next(1, 500),
-        ItemName      = $"CraftedItem_{id}",
-        Success       = rng.Next(5) != 0,
+        Category = EventCategory.Crafting,
+        Summary = $"Crafted item #{id}",
+        RecipeId = rng.Next(1, 500),
+        ItemName = $"CraftedItem_{id}",
+        Success = rng.Next(5) != 0,
         MaterialsUsed = rng.Next(1, 10),
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides trade event log functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class TradeEventLog : EventLogBase
 {
-    [Key(3)] public int    PartnerId;
-    [Key(4)] public long   GoldAmount;
-    [Key(5)] public int[]  ItemIds;
-    [Key(6)] public bool   IsPlayerInitiated;
+    /// <summary>Stores the partner id.</summary>
+    [Key(3)] public int PartnerId;
+    /// <summary>Stores the gold amount.</summary>
+    [Key(4)] public long GoldAmount;
+    /// <summary>Stores the item ids.</summary>
+    [Key(5)] public int[] ItemIds;
+    /// <summary>Stores the is player initiated.</summary>
+    [Key(6)] public bool IsPlayerInitiated;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static TradeEventLog Create(Random rng, int id) => new()
     {
         Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 86400),
-        Category  = EventCategory.Trade,
-        Summary   = $"Trade with Player_{id}",
-        PartnerId         = rng.Next(100000, 999999),
-        GoldAmount        = rng.Next(0, 100000),
-        ItemIds           = Enumerable.Range(0, rng.Next(1, 5)).Select(_ => rng.Next(1, 9999)).ToArray(),
+        Category = EventCategory.Trade,
+        Summary = $"Trade with Player_{id}",
+        PartnerId = rng.Next(100000, 999999),
+        GoldAmount = rng.Next(0, 100000),
+        ItemIds = Enumerable.Range(0, rng.Next(1, 5)).Select(_ => rng.Next(1, 9999)).ToArray(),
         IsPlayerInitiated = rng.Next(2) == 0,
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides achievement event log functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class AchievementEventLog : EventLogBase
 {
-    [Key(3)] public int    AchievementId;
+    /// <summary>Stores the achievement id.</summary>
+    [Key(3)] public int AchievementId;
+    /// <summary>Stores the achievement name.</summary>
     [Key(4)] public string AchievementName;
-    [Key(5)] public int    RewardGold;
-    [Key(6)] public int    RewardDiamond;
+    /// <summary>Stores the reward gold.</summary>
+    [Key(5)] public int RewardGold;
+    /// <summary>Stores the reward diamond.</summary>
+    [Key(6)] public int RewardDiamond;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static AchievementEventLog Create(Random rng, int id) => new()
     {
         Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 86400),
-        Category  = EventCategory.System,
-        Summary   = $"Achievement unlocked #{id}",
-        AchievementId   = rng.Next(1, 1000),
+        Category = EventCategory.System,
+        Summary = $"Achievement unlocked #{id}",
+        AchievementId = rng.Next(1, 1000),
         AchievementName = $"Achievement_{id}_Complete",
-        RewardGold      = rng.Next(0, 10000),
-        RewardDiamond   = rng.Next(0, 100),
+        RewardGold = rng.Next(0, 10000),
+        RewardDiamond = rng.Next(0, 100),
     };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// 泛型：Envelope<T>（用于包装快照数据）
+// Envelope<T> wraps snapshot data.
 // ────────────────────────────────────────────────────────────────────────────
 
+/// <summary>Provides envelope functionality.</summary>
+/// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
 [LuminPackable]
 [MemoryPackable]
 [MessagePackObject]
 [NinoType]
 public sealed partial class Envelope<T>
 {
-    [Key(0)] public long   Timestamp;
+    /// <summary>Stores the timestamp.</summary>
+    [Key(0)] public long Timestamp;
+    /// <summary>Stores the tag.</summary>
     [Key(1)] public string Tag;
-    [Key(2)] public int    Version;
-    [Key(3)] public T      Payload;
+    /// <summary>Stores the version.</summary>
+    [Key(2)] public int Version;
+    /// <summary>Stores the payload.</summary>
+    [Key(3)] public T Payload;
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// 非多态辅助类型
+// Non-polymorphic helper types.
 // ────────────────────────────────────────────────────────────────────────────
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides active buff functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class ActiveBuff
 {
+    /// <summary>Stores the type.</summary>
     [Key(0)] public BuffType Type;
-    [Key(1)] public float    Value;
-    [Key(2)] public int      RemainSeconds;
-    [Key(3)] public string   Source;
-    [Key(4)] public bool     IsDebuff;
+    /// <summary>Stores the value.</summary>
+    [Key(1)] public float Value;
+    /// <summary>Stores the remain seconds.</summary>
+    [Key(2)] public int RemainSeconds;
+    /// <summary>Stores the source.</summary>
+    [Key(3)] public string Source;
+    /// <summary>Stores the is debuff.</summary>
+    [Key(4)] public bool IsDebuff;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static ActiveBuff Create(Random rng, int id) => new()
     {
-        Type = (BuffType)(id % 5), Value = (float)Math.Round(rng.NextDouble() * 500, 2),
+        Type = (BuffType)(id % 5),
+        Value = (float)Math.Round(rng.NextDouble() * 500, 2),
         RemainSeconds = rng.Next(5, 3600),
-        Source  = $"Skill_{rng.Next(1, 50)}",
+        Source = $"Skill_{rng.Next(1, 50)}",
         IsDebuff = id % 7 == 0,
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides character stats functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class CharacterStats
 {
-    [Key(0)] public int   Hp;
-    [Key(1)] public int   MaxHp;
-    [Key(2)] public int   Mp;
-    [Key(3)] public int   MaxMp;
+    /// <summary>Stores the hp.</summary>
+    [Key(0)] public int Hp;
+    /// <summary>Stores the max hp.</summary>
+    [Key(1)] public int MaxHp;
+    /// <summary>Stores the mp.</summary>
+    [Key(2)] public int Mp;
+    /// <summary>Stores the max mp.</summary>
+    [Key(3)] public int MaxMp;
+    /// <summary>Stores the attack.</summary>
     [Key(4)] public float Attack;
+    /// <summary>Stores the defense.</summary>
     [Key(5)] public float Defense;
+    /// <summary>Stores the speed.</summary>
     [Key(6)] public float Speed;
+    /// <summary>Stores the crit rate.</summary>
     [Key(7)] public float CritRate;
+    /// <summary>Stores the crit damage.</summary>
     [Key(8)] public float CritDamage;
-    [Key(9)] public int   Level;
+    /// <summary>Stores the level.</summary>
+    [Key(9)] public int Level;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static CharacterStats Create(Random rng) => new()
     {
-        Hp = rng.Next(500, 50000), MaxHp = 50000,
-        Mp = rng.Next(0, 10000),  MaxMp = 10000,
-        Attack     = (float)Math.Round(rng.NextDouble() * 8000 + 500, 2),
-        Defense    = (float)Math.Round(rng.NextDouble() * 4000 + 200, 2),
-        Speed      = (float)Math.Round(rng.NextDouble() * 300 + 100, 2),
-        CritRate   = (float)Math.Round(rng.NextDouble() * 0.8, 4),
+        Hp = rng.Next(500, 50000),
+        MaxHp = 50000,
+        Mp = rng.Next(0, 10000),
+        MaxMp = 10000,
+        Attack = (float)Math.Round(rng.NextDouble() * 8000 + 500, 2),
+        Defense = (float)Math.Round(rng.NextDouble() * 4000 + 200, 2),
+        Speed = (float)Math.Round(rng.NextDouble() * 300 + 100, 2),
+        CritRate = (float)Math.Round(rng.NextDouble() * 0.8, 4),
         CritDamage = (float)Math.Round(rng.NextDouble() * 3.0 + 1.5, 4),
-        Level      = rng.Next(1, 200),
+        Level = rng.Next(1, 200),
     };
 }
 
-[LuminPackable] [MemoryPackable] [MessagePackObject] [NinoType]
+/// <summary>Provides guild info functionality.</summary>
+[LuminPackable]
+[MemoryPackable]
+[MessagePackObject]
+[NinoType]
 public sealed partial class GuildInfo
 {
-    [Key(0)] public int    GuildId;
+    /// <summary>Stores the guild id.</summary>
+    [Key(0)] public int GuildId;
+    /// <summary>Stores the guild name.</summary>
     [Key(1)] public string GuildName;
+    /// <summary>Stores the guild tag.</summary>
     [Key(2)] public string GuildTag;
-    [Key(3)] public int    GuildLevel;
-    [Key(4)] public long   GuildExp;
-    [Key(5)] public int    MemberCount;
-    [Key(6)] public int    MaxMemberCount;
+    /// <summary>Stores the guild level.</summary>
+    [Key(3)] public int GuildLevel;
+    /// <summary>Stores the guild exp.</summary>
+    [Key(4)] public long GuildExp;
+    /// <summary>Stores the member count.</summary>
+    [Key(5)] public int MemberCount;
+    /// <summary>Stores the max member count.</summary>
+    [Key(6)] public int MaxMemberCount;
+    /// <summary>Stores the guild notice.</summary>
     [Key(7)] public string GuildNotice;
-    [Key(8)] public bool   IsPublic;
-    [Key(9)] public long   CreatedAt;
+    /// <summary>Stores the is public.</summary>
+    [Key(8)] public bool IsPublic;
+    /// <summary>Stores the created at.</summary>
+    [Key(9)] public long CreatedAt;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <param name="rng">The rng used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static GuildInfo Create(Random rng) => new()
     {
-        GuildId = rng.Next(1, 99999), GuildName = "LegendaryGuild", GuildTag = "LGD",
-        GuildLevel = rng.Next(1, 30), GuildExp = rng.Next(0, 10_000_000),
-        MemberCount = rng.Next(1, 100), MaxMemberCount = 100,
+        GuildId = rng.Next(1, 99999),
+        GuildName = "LegendaryGuild",
+        GuildTag = "LGD",
+        GuildLevel = rng.Next(1, 30),
+        GuildExp = rng.Next(0, 10_000_000),
+        MemberCount = rng.Next(1, 100),
+        MaxMemberCount = 100,
         GuildNotice = "Welcome to LegendaryGuild! Guild events every Friday.",
         IsPublic = true,
         CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(100000, 5000000),
@@ -521,137 +870,167 @@ public sealed partial class GuildInfo
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// 顶层角色存档：三条多态集合 + 泛型快照 + 原有字段
+// Root character save: polymorphic collections, a generic snapshot, and scalar members.
 // ────────────────────────────────────────────────────────────────────────────
 
+/// <summary>Provides character save data functionality.</summary>
 [LuminPackable]
 [MemoryPackable]
 [MessagePackObject]
 [NinoType]
 public sealed partial class CharacterSaveData
 {
-    // 基础字段
-    [Key(0)]  public int            CharacterId;
-    [Key(1)]  public string         CharacterName;
-    [Key(2)]  public CharacterClass Class;
-    [Key(3)]  public int            ServerRegion;
-    [Key(4)]  public long           TotalPlayTime;
-    [Key(5)]  public long           LastSaveAt;
-    [Key(6)]  public bool           IsOnline;
-    [Key(7)]  public bool           IsDeleted;
-    [Key(8)]  public int            VipLevel;
-    [Key(9)] public long           DiamondCount;
-    [Key(10)] public long           CoinCount;
-    [Key(11)] public int            PvpRating;
-    [Key(12)] public int            PveRating;
-    [Key(13)] public string         HomeRegion;
-    [Key(14)]  public string         Title;
+    // Scalar fields.
+    /// <summary>Stores the character id.</summary>
+    [Key(0)] public int CharacterId;
+    /// <summary>Stores the character name.</summary>
+    [Key(1)] public string CharacterName;
+    /// <summary>Stores the class.</summary>
+    [Key(2)] public CharacterClass Class;
+    /// <summary>Stores the server region.</summary>
+    [Key(3)] public int ServerRegion;
+    /// <summary>Stores the total play time.</summary>
+    [Key(4)] public long TotalPlayTime;
+    /// <summary>Stores the last save at.</summary>
+    [Key(5)] public long LastSaveAt;
+    /// <summary>Stores the is online.</summary>
+    [Key(6)] public bool IsOnline;
+    /// <summary>Stores the is deleted.</summary>
+    [Key(7)] public bool IsDeleted;
+    /// <summary>Stores the vip level.</summary>
+    [Key(8)] public int VipLevel;
+    /// <summary>Stores the diamond count.</summary>
+    [Key(9)] public long DiamondCount;
+    /// <summary>Stores the coin count.</summary>
+    [Key(10)] public long CoinCount;
+    /// <summary>Stores the pvp rating.</summary>
+    [Key(11)] public int PvpRating;
+    /// <summary>Stores the pve rating.</summary>
+    [Key(12)] public int PveRating;
+    /// <summary>Stores the home region.</summary>
+    [Key(13)] public string HomeRegion;
+    /// <summary>Stores the title.</summary>
+    [Key(14)] public string Title;
 
-    // 嵌套对象
+    // Nested objects.
+    /// <summary>Stores the stats.</summary>
     [Key(15)] public CharacterStats Stats;
-    [Key(16)] public GuildInfo      Guild;
+    /// <summary>Stores the guild.</summary>
+    [Key(16)] public GuildInfo Guild;
 
-    // 泛型快照（Envelope<T>）
+    // Generic snapshot: Envelope<T>.
+    /// <summary>Stores the stats snapshot.</summary>
     [Key(17)] public Envelope<CharacterStats> StatsSnapshot;
-    [Key(18)] public Envelope<GuildInfo>      GuildSnapshot;
+    /// <summary>Stores the guild snapshot.</summary>
+    [Key(18)] public Envelope<GuildInfo> GuildSnapshot;
 
-    // 多态集合1：主背包（7种子类，40条）
+    // Polymorphic collection 1: main inventory, seven derived types and 40 entries.
+    /// <summary>Stores the bag.</summary>
     [Key(19)] public List<ItemBase> Bag;
 
-    // 多态集合2：仓库（7种子类，25条）
+    // Polymorphic collection 2: storage, seven derived types and 25 entries.
+    /// <summary>Stores the storage.</summary>
     [Key(20)] public List<ItemBase> Storage;
 
-    // 多态集合3：技能列表（4种子类，20条）
+    // Polymorphic collection 3: skills, four derived types and 20 entries.
+    /// <summary>Stores the skills.</summary>
     [Key(21)] public List<SkillBase> Skills;
 
-    // 多态集合4：近期事件日志（4种子类，30条）
+    // Polymorphic collection 4: recent events, four derived types and 30 entries.
+    /// <summary>Stores the recent events.</summary>
     [Key(22)] public List<EventLogBase> RecentEvents;
 
-    // 非多态集合
-    [Key(23)] public ActiveBuff[]             ActiveBuffs;
-    [Key(24)] public Dictionary<int, int>     SkillLevels;
+    // Non-polymorphic collection.
+    /// <summary>Stores the active buffs.</summary>
+    [Key(23)] public ActiveBuff[] ActiveBuffs;
+    /// <summary>Stores the skill levels.</summary>
+    [Key(24)] public Dictionary<int, int> SkillLevels;
+    /// <summary>Stores the records.</summary>
     [Key(25)] public Dictionary<string, long> Records;
-    [Key(26)] public List<string>             UnlockedTitles;
+    /// <summary>Stores the unlocked titles.</summary>
+    [Key(26)] public List<string> UnlockedTitles;
 
+    /// <summary>Creates a sample instance for the benchmark.</summary>
+    /// <returns>The result of the operation.</returns>
     public static CharacterSaveData Create()
     {
         var rng = new Random(42);
 
-        // 主背包 40 条：7种子类
+        // Forty main inventory entries across seven derived types.
         var bag = new List<ItemBase>();
-        for (int i = 1; i <= 8;  i++) bag.Add(WeaponItem.Create(rng, i));
+        for (int i = 1; i <= 8; i++) bag.Add(WeaponItem.Create(rng, i));
         for (int i = 1; i <= 10; i++) bag.Add(ArmorItem.Create(rng, i));
         for (int i = 1; i <= 10; i++) bag.Add(ConsumableItem.Create(rng, i));
-        for (int i = 1; i <= 4;  i++) bag.Add(MountItem.Create(rng, i));
-        for (int i = 1; i <= 3;  i++) bag.Add(QuestItem.Create(rng, i));
-        for (int i = 1; i <= 3;  i++) bag.Add(PetItem.Create(rng, i));
-        for (int i = 1; i <= 2;  i++) bag.Add(RelicItem.Create(rng, i));
+        for (int i = 1; i <= 4; i++) bag.Add(MountItem.Create(rng, i));
+        for (int i = 1; i <= 3; i++) bag.Add(QuestItem.Create(rng, i));
+        for (int i = 1; i <= 3; i++) bag.Add(PetItem.Create(rng, i));
+        for (int i = 1; i <= 2; i++) bag.Add(RelicItem.Create(rng, i));
 
-        // 仓库 25 条：以 Armor/Relic/Pet 为主
+        // Storage contains 25 entries, primarily Armor, Relic, and Pet.
         var storage = new List<ItemBase>();
-        for (int i = 1; i <= 8;  i++) storage.Add(ArmorItem.Create(rng, i + 10));
-        for (int i = 1; i <= 6;  i++) storage.Add(RelicItem.Create(rng, i));
-        for (int i = 1; i <= 5;  i++) storage.Add(PetItem.Create(rng, i + 3));
-        for (int i = 1; i <= 4;  i++) storage.Add(WeaponItem.Create(rng, i + 10));
-        for (int i = 1; i <= 2;  i++) storage.Add(QuestItem.Create(rng, i + 3));
+        for (int i = 1; i <= 8; i++) storage.Add(ArmorItem.Create(rng, i + 10));
+        for (int i = 1; i <= 6; i++) storage.Add(RelicItem.Create(rng, i));
+        for (int i = 1; i <= 5; i++) storage.Add(PetItem.Create(rng, i + 3));
+        for (int i = 1; i <= 4; i++) storage.Add(WeaponItem.Create(rng, i + 10));
+        for (int i = 1; i <= 2; i++) storage.Add(QuestItem.Create(rng, i + 3));
 
-        // 技能 20 条：4种子类
+        // Twenty skills across four derived types.
         var skills = new List<SkillBase>();
-        for (int i = 1; i <= 8;  i++) skills.Add(ActiveSkill.Create(rng, i));
-        for (int i = 1; i <= 6;  i++) skills.Add(PassiveSkill.Create(rng, i));
-        for (int i = 1; i <= 3;  i++) skills.Add(UltimateSkill.Create(rng, i));
-        for (int i = 1; i <= 3;  i++) skills.Add(SupportSkill.Create(rng, i));
+        for (int i = 1; i <= 8; i++) skills.Add(ActiveSkill.Create(rng, i));
+        for (int i = 1; i <= 6; i++) skills.Add(PassiveSkill.Create(rng, i));
+        for (int i = 1; i <= 3; i++) skills.Add(UltimateSkill.Create(rng, i));
+        for (int i = 1; i <= 3; i++) skills.Add(SupportSkill.Create(rng, i));
 
-        // 事件日志 30 条：4种子类
+        // Thirty event log entries across four derived types.
         var events = new List<EventLogBase>();
         for (int i = 1; i <= 12; i++) events.Add(CombatEventLog.Create(rng, i));
-        for (int i = 1; i <= 8;  i++) events.Add(CraftingEventLog.Create(rng, i));
-        for (int i = 1; i <= 6;  i++) events.Add(TradeEventLog.Create(rng, i));
-        for (int i = 1; i <= 4;  i++) events.Add(AchievementEventLog.Create(rng, i));
+        for (int i = 1; i <= 8; i++) events.Add(CraftingEventLog.Create(rng, i));
+        for (int i = 1; i <= 6; i++) events.Add(TradeEventLog.Create(rng, i));
+        for (int i = 1; i <= 4; i++) events.Add(AchievementEventLog.Create(rng, i));
 
         var stats = CharacterStats.Create(rng);
         var guild = GuildInfo.Create(rng);
 
         return new CharacterSaveData
         {
-            CharacterId   = rng.Next(100000, 999999),
+            CharacterId = rng.Next(100000, 999999),
             CharacterName = "DragonSlayer_X",
-            Class         = CharacterClass.Paladin,
-            ServerRegion  = 3,
+            Class = CharacterClass.Paladin,
+            ServerRegion = 3,
             TotalPlayTime = rng.Next(0, 10_000_000),
-            LastSaveAt    = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
-            IsOnline      = true,
-            IsDeleted     = false,
-            Title         = "Conqueror of the Abyss",
-            VipLevel      = rng.Next(0, 15),
-            DiamondCount  = rng.Next(0, 100000),
-            CoinCount     = rng.Next(0, 10_000_000),
-            PvpRating     = rng.Next(1000, 3000),
-            PveRating     = rng.Next(500, 5000),
-            HomeRegion    = "Asia-East-01",
-            Stats         = stats,
-            Guild         = guild,
+            LastSaveAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            IsOnline = true,
+            IsDeleted = false,
+            Title = "Conqueror of the Abyss",
+            VipLevel = rng.Next(0, 15),
+            DiamondCount = rng.Next(0, 100000),
+            CoinCount = rng.Next(0, 10_000_000),
+            PvpRating = rng.Next(1000, 3000),
+            PveRating = rng.Next(500, 5000),
+            HomeRegion = "Asia-East-01",
+            Stats = stats,
+            Guild = guild,
             StatsSnapshot = new Envelope<CharacterStats>
             {
                 Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 3600,
-                Tag       = "hourly_snapshot",
-                Version   = 3,
-                Payload   = CharacterStats.Create(rng),
+                Tag = "hourly_snapshot",
+                Version = 3,
+                Payload = CharacterStats.Create(rng),
             },
             GuildSnapshot = new Envelope<GuildInfo>
             {
                 Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 7200,
-                Tag       = "guild_snapshot",
-                Version   = 1,
-                Payload   = GuildInfo.Create(rng),
+                Tag = "guild_snapshot",
+                Version = 1,
+                Payload = GuildInfo.Create(rng),
             },
-            Bag          = bag,
-            Storage      = storage,
-            Skills       = skills,
+            Bag = bag,
+            Storage = storage,
+            Skills = skills,
             RecentEvents = events,
-            ActiveBuffs  = Enumerable.Range(1, 100).Select(i => ActiveBuff.Create(rng, i)).ToArray(),
-            SkillLevels  = Enumerable.Range(1, 100).ToDictionary(i => i, i => rng.Next(1, 10)),
-            Records      = Enumerable.Range(1, 100).ToDictionary(
+            ActiveBuffs = Enumerable.Range(1, 100).Select(i => ActiveBuff.Create(rng, i)).ToArray(),
+            SkillLevels = Enumerable.Range(1, 100).ToDictionary(i => i, i => rng.Next(1, 10)),
+            Records = Enumerable.Range(1, 100).ToDictionary(
                                i => $"RECORD_{i:D3}",
                                i => (long)i),
             UnlockedTitles = Enumerable.Range(1, 16).Select(i => $"Title_{i:D2}_Master").ToList(),
@@ -663,12 +1042,13 @@ public sealed partial class CharacterSaveData
 // Benchmark
 // ────────────────────────────────────────────────────────────────────────────
 
+/// <summary>Provides serialize benchmark functionality.</summary>
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MinColumn, MaxColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
 [ShortRunJob(RuntimeMoniker.Net10_0)]
 [MemoryDiagnoser]
-[GcServer] 
+[GcServer]
 public class SerializeBenchmark
 {
     private CharacterSaveData _data = CharacterSaveData.Create();
@@ -697,25 +1077,29 @@ public class SerializeBenchmark
         StringEncoding = StringEncoding.Utf16
     };
 
-[GlobalSetup]
+    /// <summary>Updates the up used by the current operation.</summary>
+    [GlobalSetup]
     public void SetUp()
     {
         _luminWriter.Option.StringEncoding = luminPackSerializerOption.StringEncoding;
         _luminWriter.Option.StringRecording = luminPackSerializerOption.StringRecording;
         _luminWriter.Option.StandardFormat = luminPackSerializerOption.StandardFormat;
-        _luminBuffer   = LuminPackSerializer.Serialize(_data, luminPackSerializerOption);
-        _memoryBuffer  = MemoryPackSerializer.Serialize(_data, memoryPackSerializerOption);
+        _luminBuffer = LuminPackSerializer.Serialize(_data, luminPackSerializerOption);
+        _memoryBuffer = MemoryPackSerializer.Serialize(_data, memoryPackSerializerOption);
         _msgpackBuffer = MessagePackSerializer.Serialize(_data);
-        _ninoBuffer    = NinoSerializer.Serialize(_data);
+        _ninoBuffer = NinoSerializer.Serialize(_data);
     }
 
+    /// <summary>Measures clean up for the configured benchmark input.</summary>
     [GlobalCleanup]
     public void CleanUp() => _luminWriter.Dispose();
 
+    /// <summary>Measures lumin pack serialize for the configured benchmark input.</summary>
     [Benchmark(Baseline = true)]
     public void LuminPackSerialize()
-        => LuminPackSerializer.Serialize(_data, _luminWriter); 
+        => LuminPackSerializer.Serialize(_data, _luminWriter);
 
+    /// <summary>Measures memory pack serialize for the configured benchmark input.</summary>
     [Benchmark]
     public void MemoryPackSerialize()
     {
@@ -723,6 +1107,7 @@ public class SerializeBenchmark
         MemoryPackSerializer.Serialize(_memoryWriter, _data, memoryPackSerializerOption);
     }
 
+    /// <summary>Measures message pack serialize for the configured benchmark input.</summary>
     [Benchmark]
     public void MessagePackSerialize()
     {
@@ -730,6 +1115,7 @@ public class SerializeBenchmark
         MessagePackSerializer.Serialize(_msgpackWriter, _data);
     }
 
+    /// <summary>Measures nino serialize for the configured benchmark input.</summary>
     [Benchmark]
     public void NinoSerialize()
     {
@@ -737,18 +1123,26 @@ public class SerializeBenchmark
         NinoSerializer.Serialize(_data, _ninoWriter);
     }
 
+    /// <summary>Measures lumin pack deserialize for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public CharacterSaveData LuminPackDeserialize()
         => LuminPackSerializer.Deserialize<CharacterSaveData>(_luminBuffer, luminPackSerializerOption);
 
+    /// <summary>Measures memory pack deserialize for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public CharacterSaveData MemoryPackDeserialize()
         => MemoryPackSerializer.Deserialize<CharacterSaveData>(_memoryBuffer, memoryPackSerializerOption);
 
+    /// <summary>Measures message pack deserialize for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public CharacterSaveData MessagePackDeserialize()
         => MessagePackSerializer.Deserialize<CharacterSaveData>(_msgpackBuffer);
 
+    /// <summary>Measures nino deserialize for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public CharacterSaveData NinoDeserialize()
         => NinoDeserializer.Deserialize<CharacterSaveData>(_ninoBuffer);

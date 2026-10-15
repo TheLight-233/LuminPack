@@ -1,8 +1,4 @@
-using System;
-using System.IO;
 using System.Runtime.CompilerServices;
-using System.Threading;
-using System.Threading.Tasks;
 #if NET8_0_OR_GREATER
 using System.Runtime.Intrinsics;
 using System.Runtime.Intrinsics.X86;
@@ -26,9 +22,13 @@ namespace LuminPack.Cryptography
     /// </summary>
     public static class LuminChaCha20Poly1305
     {
+        /// <summary>Stores the key size.</summary>
         public const int KeySize = 32;        // 256-bit
+        /// <summary>Stores the key size128.</summary>
         public const int KeySize128 = 16;     // 128-bit (ChaCha20-128)
+        /// <summary>Stores the nonce size.</summary>
         public const int NonceSize = 12;      // RFC 8439
+        /// <summary>Stores the tag size.</summary>
         public const int TagSize = 16;        // 128-bit tag
 
         private const int BlockSize = 64;
@@ -38,6 +38,12 @@ namespace LuminPack.Cryptography
         /// <paramref name="ciphertext"/> (same length as plaintext) and a 16-byte
         /// <paramref name="tag"/>.
         /// </summary>
+        /// <param name="key">The key used to identify the entry.</param>
+        /// <param name="nonce">The nonce used by this operation.</param>
+        /// <param name="aad">The aad used by this operation.</param>
+        /// <param name="plaintext">The plaintext used by this operation.</param>
+        /// <param name="ciphertext">The ciphertext used by this operation.</param>
+        /// <param name="tag">The tag used by this operation.</param>
         public static unsafe void Encrypt(
             ReadOnlySpan<byte> key,
             ReadOnlySpan<byte> nonce,
@@ -130,6 +136,13 @@ namespace LuminPack.Cryptography
         /// plaintext into <paramref name="plaintext"/>; returns <see langword="false"/> if the
         /// tag does not match, in which case the plaintext buffer is left unmodified.
         /// </summary>
+        /// <param name="key">The key used to identify the entry.</param>
+        /// <param name="nonce">The nonce used by this operation.</param>
+        /// <param name="aad">The aad used by this operation.</param>
+        /// <param name="ciphertext">The ciphertext used by this operation.</param>
+        /// <param name="tag">The tag used by this operation.</param>
+        /// <param name="plaintext">The plaintext used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         public static unsafe bool Decrypt(
             ReadOnlySpan<byte> key,
             ReadOnlySpan<byte> nonce,
@@ -236,6 +249,13 @@ namespace LuminPack.Cryptography
         /// Async helper: reads the whole <paramref name="source"/> stream, encrypts it and
         /// writes <c>[ciphertext][16-byte tag]</c> to <paramref name="destination"/>.
         /// </summary>
+        /// <param name="source">The input data to process.</param>
+        /// <param name="destination">The destination receiving the result.</param>
+        /// <param name="key">The key used to identify the entry.</param>
+        /// <param name="nonce">The nonce used by this operation.</param>
+        /// <param name="aad">The aad used by this operation.</param>
+        /// <param name="cancellationToken">The token used to cancel the asynchronous operation.</param>
+        /// <returns>The result of the operation.</returns>
         public static async ValueTask EncryptAsync(
             Stream source,
             Stream destination,
@@ -259,6 +279,13 @@ namespace LuminPack.Cryptography
         /// authenticates &amp; decrypts it and writes plaintext to <paramref name="destination"/>.
         /// Returns <see langword="true"/> on success.
         /// </summary>
+        /// <param name="source">The input data to process.</param>
+        /// <param name="destination">The destination receiving the result.</param>
+        /// <param name="key">The key used to identify the entry.</param>
+        /// <param name="nonce">The nonce used by this operation.</param>
+        /// <param name="aad">The aad used by this operation.</param>
+        /// <param name="cancellationToken">The token used to cancel the asynchronous operation.</param>
+        /// <returns>The result of the operation.</returns>
         public static async ValueTask<bool> DecryptAsync(
             Stream source,
             Stream destination,
@@ -292,6 +319,10 @@ namespace LuminPack.Cryptography
             return true;
         }
 
+        /// <summary>Reads all async from the current input.</summary>
+        /// <param name="source">The input data to process.</param>
+        /// <param name="cancellationToken">The token used to cancel the asynchronous operation.</param>
+        /// <returns>The result of the operation.</returns>
         private static async ValueTask<byte[]> ReadAllAsync(Stream source, CancellationToken cancellationToken)
         {
             using var ms = new MemoryStream();
@@ -307,6 +338,10 @@ namespace LuminPack.Cryptography
         /// <paramref name="src"/>, writing the result to <paramref name="dst"/>. Uses the widest
         /// available SIMD (AVX2 32B / SSE2 16B), falling back to 32-bit unaligned word XOR.
         /// </summary>
+        /// <param name="dst">The destination receiving the result.</param>
+        /// <param name="src">The input data to process.</param>
+        /// <param name="key">The key used to identify the entry.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe void XorKeystream(byte* dst, byte* src, byte* key, int length)
         {
@@ -377,28 +412,41 @@ namespace LuminPack.Cryptography
             }
         }
 
+        /// <summary>Validates key before the operation continues.</summary>
+        /// <param name="length">The number of bytes or elements to process.</param>
         private static void ValidateKey(int length)
         {
             EnsureLength(length == KeySize || length == KeySize128,
                 "Key must be 16 or 32 bytes.");
         }
 
+        /// <summary>Validates nonce before the operation continues.</summary>
+        /// <param name="length">The number of bytes or elements to process.</param>
         private static void ValidateNonce(int length)
         {
             EnsureLength(length == NonceSize, "Nonce must be 12 bytes.");
         }
 
+        /// <summary>Performs the ensure length step for the current operation.</summary>
+        /// <param name="condition">The condition used by this operation.</param>
+        /// <param name="message">The message describing the failure.</param>
         private static void EnsureLength(bool condition, string message)
         {
             if (!condition)
-                throw new ArgumentException(message);
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentException(message);
         }
 
+        /// <summary>Performs the as ref step for the current operation.</summary>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static unsafe ref byte AsRef(ReadOnlySpan<byte> span)
             => ref System.Runtime.InteropServices.MemoryMarshal.GetReference(span);
 
         /// <summary>Constant-time byte comparison (no early exit on mismatch).</summary>
+        /// <param name="left">The left used by this operation.</param>
+        /// <param name="right">The right used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         private static bool ConstantTimeEquals(ReadOnlySpan<byte> left, ReadOnlySpan<byte> right)
         {
             uint diff = unchecked((uint)(left.Length ^ right.Length));
@@ -409,6 +457,7 @@ namespace LuminPack.Cryptography
         }
 
         /// <summary>Best-effort scrubbing of a temporary plaintext buffer on failed authentication.</summary>
+        /// <param name="data">The metadata describing the serializable type.</param>
         private static void CryptographicOperationsZeroize(byte[] data)
         {
             if (data != null)

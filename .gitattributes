@@ -1,10 +1,22 @@
-# Keep the repository's existing line endings intact.  The rules below only
-# suppress generated artifacts and do not normalize the source tree.
+* text=auto
+.editorconfig text eol=lf
+.gitattributes text eol=lf
+.gitignore text eol=lf
+*.cs text eol=lf
+*.csproj text eol=lf
+*.props text eol=lf
+*.targets text eol=lf
+*.tt text eol=lf
+*.md text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sln text eol=crlf
 
-# Generated disassembly and source should not dominate code review diffs.
+# Keep generated source and disassembly from dominating repository browsing.
 *.g.cs linguist-generated=true
 *.asm linguist-generated=true -diff
 BenchmarkDotNet.Artifacts/** linguist-generated=true -diff
 
-# Archives are opaque binary user artifacts.
+# Archives are opaque binary artifacts.
 *.zip binary

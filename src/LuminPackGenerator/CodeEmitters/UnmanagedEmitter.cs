@@ -4,25 +4,38 @@ using LuminPack.Code;
 
 namespace LuminPack.SourceGenerator.CodeEmitters;
 
+/// <summary>Provides unmanaged emitter functionality.</summary>
 public static class UnmanagedEmitter
 {
+    /// <summary>Appends binary writing statements for unmanaged values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         sb.AppendLine("            Unsafe.WriteUnaligned(ref writer.GetCurrentSpanReference(), value);");
         sb.AppendLine($"            writer.Advance(Unsafe.SizeOf<{data.TypeName}>());");
     }
 
+    /// <summary>Appends binary reading statements for unmanaged values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         sb.AppendLine($"            value = Unsafe.ReadUnaligned<{data.TypeName}>(ref reader.GetCurrentSpanReference());");
         sb.AppendLine($"            reader.Advance(Unsafe.SizeOf<{data.TypeName}>());");
     }
 
+    /// <summary>Appends statements that calculate the binary payload size.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateCalculateOffsetCode(LuminLocalFieldData data, StringBuilder sb)
     {
         sb.AppendLine($"            evaluator += Unsafe.SizeOf<{data.TypeName}>();");
     }
 
+    /// <summary>Appends JSON writing statements for unmanaged values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         string write = data.TypeName switch
@@ -129,6 +142,9 @@ public static class UnmanagedEmitter
         }
     }
 
+    /// <summary>Appends JSON reading statements for unmanaged values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         string read = data.TypeName switch
@@ -254,6 +270,8 @@ public static class UnmanagedEmitter
         }
     }
 
+    /// <summary>Appends binary writing statements for unmanaged values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
     private static void AppendQuaternionWrite(StringBuilder sb)
     {
         sb.AppendLine("            writer.WriteObjectStart();");
@@ -268,6 +286,9 @@ public static class UnmanagedEmitter
         sb.AppendLine("            writer.WriteObjectEnd();");
     }
 
+    /// <summary>Appends binary writing statements for unmanaged values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="expressions">The expressions used by this operation.</param>
     private static void AppendFloatArrayWrite(StringBuilder sb, params string[] expressions)
     {
         sb.AppendLine("            writer.WriteArrayStart();");
@@ -278,6 +299,8 @@ public static class UnmanagedEmitter
         sb.AppendLine("            writer.WriteArrayEnd();");
     }
 
+    /// <summary>Appends binary reading statements for unmanaged values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
     private static void AppendQuaternionRead(StringBuilder sb)
     {
         sb.AppendLine("            reader.TryConsumeObjectStart();");
@@ -298,6 +321,10 @@ public static class UnmanagedEmitter
         sb.AppendLine("            value = new global::System.Numerics.Quaternion(x, y, z, w);");
     }
 
+    /// <summary>Appends binary reading statements for unmanaged values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="typeName">The C# type name to use in generated source.</param>
+    /// <param name="count">The number of entries involved in the operation.</param>
     private static void AppendFloatArrayRead(StringBuilder sb, string typeName, int count)
     {
         sb.AppendLine("            reader.TryConsumeArrayStart();");

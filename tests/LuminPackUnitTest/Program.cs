@@ -1,23 +1,23 @@
 using System.Collections.Concurrent;
-using System.Text;
 using LuminPack;
-using static LuminPackUnitTest.PrimitivesSerializationTest;
-using static LuminPackUnitTest.MultiThreadSerializationTest;
-using static LuminPackUnitTest.ComplexSerializationTest;
-using static LuminPackUnitTest.VersionTolerantSerializationTest;
 using static LuminPackUnitTest.CircleReferenceSerializationTest;
+using static LuminPackUnitTest.CollectionTypesSerializationTest;
+using static LuminPackUnitTest.ComplexSerializationTest;
 using static LuminPackUnitTest.GenericSerializationTest;
 using static LuminPackUnitTest.MultiDimensionalArraySerializationTest;
+using static LuminPackUnitTest.MultiThreadSerializationTest;
+using static LuminPackUnitTest.PrimitivesSerializationTest;
 using static LuminPackUnitTest.SpecialTypesSerializationTest;
-using static LuminPackUnitTest.CollectionTypesSerializationTest;
-using static LuminPackUnitTest.PhaseOneRegressionTest;
-using static LuminPackUnitTest.PruneGenericWrapperTest;
+using static LuminPackUnitTest.VersionTolerantSerializationTest;
 
 namespace LuminPackUnitTest
 {
+    /// <summary>Provides program functionality.</summary>
     class Program
     {
 
+        /// <summary>Verifies run core tests.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void RunCoreTests(List<string> results)
         {
             TestEmptyStruct(results);
@@ -233,6 +233,8 @@ namespace LuminPackUnitTest
             TestIImmutableDictionary(results);
             TestIImmutableSet(results);
         }
+        /// <summary>Verifies main.</summary>
+        /// <param name="args">The args used by this operation.</param>
         static void Main(string[] args)
         {
             Console.WriteLine("Starting LuminPack Serialization Tests...");
@@ -264,7 +266,7 @@ namespace LuminPackUnitTest
             BufferWriterOperationContextTest.Run(testResults);
             WriterReaderCorrectnessRegressionTest.Run(testResults);
             BufferResizeColdPathRegressionTest.Run(testResults);
-StringSerializerFallbackTest.Run(testResults);
+            StringSerializerFallbackTest.Run(testResults);
             InterfaceCollectionReadRegressionTest.Run(testResults);
             PruneGenericWrapperTest.Run(testResults);
             ModelBoundaryTest.Run(testResults);
@@ -284,7 +286,7 @@ StringSerializerFallbackTest.Run(testResults);
             var passedCount = 0;
             var failedCount = 0;
             var skippedCount = 0;
-            
+
             foreach (var result in testResults)
             {
                 if (result.StartsWith("✓")) passedCount++;
@@ -298,16 +300,18 @@ StringSerializerFallbackTest.Run(testResults);
             Console.WriteLine($"Skipped: {skippedCount}");
         }
 
+        /// <summary>Verifies test hierarchical base.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_HierarchicalBase(List<string> results)
         {
             try
             {
                 var original = new HierarchicalBase();
                 original.B = "Test";
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<HierarchicalBase>(bytes);
-                
+
                 if (original.B == deserialized.B)
                     results.Add("✓ Test_HierarchicalBase - PASSED");
                 else
@@ -323,10 +327,10 @@ StringSerializerFallbackTest.Run(testResults);
             {
                 var original = new HierarchicalBase();
                 original.B = "Test";
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<HierarchicalBase>(json);
-                
+
                 if (original.B == deserialized.B)
                     results.Add("✓ Test_HierarchicalBase [JSON] - PASSED");
                 else
@@ -338,6 +342,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test hierarchical sub1.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_HierarchicalSub1(List<string> results)
         {
             try
@@ -345,10 +351,10 @@ StringSerializerFallbackTest.Run(testResults);
                 var original = new HierarchicalSub1();
                 original.B = "Test";
                 original.D = 1.23f;
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<HierarchicalSub1>(bytes);
-                
+
                 if (original.B == deserialized.B && original.D == deserialized.D)
                     results.Add("✓ Test_HierarchicalSub1 - PASSED");
                 else
@@ -365,10 +371,10 @@ StringSerializerFallbackTest.Run(testResults);
                 var original = new HierarchicalSub1();
                 original.B = "Test";
                 original.D = 1.23f;
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<HierarchicalSub1>(json);
-                
+
                 if (original.B == deserialized.B && original.D == deserialized.D)
                     results.Add("✓ Test_HierarchicalSub1 [JSON] - PASSED");
                 else
@@ -380,6 +386,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test hierarchical sub2.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_HierarchicalSub2(List<string> results)
         {
             try
@@ -388,11 +396,11 @@ StringSerializerFallbackTest.Run(testResults);
                 original.B = "Test";
                 original.D = 1.23f;
                 original.F = new List<int> { 1, 2, 3 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<HierarchicalSub2>(bytes);
-                
-                if (original.B == deserialized.B && original.D == deserialized.D && 
+
+                if (original.B == deserialized.B && original.D == deserialized.D &&
                     ListsEqual(original.F, deserialized.F))
                     results.Add("✓ Test_HierarchicalSub2 - PASSED");
                 else
@@ -410,11 +418,11 @@ StringSerializerFallbackTest.Run(testResults);
                 original.B = "Test";
                 original.D = 1.23f;
                 original.F = new List<int> { 1, 2, 3 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<HierarchicalSub2>(json);
-                
-                if (original.B == deserialized.B && original.D == deserialized.D && 
+
+                if (original.B == deserialized.B && original.D == deserialized.D &&
                     ListsEqual(original.F, deserialized.F))
                     results.Add("✓ Test_HierarchicalSub2 [JSON] - PASSED");
                 else
@@ -426,16 +434,18 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test some nested private enum.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SomeNestedPrivateEnum(List<string> results)
         {
             try
             {
                 var original = new SomeNestedPrivateEnum();
                 original.Id = 123;
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SomeNestedPrivateEnum>(bytes);
-                
+
                 if (original.Id == deserialized.Id)
                     results.Add("✓ Test_SomeNestedPrivateEnum - PASSED");
                 else
@@ -451,10 +461,10 @@ StringSerializerFallbackTest.Run(testResults);
             {
                 var original = new SomeNestedPrivateEnum();
                 original.Id = 123;
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SomeNestedPrivateEnum>(json);
-                
+
                 if (original.Id == deserialized.Id)
                     results.Add("✓ Test_SomeNestedPrivateEnum [JSON] - PASSED");
                 else
@@ -466,15 +476,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test move.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_Move(List<string> results)
         {
             try
             {
                 var original = Move.Create(100, 200);
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<Move>(bytes);
-                
+
                 if (original.ClientX == deserialized.ClientX && original.ClientY == deserialized.ClientY)
                     results.Add("✓ Test_Move - PASSED");
                 else
@@ -489,10 +501,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = Move.Create(100, 200);
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<Move>(json);
-                
+
                 if (original.ClientX == deserialized.ClientX && original.ClientY == deserialized.ClientY)
                     results.Add("✓ Test_Move [JSON] - PASSED");
                 else
@@ -504,15 +516,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test test method ctor.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_TestMethodCtor(List<string> results)
         {
             try
             {
                 var original = TestMethodCtor.Create(123, "test");
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<TestMethodCtor>(bytes);
-                
+
                 if (original.A == deserialized.A)
                     results.Add("✓ Test_TestMethodCtor - PASSED");
                 else
@@ -527,10 +541,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = TestMethodCtor.Create(123, "test");
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<TestMethodCtor>(json);
-                
+
                 if (original.A == deserialized.A)
                     results.Add("✓ Test_TestMethodCtor [JSON] - PASSED");
                 else
@@ -542,16 +556,18 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test test a.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_TestA(List<string> results)
         {
             try
             {
                 var original = new TestA<int>(42);
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<TestA<int>>(bytes);
-                
-                if (original.MValue == deserialized.MValue) 
+
+                if (original.MValue == deserialized.MValue)
                     results.Add("✓ Test_TestA - PASSED");
                 else
                     results.Add("✗ Test_TestA - FAILED");
@@ -565,11 +581,11 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new TestA<int>(42);
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<TestA<int>>(json);
-                
-                if (original.MValue == deserialized.MValue) 
+
+                if (original.MValue == deserialized.MValue)
                     results.Add("✓ Test_TestA [JSON] - PASSED");
                 else
                     results.Add("✗ Test_TestA [JSON] - FAILED");
@@ -580,16 +596,18 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test test b.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_TestB(List<string> results)
         {
             try
             {
                 var original = new TestB<string>("hello");
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<TestB<string>>(bytes);
-                
-                if (original.MValue == deserialized.MValue) 
+
+                if (original.MValue == deserialized.MValue)
                     results.Add("✓ Test_TestB - PASSED");
                 else
                     results.Add("✗ Test_TestB - FAILED");
@@ -603,11 +621,11 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new TestB<string>("hello");
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<TestB<string>>(json);
-                
-                if (original.MValue == deserialized.MValue) 
+
+                if (original.MValue == deserialized.MValue)
                     results.Add("✓ Test_TestB [JSON] - PASSED");
                 else
                     results.Add("✗ Test_TestB [JSON] - FAILED");
@@ -618,6 +636,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test cursed generic.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_CursedGeneric(List<string> results)
         {
             try
@@ -625,10 +645,10 @@ StringSerializerFallbackTest.Run(testResults);
                 var original = new CursedGeneric<int>();
                 original.field = new ConcurrentDictionary<string, int[]>();
                 original.field.TryAdd("test", new[] { 1, 2, 3 });
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<CursedGeneric<int>>(bytes);
-                
+
                 if (ArraysEqual(original.field["test"], deserialized.field["test"]))
                     results.Add("✓ Test_CursedGeneric - PASSED");
                 else
@@ -645,10 +665,10 @@ StringSerializerFallbackTest.Run(testResults);
                 var original = new CursedGeneric<int>();
                 original.field = new ConcurrentDictionary<string, int[]>();
                 original.field.TryAdd("test", new[] { 1, 2, 3 });
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<CursedGeneric<int>>(json);
-                
+
                 if (ArraysEqual(original.field["test"], deserialized.field["test"]))
                     results.Add("✓ Test_CursedGeneric [JSON] - PASSED");
                 else
@@ -660,15 +680,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test private nested collection.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_PrivateNestedCollection(List<string> results)
         {
             try
             {
                 var original = new PrivateNestedCollection();
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<PrivateNestedCollection>(bytes);
-                
+
                 if (deserialized != null)
                     results.Add("✓ Test_PrivateNestedCollection - PASSED");
                 else
@@ -683,10 +705,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new PrivateNestedCollection();
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<PrivateNestedCollection>(json);
-                
+
                 if (deserialized != null)
                     results.Add("✓ Test_PrivateNestedCollection [JSON] - PASSED");
                 else
@@ -698,6 +720,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test list element class.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_ListElementClass(List<string> results)
         {
             try
@@ -709,11 +733,11 @@ StringSerializerFallbackTest.Run(testResults);
                     CreateTime = DateTime.Now,
                     Extra = true
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<ListElementClass>(bytes);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.Extra == deserialized.Extra)
                     results.Add("✓ Test_ListElementClass - PASSED");
                 else
@@ -734,11 +758,11 @@ StringSerializerFallbackTest.Run(testResults);
                     CreateTime = DateTime.Now,
                     Extra = true
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<ListElementClass>(json);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.Extra == deserialized.Extra)
                     results.Add("✓ Test_ListElementClass [JSON] - PASSED");
                 else
@@ -750,6 +774,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test list element class2 renamed.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_ListElementClass2Renamed(List<string> results)
         {
             try
@@ -761,11 +787,11 @@ StringSerializerFallbackTest.Run(testResults);
                     CreateTime = DateTime.Now,
                     Extra = "extra"
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<ListElementClass2Renamed>(bytes);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.Extra == deserialized.Extra)
                     results.Add("✓ Test_ListElementClass2Renamed - PASSED");
                 else
@@ -786,11 +812,11 @@ StringSerializerFallbackTest.Run(testResults);
                     CreateTime = DateTime.Now,
                     Extra = "extra"
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<ListElementClass2Renamed>(json);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.Extra == deserialized.Extra)
                     results.Add("✓ Test_ListElementClass2Renamed [JSON] - PASSED");
                 else
@@ -802,16 +828,18 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test protected should include.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_ProtectedShouldInclude(List<string> results)
         {
             try
             {
                 var original = new ProtectedShouldInclude();
                 original.Id = 123;
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<ProtectedShouldInclude>(bytes);
-                
+
                 if (original.Id == deserialized.Id)
                     results.Add("✓ Test_ProtectedShouldInclude - PASSED");
                 else
@@ -827,10 +855,10 @@ StringSerializerFallbackTest.Run(testResults);
             {
                 var original = new ProtectedShouldInclude();
                 original.Id = 123;
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<ProtectedShouldInclude>(json);
-                
+
                 if (original.Id == deserialized.Id)
                     results.Add("✓ Test_ProtectedShouldInclude [JSON] - PASSED");
                 else
@@ -842,6 +870,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test should ignore private.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_ShouldIgnorePrivate(List<string> results)
         {
             try
@@ -850,11 +880,11 @@ StringSerializerFallbackTest.Run(testResults);
                 original.Id = 123;
                 original.Name = "Test";
                 original.CreateTime = DateTime.Now;
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<ShouldIgnorePrivate>(bytes);
-                
-                if (original.Name == deserialized.Name && 
+
+                if (original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_ShouldIgnorePrivate - PASSED");
                 else
@@ -872,11 +902,11 @@ StringSerializerFallbackTest.Run(testResults);
                 original.Id = 123;
                 original.Name = "Test";
                 original.CreateTime = DateTime.Now;
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<ShouldIgnorePrivate>(json);
-                
-                if (original.Name == deserialized.Name && 
+
+                if (original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_ShouldIgnorePrivate [JSON] - PASSED");
                 else
@@ -888,15 +918,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test bindable.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_Bindable(List<string> results)
         {
             try
             {
                 var original = new Bindable<int>(42);
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<Bindable<int>>(bytes);
-                
+
                 if (original.Value == deserialized.Value)
                     results.Add("✓ Test_Bindable - PASSED");
                 else
@@ -911,10 +943,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new Bindable<int>(42);
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<Bindable<int>>(json);
-                
+
                 if (original.Value == deserialized.Value)
                     results.Add("✓ Test_Bindable [JSON] - PASSED");
                 else
@@ -926,15 +958,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test test private member class.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_TestPrivateMemberClass(List<string> results)
         {
             try
             {
                 var original = new TestPrivateMemberClass();
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<TestPrivateMemberClass>(bytes);
-                
+
                 if (deserialized != null)
                     results.Add("✓ Test_TestPrivateMemberClass - PASSED");
                 else
@@ -949,10 +983,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new TestPrivateMemberClass();
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<TestPrivateMemberClass>(json);
-                
+
                 if (deserialized != null)
                     results.Add("✓ Test_TestPrivateMemberClass [JSON] - PASSED");
                 else
@@ -964,15 +998,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test record with private member.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_RecordWithPrivateMember(List<string> results)
         {
             try
             {
                 var original = new RecordWithPrivateMember("Test");
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<RecordWithPrivateMember>(bytes);
-                
+
                 if (original.Name == deserialized.Name)
                     results.Add("✓ Test_RecordWithPrivateMember - PASSED");
                 else
@@ -987,10 +1023,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new RecordWithPrivateMember("Test");
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<RecordWithPrivateMember>(json);
-                
+
                 if (original.Name == deserialized.Name)
                     results.Add("✓ Test_RecordWithPrivateMember [JSON] - PASSED");
                 else
@@ -1002,15 +1038,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test record with private member2.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_RecordWithPrivateMember2(List<string> results)
         {
             try
             {
                 var original = new RecordWithPrivateMember2("Test");
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<RecordWithPrivateMember2>(bytes);
-                
+
                 if (original.Name == deserialized.Name)
                     results.Add("✓ Test_RecordWithPrivateMember2 - PASSED");
                 else
@@ -1025,10 +1063,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new RecordWithPrivateMember2("Test");
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<RecordWithPrivateMember2>(json);
-                
+
                 if (original.Name == deserialized.Name)
                     results.Add("✓ Test_RecordWithPrivateMember2 [JSON] - PASSED");
                 else
@@ -1040,6 +1078,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test struct with private member.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_StructWithPrivateMember(List<string> results)
         {
             try
@@ -1047,10 +1087,10 @@ StringSerializerFallbackTest.Run(testResults);
                 var original = new StructWithPrivateMember();
                 original.Id = 123;
                 original.SetName("Test");
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<StructWithPrivateMember>(bytes);
-                
+
                 if (original.Id == deserialized.Id && original.GetName() == deserialized.GetName())
                     results.Add("✓ Test_StructWithPrivateMember - PASSED");
                 else
@@ -1067,10 +1107,10 @@ StringSerializerFallbackTest.Run(testResults);
                 var original = new StructWithPrivateMember();
                 original.Id = 123;
                 original.SetName("Test");
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<StructWithPrivateMember>(json);
-                
+
                 if (original.Id == deserialized.Id && original.GetName() == deserialized.GetName())
                     results.Add("✓ Test_StructWithPrivateMember [JSON] - PASSED");
                 else
@@ -1082,6 +1122,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test class with private member.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_ClassWithPrivateMember(List<string> results)
         {
             try
@@ -1089,10 +1131,10 @@ StringSerializerFallbackTest.Run(testResults);
                 var original = new ClassWithPrivateMember<int>();
                 original.Id = 123;
                 original.List = new List<int> { 1, 2, 3 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<ClassWithPrivateMember<int>>(bytes);
-                
+
                 if (original.Id == deserialized.Id)
                     results.Add("✓ Test_ClassWithPrivateMember - PASSED");
                 else
@@ -1109,10 +1151,10 @@ StringSerializerFallbackTest.Run(testResults);
                 var original = new ClassWithPrivateMember<int>();
                 original.Id = 123;
                 original.List = new List<int> { 1, 2, 3 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<ClassWithPrivateMember<int>>(json);
-                
+
                 if (original.Id == deserialized.Id)
                     results.Add("✓ Test_ClassWithPrivateMember [JSON] - PASSED");
                 else
@@ -1124,6 +1166,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test struct1.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_Struct1(List<string> results)
         {
             try
@@ -1134,10 +1178,10 @@ StringSerializerFallbackTest.Run(testResults);
                     B = DateTime.Now,
                     C = Guid.NewGuid()
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<Struct1>(bytes);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_Struct1 - PASSED");
                 else
@@ -1157,10 +1201,10 @@ StringSerializerFallbackTest.Run(testResults);
                     B = DateTime.Now,
                     C = Guid.NewGuid()
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<Struct1>(json);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_Struct1 [JSON] - PASSED");
                 else
@@ -1172,6 +1216,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test class1.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_Class1(List<string> results)
         {
             try
@@ -1183,10 +1229,10 @@ StringSerializerFallbackTest.Run(testResults);
                     C = Guid.NewGuid(),
                     D = new Struct1 { A = 2, B = DateTime.Now, C = Guid.NewGuid() }
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<Class1>(bytes);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_Class1 - PASSED");
                 else
@@ -1207,10 +1253,10 @@ StringSerializerFallbackTest.Run(testResults);
                     C = Guid.NewGuid(),
                     D = new Struct1 { A = 2, B = DateTime.Now, C = Guid.NewGuid() }
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<Class1>(json);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_Class1 [JSON] - PASSED");
                 else
@@ -1222,6 +1268,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test struct2.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_Struct2(List<string> results)
         {
             try
@@ -1233,10 +1281,10 @@ StringSerializerFallbackTest.Run(testResults);
                     C = "Test",
                     D = new Class1 { A = 2, B = DateTime.Now, C = Guid.NewGuid() }
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<Struct2>(bytes);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_Struct2 - PASSED");
                 else
@@ -1257,10 +1305,10 @@ StringSerializerFallbackTest.Run(testResults);
                     C = "Test",
                     D = new Class1 { A = 2, B = DateTime.Now, C = Guid.NewGuid() }
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<Struct2>(json);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_Struct2 [JSON] - PASSED");
                 else
@@ -1272,6 +1320,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test string data.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_StringData(List<string> results)
         {
             try
@@ -1281,10 +1331,10 @@ StringSerializerFallbackTest.Run(testResults);
                     Str = "Hello World",
                     ShouldHaveNoEffect = true
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<StringData>(bytes);
-                
+
                 if (original.Str == deserialized.Str && original.ShouldHaveNoEffect == deserialized.ShouldHaveNoEffect)
                     results.Add("✓ Test_StringData - PASSED");
                 else
@@ -1303,10 +1353,10 @@ StringSerializerFallbackTest.Run(testResults);
                     Str = "Hello World",
                     ShouldHaveNoEffect = true
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<StringData>(json);
-                
+
                 if (original.Str == deserialized.Str && original.ShouldHaveNoEffect == deserialized.ShouldHaveNoEffect)
                     results.Add("✓ Test_StringData [JSON] - PASSED");
                 else
@@ -1318,6 +1368,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test string data2.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_StringData2(List<string> results)
         {
             try
@@ -1327,10 +1379,10 @@ StringSerializerFallbackTest.Run(testResults);
                     Str = "Hello World",
                     ShouldHaveNoEffect = true
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<StringData2>(bytes);
-                
+
                 if (original.Str == deserialized.Str && original.ShouldHaveNoEffect == deserialized.ShouldHaveNoEffect)
                     results.Add("✓ Test_StringData2 - PASSED");
                 else
@@ -1349,10 +1401,10 @@ StringSerializerFallbackTest.Run(testResults);
                     Str = "Hello World",
                     ShouldHaveNoEffect = true
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<StringData2>(json);
-                
+
                 if (original.Str == deserialized.Str && original.ShouldHaveNoEffect == deserialized.ShouldHaveNoEffect)
                     results.Add("✓ Test_StringData2 [JSON] - PASSED");
                 else
@@ -1364,6 +1416,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test save data.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SaveData(List<string> results)
         {
             try
@@ -1375,12 +1429,12 @@ StringSerializerFallbackTest.Run(testResults);
                     NewField1 = DateTime.Now,
                     NewField2 = new Generic<int> { Val = 42 }
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SaveData>(bytes);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
-                    original.NewField1 == deserialized.NewField1 && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
+                    original.NewField1 == deserialized.NewField1 &&
                     original.NewField2.Val == deserialized.NewField2.Val)
                     results.Add("✓ Test_SaveData - PASSED");
                 else
@@ -1401,12 +1455,12 @@ StringSerializerFallbackTest.Run(testResults);
                     NewField1 = DateTime.Now,
                     NewField2 = new Generic<int> { Val = 42 }
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SaveData>(json);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
-                    original.NewField1 == deserialized.NewField1 && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
+                    original.NewField1 == deserialized.NewField1 &&
                     original.NewField2.Val == deserialized.NewField2.Val)
                     results.Add("✓ Test_SaveData [JSON] - PASSED");
                 else
@@ -1418,15 +1472,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test generic struct.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_GenericStruct(List<string> results)
         {
             try
             {
                 var original = new GenericStruct<int> { Val = 42 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<GenericStruct<int>>(bytes);
-                
+
                 if (original.Val == deserialized.Val)
                     results.Add("✓ Test_GenericStruct - PASSED");
                 else
@@ -1441,10 +1497,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new GenericStruct<int> { Val = 42 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<GenericStruct<int>>(json);
-                
+
                 if (original.Val == deserialized.Val)
                     results.Add("✓ Test_GenericStruct [JSON] - PASSED");
                 else
@@ -1456,15 +1512,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test generic.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_Generic(List<string> results)
         {
             try
             {
                 var original = new Generic<string> { Val = "test" };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<Generic<string>>(bytes);
-                
+
                 if (original.Val == deserialized.Val)
                     results.Add("✓ Test_Generic - PASSED");
                 else
@@ -1479,10 +1537,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new Generic<string> { Val = "test" };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<Generic<string>>(json);
-                
+
                 if (original.Val == deserialized.Val)
                     results.Add("✓ Test_Generic [JSON] - PASSED");
                 else
@@ -1494,15 +1552,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test complex generic.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_ComplexGeneric(List<string> results)
         {
             try
             {
                 var original = new ComplexGeneric<List<int>> { Val = new List<int> { 1, 2, 3 } };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<ComplexGeneric<List<int>>>(bytes);
-                
+
                 if (ListsEqual(original.Val, deserialized.Val))
                     results.Add("✓ Test_ComplexGeneric - PASSED");
                 else
@@ -1517,10 +1577,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new ComplexGeneric<List<int>> { Val = new List<int> { 1, 2, 3 } };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<ComplexGeneric<List<int>>>(json);
-                
+
                 if (ListsEqual(original.Val, deserialized.Val))
                     results.Add("✓ Test_ComplexGeneric [JSON] - PASSED");
                 else
@@ -1532,15 +1592,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test complex generic2.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_ComplexGeneric2(List<string> results)
         {
             try
             {
                 var original = new ComplexGeneric2<int> { Val = new Generic<int> { Val = 42 } };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<ComplexGeneric2<int>>(bytes);
-                
+
                 if (original.Val.Val == deserialized.Val.Val)
                     results.Add("✓ Test_ComplexGeneric2 - PASSED");
                 else
@@ -1555,10 +1617,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new ComplexGeneric2<int> { Val = new Generic<int> { Val = 42 } };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<ComplexGeneric2<int>>(json);
-                
+
                 if (original.Val.Val == deserialized.Val.Val)
                     results.Add("✓ Test_ComplexGeneric2 [JSON] - PASSED");
                 else
@@ -1570,15 +1632,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test sub1.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_Sub1(List<string> results)
         {
             try
             {
                 var original = new Sub1 { A = 1, B = 2 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<Sub1>(bytes);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_Sub1 - PASSED");
                 else
@@ -1593,10 +1657,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new Sub1 { A = 1, B = 2 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<Sub1>(json);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_Sub1 [JSON] - PASSED");
                 else
@@ -1608,15 +1672,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test sub3.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_Sub3(List<string> results)
         {
             try
             {
                 var original = new Sub3 { A = 1, C = 3, E = 5 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<Sub3>(bytes);
-                
+
                 if (original.A == deserialized.A && original.C == deserialized.C && original.E == deserialized.E)
                     results.Add("✓ Test_Sub3 - PASSED");
                 else
@@ -1631,10 +1697,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new Sub3 { A = 1, C = 3, E = 5 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<Sub3>(json);
-                
+
                 if (original.A == deserialized.A && original.C == deserialized.C && original.E == deserialized.E)
                     results.Add("✓ Test_Sub3 [JSON] - PASSED");
                 else
@@ -1646,15 +1712,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test test class.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_TestClass(List<string> results)
         {
             try
             {
                 var original = new TestClass { A = 1, B = "test" };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<TestClass>(bytes);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_TestClass - PASSED");
                 else
@@ -1669,10 +1737,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new TestClass { A = 1, B = "test" };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<TestClass>(json);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_TestClass [JSON] - PASSED");
                 else
@@ -1684,15 +1752,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test test class2.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_TestClass2(List<string> results)
         {
             try
             {
                 var original = new TestClass2 { A = 1, B = "test", C = 3 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<TestClass2>(bytes);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_TestClass2 - PASSED");
                 else
@@ -1707,10 +1777,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new TestClass2 { A = 1, B = "test", C = 3 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<TestClass2>(json);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_TestClass2 [JSON] - PASSED");
                 else
@@ -1722,6 +1792,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test test class3.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_TestClass3(List<string> results)
         {
             try
@@ -1740,13 +1812,13 @@ StringSerializerFallbackTest.Run(testResults);
                     J = new TestStruct3[] { new TestStruct3 { A = 8, B = 1.5f } },
                     K = new Dictionary<int, int> { { 1, 100 } },
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<TestClass3>(bytes);
-                
-                bool success = original.A == deserialized.A && 
-                              original.B == deserialized.B && 
-                              original.C == deserialized.C && 
+
+                bool success = original.A == deserialized.A &&
+                              original.B == deserialized.B &&
+                              original.C == deserialized.C &&
                               original.D == deserialized.D &&
                               original.E.A == deserialized.E.A &&
                               original.E.B == deserialized.E.B &&
@@ -1757,7 +1829,7 @@ StringSerializerFallbackTest.Run(testResults);
                               original.I[0].Value.A == deserialized.I[0].Value.A &&
                               original.J.Length == deserialized.J.Length &&
                               original.K[1] == deserialized.K[1];
-                
+
                 if (success)
                     results.Add("✓ Test_TestClass3 - PASSED");
                 else
@@ -1785,13 +1857,13 @@ StringSerializerFallbackTest.Run(testResults);
                     J = new TestStruct3[] { new TestStruct3 { A = 8, B = 1.5f } },
                     K = new Dictionary<int, int> { { 1, 100 } },
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<TestClass3>(json);
-                
-                bool success = original.A == deserialized.A && 
-                              original.B == deserialized.B && 
-                              original.C == deserialized.C && 
+
+                bool success = original.A == deserialized.A &&
+                              original.B == deserialized.B &&
+                              original.C == deserialized.C &&
                               original.D == deserialized.D &&
                               original.E.A == deserialized.E.A &&
                               original.E.B == deserialized.E.B &&
@@ -1802,7 +1874,7 @@ StringSerializerFallbackTest.Run(testResults);
                               original.I[0].Value.A == deserialized.I[0].Value.A &&
                               original.J.Length == deserialized.J.Length &&
                               original.K[1] == deserialized.K[1];
-                
+
                 if (success)
                     results.Add("✓ Test_TestClass3 [JSON] - PASSED");
                 else
@@ -1814,15 +1886,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test test struct.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_TestStruct(List<string> results)
         {
             try
             {
                 var original = new TestStruct { A = 1, B = "test" };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<TestStruct>(bytes);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_TestStruct - PASSED");
                 else
@@ -1837,10 +1911,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new TestStruct { A = 1, B = "test" };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<TestStruct>(json);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_TestStruct [JSON] - PASSED");
                 else
@@ -1852,6 +1926,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test test struct2.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_TestStruct2(List<string> results)
         {
             try
@@ -1862,10 +1938,10 @@ StringSerializerFallbackTest.Run(testResults);
                     B = true,
                     C = new TestStruct3 { A = 2, B = 1.5f }
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<TestStruct2>(bytes);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_TestStruct2 - PASSED");
                 else
@@ -1885,10 +1961,10 @@ StringSerializerFallbackTest.Run(testResults);
                     B = true,
                     C = new TestStruct3 { A = 2, B = 1.5f }
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<TestStruct2>(json);
-                
+
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_TestStruct2 [JSON] - PASSED");
                 else
@@ -1900,6 +1976,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test simple class.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SimpleClass(List<string> results)
         {
             try
@@ -1910,11 +1988,11 @@ StringSerializerFallbackTest.Run(testResults);
                     Name = "Test",
                     CreateTime = DateTime.Now
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SimpleClass>(bytes);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleClass - PASSED");
                 else
@@ -1934,11 +2012,11 @@ StringSerializerFallbackTest.Run(testResults);
                     Name = "Test",
                     CreateTime = DateTime.Now
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SimpleClass>(json);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleClass [JSON] - PASSED");
                 else
@@ -1950,16 +2028,18 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test simple record struct.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SimpleRecordStruct(List<string> results)
         {
             try
             {
                 var original = new SimpleRecordStruct(1, "Test", DateTime.Now);
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SimpleRecordStruct>(bytes);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleRecordStruct - PASSED");
                 else
@@ -1974,11 +2054,11 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new SimpleRecordStruct(1, "Test", DateTime.Now);
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecordStruct>(json);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleRecordStruct [JSON] - PASSED");
                 else
@@ -1990,15 +2070,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test simple record struct2.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SimpleRecordStruct2(List<string> results)
         {
             try
             {
                 var original = new SimpleRecordStruct2(1, DateTime.Now);
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SimpleRecordStruct2>(bytes);
-                
+
                 if (original.Id == deserialized.Id && original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleRecordStruct2 - PASSED");
                 else
@@ -2013,10 +2095,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new SimpleRecordStruct2(1, DateTime.Now);
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecordStruct2>(json);
-                
+
                 if (original.Id == deserialized.Id && original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleRecordStruct2 [JSON] - PASSED");
                 else
@@ -2028,15 +2110,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test simple record struct2 generic.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SimpleRecordStruct2_Generic(List<string> results)
         {
             try
             {
                 var original = new SimpleRecordStruct2<string>(1, "test data");
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SimpleRecordStruct2<string>>(bytes);
-                
+
                 if (original.Id == deserialized.Id && original.Data == deserialized.Data)
                     results.Add("✓ Test_SimpleRecordStruct2_Generic - PASSED");
                 else
@@ -2051,10 +2135,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new SimpleRecordStruct2<string>(1, "test data");
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecordStruct2<string>>(json);
-                
+
                 if (original.Id == deserialized.Id && original.Data == deserialized.Data)
                     results.Add("✓ Test_SimpleRecordStruct2_Generic [JSON] - PASSED");
                 else
@@ -2066,15 +2150,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test simple record.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SimpleRecord(List<string> results)
         {
             try
             {
                 var original = new SimpleRecord(1, "Test");
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SimpleRecord>(bytes);
-                
+
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name)
                     results.Add("✓ Test_SimpleRecord - PASSED");
                 else
@@ -2089,10 +2175,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new SimpleRecord(1, "Test");
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecord>(json);
-                
+
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name)
                     results.Add("✓ Test_SimpleRecord [JSON] - PASSED");
                 else
@@ -2104,16 +2190,18 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test simple record2.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SimpleRecord2(List<string> results)
         {
             try
             {
                 var original = new SimpleRecord2(1, "Test", DateTime.Now);
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SimpleRecord2>(bytes);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleRecord2 - PASSED");
                 else
@@ -2128,11 +2216,11 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new SimpleRecord2(1, "Test", DateTime.Now);
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecord2>(json);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleRecord2 [JSON] - PASSED");
                 else
@@ -2144,6 +2232,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test simple record3.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SimpleRecord3(List<string> results)
         {
             try
@@ -2153,11 +2243,11 @@ StringSerializerFallbackTest.Run(testResults);
                     Flag = true,
                     Ignored = 999
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SimpleRecord3>(bytes);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.Flag == deserialized.Flag)
                     results.Add("✓ Test_SimpleRecord3 - PASSED");
                 else
@@ -2176,11 +2266,11 @@ StringSerializerFallbackTest.Run(testResults);
                     Flag = true,
                     Ignored = 999
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecord3>(json);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.Flag == deserialized.Flag)
                     results.Add("✓ Test_SimpleRecord3 [JSON] - PASSED");
                 else
@@ -2192,6 +2282,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test simple record4.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SimpleRecord4(List<string> results)
         {
             try
@@ -2201,11 +2293,11 @@ StringSerializerFallbackTest.Run(testResults);
                     Flag = true,
                     ShouldNotIgnore = 42
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SimpleRecord4>(bytes);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.ShouldNotIgnore == deserialized.ShouldNotIgnore)
                     results.Add("✓ Test_SimpleRecord4 - PASSED");
                 else
@@ -2224,11 +2316,11 @@ StringSerializerFallbackTest.Run(testResults);
                     Flag = true,
                     ShouldNotIgnore = 42
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecord4>(json);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.ShouldNotIgnore == deserialized.ShouldNotIgnore)
                     results.Add("✓ Test_SimpleRecord4 [JSON] - PASSED");
                 else
@@ -2240,6 +2332,8 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test simple record5.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SimpleRecord5(List<string> results)
         {
             try
@@ -2249,10 +2343,10 @@ StringSerializerFallbackTest.Run(testResults);
                     Flag = true,
                     ShouldNotIgnore = 42
                 };
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SimpleRecord5>(bytes);
-                
+
                 if (original.ShouldNotIgnore == deserialized.ShouldNotIgnore)
                     results.Add("✓ Test_SimpleRecord5 - PASSED");
                 else
@@ -2271,10 +2365,10 @@ StringSerializerFallbackTest.Run(testResults);
                     Flag = true,
                     ShouldNotIgnore = 42
                 };
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecord5>(json);
-                
+
                 if (original.ShouldNotIgnore == deserialized.ShouldNotIgnore)
                     results.Add("✓ Test_SimpleRecord5 [JSON] - PASSED");
                 else
@@ -2286,15 +2380,17 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test simple record6.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SimpleRecord6(List<string> results)
         {
             try
             {
                 var original = new SimpleRecord6<int>(1, 42);
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SimpleRecord6<int>>(bytes);
-                
+
                 if (original.Id == deserialized.Id && original.Data == deserialized.Data)
                     results.Add("✓ Test_SimpleRecord6 - PASSED");
                 else
@@ -2309,10 +2405,10 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new SimpleRecord6<int>(1, 42);
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecord6<int>>(json);
-                
+
                 if (original.Id == deserialized.Id && original.Data == deserialized.Data)
                     results.Add("✓ Test_SimpleRecord6 [JSON] - PASSED");
                 else
@@ -2324,16 +2420,18 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test simple struct.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SimpleStruct(List<string> results)
         {
             try
             {
                 var original = new SimpleStruct(1, "Test", DateTime.Now);
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SimpleStruct>(bytes);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleStruct - PASSED");
                 else
@@ -2348,11 +2446,11 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new SimpleStruct(1, "Test", DateTime.Now);
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SimpleStruct>(json);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleStruct [JSON] - PASSED");
                 else
@@ -2364,16 +2462,18 @@ StringSerializerFallbackTest.Run(testResults);
             }
         }
 
+        /// <summary>Verifies test simple class with constructor.</summary>
+        /// <param name="results">The results used by this operation.</param>
         static void Test_SimpleClassWithConstructor(List<string> results)
         {
             try
             {
                 var original = new SimpleClassWithConstructor(1, "Test", DateTime.Now);
-                
+
                 var bytes = LuminPackSerializer.Serialize(original);
                 var deserialized = LuminPackSerializer.Deserialize<SimpleClassWithConstructor>(bytes);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleClassWithConstructor - PASSED");
                 else
@@ -2388,11 +2488,11 @@ StringSerializerFallbackTest.Run(testResults);
             try
             {
                 var original = new SimpleClassWithConstructor(1, "Test", DateTime.Now);
-                
+
                 var json = LuminPackSerializer.SerializeJson(original);
                 var deserialized = LuminPackSerializer.DeserializeJson<SimpleClassWithConstructor>(json);
-                
-                if (original.Id == deserialized.Id && original.Name == deserialized.Name && 
+
+                if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleClassWithConstructor [JSON] - PASSED");
                 else
@@ -2405,12 +2505,17 @@ StringSerializerFallbackTest.Run(testResults);
         }
 
         // Helper methods for comparison
+        /// <summary>Verifies lists equal.</summary>
+        /// <param name="list1">The list1 used by this operation.</param>
+        /// <param name="list2">The list2 used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool ListsEqual<T>(List<T> list1, List<T> list2)
         {
             if (list1 == null && list2 == null) return true;
             if (list1 == null || list2 == null) return false;
             if (list1.Count != list2.Count) return false;
-            
+
             for (int i = 0; i < list1.Count; i++)
             {
                 if (!EqualityComparer<T>.Default.Equals(list1[i], list2[i]))
@@ -2419,12 +2524,17 @@ StringSerializerFallbackTest.Run(testResults);
             return true;
         }
 
+        /// <summary>Verifies arrays equal.</summary>
+        /// <param name="array1">The array1 used by this operation.</param>
+        /// <param name="array2">The array2 used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         static bool ArraysEqual<T>(T[] array1, T[] array2)
         {
             if (array1 == null && array2 == null) return true;
             if (array1 == null || array2 == null) return false;
             if (array1.Length != array2.Length) return false;
-            
+
             for (int i = 0; i < array1.Length; i++)
             {
                 if (!EqualityComparer<T>.Default.Equals(array1[i], array2[i]))

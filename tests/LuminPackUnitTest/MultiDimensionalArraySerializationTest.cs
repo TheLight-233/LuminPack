@@ -3,19 +3,29 @@ using LuminPack.Attribute;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides multi dimensional array serialization test functionality.</summary>
 public class MultiDimensionalArraySerializationTest
 {
+    /// <summary>Provides array container functionality.</summary>
     [LuminPackable]
     public class ArrayContainer
     {
+        /// <summary>Gets or sets the two dimensional array.</summary>
         [LuminPackOrder(0)] public string[,]? TwoDimensionalArray { get; set; }
+        /// <summary>Gets or sets the three dimensional array.</summary>
         [LuminPackOrder(1)] public int[,,]? ThreeDimensionalArray { get; set; }
+        /// <summary>Gets or sets the four dimensional array.</summary>
         [LuminPackOrder(2)] public int[,,,]? FourDimensionalArray { get; set; }
+        /// <summary>Gets or sets the five dimensional array.</summary>
         [LuminPackOrder(3)] public int[,,,,]? FiveDimensionalArray { get; set; }
+        /// <summary>Gets or sets the six dimensional array.</summary>
         [LuminPackOrder(4)] public int[,,,,,]? SixDimensionalArray { get; set; }
+        /// <summary>Gets or sets the seven dimensional array.</summary>
         [LuminPackOrder(5)] public int[,,,,,,]? SevenDimensionalArray { get; set; }
     }
 
+    /// <summary>Verifies test two dimensional array.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestTwoDimensionalArray(List<string> output)
     {
         try
@@ -25,7 +35,7 @@ public class MultiDimensionalArraySerializationTest
                 TwoDimensionalArray = new string[3, 4]
             };
 
-            // 初始化二维数组
+            // Initialize the two-dimensional array.
             for (int i = 0; i < 3; i++)
             {
                 for (int j = 0; j < 4; j++)
@@ -73,6 +83,8 @@ public class MultiDimensionalArraySerializationTest
         }
     }
 
+    /// <summary>Verifies test three dimensional array.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestThreeDimensionalArray(List<string> output)
     {
         try
@@ -82,7 +94,7 @@ public class MultiDimensionalArraySerializationTest
                 ThreeDimensionalArray = new int[2, 3, 4]
             };
 
-            // 初始化三维数组
+            // Initialize the three-dimensional array.
             for (int i = 0; i < 2; i++)
             {
                 for (int j = 0; j < 3; j++)
@@ -137,6 +149,8 @@ public class MultiDimensionalArraySerializationTest
         }
     }
 
+    /// <summary>Verifies test four dimensional array.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestFourDimensionalArray(List<string> output)
     {
         try
@@ -146,7 +160,7 @@ public class MultiDimensionalArraySerializationTest
                 FourDimensionalArray = new int[2, 2, 3, 4]
             };
 
-            // 初始化四维数组
+            // Initialize the four-dimensional array.
             for (int i = 0; i < 2; i++)
             {
                 for (int j = 0; j < 2; j++)
@@ -208,6 +222,8 @@ public class MultiDimensionalArraySerializationTest
         }
     }
 
+    /// <summary>Verifies test five dimensional array.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestFiveDimensionalArray(List<string> output)
     {
         try
@@ -217,7 +233,7 @@ public class MultiDimensionalArraySerializationTest
                 FiveDimensionalArray = new int[2, 2, 2, 3, 4]
             };
 
-            // 初始化五维数组
+            // Initialize the five-dimensional array.
             for (int i = 0; i < 2; i++)
             {
                 for (int j = 0; j < 2; j++)
@@ -286,6 +302,8 @@ public class MultiDimensionalArraySerializationTest
         }
     }
 
+    /// <summary>Verifies test six dimensional array.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestSixDimensionalArray(List<string> output)
     {
         try
@@ -295,7 +313,7 @@ public class MultiDimensionalArraySerializationTest
                 SixDimensionalArray = new int[2, 2, 2, 2, 3, 4]
             };
 
-            // 初始化六维数组
+            // Initialize the six-dimensional array.
             for (int i = 0; i < 2; i++)
             {
                 for (int j = 0; j < 2; j++)
@@ -371,6 +389,8 @@ public class MultiDimensionalArraySerializationTest
         }
     }
 
+    /// <summary>Verifies test seven dimensional array.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestSevenDimensionalArray(List<string> output)
     {
         try
@@ -380,7 +400,7 @@ public class MultiDimensionalArraySerializationTest
                 SevenDimensionalArray = new int[2, 2, 2, 2, 2, 3, 4]
             };
 
-            // 初始化七维数组
+            // Initialize the seven-dimensional array.
             for (int i = 0; i < 2; i++)
             {
                 for (int j = 0; j < 2; j++)
@@ -463,6 +483,8 @@ public class MultiDimensionalArraySerializationTest
         }
     }
 
+    /// <summary>Verifies test all arrays in one container.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestAllArraysInOneContainer(List<string> output)
     {
         try
@@ -471,10 +493,10 @@ public class MultiDimensionalArraySerializationTest
             {
                 TwoDimensionalArray = new string[2, 2] { { "1", "2" }, { "3", "4" } },
                 ThreeDimensionalArray = new int[2, 2, 2] { { { 1, 2 }, { 3, 4 } }, { { 5, 6 }, { 7, 8 } } },
-                FourDimensionalArray = new int[2, 2, 2, 2] 
-                { 
-                    { { { 1, 2 }, { 3, 4 } }, { { 5, 6 }, { 7, 8 } } }, 
-                    { { { 9, 10 }, { 11, 12 } }, { { 13, 14 }, { 15, 16 } } } 
+                FourDimensionalArray = new int[2, 2, 2, 2]
+                {
+                    { { { 1, 2 }, { 3, 4 } }, { { 5, 6 }, { 7, 8 } } },
+                    { { { 9, 10 }, { 11, 12 } }, { { 13, 14 }, { 15, 16 } } }
                 }
             };
 
@@ -503,12 +525,14 @@ public class MultiDimensionalArraySerializationTest
             output.Add($"✗ TestAllArraysInOneContainer - ERROR: {ex.Message}");
         }
     }
-    
+
+    /// <summary>Verifies test large two dimensional array.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void TestLargeTwoDimensionalArray(List<string> output)
     {
         try
         {
-            // 2000个元素，超过1000阈值，触发多线程
+            // Use 2000 elements to exceed the 1000-element parallelization threshold.
             string[,] twoDimensionalArray = new string[100, 20];
 
             for (int i = 0; i < 100; i++)
@@ -523,9 +547,9 @@ public class MultiDimensionalArraySerializationTest
             var deserializedContainer = LuminPackSerializer.Deserialize<string[,]>(buf);
 
             bool passed = VerifyTwoDimensionalArray(deserializedContainer, twoDimensionalArray);
-        
-            output.Add(passed 
-                ? "✓ TestLargeTwoDimensionalArray - PASSED (multithreaded)" 
+
+            output.Add(passed
+                ? "✓ TestLargeTwoDimensionalArray - PASSED (multithreaded)"
                 : "✗ TestLargeTwoDimensionalArray - FAILED");
         }
         catch (Exception ex)
@@ -533,13 +557,17 @@ public class MultiDimensionalArraySerializationTest
             output.Add($"✗ TestLargeTwoDimensionalArray - ERROR: {ex.Message}");
         }
     }
-    
+
+    /// <summary>Verifies verify two dimensional array.</summary>
+    /// <param name="actual">The actual used by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool VerifyTwoDimensionalArray(string[,]? actual, string[,]? expected)
     {
         if (actual == null || expected == null) return false;
-        if (actual.GetLength(0) != expected.GetLength(0) || actual.GetLength(1) != expected.GetLength(1)) 
+        if (actual.GetLength(0) != expected.GetLength(0) || actual.GetLength(1) != expected.GetLength(1))
             return false;
-    
+
         for (int i = 0; i < expected.GetLength(0); i++)
         {
             for (int j = 0; j < expected.GetLength(1); j++)
@@ -550,6 +578,8 @@ public class MultiDimensionalArraySerializationTest
         return true;
     }
 
+    /// <summary>Verifies run all tests.</summary>
+    /// <param name="output">The destination receiving the result.</param>
     public static void RunAllTests(List<string> output)
     {
         TestTwoDimensionalArray(output);

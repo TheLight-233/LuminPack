@@ -1,5 +1,3 @@
-using System;
-using System.Linq;
 using System.Text;
 using LuminPack;
 using LuminPack.Option;
@@ -7,8 +5,12 @@ using Xunit;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides json ordered property test functionality.</summary>
 public class JsonOrderedPropertyTest
 {
+    /// <summary>Verifies ordered and fallback paths can alternate.</summary>
+    /// <param name="encoding">The encoding used by this operation.</param>
+    /// <param name="strict">The strict used by this operation.</param>
     [Theory]
     [InlineData(LuminPackStringEncoding.UTF8, false)]
     [InlineData(LuminPackStringEncoding.UTF8, true)]
@@ -32,10 +34,12 @@ public class JsonOrderedPropertyTest
         Assert.Equal(17, result.F07);
 
         var unicode = LuminPackSerializer.DeserializeJson<JsonSmallDispatchModel>(
-            "{\"AA\":1,\"AB\":2,\"名称\":\"中文😀\\n\"}", option);
-        Assert.Equal("中文😀\n", unicode.名称);
+            "{\u0022AA\u0022:1,\u0022AB\u0022:2,\u0022\u540D\u79F0\u0022:\u0022\u4E2D\u6587\uD83D\uDE00\\n\u0022}", option);
+        Assert.Equal("\u4E2D\u6587\uD83D\uDE00\n", unicode.\u540d\u79f0);
     }
 
+    /// <summary>Verifies strict ordered path rejects malformed separators and truncations.</summary>
+    /// <param name="encoding">The encoding used by this operation.</param>
     [Theory]
     [InlineData(LuminPackStringEncoding.UTF8)]
     [InlineData(LuminPackStringEncoding.UTF16)]
@@ -63,6 +67,8 @@ public class JsonOrderedPropertyTest
         }
     }
 
+    /// <summary>Verifies random property orders preserve values.</summary>
+    /// <param name="encoding">The encoding used by this operation.</param>
     [Theory]
     [InlineData(LuminPackStringEncoding.UTF8)]
     [InlineData(LuminPackStringEncoding.UTF16)]

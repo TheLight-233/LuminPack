@@ -6,7 +6,9 @@ namespace LuminPack;
 /// formatter for T", so the generic dispatch falls back to the manual registration registry
 /// (<see cref="LuminPack.Code.LuminPackFormatterRegistry"/>).
 /// </summary>
+/// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
 public static class LuminPackTypeCache<T>
 {
+    /// <summary>Stores the type id.</summary>
     public static uint TypeId = uint.MaxValue;
 }

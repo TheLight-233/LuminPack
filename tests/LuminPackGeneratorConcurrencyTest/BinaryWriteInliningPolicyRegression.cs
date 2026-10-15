@@ -2,8 +2,11 @@ using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
+/// <summary>Provides binary write inlining policy regression functionality.</summary>
 internal static class BinaryWriteInliningPolicyRegression
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="platformReferences">The platform references used by this operation.</param>
     public static void Run(MetadataReference[] platformReferences)
     {
         const string source = """
@@ -59,6 +62,10 @@ internal static class BinaryWriteInliningPolicyRegression
         AssertWriteAttribute(generated, "global::System.Collections.Generic.Dictionary<string, long>", "NoInlining");
     }
 
+    /// <summary>Verifies assert write attribute.</summary>
+    /// <param name="generated">The generated used by this operation.</param>
+    /// <param name="typeName">The C# type name to use in generated source.</param>
+    /// <param name="expectedAttribute">The expected attribute used by this operation.</param>
     private static void AssertWriteAttribute(string generated, string typeName, string expectedAttribute)
     {
         string signature =

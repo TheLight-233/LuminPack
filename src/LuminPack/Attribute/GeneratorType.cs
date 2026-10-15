@@ -3,9 +3,13 @@ namespace LuminPack.Attribute;
 /// <summary>Specifies the source-generated serialization layout for a LuminPack type.</summary>
 public enum GeneratorType : byte
 {
+    /// <summary>Specifies object.</summary>
     Object,
+    /// <summary>Specifies version tolerant.</summary>
     VersionTolerant,
+    /// <summary>Specifies circle reference.</summary>
     CircleReference,
+    /// <summary>Specifies non generator.</summary>
     NonGenerator,
 
     /// <summary>

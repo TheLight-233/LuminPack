@@ -8,30 +8,81 @@ namespace LuminPackUnitTest;
 // JSON writes enums as their raw integer token, so every declared backing width
 // must survive the trip. Narrowing to int truncated 64-bit-backed enums and
 // reinterpreting a narrow enum as int read past the value.
-public enum BackingByte : byte { Min = byte.MinValue, Max = byte.MaxValue }
-public enum BackingSByte : sbyte { Min = sbyte.MinValue, Max = sbyte.MaxValue }
-public enum BackingShort : short { Min = short.MinValue, Max = short.MaxValue }
-public enum BackingUShort : ushort { Min = ushort.MinValue, Max = ushort.MaxValue }
-public enum BackingInt : int { Min = int.MinValue, Max = int.MaxValue }
-public enum BackingUInt : uint { Min = uint.MinValue, Max = uint.MaxValue }
-public enum BackingLong : long { Min = long.MinValue, Max = long.MaxValue }
-public enum BackingULong : ulong { Min = ulong.MinValue, Max = ulong.MaxValue }
+/// <summary>Provides backing byte functionality.</summary>
+public enum BackingByte : byte {
+/// <summary>Specifies min.</summary>
+Min = byte.MinValue,
+/// <summary>Specifies max.</summary>
+Max = byte.MaxValue }
+/// <summary>Provides backing s byte functionality.</summary>
+public enum BackingSByte : sbyte {
+/// <summary>Specifies min.</summary>
+Min = sbyte.MinValue,
+/// <summary>Specifies max.</summary>
+Max = sbyte.MaxValue }
+/// <summary>Provides backing short functionality.</summary>
+public enum BackingShort : short {
+/// <summary>Specifies min.</summary>
+Min = short.MinValue,
+/// <summary>Specifies max.</summary>
+Max = short.MaxValue }
+/// <summary>Provides backing u short functionality.</summary>
+public enum BackingUShort : ushort {
+/// <summary>Specifies min.</summary>
+Min = ushort.MinValue,
+/// <summary>Specifies max.</summary>
+Max = ushort.MaxValue }
+/// <summary>Provides backing int functionality.</summary>
+public enum BackingInt : int {
+/// <summary>Specifies min.</summary>
+Min = int.MinValue,
+/// <summary>Specifies max.</summary>
+Max = int.MaxValue }
+/// <summary>Provides backing u int functionality.</summary>
+public enum BackingUInt : uint {
+/// <summary>Specifies min.</summary>
+Min = uint.MinValue,
+/// <summary>Specifies max.</summary>
+Max = uint.MaxValue }
+/// <summary>Provides backing long functionality.</summary>
+public enum BackingLong : long {
+/// <summary>Specifies min.</summary>
+Min = long.MinValue,
+/// <summary>Specifies max.</summary>
+Max = long.MaxValue }
+/// <summary>Provides backing u long functionality.</summary>
+public enum BackingULong : ulong {
+/// <summary>Specifies min.</summary>
+Min = ulong.MinValue,
+/// <summary>Specifies max.</summary>
+Max = ulong.MaxValue }
 
+/// <summary>Provides enum holder functionality.</summary>
 [LuminPackable]
 public sealed partial class EnumHolder
 {
+    /// <summary>Stores the byte value.</summary>
     public BackingByte ByteValue;
+    /// <summary>Stores the s byte value.</summary>
     public BackingSByte SByteValue;
+    /// <summary>Stores the short value.</summary>
     public BackingShort ShortValue;
+    /// <summary>Stores the u short value.</summary>
     public BackingUShort UShortValue;
+    /// <summary>Stores the int value.</summary>
     public BackingInt IntValue;
+    /// <summary>Stores the u int value.</summary>
     public BackingUInt UIntValue;
+    /// <summary>Stores the long value.</summary>
     public BackingLong LongValue;
+    /// <summary>Stores the u long value.</summary>
     public BackingULong ULongValue;
 }
 
+/// <summary>Provides json enum backing type test functionality.</summary>
 public class JsonEnumBackingTypeTest
 {
+    /// <summary>Verifies object fields round trip minimum values.</summary>
     [Fact]
     public void ObjectFieldsRoundTripMinimumValues()
     {
@@ -68,6 +119,7 @@ public class JsonEnumBackingTypeTest
         Assert.Equal(value.ULongValue, roundTrip.ULongValue);
     }
 
+    /// <summary>Verifies object fields round trip maximum values.</summary>
     [Fact]
     public void ObjectFieldsRoundTripMaximumValues()
     {
@@ -98,6 +150,7 @@ public class JsonEnumBackingTypeTest
         Assert.Equal(value.ULongValue, roundTrip.ULongValue);
     }
 
+    /// <summary>Verifies standalone enum formatters preserve every backing width.</summary>
     [Fact]
     public void StandaloneEnumFormattersPreserveEveryBackingWidth()
     {
@@ -120,6 +173,7 @@ public class JsonEnumBackingTypeTest
         Assert.Equal(BackingULong.Max, LuminPackSerializer.DeserializeJson<BackingULong>("18446744073709551615"));
     }
 
+    /// <summary>Verifies enum collections preserve64 bit backing widths.</summary>
     [Fact]
     public void EnumCollectionsPreserve64BitBackingWidths()
     {
@@ -135,6 +189,10 @@ public class JsonEnumBackingTypeTest
         Assert.Equal(ulongs, LuminPackSerializer.DeserializeJson<BackingULong[]>(ulongJson));
     }
 
+    /// <summary>Verifies round trip.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="root">Receives the root produced by the operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static EnumHolder RoundTrip(EnumHolder value, out JsonElement root)
     {
         string json = LuminPackSerializer.SerializeJson(value);

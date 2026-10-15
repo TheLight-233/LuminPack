@@ -1,9 +1,7 @@
-using System;
 using System.Buffers;
 using System.Buffers.Text;
 using System.Runtime.CompilerServices;
 using BenchmarkDotNet.Attributes;
-using BenchmarkDotNet.Columns;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Jobs;
 using BenchmarkDotNet.Order;
@@ -41,6 +39,7 @@ public class LuminPackXjbFloatBenchmark
     private float[] _floatGame = null!, _floatRandom = null!, _floatAdversarial = null!;
     private double[] _doubleGame = null!, _doubleRandom = null!, _doubleAdversarial = null!;
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -103,6 +102,8 @@ public class LuminPackXjbFloatBenchmark
         }
     }
 
+    /// <summary>Measures floating cases for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     public static System.Collections.Generic.IEnumerable<object[]> FloatingCases()
     {
         yield return new object[] { FloatingDataset.GameLike };
@@ -110,30 +111,60 @@ public class LuminPackXjbFloatBenchmark
         yield return new object[] { FloatingDataset.Adversarial };
     }
 
+    /// <summary>Measures float legacy for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true), BenchmarkCategory("Float"), ArgumentsSource(nameof(FloatingCases))]
     public int Float_Legacy(FloatingDataset d) => WriteFloats(_buffer, GetFloats(d), 0, _state);
 
+    /// <summary>Measures float xjb for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("Float"), ArgumentsSource(nameof(FloatingCases))]
     public int Float_Xjb(FloatingDataset d) => WriteFloats(_buffer, GetFloats(d), 1, _state);
 
+    /// <summary>Measures float dot net for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("Float"), ArgumentsSource(nameof(FloatingCases))]
     public int Float_DotNet(FloatingDataset d) => WriteFloats(_buffer, GetFloats(d), 2, _state);
 
+    /// <summary>Measures double legacy for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true), BenchmarkCategory("Double"), ArgumentsSource(nameof(FloatingCases))]
     public int Double_Legacy(FloatingDataset d) => WriteDoubles(_buffer, GetDoubles(d), 0, _state);
 
+    /// <summary>Measures double xjb for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("Double"), ArgumentsSource(nameof(FloatingCases))]
     public int Double_Xjb(FloatingDataset d) => WriteDoubles(_buffer, GetDoubles(d), 1, _state);
 
+    /// <summary>Measures double dot net for the configured benchmark input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [Benchmark, BenchmarkCategory("Double"), ArgumentsSource(nameof(FloatingCases))]
     public int Double_DotNet(FloatingDataset d) => WriteDoubles(_buffer, GetDoubles(d), 2, _state);
 
+    /// <summary>Obtains the floats for the supplied input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private float[] GetFloats(FloatingDataset d) =>
         d == FloatingDataset.GameLike ? _floatGame : d == FloatingDataset.RandomFinite ? _floatRandom : _floatAdversarial;
 
+    /// <summary>Obtains the doubles for the supplied input.</summary>
+    /// <param name="d">The d used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private double[] GetDoubles(FloatingDataset d) =>
         d == FloatingDataset.GameLike ? _doubleGame : d == FloatingDataset.RandomFinite ? _doubleRandom : _doubleAdversarial;
 
+    /// <summary>Writes floats to the current output.</summary>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="values">The values used by this operation.</param>
+    /// <param name="mode">The mode used by this operation.</param>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteFloats(Span<byte> destination, float[] values, int mode, LuminPackWriterOptionalState state)
     {
@@ -171,6 +202,12 @@ public class LuminPackXjbFloatBenchmark
         }
     }
 
+    /// <summary>Writes doubles to the current output.</summary>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="values">The values used by this operation.</param>
+    /// <param name="mode">The mode used by this operation.</param>
+    /// <param name="state">The reusable state associated with the operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static int WriteDoubles(Span<byte> destination, double[] values, int mode, LuminPackWriterOptionalState state)
     {
@@ -214,6 +251,10 @@ public class LuminPackXjbFloatBenchmark
 /// <summary>Public-API bridge to the shipped formatter used by the size diagnostics.</summary>
 internal static class LuminPackJsonFloatProbe
 {
+    /// <summary>Writes  to the current output.</summary>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static int Write(Span<byte> destination, float value)
     {
         Span<byte> span = destination;
@@ -222,6 +263,10 @@ internal static class LuminPackJsonFloatProbe
         return writer.CurrentIndex;
     }
 
+    /// <summary>Writes  to the current output.</summary>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static int Write(Span<byte> destination, double value)
     {
         Span<byte> span = destination;
@@ -241,6 +286,10 @@ internal static class LegacyFormatter
     private static readonly double[] FloatPow10D = { 1.0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9 };
     private static readonly double[] DoublePow10D = { 1e0, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15, 1e16, 1e17 };
 
+    /// <summary>Measures float for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static int Float(Span<byte> dest, float value)
     {
         uint bits = BitConverter.SingleToUInt32Bits(value);
@@ -263,6 +312,10 @@ internal static class LegacyFormatter
         return written;
     }
 
+    /// <summary>Measures double for the configured benchmark input.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static int Double(Span<byte> dest, double value)
     {
         ulong bits = BitConverter.DoubleToUInt64Bits(value);
@@ -285,6 +338,10 @@ internal static class LegacyFormatter
         return written;
     }
 
+    /// <summary>Attempts to float and reports whether it succeeded.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static int TryFloat(Span<byte> dest, float value)
     {
         uint bits = BitConverter.SingleToUInt32Bits(value);
@@ -325,6 +382,10 @@ internal static class LegacyFormatter
         return 0;
     }
 
+    /// <summary>Attempts to double and reports whether it succeeded.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static int TryDouble(Span<byte> dest, double value)
     {
         ulong bits64 = BitConverter.DoubleToUInt64Bits(value);
@@ -364,6 +425,10 @@ internal static class LegacyFormatter
         return 0;
     }
 
+    /// <summary>Writes u int64 to the current output.</summary>
+    /// <param name="dest">The destination receiving the result.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static int WriteUInt64(Span<byte> dest, ulong value)
     {
         if (value < 10)
@@ -390,6 +455,11 @@ internal static class LegacyFormatter
         return digits;
     }
 
+    /// <summary>Measures emit scaled fixed for the configured benchmark input.</summary>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="scaled">The scaled used by this operation.</param>
+    /// <param name="decimals">The decimals used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static int EmitScaledFixed(Span<byte> destination, ulong scaled, int decimals)
     {
         while (decimals > 0 && scaled % 10 == 0)

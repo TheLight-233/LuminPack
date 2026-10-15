@@ -5,8 +5,11 @@ using LuminPack.Utility;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides buffer writer operation context test functionality.</summary>
 internal static class BufferWriterOperationContextTest
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     internal static void Run(List<string> results)
     {
         RunCase(results, nameof(DefaultAndCustomOptionsResetOnReturn), DefaultAndCustomOptionsResetOnReturn);
@@ -16,6 +19,7 @@ internal static class BufferWriterOperationContextTest
         RunCase(results, nameof(ConcurrentBuffersKeepIndependentContexts), ConcurrentBuffersKeepIndependentContexts);
     }
 
+    /// <summary>Verifies default and custom options reset on return.</summary>
     private static void DefaultAndCustomOptionsResetOnReturn()
     {
         var writer = LuminBufferWriterPool.Rent();
@@ -53,13 +57,14 @@ internal static class BufferWriterOperationContextTest
         }
     }
 
+    /// <summary>Verifies json uses buffer owned option.</summary>
     private static void JsonUsesBufferOwnedOption()
     {
         var writer = LuminBufferWriterPool.Rent();
         try
         {
             writer.Option.StringEncoding = LuminPackStringEncoding.UTF16;
-            const string expected = "JSON context 中文 😀";
+            const string expected = "JSON context \u4E2D\u6587 \uD83D\uDE00";
             LuminPackSerializer.SerializeJson(expected, writer);
             Assert(LuminPackSerializer.DeserializeJson<string>(writer) == expected,
                 "JSON BufferWriter APIs did not share the BufferWriter-owned UTF-16 option.");
@@ -72,6 +77,7 @@ internal static class BufferWriterOperationContextTest
         }
     }
 
+    /// <summary>Writes r and reader state reset per operation to the current output.</summary>
     private static void WriterAndReaderStateResetPerOperation()
     {
         var writer = LuminBufferWriterPool.Rent();
@@ -97,6 +103,7 @@ internal static class BufferWriterOperationContextTest
         }
     }
 
+    /// <summary>Verifies nested buffers keep independent contexts.</summary>
     private static void NestedBuffersKeepIndependentContexts()
     {
         var outer = LuminBufferWriterPool.Rent();
@@ -111,8 +118,8 @@ internal static class BufferWriterOperationContextTest
                 Assert(!ReferenceEquals(outer, inner), "Nested Rent returned the active outer BufferWriter.");
                 inner.Option.StringEncoding = LuminPackStringEncoding.UTF8;
                 inner.Option.StringRecording = LuminPackStringRecording.Token;
-                LuminPackSerializer.Serialize("inner 中文", inner);
-                Assert(LuminPackSerializer.Deserialize<string>(inner) == "inner 中文",
+                LuminPackSerializer.Serialize("inner \u4E2D\u6587", inner);
+                Assert(LuminPackSerializer.Deserialize<string>(inner) == "inner \u4E2D\u6587",
                     "The nested BufferWriter failed to round-trip with its own option.");
             }
             finally
@@ -131,6 +138,7 @@ internal static class BufferWriterOperationContextTest
         }
     }
 
+    /// <summary>Verifies concurrent buffers keep independent contexts.</summary>
     private static void ConcurrentBuffersKeepIndependentContexts()
     {
         var errors = new ConcurrentQueue<Exception>();
@@ -175,6 +183,8 @@ internal static class BufferWriterOperationContextTest
             throw error;
     }
 
+    /// <summary>Verifies assert default.</summary>
+    /// <param name="option">The configuration to apply to this operation.</param>
     private static void AssertDefault(LuminPackSerializerOption option)
     {
         Assert(option.StringEncoding == LuminPackStringEncoding.UTF8,
@@ -185,6 +195,9 @@ internal static class BufferWriterOperationContextTest
             "A rented BufferWriter did not use the default standard format.");
     }
 
+    /// <summary>Verifies assert throws.</summary>
+    /// <param name="action">The action used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void AssertThrows(Action action, string message)
     {
         try
@@ -199,6 +212,10 @@ internal static class BufferWriterOperationContextTest
         throw new InvalidOperationException(message);
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -212,6 +229,9 @@ internal static class BufferWriterOperationContextTest
         }
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)

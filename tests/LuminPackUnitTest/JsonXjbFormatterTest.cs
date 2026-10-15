@@ -1,4 +1,3 @@
-using System;
 using System.Buffers.Text;
 using System.Numerics;
 using LuminPack.Core;
@@ -14,10 +13,12 @@ namespace LuminPackUnitTest;
 // 0x0410000000000000 renders as "4.104536801298376E-289", which parses back to
 // 0x040FFFFFFFFFFFFF). Shortest-ness is therefore verified with exact rational interval
 // arithmetic, and round-tripping with the correctly rounded .NET parser.
+/// <summary>Provides json xjb formatter test functionality.</summary>
 public class JsonXjbFormatterTest
 {
     // ---------------------------------------------------------------- integer helpers
 
+    /// <summary>Verifies mul64x64 matches big integer.</summary>
     [Fact]
     public void Mul64x64MatchesBigInteger()
     {
@@ -48,6 +49,7 @@ public class JsonXjbFormatterTest
 
     // ---------------------------------------------------------------- upstream tables
 
+    /// <summary>Verifies tables match the locked upstream commit.</summary>
     [Fact]
     public void TablesMatchTheLockedUpstreamCommit()
     {
@@ -76,6 +78,7 @@ public class JsonXjbFormatterTest
 
     // ---------------------------------------------------------------- int32/uint32 number fast path
 
+    /// <summary>Writes int32 and write u int32 match utf8 formatter to the current output.</summary>
     [Fact]
     public void WriteInt32AndWriteUInt32MatchUtf8Formatter()
     {
@@ -131,6 +134,7 @@ public class JsonXjbFormatterTest
         }
     }
 
+    /// <summary>Writes u long matches utf8 formatter to the current output.</summary>
     [Fact]
     public void WriteULongMatchesUtf8Formatter()
     {
@@ -166,6 +170,8 @@ public class JsonXjbFormatterTest
         }
     }
 
+    /// <summary>Verifies h7 formula.</summary>
+    /// <returns>The result of the operation.</returns>
     private static byte[] H7Formula()
     {
         var h7 = new byte[2048];
@@ -180,6 +186,10 @@ public class JsonXjbFormatterTest
         return h7;
     }
 
+    /// <summary>Verifies fnv1a64.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <param name="byteWidth">The byte width used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static ulong Fnv1a64(byte[] values, int byteWidth)
     {
         ulong h = 0xCBF29CE484222325UL;
@@ -192,6 +202,10 @@ public class JsonXjbFormatterTest
         return h;
     }
 
+    /// <summary>Verifies fnv1a64.</summary>
+    /// <param name="values">The values used by this operation.</param>
+    /// <param name="byteWidth">The byte width used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static ulong Fnv1a64(ulong[] values, int byteWidth)
     {
         ulong h = 0xCBF29CE484222325UL;
@@ -209,6 +223,7 @@ public class JsonXjbFormatterTest
 
     // ---------------------------------------------------------------- cores
 
+    /// <summary>Verifies float core produces the shortest round tripping decimal.</summary>
     [Fact]
     public void FloatCoreProducesTheShortestRoundTrippingDecimal()
     {
@@ -229,6 +244,7 @@ public class JsonXjbFormatterTest
         Assert.True(count > 50_000, $"float corpus too small: {count}");
     }
 
+    /// <summary>Verifies double core produces the shortest round tripping decimal.</summary>
     [Fact]
     public void DoubleCoreProducesTheShortestRoundTrippingDecimal()
     {
@@ -330,6 +346,14 @@ public class JsonXjbFormatterTest
         Assert.True(verified > 50_000, $"verified only {verified} values");
     }
 
+    /// <summary>Verifies verify decimal.</summary>
+    /// <param name="absBits">The abs bits used by this operation.</param>
+    /// <param name="digits">The digits used by this operation.</param>
+    /// <param name="exponent10">The exponent10 used by this operation.</param>
+    /// <param name="isFloat">The is float used by this operation.</param>
+    /// <param name="zeroText">The zero text used by this operation.</param>
+    /// <param name="utf8Text">The utf8 text used by this operation.</param>
+    /// <param name="utf16Text">The utf16 text used by this operation.</param>
     private static void VerifyDecimal(ulong absBits, ulong digits, int exponent10, bool isFloat, string zeroText, string utf8Text, string utf16Text)
     {
         Assert.Equal(utf8Text, utf16Text);
@@ -391,6 +415,11 @@ public class JsonXjbFormatterTest
         }
     }
 
+    /// <summary>Verifies legacy fixed range.</summary>
+    /// <param name="isFloat">The is float used by this operation.</param>
+    /// <param name="exponent">The exponent used by this operation.</param>
+    /// <param name="absBits">The abs bits used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool LegacyFixedRange(bool isFloat, int exponent, ulong absBits) =>
         isFloat
             ? absBits == 0 || (uint)(exponent - 95) <= 64u
@@ -400,6 +429,12 @@ public class JsonXjbFormatterTest
     /// Exact verification that <paramref name="digits"/> x 10^<paramref name="exponent10"/> is inside the
     /// rounding interval of the value and that no decimal with fewer significant digits is.
     /// </summary>
+    /// <param name="absBits">The abs bits used by this operation.</param>
+    /// <param name="mantissaBits">The mantissa bits used by this operation.</param>
+    /// <param name="exponent">The exponent used by this operation.</param>
+    /// <param name="fraction">The fraction used by this operation.</param>
+    /// <param name="digits">The digits used by this operation.</param>
+    /// <param name="exponent10">The exponent10 used by this operation.</param>
     private static void AssertShortestDecimal(ulong absBits, int mantissaBits, int exponent, ulong fraction, ulong digits, int exponent10)
     {
         BigInteger mantissa = fraction;
@@ -415,8 +450,8 @@ public class JsonXjbFormatterTest
         }
 
         // Interval of decimals that round back to this value. Values with fraction == 0 and a non-zero
-// exponent sit on a binade boundary, so the spacing below is half the spacing above (the
-// asymmetric "irregular" interval); everything else uses the symmetric +-ulp/2 bounds.
+        // exponent sit on a binade boundary, so the spacing below is half the spacing above (the
+        // asymmetric "irregular" interval); everything else uses the symmetric +-ulp/2 bounds.
         // The bounds are inclusive when the significand is even (round half to even).
         bool powerOfTwo = exponent > 0 && fraction == 0;
         Rat lo = powerOfTwo ? Rat.Dyadic(4 * mantissa - 1, exponent2 - 2) : Rat.Dyadic(2 * mantissa - 1, exponent2 - 1);
@@ -457,6 +492,9 @@ public class JsonXjbFormatterTest
         }
     }
 
+    /// <summary>Verifies digit count.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static int DigitCount(ulong value)
     {
         int count = 1;
@@ -470,6 +508,8 @@ public class JsonXjbFormatterTest
     }
 
     /// <summary>Splits a decimal text into canonical digits and the matching power of ten.</summary>
+    /// <param name="text">The text used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static (ulong Digits, int Exponent10) ParseDecimalText(string text)
     {
         if (text.StartsWith('-'))
@@ -519,6 +559,9 @@ public class JsonXjbFormatterTest
         private readonly BigInteger _num;
         private readonly BigInteger _den;
 
+        /// <summary>Initializes a new instance of <c>Rat</c>.</summary>
+        /// <param name="num">The num used by this operation.</param>
+        /// <param name="den">The den used by this operation.</param>
         private Rat(BigInteger num, BigInteger den)
         {
             if (den.Sign < 0)
@@ -531,23 +574,42 @@ public class JsonXjbFormatterTest
             _den = den;
         }
 
+        /// <summary>Gets the is integer.</summary>
         internal bool IsInteger => _num % _den == 0;
 
+        /// <summary>Gets the integer value.</summary>
         internal BigInteger IntegerValue => _num / _den;
 
+        /// <summary>Verifies dyadic.</summary>
+        /// <param name="mantissa">The mantissa used by this operation.</param>
+        /// <param name="exponent2">The exponent2 used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         internal static Rat Dyadic(BigInteger mantissa, int exponent2) =>
             exponent2 >= 0 ? new Rat(mantissa << exponent2, BigInteger.One) : new Rat(mantissa, BigInteger.One << -exponent2);
 
+        /// <summary>Verifies decimal.</summary>
+        /// <param name="digits">The digits used by this operation.</param>
+        /// <param name="exponent10">The exponent10 used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         internal static Rat Decimal(ulong digits, int exponent10) =>
             exponent10 >= 0 ? new Rat(new BigInteger(digits) * BigInteger.Pow(10, exponent10), BigInteger.One)
                             : new Rat(new BigInteger(digits), BigInteger.Pow(10, -exponent10));
 
+        /// <summary>Verifies compare to.</summary>
+        /// <param name="other">The other used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         internal int CompareTo(Rat other) => (_num * other._den).CompareTo(other._num * _den);
 
+        /// <summary>Verifies divide pow10.</summary>
+        /// <param name="exponent10">The exponent10 used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         internal Rat DividePow10(int exponent10) =>
             exponent10 >= 0 ? new Rat(_num, _den * BigInteger.Pow(10, exponent10))
                             : new Rat(_num * BigInteger.Pow(10, -exponent10), _den);
 
+        /// <summary>Verifies floor.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         internal static BigInteger Floor(Rat value)
         {
             BigInteger quotient = BigInteger.DivRem(value._num, value._den, out BigInteger remainder);
@@ -556,6 +618,9 @@ public class JsonXjbFormatterTest
             return quotient;
         }
 
+        /// <summary>Verifies ceiling.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         internal static BigInteger Ceiling(Rat value)
         {
             BigInteger quotient = BigInteger.DivRem(value._num, value._den, out BigInteger remainder);
@@ -565,6 +630,9 @@ public class JsonXjbFormatterTest
         }
     }
 
+    /// <summary>Verifies emit utf8.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string EmitUtf8(double value)
     {
         Span<byte> buffer = stackalloc byte[48];
@@ -572,6 +640,9 @@ public class JsonXjbFormatterTest
         return System.Text.Encoding.ASCII.GetString(buffer[..written]);
     }
 
+    /// <summary>Verifies emit utf8.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string EmitUtf8(float value)
     {
         Span<byte> buffer = stackalloc byte[48];
@@ -579,6 +650,9 @@ public class JsonXjbFormatterTest
         return System.Text.Encoding.ASCII.GetString(buffer[..written]);
     }
 
+    /// <summary>Verifies emit utf16.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string EmitUtf16(double value)
     {
         Span<char> buffer = stackalloc char[48];
@@ -586,6 +660,9 @@ public class JsonXjbFormatterTest
         return new string(buffer[..written]);
     }
 
+    /// <summary>Verifies emit utf16.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string EmitUtf16(float value)
     {
         Span<char> buffer = stackalloc char[48];
@@ -595,6 +672,8 @@ public class JsonXjbFormatterTest
 
     // ---------------------------------------------------------------- corpora
 
+    /// <summary>Verifies float corpus.</summary>
+    /// <returns>The result of the operation.</returns>
     private static float[] FloatCorpus()
     {
         var values = new System.Collections.Generic.List<float>();
@@ -642,6 +721,8 @@ public class JsonXjbFormatterTest
         return values.ToArray();
     }
 
+    /// <summary>Verifies double corpus.</summary>
+    /// <returns>The result of the operation.</returns>
     private static double[] DoubleCorpus()
     {
         var values = new System.Collections.Generic.List<double>();
@@ -690,6 +771,7 @@ public class JsonXjbFormatterTest
 
     // ---------------------------------------------------------------- emitter buffers
 
+    /// <summary>Verifies emitter writes exactly the reported length inside an exact buffer.</summary>
     [Fact]
     public void EmitterWritesExactlyTheReportedLengthInsideAnExactBuffer()
     {
@@ -736,6 +818,7 @@ public class JsonXjbFormatterTest
         }
     }
 
+    /// <summary>Writes r rejects non finite values and keeps negative zero to the current output.</summary>
     [Fact]
     public void WriterRejectsNonFiniteValuesAndKeepsNegativeZero()
     {
@@ -756,6 +839,10 @@ public class JsonXjbFormatterTest
         Assert.Equal("0", System.Text.Encoding.ASCII.GetString(positive.GetSpan()));
     }
 
+    /// <summary>Raises the exception for s double.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>This method never returns a value.</returns>
     private static bool ThrowsDouble(ref LuminPackJsonWriter writer, double value)
     {
         try
@@ -769,6 +856,10 @@ public class JsonXjbFormatterTest
         }
     }
 
+    /// <summary>Raises the exception for s float.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>This method never returns a value.</returns>
     private static bool ThrowsFloat(ref LuminPackJsonWriter writer, float value)
     {
         try

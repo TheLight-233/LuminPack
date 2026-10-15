@@ -3,8 +3,12 @@ using LuminPack.Code;
 
 namespace LuminPack.SourceGenerator.CodeEmitters;
 
+/// <summary>Provides uri emitter functionality.</summary>
 public static class UriEmitter
 {
+    /// <summary>Appends binary writing statements for uri values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         sb.AppendLine("            if (value == null)");
@@ -18,7 +22,10 @@ public static class UriEmitter
         sb.AppendLine("            writer.Advance(offset);");
         sb.AppendLine("            writer.CheckBuffer();");
     }
-    
+
+    /// <summary>Appends binary reading statements for uri values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
@@ -42,6 +49,9 @@ public static class UriEmitter
         sb.AppendLine("            }");
     }
 
+    /// <summary>Appends JSON writing statements for uri values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         sb.AppendLine("            if (value == null)");
@@ -53,6 +63,9 @@ public static class UriEmitter
         sb.AppendLine("            writer.WriteString(value.OriginalString);");
     }
 
+    /// <summary>Appends JSON reading statements for uri values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         sb.AppendLine("            if (reader.IsNull())");

@@ -1,0 +1,30 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.cs]
+indent_style = space
+indent_size = 4
+csharp_new_line_before_open_brace = all
+csharp_indent_case_contents = true
+csharp_indent_switch_labels = true
+csharp_space_after_cast = false
+csharp_prefer_braces = true:suggestion
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+dotnet_diagnostic.IDE0005.severity = warning
+
+[*.{csproj,props,targets,json,yml,yaml}]
+indent_style = space
+indent_size = 2
+
+[*.{cs,csproj,props,targets}]
+dotnet_diagnostic.CS1570.severity = warning
+dotnet_diagnostic.CS1572.severity = warning
+dotnet_diagnostic.CS1573.severity = warning
+dotnet_diagnostic.CS1584.severity = warning
+dotnet_diagnostic.CS1658.severity = warning

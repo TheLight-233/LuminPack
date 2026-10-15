@@ -5,8 +5,12 @@ using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator.CodeEmitters;
 
+/// <summary>Provides nullable emitter functionality.</summary>
 public static class NullableEmitter
 {
+    /// <summary>Appends binary writing statements for nullable values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         string elementType = GetElementType(data);
@@ -41,6 +45,9 @@ public static class NullableEmitter
         AppendManagedSerialize(sb, elementType);
     }
 
+    /// <summary>Appends binary reading statements for nullable values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         string elementType = GetElementType(data);
@@ -75,38 +82,44 @@ public static class NullableEmitter
         AppendManagedDeserialize(sb, elementType);
     }
 
+    /// <summary>Appends statements that calculate the binary payload size.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateCalculateOffsetCode(LuminLocalFieldData data, StringBuilder sb)
     {
-		string elementType = GetElementType(data);
+        string elementType = GetElementType(data);
         sb.AppendLine($"            if (!value.HasValue)");
         sb.AppendLine($"            {{");
         sb.AppendLine($"                evaluator += 1;");
-		sb.AppendLine($"                return;");
-        sb.AppendLine($"            }}");
-        sb.AppendLine($"");
-
-		if (EmitterTypeTraits.TryGetIsUnmanaged(GetElementTypeSymbol(data), out bool isUnmanaged))
-		{
-			if (isUnmanaged)
-			{
-				AppendUnmanagedCalculateOffset(sb, elementType);
-			}
-			else
-			{
-				AppendManagedCalculateOffset(sb, elementType);
-			}
-			return;
-		}
-
-		sb.AppendLine($"            if (!RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
-        sb.AppendLine($"            {{");
-		AppendUnmanagedCalculateOffset(sb, elementType, "    ");
         sb.AppendLine($"                return;");
         sb.AppendLine($"            }}");
         sb.AppendLine($"");
-		AppendManagedCalculateOffset(sb, elementType);
+
+        if (EmitterTypeTraits.TryGetIsUnmanaged(GetElementTypeSymbol(data), out bool isUnmanaged))
+        {
+            if (isUnmanaged)
+            {
+                AppendUnmanagedCalculateOffset(sb, elementType);
+            }
+            else
+            {
+                AppendManagedCalculateOffset(sb, elementType);
+            }
+            return;
+        }
+
+        sb.AppendLine($"            if (!RuntimeHelpers.IsReferenceOrContainsReferences<{elementType}>())");
+        sb.AppendLine($"            {{");
+        AppendUnmanagedCalculateOffset(sb, elementType, "    ");
+        sb.AppendLine($"                return;");
+        sb.AppendLine($"            }}");
+        sb.AppendLine($"");
+        AppendManagedCalculateOffset(sb, elementType);
     }
 
+    /// <summary>Appends JSON writing statements for nullable values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         var elementType = GetElementType(data);
@@ -120,6 +133,9 @@ public static class NullableEmitter
         sb.AppendLine("            writer.WriteValue(in item);");
     }
 
+    /// <summary>Appends JSON reading statements for nullable values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         var elementType = GetElementType(data);
@@ -134,6 +150,9 @@ public static class NullableEmitter
         sb.AppendLine("            value = item;");
     }
 
+    /// <summary>Obtains the element type for the supplied input.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <returns>The result of the operation.</returns>
     private static string GetElementType(LuminLocalFieldData data)
     {
         if (data.TypeSymbol is INamedTypeSymbol named &&
@@ -146,6 +165,9 @@ public static class NullableEmitter
         return CodeEmitterRegistry.GetFirstGeneric(data.TypeName);
     }
 
+    /// <summary>Obtains the element type symbol for the supplied input.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <returns>The result of the operation.</returns>
     private static ITypeSymbol GetElementTypeSymbol(LuminLocalFieldData data)
     {
         return data.TypeSymbol is INamedTypeSymbol
@@ -157,6 +179,10 @@ public static class NullableEmitter
             : null;
     }
 
+    /// <summary>Appends binary writing statements for nullable values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="elementType">The element type used by this operation.</param>
+    /// <param name="indentSuffix">The indent suffix used by this operation.</param>
     private static void AppendUnmanagedSerialize(StringBuilder sb, string elementType, string indentSuffix = "")
     {
         string indent = "            " + indentSuffix;
@@ -165,12 +191,19 @@ public static class NullableEmitter
         sb.AppendLine($"{indent}writer.Advance(Unsafe.SizeOf<{elementType}>());");
     }
 
+    /// <summary>Appends binary writing statements for nullable values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="elementType">The element type used by this operation.</param>
     private static void AppendManagedSerialize(StringBuilder sb, string elementType)
     {
         sb.AppendLine($"            {elementType} valRef = value.Value;");
         sb.AppendLine("            writer.WriteValue(in valRef);");
     }
 
+    /// <summary>Appends binary reading statements for nullable values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="elementType">The element type used by this operation.</param>
+    /// <param name="indentSuffix">The indent suffix used by this operation.</param>
     private static void AppendUnmanagedDeserialize(StringBuilder sb, string elementType, string indentSuffix = "")
     {
         string indent = "            " + indentSuffix;
@@ -180,6 +213,9 @@ public static class NullableEmitter
         sb.AppendLine($"{indent}reader.Advance(Unsafe.SizeOf<{elementType}>());");
     }
 
+    /// <summary>Appends binary reading statements for nullable values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="elementType">The element type used by this operation.</param>
     private static void AppendManagedDeserialize(StringBuilder sb, string elementType)
     {
         sb.AppendLine($"            {elementType} valRef = default!;");
@@ -187,14 +223,21 @@ public static class NullableEmitter
         sb.AppendLine("            value = valRef;");
     }
 
+    /// <summary>Appends binary size evaluation statements for nullable values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="elementType">The element type used by this operation.</param>
+    /// <param name="indentSuffix">The indent suffix used by this operation.</param>
     private static void AppendUnmanagedCalculateOffset(StringBuilder sb, string elementType, string indentSuffix = "")
     {
         sb.AppendLine($"            {indentSuffix}evaluator += Unsafe.SizeOf<{elementType}>();");
     }
 
+    /// <summary>Appends binary size evaluation statements for nullable values.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="elementType">The element type used by this operation.</param>
     private static void AppendManagedCalculateOffset(StringBuilder sb, string elementType)
     {
-		sb.AppendLine($"            {elementType} val = value.Value;");
-		sb.AppendLine("            evaluator.CalculateOffset(ref val);");
+        sb.AppendLine($"            {elementType} val = value.Value;");
+        sb.AppendLine("            evaluator.CalculateOffset(ref val);");
     }
 }

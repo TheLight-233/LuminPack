@@ -1,47 +1,10 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using LuminPack.Code;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.Code.Core;
-
-/// <summary>Analysis result for one [LuminPackable(GeneratorType.Custom)] type.</summary>
-internal sealed class CustomFormatterModel
-{
-    internal CustomFormatterModel(INamedTypeSymbol type, string typeName)
-    {
-        Type = type;
-        TypeName = typeName;
-    }
-
-    internal INamedTypeSymbol Type { get; }
-
-    /// <summary>global::-qualified type name usable in generated code.</summary>
-    internal string TypeName { get; }
-
-    internal IMethodSymbol? Serialize { get; set; }
-    internal IMethodSymbol? Deserialize { get; set; }
-    internal IMethodSymbol? SerializeJson { get; set; }
-    internal IMethodSymbol? DeserializeJson { get; set; }
-    internal IMethodSymbol? CalculateOffset { get; set; }
-
-    internal bool HasErrors { get; set; }
-
-    /// <summary>Register overload tier: 1 = binary, 2 = +JSON, 3 = +JSON+calculate. 0 = invalid.</summary>
-    internal int RegisterTier
-    {
-        get
-        {
-            if (Serialize is null || Deserialize is null) return 0;
-            if (CalculateOffset is not null) return 3;
-            if (SerializeJson is not null && DeserializeJson is not null) return 2;
-            return 1;
-        }
-    }
-}
 
 /// <summary>
 /// Validates user-written static formatter methods on [LuminPackable(GeneratorType.Custom)]
@@ -61,14 +24,29 @@ internal static class CustomFormatterAnalyzer
     internal const string DeserializeJsonName = "DeserializeJson";
     internal const string CalculateOffsetName = "CalculateOffset";
 
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="typeName">The C# type name to use in generated source.</param>
+    /// <returns>The result of the operation.</returns>
     internal static string SerializeSignature(string typeName) =>
         $"static void {SerializeName}(ref global::LuminPack.Core.LuminPackWriter writer, in {typeName} value)";
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="typeName">The C# type name to use in generated source.</param>
+    /// <returns>The result of the operation.</returns>
     internal static string DeserializeSignature(string typeName) =>
         $"static void {DeserializeName}(ref global::LuminPack.Core.LuminPackReader reader, ref {typeName} value)";
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="typeName">The C# type name to use in generated source.</param>
+    /// <returns>The result of the operation.</returns>
     internal static string SerializeJsonSignature(string typeName) =>
         $"static void {SerializeJsonName}(ref global::LuminPack.Core.LuminPackJsonWriter writer, in {typeName} value)";
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="typeName">The C# type name to use in generated source.</param>
+    /// <returns>The result of the operation.</returns>
     internal static string DeserializeJsonSignature(string typeName) =>
         $"static void {DeserializeJsonName}(ref global::LuminPack.Core.LuminPackJsonReader reader, ref {typeName} value)";
+    /// <summary>Calculates the serialized size contribution of offset signature.</summary>
+    /// <param name="typeName">The C# type name to use in generated source.</param>
+    /// <returns>The result of the operation.</returns>
     internal static string CalculateOffsetSignature(string typeName) =>
         $"static void {CalculateOffsetName}(ref global::LuminPack.Core.LuminPackEvaluator evaluator, in {typeName} value)";
 
@@ -76,6 +54,9 @@ internal static class CustomFormatterAnalyzer
     /// Collects and validates every Custom formatter type declared in the compilation's own
     /// assembly. Returns the models plus the diagnostics to report.
     /// </summary>
+    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+    /// <param name="reportDiagnostic">The report diagnostic used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     internal static List<CustomFormatterModel> AnalyzeAll(
         Compilation compilation,
         Action<Diagnostic> reportDiagnostic)
@@ -103,6 +84,9 @@ internal static class CustomFormatterAnalyzer
         return models;
     }
 
+    /// <summary>Analyzes  and records the resulting metadata or diagnostics.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>The result of the operation.</returns>
     internal static CustomFormatterModel Analyze(INamedTypeSymbol type)
     {
         string typeName = type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -117,6 +101,10 @@ internal static class CustomFormatterAnalyzer
         return model;
     }
 
+    /// <summary>Finds the method in the supplied metadata.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static IMethodSymbol? FindMethod(INamedTypeSymbol type, string name)
     {
         // DeclaredAccessibility on the method itself is validated separately; resolve the
@@ -127,6 +115,9 @@ internal static class CustomFormatterAnalyzer
             .FirstOrDefault(static method => method.MethodKind == MethodKind.Ordinary);
     }
 
+    /// <summary>Performs the collect diagnostics step for the current operation.</summary>
+    /// <param name="model">The model used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     internal static List<Diagnostic> CollectDiagnostics(CustomFormatterModel model)
     {
         var diagnostics = new List<Diagnostic>();
@@ -199,6 +190,17 @@ internal static class CustomFormatterAnalyzer
         return diagnostics;
     }
 
+    /// <summary>Validates method before the operation continues.</summary>
+    /// <param name="method">The method used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="expectedSignature">The expected signature used by this operation.</param>
+    /// <param name="firstParameterType">The first parameter type used by this operation.</param>
+    /// <param name="secondParameterType">The second parameter type used by this operation.</param>
+    /// <param name="secondParameterRefKind">The second parameter ref kind used by this operation.</param>
+    /// <param name="ownerDisplay">The owner display used by this operation.</param>
+    /// <param name="ownerLocation">The owner location used by this operation.</param>
+    /// <param name="diagnostics">The diagnostics used by this operation.</param>
+    /// <param name="anyError">The any error used by this operation.</param>
     private static void ValidateMethod(
         IMethodSymbol? method,
         string name,
@@ -254,6 +256,11 @@ internal static class CustomFormatterAnalyzer
         }
     }
 
+    /// <summary>Performs the parameter matches step for the current operation.</summary>
+    /// <param name="parameter">The parameter used by this operation.</param>
+    /// <param name="expectedTypeName">The expected type name used by this operation.</param>
+    /// <param name="expectedRefKind">The expected ref kind used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool ParameterMatches(IParameterSymbol parameter, string expectedTypeName, RefKind expectedRefKind)
     {
         if (parameter.RefKind != expectedRefKind) return false;
@@ -262,115 +269,29 @@ internal static class CustomFormatterAnalyzer
         return actual == expectedTypeName || actual == FullyQualifiedAlias(expectedTypeName);
     }
 
+    /// <summary>Performs the fully qualified alias step for the current operation.</summary>
+    /// <param name="typeName">The C# type name to use in generated source.</param>
+    /// <returns>The result of the operation.</returns>
     private static string FullyQualifiedAlias(string typeName)
         => typeName.StartsWith("global::", StringComparison.Ordinal)
             ? typeName.Substring("global::".Length)
             : "global::" + typeName;
 
+    /// <summary>Determines whether union attribute are present.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool HasUnionAttribute(INamedTypeSymbol type)
     {
         return type.GetAttributes().Any(static attribute =>
             attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackUnionAttribute");
     }
 
+    /// <summary>Determines whether packable attribute are present.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool HasPackableAttribute(INamedTypeSymbol type)
     {
         return type.GetAttributes().Any(static attribute =>
             attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE);
-    }
-}
-
-/// <summary>Emits the module initializer that registers every valid Custom formatter type.</summary>
-internal static class CustomFormatterRegistrationGenerator
-{
-    /// <summary>
-    /// Generates the registration source for the valid Custom models, or an empty string when
-    /// there is nothing to register.
-    /// </summary>
-    internal static string Generate(
-        IReadOnlyList<CustomFormatterModel> models,
-        Compilation compilation,
-        MetaInfo metaInfo,
-        bool isUnity)
-    {
-        var registerable = models.Where(static model => !model.HasErrors && model.RegisterTier > 0).ToArray();
-        if (registerable.Length == 0)
-        {
-            return string.Empty;
-        }
-
-        string asmRaw = compilation.AssemblyName ?? "Unknown";
-        string asmSafe = SanitizeId(asmRaw);
-
-        var sb = new StringBuilder();
-        sb.AppendLine("// <auto-generated/>");
-        sb.AppendLine("// LuminPack Custom formatter registration — do not modify");
-        sb.AppendLine("#nullable enable");
-        sb.AppendLine();
-        sb.AppendLine("using global::System;");
-        sb.AppendLine("using global::System.Runtime.CompilerServices;");
-        sb.AppendLine("using global::LuminPack;");
-        sb.AppendLine();
-
-        bool hasNs = asmSafe != "Unknown";
-        if (hasNs) { sb.AppendLine($"namespace LuminPackRegisters.{asmSafe}"); sb.AppendLine("{"); }
-
-        sb.AppendLine("    internal static unsafe class LuminPackCustomFormatterRegistry");
-        sb.AppendLine("    {");
-
-        if (isUnity)
-        {
-            sb.AppendLine("#if UNITY_EDITOR");
-            sb.AppendLine("        [global::UnityEditor.InitializeOnLoadMethod]");
-            sb.AppendLine("#endif");
-            sb.AppendLine("        [global::UnityEngine.RuntimeInitializeOnLoadMethod(global::UnityEngine.RuntimeInitializeLoadType.BeforeSceneLoad)]");
-        }
-        else
-        {
-            sb.AppendLine("#if NET5_0_OR_GREATER");
-            sb.AppendLine("        [System.Runtime.CompilerServices.ModuleInitializerAttribute]");
-            sb.AppendLine("#else");
-            sb.AppendLine("        // 需要手动调用初始化");
-            sb.AppendLine($"        // 请在程序入口调用 LuminPackRegisters.{asmSafe}.LuminPackCustomFormatterRegistry.Initialize()");
-            sb.AppendLine("#endif");
-        }
-        sb.AppendLine("        internal static void Initialize()");
-        sb.AppendLine("        {");
-
-        foreach (CustomFormatterModel model in registerable)
-        {
-            string type = model.TypeName;
-            sb.AppendLine($"            global::LuminPack.LuminPackSerializer.Register<{type}>(");
-            sb.AppendLine($"                &{type}.{CustomFormatterAnalyzer.SerializeName},");
-            sb.AppendLine($"                &{type}.{CustomFormatterAnalyzer.DeserializeName}");
-            if (model.RegisterTier >= 2)
-            {
-                sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.SerializeJsonName}");
-                sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.DeserializeJsonName}");
-            }
-            if (model.RegisterTier >= 3)
-            {
-                sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.CalculateOffsetName}");
-            }
-            sb.AppendLine("            );");
-        }
-
-        sb.AppendLine("        }");
-        sb.AppendLine("    }");
-        if (hasNs) sb.AppendLine("}");
-        return sb.ToString();
-    }
-
-    private static string SanitizeId(string name)
-    {
-        if (string.IsNullOrEmpty(name)) return "Unknown";
-        var sb = new StringBuilder(name.Length);
-        for (int i = 0; i < name.Length; i++)
-        {
-            char c = name[i];
-            if (i == 0) sb.Append(char.IsLetter(c) || c == '_' ? c : '_');
-            else sb.Append(char.IsLetterOrDigit(c) || c == '_' ? c : '_');
-        }
-        return sb.ToString();
     }
 }

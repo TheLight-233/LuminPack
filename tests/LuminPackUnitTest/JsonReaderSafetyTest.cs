@@ -8,6 +8,7 @@ using LuminPack.Utility;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides json reader safety test functionality.</summary>
 internal static class JsonReaderSafetyTest
 {
     private static readonly LuminPackSerializerOption Utf16 = new()
@@ -15,6 +16,8 @@ internal static class JsonReaderSafetyTest
         StringEncoding = LuminPackStringEncoding.UTF16
     };
 
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(TopLevelScalarsReadTheirFirstToken), TopLevelScalarsReadTheirFirstToken);
@@ -30,6 +33,7 @@ internal static class JsonReaderSafetyTest
         RunCase(results, nameof(MultiDimensionalArraysUseSymmetricNestedArrays), MultiDimensionalArraysUseSymmetricNestedArrays);
     }
 
+    /// <summary>Verifies top level scalars read their first token.</summary>
     private static void TopLevelScalarsReadTheirFirstToken()
     {
         Assert(LuminPackSerializer.DeserializeJson<int>("-12345") == -12345,
@@ -51,10 +55,11 @@ internal static class JsonReaderSafetyTest
             "A top-level UTF-16 null was not recognized.");
     }
 
+    /// <summary>Verifies escaped strings unescape in both encodings.</summary>
     private static void EscapedStringsUnescapeInBothEncodings()
     {
         const string json = "\"quote=\\\" slash=\\\\ controls=\\b\\f\\n\\r\\t unicode=\\u4F60 emoji=\\uD83D\\uDE00\"";
-        const string expected = "quote=\" slash=\\ controls=\b\f\n\r\t unicode=你 emoji=😀";
+        const string expected = "quote=\u0022 slash=\\ controls=\b\f\n\r\t unicode=\u4F60 emoji=\uD83D\uDE00";
 
         Assert(LuminPackSerializer.DeserializeJson<string>(json) == expected,
             "UTF-8 JSON escapes were returned as raw backslash sequences.");
@@ -62,6 +67,7 @@ internal static class JsonReaderSafetyTest
             "UTF-16 JSON escapes were returned as raw backslash sequences.");
     }
 
+    /// <summary>Verifies escaped property names and unknown nested values.</summary>
     private static void EscapedPropertyNamesAndUnknownNestedValues()
     {
         const string escapedName = "{\"V\\u0061l\":42}";
@@ -78,6 +84,7 @@ internal static class JsonReaderSafetyTest
             "Skipping an unknown UTF-16 nested value consumed the following known property.");
     }
 
+    /// <summary>Verifies malformed strings are rejected.</summary>
     private static void MalformedStringsAreRejected()
     {
         AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<string>("\"unterminated"));
@@ -86,6 +93,7 @@ internal static class JsonReaderSafetyTest
         AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<string>("\"\\q\"", Utf16));
     }
 
+    /// <summary>Verifies skipped strings validate every escape.</summary>
     private static void SkippedStringsValidateEveryEscape()
     {
         foreach (string malformed in new[] { "\\q", "\\u12", "\\uZZZZ", "\\uD800x", "\\uDC00",
@@ -103,6 +111,9 @@ internal static class JsonReaderSafetyTest
             "Skipping escaped UTF-16 strings consumed the next property.");
     }
 
+    /// <summary>Verifies skip document.</summary>
+    /// <param name="bytes">The bytes used by this operation.</param>
+    /// <param name="state">The reusable state associated with the operation.</param>
     private static void SkipDocument(byte[] bytes, LuminPackReaderOptionalState state)
     {
         ReadOnlySpan<byte> source = bytes;
@@ -112,6 +123,7 @@ internal static class JsonReaderSafetyTest
         reader.EnsureEndOfDocument();
     }
 
+    /// <summary>Verifies skipped escaped strings do not allocate.</summary>
     private static void SkippedEscapedStringsDoNotAllocate()
     {
         string json = "[\"" + string.Concat(Enumerable.Repeat("text\\n\\u4F60\\uD83D\\uDE00\\\\", 1000)) + "\"]";
@@ -128,6 +140,7 @@ internal static class JsonReaderSafetyTest
         }
     }
 
+    /// <summary>Verifies malformed numbers and trailing data are rejected.</summary>
     private static void MalformedNumbersAndTrailingDataAreRejected()
     {
         AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<int>("1e+"));
@@ -137,6 +150,7 @@ internal static class JsonReaderSafetyTest
         AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<int>("12x", Utf16));
     }
 
+    /// <summary>Verifies numeric vector types consume every array token.</summary>
     private static void NumericVectorTypesConsumeEveryArrayToken()
     {
         RoundTrip(new Vector2(1.25f, -2.5f));
@@ -153,6 +167,7 @@ internal static class JsonReaderSafetyTest
         RoundTrip(new Plane(new Vector3(1, 2, 3), 4));
     }
 
+    /// <summary>Verifies nested unions consume their outer object end.</summary>
     private static void NestedUnionsConsumeTheirOuterObjectEnd()
     {
         ISerializable value = new Class1
@@ -172,6 +187,9 @@ internal static class JsonReaderSafetyTest
         AssertNestedUnion(value, Utf16);
     }
 
+    /// <summary>Verifies assert nested union.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="option">The configuration to apply to this operation.</param>
     private static void AssertNestedUnion(ISerializable value, LuminPackSerializerOption? option)
     {
         var json = LuminPackSerializer.SerializeJson(value, option);
@@ -180,6 +198,7 @@ internal static class JsonReaderSafetyTest
             "A nested JSON union left its wrapper end token unread or lost the nested value.");
     }
 
+    /// <summary>Verifies collections use symmetric json shapes.</summary>
     private static void CollectionsUseSymmetricJsonShapes()
     {
         var dictionary = new Dictionary<string, List<int>>
@@ -217,6 +236,7 @@ internal static class JsonReaderSafetyTest
             "UTF-16 IGrouping JSON property names were encoded with the UTF-8 protocol.");
     }
 
+    /// <summary>Verifies multi dimensional arrays use symmetric nested arrays.</summary>
     private static void MultiDimensionalArraysUseSymmetricNestedArrays()
     {
         int[,] twoDimensional =
@@ -275,6 +295,11 @@ internal static class JsonReaderSafetyTest
             "Four-dimensional JSON array protocol was not symmetric.");
     }
 
+    /// <summary>Verifies round trip.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="option">The configuration to apply to this operation.</param>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+    /// <returns>The result of the operation.</returns>
     private static T? RoundTrip<T>(T value, LuminPackSerializerOption? option = null)
     {
         var buffer = LuminBufferWriterPool.Rent();
@@ -303,6 +328,9 @@ internal static class JsonReaderSafetyTest
         }
     }
 
+    /// <summary>Verifies assert throws.</summary>
+    /// <param name="action">The action used by this operation.</param>
+    /// <typeparam name="TException">The type represented by <c>TException</c>.</typeparam>
     private static void AssertThrows<TException>(Action action)
         where TException : Exception
     {
@@ -318,6 +346,10 @@ internal static class JsonReaderSafetyTest
         throw new InvalidOperationException($"Expected {typeof(TException).Name} was not thrown.");
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -331,6 +363,9 @@ internal static class JsonReaderSafetyTest
         }
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)

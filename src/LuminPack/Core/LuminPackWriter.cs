@@ -1,6 +1,4 @@
-using System;
 using System.Buffers;
-using System.Collections.Generic;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
@@ -15,10 +13,11 @@ using static LuminPack.Code.LuminPackMarshal;
 
 namespace LuminPack.Core
 {
+    /// <summary>Writes LuminPack binary values to a caller-supplied or reusable buffer.</summary>
     [StructLayout(LayoutKind.Sequential)]
     public unsafe ref partial struct LuminPackWriter
     {
-        
+
         private Span<byte> _bufferReference;
 #if NET8_0_OR_GREATER
         internal ref byte _bufferStart;
@@ -27,19 +26,26 @@ namespace LuminPack.Core
 #endif
         internal int _currentIndex;
         private LuminBufferWriter? _writerBuffer = null;
-        
+
         private readonly LuminPackWriterOptionalState _optionState;
 
         // 0: UTF8+Token, 1: UTF8+Length, 2: UTF16+Token, 3: UTF16+Length.
         private readonly byte _stringSerializationMode;
+        /// <summary>Gets the serialize string as utf8.</summary>
         private bool SerializeStringAsUtf8 => (_stringSerializationMode & 2) == 0;
+        /// <summary>Gets the serialize string record as token.</summary>
         private bool SerializeStringRecordAsToken => (_stringSerializationMode & 1) == 0;
-        
+
+        /// <summary>Gets the option state.</summary>
         public LuminPackWriterOptionalState OptionState => _optionState;
+        /// <summary>Gets the option.</summary>
         public LuminPackSerializerOption Option => _optionState.Option;
-        
+
+        /// <summary>Gets the current index.</summary>
         public ref int CurrentIndex => ref _currentIndex;
 
+        /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
+        /// <param name="option">The configuration to apply to this operation.</param>
         public LuminPackWriter(LuminPackWriterOptionalState? option = null)
         {
             _optionState = option ?? LuminPackWriterOptionalState.NullOption;
@@ -52,10 +58,13 @@ namespace LuminPack.Core
             _currentIndex = 0;
             _stringSerializationMode = GetStringSerializationMode(_optionState.Option);
         }
-        
+
+        /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
+        /// <param name="bufferReference">The buffer reference used by this operation.</param>
+        /// <param name="option">The configuration to apply to this operation.</param>
         public LuminPackWriter(ref Span<byte> bufferReference, LuminPackWriterOptionalState? option = null)
         {
-            
+
             _optionState = option ?? LuminPackWriterOptionalState.NullOption;
             _bufferReference = bufferReference;
 #if NET8_0_OR_GREATER
@@ -66,10 +75,13 @@ namespace LuminPack.Core
             _currentIndex = 0;
             _stringSerializationMode = GetStringSerializationMode(_optionState.Option);
         }
-        
+
+        /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
+        /// <param name="bufferReference">The buffer reference used by this operation.</param>
+        /// <param name="option">The configuration to apply to this operation.</param>
         public LuminPackWriter(ref ReadOnlySpan<byte> bufferReference, LuminPackWriterOptionalState? option = null)
         {
-            
+
             _optionState = option ?? LuminPackWriterOptionalState.NullOption;
             var ptr = bufferReference.GetPinnableReference();
             _bufferReference = CreateSpan(ref ptr, bufferReference.Length);
@@ -81,7 +93,10 @@ namespace LuminPack.Core
             _currentIndex = 0;
             _stringSerializationMode = GetStringSerializationMode(_optionState.Option);
         }
-        
+
+        /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
+        /// <param name="bufferWriter">The writer receiving the output data.</param>
+        /// <param name="option">The configuration to apply to this operation.</param>
         public LuminPackWriter(LuminBufferWriter? bufferWriter, LuminPackWriterOptionalState? option = null)
         {
             _optionState = option ?? LuminPackWriterOptionalState.NullOption;
@@ -98,6 +113,8 @@ namespace LuminPack.Core
             _stringSerializationMode = GetStringSerializationMode(_optionState.Option);
         }
 
+        /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
+        /// <param name="bufferWriter">The writer receiving the output data.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal LuminPackWriter(LuminBufferWriter bufferWriter)
         {
@@ -113,13 +130,16 @@ namespace LuminPack.Core
             _stringSerializationMode = GetStringSerializationMode(bufferWriter.Option);
         }
 
+        /// <summary>Obtains the string serialization mode for the supplied input.</summary>
+        /// <param name="option">The configuration to apply to this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static byte GetStringSerializationMode(LuminPackSerializerOption option) =>
             (byte)((option.StringEncoding is LuminPackStringEncoding.UTF16 ? 2 : 0) |
                    (option.StringRecording is LuminPackStringRecording.Length ? 1 : 0));
 
         /// <summary>
-        /// 获取Span数组指针
+        /// Returns a reference to the span's first element.
         /// </summary>
         /// <param name="index"></param>
         /// <returns></returns>
@@ -131,9 +151,14 @@ namespace LuminPack.Core
             ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
 
+        /// <summary>Ensures that the buffer can accommodate the requested write.</summary>
+        /// <param name="count">The number of entries involved in the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void EnsureAdditionalCapacity(int count) => EnsureCapacity(_currentIndex, count);
 
+        /// <summary>Ensures that the buffer can accommodate the requested write.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="count">The number of entries involved in the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void EnsureCapacity(int index, int count)
         {
@@ -144,6 +169,9 @@ namespace LuminPack.Core
             EnsureCapacitySlow(index, count);
         }
 
+        /// <summary>Ensures that the buffer can accommodate the requested write.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="count">The number of entries involved in the operation.</param>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void EnsureCapacitySlow(int index, int count)
         {
@@ -154,6 +182,9 @@ namespace LuminPack.Core
             FlushBuffer();
         }
 
+        /// <summary>Performs the ensure writable advance step for the current operation.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="count">The number of entries involved in the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         [System.Diagnostics.Conditional("DEBUG")]
         private void EnsureWritableAdvance(int index, int count)
@@ -164,7 +195,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 移动指针
+        /// Advances the target pointer.
         /// </summary>
         /// <param name="count"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -172,34 +203,36 @@ namespace LuminPack.Core
         {
             EnsureWritableAdvance(_currentIndex, count);
             _currentIndex += count;
-            
+
         }
-        
+
         /// <summary>
-        /// 移动指针
+        /// Advances the target pointer.
         /// </summary>
         /// <param name="count"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void AdvanceSafe(int count)
         {
-            
+
             _writerBuffer!.Check(ref this);
             EnsureWritableAdvance(_currentIndex, count);
             _currentIndex += count;
-            
+
         }
 
+        /// <summary>Updates the write buffer used by the current operation.</summary>
+        /// <param name="bufferWriter">The writer receiving the output data.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void SetWriteBuffer(LuminBufferWriter? bufferWriter)
         {
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
-            
+
             _writerBuffer = bufferWriter;
         }
 
         /// <summary>
-        /// 设置Span
+        /// Replaces the current buffer span.
         /// </summary>
         /// <param name="span"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -214,7 +247,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 刷新Writer
+        /// Flushes the writer's pending output.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Flush()
@@ -225,7 +258,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 刷新Buffer
+        /// Publishes pending buffer contents.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void FlushBuffer()
@@ -240,13 +273,21 @@ namespace LuminPack.Core
 #endif
             }
         }
-        
+
+        /// <summary>Determines whether the value type requires managed reference handling.</summary>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool IsReferenceOrContainsReferences<T>()
         {
             return RuntimeHelpers.IsReferenceOrContainsReferences<T>();
         }
-        
+
+        /// <summary>Creates span from the supplied input.</summary>
+        /// <param name="reference">The reference used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Span<T> CreateSpan<T>(scoped ref T reference, int length)
         {
@@ -254,11 +295,11 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 获取当前数组指针
+        /// Obtains a reference to the current array data.
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public ref byte GetCurrentSpanReference() => 
+        public ref byte GetCurrentSpanReference() =>
 #if NET8_0_OR_GREATER
             ref Unsafe.Add(ref _bufferStart, (nint)(uint)_currentIndex);
 #else
@@ -266,7 +307,7 @@ namespace LuminPack.Core
 #endif
 
         /// <summary>
-        /// 获取Writer持有的Span
+        /// Returns the span currently held by the writer.
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -276,14 +317,14 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 获取当前SpanOffset
+        /// Returns a reference to the current buffer offset.
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public unsafe ref int GetCurrentSpanOffset() => ref _currentIndex;
-        
+
         /// <summary>
-        /// 获取当前SpanOffsetEvaluator
+        /// Returns a reference to the size accumulator's current offset.
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -292,18 +333,19 @@ namespace LuminPack.Core
             var eval = new LuminPackEvaluator(ref _currentIndex);
             return ref eval;
         }
-        
+
         /// <summary>
-        /// 获取当前SpanOffset
+        /// Returns a reference to the current buffer offset.
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetCurrentSpanIndex() => _currentIndex;
 
         /// <summary>
-        /// 边界检测
+        /// Validate the buffer bounds.
         /// </summary>
         /// <returns></returns>
+        /// <param name="offset">The position at which the operation starts.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void FlushCurrentIndex(int offset)
         {
@@ -311,9 +353,9 @@ namespace LuminPack.Core
 
             _currentIndex = offset;
         }
-        
+
         /// <summary>
-        /// 边界检测
+        /// Validate the buffer bounds.
         /// </summary>
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -323,7 +365,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 获取字符串长度
+        /// Calculates the serialized string length.
         /// </summary>
         /// <param name="value"></param>
         /// <returns></returns>
@@ -334,12 +376,12 @@ namespace LuminPack.Core
             {
                 return 0;
             }
-            
+
             return SerializeStringAsUtf8 ? LuminPackMarshal.CalculateStringByteCount(value) : checked(value.Length * 2);
         }
 
         /// <summary>
-        /// 获取字符串字节数，包括标记符
+        /// Calculates the string payload size, including its header or terminator.
         /// </summary>
         /// <param name="value"></param>
         /// <returns></returns>
@@ -359,16 +401,18 @@ namespace LuminPack.Core
                 ? checked(value.Length * 2) + 1
                 : checked(value.Length * 2) + 4;
         }
-        
+
+        /// <summary>Returns the size of the string header used by the current recording mode.</summary>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int StringRecordLength()
         {
-            // UTF-16 Token 模式用 0x0000 (2字节) 作为终止符，因为 UTF-16 内部含大量单字节 0x00
+            // UTF-16 token mode uses a two-byte 0x0000 terminator because individual zero bytes are common within code units.
             return SerializeStringRecordAsToken ? (SerializeStringAsUtf8 ? 1 : 2) : SerializeStringAsUtf8 ? 8 : 4;
         }
-        
+
         /// <summary>
-        /// 获取值类型数组字节数
+        /// Calculates the byte size of an unmanaged array.
         /// </summary>
         /// <param name="value"></param>
         /// <typeparam name="T"></typeparam>
@@ -388,7 +432,7 @@ namespace LuminPack.Core
         #region Write
 
         /// <summary>
-        /// 序列化空Object字节
+        /// Writes the null object header.
         /// </summary>
         /// <param name="index"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -400,9 +444,9 @@ namespace LuminPack.Core
             Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index) = LuminPackCode.NullObject;
 #endif
         }
-        
+
         /// <summary>
-        /// 序列化空Object字节
+        /// Writes the null object header.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteNullObjectHeader()
@@ -416,10 +460,10 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 序列化集合字节
+        /// Writes the collection header.
         /// </summary>
         /// <param name="index"></param>
-        /// <param name="length">集合长度</param>
+        /// <param name="length">The collection length.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteCollectionHeader(ref int index, int length)
         {
@@ -434,6 +478,10 @@ namespace LuminPack.Core
         /// Generator fast path for a non-null list: obtains its backing span and writes the matching
         /// collection header in one call boundary.
         /// </summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="list">The list used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Span<T?> WriteListHeaderAndGetSpan<T>(ref int index, List<T?> list)
         {
@@ -443,7 +491,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 序列化空集合字节
+        /// Writes the null collection header.
         /// </summary>
         /// <param name="index"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -454,11 +502,11 @@ namespace LuminPack.Core
 #else
             Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index), LuminPackCode.NullCollection);
 #endif
-            
+
         }
 
         /// <summary>
-        /// 序列化空字符串
+        /// Writes the null string marker.
         /// </summary>
         /// <param name="index"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -478,7 +526,10 @@ namespace LuminPack.Core
 
             WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
         }
-        
+
+        /// <summary>Writes null string header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="offset">Receives the offset produced by the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteNullStringHeader(ref int index, out int offset)
         {
@@ -501,7 +552,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 序列化字符串终止符
+        /// Writes the string terminator.
         /// </summary>
         /// <param name="index"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -509,7 +560,7 @@ namespace LuminPack.Core
         {
             if (SerializeStringAsUtf8)
             {
-                // UTF-8 Token: 单字节 0x00 终止符
+                // UTF-8 token mode uses a single zero-byte terminator.
 #if NET8_0_OR_GREATER
                 Unsafe.Add(ref _bufferStart, (nint)(uint)index) = 0;
 #else
@@ -518,7 +569,7 @@ namespace LuminPack.Core
             }
             else
             {
-                // UTF-16 Token: 双字节 0x0000 终止符，匹配 UTF-16 null char
+                // UTF-16 token mode terminates at the two-byte null character 0x0000.
 #if NET8_0_OR_GREATER
                 Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index), (ushort)0);
 #else
@@ -526,9 +577,9 @@ namespace LuminPack.Core
 #endif
             }
         }
-        
+
         /// <summary>
-        /// 序列化字符串字节数
+        /// Writes the string length header.
         /// </summary>
         /// <param name="index"></param>
         /// <param name="length"></param>
@@ -542,12 +593,17 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Writes null utf8 length header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteNullUtf8LengthHeader(ref int index)
         {
             WriteEmptyOrNullUtf8LengthHeader(index, LuminPackCode.NullCollection);
         }
 
+        /// <summary>Writes empty or null utf8 length header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteEmptyOrNullUtf8LengthHeader(int index, int length)
         {
@@ -561,6 +617,9 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Writes object header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="memberCount">The member count used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteObjectHeader(ref int index, byte memberCount)
         {
@@ -570,7 +629,10 @@ namespace LuminPack.Core
             Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index) = memberCount;
 #endif
         }
-        
+
+        /// <summary>Writes null object header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="memberCount">The member count used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteNullObjectHeader(ref int index, byte memberCount)
         {
@@ -580,7 +642,9 @@ namespace LuminPack.Core
             Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index) = LuminPackCode.NullObject;
 #endif
         }
-        
+
+        /// <summary>Writes union header to the current output.</summary>
+        /// <param name="tag">The tag used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnionHeader(ushort tag)
         {
@@ -591,7 +655,10 @@ namespace LuminPack.Core
 #endif
             Advance(1);
         }
-        
+
+        /// <summary>Writes union header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="tag">The tag used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnionHeader(ref int index, ushort tag)
         {
@@ -602,7 +669,9 @@ namespace LuminPack.Core
 #endif
             Advance(1);
         }
-        
+
+        /// <summary>Writes wide union header to the current output.</summary>
+        /// <param name="tag">The tag used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteWideUnionHeader(ushort tag)
         {
@@ -627,7 +696,10 @@ namespace LuminPack.Core
                 Advance(3);
             }
         }
-        
+
+        /// <summary>Writes wide union header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="tag">The tag used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteWideUnionHeader(ref int index, ushort tag)
         {
@@ -652,13 +724,18 @@ namespace LuminPack.Core
                 Advance(3);
             }
         }
-        
+
+        /// <summary>Writes null union header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteNullUnionHeader(ref int index)
         {
             WriteNullObjectHeader(ref index);
         }
-        
+
+        /// <summary>Writes object reference id to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="referenceId">The reference id used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteObjectReferenceId(ref int index, uint referenceId)
         {
@@ -672,10 +749,10 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 序列化字符串
+        /// Writes a string using the configured encoding and recording mode.
         /// </summary>
         /// <param name="value"></param>
-        /// <returns>偏移量</returns>
+        /// <returns>The number of bytes contributed to the payload.</returns>
 #if NET8_0_OR_GREATER
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #else
@@ -698,13 +775,13 @@ namespace LuminPack.Core
                 : WriteUtf16WithToken(_currentIndex, value);
 #endif
         }
-        
+
         /// <summary>
-        /// 序列化字符串(已知长度)
+        /// Writes a string with a known length.
         /// </summary>
         /// <param name="value"></param>
         /// <param name="length"></param>
-        /// <returns>偏移量</returns>
+        /// <returns>The number of bytes contributed to the payload.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void WriteString(string? value, int length)
         {
@@ -718,13 +795,13 @@ namespace LuminPack.Core
             else
                 WriteUtf16WithToken(_currentIndex, value, length);
         }
-        
+
         /// <summary>
-        /// 序列化字符串
+        /// Writes a string using the configured encoding and recording mode.
         /// </summary>
         /// <param name="index"></param>
         /// <param name="value"></param>
-        /// <returns>偏移量</returns>
+        /// <returns>The number of bytes contributed to the payload.</returns>
 #if NET8_0_OR_GREATER
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #else
@@ -751,6 +828,10 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
         // Only the small mode test is inlined into generated parsers. Each mode
         // keeps its own frame; UTF-8 identifiers never prepare token/copy state.
+        /// <summary>Writes string other mode to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private int WriteStringOtherMode(int index, string? value)
         {
@@ -762,14 +843,14 @@ namespace LuminPack.Core
                 : WriteUtf16WithToken(index, value);
         }
 #endif
-        
+
         /// <summary>
-        /// 序列化字符串(已知长度)
+        /// Writes a string with a known length.
         /// </summary>
         /// <param name="index"></param>
         /// <param name="value"></param>
         /// <param name="length"></param>
-        /// <returns>偏移量</returns>
+        /// <returns>The number of bytes contributed to the payload.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void WriteString(ref int index, string? value, int length)
         {
@@ -785,11 +866,11 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// 序列化字符串 (ReadOnlySpan)
+        /// Writes a string from a read-only character span.
         /// </summary>
         /// /// <param name="index"></param>
         /// <param name="value"></param>
-        /// <returns>偏移量</returns>
+        /// <returns>The number of bytes contributed to the payload.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         public int WriteString(ref int index, ReadOnlySpan<char> value)
         {
@@ -803,6 +884,10 @@ namespace LuminPack.Core
                 : WriteUtf16WithToken(index, value);
         }
 
+        /// <summary>Writes utf8 with token to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteUtf8WithToken(int index, string? value)
         {
@@ -811,9 +896,9 @@ namespace LuminPack.Core
                 WriteStringRecordTokenHeader(ref index);
                 return 0;
             }
-            
+
             var status = StringSerializer.Serialize(value, _bufferReference.Slice(index), out var _, out var bytesWritten, replaceInvalidSequences: false);
-            
+
             if (status != OperationStatus.Done)
             {
                 if (status == OperationStatus.DestinationTooSmall)
@@ -821,14 +906,18 @@ namespace LuminPack.Core
                 else
                     LuminPackExceptionHelper.ThrowFailedEncoding(status);
             }
-            
+
             var tokenIndex = index + bytesWritten;
             WriteStringRecordTokenHeader(ref tokenIndex);
-            
+
             return bytesWritten;
-            
+
         }
 
+        /// <summary>Writes utf8 with token to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUtf8WithToken(int index, string? value, int length)
         {
@@ -838,16 +927,20 @@ namespace LuminPack.Core
                 return;
             }
             var status = StringSerializer.Serialize(value.AsSpan(), _bufferReference.Slice(index, length), out _, out var bytesWritten, replaceInvalidSequences: false);
-            
+
             if (status != OperationStatus.Done)
             {
                 LuminPackExceptionHelper.ThrowFailedEncoding(status);
             }
-            
+
             var tokenIndex = index + length;
             WriteStringRecordTokenHeader(ref tokenIndex);
         }
 
+        /// <summary>Writes utf8 with token to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteUtf8WithToken(int index, ReadOnlySpan<char> value)
         {
@@ -865,16 +958,24 @@ namespace LuminPack.Core
                 else
                     LuminPackExceptionHelper.ThrowFailedEncoding(status);
             }
-            
+
             var tokenIndex = index + bytesWritten;
             WriteStringRecordTokenHeader(ref tokenIndex);
-            
+
             return bytesWritten;
         }
 
 #if NET8_0_OR_GREATER
+        /// <summary>Writes utf8 with length to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
 #else
+        /// <summary>Writes utf8 with length to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #endif
         public int WriteUtf8WithLength(int index, string? value)
@@ -890,9 +991,9 @@ namespace LuminPack.Core
                 WriteEmptyOrNullUtf8LengthHeader(index, 0);
                 return 0;
             }
-            
+
             var source = value.AsSpan();
-            
+
             var startIndex = checked(index + 8);
             var dest = (uint)startIndex <= (uint)_bufferReference.Length
                 ? _bufferReference.Slice(startIndex)
@@ -912,6 +1013,11 @@ namespace LuminPack.Core
 
         // Keep general transcoding, retry state and its argument frame out of
         // the short ASCII path.
+        /// <summary>Writes utf8 with length slow to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="source">The input data to process.</param>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private int WriteUtf8WithLengthSlow(int index, ReadOnlySpan<char> source, Span<byte> dest)
         {
@@ -938,6 +1044,10 @@ namespace LuminPack.Core
             return bytesWritten;
         }
 
+        /// <summary>Writes utf8 with length to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUtf8WithLength(int index, string? value, int length)
         {
@@ -952,7 +1062,7 @@ namespace LuminPack.Core
                 WriteEmptyOrNullUtf8LengthHeader(index, 0);
                 return;
             }
-            
+
             WriteStringRecordLengthHeader(ref index, length);
 
             int index1 = index + 4;
@@ -961,7 +1071,7 @@ namespace LuminPack.Core
 #else
             Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index1), value.Length);
 #endif
-            
+
             var startIndex = index + 8;
             var target = LuminPackMarshal.CreateSpan(ref _bufferReference[startIndex], length);
 
@@ -973,6 +1083,10 @@ namespace LuminPack.Core
 
         }
 
+        /// <summary>Writes utf8 with length to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteUtf8WithLength(int index, ReadOnlySpan<char> value)
         {
@@ -981,7 +1095,7 @@ namespace LuminPack.Core
                 WriteEmptyOrNullUtf8LengthHeader(index, 0);
                 return 0;
             }
-            
+
             var startIndex = index + 8;
             var status = StringSerializer.Serialize(value, _bufferReference.Slice(startIndex), out _, out var bytesWritten, replaceInvalidSequences: false);
             if (status != OperationStatus.Done)
@@ -998,10 +1112,14 @@ namespace LuminPack.Core
 #else
             Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)(index + 4)), value.Length);
 #endif
-            
+
             return bytesWritten;
         }
 
+        /// <summary>Performs the retry write utf8 with token step for the current operation.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private int RetryWriteUtf8WithToken(int index, ReadOnlySpan<char> value)
         {
@@ -1013,6 +1131,11 @@ namespace LuminPack.Core
             return bytesWritten;
         }
 
+        /// <summary>Performs the retry write utf8 with length step for the current operation.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <param name="maxByteCount">The max byte count used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private int RetryWriteUtf8WithLength(int index, ReadOnlySpan<char> value, int maxByteCount)
         {
@@ -1024,6 +1147,10 @@ namespace LuminPack.Core
             return bytesWritten;
         }
 
+        /// <summary>Writes utf16 with token to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteUtf16WithToken(int index, string? value)
         {
@@ -1032,35 +1159,43 @@ namespace LuminPack.Core
                 WriteStringRecordTokenHeader(ref index);
                 return 0;
             }
-            
+
             StringSerializer.Serialize(value, _bufferReference.Slice(index), out _, out var bytesWritten, SerializeMode.Utf16, replaceInvalidSequences: false);
-            
+
             var tokenIndex = index + bytesWritten;
-            
+
             WriteStringRecordTokenHeader(ref tokenIndex);
-            
+
             return bytesWritten;
         }
 
+        /// <summary>Writes utf16 with token to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUtf16WithToken(int index, string? value, int length)
         {
             if (length is 0)
             {
                 WriteStringRecordTokenHeader(ref index);
-                
+
                 return;
             }
-            
+
             StringSerializer.Serialize(value, _bufferReference.Slice(index, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
-            
+
             var tokenIndex = index + length;
-            
+
             WriteStringRecordTokenHeader(ref tokenIndex);
         }
-        
-        
-        
+
+
+
+        /// <summary>Writes utf16 with token to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteUtf16WithToken(int index, ReadOnlySpan<char> value)
         {
@@ -1069,18 +1204,22 @@ namespace LuminPack.Core
                 WriteStringRecordTokenHeader(ref index);
                 return 0;
             }
-            
+
             var length = checked(value.Length * 2);
-            
+
             StringSerializer.Serialize(value, _bufferReference.Slice(index, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
-            
+
             var tokenIndex = index + length;
-            
+
             WriteStringRecordTokenHeader(ref tokenIndex);
-            
+
             return length;
         }
-        
+
+        /// <summary>Writes utf16 with length to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteUtf16WithLength(int index, string? value)
         {
@@ -1095,16 +1234,20 @@ namespace LuminPack.Core
                 WriteStringRecordLengthHeader(ref index, 0);
                 return 0;
             }
-            
+
             var length = unchecked(value.Length * 2);
-            
+
             WriteStringRecordLengthHeader(ref index, length);
             var startIndex = index + 4;
             StringSerializer.Serialize(value, _bufferReference.Slice(startIndex, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
-            
+
             return length;
         }
 
+        /// <summary>Writes utf16 with length to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUtf16WithLength(int index, string? value, int length)
         {
@@ -1119,14 +1262,18 @@ namespace LuminPack.Core
                 WriteStringRecordLengthHeader(ref index, 0);
                 return;
             }
-            
+
             WriteStringRecordLengthHeader(ref index, length);
-            
+
             var startIndex = index + 4;
-            
+
             StringSerializer.Serialize(value, _bufferReference.Slice(startIndex, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
         }
-        
+
+        /// <summary>Writes utf16 with length to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteUtf16WithLength(int index, ReadOnlySpan<char> value)
         {
@@ -1135,21 +1282,21 @@ namespace LuminPack.Core
                 WriteStringRecordLengthHeader(ref index, 0);
                 return 0;
             }
-            
+
             var length = checked(value.Length * sizeof(char));
-            
+
             WriteStringRecordLengthHeader(ref index, length);
-            
+
             var startIndex = index + 4;
-            
+
             StringSerializer.Serialize(value, _bufferReference.Slice(startIndex, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
-            
+
             return length;
         }
 
-        
+
         /// <summary>
-        /// 序列化数组
+        /// Writes the array contents.
         /// </summary>
         /// <param name="array"></param>
         /// <typeparam name="T"></typeparam>
@@ -1168,19 +1315,19 @@ namespace LuminPack.Core
             {
                 EnsureAdditionalCapacity(checked(sizeof(int) + array.Length * Unsafe.SizeOf<T>()));
                 DangerousWriteUnmanagedArray(ref _currentIndex, array, out var offset);
-                
+
                 Advance(offset);
-                
+
                 CheckBuffer();
-                
+
                 return;
             }
 
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
-        
+
         /// <summary>
-        /// 序列化数组
+        /// Writes the array contents.
         /// </summary>
         /// <param name="index"></param>
         /// <param name="array"></param>
@@ -1200,93 +1347,99 @@ namespace LuminPack.Core
             {
                 EnsureCapacity(index, checked(sizeof(int) + array.Length * Unsafe.SizeOf<T>()));
                 DangerousWriteUnmanagedArray(ref index, array, out var offset);
-                
+
                 Advance(offset);
-                
+
                 CheckBuffer();
-                
+
                 return;
             }
 
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
-        
+
         /// <summary>
-        /// 序列化Span
+        /// SerializeSpan
         /// </summary>
         /// <param name="span"></param>
         /// <typeparam name="T"></typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteSpan<T>(scoped Span<T> span)
         {
-            
+
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
                 EnsureAdditionalCapacity(checked(sizeof(int) + span.Length * Unsafe.SizeOf<T>()));
                 DangerousWriteUnmanagedSpan(ref _currentIndex, span, out var offset);
-                
+
                 Advance(offset);
-                
+
                 CheckBuffer();
-                
+
                 return;
             }
 
             if (span.IsEmpty)
             {
                 WriteNullCollectionHeader(ref _currentIndex);
-                
+
                 Advance(4);
-                
+
                 return;
             }
-            
+
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
-        
+
+        /// <summary>Writes span to the current output.</summary>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteSpan<T>(scoped ReadOnlySpan<T> span)
         {
             var index = _currentIndex;
-            
+
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
                 EnsureAdditionalCapacity(checked(sizeof(int) + span.Length * Unsafe.SizeOf<T>()));
                 DangerousWriteUnmanagedSpan(ref index, span, out var offset);
-                
+
                 Advance(offset);
-                
+
                 CheckBuffer();
-                
+
                 return;
             }
 
             if (span.IsEmpty)
             {
                 WriteNullCollectionHeader(ref index);
-                
+
                 Advance(4);
-                
+
                 return;
             }
-            
+
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
-        
+
+        /// <summary>Writes span with out header to the current output.</summary>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteSpanWithOutHeader<T>(scoped Span<T> span)
         {
             var index = _currentIndex;
-            
+
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
                 int spanOffset;
-                
+
                 if (span.Length == 0)
                 {
                     return;
                 }
-            
+
                 var srcLength = checked(Unsafe.SizeOf<T>() * span.Length);
                 EnsureAdditionalCapacity(srcLength);
 
@@ -1296,11 +1449,11 @@ namespace LuminPack.Core
                 ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
                 ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference());
-            
+
                 Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)srcLength);
-            
+
                 spanOffset = srcLength;
-                
+
                 Advance(spanOffset);
                 return;
             }
@@ -1309,24 +1462,27 @@ namespace LuminPack.Core
             {
                 return;
             }
-            
+
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
-        
+
+        /// <summary>Writes span with out header to the current output.</summary>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteSpanWithOutHeader<T>(scoped ReadOnlySpan<T> span)
         {
             var index = _currentIndex;
-            
+
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
                 int spanOffset;
-                
+
                 if (span.Length == 0)
                 {
                     return;
                 }
-            
+
                 var srcLength = checked(Unsafe.SizeOf<T>() * span.Length);
                 EnsureAdditionalCapacity(srcLength);
 
@@ -1336,11 +1492,11 @@ namespace LuminPack.Core
                 ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
                 ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
-            
+
                 Unsafe.CopyBlockUnaligned(ref dest, ref src, (uint)srcLength);
-            
+
                 spanOffset = srcLength;
-                
+
                 Advance(spanOffset);
                 return;
             }
@@ -1349,12 +1505,12 @@ namespace LuminPack.Core
             {
                 return;
             }
-            
+
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
-        
+
         /// <summary>
-        /// 序列化Span
+        /// SerializeSpan
         /// </summary>
         /// <param name="index"></param>
         /// <param name="span"></param>
@@ -1365,65 +1521,72 @@ namespace LuminPack.Core
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
                 DangerousWriteUnmanagedSpan(ref index, span, out var offset);
-                
+
                 Advance(offset);
-                
+
                 CheckBuffer();
-                
+
                 return;
             }
 
             if (span.IsEmpty)
             {
                 WriteNullCollectionHeader(ref index);
-                
+
                 Advance(4);
-                
+
                 return;
             }
-            
+
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
-        
+
+        /// <summary>Writes span to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span)
         {
             if (!RuntimeHelpers.IsReferenceOrContainsReferences<T>())
             {
                 DangerousWriteUnmanagedSpan(ref index, span, out var offset);
-                
+
                 Advance(offset);
-                
+
                 CheckBuffer();
-                
+
                 return;
             }
 
             if (span.IsEmpty)
             {
                 WriteNullCollectionHeader(ref index);
-                
+
                 Advance(4);
-                
+
                 return;
             }
-            
+
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));
         }
-        
 
+
+        /// <summary>Writes unmanaged array to the current output.</summary>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedArray<T>(scoped ref T[]? array) 
+        public void WriteUnmanagedArray<T>(scoped ref T[]? array)
             where T : unmanaged
         {
             var index = _currentIndex;
-        
+
             if (array is null)
             {
                 WriteNullCollectionHeader(ref index);
                 return;
             }
-        
+
             if (array.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
@@ -1442,18 +1605,21 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, array.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-    
+
+        /// <summary>Writes unmanaged array with out header to the current output.</summary>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref T[]? array) 
+        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref T[]? array)
             where T : unmanaged
         {
             var index = _currentIndex;
-        
+
             if (array is null)
             {
                 return;
             }
-        
+
             if (array.Length == 0)
             {
                 return;
@@ -1471,9 +1637,13 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, array.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-    
+
+        /// <summary>Writes unmanaged array to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedArray<T>(scoped ref int index, T[]? array) 
+        public void WriteUnmanagedArray<T>(scoped ref int index, T[]? array)
             where T : unmanaged
         {
             if (array is null)
@@ -1481,7 +1651,7 @@ namespace LuminPack.Core
                 WriteNullCollectionHeader(ref index);
                 return;
             }
-        
+
             if (array.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
@@ -1500,16 +1670,20 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, array.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-    
+
+        /// <summary>Writes unmanaged array with out header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array) 
+        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array)
             where T : unmanaged
         {
             if (array is null)
             {
                 return;
             }
-        
+
             if (array.Length == 0)
             {
                 return;
@@ -1528,8 +1702,13 @@ namespace LuminPack.Core
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
 
+        /// <summary>Writes unmanaged array to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">Receives the length produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedArray<T>(scoped ref int index, T[]? array, out int length) 
+        public void WriteUnmanagedArray<T>(scoped ref int index, T[]? array, out int length)
         {
             if (array is null)
             {
@@ -1537,7 +1716,7 @@ namespace LuminPack.Core
                 length = 4;
                 return;
             }
-        
+
             if (array.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
@@ -1556,19 +1735,24 @@ namespace LuminPack.Core
 
             Unsafe.WriteUnaligned(ref dest, array.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-        
+
             length = srcLength + 4;
         }
-    
+
+        /// <summary>Writes unmanaged array with out header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">Receives the length produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, out int length) 
+        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, out int length)
         {
             if (array is null)
             {
                 length = 0;
                 return;
             }
-        
+
             if (array.Length == 0)
             {
                 length = 0;
@@ -1587,9 +1771,15 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, array.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)length);
         }
-    
+
+        /// <summary>Writes unmanaged array to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedArray<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
+        public void WriteUnmanagedArray<T>(scoped ref int index, T[]? array, int length, out int spanOffset)
         {
             if (array is null)
             {
@@ -1597,14 +1787,14 @@ namespace LuminPack.Core
                 spanOffset = 4;
                 return;
             }
-        
+
             if (array.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
                 spanOffset = 4;
                 return;
             }
-        
+
             var srcLength = Unsafe.SizeOf<T>() * length;
 
 #if NET8_0_OR_GREATER
@@ -1613,27 +1803,33 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
-        
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-        
+
             spanOffset = srcLength + 4;
         }
-    
+
+        /// <summary>Writes unmanaged array with out header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
+        public void WriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, int length, out int spanOffset)
         {
             if (array is null)
             {
                 spanOffset = 0;
                 return;
             }
-        
+
             if (array.Length == 0)
             {
                 spanOffset = 0;
                 return;
             }
-        
+
             spanOffset = Unsafe.SizeOf<T>() * length;
 
 #if NET8_0_OR_GREATER
@@ -1642,12 +1838,16 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
-        
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)spanOffset);
         }
 
+        /// <summary>Writes unmanaged span to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span) 
+        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span)
             where T : unmanaged
         {
             if (span.Length == 0)
@@ -1668,9 +1868,13 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, span.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-    
+
+        /// <summary>Writes unmanaged span to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span) 
+        public void WriteUnmanagedSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span)
             where T : unmanaged
         {
             if (span.Length == 0)
@@ -1691,9 +1895,13 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, span.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-    
+
+        /// <summary>Writes unmanaged span with out header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped Span<T> span) 
+        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped Span<T> span)
             where T : unmanaged
         {
             if (span.Length == 0)
@@ -1713,9 +1921,13 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, span.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-    
+
+        /// <summary>Writes unmanaged span with out header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped ReadOnlySpan<T> span) 
+        public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped ReadOnlySpan<T> span)
             where T : unmanaged
         {
             if (span.Length == 0)
@@ -1735,7 +1947,12 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, span.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-    
+
+        /// <summary>Writes unmanaged span to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span, out int spanOffset)
         {
@@ -1745,9 +1962,9 @@ namespace LuminPack.Core
                 spanOffset = 4;
                 return;
             }
-        
+
             WriteCollectionHeader(ref index, span.Length);
-        
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -1756,12 +1973,17 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference());
-        
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-        
+
             spanOffset = srcLength + 4;
         }
-    
+
+        /// <summary>Writes unmanaged span to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span, out int spanOffset)
         {
@@ -1771,9 +1993,9 @@ namespace LuminPack.Core
                 spanOffset = 4;
                 return;
             }
-        
+
             WriteCollectionHeader(ref index, span.Length);
-        
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -1782,12 +2004,17 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
-        
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-        
+
             spanOffset = srcLength + 4;
         }
-    
+
+        /// <summary>Writes unmanaged span with out header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped Span<T> span, out int spanOffset)
         {
@@ -1796,7 +2023,7 @@ namespace LuminPack.Core
                 spanOffset = 0;
                 return;
             }
-        
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -1805,12 +2032,17 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference());
-        
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-        
+
             spanOffset = srcLength;
         }
-    
+
+        /// <summary>Writes unmanaged span with out header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped ReadOnlySpan<T> span, out int spanOffset)
         {
@@ -1819,7 +2051,7 @@ namespace LuminPack.Core
                 spanOffset = 0;
                 return;
             }
-        
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -1828,12 +2060,18 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
-        
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-        
+
             spanOffset = srcLength;
         }
-    
+
+        /// <summary>Writes unmanaged span to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span, int length, out int spanOffset)
         {
@@ -1845,7 +2083,7 @@ namespace LuminPack.Core
             }
 
             WriteCollectionHeader(ref index, length);
-        
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -1854,12 +2092,18 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference());
-        
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-        
+
             spanOffset = srcLength + 4;
         }
-    
+
+        /// <summary>Writes unmanaged span to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span, int length, out int spanOffset)
         {
@@ -1871,7 +2115,7 @@ namespace LuminPack.Core
             }
 
             WriteCollectionHeader(ref index, length);
-        
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -1880,12 +2124,18 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
-        
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-        
+
             spanOffset = srcLength + 4;
         }
-    
+
+        /// <summary>Writes unmanaged span with out header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped Span<T> span, int length, out int spanOffset)
         {
@@ -1894,19 +2144,25 @@ namespace LuminPack.Core
                 spanOffset = 0;
                 return;
             }
-        
+
             spanOffset = Unsafe.SizeOf<T>() * span.Length;
-        
+
 #if NET8_0_OR_GREATER
             ref var dest = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
 #else
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
-        
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)spanOffset);
         }
-    
+
+        /// <summary>Writes unmanaged span with out header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped ReadOnlySpan<T> span, int length, out int spanOffset)
         {
@@ -1915,7 +2171,7 @@ namespace LuminPack.Core
                 spanOffset = 0;
                 return;
             }
-        
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -1924,17 +2180,20 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
-        
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-        
+
             spanOffset = srcLength;
         }
-        
+
+        /// <summary>Writes unmanaged array using the caller-validated buffer layout.</summary>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArray<T>(scoped ref T[]? array) 
+        public void DangerousWriteUnmanagedArray<T>(scoped ref T[]? array)
         {
             var index = _currentIndex;
-        
+
             if (array!.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
@@ -1953,12 +2212,15 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, array.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-    
+
+        /// <summary>Writes unmanaged array with out header using the caller-validated buffer layout.</summary>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref T[]? array) 
+        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref T[]? array)
         {
             var index = _currentIndex;
-        
+
             if (array!.Length == 0)
             {
                 return;
@@ -1976,9 +2238,13 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, array.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-    
+
+        /// <summary>Writes unmanaged array using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array) 
+        public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array)
         {
             if (array!.Length == 0)
             {
@@ -1998,9 +2264,13 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, array.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-    
+
+        /// <summary>Writes unmanaged array with out header using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array) 
+        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array)
         {
             if (array!.Length == 0)
             {
@@ -2019,9 +2289,14 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, array.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-    
+
+        /// <summary>Writes unmanaged array using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">Receives the length produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array, out int length) 
+        public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array, out int length)
         {
             if (array!.Length == 0)
             {
@@ -2041,12 +2316,17 @@ namespace LuminPack.Core
 
             Unsafe.WriteUnaligned(ref dest, array.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-        
+
             length = srcLength + 4;
         }
-    
+
+        /// <summary>Writes unmanaged array with out header using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">Receives the length produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, out int length) 
+        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, out int length)
         {
             if (array!.Length == 0)
             {
@@ -2066,9 +2346,15 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, array.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)length);
         }
-    
+
+        /// <summary>Writes unmanaged array using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
+        public void DangerousWriteUnmanagedArray<T>(scoped ref int index, T[]? array, int length, out int spanOffset)
         {
             if (array!.Length == 0)
             {
@@ -2076,7 +2362,7 @@ namespace LuminPack.Core
                 spanOffset = 4;
                 return;
             }
-        
+
             var srcLength = Unsafe.SizeOf<T>() * array.Length;
 
 #if NET8_0_OR_GREATER
@@ -2085,21 +2371,27 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
-        
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-        
+
             spanOffset = srcLength + 4;
         }
-    
+
+        /// <summary>Writes unmanaged array with out header using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="array">The array used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, int length, out int spanOffset) 
+        public void DangerousWriteUnmanagedArrayWithOutHeader<T>(scoped ref int index, T[]? array, int length, out int spanOffset)
         {
             if (array!.Length == 0)
             {
                 spanOffset = 0;
                 return;
             }
-        
+
             spanOffset = Unsafe.SizeOf<T>() * array.Length;
 
 #if NET8_0_OR_GREATER
@@ -2108,14 +2400,18 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref LuminPackMarshal.GetArrayDataReference(array);
-        
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)spanOffset);
         }
-        
+
+        /// <summary>Writes unmanaged span using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span)
         {
-            
+
             if (span.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
@@ -2134,11 +2430,15 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, span.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-        
+
+        /// <summary>Writes unmanaged span using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span)
         {
-            
+
             if (span.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
@@ -2157,7 +2457,11 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, span.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-        
+
+        /// <summary>Writes unmanaged span with out header using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped Span<T> span)
         {
@@ -2178,11 +2482,15 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, span.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-        
+
+        /// <summary>Writes unmanaged span with out header using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped ReadOnlySpan<T> span)
         {
-            
+
             if (span.Length == 0)
             {
                 return;
@@ -2200,21 +2508,26 @@ namespace LuminPack.Core
             Unsafe.WriteUnaligned(ref dest, span.Length);
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
         }
-        
-        
+
+
+        /// <summary>Writes unmanaged span using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span, out int spanOffset)
         {
-            
+
             if (span.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
                 spanOffset = 4;
                 return;
             }
-            
+
             WriteCollectionHeader(ref index, span.Length);
-            
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -2223,25 +2536,30 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference());
-            
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
+
             spanOffset = srcLength + 4;
         }
-        
+
+        /// <summary>Writes unmanaged span using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span, out int spanOffset)
         {
-            
+
             if (span.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
                 spanOffset = 4;
                 return;
             }
-            
+
             WriteCollectionHeader(ref index, span.Length);
-            
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -2250,22 +2568,27 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
-            
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
+
             spanOffset = srcLength + 4;
         }
-        
+
+        /// <summary>Writes unmanaged span with out header using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped Span<T> span, out int spanOffset)
         {
-            
+
             if (span.Length == 0)
             {
                 spanOffset = 0;
                 return;
             }
-            
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -2274,12 +2597,17 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference());
-            
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
+
             spanOffset = srcLength;
         }
-        
+
+        /// <summary>Writes unmanaged span with out header using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped ReadOnlySpan<T> span, out int spanOffset)
         {
@@ -2288,7 +2616,7 @@ namespace LuminPack.Core
                 spanOffset = 0;
                 return;
             }
-            
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -2297,16 +2625,22 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
-            
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
+
             spanOffset = srcLength;
         }
-        
+
+        /// <summary>Writes unmanaged span using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpan<T>(scoped ref int index, scoped Span<T> span, int length, out int spanOffset)
         {
-            
+
             if (span.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
@@ -2315,7 +2649,7 @@ namespace LuminPack.Core
             }
 
             WriteCollectionHeader(ref index, length);
-            
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -2324,16 +2658,22 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref span.GetPinnableReference());
-            
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
+
             spanOffset = srcLength + 4;
         }
-        
+
+        /// <summary>Writes unmanaged span using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpan<T>(scoped ref int index, scoped ReadOnlySpan<T> span, int length, out int spanOffset)
         {
-            
+
             if (span.Length == 0)
             {
                 WriteCollectionHeader(ref index, 0);
@@ -2342,7 +2682,7 @@ namespace LuminPack.Core
             }
 
             WriteCollectionHeader(ref index, length);
-            
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -2351,12 +2691,18 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
-            
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
+
             spanOffset = srcLength + 4;
         }
-        
+
+        /// <summary>Writes unmanaged span with out header using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped Span<T> span, int length, out int spanOffset)
         {
@@ -2365,29 +2711,35 @@ namespace LuminPack.Core
                 spanOffset = 0;
                 return;
             }
-            
+
             spanOffset = Unsafe.SizeOf<T>() * span.Length;
-            
+
 #if NET8_0_OR_GREATER
             ref var dest = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
 #else
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
-            
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)spanOffset);
         }
-        
+
+        /// <summary>Writes unmanaged span with out header using the caller-validated buffer layout.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="span">The buffer used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void DangerousWriteUnmanagedSpanWithOutHeader<T>(scoped ref int index, scoped ReadOnlySpan<T> span, int length, out int spanOffset)
         {
-            
+
             if (span.Length == 0)
             {
                 spanOffset = 0;
                 return;
             }
-            
+
             var srcLength = Unsafe.SizeOf<T>() * span.Length;
 
 #if NET8_0_OR_GREATER
@@ -2396,80 +2748,104 @@ namespace LuminPack.Core
             ref var dest = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
 #endif
             ref var src = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(span));
-            
+
             Unsafe.CopyBlockUnaligned(ref Unsafe.Add(ref dest, 4), ref src, (uint)srcLength);
-            
+
             spanOffset = srcLength;
         }
 
+        /// <summary>Writes unmanaged list to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="list">The list used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedList<T>(scoped ref int index, scoped ref List<T>? list, out int spanOffset) 
+        public void WriteUnmanagedList<T>(scoped ref int index, scoped ref List<T>? list, out int spanOffset)
             where T : struct
         {
             if (list is null || list.Count == 0)
             {
                 WriteCollectionHeader(ref index, 0);
-                
+
                 spanOffset = 4;
-                
+
                 return;
             }
-            
+
             var span = LuminPackMarshal.GetListSpan(list, list.Count);
-            
+
             WriteUnmanagedSpan(ref index, span, out spanOffset);
         }
 
+        /// <summary>Writes unmanaged list to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="list">The list used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedList<T>(scoped ref int index, scoped ref List<T>? list, int length, out int spanOffset) 
+        public void WriteUnmanagedList<T>(scoped ref int index, scoped ref List<T>? list, int length, out int spanOffset)
             where T : struct
         {
             if (list is null || list.Count == 0)
             {
                 WriteCollectionHeader(ref index, 0);
-                
+
                 spanOffset = 4;
-                
+
                 return;
             }
 
             var span = LuminPackMarshal.GetListSpan(list, list.Count);
-            
+
             WriteUnmanagedSpan(ref index, span, length, out spanOffset);
         }
-        
+
+        /// <summary>Writes unmanaged list with out header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="list">The list used by this operation.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedListWithOutHeader<T>(scoped ref int index, scoped ref List<T>? list, out int spanOffset) 
+        public void WriteUnmanagedListWithOutHeader<T>(scoped ref int index, scoped ref List<T>? list, out int spanOffset)
             where T : struct
         {
             if (list is null || list.Count == 0)
             {
                 spanOffset = 0;
-                
+
                 return;
             }
-            
+
             var span = LuminPackMarshal.GetListSpan(list, list.Count);
-            
+
             WriteUnmanagedSpanWithOutHeader(ref index, span, out spanOffset);
         }
 
+        /// <summary>Writes unmanaged list with out header to the current output.</summary>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <param name="list">The list used by this operation.</param>
+        /// <param name="length">The number of bytes or elements to process.</param>
+        /// <param name="spanOffset">Receives the span offset produced by the operation.</param>
+        /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void WriteUnmanagedListWithOutHeader<T>(scoped ref int index, scoped ref List<T>? list, int length, out int spanOffset) 
+        public void WriteUnmanagedListWithOutHeader<T>(scoped ref int index, scoped ref List<T>? list, int length, out int spanOffset)
             where T : struct
         {
             if (list is null || list.Count == 0)
             {
                 spanOffset = 0;
-                
+
                 return;
             }
 
             var span = LuminPackMarshal.GetListSpan(list, list.Count);
-            
+
             WriteUnmanagedSpanWithOutHeader(ref index, span, length, out spanOffset);
         }
-        
+
+        /// <summary>Writes var int to the current output.</summary>
+        /// <param name="x">The x used by this operation.</param>
         public void WriteVarInt(byte x)
         {
             if (x <= VarIntCodes.MaxSingleValue)
@@ -2482,6 +2858,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Writes var int to the current output.</summary>
+        /// <param name="x">The x used by this operation.</param>
         public void WriteVarInt(sbyte x)
         {
             if (VarIntCodes.MinSingleValue <= x)
@@ -2494,6 +2872,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Writes var int to the current output.</summary>
+        /// <param name="x">The x used by this operation.</param>
         public void WriteVarInt(ushort x)
         {
             if (x <= VarIntCodes.MaxSingleValue)
@@ -2506,6 +2886,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Writes var int to the current output.</summary>
+        /// <param name="x">The x used by this operation.</param>
         public void WriteVarInt(short x)
         {
             if (0 <= x)
@@ -2536,6 +2918,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Writes var int to the current output.</summary>
+        /// <param name="x">The x used by this operation.</param>
         public void WriteVarInt(uint x)
         {
             if (x <= VarIntCodes.MaxSingleValue)
@@ -2552,6 +2936,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Writes var int to the current output.</summary>
+        /// <param name="x">The x used by this operation.</param>
         public void WriteVarInt(int x)
         {
             if (0 <= x)
@@ -2590,6 +2976,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Writes var int to the current output.</summary>
+        /// <param name="x">The x used by this operation.</param>
         public void WriteVarInt(ulong x)
         {
             if (x <= VarIntCodes.MaxSingleValue)
@@ -2610,6 +2998,8 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Writes var int to the current output.</summary>
+        /// <param name="x">The x used by this operation.</param>
         public void WriteVarInt(long x)
         {
             if (0 <= x)
@@ -2655,7 +3045,7 @@ namespace LuminPack.Core
                 }
             }
         }
-        
+
         #endregion
     }
 }

@@ -7,8 +7,12 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 
 using static CodeEmitterRegistry;
 
+/// <summary>Provides array emitter functionality.</summary>
 public static class ArrayEmitter
 {
+    /// <summary>Appends binary writing statements for array values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
@@ -69,6 +73,9 @@ public static class ArrayEmitter
         sb.AppendLine("            writer.CheckBuffer();");
     }
 
+    /// <summary>Appends binary reading statements for array values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
@@ -138,6 +145,9 @@ public static class ArrayEmitter
         sb.AppendLine(@"            }");
     }
 
+    /// <summary>Appends binary reading statements for array values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateFreshDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
@@ -169,6 +179,9 @@ public static class ArrayEmitter
         sb.AppendLine(@"            }");
     }
 
+    /// <summary>Appends JSON writing statements for array values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string elementType = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
@@ -190,6 +203,9 @@ public static class ArrayEmitter
         sb.AppendLine("            writer.WriteArrayEnd();");
     }
 
+    /// <summary>Appends JSON reading statements for array values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string elementType = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
@@ -251,6 +267,9 @@ public static class ArrayEmitter
     // normal WriteValue / ReadValue loop (compress attribute is ignored silently
     // for elements that are not blittable).
 
+    /// <summary>Appends binary writing statements for array values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCodeWithCompress(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
@@ -321,6 +340,9 @@ public static class ArrayEmitter
         sb.AppendLine("            writer.CheckBuffer();");
     }
 
+    /// <summary>Appends binary reading statements for array values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCodeWithCompress(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
@@ -396,6 +418,9 @@ public static class ArrayEmitter
         sb.AppendLine(@"            }");
     }
 
+    /// <summary>Obtains the closed element is unmanaged for the supplied input.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <returns>The result of the operation.</returns>
     private static bool? GetClosedElementIsUnmanaged(LuminLocalFieldData fieldData)
     {
         if (fieldData.TypeSymbol is not Microsoft.CodeAnalysis.IArrayTypeSymbol array)
@@ -408,6 +433,10 @@ public static class ArrayEmitter
             : null;
     }
 
+    /// <summary>Obtains the array pool clear expression for the supplied input.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="elementType">The element type used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static string GetArrayPoolClearExpression(LuminLocalFieldData fieldData, string elementType)
     {
         bool? elementIsUnmanaged = GetClosedElementIsUnmanaged(fieldData);

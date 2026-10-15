@@ -3,8 +3,10 @@ using Xunit;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides assembly string writer test functionality.</summary>
 public class AssemblyStringWriterTest
 {
+    /// <summary>Verifies direct utf8 length path preserves offset headers and bounds.</summary>
     [Fact]
     public void DirectUtf8LengthPathPreservesOffsetHeadersAndBounds()
     {
@@ -22,6 +24,7 @@ public class AssemblyStringWriterTest
         }
     }
 
+    /// <summary>Verifies fixed buffer shortage keeps outside sentinels intact.</summary>
     [Fact]
     public void FixedBufferShortageKeepsOutsideSentinelsIntact()
     {
@@ -33,6 +36,9 @@ public class AssemblyStringWriterTest
             Assert.Equal((byte)0xCC, bytes[^1]);
         }
 
+        // <summary>Writes into insufficient span to the current output.</summary>
+        // <param name="bytes">The bytes used by this operation.</param>
+        // <param name="value">The value consumed or produced by this operation.</param>
         static void WriteIntoInsufficientSpan(byte[] bytes, string value)
         {
             Span<byte> span = bytes.AsSpan(1, bytes.Length - 2);

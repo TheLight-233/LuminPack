@@ -1,4 +1,3 @@
-﻿using System;
 using System.Buffers;
 using System.Text;
 #if NET8_0_OR_GREATER
@@ -13,9 +12,12 @@ using System.Runtime.Intrinsics.X86;
 
 namespace LuminPack.Utility;
 
+/// <summary>Provides serialize mode functionality.</summary>
 public enum SerializeMode : byte
 {
+    /// <summary>Specifies utf8.</summary>
     Utf8,
+    /// <summary>Specifies utf16.</summary>
     Utf16
 }
 
@@ -27,6 +29,15 @@ public enum SerializeMode : byte
 /// </summary>
 public static class StringSerializer
 {
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="charsRead">Receives the chars read produced by the operation.</param>
+    /// <param name="bytesWritten">Receives the bytes written produced by the operation.</param>
+    /// <param name="mode">The mode used by this operation.</param>
+    /// <param name="replaceInvalidSequences">The replace invalid sequences used by this operation.</param>
+    /// <param name="isFinalBlock">The is final block used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static OperationStatus Serialize(
         ReadOnlySpan<char> source,
         Span<byte> destination,
@@ -41,6 +52,15 @@ public static class StringSerializer
             : SerializeAsUtf16(source, destination, out charsRead, out bytesWritten,
                 replaceInvalidSequences, isFinalBlock);
 
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="bytesRead">Receives the bytes read produced by the operation.</param>
+    /// <param name="charsWritten">Receives the chars written produced by the operation.</param>
+    /// <param name="mode">The mode used by this operation.</param>
+    /// <param name="replaceInvalidSequences">The replace invalid sequences used by this operation.</param>
+    /// <param name="isFinalBlock">The is final block used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     public static OperationStatus Deserialize(
         ReadOnlySpan<byte> source,
         Span<char> destination,
@@ -86,6 +106,10 @@ public static class StringSerializer
 #endif
     }
 
+    /// <summary>Performs the prefer custom simd step for the current operation.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destinationLength">The destination length used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool PreferCustomSimd(ReadOnlySpan<char> source, int destinationLength)
     {
@@ -111,6 +135,14 @@ public static class StringSerializer
 #endif
     }
 
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="charsRead">Receives the chars read produced by the operation.</param>
+    /// <param name="bytesWritten">Receives the bytes written produced by the operation.</param>
+    /// <param name="replaceInvalidSequences">The replace invalid sequences used by this operation.</param>
+    /// <param name="isFinalBlock">The is final block used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     internal static unsafe OperationStatus SerializeAsUtf8(
         ReadOnlySpan<char> source,
         Span<byte> destination,
@@ -190,6 +222,14 @@ public static class StringSerializer
         }
     }
 
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="bytesRead">Receives the bytes read produced by the operation.</param>
+    /// <param name="charsWritten">Receives the chars written produced by the operation.</param>
+    /// <param name="replaceInvalidSequences">The replace invalid sequences used by this operation.</param>
+    /// <param name="isFinalBlock">The is final block used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     internal static unsafe OperationStatus DeserializeFromUtf8(
         ReadOnlySpan<byte> source,
         Span<char> destination,
@@ -249,7 +289,15 @@ public static class StringSerializer
             return status;
         }
     }
-    
+
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="charsRead">Receives the chars read produced by the operation.</param>
+    /// <param name="bytesWritten">Receives the bytes written produced by the operation.</param>
+    /// <param name="replaceInvalidSequences">The replace invalid sequences used by this operation.</param>
+    /// <param name="isFinalBlock">The is final block used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static OperationStatus SerializeAsUtf16(
         ReadOnlySpan<char> source, Span<byte> destination,
         out int charsRead, out int bytesWritten,
@@ -267,6 +315,14 @@ public static class StringSerializer
     }
 
     // Keep the original native-UTF16 odd-byte and chunk behavior for compatibility.
+    /// <summary>Deserializes the supplied input using the selected format and options.</summary>
+    /// <param name="source">The input data to process.</param>
+    /// <param name="destination">The destination receiving the result.</param>
+    /// <param name="bytesRead">Receives the bytes read produced by the operation.</param>
+    /// <param name="charsWritten">Receives the chars written produced by the operation.</param>
+    /// <param name="replaceInvalidSequences">The replace invalid sequences used by this operation.</param>
+    /// <param name="isFinalBlock">The is final block used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static OperationStatus DeserializeFromUtf16(
         ReadOnlySpan<byte> source,
         Span<char> destination,
@@ -277,7 +333,7 @@ public static class StringSerializer
     {
         bytesRead = 0;
         charsWritten = 0;
-        
+
         if (source.Length % sizeof(char) != 0)
         {
             if (isFinalBlock)
@@ -288,16 +344,16 @@ public static class StringSerializer
                     charsWritten = 1;
                 }
                 bytesRead = source.Length;
-                return replaceInvalidSequences ? 
-                    OperationStatus.Done : 
+                return replaceInvalidSequences ?
+                    OperationStatus.Done :
                     OperationStatus.InvalidData;
             }
             return OperationStatus.NeedMoreData;
         }
-        
+
         int maxChars = Math.Min(source.Length / sizeof(char), destination.Length);
         int bytesToCopy = maxChars * sizeof(char);
-        
+
         if (bytesToCopy > 0)
         {
             Unsafe.CopyBlockUnaligned(
@@ -305,19 +361,27 @@ public static class StringSerializer
                 ref MemoryMarshal.GetReference(source),
                 (uint)bytesToCopy);
         }
-        
+
         bytesRead = bytesToCopy;
         charsWritten = maxChars;
-        
+
         if (source.Length > bytesToCopy)
         {
             return OperationStatus.DestinationTooSmall;
         }
-        
+
         return OperationStatus.Done;
     }
-        
-        
+
+
+    /// <summary>Performs the transcode to utf8 step for the current operation.</summary>
+    /// <param name="pInputBuffer">The p input buffer used by this operation.</param>
+    /// <param name="inputLength">The input length used by this operation.</param>
+    /// <param name="pOutputBuffer">The p output buffer used by this operation.</param>
+    /// <param name="outputBytesRemaining">The output bytes remaining used by this operation.</param>
+    /// <param name="pInputBufferRemaining">Receives the p input buffer remaining produced by the operation.</param>
+    /// <param name="pOutputBufferRemaining">Receives the p output buffer remaining produced by the operation.</param>
+    /// <returns>The result of the operation.</returns>
     internal static unsafe OperationStatus TranscodeToUtf8(
         char* pInputBuffer, int inputLength,
         byte* pOutputBuffer, int outputBytesRemaining,
@@ -406,6 +470,10 @@ public static class StringSerializer
     /// Two exact 16-byte stores. No input over-read or output over-store.
     /// The remainder is handled by the shared portable implementation.
     /// </summary>
+    /// <param name="input">The input data to process.</param>
+    /// <param name="output">The destination receiving the result.</param>
+    /// <param name="inputEnd">The input end used by this operation.</param>
+    /// <param name="outputEnd">The output end used by this operation.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static unsafe void EncodeAsciiRun(
         ref char* input, ref byte* output, char* inputEnd, byte* outputEnd)
@@ -445,6 +513,13 @@ public static class StringSerializer
 #endif
 
     /// <summary>Portable UTF-8 encoder; no SIMD dispatch inside this hot loop.</summary>
+    /// <param name="pInputBuffer">The p input buffer used by this operation.</param>
+    /// <param name="inputLength">The input length used by this operation.</param>
+    /// <param name="pOutputBuffer">The p output buffer used by this operation.</param>
+    /// <param name="outputBytesRemaining">The output bytes remaining used by this operation.</param>
+    /// <param name="pInputBufferRemaining">Receives the p input buffer remaining produced by the operation.</param>
+    /// <param name="pOutputBufferRemaining">Receives the p output buffer remaining produced by the operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static unsafe OperationStatus TranscodeToUtf8Scalar(
         char* pInputBuffer, int inputLength,
         byte* pOutputBuffer, int outputBytesRemaining,
@@ -592,11 +667,21 @@ public static class StringSerializer
         return status;
     }
 
+    /// <summary>Determines whether the supplied value has the bmp3 classification.</summary>
+    /// <param name="ch">The ch used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsBmp3(uint ch)
         => ch >= 0x0800 && (ch < 0xD800 || ch > 0xDFFF);
 
     /// <summary>Core decoder: ASCII-vector and portable Unicode validation.</summary>
+    /// <param name="pInputBuffer">The p input buffer used by this operation.</param>
+    /// <param name="inputLength">The input length used by this operation.</param>
+    /// <param name="pOutputBuffer">The p output buffer used by this operation.</param>
+    /// <param name="outputCharsRemaining">The output chars remaining used by this operation.</param>
+    /// <param name="pInputBufferRemaining">Receives the p input buffer remaining produced by the operation.</param>
+    /// <param name="pOutputBufferRemaining">Receives the p output buffer remaining produced by the operation.</param>
+    /// <returns>The result of the operation.</returns>
     internal static unsafe OperationStatus TranscodeToUtf16(
         byte* pInputBuffer,
         int inputLength,
@@ -667,8 +752,8 @@ public static class StringSerializer
                 if (pOutputBuffer == outputEnd)
                     return Complete(OperationStatus.DestinationTooSmall);
 
-                uint codePoint = ((firstByte & 0x0F) << 12) | 
-                                 ((secondByte & 0x3F) << 6) | 
+                uint codePoint = ((firstByte & 0x0F) << 12) |
+                                 ((secondByte & 0x3F) << 6) |
                                  (thirdByte & 0x3F);
                 *pOutputBuffer = (char)codePoint;
                 pInputBuffer += 3;
@@ -705,9 +790,9 @@ public static class StringSerializer
                 if (outputEnd - pOutputBuffer < 2)
                     return Complete(OperationStatus.DestinationTooSmall);
 
-                uint codePoint = ((firstByte & 0x07) << 18) | 
-                                 ((secondByte & 0x3F) << 12) | 
-                                 ((thirdByte & 0x3F) << 6) | 
+                uint codePoint = ((firstByte & 0x07) << 18) |
+                                 ((secondByte & 0x3F) << 12) |
+                                 ((thirdByte & 0x3F) << 6) |
                                  (fourthByte & 0x3F);
 
                 codePoint -= 0x10000;
@@ -726,12 +811,22 @@ public static class StringSerializer
         pOutputBufferRemaining = pOutputBuffer;
         return OperationStatus.Done;
 
+        // <summary>Performs the complete step for the current operation.</summary>
+        // <param name="status">The status used by this operation.</param>
+        // <returns>The result of the operation.</returns>
         static OperationStatus Complete(OperationStatus status) => status;
     }
-        
+
+    /// <summary>Determines whether the supplied value has the utf8 continuation byte classification.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool IsUtf8ContinuationByte(uint value) => (value & 0xC0) == 0x80;
 
+    /// <summary>Obtains the invalid utf8 sequence length for the supplied input.</summary>
+    /// <param name="input">The input data to process.</param>
+    /// <param name="remaining">The remaining used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     private static unsafe int GetInvalidUtf8SequenceLength(byte* input, int remaining)
     {
         if (remaining <= 1) return 1;
@@ -789,6 +884,12 @@ public static class StringSerializer
     /// ASCII first on every 8/16 code units, and AVX2 failure does not invoke
     /// three unrelated SSSE3 classifiers.
     /// </summary>
+    /// <param name="input">The input data to process.</param>
+    /// <param name="output">The destination receiving the result.</param>
+    /// <param name="inputEnd">The input end used by this operation.</param>
+    /// <param name="outputEnd">The output end used by this operation.</param>
+    /// <param name="lead">The lead used by this operation.</param>
+    /// <returns>Whether the requested condition or operation succeeded.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static unsafe bool TryEncodeVectorRun(
         ref char* input, ref byte* output, char* inputEnd, byte* outputEnd, uint lead)

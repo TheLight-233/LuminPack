@@ -1,39 +1,48 @@
-using System;
-using System.Collections.Generic;
 using LuminPack;
 using LuminPack.Attribute;
 
 namespace LuminPackUnitTest
 {
     // ─────────────────────────────────────────────────────────────────────────
-    //  二层嵌套 private 回归测试：根 ->(private) ShallowLevel1 ->(private) int
-    //  覆盖"嵌套类型自身私有成员"这一最基本形态，防止深层改造回归浅层行为。
+    //  Regression: root to private ShallowLevel1 to private integer.
+    //  Cover private members on the nested type itself to protect shallow access during deeper layout changes.
     // ─────────────────────────────────────────────────────────────────────────
 
+    /// <summary>Provides shallow root functionality.</summary>
     [LuminPackable]
     public class ShallowRoot
     {
+        /// <summary>Stores the root value.</summary>
         public int RootValue;
 
         [LuminPackInclude]
         private ShallowLevel1 _level1 = new();
 
+        /// <summary>Gets the level1.</summary>
         public ShallowLevel1 Level1 => _level1;
     }
 
+    /// <summary>Provides shallow level1 functionality.</summary>
     public class ShallowLevel1
     {
+        /// <summary>Stores the value1.</summary>
         public int Value1;
 
         [LuminPackInclude]
         private int _secret = 42;
 
+        /// <summary>Gets the secret.</summary>
         public int Secret => _secret;
+        /// <summary>Updates the secret used by the current operation.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         public void SetSecret(int value) => _secret = value;
     }
 
+    /// <summary>Provides shallow private member test functionality.</summary>
     public static class ShallowPrivateMemberTest
     {
+        /// <summary>Verifies run.</summary>
+        /// <param name="results">The results used by this operation.</param>
         public static void Run(List<string> results)
         {
             try

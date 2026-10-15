@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using LuminPack;
 using LuminPack.Attribute;
 using Xunit;
@@ -13,20 +11,30 @@ namespace LuminPackUnitTest
     /// </summary>
     public class DeserializeMergeTest
     {
+        /// <summary>Provides merge target functionality.</summary>
         [LuminPackable]
         public sealed class MergeTarget
         {
+            /// <summary>Stores the a.</summary>
             public int A;
+            /// <summary>Stores the name.</summary>
             public string Name = "";
+            /// <summary>Stores the items.</summary>
             public List<int> Items = new();
         }
 
+        /// <summary>Verifies payload.</summary>
+        /// <param name="a">The a used by this operation.</param>
+        /// <param name="name">The name used by this operation.</param>
+        /// <param name="items">The items used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         private static byte[] Payload(int a, string name, params int[] items)
         {
             var value = new MergeTarget { A = a, Name = name, Items = new List<int>(items) };
             return LuminPackSerializer.Serialize(value);
         }
 
+        /// <summary>Verifies reuses existing root identity preserved.</summary>
         [Fact]
         public void ReusesExistingRoot_IdentityPreserved()
         {
@@ -43,6 +51,7 @@ namespace LuminPackUnitTest
             Assert.Equal(new[] { 1, 2, 3 }, existing.Items);
         }
 
+        /// <summary>Verifies constructs when root is null.</summary>
         [Fact]
         public void ConstructsWhenRootIsNull()
         {
@@ -57,6 +66,7 @@ namespace LuminPackUnitTest
             Assert.Equal("created", existing.Name);
         }
 
+        /// <summary>Verifies null payload leaves existing root untouched.</summary>
         [Fact]
         public void NullPayloadLeavesExistingRootUntouched()
         {

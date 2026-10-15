@@ -1,4 +1,3 @@
-using System;
 using System.Buffers.Text;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -13,11 +12,14 @@ namespace LuminPack.Core
     /// </summary>
     internal static class LuminPackJsonNumberFormatter
     {
+        /// <summary>Provides packed4 lut functionality.</summary>
         private sealed class Packed4Lut
         {
             internal readonly uint[] Packed;
             internal readonly byte[] Lengths;
 
+            /// <summary>Initializes a new instance of <c>Packed4Lut</c>.</summary>
+            /// <param name="count">The number of entries involved in the operation.</param>
             internal Packed4Lut(int count)
             {
                 Packed = new uint[count];
@@ -44,6 +46,8 @@ namespace LuminPack.Core
         private static readonly Packed4Lut s_lut10K = new(10_000);
         private static readonly byte[] s_digitPairs = BuildDigitPairs();
 
+        /// <summary>Performs the build digit pairs step for the current operation.</summary>
+        /// <returns>The result of the operation.</returns>
         private static byte[] BuildDigitPairs()
         {
             var pairs = new byte[200];
@@ -55,6 +59,11 @@ namespace LuminPack.Core
             return pairs;
         }
 
+        /// <summary>Writes packed4 to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="lut">The lut used by this operation.</param>
+        /// <param name="index">The position at which the operation starts.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int WritePacked4(Span<byte> dest, Packed4Lut lut, int index)
         {
@@ -66,10 +75,18 @@ namespace LuminPack.Core
         // byte / sbyte
         // -----------------------------------------------------------------
 
+        /// <summary>Writes byte to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int WriteByte(Span<byte> dest, byte value)
             => WritePacked4(dest, s_lut256, value);
 
+        /// <summary>Writes s byte to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int WriteSByte(Span<byte> dest, sbyte value)
         {
@@ -86,6 +103,10 @@ namespace LuminPack.Core
         // -----------------------------------------------------------------
 
         // Final benchmark winner for ushort: 0..9999 LUT, DotNet fallback.
+        /// <summary>Writes u short to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int WriteUShort(Span<byte> dest, ushort value)
         {
@@ -97,6 +118,10 @@ namespace LuminPack.Core
         }
 
         // Final benchmark winner for short: 1K LUT + 32-bit pair formatter fallback.
+        /// <summary>Writes short to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int WriteShort(Span<byte> dest, short value)
         {
@@ -120,6 +145,10 @@ namespace LuminPack.Core
             return offset + WriteUInt32PairLinear(dest[offset..], magnitude);
         }
 
+        /// <summary>Writes u int32 pair linear to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int WriteUInt32PairLinear(Span<byte> dest, uint value)
         {
@@ -170,6 +199,10 @@ namespace LuminPack.Core
 
         // 10K packed LUT for small values (packed store intentionally writes 4 bytes),
         // digit-pair linear formatter for the rest.
+        /// <summary>Writes u int32 to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int WriteUInt32(Span<byte> dest, uint value)
         {
@@ -179,6 +212,10 @@ namespace LuminPack.Core
             return WriteUInt32PairLinear(dest, value);
         }
 
+        /// <summary>Writes int32 to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int WriteInt32(Span<byte> dest, int value)
         {
@@ -205,6 +242,10 @@ namespace LuminPack.Core
         // -----------------------------------------------------------------
 
         // Final benchmark winner for long: 10K packed LUT + quad formatter.
+        /// <summary>Writes long to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int WriteLong(Span<byte> dest, long value)
         {
@@ -222,6 +263,10 @@ namespace LuminPack.Core
 
         // Same routing as long: 10K packed LUT for small values (packed store
         // intentionally writes 4 bytes), quad formatter above.
+        /// <summary>Writes u long to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int WriteULong(Span<byte> dest, ulong value)
         {
@@ -255,6 +300,9 @@ namespace LuminPack.Core
             10_000_000_000_000_000_000UL
         };
 
+        /// <summary>Performs the count digits step for the current operation.</summary>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int CountDigits(ulong value)
         {
@@ -301,6 +349,10 @@ namespace LuminPack.Core
 #endif
         }
 
+        /// <summary>Writes u int64 quad to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int WriteUInt64Quad(Span<byte> dest, ulong value)
         {
@@ -362,6 +414,9 @@ namespace LuminPack.Core
             return digits;
         }
 
+        /// <summary>Writes 4 digits to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void Write4Digits(Span<byte> dest, uint value)
         {
@@ -379,6 +434,10 @@ namespace LuminPack.Core
         // decimal
         // -----------------------------------------------------------------
 
+        /// <summary>Writes decimal to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal static int WriteDecimal(Span<byte> dest, decimal value)
         {
@@ -412,6 +471,12 @@ namespace LuminPack.Core
         }
 
 #if NET5_0_OR_GREATER
+        /// <summary>Writes decimal u int64 fixed to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="coefficient">The coefficient used by this operation.</param>
+        /// <param name="scale">The scale used by this operation.</param>
+        /// <param name="negative">The negative used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int WriteDecimalUInt64Fixed(Span<byte> dest, ulong coefficient, int scale, bool negative)
         {
@@ -420,6 +485,12 @@ namespace LuminPack.Core
             return WriteDecimalDigits(dest, digits[..count], scale, negative);
         }
 
+        /// <summary>Writes decimal digits to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="digits">The digits used by this operation.</param>
+        /// <param name="scale">The scale used by this operation.</param>
+        /// <param name="negative">The negative used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static int WriteDecimalDigits(Span<byte> dest, ReadOnlySpan<byte> digits, int scale, bool negative)
         {
@@ -452,6 +523,12 @@ namespace LuminPack.Core
             return pos + digits.Length;
         }
 
+        /// <summary>Writes u int96 digits to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="hi">The hi used by this operation.</param>
+        /// <param name="mid">The mid used by this operation.</param>
+        /// <param name="lo">The lo used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         private static int WriteUInt96Digits(Span<byte> dest, uint hi, uint mid, uint lo)
         {
             if ((hi | mid) == 0)
@@ -474,6 +551,11 @@ namespace LuminPack.Core
             return pos;
         }
 
+        /// <summary>Performs the div96 by1 billion step for the current operation.</summary>
+        /// <param name="hi">The hi used by this operation.</param>
+        /// <param name="mid">The mid used by this operation.</param>
+        /// <param name="lo">The lo used by this operation.</param>
+        /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static uint Div96By1Billion(ref uint hi, ref uint mid, ref uint lo)
         {
@@ -497,6 +579,9 @@ namespace LuminPack.Core
             return (uint)rem;
         }
 
+        /// <summary>Writes nine digits to the current output.</summary>
+        /// <param name="dest">The destination receiving the result.</param>
+        /// <param name="value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private static void WriteNineDigits(Span<byte> dest, uint value)
         {

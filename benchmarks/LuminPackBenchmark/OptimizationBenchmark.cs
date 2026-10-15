@@ -1,7 +1,7 @@
+using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Globalization;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Jobs;
 using LuminPack;
@@ -12,6 +12,7 @@ namespace LuminPackBenchmark;
 
 // Keep the same input, options and return shapes when comparing revisions.
 // Run this class on each revision, in separate processes, without other benchmarks running.
+/// <summary>Provides optimization benchmark functionality.</summary>
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 4, iterationCount: 8)]
 [MemoryDiagnoser]
 public class OptimizationBenchmark
@@ -23,6 +24,7 @@ public class OptimizationBenchmark
     private LuminBufferWriter _writer = null!;
     private static readonly LuminPackSerializerOption Strict = new() { ValidateJsonSyntax = true };
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -38,6 +40,8 @@ public class OptimizationBenchmark
         Console.WriteLine($"Fixture: binary={_binary.Length} B, JSON UTF-8={_json.Length} B");
     }
 
+    /// <summary>Creates deterministic data from the supplied input.</summary>
+    /// <returns>The result of the operation.</returns>
     internal static CharacterSaveData CreateDeterministicData()
     {
         var data = CharacterSaveData.Create();
@@ -52,28 +56,44 @@ public class OptimizationBenchmark
         return data;
     }
 
+    /// <summary>Measures cleanup for the configured benchmark input.</summary>
     [GlobalCleanup]
     public void Cleanup() => LuminBufferWriterPool.Return(_writer);
 
+    /// <summary>Measures json read utf8 for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData JsonReadUtf8() => LuminPackSerializer.DeserializeJson<CharacterSaveData>(_json);
+    /// <summary>Measures json read string for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData JsonReadString() => LuminPackSerializer.DeserializeJson<CharacterSaveData>(_jsonString);
+    /// <summary>Measures json read strict utf8 for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData JsonReadStrictUtf8() => LuminPackSerializer.DeserializeJson<CharacterSaveData>(_json, Strict);
+    /// <summary>Measures json write buffer for the configured benchmark input.</summary>
     [Benchmark] public void JsonWriteBuffer() => LuminPackSerializer.SerializeJson(_data, _writer);
+    /// <summary>Measures json write string for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public string JsonWriteString() => LuminPackSerializer.SerializeJson(_data);
+    /// <summary>Measures binary write buffer for the configured benchmark input.</summary>
     [Benchmark] public void BinaryWriteBuffer() => LuminPackSerializer.Serialize(_data, _writer);
+    /// <summary>Measures binary read for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData BinaryRead() => LuminPackSerializer.Deserialize<CharacterSaveData>(_binary);
 }
 
+/// <summary>Provides json number read optimization benchmark functionality.</summary>
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 4, iterationCount: 8)]
 [MemoryDiagnoser]
 public class JsonNumberReadOptimizationBenchmark
 {
+    /// <summary>Gets or sets the shape.</summary>
     [Params("Fixed", "Exponent", "Roundtrip")]
     public string Shape { get; set; } = "Fixed";
     private byte[] _floats = null!;
     private byte[] _doubles = null!;
     private readonly LuminPackReaderOptionalState _state = new(new LuminPackSerializerOption());
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -85,6 +105,8 @@ public class JsonNumberReadOptimizationBenchmark
         _doubles = Encoding.UTF8.GetBytes("[" + string.Join(",", doubles.Select(f => f.ToString(format, CultureInfo.InvariantCulture))) + "]");
     }
 
+    /// <summary>Reads floats from the current input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public double ReadFloats()
     {
@@ -97,6 +119,8 @@ public class JsonNumberReadOptimizationBenchmark
         return sum;
     }
 
+    /// <summary>Reads doubles from the current input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     public double ReadDoubles()
     {
@@ -110,15 +134,18 @@ public class JsonNumberReadOptimizationBenchmark
     }
 }
 
+/// <summary>Provides json input shape optimization benchmark functionality.</summary>
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 4, iterationCount: 8)]
 [MemoryDiagnoser]
 public class JsonInputShapeOptimizationBenchmark
 {
+    /// <summary>Gets or sets the shape.</summary>
     [Params("Reversed", "Indented", "Utf16")]
     public string Shape { get; set; } = "Reversed";
     private string _json = null!;
     private LuminPackSerializerOption _option = null!;
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -139,6 +166,10 @@ public class JsonInputShapeOptimizationBenchmark
             throw new InvalidOperationException("Reshaping JSON changed its values.");
     }
 
+    /// <summary>Writes element to the current output.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="element">The element used by this operation.</param>
+    /// <param name="reverse">The reverse used by this operation.</param>
     private static void WriteElement(Utf8JsonWriter writer, JsonElement element, bool reverse)
     {
         if (element.ValueKind == JsonValueKind.Object)
@@ -163,15 +194,19 @@ public class JsonInputShapeOptimizationBenchmark
         else element.WriteTo(writer);
     }
 
+    /// <summary>Reads  from the current input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData Read() => LuminPackSerializer.DeserializeJson<CharacterSaveData>(_json, _option);
 }
 
 // No ignored default fields; both JSON writers return a newly allocated string.
 // Each reader consumes its own library's full representation (union wire formats differ).
+/// <summary>Provides optimization json context functionality.</summary>
 [JsonSourceGenerationOptions(IncludeFields = true, DefaultIgnoreCondition = JsonIgnoreCondition.Never)]
 [JsonSerializable(typeof(CharacterSaveData))]
 internal partial class OptimizationJsonContext : JsonSerializerContext { }
 
+/// <summary>Provides serializer comparison benchmark functionality.</summary>
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 4, iterationCount: 8)]
 [MemoryDiagnoser]
 public class SerializerComparisonBenchmark
@@ -190,6 +225,7 @@ public class SerializerComparisonBenchmark
         DefaultBufferSize = 64 * 1024
     });
 
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -213,12 +249,28 @@ public class SerializerComparisonBenchmark
             $"LP binary={_luminBinary.Length}, MemoryPack binary={_memoryBinary.Length}");
     }
 
+    /// <summary>Measures lumin json write string for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public string LuminJsonWriteString() => LuminPackSerializer.SerializeJson(_data);
+    /// <summary>Measures stj json write string for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public string StjJsonWriteString() => JsonSerializer.Serialize(_data, Context.CharacterSaveData);
+    /// <summary>Measures lumin json read strict for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData LuminJsonReadStrict() => LuminPackSerializer.DeserializeJson<CharacterSaveData>(_luminJson, Strict);
+    /// <summary>Measures stj json read for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData StjJsonRead() => JsonSerializer.Deserialize(_stjJson, Context.CharacterSaveData)!;
+    /// <summary>Measures lumin binary write array for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public byte[] LuminBinaryWriteArray() => LuminPackSerializer.Serialize(_data);
+    /// <summary>Measures memory pack write array for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public byte[] MemoryPackWriteArray() => MemoryPack.MemoryPackSerializer.Serialize(_data);
+    /// <summary>Measures lumin binary read for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData LuminBinaryRead() => LuminPackSerializer.Deserialize<CharacterSaveData>(_luminBinary);
+    /// <summary>Measures memory pack read for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData MemoryPackRead() => MemoryPack.MemoryPackSerializer.Deserialize<CharacterSaveData>(_memoryBinary)!;
 }

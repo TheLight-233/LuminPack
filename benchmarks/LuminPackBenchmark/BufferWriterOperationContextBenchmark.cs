@@ -11,6 +11,7 @@ using LuminPack.Utility;
 
 namespace LuminPackBenchmark;
 
+/// <summary>Provides buffer writer operation context benchmark functionality.</summary>
 [MemoryDiagnoser]
 [DisassemblyDiagnoser(maxDepth: 5, printSource: true, printInstructionAddresses: true)]
 [SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 3, iterationCount: 5)]
@@ -38,7 +39,7 @@ public class BufferWriterOperationContextBenchmark
         Child = new ContextMedium
         {
             Id = 84,
-            Name = "nested 中文",
+            Name = "nested \u4E2D\u6587",
             Values = Enumerable.Range(0, 64).ToArray()
         }
     };
@@ -48,7 +49,8 @@ public class BufferWriterOperationContextBenchmark
     private LuminBufferWriter _fastCustomBuffer = null!;
     private LuminBufferWriter _fastReadBuffer = null!;
     private byte[] _smallPayload = null!;
-    
+
+    /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
@@ -68,6 +70,7 @@ public class BufferWriterOperationContextBenchmark
         _ = LuminPackSerializer.Deserialize<ContextSmall>(_fastReadBuffer);
     }
 
+    /// <summary>Measures cleanup for the configured benchmark input.</summary>
     [GlobalCleanup]
     public void Cleanup()
     {
@@ -80,47 +83,64 @@ public class BufferWriterOperationContextBenchmark
         t_legacyReaderState?.Reset();
     }
 
+    /// <summary>Measures legacy serialize small default for the configured benchmark input.</summary>
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("SerializeSmallDefault")]
     public void LegacySerializeSmallDefault() => LegacySerialize(_small, _legacyBuffer, null);
 
+    /// <summary>Measures buffer context serialize small default for the configured benchmark input.</summary>
     [Benchmark]
     [BenchmarkCategory("SerializeSmallDefault")]
     public void BufferContextSerializeSmallDefault() => LuminPackSerializer.Serialize(_small, _fastBuffer);
 
+    /// <summary>Measures legacy serialize small custom for the configured benchmark input.</summary>
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("SerializeSmallCustom")]
     public void LegacySerializeSmallCustom() => LegacySerialize(_small, _legacyBuffer, _customOption);
 
+    /// <summary>Measures buffer context serialize small custom for the configured benchmark input.</summary>
     [Benchmark]
     [BenchmarkCategory("SerializeSmallCustom")]
     public void BufferContextSerializeSmallCustom() => LuminPackSerializer.Serialize(_small, _fastCustomBuffer);
 
+    /// <summary>Measures legacy serialize medium for the configured benchmark input.</summary>
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("SerializeMedium")]
     public void LegacySerializeMedium() => LegacySerialize(_medium, _legacyBuffer, null);
 
+    /// <summary>Measures buffer context serialize medium for the configured benchmark input.</summary>
     [Benchmark]
     [BenchmarkCategory("SerializeMedium")]
     public void BufferContextSerializeMedium() => LuminPackSerializer.Serialize(_medium, _fastBuffer);
 
+    /// <summary>Measures legacy serialize nested for the configured benchmark input.</summary>
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("SerializeNested")]
     public void LegacySerializeNested() => LegacySerialize(_nested, _legacyBuffer, null);
 
+    /// <summary>Measures buffer context serialize nested for the configured benchmark input.</summary>
     [Benchmark]
     [BenchmarkCategory("SerializeNested")]
     public void BufferContextSerializeNested() => LuminPackSerializer.Serialize(_nested, _fastBuffer);
 
+    /// <summary>Measures legacy deserialize small for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("DeserializeSmall")]
     public ContextSmall? LegacyDeserializeSmall() => LegacyDeserialize(_smallPayload);
 
+    /// <summary>Measures buffer context deserialize small for the configured benchmark input.</summary>
+    /// <returns>The result of the operation.</returns>
     [Benchmark]
     [BenchmarkCategory("DeserializeSmall")]
     public ContextSmall? BufferContextDeserializeSmall() =>
         LuminPackSerializer.Deserialize<ContextSmall>(_fastReadBuffer);
 
+    /// <summary>Measures legacy serialize for the configured benchmark input.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="option">The configuration to apply to this operation.</param>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void LegacySerialize<T>(T? value, LuminBufferWriter buffer, LuminPackSerializerOption? option)
     {
@@ -137,6 +157,9 @@ public class BufferWriterOperationContextBenchmark
         }
     }
 
+    /// <summary>Measures legacy deserialize for the configured benchmark input.</summary>
+    /// <param name="payload">The payload used by this operation.</param>
+    /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static ContextSmall? LegacyDeserialize(ReadOnlySpan<byte> payload)
     {
@@ -156,24 +179,34 @@ public class BufferWriterOperationContextBenchmark
     }
 }
 
+/// <summary>Provides context small functionality.</summary>
 [LuminPackable]
 public partial class ContextSmall
 {
+    /// <summary>Gets or sets the id.</summary>
     public int Id { get; set; }
+    /// <summary>Gets or sets the active.</summary>
     public bool Active { get; set; }
 }
 
+/// <summary>Provides context medium functionality.</summary>
 [LuminPackable]
 public partial class ContextMedium
 {
+    /// <summary>Gets or sets the id.</summary>
     public int Id { get; set; }
+    /// <summary>Gets or sets the name.</summary>
     public string? Name { get; set; }
+    /// <summary>Gets or sets the values.</summary>
     public int[]? Values { get; set; }
 }
 
+/// <summary>Provides context nested functionality.</summary>
 [LuminPackable]
 public partial class ContextNested
 {
+    /// <summary>Gets or sets the name.</summary>
     public string? Name { get; set; }
+    /// <summary>Gets or sets the child.</summary>
     public ContextMedium? Child { get; set; }
 }

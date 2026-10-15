@@ -2,8 +2,11 @@ using LuminPack.Utility;
 
 namespace LuminPackUnitTest;
 
+/// <summary>Provides object pool regression test functionality.</summary>
 internal static class ObjectPoolRegressionTest
 {
+    /// <summary>Verifies run.</summary>
+    /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
         RunCase(results, nameof(ThreadCacheIsIsolatedPerPool), ThreadCacheIsIsolatedPerPool);
@@ -12,6 +15,7 @@ internal static class ObjectPoolRegressionTest
         RunCase(results, nameof(QuiescentResizeUpdatesCapacityAndRetainsItems), QuiescentResizeUpdatesCapacityAndRetainsItems);
     }
 
+    /// <summary>Verifies thread cache is isolated per pool.</summary>
     private static void ThreadCacheIsIsolatedPerPool()
     {
         ObjectPool<PoolItem>.ClearThreadLocalCache();
@@ -31,6 +35,7 @@ internal static class ObjectPoolRegressionTest
         ObjectPool<PoolItem>.ClearThreadLocalCache();
     }
 
+    /// <summary>Verifies central ring never publishes null or double rents.</summary>
     private static void CentralRingNeverPublishesNullOrDoubleRents()
     {
         ObjectPool<PoolItem>.ClearThreadLocalCache();
@@ -73,6 +78,7 @@ internal static class ObjectPoolRegressionTest
         Assert(doubleRents == 0, $"The same pooled object was rented concurrently {doubleRents} times.");
     }
 
+    /// <summary>Verifies single slot and full pool behave correctly.</summary>
     private static void SingleSlotAndFullPoolBehaveCorrectly()
     {
         ObjectPool<PoolItem>.ClearThreadLocalCache();
@@ -89,6 +95,7 @@ internal static class ObjectPoolRegressionTest
         ObjectPool<PoolItem>.ClearThreadLocalCache();
     }
 
+    /// <summary>Verifies quiescent resize updates capacity and retains items.</summary>
     private static void QuiescentResizeUpdatesCapacityAndRetainsItems()
     {
         ObjectPool<PoolItem>.ClearThreadLocalCache();
@@ -105,23 +112,34 @@ internal static class ObjectPoolRegressionTest
         ObjectPool<PoolItem>.ClearThreadLocalCache();
     }
 
+    /// <summary>Provides pool item functionality.</summary>
     private sealed class PoolItem : IPooledObjectPolicy<PoolItem>, IDisposable
     {
         internal static int DisposeCount;
         internal int Owner;
         internal int InUse;
 
+        /// <summary>Creates a sample instance for the benchmark.</summary>
+        /// <returns>The result of the operation.</returns>
         public static PoolItem Create() => new();
 
+        /// <summary>Returns an instance to the pool for reuse.</summary>
+        /// <param name="obj">The obj used by this operation.</param>
+        /// <returns>Whether the requested condition or operation succeeded.</returns>
         public static bool Return(PoolItem obj)
         {
             Volatile.Write(ref obj.InUse, 0);
             return true;
         }
 
+        /// <summary>Releases the resources or pooled state owned by this instance.</summary>
         public void Dispose() => Interlocked.Increment(ref DisposeCount);
     }
 
+    /// <summary>Verifies run case.</summary>
+    /// <param name="results">The results used by this operation.</param>
+    /// <param name="name">The name used by this operation.</param>
+    /// <param name="test">The test used by this operation.</param>
     private static void RunCase(List<string> results, string name, Action test)
     {
         try
@@ -135,6 +153,9 @@ internal static class ObjectPoolRegressionTest
         }
     }
 
+    /// <summary>Verifies assert.</summary>
+    /// <param name="condition">The condition used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
     private static void Assert(bool condition, string message)
     {
         if (!condition)

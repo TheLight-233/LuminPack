@@ -10,6 +10,7 @@ namespace LuminPackUnitTest;
 // These scalars used to be written as value.ToString(...), allocating an
 // intermediate string per value. They now format into a stack buffer, so the
 // emitted JSON must stay byte-identical while the write path allocates nothing.
+/// <summary>Provides json formatted scalar test functionality.</summary>
 public class JsonFormattedScalarTest
 {
     private static readonly DateTime[] DateTimes =
@@ -56,6 +57,7 @@ public class JsonFormattedScalarTest
         TimeSpan.FromMilliseconds(1500.25),
     };
 
+    /// <summary>Writes r emits the same text as to string for every value to the current output.</summary>
     [Fact]
     public void WriterEmitsTheSameTextAsToStringForEveryValue()
     {
@@ -72,6 +74,7 @@ public class JsonFormattedScalarTest
             AssertWriterText(value, "\"" + value.ToString("c") + "\"");
     }
 
+    /// <summary>Serializes the supplied value using the selected format and options.</summary>
     [Fact]
     public void SerializerMatchesToStringInBothEncodings()
     {
@@ -88,6 +91,7 @@ public class JsonFormattedScalarTest
             AssertSerializerMatches(value, "\"" + value.ToString("c") + "\"");
     }
 
+    /// <summary>Verifies nested and collection values still round trip.</summary>
     [Fact]
     public void NestedAndCollectionValuesStillRoundTrip()
     {
@@ -119,6 +123,7 @@ public class JsonFormattedScalarTest
         Assert.Equal(array, LuminPackSerializer.DeserializeJson<DateTime[]>(arrayJson));
     }
 
+    /// <summary>Verifies nullable values still emit null and values.</summary>
     [Fact]
     public void NullableValuesStillEmitNullAndValues()
     {
@@ -140,6 +145,7 @@ public class JsonFormattedScalarTest
         Assert.Equal(none.OptionalAt, LuminPackSerializer.DeserializeJson<FormattedScalarModel>(valueJson).OptionalAt);
     }
 
+    /// <summary>Verifies writing scalars into a reusable buffer allocates nothing.</summary>
     [Fact]
     public void WritingScalarsIntoAReusableBufferAllocatesNothing()
     {
@@ -161,6 +167,12 @@ public class JsonFormattedScalarTest
         Assert.Equal(0, allocated);
     }
 
+    /// <summary>Writes all to the current output.</summary>
+    /// <param name="buffer">The buffer used by this operation.</param>
+    /// <param name="moment">The moment used by this operation.</param>
+    /// <param name="offset">The position at which the operation starts.</param>
+    /// <param name="id">The id used by this operation.</param>
+    /// <param name="elapsed">The elapsed used by this operation.</param>
     private static void WriteAll(LuminBufferWriter buffer, DateTime moment, DateTimeOffset offset, Guid id, TimeSpan elapsed)
     {
         LuminPackSerializer.SerializeJson(moment, buffer);
@@ -169,22 +181,51 @@ public class JsonFormattedScalarTest
         LuminPackSerializer.SerializeJson(elapsed, buffer);
     }
 
+    /// <summary>Verifies assert writer text.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
     private static void AssertWriterText(DateTime value, string expected) => AssertWriter(value, expected, WriteDateTime);
 
+    /// <summary>Verifies assert writer text.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
     private static void AssertWriterText(DateTimeOffset value, string expected) => AssertWriter(value, expected, WriteDateTimeOffset);
 
+    /// <summary>Verifies assert writer text.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
     private static void AssertWriterText(Guid value, string expected) => AssertWriter(value, expected, WriteGuid);
 
+    /// <summary>Verifies assert writer text.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
     private static void AssertWriterText(TimeSpan value, string expected) => AssertWriter(value, expected, WriteTimeSpan);
 
+    /// <summary>Writes date time to the current output.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     private static void WriteDateTime(ref LuminPackJsonWriter writer, DateTime value) => writer.WriteDateTime(value);
 
+    /// <summary>Writes date time offset to the current output.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     private static void WriteDateTimeOffset(ref LuminPackJsonWriter writer, DateTimeOffset value) => writer.WriteDateTimeOffset(value);
 
+    /// <summary>Writes guid to the current output.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     private static void WriteGuid(ref LuminPackJsonWriter writer, Guid value) => writer.WriteGuid(value);
 
+    /// <summary>Writes time span to the current output.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
     private static void WriteTimeSpan(ref LuminPackJsonWriter writer, TimeSpan value) => writer.WriteTimeSpan(value);
 
+    /// <summary>Verifies assert writer.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
+    /// <param name="write">The write used by this operation.</param>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     private static void AssertWriter<T>(T value, string expected, WriteScalar<T> write)
     {
         byte[] expectedBytes = Encoding.UTF8.GetBytes(expected);
@@ -198,8 +239,16 @@ public class JsonFormattedScalarTest
         Assert.All(guarded.Skip(expectedBytes.Length), octet => Assert.Equal((byte)0xCC, octet));
     }
 
+    /// <summary>Represents a callback for write scalar.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     private delegate void WriteScalar<T>(ref LuminPackJsonWriter writer, T value);
 
+    /// <summary>Verifies assert serializer matches.</summary>
+    /// <param name="value">The value consumed or produced by this operation.</param>
+    /// <param name="expected">The expected used by this operation.</param>
+    /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     private static void AssertSerializerMatches<T>(T value, string expected)
     {
         Assert.Equal(expected, LuminPackSerializer.SerializeJson(value));
@@ -212,12 +261,18 @@ public class JsonFormattedScalarTest
     }
 }
 
+/// <summary>Provides formatted scalar model functionality.</summary>
 [LuminPack.Attribute.LuminPackable]
 public sealed partial class FormattedScalarModel
 {
+    /// <summary>Stores the created at.</summary>
     public DateTime CreatedAt;
+    /// <summary>Stores the saved at.</summary>
     public DateTimeOffset SavedAt;
+    /// <summary>Stores the id.</summary>
     public Guid Id;
+    /// <summary>Stores the elapsed.</summary>
     public TimeSpan Elapsed;
+    /// <summary>Stores the optional at.</summary>
     public DateTime? OptionalAt;
 }

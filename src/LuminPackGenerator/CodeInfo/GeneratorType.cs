@@ -1,12 +1,17 @@
 namespace LuminPack.Code;
 
+/// <summary>Provides generator type functionality.</summary>
 public enum GeneratorType : byte
 {
+    /// <summary>Specifies object.</summary>
     Object,
+    /// <summary>Specifies version tolerant.</summary>
     VersionTolerant,
+    /// <summary>Specifies circle reference.</summary>
     CircleReference,
+    /// <summary>Specifies non generator.</summary>
     NonGenerator,
 
-    /// <summary>用户手写静态序列化方法，生成器不生成任何扩展方法，只做校验与自动注册。</summary>
+    /// <summary>User-supplied static formatters are validated and registered; formatter extensions are not generated.</summary>
     Custom
 }
