@@ -125,7 +125,7 @@ public static class QueueEmitter
         sb.AppendLine(indent + "if (secondBytes != 0)");
         sb.AppendLine(indent + "{");
         sb.AppendLine(indent + $"    ref var source = ref global::System.Runtime.CompilerServices.Unsafe.As<{elementType}, byte>(ref secondSegment.GetPinnableReference()!);");
-        sb.AppendLine(indent + "    global::System.Runtime.CompilerServices.Unsafe.CopyBlockUnaligned(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref destination, firstBytes), ref source, (uint)secondBytes);");
+        sb.AppendLine(indent + "    global::System.Runtime.CompilerServices.Unsafe.CopyBlockUnaligned(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref destination, (nint)(uint)firstBytes), ref source, (uint)secondBytes);");
         sb.AppendLine(indent + "}");
         sb.AppendLine("#else");
         sb.AppendLine(indent + $"var buffer = global::System.Buffers.ArrayPool<{elementType}>.Shared.Rent(size);");

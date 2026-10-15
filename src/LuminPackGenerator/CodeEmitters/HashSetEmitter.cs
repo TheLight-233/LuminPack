@@ -78,7 +78,7 @@ public static class HashSetEmitter
         sb.AppendLine();
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                ref var _entry = ref Unsafe.Add(ref _entryRef, i);");
+        sb.AppendLine("                ref var _entry = ref Unsafe.Add(ref _entryRef, (nint)(uint)i);");
         sb.AppendLine("                reader.ReadValue(ref _entry.Value!);");
         sb.AppendLine("            }");
         sb.AppendLine();
