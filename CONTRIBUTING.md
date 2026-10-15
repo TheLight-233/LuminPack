@@ -11,10 +11,12 @@ dotnet build LuminPack.sln -c Release
 dotnet run --project tools/LuminPack.RepositoryChecks/LuminPack.RepositoryChecks.csproj -c Release -- .
 dotnet run --project tests/LuminPackDocumentationTest/LuminPackDocumentationTest.csproj -c Release
 dotnet run --project tests/LuminPackGeneratorConcurrencyTest/LuminPackGeneratorConcurrencyTest.csproj -c Release
+
+dotnet run --project tests/LuminPackGeneratorConcurrencyTest/LuminPackGeneratorConcurrencyTest.csproj -c Release -- --verify-incremental
 dotnet test tests/LuminPackUnitTest/LuminPackUnitTest.csproj -c Release
 ```
 
-The documentation test uses the installed SDK's Roslyn assemblies so it can compile generated code using current language features. The existing concurrency and emitter-shape regressions continue to exercise the generator's older Roslyn dependency separately.
+The documentation test uses the installed SDK's Roslyn assemblies so it can compile generated code using current language features. The existing concurrency, emitter-shape, and incremental invalidation regressions exercise the generator's older Roslyn dependency separately. The incremental check compares retained and fresh drivers, checks affected model/analysis-transform counts and Roslyn tracked-step reasons, and verifies cached diagnostic callbacks and exact trees with duplicate or empty paths. It also requires cached aggregate construction for unrelated Full/Minimal edits and invalidation when a method body introduces a new formatter type. Identical output alone does not prove that analysis was skipped.
 
 ## Source conventions
 

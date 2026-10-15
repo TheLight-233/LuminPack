@@ -245,7 +245,7 @@ public class MyClass
 }
 ```
 
-实现方式：生成器会为所有需要访问私有/受保护成员的类型生成 **Local 布局镜像**，统一输出在单个 `LuminPack.LocalLayouts.g.cs` 文件中。镜像严格复刻原类型的继承链与 `LayoutKind`（包括 `Explicit` 及其 `FieldOffset`），生成代码通过重新解释引用来读写这些槽位。每一层都是一次独立的重新解释，不会像嵌套访问器那样在深层级上失效。镜像按需生成，只有真正需要访问私有/受保护成员或需要 `Unsafe.As` 转换的类型才会生成。
+实现方式：生成器会为所有需要访问私有/受保护成员的类型生成 **Local 布局镜像**，按镜像身份分片输出到 `LuminPack.LocalLayouts.<hash>.g.cs`（每个镜像一个文件；未变动的分片不会重新生成）。镜像严格复刻原类型的继承链与 `LayoutKind`（包括 `Explicit` 及其 `FieldOffset`），生成代码通过重新解释引用来读写这些槽位。每一层都是一次独立的重新解释，不会像嵌套访问器那样在深层级上失效。镜像按需生成，只有真正需要访问私有/受保护成员或需要 `Unsafe.As` 转换的类型才会生成。
 
 ### 序列化回调
 
@@ -298,6 +298,8 @@ public static void OnDeserializing()
 *   `Full`：根 = 项目中所有类型。
 *   `Medium` / `Light`：根 = 所有 `[LuminPackable]` 类型 + 所有序列化调用点；`Medium` 再多保留 `public` 类型。
 *   `Minimal`：根 = 只有 `LuminPackSerializer.*` 调用点。
+
+> 档位同时决定**两层**选择。第一层（packable 扩展 / 格式化器）：`Full` 覆盖全部类型；`Medium` 覆盖可达类型并额外保留 `public` 非 `[LuminPackable]` 类型；`Light` 保留**每一个** `[LuminPackable]` 的扩展与格式化器；`Minimal` 才按可达性裁剪。第二层（`LuminPackSerializer` facade 的具体重载）：`Full` 与 `Medium` 为每个保留类型发出**全部 14 种**具体重载；`Light` 与 `Minimal` **都按调用点裁剪**具体重载，二者在这一层没有区别——Light 与 Minimal 的差别仅在 packable 扩展层。
 
 ### 开启方式（两种任选其一）
 
