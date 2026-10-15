@@ -34,7 +34,7 @@ public static partial class LuminPackSerializerGenerator
         {
             // For .NET 9+ keep the original code directly (compiler allows it)
             sb.AppendLine("                var writer = new LuminPackWriter(tempWriter, state);");
-            sb.AppendLine("                writer.WriteValue(in value);");
+            AppendBinaryOperation(sb, read: false);
             sb.AppendLine("                tempWriter.CompleteWrite(writer.CurrentIndex);");
         }
         else
@@ -43,7 +43,7 @@ public static partial class LuminPackSerializerGenerator
             sb.AppendLine("                static void WriteValue(LuminBufferWriter tempWriter, LuminPackWriterOptionalState state, in " + typeName + " value)");
             sb.AppendLine("                {");
             sb.AppendLine("                    var writer = new LuminPackWriter(tempWriter, state);");
-            sb.AppendLine("                    writer.WriteValue(in value);");
+            AppendBinaryOperation(sb, read: false, indent: 20);
             sb.AppendLine("                    tempWriter.CompleteWrite(writer.CurrentIndex);");
             sb.AppendLine("                }");
             sb.AppendLine("                WriteValue(tempWriter, state, in value);");
@@ -64,7 +64,8 @@ public static partial class LuminPackSerializerGenerator
     /// <summary>Appends binary deserialization statements for the analyzed type.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="typeName">The C# type name to use in generated source.</param>
-    private static void AppendDeserializeAsyncValue(StringBuilder sb, string typeName)
+    /// <param name="metadata">Current language and framework settings.</param>
+    private static void AppendDeserializeAsyncValue(StringBuilder sb, string typeName, MetaInfo metadata)
     {
         sb.AppendLine("        /// <summary>Asynchronously reads a stream to completion and returns the deserialized value.</summary>");
         sb.AppendLine("        /// <param name=\"stream\">The source stream.</param>");
@@ -79,9 +80,40 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("        {");
         sb.AppendLine("            using var data = new MemoryStream();");
         sb.AppendLine("            await stream.CopyToAsync(data, cancellationToken).ConfigureAwait(false);");
-        sb.AppendLine("            return Deserialize<" + typeName + ">(data.GetBuffer().AsSpan(0, checked((int)data.Length)), options);");
+        if (metadata.IsNet9_OR_GREATER)
+        {
+            sb.AppendLine("            value = default!;");
+            AppendAsyncReadBody(sb, indent: 12);
+        }
+        else
+        {
+            sb.AppendLine("            static " + typeName + " ReadValue(MemoryStream data, LuminPackSerializerOption? options)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                " + typeName + " value = default!;");
+            AppendAsyncReadBody(sb, indent: 16);
+            sb.AppendLine("            }");
+            sb.AppendLine("            return ReadValue(data, options);");
+        }
         sb.AppendLine("        }");
         sb.AppendLine();
+    }
+
+    /// <summary>Emits the synchronous read operation after an asynchronous entry has buffered its input.</summary>
+    /// <param name="builder">The concrete asynchronous overload builder.</param>
+    /// <param name="indent">The enclosing method or compatibility local-function indentation.</param>
+    private static void AppendAsyncReadBody(StringBuilder builder, int indent)
+    {
+        string padding = new string(' ', indent);
+        builder.Append(padding).AppendLine("var state = _threadStaticReaderOptionalState ??= new LuminPackReaderOptionalState();");
+        builder.Append(padding).AppendLine("state.Init(options);");
+        builder.Append(padding).AppendLine("ReadOnlySpan<byte> buffer = data.GetBuffer().AsSpan(0, checked((int)data.Length));");
+        builder.Append(padding).AppendLine("var reader = new LuminPackReader(ref buffer, state);");
+        builder.Append(padding).AppendLine("try");
+        builder.Append(padding).AppendLine("{");
+        AppendBinaryOperation(builder, read: true, indent: indent + 4);
+        builder.Append(padding).AppendLine("    return value;");
+        builder.Append(padding).AppendLine("}");
+        builder.Append(padding).AppendLine("finally { state.Reset(); }");
     }
 
     /// <summary>Appends binary deserialization statements for the analyzed type.</summary>

@@ -84,6 +84,8 @@ internal sealed class CompilationTypeAnalysis
 /// <summary>Reusable structural facts for one source-declared type.</summary>
 internal sealed class ProjectTypeData
 {
+    private readonly Lazy<ImmutableArray<IFieldSymbol>> _fields;
+    private readonly Lazy<ImmutableArray<IPropertySymbol>> _properties;
     /// <summary>Initializes a new instance of <c>ProjectTypeData</c>.</summary>
     /// <param name="symbol">The type or symbol to analyze.</param>
     internal ProjectTypeData(INamedTypeSymbol symbol)
@@ -91,12 +93,18 @@ internal sealed class ProjectTypeData
         Symbol = symbol;
         BaseType = symbol.BaseType;
         Interfaces = symbol.Interfaces;
-        Fields = symbol.GetMembers().OfType<IFieldSymbol>()
-            .Where(static field => !field.IsStatic && !field.IsImplicitlyDeclared)
-            .ToImmutableArray();
-        Properties = symbol.GetMembers().OfType<IPropertySymbol>()
-            .Where(static property => !property.IsStatic && !property.IsImplicitlyDeclared)
-            .ToImmutableArray();
+        _fields = new Lazy<ImmutableArray<IFieldSymbol>>(() =>
+        {
+            System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.ProjectMemberInspections);
+            return symbol.GetMembers().OfType<IFieldSymbol>()
+                .Where(static field => !field.IsStatic && !field.IsImplicitlyDeclared).ToImmutableArray();
+        });
+        _properties = new Lazy<ImmutableArray<IPropertySymbol>>(() =>
+        {
+            System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.ProjectMemberInspections);
+            return symbol.GetMembers().OfType<IPropertySymbol>()
+                .Where(static property => !property.IsStatic && !property.IsImplicitlyDeclared).ToImmutableArray();
+        });
     }
 
     /// <summary>Gets the symbol.</summary>
@@ -106,9 +114,9 @@ internal sealed class ProjectTypeData
     /// <summary>Gets the interfaces.</summary>
     internal ImmutableArray<INamedTypeSymbol> Interfaces { get; }
     /// <summary>Gets the fields.</summary>
-    internal ImmutableArray<IFieldSymbol> Fields { get; }
+    internal ImmutableArray<IFieldSymbol> Fields => _fields.Value;
     /// <summary>Gets the properties.</summary>
-    internal ImmutableArray<IPropertySymbol> Properties { get; }
+    internal ImmutableArray<IPropertySymbol> Properties => _properties.Value;
 }
 
 /// <summary>Provides compilation type analysis cache functionality.</summary>
@@ -150,30 +158,12 @@ internal static class CompilationTypeAnalysisCache
 
         CollectDeclaredTypes(compilation.Assembly.GlobalNamespace, declaredTypes, packableTypes);
 
-        // A single semantic pass captures both explicitly written types and inferred types
-        // such as tuple expressions, target-typed new expressions and collection expressions.
+        var observations = FileSemanticObservationCache.For(compilation);
         foreach (SyntaxTree tree in compilation.SyntaxTrees)
         {
-            SyntaxNode root = tree.GetRoot();
-            SemanticModel model = compilation.GetSemanticModel(tree);
-
-            foreach (SyntaxNode node in root.DescendantNodesAndSelf())
-            {
-                if (node is TypeSyntax syntax)
-                {
-                    ITypeSymbol type = model.GetTypeInfo(syntax).Type;
-                    usesLuminPack |= IsLuminPackRelevantType(type);
-                    AddTypeGraph(type, formatterTypes);
-                }
-                else if (node is ExpressionSyntax expression)
-                {
-                    TypeInfo typeInfo = model.GetTypeInfo(expression);
-                    usesLuminPack |= IsLuminPackRelevantType(typeInfo.Type) ||
-                                     IsLuminPackRelevantType(typeInfo.ConvertedType);
-                    AddTypeGraph(typeInfo.Type, formatterTypes);
-                    AddTypeGraph(typeInfo.ConvertedType, formatterTypes);
-                }
-            }
+            var observed = observations.Read(tree, IsLuminPackRelevantType);
+            usesLuminPack |= observed.UsesLuminPack;
+            foreach (var type in observed.Types) AddTypeGraph(type, formatterTypes);
         }
 
         foreach (INamedTypeSymbol packable in packableTypes)
@@ -187,17 +177,29 @@ internal static class CompilationTypeAnalysisCache
                      StringComparer.Ordinal).ToArray();
         foreach (INamedTypeSymbol packable in orderedPackables)
         {
-            var ownedGraph = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
-            // Use the global formatterTypes for analyzedTypes so types of ignored, private, or computed members
-            // Also retain the type in shared analysis to ensure its formatter extensions are emitted.
-            AddPackableGraph(packable, ownedGraph, formatterTypes, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
-            foreach (ITypeSymbol type in ownedGraph)
+            var contribution = PackableGraphCache.GetOrBuild(compilation, packable, (owned, analyzed) =>
+                AddPackableGraph(packable, owned, analyzed, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default)));
+            // Reproduce legacy first-occurrence insertion while retaining every unowned member type.
+            foreach (ITypeSymbol type in contribution.Analyzed) AddTypeGraph(type, formatterTypes);
+            foreach (ITypeSymbol type in contribution.Owned)
             {
                 if (!owners.ContainsKey(type))
                 {
                     owners.Add(type, packable);
                 }
             }
+        }
+
+        // Open packable definitions describe the shared formatter methods. Observed closed
+        // constructions also need their substituted member formatters (for example List<string>
+        // inside Envelope<string>), which cannot acquire an owner from an open List<T> field.
+        var closedPackables = formatterTypes.OfType<INamedTypeSymbol>().Where(type => type.IsGenericType &&
+            !LuminPackExtensionGenerator.ContainsTypeParameter(type) && HasPackableAttribute(type)).ToArray();
+        foreach (var packable in closedPackables)
+        {
+            var contribution = PackableGraphCache.GetOrBuild(compilation, packable, (owned, analyzed) =>
+                AddPackableGraph(packable, owned, analyzed, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default)));
+            foreach (var type in contribution.Analyzed) AddTypeGraph(type, formatterTypes);
         }
 
         // Every packable owns its own local marshal layout.  Unannotated base layouts are

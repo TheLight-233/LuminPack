@@ -22,27 +22,24 @@ public static partial class LuminPackExtensionGenerator
     /// directly with the T-typed signature - no boxing.
     /// </summary>
     /// <param name="sb">The builder receiving generated source code.</param>
-    /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
     /// <param name="metaInfo">The language, framework, and generation settings.</param>
     /// <param name="extensionClassName">The extension class name used by this operation.</param>
-    /// <param name="reachability">The reachability used by this operation.</param>
-    private static void AppendGenericDispatchExtensions(StringBuilder sb, Compilation compilation, MetaInfo metaInfo, string extensionClassName, ReachabilityAnalysis? reachability = null)
+    /// <param name="dispatch">The exact ordered legacy ids, names, and operation capabilities.</param>
+    private static void AppendGenericDispatchExtensions(StringBuilder sb, MetaInfo metaInfo, string extensionClassName, DispatchEntry[] dispatch)
+        => BuildGenericDispatchParts(metaInfo, extensionClassName, dispatch, (_, text) => sb.Append(text));
+
+    /// <summary>Builds registration and each generic dispatch operation as independent source contributions.</summary>
+    /// <param name="metaInfo">Current language, framework, and registration settings.</param>
+    /// <param name="extensionClassName">The common partial extension container.</param>
+    /// <param name="dispatch">Stable dense ids and operation capabilities.</param>
+    /// <param name="publish">Receives a fixed operation identity and its unchanged declaration text.</param>
+    private static void BuildGenericDispatchParts(MetaInfo metaInfo, string extensionClassName, DispatchEntry[] dispatch, System.Action<string, string> publish)
     {
-        ITypeSymbol[] types = GetOrderedFormatterTypes(compilation, reachability);
+        var sb = new StringBuilder();
         string scopedIn = metaInfo.IsNet8 ? "scoped in " : "in ";
         string scopedRef = metaInfo.IsNet8 ? "scoped ref " : "ref ";
         string unsafeAs = "global::System.Runtime.CompilerServices.Unsafe.As";
         string throwNoFormatter = "global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));";
-
-        DispatchEntry[] dispatch = types
-            .Select((type, index) => new DispatchEntry(
-                index,
-                FormatterTypeName.Get(type),
-                CanRegisterFormatter(type, compilation, json: false),
-                CanRegisterFormatter(type, compilation, json: true),
-                CanRegisterCalculateFormatter(type, compilation)))
-            .Where(static d => d.Binary || d.Json || d.Calculate)
-            .ToArray();
 
         // The static ctor writes each per-type compact id before any generic dispatch extension can
         // run (the JIT runs a type's static ctor before its static methods). uint.MaxValue stays the
@@ -55,12 +52,22 @@ public static partial class LuminPackExtensionGenerator
         }
         sb.AppendLine("        }");
         sb.AppendLine();
-
+        publish("Registration", sb.ToString());
+        sb.Clear();
         AppendGenericSwitch(sb, dispatch, "WriteValue", "ref this LuminPackWriter writer", scopedIn, "T value", metaInfo, op: "write", isJson: false, unsafeAs, throwNoFormatter);
+        publish("BinaryWrite", sb.ToString());
+        sb.Clear();
         AppendGenericSwitch(sb, dispatch, "ReadValue", "ref this LuminPackReader reader", scopedRef, "T value", metaInfo, op: "read", isJson: false, unsafeAs, throwNoFormatter);
+        publish("BinaryRead", sb.ToString());
+        sb.Clear();
         AppendGenericSwitch(sb, dispatch, "CalculateOffset", "ref this LuminPackEvaluator evaluator", scopedRef, "T value", metaInfo, op: "calculate", isJson: false, unsafeAs, throwNoFormatter);
+        publish("Calculate", sb.ToString());
+        sb.Clear();
         AppendGenericSwitch(sb, dispatch, "WriteValue", "ref this global::LuminPack.Core.LuminPackJsonWriter writer", scopedIn, "T value", metaInfo, op: "write", isJson: true, unsafeAs, throwNoFormatter);
+        publish("JsonWrite", sb.ToString());
+        sb.Clear();
         AppendGenericSwitch(sb, dispatch, "ReadValue", "ref this global::LuminPack.Core.LuminPackJsonReader reader", scopedRef, "T value", metaInfo, op: "read", isJson: true, unsafeAs, throwNoFormatter);
+        publish("JsonRead", sb.ToString());
     }
 
     /// <summary>Builds the generic switch source from the supplied metadata.</summary>
@@ -265,7 +272,7 @@ public static partial class LuminPackExtensionGenerator
         return type switch
         {
             IArrayTypeSymbol array => ContainsTypeParameter(array.ElementType),
-            INamedTypeSymbol named => ContainsTypeParameter(named.ContainingType) || named.TypeArguments.Any(ContainsTypeParameter),
+            INamedTypeSymbol named => named.IsUnboundGenericType || ContainsTypeParameter(named.ContainingType) || named.TypeArguments.Any(ContainsTypeParameter),
             _ => false
         };
     }

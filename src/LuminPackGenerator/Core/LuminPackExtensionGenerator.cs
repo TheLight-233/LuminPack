@@ -63,9 +63,10 @@ public static partial class LuminPackExtensionGenerator
             GenerateRootBinaryExtensions(sb, data, typeName, metaInfo);
             GenerateRootJsonExtensions(sb, data, typeName, metaInfo);
             // Local layout mirrors and the private-member accessors are no longer emitted per type.
-            // Every Local for the assembly lives in the dedicated LuminPack.LocalLayouts.g.cs file
-            // (see LuminPackLocalLayoutGenerator), which is what makes nesting depth irrelevant: a
-            // mirror emitted once is reachable from any generated formatter in the same assembly.
+            // Every Local for the assembly is partitioned into LuminPack.LocalLayouts.<hash>.g.cs
+            // shards (see LuminPackLocalLayoutGenerator), which is what makes nesting depth
+            // irrelevant: a mirror emitted once is reachable from any generated formatter in the
+            // same assembly.
         }
 
         return GenerateExtension(sb, GetExtensionClassName(compilation));
@@ -79,8 +80,6 @@ public static partial class LuminPackExtensionGenerator
     public static string GenerateSerializerInvocationSupport(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis? reachability = null)
     {
         CompilationTypeAnalysis analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
-        var sb = new StringBuilder();
-        var analyzedTypes = new HashSet<string>(StringComparer.Ordinal);
 
         // Full mode emits every no-owner type observed in the project.  Prune mode restricts the
         // source set to the reachable no-owner types and suppresses optional variants (compress /
@@ -90,25 +89,36 @@ public static partial class LuminPackExtensionGenerator
             ? analysis.FormatterTypes.Where(type => !analysis.HasOwner(type))
             : reachability.ReachableNoOwnerTypes;
 
-        foreach (ITypeSymbol type in sourceTypes
+        ITypeSymbol[] bodyTypes = sourceTypes
             .Where(static type => !ContainsTypeParameter(type))
             .Where(IsAotVisible)
             .Where(IsStaticFormatterCandidate)
             .Where(static type => !IsCustomGeneratorType(type))
-            .OrderBy(static type => FormatterTypeName.Get(type), StringComparer.Ordinal))
+            .OrderBy(static type => FormatterTypeName.Get(type), StringComparer.Ordinal).ToArray();
+        DispatchEntry[] dispatch = GetOrderedFormatterTypes(compilation, reachability)
+            .Select((type, index) => new DispatchEntry(index, FormatterTypeName.Get(type),
+                CanRegisterFormatter(type, compilation, json: false), CanRegisterFormatter(type, compilation, json: true),
+                CanRegisterCalculateFormatter(type, compilation)))
+            .Where(static entry => entry.Binary || entry.Json || entry.Calculate).ToArray();
+        string extensionName = GetExtensionClassName(compilation);
+        string Render()
         {
-            GenerateFormatterExtensions(sb, new LuminLocalFieldData
+            var sb = new StringBuilder();
+            var analyzedTypes = new HashSet<string>(StringComparer.Ordinal);
+            foreach (ITypeSymbol type in bodyTypes)
             {
-                TypeName = FormatterTypeName.Get(type),
-                TypeSymbol = type,
-                Name = "value",
-                IsValue = type.IsValueType
-            }, metaInfo, analyzedTypes, emitOptionalVariants: reachability is null);
+                GenerateFormatterExtensions(sb, new LuminLocalFieldData
+                {
+                    TypeName = FormatterTypeName.Get(type),
+                    TypeSymbol = type,
+                    Name = "value",
+                    IsValue = type.IsValueType
+                }, metaInfo, analyzedTypes, emitOptionalVariants: reachability is null);
+            }
+            AppendGenericDispatchExtensions(sb, metaInfo, extensionName, dispatch);
+            return GenerateExtension(sb, extensionName);
         }
-
-        AppendGenericDispatchExtensions(sb, compilation, metaInfo, GetExtensionClassName(compilation), reachability);
-
-        return GenerateExtension(sb, GetExtensionClassName(compilation));
+        return Render();
     }
 
     /// <summary>Provides dispatch entry functionality.</summary>

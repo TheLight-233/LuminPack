@@ -29,6 +29,7 @@ namespace LuminPack.SourceGenerator
             Compilation compilation,
             MetaInfo metadata)
         {
+            System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.MetadataAnalyses);
             var previousState = _analysisState;
             var previousDiagnostics = TypeMetaChecker.PushDiagnosticScope();
             try

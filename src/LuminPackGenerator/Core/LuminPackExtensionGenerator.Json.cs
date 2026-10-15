@@ -87,7 +87,10 @@ public static partial class LuminPackExtensionGenerator
         AppendGenericConstraints(sb, data);
         sb.AppendLine("            => " + helperTypeName + ".ReadValue(ref reader, ref value);");
         sb.AppendLine();
-        sb.AppendLine("        private static class " + helperTypeName);
+        // The helper owns this type's shared JSON property-name cache.  Concrete JSON entries
+        // reference these members directly (instead of copying them per root), so the helper and
+        // its cache members are emitted as assembly-internal rather than private.
+        sb.AppendLine("        internal static class " + helperTypeName);
         AppendGenericConstraints(sb, data);
         sb.AppendLine("        {");
         if (data.generatorType == GeneratorType.CircleReference)

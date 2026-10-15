@@ -33,7 +33,7 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                     : false;
                 var registerMode = LuminPackGenerationTierResolver.RegisterModeFromAssembly(compilation);
                 return new MetaInfo(cs, cs.LanguageVersion, net8, net9_OR_GREATER, allowUnsafe, registerMode);
-            });
+            }).WithComparer(MetaInfoValueComparer.Instance).WithTrackingName("LuminPack.Mapping.MetaInfo");
 
         var generationMode = context.AnalyzerConfigOptionsProvider
             .Select(static (options, _) =>
@@ -42,94 +42,64 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                 return LuminPackGenerationTierResolver.FromProperty(value);
             });
 
-        var autoMapDeclarations = context.SyntaxProvider
-            .CreateSyntaxProvider(
+        var automaticCache = new SemanticContributionCache<FrozenMapperEmission>();
+        var manualCache = new SemanticContributionCache<FrozenMapperEmission>();
+        var automaticTypes = context.SyntaxProvider.CreateSyntaxProvider(
                 static (node, _) => node is ClassDeclarationSyntax or StructDeclarationSyntax,
-                static (ctx, _) =>
-                {
-                    var symbol = GetTypeWithAttribute(ctx, LuminMapToAttr);
-                    return symbol == null
-                        ? null
-                        : LuminAutoMapAnalyzer.Analyze(symbol, ctx.SemanticModel.Compilation);
-                })
-            .Where(static x => x != null)!;
-
-        context.RegisterSourceOutput(
-            autoMapDeclarations.Combine(metaProvider),
-            static (spc, pair) =>
-            {
-                var (info, meta) = pair;
-                if (info == null || info.Pairs.Count == 0) return;
-                try
-                {
-                    var code = LuminAutoMapCodeGenerator.GenerateAutoMapperClass(info, meta);
-                    if (string.IsNullOrEmpty(code)) return;
-                    spc.AddSource($"{SafeFileName(info.SourceFullName)}Mapper.g.cs", GeneratedSourceDocumentation.Complete(code, meta.ParseOptions));
-                }
-                catch (Exception ex)
-                {
-                    spc.ReportDiagnostic(Diagnostic.Create(
-                        DiagnosticDescriptors.GeneratorFailure,
-                        Location.None,
-                        ex.GetType().FullName + ": " + ex.Message + " | " +
-                        (ex.StackTrace ?? string.Empty).Replace("\r", " ").Replace("\n", " ")));
-                }
-            });
-
-        var manualMapDeclarations = context.SyntaxProvider
-            .CreateSyntaxProvider(
-                static (node, _) =>
-                    node is ClassDeclarationSyntax cls
-                    && cls.Modifiers.Any(m => m.IsKind(SyntaxKind.StaticKeyword))
-                    && cls.Modifiers.Any(m => m.IsKind(SyntaxKind.PartialKeyword)),
-                static (ctx, _) =>
-                {
-                    var symbol = GetTypeWithAttribute(ctx, LuminMapperAttr);
-                    return symbol == null
-                        ? null
-                        : LuminMapAnalyzer.Analyze(symbol, ctx.SemanticModel.Compilation);
-                })
-            .Where(static x => x != null)!;
-
-        context.RegisterSourceOutput(
-            manualMapDeclarations.Combine(metaProvider),
-            static (spc, pair) =>
-            {
-                var (info, meta) = pair;
-                if (info.Methods.Count == 0) return;
-                try
-                {
-                    var code = LuminMapCodeGenerator.GenerateMapperImpl(info, meta);
-                    if (string.IsNullOrEmpty(code)) return;
-                    spc.AddSource($"{SafeFileName(info.ClassFullName)}.Mapper.g.cs", GeneratedSourceDocumentation.Complete(code, meta.ParseOptions));
-                }
-                catch (Exception ex)
-                {
-                    spc.ReportDiagnostic(Diagnostic.Create(
-                        DiagnosticDescriptors.GeneratorFailure,
-                        Location.None,
-                        ex.ToString()));
-                }
-            });
-
+                static (syntax, _) => GetTypeWithAttribute(syntax, LuminMapToAttr))
+            .Where(static type => type != null).Select(static (type, _) => type!);
+        var manualTypes = context.SyntaxProvider.CreateSyntaxProvider(
+                static (node, _) => node is ClassDeclarationSyntax declaration &&
+                    declaration.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.StaticKeyword)) &&
+                    declaration.Modifiers.Any(modifier => modifier.IsKind(SyntaxKind.PartialKeyword)),
+                static (syntax, _) => GetTypeWithAttribute(syntax, LuminMapperAttr))
+            .Where(static type => type != null).Select(static (type, _) => type!);
+        var autoMapDeclarations = automaticTypes.Combine(context.CompilationProvider).Combine(metaProvider)
+            .Select((input, _) => automaticCache.GetOrBuild(input.Left.Left, input.Left.Right, input.Right,
+                () => FrozenMapperEmission.Automatic(input.Left.Left, input.Left.Right, input.Right),
+                () => System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.AutomaticMapperCacheHits)))
+            .WithTrackingName("LuminPack.Incremental.AutomaticMapper");
+        var manualMapDeclarations = manualTypes.Combine(context.CompilationProvider).Combine(metaProvider)
+            .Select((input, _) => manualCache.GetOrBuild(input.Left.Left, input.Left.Right, input.Right,
+                () => FrozenMapperEmission.Manual(input.Left.Left, input.Left.Right, input.Right),
+                () => System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.ManualMapperCacheHits)))
+            .WithTrackingName("LuminPack.Incremental.ManualMapper");
+        RegisterMapperOutputs(context, autoMapDeclarations, automatic: true);
+        RegisterMapperOutputs(context, manualMapDeclarations, automatic: false);
+        var serializerFragments = new SerializerFacadeCache();
+        var invocationSupport = new InvocationSupportCache();
+        var customRegistration = new SemanticContributionCache<FrozenCustomRegistration>();
+        var customRegistrySource = new RegistrySourceCache(custom: true);
+        var mapperRegistrySource = new RegistrySourceCache(custom: false);
         var allAuto = autoMapDeclarations.Collect();
         var allManual = manualMapDeclarations.Collect();
 
-        context.RegisterSourceOutput(
-            allAuto.Combine(allManual)
-                   .Combine(context.CompilationProvider)
-                   .Combine(metaProvider)
-                   .Combine(generationMode),
-            static (spc, pair) =>
+        var aggregateCache = new AggregateEmissionCache();
+        var aggregateInputs = allAuto.Combine(allManual)
+            .Combine(context.CompilationProvider)
+            .Combine(metaProvider)
+            .Combine(generationMode)
+            .Select((pair, _) => aggregateCache.PrepareInput(pair.Left.Left.Right,
+                pair.Left.Left.Left.Left, pair.Left.Left.Left.Right, pair.Left.Right, pair.Right))
+            .WithTrackingName("LuminPack.Incremental.AggregateInput");
+        var aggregateResults = aggregateInputs
+            .Select((pair, _) =>
             {
-                var ((((autoInfos, manualInfos), compilation), meta), mode) = pair;
+                if (pair.Completed != null) return pair.Completed;
+                System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.AggregateBuilds);
+                var spc = new AggregateResultBuilder();
+                var compilation = pair.GetCompilation();
+                var autoInfos = pair.Automatic;
+                var manualInfos = pair.Manual;
+                var meta = pair.Metadata;
+                var mode = pair.Mode;
 
                 // Unity auto-references managed plug-ins from every compilation. Merely
                 // finding LuminPack in metadata therefore is not evidence that the target
                 // assembly uses it; emitting support there pollutes dependent assemblies
                 // with duplicate extension overloads.
                 if (!CompilationTypeAnalysisCache.GetOrCreate(compilation).UsesLuminPack)
-                    return;
+                    return pair.Complete(spc.Freeze());
 
                 // Skip emission when there are no packable types or mapper declarations.
                 bool hasMappers = !autoInfos.IsEmpty || !manualInfos.IsEmpty;
@@ -138,34 +108,42 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                 {
                     // Validate [LuminPackable(GeneratorType.Custom)] types and emit the automatic
                     // LuminPackSerializer.Register registration module initializer.
-                    var customModels = CustomFormatterAnalyzer.AnalyzeAll(compilation, spc.ReportDiagnostic);
-                    bool hasValidCustom = customModels.Any(static m => !m.HasErrors && m.RegisterTier > 0);
-                    if (hasValidCustom && (!meta.AllowUnsafe || meta.RegisterMode == LuminPackRegisterMode.Disabled))
+                    var customBlocks = new System.Collections.Generic.List<string>();
+                    var registrationDiagnostics = new System.Collections.Generic.List<FrozenDiagnostic>();
+                    foreach (var declared in CompilationTypeAnalysisCache.GetOrCreate(compilation).DeclaredTypes)
                     {
-                        foreach (var model in customModels.Where(static m => !m.HasErrors && m.RegisterTier > 0))
+                        var type = declared.Symbol;
+                        if (!LuminPackExtensionGenerator.IsCustomGeneratorType(type) ||
+                            !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly)) continue;
+                        var contribution = customRegistration.GetOrBuild(type, compilation, meta,
+                            () => FrozenCustomRegistration.Build(type, meta),
+                            () => System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.CustomRegistrationCacheHits));
+                        foreach (var diagnostic in contribution.Diagnostics) spc.AddDiagnostic(diagnostic);
+                        registrationDiagnostics.AddRange(contribution.RegistrationDiagnostics);
+                        if (!string.IsNullOrEmpty(contribution.Registration)) customBlocks.Add(contribution.Registration);
+                    }
+                    foreach (var diagnostic in registrationDiagnostics) spc.AddDiagnostic(diagnostic);
+                    if (customBlocks.Count != 0)
+                    {
+                        bool isUnity = TypeMetaChecker.IsUnityProject(compilation);
+                        string customCode = customRegistrySource.GetOrBuild(compilation.AssemblyName, isUnity, meta, customBlocks, () =>
                         {
-                            spc.ReportDiagnostic(Diagnostic.Create(
-                                DiagnosticDescriptors.CustomRegistrationSkippedNoUnsafe,
-                                model.Type.Locations.FirstOrDefault() ?? Location.None,
-                                model.Type.ToDisplayString(SymbolDisplayFormat.MinimallyQualifiedFormat)));
-                        }
-                    }
-                    else if (hasValidCustom)
-                    {
-                        var customCode = CustomFormatterRegistrationGenerator.Generate(
-                            customModels,
-                            compilation,
-                            meta,
-                            TypeMetaChecker.IsUnityProject(compilation));
+                            string raw = CustomFormatterRegistrationGenerator.GenerateBlocks(customBlocks, compilation, meta, isUnity);
+                            return string.IsNullOrEmpty(raw) ? raw : GeneratedSourceDocumentation.Complete(raw, meta.ParseOptions);
+                        });
                         if (!string.IsNullOrEmpty(customCode))
-                            spc.AddSource("LuminPackCustomFormatterRegistry.g.cs", GeneratedSourceDocumentation.Complete(customCode, meta.ParseOptions));
+                            spc.AddSource("LuminPackCustomFormatterRegistry.g.cs", customCode);
                     }
-
                     if (hasMappers)
                     {
-                        var code = GenerateMappersRegistry(autoInfos!, manualInfos, compilation, meta);
+                        var blocks = autoInfos.Select(info => info.Registration).Concat(manualInfos.Select(info => info.Registration)).ToArray();
+                        string code = mapperRegistrySource.GetOrBuild(compilation.AssemblyName, TypeMetaChecker.IsUnityProject(compilation), meta, blocks, () =>
+                        {
+                            string raw = GenerateMappersRegistry(autoInfos, manualInfos, compilation, meta);
+                            return string.IsNullOrEmpty(raw) ? raw : GeneratedSourceDocumentation.Complete(raw, meta.ParseOptions);
+                        });
                         if (!string.IsNullOrEmpty(code))
-                            spc.AddSource("GeneratedMappersRegistry.g.cs", GeneratedSourceDocumentation.Complete(code, meta.ParseOptions));
+                            spc.AddSource("GeneratedMappersRegistry.g.cs", code);
                     }
 
                     LuminPackGenerationTier propertyTier = mode;
@@ -176,13 +154,11 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                         ? ReachabilityAnalysisCache.GetOrCreate(compilation, effectiveTier)
                         : null;
 
-                    var formatterSupport = LuminPackExtensionGenerator.GenerateSerializerInvocationSupport(compilation, meta, reachability);
-                    if (!string.IsNullOrEmpty(formatterSupport))
-                        spc.AddSource("LuminPack.SerializerInvocation.Extension.g.cs", GeneratedSourceDocumentation.Complete(formatterSupport, meta.ParseOptions));
+                    foreach (var formatter in LuminPackExtensionGenerator.GenerateInvocationFiles(compilation, meta, reachability, invocationSupport))
+                        spc.AddSource(formatter.Name, formatter.Text);
 
-                    var serializer = LuminPackSerializerGenerator.GenerateSerializerClass(compilation, meta, reachability);
-                    if (!string.IsNullOrEmpty(serializer))
-                        spc.AddSource("LuminPackSerializer.g.cs", serializer);
+                    foreach (var serializer in LuminPackSerializerGenerator.GenerateSerializerFiles(compilation, meta, reachability, serializerFragments))
+                        spc.AddSource(serializer.Name, serializer.Text);
                 }
                 catch (Exception ex)
                 {
@@ -191,8 +167,47 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                         Location.None,
                         ex.GetType().FullName + ": " + ex.Message + " | " +
                         (ex.StackTrace ?? string.Empty).Replace("\r", " ").Replace("\n", " ")));
+                    return spc.Freeze();
                 }
-            });
+                return pair.Complete(spc.Freeze());
+            }).WithTrackingName("LuminPack.Incremental.AggregateBatch");
+
+        var aggregateFiles = aggregateResults.SelectMany(static (result, _) => result.Files)
+            .WithTrackingName("LuminPack.Incremental.AggregateFiles");
+        context.RegisterSourceOutput(aggregateFiles, static (output, file) =>
+        {
+            System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.AggregateFileOutputCallbacks);
+            output.AddSource(file.Name, file.Text);
+        });
+        var aggregateDiagnostics = aggregateResults.SelectMany(static (result, _) => result.Diagnostics);
+        context.RegisterSourceOutput(aggregateDiagnostics.Combine(context.CompilationProvider), static (output, input) =>
+        {
+            output.ReportDiagnostic(input.Left.Materialize(input.Right));
+        });
+    }
+
+    /// <summary>Registers individually comparable mapper files and current-tree diagnostic reporting.</summary>
+    /// <param name="context">The generator initialization context.</param>
+    /// <param name="contributions">Immutable contributions in the legacy declaration order.</param>
+    /// <param name="automatic">Whether to preserve the automatic mapper's legacy failure format.</param>
+    private static void RegisterMapperOutputs(IncrementalGeneratorInitializationContext context, IncrementalValuesProvider<FrozenMapperEmission> contributions, bool automatic)
+    {
+        var files = contributions.SelectMany(static (value, _) => value.Output.Files);
+        context.RegisterSourceOutput(files, (output, file) =>
+        {
+            System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.MapperFileOutputCallbacks);
+            try { output.AddSource(file.Name, file.Text); }
+            catch (Exception exception)
+            {
+                string message = automatic
+                    ? exception.GetType().FullName + ": " + exception.Message + " | " + (exception.StackTrace ?? string.Empty).Replace("\r", " ").Replace("\n", " ")
+                    : exception.ToString();
+                output.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.GeneratorFailure, Location.None, message));
+            }
+        });
+        var diagnostics = contributions.SelectMany(static (value, _) => value.Output.Diagnostics);
+        context.RegisterSourceOutput(diagnostics.Combine(context.CompilationProvider), static (output, input) =>
+            output.ReportDiagnostic(input.Left.Materialize(input.Right)));
     }
 
     /// <summary>Builds the mappers registry source from the supplied metadata.</summary>
@@ -202,8 +217,8 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
     /// <param name="meta">The meta used by this operation.</param>
     /// <returns>The result of the operation.</returns>
     private static string GenerateMappersRegistry(
-        System.Collections.Immutable.ImmutableArray<AutoMapSourceInfo> autoInfos,
-        System.Collections.Immutable.ImmutableArray<LuminMapperClassInfo> manualInfos,
+        System.Collections.Immutable.ImmutableArray<FrozenMapperEmission> autoInfos,
+        System.Collections.Immutable.ImmutableArray<FrozenMapperEmission> manualInfos,
         Compilation compilation,
         MetaInfo meta)
     {
@@ -252,19 +267,8 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
         sb.AppendLine("        public static void Initialize()");
         sb.AppendLine("        {");
 
-        foreach (var info in autoInfos)
-        {
-            if (info == null || info.Pairs.Count == 0) continue;
-            sb.AppendLine($"            // Auto: {info.SourceFullName}");
-            sb.Append(LuminAutoMapCodeGenerator.GenerateAutoRegistrationLines(info));
-        }
-
-        foreach (var info in manualInfos)
-        {
-            if (info.Methods.Count == 0) continue;
-            sb.AppendLine($"            // Manual: {info.ClassFullName}");
-            sb.Append(LuminMapCodeGenerator.GenerateManualRegistrationLines(info));
-        }
+        foreach (var info in autoInfos) sb.Append(info.Registration);
+        foreach (var info in manualInfos) sb.Append(info.Registration);
 
         sb.AppendLine("        }");
         sb.AppendLine();

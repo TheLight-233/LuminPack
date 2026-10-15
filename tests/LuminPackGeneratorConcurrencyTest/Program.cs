@@ -26,6 +26,13 @@ if (args.Contains("--verify-scoped-emission", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--verify-incremental", StringComparer.Ordinal))
+{
+    IncrementalGenerationChecks.Run(references);
+    Console.WriteLine("Passed incremental generation and dependency invalidation checks.");
+    return;
+}
+
 // <summary>Verifies verify read only collection builder.</summary>
 // <param name="references">The references used by this operation.</param>
 static void VerifyReadOnlyCollectionBuilder(MetadataReference[] references)

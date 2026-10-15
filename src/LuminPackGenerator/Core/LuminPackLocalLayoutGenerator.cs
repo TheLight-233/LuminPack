@@ -20,7 +20,7 @@ namespace LuminPack.Code.Core;
 /// </para>
 ///
 /// <para>
-/// All Local classes for an assembly are emitted into one dedicated file so a Local declared for one
+/// Local classes for an assembly are emitted into independent files so a Local declared for one
 /// root type is also usable from every other generated file of the same assembly (they all share the
 /// same <c>internal static partial</c> extension class).
 /// </para>
@@ -38,7 +38,14 @@ public static class LuminPackLocalLayoutGenerator
         /// <summary>Registers a layout key; returns false when it was already emitted.</summary>
         /// <param name="key">The key used to identify the entry.</param>
         /// <returns>Whether the requested condition or operation succeeded.</returns>
-        public bool TryRegister(string key) => _emitted.Add(key);
+        public bool TryRegister(string key)
+        {
+            if (!_emitted.Add(key)) return false;
+            Registered?.Invoke(key);
+            return true;
+        }
+
+        internal Action<string> Registered;
 
         /// <summary>Gets the count.</summary>
         public int Count => _emitted.Count;
@@ -435,7 +442,7 @@ public static class LuminPackLocalLayoutGenerator
                 continue;
             }
 
-            if (field.TypeSymbol is INamedTypeSymbol nestedType && NeedsNestedLocal(field.ClassFields))
+            if (GetNestedStorageType(field) is INamedTypeSymbol nestedType && NeedsNestedLocal(field.ClassFields))
             {
                 EmitLevels(
                     sb,
@@ -499,10 +506,11 @@ public static class LuminPackLocalLayoutGenerator
             // Every member of ClassFields is declared by the type of this field, so the mirror to reach
             // through is the one for that type. The parameter type is taken from the member itself, which
             // is what the pre-existing call sites already pass.
-            string localName = field.TypeSymbol is not null
-                ? GetLocalDeclarationName(field.TypeSymbol)
+            var storageType = GetNestedStorageType(field);
+            string localName = storageType is not null
+                ? GetLocalDeclarationName(storageType)
                 : null;
-            string fallbackDeclaringType = field.TypeSymbol?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
+            string fallbackDeclaringType = storageType?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
 
             if (localName is not null)
             {
@@ -523,16 +531,18 @@ public static class LuminPackLocalLayoutGenerator
                         continue;
                     }
 
-                    // Keyed on the emitted signature so one accessor per (declaring type, member) is
-                    // produced no matter how many roots reach it.
-                    if (!registry.TryRegister("acc:" + declaringType + "|" + member.Name))
+                    // The field path participates in the emitted method name. Repeated fields of
+                    // the same type therefore need distinct accessors; identical emitted signatures
+                    // reached through different roots still share one declaration.
+                    string accessorName = "Get" + field.Name + member.Name;
+                    if (!registry.TryRegister("acc:" + declaringType + "|" + member.Name + "|" + accessorName))
                     {
                         continue;
                     }
 
                     sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
                     sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
-                    sb.AppendLine("        private static ref " + member.TypeName + " Get" + field.Identifier + member.Identifier + "(in " + declaringType + " value)");
+                    sb.AppendLine("        private static ref " + member.TypeName + " " + accessorName + "(in " + declaringType + " value)");
                     sb.AppendLine("            => ref global::LuminPack.Code.LuminPackMarshal.As<" + declaringType + ", " + localName
                         + ">(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in value))." + member.Identifier + ";");
                     sb.AppendLine();
@@ -540,6 +550,29 @@ public static class LuminPackLocalLayoutGenerator
             }
 
             AppendLocalMemberAccessors(sb, registry, field.ClassFields);
+        }
+    }
+
+    /// <summary>Resolves the element storage described by nested fields carried on an array or list member.</summary>
+    /// <param name="field">The member whose nested metadata describes the stored element's fields.</param>
+    /// <returns>The actual mirrored class or struct, rather than its surrounding collection.</returns>
+    private static INamedTypeSymbol GetNestedStorageType(LuminDataField field)
+    {
+        ITypeSymbol type = field.TypeSymbol;
+        while (true)
+        {
+            if (type is IArrayTypeSymbol array)
+            {
+                type = array.ElementType;
+                continue;
+            }
+            if (type is INamedTypeSymbol { Arity: 1 } list && list.Name == "List" &&
+                list.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
+            {
+                type = list.TypeArguments[0];
+                continue;
+            }
+            return type as INamedTypeSymbol;
         }
     }
 

@@ -36,5 +36,6 @@ public static partial class LuminPackSerializerGenerator
         AppendGenericDeserializeJsonBuffer(sb);
         AppendGenericDeserializeAsync(sb);
         AppendGenericDeserializeAsyncValue(sb);
+        AppendAdditionalGenericFallbacks(sb);
     }
 }

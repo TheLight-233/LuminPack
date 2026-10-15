@@ -129,21 +129,27 @@ public sealed class ReachabilityAnalysis
     private readonly ImmutableHashSet<ISymbol> _emittedPackableDefinitions;
     private readonly LuminPackGenerationTier _tier;
 
+    /// <summary>Gets call-selected facade overloads for Light and Minimal generation.</summary>
+    internal SerializerApiUsageAnalysis? ApiUsage { get; }
+
     /// <summary>Initializes a new instance of <c>ReachabilityAnalysis</c>.</summary>
     /// <param name="tier">The tier used by this operation.</param>
     /// <param name="reachableNoOwnerTypes">The reachable no owner types used by this operation.</param>
     /// <param name="emittedTypes">The emitted types used by this operation.</param>
     /// <param name="emittedPackableDefinitions">The emitted packable definitions used by this operation.</param>
+    /// <param name="apiUsage">Call-site selections when concrete facade pruning is enabled.</param>
     internal ReachabilityAnalysis(
         LuminPackGenerationTier tier,
         ImmutableArray<ITypeSymbol> reachableNoOwnerTypes,
         ImmutableArray<ITypeSymbol> emittedTypes,
-        ImmutableHashSet<ISymbol> emittedPackableDefinitions)
+        ImmutableHashSet<ISymbol> emittedPackableDefinitions,
+        SerializerApiUsageAnalysis? apiUsage = null)
     {
         _tier = tier;
         _reachableNoOwnerTypes = reachableNoOwnerTypes;
         _emittedTypes = emittedTypes;
         _emittedPackableDefinitions = emittedPackableDefinitions;
+        ApiUsage = apiUsage;
     }
 
     /// <summary>No-owner formatter types that are reachable from serializer call sites.</summary>
@@ -212,25 +218,27 @@ internal static class ReachabilityAnalysisCache
     /// <returns>The result of the operation.</returns>
     private static ReachabilityAnalysis Analyze(Compilation compilation, LuminPackGenerationTier tier)
     {
+        Interlocked.Increment(ref IncrementalGenerationMetrics.ReachabilityAnalyses);
         CompilationTypeAnalysis analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
+        var apiUsage = tier is LuminPackGenerationTier.Light or LuminPackGenerationTier.Minimal
+            ? SerializerApiUsageAnalysis.GetOrCreate(compilation) : null;
 
-        // Resolve every invocation in the project once.  Semantic models are expensive; slot
-        // matching and substitution then operate over this cheap list.
-        var invocations = new List<(InvocationExpressionSyntax Syntax, IMethodSymbol? Method)>();
+        // Preserve every invocation in legacy order, reconstructing verified identities from
+        // unchanged files with current symbols before slot matching and substitution.
+        var invocations = new List<IMethodSymbol?>();
+        var observations = InvocationFileObservationCache.For(compilation);
         foreach (SyntaxTree tree in compilation.SyntaxTrees)
         {
-            SemanticModel model = compilation.GetSemanticModel(tree);
-            foreach (InvocationExpressionSyntax invocation in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
-            {
-                invocations.Add((invocation, model.GetSymbolInfo(invocation).Symbol as IMethodSymbol));
-            }
+            invocations.AddRange(observations.Read(tree));
         }
 
         var seeds = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+        if (apiUsage != null) seeds.UnionWith(apiUsage.Roots);
+        if (apiUsage?.RequiresConservativeRoots == true) seeds.UnionWith(analysis.FormatterTypes);
         var pending = new Queue<TypeParamSlot>();
         var visited = new HashSet<TypeParamSlot>();
 
-        foreach ((_, IMethodSymbol? method) in invocations)
+        foreach (IMethodSymbol? method in invocations)
         {
             if (method is null)
             {
@@ -275,7 +283,7 @@ internal static class ReachabilityAnalysisCache
                 continue;
             }
 
-            foreach ((_, IMethodSymbol? method) in invocations)
+            foreach (IMethodSymbol? method in invocations)
             {
                 if (method is null || !slot.Matches(method))
                 {
@@ -302,12 +310,8 @@ internal static class ReachabilityAnalysisCache
             finalCandidates.Add(type);
         }
 
-        // Minimal prunes to the call-site reachable set.  On a fresh build LuminPackSerializer is itself
-        // generated code and is not yet in the input compilation, so no call site resolves and the
-        // seed set is empty; conservatively fall back to emitting every packable (Light behaviour) so
-        // the first build is not broken.  Once the serializer exists (IDE or a rebuild), call sites
-        // resolve and real Minimal pruning applies.
-        bool minimalPrune = tier == LuminPackGenerationTier.Minimal && seeds.Count != 0;
+        // Signature-based binding discovers roots on the first build, including a genuinely empty set.
+        bool minimalPrune = tier == LuminPackGenerationTier.Minimal && apiUsage?.RequiresConservativeRoots != true;
         if (minimalPrune)
         {
             // Minimal: seed the emitted set from call-site reachable packables, then close over the
@@ -422,7 +426,31 @@ internal static class ReachabilityAnalysisCache
             emitted
                 .OrderBy(static type => type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), StringComparer.Ordinal)
                 .ToImmutableArray(),
-            emittedPackableDefinitions.ToImmutableHashSet(SymbolEqualityComparer.Default));
+            emittedPackableDefinitions.ToImmutableHashSet(SymbolEqualityComparer.Default), apiUsage);
+    }
+
+    /// <summary>Closes serializer payloads through source generic method and containing-type calls.</summary>
+    /// <param name="compilation">The single semantic context owning every supplied symbol.</param>
+    /// <param name="payloads">Direct serializer payloads, which may contain source type parameters.</param>
+    /// <param name="invocations">All source invocation methods in the same context.</param>
+    /// <returns>Closed payload roots discovered through generic forwarding.</returns>
+    internal static IEnumerable<ITypeSymbol> ExpandApiPayloads(Compilation compilation, IEnumerable<ITypeSymbol> payloads, IReadOnlyList<IMethodSymbol?> invocations)
+    {
+        var seeds = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+        var pending = new Queue<TypeParamSlot>();
+        var visited = new HashSet<TypeParamSlot>();
+        foreach (var payload in payloads) CollectPayload(compilation, payload, seeds, pending);
+        while (pending.Count != 0)
+        {
+            var slot = pending.Dequeue();
+            if (!visited.Add(slot)) continue;
+            foreach (var method in invocations)
+            {
+                if (method == null || !slot.Matches(method)) continue;
+                CollectPayload(compilation, Substitute(compilation, slot.PayloadType, BuildMap(slot, method)), seeds, pending);
+            }
+        }
+        return seeds;
     }
 
     /// <summary>Determines whether the supplied value has the reachable no owner classification.</summary>
@@ -470,7 +498,7 @@ internal static class ReachabilityAnalysisCache
     /// <param name="type">The type or symbol to analyze.</param>
     /// <param name="types">The types used by this operation.</param>
     /// <param name="analysis">The analysis used by this operation.</param>
-    private static void ExpandType(Compilation compilation, ITypeSymbol type, ISet<ITypeSymbol> types, CompilationTypeAnalysis analysis)
+    private static void ExpandType(Compilation compilation, ITypeSymbol? type, ISet<ITypeSymbol> types, CompilationTypeAnalysis analysis)
     {
         if (type is null || type.TypeKind == TypeKind.Error || type is ITypeParameterSymbol)
         {
@@ -536,7 +564,7 @@ internal static class ReachabilityAnalysisCache
                 {
                     if (argument.Value is INamedTypeSymbol member)
                     {
-                        ExpandType(compilation, member, types, analysis);
+                        ExpandType(compilation, CloseUnionMember(compilation, member, packable), types, analysis);
                     }
                 }
             }
@@ -551,7 +579,7 @@ internal static class ReachabilityAnalysisCache
                 }
                 if (IsDerivedFrom(declared.Symbol, baseDef))
                 {
-                    ExpandType(compilation, declared.Symbol, types, analysis);
+                    ExpandType(compilation, CloseUnionMember(compilation, declared.Symbol, packable), types, analysis);
                 }
             }
             return;
@@ -567,6 +595,35 @@ internal static class ReachabilityAnalysisCache
                 ExpandType(compilation, caseType, types, analysis);
             }
         }
+    }
+
+    /// <summary>Closes an open union case with the actual root arguments before expanding its serialized members.</summary>
+    /// <param name="compilation">The compilation used to validate substituted constraints.</param>
+    /// <param name="member">The explicit or discovered member definition.</param>
+    /// <param name="root">The currently reachable union construction.</param>
+    /// <returns>The member construction used by the generated union formatter, the original member when it is already closed, or <see langword="null"/> when the construction violates the member's constraints.</returns>
+    private static INamedTypeSymbol? CloseUnionMember(Compilation compilation, INamedTypeSymbol member, INamedTypeSymbol root)
+    {
+        if (!member.IsGenericType || member.Arity != root.TypeArguments.Length ||
+            LuminPackExtensionGenerator.ContainsTypeParameter(root) ||
+            !member.IsUnboundGenericType && !LuminPackExtensionGenerator.ContainsTypeParameter(member)) return member;
+        var definition = member.OriginalDefinition;
+        for (int index = 0; index < definition.TypeParameters.Length; index++)
+        {
+            var parameter = definition.TypeParameters[index];
+            var argument = root.TypeArguments[index];
+            if (parameter.HasValueTypeConstraint && (!argument.IsValueType || argument.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T) ||
+                parameter.HasReferenceTypeConstraint && !argument.IsReferenceType || parameter.HasUnmanagedTypeConstraint && !argument.IsUnmanagedType ||
+                parameter.HasConstructorConstraint && argument is INamedTypeSymbol named && !argument.IsValueType &&
+                (named.IsAbstract || !named.InstanceConstructors.Any(constructor => constructor.Parameters.Length == 0 && constructor.DeclaredAccessibility == Accessibility.Public))) return null;
+        }
+        var construction = definition.Construct(root.TypeArguments.ToArray());
+        var substitutions = new Dictionary<ITypeParameterSymbol, ITypeSymbol>(SymbolEqualityComparer.Default);
+        for (int index = 0; index < definition.TypeParameters.Length; index++) substitutions.Add(definition.TypeParameters[index], root.TypeArguments[index]);
+        for (int index = 0; index < definition.TypeParameters.Length; index++)
+            foreach (var constraint in definition.TypeParameters[index].ConstraintTypes)
+                if (!compilation.ClassifyCommonConversion(root.TypeArguments[index], Substitute(compilation, constraint, substitutions)).IsImplicit) return null;
+        return construction;
     }
 
     /// <summary>Determines whether the supplied value has the cs11 union classification.</summary>

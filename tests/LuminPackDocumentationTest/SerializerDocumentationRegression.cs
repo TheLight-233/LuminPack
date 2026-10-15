@@ -76,8 +76,10 @@ internal static class SerializerDocumentationRegression
                 Require(method.GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)), "Missing generated method documentation: " + method);
         }
 
-        string serializer = generated.Single(file => file.HintName == "LuminPackSerializer.g.cs").SourceText.ToString();
-        var methods = CSharpSyntaxTree.ParseText(serializer, options.WithDocumentationMode(DocumentationMode.Parse)).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
+        var serializerFiles = generated.Where(file => file.HintName.StartsWith("LuminPackSerializer.", StringComparison.Ordinal)).ToArray();
+        string serializer = string.Join(Environment.NewLine, serializerFiles.Select(file => file.SourceText.ToString()));
+        var methods = serializerFiles.SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, options.WithDocumentationMode(DocumentationMode.Parse))
+            .GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
         var modelOverloads = methods.Where(method => method.TypeParameterList == null &&
             (method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "global::DocumentationModel") ||
              method.ReturnType.ToString().Contains("global::DocumentationModel", StringComparison.Ordinal))).ToArray();

@@ -28,7 +28,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            {");
         sb.AppendLine("                var writer = new LuminPackJsonWriter(writerBuffer, state);");
         sb.AppendLine();
-        sb.AppendLine("                writer.WriteValue(in value);");
+        AppendJsonOperation(sb, read: false);
         sb.AppendLine();
         sb.AppendLine("                return writer.Option.StringEncoding is LuminPackStringEncoding.UTF8");
         sb.AppendLine("                    ? Encoding.UTF8.GetString(writer.GetSpan())");
@@ -67,7 +67,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            {");
         sb.AppendLine("                var writer = new LuminPackJsonWriter(writerBuffer, state);");
         sb.AppendLine();
-        sb.AppendLine("                writer.WriteValue(in value);");
+        AppendJsonOperation(sb, read: false);
         sb.AppendLine();
         sb.AppendLine("                writerBuffer.CompleteWrite(writer.CurrentIndex);");
         sb.AppendLine("            }");
@@ -107,7 +107,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("                    try");
         sb.AppendLine("                    {");
         sb.AppendLine("                        Encoding.UTF8.GetBytes(buffer, 0, buffer.Length, byteBuffer, 0);");
-        sb.AppendLine("                        return DeserializeJson(byteBuffer.AsSpan(0, byteCount), ref value, options);");
+        AppendConcreteJsonReadBody(sb, "byteBuffer.AsSpan(0, byteCount)", indent: 24);
         sb.AppendLine("                    }");
         sb.AppendLine("                    finally");
         sb.AppendLine("                    {");
@@ -118,12 +118,12 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("                {");
         sb.AppendLine("                    Span<byte> span = stackalloc byte[buffer.Length * 3];");
         sb.AppendLine("                    var written = Encoding.UTF8.GetBytes(buffer, span);");
-        sb.AppendLine("                    return DeserializeJson(span[..written], ref value, options);");
+        AppendConcreteJsonReadBody(sb, "span[..written]", indent: 20);
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
-        sb.AppendLine("                return DeserializeJson(buffer.AsSpan(), ref value, options);");
+        AppendConcreteJsonReadBody(sb, "MemoryMarshal.AsBytes(buffer.AsSpan())", indent: 16);
         sb.AppendLine("            }");
         sb.AppendLine("        }");
         sb.AppendLine();
@@ -147,7 +147,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            {");
         sb.AppendLine("                var reader = new LuminPackJsonReader(ref buffer, state);");
         sb.AppendLine("                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\");");
-        sb.AppendLine("                reader.ReadValue(ref value);");
+        AppendJsonOperation(sb, read: true);
         sb.AppendLine("                reader.EnsureEndOfDocument();");
         sb.AppendLine("                return reader.CurrentIndex;");
         sb.AppendLine("            }");
@@ -179,7 +179,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("                try");
         sb.AppendLine("                {");
         sb.AppendLine("                    int written = Encoding.UTF8.GetBytes(buffer, rented);");
-        sb.AppendLine("                    return DeserializeJson(rented.AsSpan(0, written), ref value, options);");
+        AppendConcreteJsonReadBody(sb, "rented.AsSpan(0, written)", indent: 20);
         sb.AppendLine("                }");
         sb.AppendLine("                finally");
         sb.AppendLine("                {");
@@ -193,7 +193,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("                var span = MemoryMarshal.Cast<char, byte>(buffer);");
         sb.AppendLine("                var reader = new LuminPackJsonReader(ref span, state);");
         sb.AppendLine("                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\");");
-        sb.AppendLine("                reader.ReadValue(ref value);");
+        AppendJsonOperation(sb, read: true);
         sb.AppendLine("                reader.EnsureEndOfDocument();");
         sb.AppendLine("                return reader.CurrentIndex;");
         sb.AppendLine("            }");
@@ -228,7 +228,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("                var bytes = bufferWriter.GetSpan();");
         sb.AppendLine("                var reader = new LuminPackJsonReader(ref bytes, state);");
         sb.AppendLine("                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\");");
-        sb.AppendLine("                reader.ReadValue(ref value);");
+        AppendJsonOperation(sb, read: true);
         sb.AppendLine("                reader.EnsureEndOfDocument();");
         sb.AppendLine("                return reader.CurrentIndex;");
         sb.AppendLine("            }");
@@ -238,6 +238,29 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            }");
         sb.AppendLine("        }");
         sb.AppendLine();
+    }
+
+    /// <summary>Emits a complete concrete JSON read after the caller has performed its original transcoding step.</summary>
+    /// <param name="builder">The concrete string or character-span entry builder.</param>
+    /// <param name="bytes">The already transcoded or UTF-16 byte-span expression.</param>
+    /// <param name="indent">Indentation in the current transcoding branch.</param>
+    private static void AppendConcreteJsonReadBody(StringBuilder builder, string bytes, int indent)
+    {
+        string padding = new string(' ', indent);
+        builder.Append(padding).AppendLine("{");
+        builder.Append(padding).AppendLine("    var __jsonInlineState = _threadStaticReaderOptionalState ??= new LuminPackReaderOptionalState();");
+        builder.Append(padding).AppendLine("    __jsonInlineState.Init(options);");
+        builder.Append(padding).AppendLine("    try");
+        builder.Append(padding).AppendLine("    {");
+        builder.Append(padding).Append("        ReadOnlySpan<byte> __jsonInlineInput = ").Append(bytes).AppendLine(";");
+        builder.Append(padding).AppendLine("        var reader = new LuminPackJsonReader(ref __jsonInlineInput, __jsonInlineState);");
+        builder.Append(padding).AppendLine("        if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\");");
+        AppendJsonOperation(builder, read: true, indent: indent + 8);
+        builder.Append(padding).AppendLine("        reader.EnsureEndOfDocument();");
+        builder.Append(padding).AppendLine("        return reader.CurrentIndex;");
+        builder.Append(padding).AppendLine("    }");
+        builder.Append(padding).AppendLine("    finally { __jsonInlineState.Reset(); }");
+        builder.Append(padding).AppendLine("}");
     }
 
     /// <summary>
@@ -289,11 +312,10 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            state.Init(option);");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                var writer = new LuminPackJsonWriter(writerBuffer, state);");
-        sb.AppendLine("                writer.WriteValue(in value);");
-        sb.AppendLine("                return writer.Option.StringEncoding is LuminPackStringEncoding.UTF8");
-        sb.AppendLine("                    ? Encoding.UTF8.GetString(writer.GetSpan())");
-        sb.AppendLine("                    : Encoding.Unicode.GetString(writer.GetSpan());");
+        sb.AppendLine("                SerializeJsonCore(writerBuffer, state, in value);");
+        sb.AppendLine("                return state.Option.StringEncoding is LuminPackStringEncoding.UTF8");
+        sb.AppendLine("                    ? Encoding.UTF8.GetString(writerBuffer.GetSpan())");
+        sb.AppendLine("                    : Encoding.Unicode.GetString(writerBuffer.GetSpan());");
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
@@ -334,20 +356,8 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("        " + _currentAccess + " static T DeserializeJson<T>(ReadOnlySpan<byte> buffer, LuminPackSerializerOption? options = null)");
         sb.AppendLine("        {");
         sb.AppendLine("            T value = default!;");
-        sb.AppendLine("            var state = _threadStaticReaderOptionalState ??= new LuminPackReaderOptionalState();");
-        sb.AppendLine("            state.Init(options);");
-        sb.AppendLine("            try");
-        sb.AppendLine("            {");
-        sb.AppendLine("                var reader = new LuminPackJsonReader(ref buffer, state);");
-        sb.AppendLine("                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\");");
-        sb.AppendLine("                reader.ReadValue(ref value);");
-        sb.AppendLine("                reader.EnsureEndOfDocument();");
-        sb.AppendLine("                return value;");
-        sb.AppendLine("            }");
-        sb.AppendLine("            finally");
-        sb.AppendLine("            {");
-        sb.AppendLine("                state.Reset();");
-        sb.AppendLine("            }");
+        sb.AppendLine("            DeserializeJson<T>(buffer, ref value, options);");
+        sb.AppendLine("            return value;");
         sb.AppendLine("        }");
         sb.AppendLine();
     }
@@ -364,37 +374,9 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
         sb.AppendLine("        " + _currentAccess + " static T DeserializeJson<T>(ReadOnlySpan<char> buffer, LuminPackSerializerOption? options = null)");
         sb.AppendLine("        {");
-        sb.AppendLine("            if (options?.StringEncoding is not LuminPackStringEncoding.UTF16)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                int byteCount = Encoding.UTF8.GetByteCount(buffer);");
-        sb.AppendLine("                byte[] rented = ArrayPool<byte>.Shared.Rent(byteCount);");
-        sb.AppendLine("                try");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    int written = Encoding.UTF8.GetBytes(buffer, rented);");
-        sb.AppendLine("                    return DeserializeJson<T>(rented.AsSpan(0, written), options);");
-        sb.AppendLine("                }");
-        sb.AppendLine("                finally");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    ArrayPool<byte>.Shared.Return(rented);");
-        sb.AppendLine("                }");
-        sb.AppendLine("            }");
-        sb.AppendLine();
         sb.AppendLine("            T value = default!;");
-        sb.AppendLine("            var state = _threadStaticReaderOptionalState ??= new LuminPackReaderOptionalState();");
-        sb.AppendLine("            state.Init(options);");
-        sb.AppendLine("            try");
-        sb.AppendLine("            {");
-        sb.AppendLine("                var bytes = MemoryMarshal.Cast<char, byte>(buffer);");
-        sb.AppendLine("                var reader = new LuminPackJsonReader(ref bytes, state);");
-        sb.AppendLine("                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\");");
-        sb.AppendLine("                reader.ReadValue(ref value);");
-        sb.AppendLine("                reader.EnsureEndOfDocument();");
-        sb.AppendLine("                return value;");
-        sb.AppendLine("            }");
-        sb.AppendLine("            finally");
-        sb.AppendLine("            {");
-        sb.AppendLine("                state.Reset();");
-        sb.AppendLine("            }");
+        sb.AppendLine("            DeserializeJson<T>(buffer, ref value, options);");
+        sb.AppendLine("            return value;");
         sb.AppendLine("        }");
         sb.AppendLine();
     }
@@ -411,20 +393,8 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("        " + _currentAccess + " static T DeserializeJson<T>(LuminBufferWriter bufferWriter)");
         sb.AppendLine("        {");
         sb.AppendLine("            T value = default!;");
-        sb.AppendLine("            var state = bufferWriter.ReaderState;");
-        sb.AppendLine("            try");
-        sb.AppendLine("            {");
-        sb.AppendLine("                var bytes = bufferWriter.GetSpan();");
-        sb.AppendLine("                var reader = new LuminPackJsonReader(ref bytes, state);");
-        sb.AppendLine("                if (!reader.Read()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value\");");
-        sb.AppendLine("                reader.ReadValue(ref value);");
-        sb.AppendLine("                reader.EnsureEndOfDocument();");
-        sb.AppendLine("                return value;");
-        sb.AppendLine("            }");
-        sb.AppendLine("            finally");
-        sb.AppendLine("            {");
-        sb.AppendLine("                state.ResetOperationState();");
-        sb.AppendLine("            }");
+        sb.AppendLine("            DeserializeJson<T>(bufferWriter, ref value);");
+        sb.AppendLine("            return value;");
         sb.AppendLine("        }");
         sb.AppendLine();
     }

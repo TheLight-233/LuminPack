@@ -31,7 +31,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            {");
         sb.AppendLine("                var writer = new LuminPackWriter(writerBuffer, state);");
         sb.AppendLine();
-        sb.AppendLine("                writer.WriteValue(in value);");
+        AppendBinaryOperation(sb, read: false);
         sb.AppendLine();
         sb.AppendLine("                var buffer = AllocateUninitializedArray<byte>(writer.CurrentIndex);");
         sb.AppendLine("                writer.GetSpan().CopyTo(buffer.AsSpan());");
@@ -69,7 +69,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            {");
         sb.AppendLine("                var writer = new LuminPackWriter(writerBuffer, state);");
         sb.AppendLine();
-        sb.AppendLine("                writer.WriteValue(in value);");
+        AppendBinaryOperation(sb, read: false);
         sb.AppendLine();
         sb.AppendLine("                writerBuffer.CompleteWrite(writer.CurrentIndex);");
         sb.AppendLine("            }");
@@ -103,10 +103,10 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            state.Init(option);");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                var writer = new LuminPackWriter(writerBuffer, state);");
-        sb.AppendLine("                writer.WriteValue(in value);");
-        sb.AppendLine("                var buffer = AllocateUninitializedArray<byte>(writer.CurrentIndex);");
-        sb.AppendLine("                writer.GetSpan().CopyTo(buffer.AsSpan());");
+        sb.AppendLine("                SerializeCore(writerBuffer, state, in value);");
+        sb.AppendLine("                var source = writerBuffer.GetSpan();");
+        sb.AppendLine("                var buffer = AllocateUninitializedArray<byte>(source.Length);");
+        sb.AppendLine("                source.CopyTo(buffer.AsSpan());");
         sb.AppendLine("                return buffer;");
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
@@ -142,11 +142,10 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            state.Init(option);");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                var writer = new LuminPackWriter(writerBuffer, state);");
-        sb.AppendLine("                writer.WriteValue(in value);");
-        sb.AppendLine("                var source = writer.GetSpan();");
-        sb.AppendLine("                var dest = bufferWriter.GetSpan(source.Length);");
-        sb.AppendLine("                source.CopyTo(dest);");
+        sb.AppendLine("                SerializeCore(writerBuffer, state, in value);");
+        sb.AppendLine("                var source = writerBuffer.GetSpan();");
+        sb.AppendLine("                var destination = bufferWriter.GetSpan(source.Length);");
+        sb.AppendLine("                source.CopyTo(destination);");
         sb.AppendLine("                bufferWriter.Advance(source.Length);");
         sb.AppendLine("            }");
         sb.AppendLine("            finally");

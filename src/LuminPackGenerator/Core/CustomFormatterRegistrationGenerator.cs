@@ -24,12 +24,19 @@ internal static class CustomFormatterRegistrationGenerator
         MetaInfo metaInfo,
         bool isUnity)
     {
-        var registerable = models.Where(static model => !model.HasErrors && model.RegisterTier > 0).ToArray();
-        if (registerable.Length == 0)
-        {
-            return string.Empty;
-        }
+        return GenerateBlocks(models.Where(static model => !model.HasErrors && model.RegisterTier > 0)
+            .Select(model => GenerateRegistrationBlock(model.TypeName, model.RegisterTier)).ToArray(), compilation, metaInfo, isUnity);
+    }
 
+    /// <summary>Assembles the unchanged registry wrapper around cached registration contributions.</summary>
+    /// <param name="blocks">Valid registration blocks in legacy declared-type order.</param>
+    /// <param name="compilation">The compilation supplying assembly identity.</param>
+    /// <param name="metaInfo">The current generation settings.</param>
+    /// <param name="isUnity">Whether Unity registration attributes are required.</param>
+    /// <returns>The exact legacy registry, or an empty string for no registrations.</returns>
+    internal static string GenerateBlocks(IReadOnlyList<string> blocks, Compilation compilation, MetaInfo metaInfo, bool isUnity)
+    {
+        if (blocks.Count == 0) return string.Empty;
         string asmRaw = compilation.AssemblyName ?? "Unknown";
         string asmSafe = SanitizeId(asmRaw);
 
@@ -68,27 +75,31 @@ internal static class CustomFormatterRegistrationGenerator
         sb.AppendLine("        internal static void Initialize()");
         sb.AppendLine("        {");
 
-        foreach (CustomFormatterModel model in registerable)
-        {
-            string type = model.TypeName;
-            sb.AppendLine($"            global::LuminPack.LuminPackSerializer.Register<{type}>(");
-            sb.AppendLine($"                &{type}.{CustomFormatterAnalyzer.SerializeName},");
-            sb.AppendLine($"                &{type}.{CustomFormatterAnalyzer.DeserializeName}");
-            if (model.RegisterTier >= 2)
-            {
-                sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.SerializeJsonName}");
-                sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.DeserializeJsonName}");
-            }
-            if (model.RegisterTier >= 3)
-            {
-                sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.CalculateOffsetName}");
-            }
-            sb.AppendLine("            );");
-        }
+        foreach (string block in blocks) sb.Append(block);
 
         sb.AppendLine("        }");
         sb.AppendLine("    }");
         if (hasNs) sb.AppendLine("}");
+        return sb.ToString();
+    }
+
+    /// <summary>Builds one exact legacy registration block from validated symbol-free facts.</summary>
+    /// <param name="type">The fully qualified formatter type name.</param>
+    /// <param name="tier">The original validated registration overload tier.</param>
+    /// <returns>The complete registration statements with original whitespace.</returns>
+    internal static string GenerateRegistrationBlock(string type, int tier)
+    {
+        var sb = new StringBuilder();
+        sb.AppendLine($"            global::LuminPack.LuminPackSerializer.Register<{type}>(");
+        sb.AppendLine($"                &{type}.{CustomFormatterAnalyzer.SerializeName},");
+        sb.AppendLine($"                &{type}.{CustomFormatterAnalyzer.DeserializeName}");
+        if (tier >= 2)
+        {
+            sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.SerializeJsonName}");
+            sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.DeserializeJsonName}");
+        }
+        if (tier >= 3) sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.CalculateOffsetName}");
+        sb.AppendLine("            );");
         return sb.ToString();
     }
 
