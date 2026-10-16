@@ -9,6 +9,8 @@ try
     SerializerDocumentationRegression.Run(references);
     SerializerRootApiRegression.Run(references);
     SerializerGenericOverloadRegression.Run(references);
+    SerializerReviewRegression.Run(references);
+    SerializerCustomFormatterRegression.Run(references);
     SerializerPartitionRegression.Run(references);
     SerializerBinaryInliningRegression.Run(references);
     SerializerCollectionInliningRegression.Run(references);

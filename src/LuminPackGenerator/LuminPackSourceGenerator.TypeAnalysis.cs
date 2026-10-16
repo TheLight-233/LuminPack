@@ -97,7 +97,7 @@ namespace LuminPack.SourceGenerator
 
                 // At the innermost element, use Roslyn's IsUnmanagedType classification.
                 // Return true for primitive values, enums, and structs whose fields are all unmanaged.
-                return type.IsUnmanagedType;
+                return global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.CanUseUnmanagedSerialization(type);
             }
         }
 

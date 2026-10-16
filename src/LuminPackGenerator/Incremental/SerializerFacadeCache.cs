@@ -10,12 +10,29 @@ internal sealed class SerializerFacadeCache
 {
     internal readonly TypeEmissionCache Fragments = new TypeEmissionCache();
     internal readonly PartitionedSourceCache Files = new PartitionedSourceCache();
-    internal readonly BinaryOperationPlanCache BinaryOperations = new BinaryOperationPlanCache();
     private readonly object _gate = new object();
     private string _header;
     private string _tail;
     private string[] _blocks;
     private string _result;
+    private MetaInfo _commonSettings;
+    private string _common;
+
+    /// <summary>Reuses common generic APIs and their XML independently of concrete payload edits.</summary>
+    /// <param name="metadata">All parse and generation settings used by the common emitters.</param>
+    /// <param name="build">Renders and documents the common contribution when settings change.</param>
+    /// <returns>The exact common source without retaining the compilation used to build it.</returns>
+    internal string GetCommon(MetaInfo metadata, Func<string> build)
+    {
+        lock (_gate)
+        {
+            if (_common != null && MetaInfoValueComparer.Instance.Equals(_commonSettings, metadata)) return _common;
+            string source = build();
+            _commonSettings = new MetaInfo(metadata.ParseOptions, metadata.CSharpVersion, metadata.IsNet8,
+                metadata.IsNet9_OR_GREATER, metadata.AllowUnsafe, metadata.RegisterMode) { IsForUnity = metadata.IsForUnity };
+            return _common = source;
+        }
+    }
 
     /// <summary>Assembles the legacy facade only when its component texts change.</summary>
     /// <param name="header">The unchanged legacy header.</param>

@@ -9,25 +9,6 @@ namespace LuminPack.Code.Core;
 public static partial class LuminPackExtensionGenerator
 {
 
-    /// <summary>
-    /// Emits the generic dispatch extensions (<c>WriteValue&lt;T&gt;</c>, <c>ReadValue&lt;T&gt;</c>,
-    /// <c>CalculateOffset&lt;T&gt;</c> and their JSON counterparts). Each closed <c>T</c> carries its
-    /// compact formatter id (0,1,2,3...) in <c>LuminPackTypeCache&lt;T&gt;</c>,
-    /// written by this assembly's static constructor, and the generic method dispatches with a dense
-    /// <c>switch(TypeId)</c> that the JIT lowers to a jump table. That replaces the old MethodTable
-    /// lookup + frozen-map probe on the hot path. The <c>default</c> branch (TypeId still
-    /// <see cref="uint.MaxValue"/>, i.e. no generated formatter) falls back to
-    /// <c>LuminPackFormatterRegistry</c> for types the generator did
-    /// not cover (manual <c>LuminPackSerializer.Register</c>), calling the stored method pointer
-    /// directly with the T-typed signature - no boxing.
-    /// </summary>
-    /// <param name="sb">The builder receiving generated source code.</param>
-    /// <param name="metaInfo">The language, framework, and generation settings.</param>
-    /// <param name="extensionClassName">The extension class name used by this operation.</param>
-    /// <param name="dispatch">The exact ordered legacy ids, names, and operation capabilities.</param>
-    private static void AppendGenericDispatchExtensions(StringBuilder sb, MetaInfo metaInfo, string extensionClassName, DispatchEntry[] dispatch)
-        => BuildGenericDispatchParts(metaInfo, extensionClassName, dispatch, (_, text) => sb.Append(text));
-
     /// <summary>Builds registration and each generic dispatch operation as independent source contributions.</summary>
     /// <param name="metaInfo">Current language, framework, and registration settings.</param>
     /// <param name="extensionClassName">The common partial extension container.</param>

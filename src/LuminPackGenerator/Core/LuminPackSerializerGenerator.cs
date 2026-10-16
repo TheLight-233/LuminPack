@@ -17,7 +17,7 @@ namespace LuminPack.Code.Core;
 public static partial class LuminPackSerializerGenerator
 {
     [ThreadStatic] private static string _currentAccess = "public";
-    [ThreadStatic] private static BinaryEntryInlining _binaryInlining;
+    [ThreadStatic] private static bool? _currentContainsReferences;
 
     /// <summary>Builds the serializer facade for the types reachable in the compilation.</summary>
     /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
@@ -36,7 +36,8 @@ public static partial class LuminPackSerializerGenerator
     internal static string GenerateSerializerClass(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis? reachability, SerializerFacadeCache fragments)
     {
         var parts = BuildSerializerParts(compilation, metaInfo, reachability, fragments);
-        return fragments.Assemble(parts.Header, parts.Blocks.Select(block => block.Value).ToArray(), parts.Tail);
+        return fragments.Assemble(parts.Header, parts.Blocks.Select(block => block.Value).ToArray(), parts.Tail)
+            .Replace("    public static class LuminPackSerializer", "    public static partial class LuminPackSerializer");
     }
 
     /// <summary>Emits common helpers and independently cached concrete partial declarations.</summary>
@@ -119,10 +120,10 @@ public static partial class LuminPackSerializerGenerator
             string typeName = FormatterTypeName.Get(type);
             var apis = apiUsage?.GetApis(type) ?? SerializerApiKind.All;
             if (apis == SerializerApiKind.None) continue;
-            _currentAccess = type.DeclaredAccessibility == Accessibility.Public ? "public" : "internal";
+            _currentAccess = HasPublicSignature(type) ? "public" : "internal";
             var frozen = fragments.Fragments.GetOrBuild(type, compilation, metaInfo, LuminPackGenerationTier.Full, () =>
             {
-                string text = RenderOverloadFragment(type, typeName, compilation, metaInfo, apis, fragments.BinaryOperations);
+                string text = RenderOverloadFragment(type, typeName, compilation, metaInfo, apis);
                 return new FrozenTypeEmission(typeName, text, string.Empty,
                     new FrozenLayoutGroup(string.Empty, metaInfo.ParseOptions, Array.Empty<FrozenLayoutFragment>(), null), Array.Empty<Diagnostic>());
             }, serializerFragment: true, outputVariant: apis == SerializerApiKind.All ? null : ((int)apis).ToString(System.Globalization.CultureInfo.InvariantCulture));
@@ -130,13 +131,32 @@ public static partial class LuminPackSerializerGenerator
         }
 
         _currentAccess = "public";
-        var tail = new StringBuilder();
-        AppendGenericFallbacks(tail, metaInfo);
-
-        AppendCompressDecompress(tail);
-
-        string documentedTail = DocumentFragment(tail.ToString(), Array.Empty<ITypeSymbol>(), compilation, metaInfo) + "    }" + Environment.NewLine + "}" + Environment.NewLine;
+        string documentedTail = fragments.GetCommon(metaInfo, () =>
+        {
+            var tail = new StringBuilder();
+            AppendGenericFallbacks(tail, metaInfo);
+            AppendCompressDecompress(tail);
+            return DocumentFragment(tail.ToString(), Array.Empty<ITypeSymbol>(), compilation, metaInfo) + "    }" + Environment.NewLine + "}" + Environment.NewLine;
+        });
         return new SerializerParts(prelude, header, blocks, documentedTail);
+    }
+
+    /// <summary>Preserves the facade's visibility policy while checking enclosing and constructed types.</summary>
+    /// <param name="type">The concrete overload payload.</param>
+    /// <returns>Whether the existing public overload policy can expose this complete signature.</returns>
+    private static bool HasPublicSignature(ITypeSymbol type)
+        => type.DeclaredAccessibility == Accessibility.Public && IsPublicSignatureType(type);
+
+    /// <summary>Checks the effective accessibility of all components of a payload type.</summary>
+    /// <param name="type">A payload, enclosing type, or generic argument.</param>
+    /// <returns>Whether external consumers can name the complete type.</returns>
+    private static bool IsPublicSignatureType(ITypeSymbol type)
+    {
+        if (type is IArrayTypeSymbol array) return IsPublicSignatureType(array.ElementType);
+        if (type is not INamedTypeSymbol named) return type.DeclaredAccessibility == Accessibility.Public;
+        return named.DeclaredAccessibility == Accessibility.Public &&
+            (named.ContainingType == null || IsPublicSignatureType(named.ContainingType)) &&
+            named.TypeArguments.All(IsPublicSignatureType);
     }
 
     /// <summary>Keeps legacy composition available while production emits independent partial files.</summary>
@@ -162,41 +182,36 @@ public static partial class LuminPackSerializerGenerator
     /// <param name="compilation">The compilation supplying contract metadata.</param>
     /// <param name="metadata">The current generation settings.</param>
     /// <param name="apis">Concrete overloads selected by current project calls.</param>
-    /// <param name="operations">Independently cached binary operation templates.</param>
     /// <returns>The complete overload block with legacy documentation.</returns>
-    private static string RenderOverloadFragment(ITypeSymbol type, string typeName, Compilation compilation, MetaInfo metadata, SerializerApiKind apis,
-        BinaryOperationPlanCache operations)
+    private static string RenderOverloadFragment(ITypeSymbol type, string typeName, Compilation compilation, MetaInfo metadata, SerializerApiKind apis)
     {
         var builder = new StringBuilder();
-        var previousInlining = _binaryInlining;
-        _binaryInlining = new BinaryEntryInlining(type, compilation, metadata, operations);
+        var previousClassification = _currentContainsReferences;
+        _currentContainsReferences = !global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.CanUseUnmanagedSerialization(type);
         try
         {
             AppendTypeOverloads(builder, typeName, metadata, apis);
-            _binaryInlining.AppendLayouts(builder);
-            return DocumentFragment(BinaryEntryLocalScopes.Normalize(builder.ToString(), metadata), new[] { type }, compilation, metadata);
+            return DocumentFragment(builder.ToString(), new[] { type }, compilation, metadata);
         }
-        finally { _binaryInlining = previousInlining; }
+        finally { _currentContainsReferences = previousClassification; }
     }
 
-    /// <summary>Emits a concrete entry's complete binary operation instead of an ordinary formatter call.</summary>
+    /// <summary>Forwards a convenience entry to the unique state-based binary implementation.</summary>
     /// <param name="builder">The concrete overload source builder.</param>
     /// <param name="read">Whether the operation reads into the value.</param>
     /// <param name="indent">Indentation at the operation site.</param>
     private static void AppendBinaryOperation(StringBuilder builder, bool read, int indent = 16)
     {
-        if (_binaryInlining != null) _binaryInlining.Append(builder, read, indent);
-        else builder.Append(' ', indent).AppendLine(read ? "reader.ReadValue(ref value);" : "writer.WriteValue(in value);");
+        builder.Append(' ', indent).AppendLine(read ? "global::LuminPack.LuminPackSerializer.Deserialize(ref reader, ref value);" : "global::LuminPack.LuminPackSerializer.Serialize(ref writer, in value);");
     }
 
-    /// <summary>Expands JSON operations for concrete entries while leaving analysis-only signature rendering body-free.</summary>
+    /// <summary>Forwards a convenience entry to the unique state-based JSON implementation.</summary>
     /// <param name="builder">The concrete JSON source builder.</param>
     /// <param name="read">Whether the operation reads JSON.</param>
     /// <param name="indent">Indentation at the operation site.</param>
     private static void AppendJsonOperation(StringBuilder builder, bool read, int indent = 16)
     {
-        if (_binaryInlining != null) _binaryInlining.AppendJson(builder, read, indent);
-        else builder.Append(' ', indent).AppendLine(read ? "reader.ReadValue(ref value);" : "writer.WriteValue(in value);");
+        builder.Append(' ', indent).AppendLine(read ? "global::LuminPack.LuminPackSerializer.DeserializeJson(ref reader, ref value);" : "global::LuminPack.LuminPackSerializer.SerializeJson(ref writer, in value);");
     }
 
     /// <summary>Uses a temporary syntax wrapper to preserve legacy indentation and XML formatting.</summary>
@@ -257,8 +272,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine();
         sb.AppendLine("                var evaluator = new LuminPackEvaluator(ref totalLength, state);");
         sb.AppendLine();
-        if (_binaryInlining != null) _binaryInlining.AppendCalculate(sb, indent: 16);
-        else sb.AppendLine("                evaluator.CalculateOffset(ref value);");
+        sb.AppendLine("                global::LuminPack.LuminPackSerializer.Sizeof(ref evaluator, ref value);");
         sb.AppendLine();
         sb.AppendLine("                return totalLength;");
         sb.AppendLine("            }");

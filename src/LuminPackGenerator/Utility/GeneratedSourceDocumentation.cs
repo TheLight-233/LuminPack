@@ -19,8 +19,17 @@ internal static class GeneratedSourceDocumentation
     internal static string Complete(string source, CSharpParseOptions options)
     {
         var root = CSharpSyntaxTree.ParseText(source, options.WithDocumentationMode(DocumentationMode.Parse)).GetRoot();
-        var additions = new List<(int Position, string Documentation)>();
-        foreach (var method in root.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
+        return CompleteRoot(root).ToFullString();
+    }
+
+    /// <summary>Adds method documentation directly to an already parsed generated tree.</summary>
+    /// <param name="root">A source root with documentation parsing enabled.</param>
+    /// <returns>The same executable syntax with missing XML trivia inserted.</returns>
+    internal static SyntaxNode CompleteRoot(SyntaxNode root)
+    {
+        string source = root.ToFullString();
+        var methods = new Dictionary<BaseMethodDeclarationSyntax, string>();
+        foreach (var method in root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<BaseMethodDeclarationSyntax>())
         {
             if (method.GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
                                                       trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia)))
@@ -71,24 +80,33 @@ internal static class GeneratedSourceDocumentation
             }
 
             documentation.Append(indentation);
-            additions.Add((position, documentation.ToString()));
+            methods.Add(method, documentation.ToString());
         }
 
-        if (additions.Count == 0)
+        if (methods.Count == 0)
         {
-            return source;
+            return root;
         }
 
-        var result = new StringBuilder(source.Length + additions.Sum(addition => addition.Documentation.Length));
-        int copied = 0;
-        foreach (var addition in additions.OrderBy(addition => addition.Position))
-        {
-            result.Append(source, copied, addition.Position - copied);
-            result.Append(addition.Documentation);
-            copied = addition.Position;
-        }
+        return new DocumentationInserter(methods).Visit(root);
+    }
 
-        return result.Append(source, copied, source.Length - copied).ToString();
+    /// <summary>Inserts XML trivia while avoiding traversal of unchanged executable bodies.</summary>
+    private sealed class DocumentationInserter : CSharpSyntaxRewriter
+    {
+        private readonly Dictionary<BaseMethodDeclarationSyntax, string> _methods;
+
+        /// <summary>Captures missing documentation for declarations in the current root.</summary>
+        /// <param name="methods">Method identities and their exact XML prefixes.</param>
+        internal DocumentationInserter(Dictionary<BaseMethodDeclarationSyntax, string> methods) { _methods = methods; }
+
+        /// <summary>Changes declaration trivia without visiting or rewriting its body.</summary>
+        /// <param name="node">The current declaration or structural container.</param>
+        /// <returns>The documented declaration or an unchanged structural traversal.</returns>
+        public override SyntaxNode Visit(SyntaxNode node)
+            => node is BaseMethodDeclarationSyntax method ? _methods.TryGetValue(method, out string documentation)
+                ? method.WithLeadingTrivia(method.GetLeadingTrivia().AddRange(SyntaxFactory.ParseLeadingTrivia(documentation))) : method
+                : base.Visit(node);
     }
 
     /// <summary>Describes the role of an emitted method in serialization, mapping, or dispatch.</summary>

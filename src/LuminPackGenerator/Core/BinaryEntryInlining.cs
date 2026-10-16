@@ -19,6 +19,7 @@ internal sealed class BinaryEntryInlining
     private readonly BinaryOperationPlanCache _cache;
     private readonly ITypeSymbol _root;
     private readonly Dictionary<string, ITypeSymbol> _types = new Dictionary<string, ITypeSymbol>(StringComparer.Ordinal);
+    private readonly Dictionary<string, BinaryOperationPlan> _plans = new Dictionary<string, BinaryOperationPlan>(StringComparer.Ordinal);
     private readonly Dictionary<string, MemberDeclarationSyntax> _layouts = new Dictionary<string, MemberDeclarationSyntax>(StringComparer.Ordinal);
     private readonly string _layoutPrefix;
     private int _next;
@@ -37,54 +38,29 @@ internal sealed class BinaryEntryInlining
                 .Select(value => value.ToString("x2", System.Globalization.CultureInfo.InvariantCulture))) + "_";
     }
 
-    /// <summary>Appends the complete binary operation in the current concrete entry body.</summary>
-    /// <param name="builder">The entry source builder.</param>
-    /// <param name="read">Whether this is a reader operation.</param>
-    /// <param name="indent">Indentation at the original formatter call.</param>
-    internal void Append(StringBuilder builder, bool read, int indent)
-        => AppendOperation(builder, read ? "ReadValue" : "WriteValue", read ? "reader" : "writer", read ? "ref" : "in", indent);
-
-    /// <summary>Expands the size operation without an intermediate evaluator extension call.</summary>
-    /// <param name="builder">The concrete size entry builder.</param>
-    /// <param name="indent">Indentation at the evaluator operation site.</param>
-    internal void AppendCalculate(StringBuilder builder, int indent)
-        => AppendOperation(builder, "CalculateOffset", "evaluator", "ref", indent);
-
-    /// <summary>Expands one JSON read or write operation directly into its concrete entry.</summary>
-    /// <param name="builder">The concrete JSON entry builder.</param>
-    /// <param name="read">Whether the operation reads JSON.</param>
-    /// <param name="indent">Indentation at the formatter call.</param>
-    internal void AppendJson(StringBuilder builder, bool read, int indent)
-        => AppendOperation(builder, read ? "ReadValue:json" : "WriteValue:json", read ? "reader" : "writer", read ? "ref" : "in", indent);
-
-    /// <summary>Instantiates a concrete operation at the entry's original state and value storage.</summary>
-    /// <param name="builder">The concrete entry source builder.</param>
-    /// <param name="operation">The formatter operation identity.</param>
-    /// <param name="state">The original writer, reader, or evaluator local.</param>
-    /// <param name="modifier">The fallback argument passing convention.</param>
-    /// <param name="indent">Indentation at the operation site.</param>
-    private void AppendOperation(StringBuilder builder, string operation, string state, string modifier, int indent)
+    /// <summary>Expands a retained formatter operation into its unique state-based serializer implementation.</summary>
+    /// <param name="operation">The original formatter operation identity.</param>
+    /// <returns>The expanded syntax block, or null when the original fallback must be retained.</returns>
+    internal BlockSyntax ExpandCore(string operation)
     {
-        var plan = _cache.Get(_root, _compilation, _metadata);
-        var result = Expand(plan, operation, new ExpressionSyntax[] { SyntaxFactory.IdentifierName(state), SyntaxFactory.IdentifierName("value") },
+        string state = operation == "CalculateOffset" ? "evaluator" : operation.StartsWith("Read", StringComparison.Ordinal) ? "reader" : "writer";
+        return Expand(GetPlan(_root), operation, new ExpressionSyntax[] { SyntaxFactory.IdentifierName(state), SyntaxFactory.IdentifierName("value") },
             new[] { true, true }, new HashSet<string>(StringComparer.Ordinal));
-        if (result == null)
-        {
-            builder.Append(' ', indent).Append(state).Append('.').Append(operation.Replace(":json", string.Empty)).Append('(').Append(modifier).AppendLine(" value);");
-            return;
-        }
-        string padding = new string(' ', indent);
-        builder.Append(padding).Append(result.NormalizeWhitespace("    ", Environment.NewLine).ToFullString()
-            .Replace(Environment.NewLine, Environment.NewLine + padding)).AppendLine();
     }
 
-    /// <summary>Appends private layout declarations after all selected entry bodies have been expanded.</summary>
-    /// <param name="builder">The concrete serializer partial contribution.</param>
-    internal void AppendLayouts(StringBuilder builder)
+    /// <summary>Validates an operation plan once within this immutable emission context.</summary>
+    /// <param name="type">The current root or nested operation type.</param>
+    /// <returns>The dependency-guarded plan shared by all entries for this root.</returns>
+    private BinaryOperationPlan GetPlan(ITypeSymbol type)
     {
-        foreach (var layout in _layouts.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => pair.Value))
-            builder.AppendLine().AppendLine(layout.NormalizeWhitespace("    ", Environment.NewLine).ToFullString());
+        string name = FormatterTypeName.Get(type);
+        if (!_plans.TryGetValue(name, out var plan))
+            _plans.Add(name, plan = _cache.Get(type, _compilation, _metadata));
+        return plan;
     }
+
+    /// <summary>Gets private layout syntax after all selected operation bodies have been expanded.</summary>
+    internal IEnumerable<MemberDeclarationSyntax> Layouts => _layouts.OrderBy(pair => pair.Key, StringComparer.Ordinal).Select(pair => pair.Value);
 
     /// <summary>Instantiates an operation with independent locals, reference aliases, and a local return target.</summary>
     /// <param name="plan">The closed type's reusable template set.</param>
@@ -247,7 +223,7 @@ internal sealed class BinaryEntryInlining
             var slot = _operation.Calls[annotation.Data];
             var arguments = call.ArgumentList.Arguments.Select(argument => (ExpressionSyntax)Visit(argument.Expression)).ToList();
             if (slot.Reduced) arguments.Insert(0, (ExpressionSyntax)Visit(((MemberAccessExpressionSyntax)call.Expression).Expression));
-            var plan = slot.Local ? _plan : _owner._cache.Get(_owner.Resolve(slot.TypeName), _owner._compilation, _owner._metadata);
+            var plan = slot.Local ? _plan : _owner.GetPlan(_owner.Resolve(slot.TypeName));
             var expanded = _owner.Expand(plan, slot.Operation, arguments, slot.Aliases, _stack);
             return expanded == null ? base.VisitExpressionStatement(node) : expanded.WithTriviaFrom(node);
         }

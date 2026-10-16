@@ -78,7 +78,7 @@ internal static class JsonOperationTemplates
         /// <returns>The helper-qualified reference or the unchanged identifier.</returns>
         public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
         {
-            if (!_members.Contains(node.Identifier.ValueText) ||
+            if (!_members.Contains(node.Identifier.ValueText) || node.Parent is QualifiedNameSyntax or AliasQualifiedNameSyntax ||
                 node.Parent is MemberAccessExpressionSyntax access && access.Name == node)
                 return base.VisitIdentifierName(node);
             return SyntaxFactory.ParseExpression(_qualified + "." + node.Identifier.ValueText).WithTriviaFrom(node);

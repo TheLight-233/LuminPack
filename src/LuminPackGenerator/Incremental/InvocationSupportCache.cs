@@ -10,6 +10,7 @@ internal sealed class InvocationSupportCache
 {
     internal readonly TypeEmissionCache Fragments = new TypeEmissionCache();
     internal readonly PartitionedSourceCache Files = new PartitionedSourceCache();
+    internal readonly BinaryOperationPlanCache Operations = new BinaryOperationPlanCache();
     private readonly System.Collections.Generic.Dictionary<string, InvocationSupportCache> _parts = new(System.StringComparer.Ordinal);
     private readonly object _gate = new object();
     private object _project;

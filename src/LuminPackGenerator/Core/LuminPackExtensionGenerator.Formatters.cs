@@ -42,8 +42,8 @@ public static partial class LuminPackExtensionGenerator
         return types
             .Where(static type => !ContainsTypeParameter(type))
             .Where(IsAotVisible)
+            .Where(type => !IsCustomGeneratorType(type) || SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly))
             .Where(IsStaticFormatterCandidate)
-            .Where(static type => !IsCustomGeneratorType(type))
             .OrderBy(static type => FormatterTypeName.Get(type), StringComparer.Ordinal)
             .GroupBy(static type => FormatterTypeName.Get(type), StringComparer.Ordinal)
             .Select(static group => group.First())
@@ -58,6 +58,11 @@ public static partial class LuminPackExtensionGenerator
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool CanRegisterFormatter(ITypeSymbol type, Compilation compilation, bool json)
     {
+        if (IsCustomGeneratorType(type))
+        {
+            var custom = CustomFormatterAnalyzer.Analyze((INamedTypeSymbol)type);
+            return !json || custom.SerializeJson != null && custom.DeserializeJson != null;
+        }
         if (type.TypeKind == TypeKind.Enum ||
             type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
         {
@@ -81,6 +86,8 @@ public static partial class LuminPackExtensionGenerator
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool CanRegisterCalculateFormatter(ITypeSymbol type, Compilation compilation)
     {
+        if (IsCustomGeneratorType(type))
+            return CustomFormatterAnalyzer.Analyze((INamedTypeSymbol)type).CalculateOffset != null;
         if (type.TypeKind == TypeKind.Enum ||
             type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
         {
@@ -169,6 +176,11 @@ public static partial class LuminPackExtensionGenerator
         bool emitOptionalVariants = true)
     {
         string typeName = field.TypeName;
+        if (IsCustomGeneratorType(field.TypeSymbol))
+        {
+            // Custom state overloads are emitted once by the assembly-wide invocation partition.
+            return;
+        }
         bool isEnum = field.TypeSymbol?.TypeKind == TypeKind.Enum;
         bool isNullable = field.TypeSymbol is INamedTypeSymbol nullableSymbol &&
             nullableSymbol.OriginalDefinition.SpecialType == SpecialType.System_Nullable_T;

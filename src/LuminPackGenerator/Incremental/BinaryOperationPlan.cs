@@ -255,8 +255,11 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
             {
                 var argument = call.ArgumentList.Arguments[reduced ? 0 : 1].Expression;
                 var type = _model.GetTypeInfo(argument).Type;
+                if ((type == null || type.TypeKind == TypeKind.Error) && _typeArguments.Any(pair => pair.Key == pair.Value))
+                    return base.VisitExpressionStatement(node);
                 if (type == null || type.TypeKind == TypeKind.Error)
                     return LuminPackExceptionHelper.ThrowInvalidOperationException<SyntaxNode>("Cannot resolve an inline operation argument: " + call);
+                if (IsOpenOperationType(type)) return base.VisitExpressionStatement(node);
                 var aliases = call.ArgumentList.Arguments.Select(item => CanAlias(item.Expression)).ToList();
                 if (reduced) aliases.Insert(0, true);
                 string state = reduced ? receiver : _model.GetTypeInfo(call.ArgumentList.Arguments[0].Expression).Type?.ToDisplayString();
@@ -270,6 +273,17 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
         Calls.Add(id, slot);
         return result.WithAdditionalAnnotations(new SyntaxAnnotation(BinaryOperationPlan.CallAnnotation, id));
     }
+
+    /// <summary>Keeps unknown generic payloads behind the shared state dispatch boundary.</summary>
+    /// <param name="type">The original operation argument type.</param>
+    /// <returns>Whether a type parameter remains unknown after closing the containing operation.</returns>
+    private bool IsOpenOperationType(ITypeSymbol type) => type switch
+    {
+        ITypeParameterSymbol parameter => !_typeArguments.TryGetValue(parameter.Name, out string argument) || argument == parameter.Name,
+        IArrayTypeSymbol array => IsOpenOperationType(array.ElementType),
+        INamedTypeSymbol named => named.TypeArguments.Any(IsOpenOperationType) || named.ContainingType != null && IsOpenOperationType(named.ContainingType),
+        _ => false
+    };
 
     /// <summary>Removes static local helper declarations after capturing their independently expandable bodies.</summary>
     /// <param name="node">The original helper declaration.</param>
@@ -290,6 +304,8 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
             if (visited == null) continue;
             if (statement is LocalDeclarationStatementSyntax { Declaration.Variables.Count: 1 } original &&
                 original.Declaration.Type is not RefTypeSyntax && original.Declaration.Variables[0].Initializer != null &&
+                !original.Declaration.Variables[0].Initializer.Value.DescendantNodesAndSelf().Any(expression =>
+                    expression is StackAllocArrayCreationExpressionSyntax or ImplicitStackAllocArrayCreationExpressionSyntax) &&
                 _model.GetDeclaredSymbol(original.Declaration.Variables[0]) is ILocalSymbol { Type: INamedTypeSymbol span } &&
                 span.ContainingNamespace.ToDisplayString() == "System" && span.Name is "Span" or "ReadOnlySpan" && span.TypeArguments.Length == 1)
             {

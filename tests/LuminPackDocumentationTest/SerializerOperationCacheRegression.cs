@@ -105,13 +105,13 @@ internal static class SerializerOperationCacheRegression
     private static Dictionary<string, string> Files(GeneratorDriver driver) => driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
         .ToDictionary(file => file.HintName, file => file.SourceText.ToString(), StringComparer.Ordinal);
 
-    /// <summary>Finds a concrete payload's stable serializer partition.</summary>
+    /// <summary>Finds a concrete payload's stable state implementation partition.</summary>
     /// <param name="files">Generated files.</param>
     /// <param name="type">The canonical payload type.</param>
     /// <returns>The concrete partition hint name.</returns>
-    private static string PayloadFile(Dictionary<string, string> files, string type) => files.Single(pair => pair.Key.StartsWith("LuminPackSerializer.", StringComparison.Ordinal) &&
+    private static string PayloadFile(Dictionary<string, string> files, string type) => files.Single(pair => pair.Key.EndsWith(".Extension.g.cs", StringComparison.Ordinal) &&
         CSharpSyntaxTree.ParseText(pair.Value, Parse).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Any(method =>
-            method.Identifier.ValueText == "Serialize" && method.TypeParameterList == null && method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == type))).Key;
+            method.Identifier.ValueText == "Serialize" && method.TypeParameterList == null && method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().TrimEnd('?') == type))).Key;
 
     /// <summary>Rejects generator failures and invalid generated declarations.</summary>
     /// <param name="output">The generated compilation.</param>

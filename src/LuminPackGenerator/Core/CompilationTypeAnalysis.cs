@@ -32,6 +32,8 @@ internal sealed class CompilationTypeAnalysis
         bool usesLuminPack)
     {
         FormatterTypes = formatterTypes;
+        FormatterTypesByName = formatterTypes.GroupBy(FormatterTypeName.Get, System.StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => group.First(), System.StringComparer.Ordinal);
         DeclaredTypes = declaredTypes;
         _formatterOwners = formatterOwners;
         _layoutOwners = layoutOwners;
@@ -40,6 +42,9 @@ internal sealed class CompilationTypeAnalysis
 
     /// <summary>Gets the formatter types.</summary>
     internal ImmutableArray<ITypeSymbol> FormatterTypes { get; }
+
+    /// <summary>Gets the compilation-local canonical formatter index shared by operation projections.</summary>
+    internal IReadOnlyDictionary<string, ITypeSymbol> FormatterTypesByName { get; }
 
     /// <summary>Gets the declared types.</summary>
     internal ImmutableArray<ProjectTypeData> DeclaredTypes { get; }

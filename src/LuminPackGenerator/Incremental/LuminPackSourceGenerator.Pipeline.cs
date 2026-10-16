@@ -22,6 +22,7 @@ public sealed partial class LuminPackSourceGenerator
         IncrementalValueProvider<LuminPackGenerationTier> mode)
     {
         var cache = new TypeEmissionCache();
+        var operations = new BinaryOperationPlanCache();
         var inputs = types.Combine(context.CompilationProvider).Combine(metadata).Combine(mode)
             .Select((input, _) =>
             {
@@ -32,10 +33,10 @@ public sealed partial class LuminPackSourceGenerator
                 return cache.PrepareInput(symbol, compilation, meta, tier);
             })
             .WithTrackingName("LuminPack.Incremental.TypeInput");
-        var emissions = inputs.Select(static (input, _) =>
+        var emissions = inputs.Select((input, _) =>
             {
                 Interlocked.Increment(ref IncrementalGenerationMetrics.PackableAnalysisTransforms);
-                return input.Evaluate(AnalyzeAndRender);
+                return input.Evaluate((symbol, compilation, meta, tier) => AnalyzeAndRender(symbol, compilation, meta, tier, operations));
             })
             .WithTrackingName("LuminPack.Incremental.TypeEmission");
 
@@ -82,8 +83,9 @@ public sealed partial class LuminPackSourceGenerator
     /// <param name="compilation">The compilation containing current symbols.</param>
     /// <param name="metadata">The current generation settings.</param>
     /// <param name="tier">The effective project generation tier.</param>
+    /// <param name="operations">Shared dependency-guarded operation plans.</param>
     /// <returns>The frozen source, diagnostic, and layout contributions.</returns>
-    private static FrozenTypeEmission AnalyzeAndRender(INamedTypeSymbol symbol, Compilation compilation, MetaInfo metadata, LuminPackGenerationTier tier)
+    private static FrozenTypeEmission AnalyzeAndRender(INamedTypeSymbol symbol, Compilation compilation, MetaInfo metadata, LuminPackGenerationTier tier, BinaryOperationPlanCache operations)
     {
         var data = CreateLuminDataInfo(symbol, compilation, metadata);
         var diagnostics = new List<Diagnostic>(data.Diagnostics);
@@ -101,10 +103,11 @@ public sealed partial class LuminPackSourceGenerator
         try
         {
             extension = LuminPackExtensionGenerator.CodeGenerator(data, metadata, compilation);
+            extension = SerializerCoreProjection.Project(extension, compilation, metadata, operations);
             union = data.isUnion && !data.isValueType ? LuminPackUnionDispatchCodeGenerator.Generate(data, compilation, metadata) : string.Empty;
+            if (!string.IsNullOrEmpty(union)) union = SerializerCoreProjection.RewriteCalls(union, compilation, metadata);
             if (!string.IsNullOrEmpty(extension))
             {
-                extension = GeneratedSourceDocumentation.Complete(extension, metadata.ParseOptions);
                 if (!string.IsNullOrEmpty(union)) union = GeneratedSourceDocumentation.Complete(union, metadata.ParseOptions);
             }
             else union = string.Empty;

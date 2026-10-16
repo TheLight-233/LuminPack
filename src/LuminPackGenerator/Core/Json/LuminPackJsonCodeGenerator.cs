@@ -402,7 +402,7 @@ public static class LuminPackJsonCodeGenerator
     /// <param name="indent">The indentation level of the generated statements.</param>
     private static void GenerateJsonSerializeField(StringBuilder sb, LuminDataField field, string valueExpr, string indent)
     {
-        if (field.FieldType == LuminDataType.Reference)
+        if (field.FieldType == LuminDataType.Reference && field.Type != LuminFiledType.Other)
         {
             sb.AppendLine(indent + "if (" + valueExpr + " == null)");
             sb.AppendLine(indent + "{");
@@ -682,7 +682,7 @@ public static class LuminPackJsonCodeGenerator
     /// <param name="indent">The indentation level of the generated statements.</param>
     private static void GenerateJsonDeserializeField(StringBuilder sb, LuminDataField field, string targetVar, string indent)
     {
-        if (field.FieldType == LuminDataType.Reference)
+        if (field.FieldType == LuminDataType.Reference && field.Type != LuminFiledType.Other)
         {
             sb.AppendLine(indent + "if (reader.IsNull())");
             sb.AppendLine(indent + "{");
@@ -1011,7 +1011,7 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
     /// <param name="indent">The indentation level of the generated statements.</param>
     private static void GenerateJsonSerializeFieldWithCircleReference(StringBuilder sb, LuminDataField field, string accessor, string indent)
     {
-        bool flag = field.FieldType == LuminDataType.Reference;
+        bool flag = field.FieldType == LuminDataType.Reference && field.Type != LuminFiledType.Other;
         string text = accessor + "." + field.Identifier;
         if (flag)
         {

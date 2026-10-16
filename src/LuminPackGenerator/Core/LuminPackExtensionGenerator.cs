@@ -6,13 +6,14 @@ using System.Text;
 using LuminPack.SourceGenerator;
 using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace LuminPack.Code.Core;
 
-/// <summary>Builds concrete formatter extensions and generic dispatch for one consuming assembly.</summary>
+/// <summary>Builds concrete root operations, shared formatter operations, and generic dispatch for one consuming assembly.</summary>
 public static partial class LuminPackExtensionGenerator
 {
-    /// <summary>Builds the formatter extensions for the analyzed type and its owned field types.</summary>
+    /// <summary>Builds the inline operations for one serializable root.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="metaInfo">The language, framework, and generation settings.</param>
     /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
@@ -20,54 +21,17 @@ public static partial class LuminPackExtensionGenerator
     public static string CodeGenerator(LuminDataInfo data, MetaInfo metaInfo, Compilation compilation)
     {
         StringBuilder sb = new StringBuilder();
-        HashSet<string> analyzedTypes = new HashSet<string>(StringComparer.Ordinal);
-        CompilationTypeAnalysis analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
-        INamedTypeSymbol owner = data.TypeSymbol;
-
-        foreach (LuminLocalFieldData localField in data.localFields)
-        {
-            if (localField.TypeSymbol is null)
-            {
-                GenerateFormatterExtensions(sb, localField, metaInfo, analyzedTypes);
-                continue;
-            }
-
-            foreach (LuminLocalFieldData formatterField in EnumerateFormatterFields(
-                localField.TypeSymbol,
-                new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default)))
-            {
-                if (!ContainsTypeParameter(formatterField.TypeSymbol) &&
-                    analysis.IsOwnedBy(formatterField.TypeSymbol, owner))
-                {
-                    GenerateFormatterExtensions(sb, formatterField, metaInfo, analyzedTypes);
-                }
-            }
-        }
-
-        foreach (LuminLocalFieldData formatterField in EnumerateFormatterFields(data))
-        {
-            if (!ContainsTypeParameter(formatterField.TypeSymbol) &&
-                analysis.IsOwnedBy(formatterField.TypeSymbol, owner))
-            {
-                GenerateFormatterExtensions(sb, formatterField, metaInfo, analyzedTypes);
-            }
-        }
-
         string typeName = GetGlobalTypeName(data);
-        if (TryAddAnalyzedType(analyzedTypes, "root:" + typeName))
+        if (data.isUnion && data.isValueType)
         {
-            if (data.isUnion && data.isValueType)
-            {
-                LuminPackUnionCodeGenerator.GenerateCaseMapStruct(data, sb);
-            }
-            GenerateRootBinaryExtensions(sb, data, typeName, metaInfo);
-            GenerateRootJsonExtensions(sb, data, typeName, metaInfo);
-            // Local layout mirrors and the private-member accessors are no longer emitted per type.
-            // Every Local for the assembly is partitioned into LuminPack.LocalLayouts.<hash>.g.cs
-            // shards (see LuminPackLocalLayoutGenerator), which is what makes nesting depth
-            // irrelevant: a mirror emitted once is reachable from any generated formatter in the
-            // same assembly.
+            LuminPackUnionCodeGenerator.GenerateCaseMapStruct(data, sb);
         }
+
+        // The root owns its full inline implementation. Shared non-root formatters are emitted
+        // once by the assembly invocation pipeline, so multiple roots can reuse one state API.
+        GenerateRootBinaryExtensions(sb, data, typeName, metaInfo);
+        GenerateRootJsonExtensions(sb, data, typeName, metaInfo);
+        // Local layout mirrors and accessors are partitioned into shared assembly files.
 
         return GenerateExtension(sb, GetExtensionClassName(compilation));
     }
@@ -79,46 +43,14 @@ public static partial class LuminPackExtensionGenerator
     /// <returns>The result of the operation.</returns>
     public static string GenerateSerializerInvocationSupport(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis? reachability = null)
     {
-        CompilationTypeAnalysis analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
-
-        // Full mode emits every no-owner type observed in the project.  Prune mode restricts the
-        // source set to the reachable no-owner types and suppresses optional variants (compress /
-        // fresh-read), which are only ever referenced through [LuminPackable] member graphs (owned
-        // types) and are therefore never needed by a reachable no-owner formatter.
-        IEnumerable<ITypeSymbol> sourceTypes = reachability is null
-            ? analysis.FormatterTypes.Where(type => !analysis.HasOwner(type))
-            : reachability.ReachableNoOwnerTypes;
-
-        ITypeSymbol[] bodyTypes = sourceTypes
-            .Where(static type => !ContainsTypeParameter(type))
-            .Where(IsAotVisible)
-            .Where(IsStaticFormatterCandidate)
-            .Where(static type => !IsCustomGeneratorType(type))
-            .OrderBy(static type => FormatterTypeName.Get(type), StringComparer.Ordinal).ToArray();
-        DispatchEntry[] dispatch = GetOrderedFormatterTypes(compilation, reachability)
-            .Select((type, index) => new DispatchEntry(index, FormatterTypeName.Get(type),
-                CanRegisterFormatter(type, compilation, json: false), CanRegisterFormatter(type, compilation, json: true),
-                CanRegisterCalculateFormatter(type, compilation)))
-            .Where(static entry => entry.Binary || entry.Json || entry.Calculate).ToArray();
-        string extensionName = GetExtensionClassName(compilation);
-        string Render()
-        {
-            var sb = new StringBuilder();
-            var analyzedTypes = new HashSet<string>(StringComparer.Ordinal);
-            foreach (ITypeSymbol type in bodyTypes)
-            {
-                GenerateFormatterExtensions(sb, new LuminLocalFieldData
-                {
-                    TypeName = FormatterTypeName.Get(type),
-                    TypeSymbol = type,
-                    Name = "value",
-                    IsValue = type.IsValueType
-                }, metaInfo, analyzedTypes, emitOptionalVariants: reachability is null);
-            }
-            AppendGenericDispatchExtensions(sb, metaInfo, extensionName, dispatch);
-            return GenerateExtension(sb, extensionName);
-        }
-        return Render();
+        var files = GenerateInvocationFiles(compilation, metaInfo, reachability, new InvocationSupportCache());
+        var roots = files.Select(file => Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(file.Text, metaInfo.ParseOptions).GetCompilationUnitRoot()).ToArray();
+        var builder = new StringBuilder("#nullable enable" + Environment.NewLine);
+        foreach (string directive in roots.SelectMany(root => root.Usings).Select(directive => directive.ToString()).Distinct(StringComparer.Ordinal))
+            builder.AppendLine(directive);
+        foreach (var root in roots)
+            foreach (var member in root.Members) builder.AppendLine(member.ToFullString());
+        return builder.ToString();
     }
 
     /// <summary>Provides dispatch entry functionality.</summary>
@@ -152,9 +84,8 @@ public static partial class LuminPackExtensionGenerator
     }
 
     /// <summary>
-    /// True when the type declares [LuminPackable(GeneratorType.Custom)]: the generator emits no
-    /// formatter extensions for it — user-written static methods are registered at runtime
-    /// through LuminPackSerializer.Register instead.
+    /// True when the type declares [LuminPackable(GeneratorType.Custom)]: user-written static
+    /// methods are registered once and reached through generated Serializer state overloads.
     /// </summary>
     /// <param name="type">The type or symbol to analyze.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
@@ -207,7 +138,7 @@ public static partial class LuminPackExtensionGenerator
 
             // Keep the closed unmanaged bulk copy in its caller. Managed arrays contain
             // a loop plus null/growth slow paths, which are cheaper behind one call.
-            return array.ElementType.IsUnmanagedType;
+            return EmitterTypeTraits.CanUseUnmanagedSerialization(array.ElementType);
         }
 
         if (field.TypeSymbol is not INamedTypeSymbol named)
@@ -225,7 +156,7 @@ public static partial class LuminPackExtensionGenerator
         if (namespaceName == "System.Collections.Generic" && named.Name == "List" &&
             named.TypeArguments.Length == 1)
         {
-            return named.TypeArguments[0].IsUnmanagedType;
+            return EmitterTypeTraits.CanUseUnmanagedSerialization(named.TypeArguments[0]);
         }
 
         return true;
@@ -447,7 +378,7 @@ public static partial class LuminPackExtensionGenerator
     {
         bool inlineBulkRead = localData.TypeSymbol is Microsoft.CodeAnalysis.INamedTypeSymbol listType &&
                               listType.TypeArguments.Length == 1 &&
-                              listType.TypeArguments[0].IsUnmanagedType;
+                              EmitterTypeTraits.CanUseUnmanagedSerialization(listType.TypeArguments[0]);
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine(inlineBulkRead
             ? "        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]"
@@ -513,7 +444,7 @@ public static partial class LuminPackExtensionGenerator
     private static bool IsExactManagedArrayType(ITypeSymbol typeSymbol)
     {
         return typeSymbol is IArrayTypeSymbol { Rank: 1 } array &&
-               !array.ElementType.IsUnmanagedType && !ContainsTypeParameter(array.ElementType);
+               !EmitterTypeTraits.CanUseUnmanagedSerialization(array.ElementType) && !ContainsTypeParameter(array.ElementType);
     }
 
     /// <summary>Determines whether the supplied value has the exact dictionary type classification.</summary>

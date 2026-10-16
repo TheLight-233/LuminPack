@@ -99,7 +99,7 @@ public static partial class LuminPackCodeGenerator
                         for (int m = 0; m < field.ClassFields.Count; m++)
                         {
                             LuminDataField nestedField3 = field.ClassFields[m];
-                            if (nestedField3.FieldType == LuminDataType.Reference)
+                            if (nestedField3.FieldType == LuminDataType.Reference && nestedField3.Type != LuminFiledType.Other)
                             {
                                 if (nestedField3.IsPrivate)
                                 {
@@ -245,7 +245,7 @@ public static partial class LuminPackCodeGenerator
                         for (int k = 0; k < field.ClassFields.Count; k++)
                         {
                             LuminDataField nestedField2 = field.ClassFields[k];
-                            if (nestedField2.FieldType == LuminDataType.Reference)
+                            if (nestedField2.FieldType == LuminDataType.Reference && nestedField2.Type != LuminFiledType.Other)
                             {
                                 if (nestedField2.IsPrivate)
                                 {
@@ -355,7 +355,7 @@ public static partial class LuminPackCodeGenerator
                     for (int i = 0; i < field.ClassFields.Count; i++)
                     {
                         LuminDataField nestedField = field.ClassFields[i];
-                        if (nestedField.FieldType == LuminDataType.Reference)
+                        if (nestedField.FieldType == LuminDataType.Reference && nestedField.Type != LuminFiledType.Other)
                         {
                             if (nestedField.IsPrivate)
                             {

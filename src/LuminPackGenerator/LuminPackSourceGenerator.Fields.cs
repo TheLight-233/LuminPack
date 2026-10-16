@@ -28,6 +28,13 @@ namespace LuminPack.SourceGenerator
 
             field.FieldType = type.IsReferenceType ? LuminDataType.Reference : LuminDataType.Value;
 
+            // A custom formatter owns its complete payload, including null and object framing.
+            if (global::LuminPack.Code.Core.LuminPackExtensionGenerator.IsCustomGeneratorType(type))
+            {
+                field.Type = LuminFiledType.Other;
+                return;
+            }
+
             if (type is ITypeParameterSymbol typeSymbol)
             {
 
@@ -173,7 +180,8 @@ namespace LuminPack.SourceGenerator
                     INamedTypeSymbol originalSymbol = namedTypeArg.OriginalDefinition;
                     string metadataName = $"{originalSymbol.ContainingNamespace}.{originalSymbol.MetadataName}";
 
-                    if (CodeEmitterTypeCatalog.SupportedMetadataNames.Contains(metadataName))
+                    if (CodeEmitterTypeCatalog.SupportedMetadataNames.Contains(metadataName) ||
+                        global::LuminPack.Code.Core.LuminPackExtensionGenerator.IsCustomGeneratorType(namedTypeArg))
                     {
                         field.Type = LuminFiledType.Other;
 
@@ -240,7 +248,8 @@ namespace LuminPack.SourceGenerator
                 INamedTypeSymbol originalSymbol = elementNamedType.OriginalDefinition;
                 string metadataName = $"{originalSymbol.ContainingNamespace}.{originalSymbol.MetadataName}";
 
-                if (CodeEmitterTypeCatalog.SupportedMetadataNames.Contains(metadataName))
+                if (CodeEmitterTypeCatalog.SupportedMetadataNames.Contains(metadataName) ||
+                    global::LuminPack.Code.Core.LuminPackExtensionGenerator.IsCustomGeneratorType(elementNamedType))
                 {
                     field.Type = LuminFiledType.Other;
 

@@ -715,6 +715,13 @@ public static partial class LuminPackCodeGenerator
                 sb.AppendLine(indentation + targetObj + " = " + field.Name + "TempValue" + depthSuffix + ";");
                 break;
             default:
+                // A formatter consumes through reader state, which can lag a local offset used by
+                // inline collection members. Synchronize at the boundary and resume inline reads
+                // from the formatter's resulting position.
+                if (field.Type == LuminFiledType.Other)
+                {
+                    sb.AppendLine(indentation + "reader.FlushCurrentIndex(" + offset + ");");
+                }
                 if (field.IsCompress)
                 {
                     sb.AppendLine(indentation + "reader.ReadValueWithCompress(ref " + targetObj + ");");
@@ -727,6 +734,10 @@ public static partial class LuminPackCodeGenerator
                 else
                 {
                     sb.AppendLine(indentation + "reader.ReadValue(ref " + targetObj + ");");
+                }
+                if (field.Type == LuminFiledType.Other)
+                {
+                    sb.AppendLine(indentation + offset + " = reader.GetCurrentSpanIndex();");
                 }
                 break;
         }

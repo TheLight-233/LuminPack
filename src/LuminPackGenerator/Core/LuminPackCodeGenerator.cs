@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using LuminPack.SourceGenerator;
+using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.Code.Core;
@@ -344,7 +345,7 @@ public static partial class LuminPackCodeGenerator
     private static bool IsExactManagedArrayType(LuminDataField field)
     {
         return field.TypeSymbol is IArrayTypeSymbol { Rank: 1 } array &&
-               !array.ElementType.IsUnmanagedType && !ContainsTypeParameter(array.ElementType);
+               !EmitterTypeTraits.CanUseUnmanagedSerialization(array.ElementType) && !ContainsTypeParameter(array.ElementType);
     }
 
     /// <summary>Determines whether the supplied value has the exact fresh collection type classification.</summary>

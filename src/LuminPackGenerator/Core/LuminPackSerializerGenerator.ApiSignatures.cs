@@ -26,7 +26,7 @@ public static partial class LuminPackSerializerGenerator
         foreach (var type in types)
         {
             string name = FormatterTypeName.Get(type);
-            key.Append(name.Length).Append(':').Append(name).Append('=').Append((int)type.DeclaredAccessibility).Append('|');
+            key.Append(name.Length).Append(':').Append(name).Append('=').Append(HasPublicSignature(type)).Append('|');
         }
         string identity = key.ToString();
         var cache = ApiSignatures.GetValue(FileSemanticObservationCache.For(compilation).ProjectGuard, _ => new ApiSignatureCache());
@@ -57,9 +57,9 @@ public static partial class LuminPackSerializerGenerator
         const string header = "using System; using System.Buffers; using System.IO; using System.Threading; using System.Threading.Tasks; " +
             "using LuminPack.Core; using LuminPack.Option; using LuminPack.Utility; namespace LuminPack { public static class LuminPackSerializer {";
         string previousAccess = _currentAccess;
-        var previousInlining = _binaryInlining;
+        var previousClassification = _currentContainsReferences;
         _currentAccess = "public";
-        _binaryInlining = null;
+        _currentContainsReferences = null;
         try
         {
             var concrete = new StringBuilder();
@@ -73,7 +73,7 @@ public static partial class LuminPackSerializerGenerator
                 for (int index = 0; index < templates.Length; index++)
                 {
                     string signature = templates[index].Replace(placeholder, typeName);
-                    if (type.DeclaredAccessibility != Accessibility.Public)
+                    if (!HasPublicSignature(type))
                         signature = signature.Replace("public static", "internal static");
                     source.AppendLine(signature);
                     orderedKinds.Add((SerializerApiKind)(1 << index));
@@ -94,7 +94,7 @@ public static partial class LuminPackSerializerGenerator
         finally
         {
             _currentAccess = previousAccess;
-            _binaryInlining = previousInlining;
+            _currentContainsReferences = previousClassification;
         }
     }
 

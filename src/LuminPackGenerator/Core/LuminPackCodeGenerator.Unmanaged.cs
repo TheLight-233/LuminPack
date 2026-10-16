@@ -17,6 +17,7 @@ public static partial class LuminPackCodeGenerator
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsPureValueTypeStruct(LuminDataField field)
     {
+        if (field.TypeSymbol?.IsUnmanagedType == true && !EmitterTypeTraits.CanUseUnmanagedSerialization(field.TypeSymbol)) return false;
         if (field.Type != LuminFiledType.Struct)
         {
             return false;
@@ -27,6 +28,10 @@ public static partial class LuminPackCodeGenerator
         }
         foreach (LuminDataField classField in field.ClassFields)
         {
+            if (classField.Type == LuminFiledType.Other)
+            {
+                return false;
+            }
             if (classField.FieldType == LuminDataType.Reference)
             {
                 return false;
@@ -51,7 +56,7 @@ public static partial class LuminPackCodeGenerator
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool IsPureUnmanagedStruct(LuminDataInfo data)
     {
-        return data.isValueType && data.TypeSymbol?.IsUnmanagedType == true;
+        return data.isValueType && EmitterTypeTraits.CanUseUnmanagedSerialization(data.TypeSymbol);
     }
 
     /// <summary>Determines whether the supplied value has the mergeable field classification.</summary>

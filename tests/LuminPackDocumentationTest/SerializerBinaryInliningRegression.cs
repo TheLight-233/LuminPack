@@ -219,9 +219,7 @@ internal static class SerializerBinaryInliningRegression
             {
                 inspected++;
                 var calls = method.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
-                // Contract: JSON entries expand in place exactly like binary ones, so no concrete entry
-                // may retain a shared per-type LuminPackExtensions_ formatter or accessor call. The
-                // expanded JSON body references its owning Json_<Type> helper members directly instead.
+                // Convenience entries use the same state overloads as framework-internal calls.
                 foreach (var call in calls)
                 {
                     var symbol = model.GetSymbolInfo(call).Symbol as IMethodSymbol;
@@ -232,6 +230,29 @@ internal static class SerializerBinaryInliningRegression
             }
         }
         Require(inspected == 14, "Expected every concrete binary, asynchronous, JSON, and size payload entry.");
+        var implementations = output.SyntaxTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+            .Where(method => method.TypeParameterList == null && method.ParameterList.Parameters.Count == 2 &&
+                method.ParameterList.Parameters[1].Type?.ToString() is "global::Payload" or "global::Payload?" &&
+                method.ParameterList.Parameters[0].Type?.ToString().Contains("LuminPack", StringComparison.Ordinal) == true &&
+                method.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "Sizeof").ToArray();
+        Require(implementations.Length == 5, "Expected one state implementation for each payload operation.");
+        foreach (var method in implementations)
+        {
+            var model = output.GetSemanticModel(method.SyntaxTree);
+            Require(!method.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Any(), "A state implementation retained an ordinary local formatter helper.");
+            foreach (var call in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                var symbol = model.GetSymbolInfo(call).Symbol as IMethodSymbol;
+                Require(symbol?.ContainingType.Name != "LuminPackSerializer" &&
+                    !(symbol?.ContainingType.Name.StartsWith("LuminPackExtensions_", StringComparison.Ordinal) ?? false),
+                    "An ordinary payload field retained a serializer or extension call instead of expanding: " + call);
+            }
+        }
+        var bridges = output.SyntaxTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+            .Where(method => method.Identifier.ValueText is "WriteValue" or "ReadValue" or "CalculateOffset" &&
+                method.Parent is ClassDeclarationSyntax owner && owner.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal)).ToArray();
+        Require(bridges.Length == 5 && bridges.All(method => method.TypeParameterList?.Parameters.Count == 1 && method.ExpressionBody != null),
+            "The compatibility surface must contain only five generic forwarding methods without concrete formatter bodies.");
         // The property-name cache stays owned by the per-type Json_<Type> helper: it is declared
         // once for the whole compilation, never lifted and copied into each concrete entry.
         string[] generated = output.SyntaxTrees.Select(tree => tree.ToString()).ToArray();

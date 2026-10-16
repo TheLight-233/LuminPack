@@ -137,10 +137,16 @@ internal static class SerializerUnionInliningRegression
                 bool perTypeFormatter = calls.Any(call => (model.GetSymbolInfo(call).Symbol as IMethodSymbol) is { } symbol &&
                     symbol.ContainingType.Name.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
 
-                // Contract: binary, size, and JSON entries all inline down to their boundary. The union
-                // JSON entry expands in place and forwards only to its hidden virtual union method, so
-                // none of them may retain a shared per-type formatter call.
+                // Convenience entries forward to the sole state implementation. The state implementation
+                // retains the hidden virtual Union boundary and never dispatches through a type map.
                 Require(!perTypeFormatter, "A union entry retained a formatter call: " + method);
+                var implementations = calls.Select(call => model.GetSymbolInfo(call).Symbol as IMethodSymbol)
+                    .Where(symbol => symbol?.ContainingType.Name == "LuminPackSerializer" && symbol.Parameters.Length == 2 &&
+                        symbol.Parameters[0].Type.ContainingNamespace.ToDisplayString() == "LuminPack.Core")
+                    .SelectMany(symbol => symbol!.DeclaringSyntaxReferences.Select(reference => reference.GetSyntax()))
+                    .OfType<MethodDeclarationSyntax>().ToArray();
+                Require(implementations.Length == 1, "A Union convenience entry must call exactly one state implementation: " + name);
+                calls = implementations[0].DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
 
                 foreach (var call in calls)
                 {
@@ -151,7 +157,7 @@ internal static class SerializerUnionInliningRegression
                     }
                 }
 
-                Require(!method.DescendantNodes().OfType<SwitchStatementSyntax>().Any(statement =>
+                Require(!implementations[0].DescendantNodes().OfType<SwitchStatementSyntax>().Any(statement =>
                         statement.Expression.DescendantNodesAndSelf().OfType<IdentifierNameSyntax>().Any(identifier =>
                             identifier.Identifier.ValueText.Contains("CaseMap", StringComparison.Ordinal)) ||
                         statement.Expression.ToString().Contains("GetMethodTable", StringComparison.Ordinal)),

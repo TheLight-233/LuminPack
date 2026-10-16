@@ -219,7 +219,7 @@ public static partial class LuminPackCodeGenerator
                             for (int m = fieldIndex4; m < elementField4.ClassFields.Count; m++)
                             {
                                 LuminDataField nestedField6 = elementField4.ClassFields[m];
-                                if (nestedField6.FieldType == LuminDataType.Reference)
+                                if (nestedField6.FieldType == LuminDataType.Reference && nestedField6.Type != LuminFiledType.Other)
                                 {
                                     string fieldVariable6 = "serialize" + nestedField6.Name + "Field" + depthSuffix;
                                     if (nestedField6.IsPrivate)
@@ -447,7 +447,7 @@ public static partial class LuminPackCodeGenerator
                             for (int j = fieldIndex; j < elementField.ClassFields.Count; j++)
                             {
                                 LuminDataField nestedField3 = elementField.ClassFields[j];
-                                if (nestedField3.FieldType == LuminDataType.Reference)
+                                if (nestedField3.FieldType == LuminDataType.Reference && nestedField3.Type != LuminFiledType.Other)
                                 {
                                     string fieldVariable5 = "serialize" + nestedField3.Name + "Field" + depthSuffix;
                                     if (nestedField3.IsPrivate)
@@ -576,7 +576,7 @@ public static partial class LuminPackCodeGenerator
                     for (int fieldIndex7 = 0; fieldIndex7 < field.ClassFields.Count; fieldIndex7++)
                     {
                         LuminDataField nestedField7 = field.ClassFields[fieldIndex7];
-                        if (nestedField7.FieldType == LuminDataType.Reference)
+                        if (nestedField7.FieldType == LuminDataType.Reference && nestedField7.Type != LuminFiledType.Other)
                         {
                             string fieldVariable9 = "serialize" + nestedField7.Name + "Field" + depthSuffix;
                             if (nestedField7.IsPrivate)
@@ -682,6 +682,14 @@ public static partial class LuminPackCodeGenerator
                 }
                 break;
             default:
+                // Formatter calls operate on the writer's current index, while nested collection
+                // layouts may still be accumulating their position in a local offset variable.
+                // Publish that position before crossing the formatter boundary and copy its
+                // resulting position back so the following inline fields continue at the right byte.
+                if (field.Type == LuminFiledType.Other)
+                {
+                    sb.AppendLine(indentation + "writer.FlushCurrentIndex(" + offset + ");");
+                }
                 if (field.IsCompress)
                 {
                     sb.AppendLine(indentation + "writer.WriteValueWithCompress(" + fieldPath + ");");
@@ -689,6 +697,10 @@ public static partial class LuminPackCodeGenerator
                 else
                 {
                     sb.AppendLine(indentation + "writer.WriteValue(" + fieldPath + ");");
+                }
+                if (field.Type == LuminFiledType.Other)
+                {
+                    sb.AppendLine(indentation + offset + " = writer.GetCurrentSpanIndex();");
                 }
                 break;
         }

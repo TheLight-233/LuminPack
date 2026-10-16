@@ -125,8 +125,8 @@ public static class DictionaryEmitter
         string valueType = GetSecondGeneric(fieldData.TypeName);
         bool unmanagedPair = fieldData.TypeSymbol is Microsoft.CodeAnalysis.INamedTypeSymbol dictionaryType &&
                              dictionaryType.TypeArguments.Length == 2 &&
-                             dictionaryType.TypeArguments[0].IsUnmanagedType &&
-                             dictionaryType.TypeArguments[1].IsUnmanagedType;
+                             EmitterTypeTraits.CanUseUnmanagedSerialization(dictionaryType.TypeArguments[0]) &&
+                             EmitterTypeTraits.CanUseUnmanagedSerialization(dictionaryType.TypeArguments[1]);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
@@ -265,8 +265,8 @@ public static class DictionaryEmitter
         string valueType = GetSecondGeneric(fieldData.TypeName);
         bool unmanagedPair = fieldData.TypeSymbol is Microsoft.CodeAnalysis.INamedTypeSymbol dictionaryType &&
                              dictionaryType.TypeArguments.Length == 2 &&
-                             dictionaryType.TypeArguments[0].IsUnmanagedType &&
-                             dictionaryType.TypeArguments[1].IsUnmanagedType;
+                             EmitterTypeTraits.CanUseUnmanagedSerialization(dictionaryType.TypeArguments[0]) &&
+                             EmitterTypeTraits.CanUseUnmanagedSerialization(dictionaryType.TypeArguments[1]);
 
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();

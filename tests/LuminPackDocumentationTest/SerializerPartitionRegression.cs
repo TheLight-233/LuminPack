@@ -112,8 +112,14 @@ internal static class SerializerPartitionRegression
             "Independent formatter and six dispatch/registration partitions were not emitted.");
         string legacy = GeneratedInvocation(input);
         var expected = MethodInventory([legacy]);
-        var actual = MethodInventory(original.Where(pair => pair.Key.StartsWith("LuminPack.Formatter.", StringComparison.Ordinal) || pair.Key.StartsWith("LuminPack.Dispatch.", StringComparison.Ordinal)).Select(pair => pair.Value));
+        var actual = MethodInventory(original.Where(pair => pair.Key.StartsWith("LuminPack.Formatter.", StringComparison.Ordinal) ||
+            pair.Key.StartsWith("LuminPack.Dispatch.", StringComparison.Ordinal) || pair.Key == "LuminPack.FormatterBridges.g.cs").Select(pair => pair.Value));
         Require(expected.Count == actual.Count && expected.All(pair => actual.GetValueOrDefault(pair.Key) == pair.Value), "Formatter or generic dispatch partition changed executable method text or documentation.");
+        GeneratorDriver typeDriver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator()], parseOptions: Parse);
+        typeDriver.RunGeneratorsAndUpdateCompilation(input, out var legacyOutput, out _);
+        legacyOutput = legacyOutput.AddSyntaxTrees(CSharpSyntaxTree.ParseText(legacy, Parse),
+            CSharpSyntaxTree.ParseText(LuminPackSerializerGenerator.GenerateSerializerClass(input, new MetaInfo(Parse, Parse.LanguageVersion, true, true, true)), Parse));
+        CheckErrors(legacyOutput);
         long count = ReadMetric("InvocationFormatterBuilds");
         var edited = Replace(input, "Choice.cs", "Second", "Renamed");
         driver = driver.RunGeneratorsAndUpdateCompilation(edited, out output, out _);

@@ -84,11 +84,22 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            ReadOnlySequence<byte> buffer, ref " + typeName + " value,");
         sb.AppendLine("            LuminPackSerializerOption? options = default)");
         sb.AppendLine("        {");
-        sb.AppendLine("            if (!RuntimeHelpers.IsReferenceOrContainsReferences<" + typeName + ">())");
-        sb.AppendLine("            {");
-        AppendUnmanagedSequenceRead(sb, typeName, indent: 16);
-        sb.AppendLine("            }");
-        sb.AppendLine();
+        bool? containsReferences = _currentContainsReferences;
+        if (containsReferences == false)
+        {
+            AppendUnmanagedSequenceRead(sb, typeName, indent: 12);
+            sb.AppendLine("        }");
+            sb.AppendLine();
+            return;
+        }
+        if (containsReferences == null)
+        {
+            sb.AppendLine("            if (!RuntimeHelpers.IsReferenceOrContainsReferences<" + typeName + ">())");
+            sb.AppendLine("            {");
+            AppendUnmanagedSequenceRead(sb, typeName, indent: 16);
+            sb.AppendLine("            }");
+            sb.AppendLine();
+        }
         sb.AppendLine("            if (!buffer.IsSingleSegment)");
         sb.AppendLine("            {");
         sb.AppendLine("                var staging = LuminBufferWriterPool.Rent();");

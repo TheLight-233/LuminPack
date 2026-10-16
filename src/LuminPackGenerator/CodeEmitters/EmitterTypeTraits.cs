@@ -1,5 +1,7 @@
 using System.Linq;
+using System.Collections.Generic;
 using LuminPack.Code;
+using LuminPack.Code.Core;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator.CodeEmitters;
@@ -8,18 +10,22 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 internal static class EmitterTypeTraits
 {
     /// <summary>
-    /// Resolves the unmanaged decision when Roslyn can prove it at generation time.
-    /// An unmanaged-constrained type parameter is already definitive; other open
-    /// types must keep the RuntimeHelpers fallback for each closed instantiation.
+    /// Resolves whether raw serialization can preserve the formatter contract.
+    /// Open types retain per-value dispatch because an unmanaged constraint does not exclude Custom.
     /// </summary>
     /// <param name="type">The type or symbol to analyze.</param>
     /// <param name="isUnmanaged">Receives the is unmanaged produced by the operation.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     public static bool TryGetIsUnmanaged(ITypeSymbol type, out bool isUnmanaged)
     {
+        if (type is not null && ContainsUndeterminedTypeParameter(type))
+        {
+            isUnmanaged = false;
+            return true;
+        }
         if (type?.IsUnmanagedType == true)
         {
-            isUnmanaged = true;
+            isUnmanaged = CanUseUnmanagedSerialization(type);
             return true;
         }
 
@@ -37,6 +43,26 @@ internal static class EmitterTypeTraits
 
         isUnmanaged = false;
         return true;
+    }
+
+    /// <summary>Checks whether a closed unmanaged value has no custom formatter in its storage graph.</summary>
+    /// <param name="type">The value type considered for raw copying.</param>
+    /// <returns>Whether raw copying preserves every nested formatter boundary.</returns>
+    internal static bool CanUseUnmanagedSerialization(ITypeSymbol type)
+        => type?.IsUnmanagedType == true && !ContainsUndeterminedTypeParameter(type) &&
+           !ContainsCustomFormatter(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
+
+    /// <summary>Finds custom contracts inside finite unmanaged storage without following reference graphs.</summary>
+    /// <param name="type">The current storage type.</param>
+    /// <param name="visited">Storage types already inspected.</param>
+    /// <returns>Whether the storage contains a custom formatter contract.</returns>
+    private static bool ContainsCustomFormatter(ITypeSymbol type, HashSet<ITypeSymbol> visited)
+    {
+        if (!visited.Add(type)) return false;
+        if (LuminPackExtensionGenerator.IsCustomGeneratorType(type)) return true;
+        return type is INamedTypeSymbol { TypeKind: TypeKind.Struct } named &&
+            (named.TypeArguments.Any(argument => ContainsCustomFormatter(argument, visited)) ||
+             named.GetMembers().OfType<IFieldSymbol>().Any(field => !field.IsStatic && ContainsCustomFormatter(field.Type, visited)));
     }
 
     /// <summary>Obtains the first type argument for the supplied input.</summary>
@@ -66,6 +92,8 @@ internal static class EmitterTypeTraits
     /// <returns>The result of the operation.</returns>
     public static string GetArrayPoolClearExpression(LuminLocalFieldData fieldData, string elementType)
     {
+        var element = GetFirstTypeArgument(fieldData);
+        if (element?.IsUnmanagedType == true) return "false";
         if (TryGetIsUnmanaged(GetFirstTypeArgument(fieldData), out bool isUnmanaged))
         {
             return isUnmanaged ? "false" : "true";

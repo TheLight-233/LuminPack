@@ -24,20 +24,46 @@ internal static class LuminPackSerializerDocumentation
     internal static string Enhance(string source, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata)
     {
         source = GeneratedSourceDocumentation.Complete(source, metadata.ParseOptions);
+        var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.Parse)).GetRoot();
+        return Enhance(root, source, types, compilation, metadata);
+    }
+
+    /// <summary>Documents a projected state implementation without reparsing its complete method bodies.</summary>
+    /// <param name="root">The normalized source with documentation parsing enabled.</param>
+    /// <param name="types">Concrete payloads represented by the state methods.</param>
+    /// <param name="compilation">Current serialization metadata inputs.</param>
+    /// <param name="metadata">Current generation settings.</param>
+    /// <returns>Rich XML comments and unchanged executable tokens.</returns>
+    internal static string Enhance(CompilationUnitSyntax root, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata)
+    {
+        var completed = (CompilationUnitSyntax)GeneratedSourceDocumentation.CompleteRoot(root);
+        var tree = CSharpSyntaxTree.Create(completed, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.Parse));
+        return Enhance(tree.GetRoot(), tree.GetRoot().ToFullString(), types, compilation, metadata);
+    }
+
+    /// <summary>Applies contract documentation at method trivia boundaries.</summary>
+    /// <param name="root">The fully documented source tree.</param>
+    /// <param name="source">Its exact source text.</param>
+    /// <param name="types">Concrete payload contracts.</param>
+    /// <param name="compilation">Current semantic inputs.</param>
+    /// <param name="metadata">Current generation settings.</param>
+    /// <returns>The source with overload-specific remarks.</returns>
+    private static string Enhance(SyntaxNode root, string source, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata)
+    {
         var typeLookup = types.ToDictionary(type => FormatterTypeName.Get(type), StringComparer.Ordinal);
         var contracts = new Dictionary<ITypeSymbol, XElement>(SymbolEqualityComparer.Default);
-        var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.Parse)).GetRoot();
         var edits = new List<(int Start, int Length, string Text)>();
 
-        foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
+        foreach (var method in root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<MethodDeclarationSyntax>())
         {
             if (!method.Modifiers.Any(SyntaxKind.PublicKeyword) && !method.Modifiers.Any(SyntaxKind.InternalKeyword)) continue;
             string name = method.Identifier.ValueText;
             if (!(name.StartsWith("Serialize", StringComparison.Ordinal) || name.StartsWith("Deserialize", StringComparison.Ordinal) || name == "Sizeof")) continue;
 
-            var valueParameter = method.ParameterList.Parameters.FirstOrDefault(parameter => parameter.Identifier.ValueText == "value");
+            var valueParameter = method.ParameterList.Parameters.FirstOrDefault(parameter => parameter.Identifier.ValueText is "value" or "input");
             ITypeSymbol type = null;
-            if (valueParameter?.Type != null) typeLookup.TryGetValue(valueParameter.Type.ToString(), out type);
+            if (valueParameter?.Type != null && !typeLookup.TryGetValue(valueParameter.Type.ToString(), out type))
+                typeLookup.TryGetValue(valueParameter.Type.ToString().TrimEnd('?'), out type);
             if (type == null)
             {
                 var task = method.ReturnType.DescendantNodesAndSelf().OfType<GenericNameSyntax>().FirstOrDefault(generic => generic.Identifier.ValueText == "ValueTask" && generic.TypeArgumentList.Arguments.Count == 1);
@@ -148,7 +174,7 @@ internal static class LuminPackSerializerDocumentation
             return contract;
         }
 
-        bool rawCopy = named.IsUnmanagedType && data.isValueType && data.generatorType == GeneratorType.Object;
+        bool rawCopy = global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.CanUseUnmanagedSerialization(named) && data.isValueType && data.generatorType == GeneratorType.Object;
         contract.Add(new XElement("para", rawCopy ?
             "Binary payload is copied from the complete unmanaged storage, including CLR padding. Its size is Unsafe.SizeOf<T>(); offsets depend on the target runtime and any explicit FieldOffset attributes. The table describes storage members, not a packed wire layout." :
             data.generatorType == GeneratorType.VersionTolerant ? "Binary members follow LuminPackOrder and include version-tolerant field framing. Field offsets depend on the preceding payloads." :
@@ -197,12 +223,18 @@ internal static class LuminPackSerializerDocumentation
     {
         var parameters = method.ParameterList.Parameters;
         bool json = method.Identifier.ValueText.Contains("Json");
+        if (parameters.Count == 2 && parameters[0].Identifier.ValueText is "writer" or "reader" or "evaluator" or "state")
+            remarks.Add(new XElement("para", "Uses the supplied operation state directly, preserving its options, buffer position, and reference tracking. The caller owns operation initialization and completion."));
+        if (method.Identifier.ValueText is "SerializeUnion" or "DeserializeUnion")
+            remarks.Add(new XElement("para", "Processes a concrete Union case body. The Union tag replaces the ordinary object header and is handled by the hidden Union dispatch method."));
         if (parameters.Any(parameter => parameter.Type?.ToString() == "LuminBufferWriter"))
             remarks.Add(new XElement("para", "Uses the caller-owned reusable buffer and its options. The caller must exclusively own the buffer for the duration of the operation."));
         if (parameters.Any(parameter => parameter.Type?.ToString().EndsWith("IBufferWriter<byte>", StringComparison.Ordinal) == true))
             remarks.Add(new XElement("para", "Writes to the supplied IBufferWriter<byte> and advances it by the produced byte count; the destination remains caller-owned."));
-        if (parameters.Any(parameter => parameter.Identifier.ValueText == "value" && parameter.Modifiers.Any(SyntaxKind.RefKeyword)))
-            remarks.Add(new XElement("para", "Populates the supplied value by reference; formatter-specific merge and reuse rules apply. The return value reports consumed bytes", json ? " in the selected UTF-8 or UTF-16 input representation, including any transcoding performed by a character-input overload" : "", "."));
+        if (method.Identifier.ValueText != "Sizeof" && parameters.Any(parameter => parameter.Identifier.ValueText == "value" && parameter.Modifiers.Any(SyntaxKind.RefKeyword)))
+            remarks.Add(new XElement("para", "Populates the supplied value by reference; formatter-specific merge and reuse rules apply.",
+                method.ReturnType.ToString() == "void" ? string.Empty : " The return value reports consumed bytes" +
+                    (json ? " in the selected UTF-8 or UTF-16 input representation, including any transcoding performed by a character-input overload" : string.Empty) + "."));
         if (method.Identifier.ValueText.Contains("Async")) remarks.Add(new XElement("para", "Reads or writes the caller-owned stream asynchronously; cancellation is observed through cancellationToken."));
         if (method.Identifier.ValueText == "Sizeof") remarks.Add(new XElement("para", "Evaluates the binary size without producing a payload. This value does not describe JSON size or CLR object allocation size."));
     }
