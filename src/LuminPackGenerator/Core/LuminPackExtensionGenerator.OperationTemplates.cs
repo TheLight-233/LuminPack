@@ -22,7 +22,7 @@ public static partial class LuminPackExtensionGenerator
         // operation cannot reference the absent per-type helper.  Such types keep the original
         // direct formatter call boundary instead of a JSON expansion.
         bool jsonExpandable = true;
-        if (type is INamedTypeSymbol named && HasPackableAttribute(named))
+        if (type is INamedTypeSymbol named && CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named))
         {
             // Preserve the original generic definition's wire decisions. Analyzing a closed
             // construction can classify a formerly generic field as unmanaged and change framing.
@@ -45,6 +45,9 @@ public static partial class LuminPackExtensionGenerator
             }, metadata, new HashSet<string>(StringComparer.Ordinal));
         }
         string source = GenerateExtension(body, GetExtensionClassName(compilation));
-        return jsonExpandable ? JsonOperationTemplates.Prepare(source, metadata) : source;
+        bool ownsExternalHelper = type is INamedTypeSymbol external &&
+            CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(external) &&
+            !SymbolEqualityComparer.Default.Equals(external.ContainingAssembly, compilation.Assembly);
+        return jsonExpandable ? JsonOperationTemplates.Prepare(source, metadata, type, ownsExternalHelper) : source;
     }
 }

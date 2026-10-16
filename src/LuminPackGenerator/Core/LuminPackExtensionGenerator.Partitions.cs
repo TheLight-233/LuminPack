@@ -22,14 +22,16 @@ public static partial class LuminPackExtensionGenerator
     {
         var analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
         var ordered = GetOrderedFormatterTypes(compilation, reachability);
-        var candidates = ordered.Where(type => type is not INamedTypeSymbol named || !HasPackableAttribute(named));
+        var candidates = ordered.Where(type => !analysis.IsPackable(type));
         var specializations = ordered.Where(type => type is INamedTypeSymbol { IsGenericType: true } named &&
-            HasPackableAttribute(named) && SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly));
+            analysis.IsPackable(named) && SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly));
+        var assemblyPackables = ordered.Where(analysis.IsAssemblyPackable);
         var custom = ordered.Where(IsCustomGeneratorType);
-        var customDependencies = GetCustomFormatterDependencies(analysis, compilation)
+        var customTypes = ordered.OfType<INamedTypeSymbol>().Where(IsCustomGeneratorType);
+        var customDependencies = GetCustomFormatterDependencies(analysis, compilation, customTypes)
             .Distinct(SymbolEqualityComparer.Default).OfType<ITypeSymbol>().ToArray();
-        var types = candidates.Concat(specializations).Concat(custom).Concat(customDependencies)
-            .Where(type => !ContainsTypeParameter(type) && IsAotVisible(type) && IsStaticFormatterCandidate(type))
+        var types = candidates.Concat(specializations).Concat(assemblyPackables).Concat(custom).Concat(customDependencies)
+            .Where(type => !ContainsTypeParameter(type) && IsAotVisible(type) && IsStaticFormatterCandidate(type, analysis))
             .OrderBy(type => FormatterTypeName.Get(type), StringComparer.Ordinal).GroupBy(type => FormatterTypeName.Get(type), StringComparer.Ordinal)
             .Select(group => group.First()).ToArray();
         string extension = GetExtensionClassName(compilation);
@@ -46,7 +48,9 @@ public static partial class LuminPackExtensionGenerator
                     AppendCustomFormatterExtensions(body, new LuminLocalFieldData { TypeName = name, TypeSymbol = type, Name = "value", IsValue = type.IsValueType }, metadata);
                     source = SerializerCoreProjection.Project(GenerateExtension(body, extension), compilation, metadata, cache.Operations);
                 }
-                else if (type is INamedTypeSymbol { IsGenericType: true } named && HasPackableAttribute(named) &&
+                else if (type is INamedTypeSymbol marked && analysis.IsAssemblyPackable(marked))
+                    source = SerializerCoreProjection.Project(GenerateOperationTemplates(type, compilation, metadata), compilation, metadata, cache.Operations, type);
+                else if (type is INamedTypeSymbol { IsGenericType: true } named && analysis.IsPackable(named) &&
                     SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly))
                     source = SerializerCoreProjection.Project(GenerateOperationTemplates(type, compilation, metadata), compilation, metadata, cache.Operations, type);
                 else
@@ -64,7 +68,7 @@ public static partial class LuminPackExtensionGenerator
         }
 
         var dispatchTypes = ordered.Concat(customDependencies)
-            .Where(type => !ContainsTypeParameter(type) && IsAotVisible(type) && IsStaticFormatterCandidate(type))
+            .Where(type => !ContainsTypeParameter(type) && IsAotVisible(type) && IsStaticFormatterCandidate(type, analysis))
             .OrderBy(type => FormatterTypeName.Get(type), StringComparer.Ordinal)
             .GroupBy(type => FormatterTypeName.Get(type), StringComparer.Ordinal)
             .Select(group => group.First());
@@ -84,13 +88,17 @@ public static partial class LuminPackExtensionGenerator
     /// <summary>Collects concrete state formatter types called by source Custom formatter methods.</summary>
     /// <param name="analysis">The compilation-local declaration index.</param>
     /// <param name="compilation">The current compilation supplying semantic argument types.</param>
+    /// <param name="customTypes">The Custom formatter types whose callbacks should be scanned.</param>
     /// <returns>Types needed by legacy Writer and Reader calls inside Custom callbacks.</returns>
-    private static IEnumerable<ITypeSymbol> GetCustomFormatterDependencies(CompilationTypeAnalysis analysis, Compilation compilation)
+    internal static IEnumerable<ITypeSymbol> GetCustomFormatterDependencies(CompilationTypeAnalysis analysis, Compilation compilation,
+        IEnumerable<INamedTypeSymbol> customTypes)
     {
+        var selectedCustomTypes = new HashSet<ITypeSymbol>(customTypes.Select(static type => type.OriginalDefinition), SymbolEqualityComparer.Default);
         foreach (var declared in analysis.DeclaredTypes)
         {
             INamedTypeSymbol type = declared.Symbol;
             if (!IsCustomGeneratorType(type) || !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly)) continue;
+            if (!selectedCustomTypes.Contains(type.OriginalDefinition)) continue;
             foreach (var method in type.GetMembers().OfType<IMethodSymbol>())
             {
                 if (method.Parameters.Length == 0 || method.DeclaringSyntaxReferences.Length == 0) continue;

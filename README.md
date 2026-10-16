@@ -441,6 +441,22 @@ switch (result)
 >
 > `LuminPackRegisterMode.Auto`（默认）：跟随 unsafe 设置，开启 unsafe 才生成；`Disabled`：即使开启 unsafe 也不生成 Register 相关代码。
 
+### 跨程序集类型直接生成
+
+当类型定义在引用程序集里时，当前项目的源生成器无法从该程序集的源码发现它。可以在当前项目的程序集上重复添加 `[LuminPackable(typeof(...))]`，把这些类型显式加入分析：
+
+```csharp
+using LuminPack.Attribute;
+
+[assembly: LuminPackable(typeof(MyLibrary.MyModel))]
+[assembly: LuminPackable(typeof(MyLibrary.GenericModel<>))]
+[assembly: LuminPackable(typeof(MyLibrary.TripleModel<,,>))]
+```
+
+非泛型类型直接传入 `typeof(MyModel)`；开放泛型用 `typeof(GenericModel<>)`、`typeof(TripleModel<,,>)` 标记整个泛型定义。生成器会为项目中实际使用的闭合类型（例如 `GenericModel<int>`）生成具体的 `LuminPackSerializer` 重载，因此这些静态调用不需要再手动注册。可以为多个类型添加多个程序集特性。
+
+跨程序集生成遵守类型可访问性边界：生成代码序列化公开字段和同时具有公开 getter/setter 的公开属性。程序集元数据无法区分自动属性与计算属性，因此该根类型上的公开读写属性都会参与序列化。私有成员上的 `[LuminPackInclude]` 无法授予消费程序集访问权限；反序列化还需要可访问的构造函数。`LuminPackSerializer.Register<T>` 仍保留给运行期动态类型、源生成器无法静态分析的类型，以及其他需要显式提供 formatter 的场景。
+
 LuminPack 有两处运行时手动注册机制，均以 **函数指针（`delegate*`）** 方式传入静态方法。注册表以 **MethodTable 地址（`nint`）** 为键、
 存储方法指针，不持有强 `Type` 引用，保持 ALC 安全。注册后生成类型的**热路径不受任何影响**，
 只有未生成代码的类型（或未列入 union 的类型）才会走注册表。

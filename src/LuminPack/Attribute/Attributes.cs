@@ -1,14 +1,24 @@
 namespace LuminPack.Attribute;
 
-/// <summary>Provides lumin packable attribute functionality.</summary>
-[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface, AllowMultiple = false, Inherited = false)]
+/// <summary>Marks a type for source-generated serialization or registers a referenced type for generation.</summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface | AttributeTargets.Assembly, AllowMultiple = true, Inherited = false)]
 public sealed class LuminPackableAttribute : System.Attribute
 {
+    /// <summary>Gets the referenced type marked by an assembly-level attribute.</summary>
+    public System.Type? TargetType { get; }
 
     /// <summary>Initializes a new instance of <c>LuminPackableAttribute</c>.</summary>
     /// <param name="generatorType">The generator type used by this operation.</param>
     public LuminPackableAttribute(GeneratorType generatorType = GeneratorType.Object)
     {
+        TargetType = null;
+    }
+
+    /// <summary>Marks a referenced type for source-generated serialization in the current assembly.</summary>
+    /// <param name="targetType">The referenced type to include in source generation.</param>
+    public LuminPackableAttribute(System.Type targetType)
+    {
+        TargetType = targetType ?? global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException<System.Type>(nameof(targetType));
     }
 }
 

@@ -321,9 +321,24 @@ internal static class ReachabilityAnalysisCache
             // dispatch case for it would fall back to the generic method and recurse.  Base packable
             // chains are kept too, because subclass formatters serialize inherited members.
             bool changed = true;
+            var expandedCustomTypes = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
             while (changed)
             {
                 changed = false;
+
+                // User-written Custom callbacks can call Writer/Reader APIs for packable types
+                // that are not represented by fields. Keep those payloads in the owned graph so
+                // their concrete serializer operations and private-member layout helpers exist.
+                var customTypes = finalCandidates.OfType<INamedTypeSymbol>()
+                    .Where(LuminPackExtensionGenerator.IsCustomGeneratorType)
+                    .Where(type => expandedCustomTypes.Add(type.OriginalDefinition))
+                    .ToArray();
+                foreach (ITypeSymbol dependency in LuminPackExtensionGenerator.GetCustomFormatterDependencies(analysis, compilation, customTypes))
+                {
+                    int previousCount = finalCandidates.Count;
+                    ExpandType(compilation, dependency, finalCandidates, analysis);
+                    if (finalCandidates.Count != previousCount) changed = true;
+                }
 
                 foreach (ITypeSymbol ownedType in analysis.FormatterTypes)
                 {
@@ -337,24 +352,21 @@ internal static class ReachabilityAnalysisCache
                 foreach (ITypeSymbol type in finalCandidates)
                 {
                     if (type is INamedTypeSymbol named &&
-                        HasPackableAttribute(named.OriginalDefinition) &&
+                        analysis.IsPackable(named) &&
                         emittedPackableDefinitions.Add(named.OriginalDefinition))
                     {
                         changed = true;
                     }
                 }
 
-                AddBasePackableChain(compilation, emittedPackableDefinitions);
+                AddBasePackableChain(compilation, emittedPackableDefinitions, analysis);
             }
         }
         else
         {
-            foreach (ProjectTypeData declared in analysis.DeclaredTypes)
+            foreach (INamedTypeSymbol packable in analysis.PackableTypes)
             {
-                if (HasPackableAttribute(declared.Symbol))
-                {
-                    emittedPackableDefinitions.Add(declared.Symbol.OriginalDefinition);
-                }
+                emittedPackableDefinitions.Add(packable.OriginalDefinition);
             }
 
             // Expand the emitted packables' serialized member graphs.  The per-type generator emits
@@ -389,7 +401,7 @@ internal static class ReachabilityAnalysisCache
                 if (analysis.HasOwner(type) ||
                     LuminPackExtensionGenerator.ContainsTypeParameter(type) ||
                     !LuminPackExtensionGenerator.IsAotVisible(type) ||
-                    !LuminPackExtensionGenerator.IsStaticFormatterCandidate(type))
+                    !LuminPackExtensionGenerator.IsStaticFormatterCandidate(type, analysis))
                 {
                     continue;
                 }
@@ -461,7 +473,7 @@ internal static class ReachabilityAnalysisCache
         => !analysis.HasOwner(type) &&
            !LuminPackExtensionGenerator.ContainsTypeParameter(type) &&
            LuminPackExtensionGenerator.IsAotVisible(type) &&
-           LuminPackExtensionGenerator.IsStaticFormatterCandidate(type);
+           LuminPackExtensionGenerator.IsStaticFormatterCandidate(type, analysis);
 
     /// <summary>Determines whether the supplied value has the publicly accessible type classification.</summary>
     /// <param name="type">The type or symbol to analyze.</param>
@@ -525,7 +537,7 @@ internal static class ReachabilityAnalysisCache
                     ExpandType(compilation, argument, types, analysis);
                 }
 
-                if (HasPackableAttribute(named.OriginalDefinition))
+                if (analysis.IsPackable(named))
                 {
                     ExpandPackableMembers(compilation, named, types, analysis);
                     ExpandUnionMembers(compilation, named, types, analysis);
@@ -764,7 +776,8 @@ internal static class ReachabilityAnalysisCache
     /// </summary>
     /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
     /// <param name="definitions">The definitions used by this operation.</param>
-    private static void AddBasePackableChain(Compilation compilation, ISet<ITypeSymbol> definitions)
+    /// <param name="analysis">The compilation-local packable type index.</param>
+    private static void AddBasePackableChain(Compilation compilation, ISet<ITypeSymbol> definitions, CompilationTypeAnalysis analysis)
     {
         var pending = new Queue<INamedTypeSymbol>();
         foreach (ITypeSymbol definition in definitions)
@@ -783,7 +796,7 @@ internal static class ReachabilityAnalysisCache
                  baseType = baseType.BaseType)
             {
                 INamedTypeSymbol baseDef = baseType.OriginalDefinition;
-                if (HasPackableAttribute(baseDef) && baseDef.DeclaringSyntaxReferences.Length != 0 &&
+                if (analysis.IsPackable(baseDef) &&
                     definitions.Add(baseDef))
                 {
                     pending.Enqueue(baseDef);
@@ -805,7 +818,8 @@ internal static class ReachabilityAnalysisCache
             {
                 IFieldSymbol { IsStatic: false, IsImplicitlyDeclared: false } field =>
                     IsSerializedField(field) ? field.Type : null,
-                IPropertySymbol { IsStatic: false } property when IsAutoProperty(property) =>
+                IPropertySymbol { IsStatic: false } property when IsAutoProperty(property) ||
+                    analysis.IsAssemblyPackable(packable) && IsPublicSettableProperty(property) =>
                     IsSerializedProperty(property) ? property.Type : null,
                 _ => null
             };
@@ -852,6 +866,13 @@ internal static class ReachabilityAnalysisCache
     private static bool IsSerializedProperty(IPropertySymbol property)
         => !TypeMetaChecker.TryCheckIgnoreAttribute(property) &&
            (TypeMetaChecker.TryCheckIncludeAttribute(property) || IsPubliclyAccessible(property.DeclaredAccessibility));
+
+    /// <summary>Determines whether a metadata property can be populated from the consuming assembly.</summary>
+    /// <param name="property">The property used by this operation.</param>
+    /// <returns>Whether the property has public accessors for both serialization directions.</returns>
+    private static bool IsPublicSettableProperty(IPropertySymbol property)
+        => property.GetMethod?.DeclaredAccessibility == Accessibility.Public &&
+           property.SetMethod?.DeclaredAccessibility == Accessibility.Public;
 
     /// <summary>Determines whether the supplied value has the publicly accessible classification.</summary>
     /// <param name="accessibility">The accessibility used by this operation.</param>

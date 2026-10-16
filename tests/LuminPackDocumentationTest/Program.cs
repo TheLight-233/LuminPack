@@ -8,6 +8,7 @@ try
         .ToArray();
     SerializerDocumentationRegression.Run(references);
     SerializerRootApiRegression.Run(references);
+    SerializerAssemblyPackableRegression.Run(references);
     SerializerGenericOverloadRegression.Run(references);
     SerializerReviewRegression.Run(references);
     SerializerCustomFormatterRegression.Run(references);

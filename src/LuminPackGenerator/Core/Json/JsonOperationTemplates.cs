@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -19,8 +20,10 @@ internal static class JsonOperationTemplates
     /// <summary>Projects one type's generated JSON helper into directly expandable operations.</summary>
     /// <param name="source">This type's temporary formatter source.</param>
     /// <param name="metadata">The consuming parse settings.</param>
+    /// <param name="closedRoot">The closed formatter type whose helper may need a unique identity.</param>
+    /// <param name="retainHelper">Whether this output owns a helper unavailable from a source-declared root.</param>
     /// <returns>Direct JSON operations that reference the shared per-type helper members.</returns>
-    internal static string Prepare(string source, MetaInfo metadata)
+    internal static string Prepare(string source, MetaInfo metadata, ITypeSymbol closedRoot, bool retainHelper)
     {
         var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions).GetRoot();
         var container = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
@@ -29,10 +32,15 @@ internal static class JsonOperationTemplates
         var helper = container.Members.OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(type => type.Identifier.ValueText.StartsWith("Json_", StringComparison.Ordinal));
         if (helper == null) return source;
-        // The helper keeps every shared cache member.  The expanded operations reference it by its
-        // stable assembly-qualified identity so no cache declaration is duplicated per concrete root.
+        // Each closed root owns a distinct helper name so multiple closed constructions of one
+        // generic external type can contribute their cache declarations to the partial container.
+        // The helper remains generic because its operation signatures are emitted from the open type.
+        string helperName = retainHelper
+            ? helper.Identifier.ValueText + "__" + GetStableSuffix(FormatterTypeName.Get(closedRoot))
+            : helper.Identifier.ValueText;
+        var renamedHelper = helper.WithIdentifier(SyntaxFactory.Identifier(helperName));
         string qualified = "global::LuminPack.Generated." + container.Identifier.ValueText + "." +
-            helper.Identifier.ValueText + (helper.TypeParameterList?.ToString() ?? string.Empty);
+            helperName + (helper.TypeParameterList?.ToString() ?? string.Empty);
         var members = new HashSet<string>(StringComparer.Ordinal);
         foreach (var member in helper.Members)
         {
@@ -53,6 +61,11 @@ internal static class JsonOperationTemplates
         var containerMembers = container.Members.Where(member => member != helper &&
             !(member is MethodDeclarationSyntax method &&
               method.ParameterList.Parameters.FirstOrDefault()?.Type?.ToString().Contains("LuminPackJson") == true)).ToList();
+        if (retainHelper)
+        {
+            containerMembers.Add(renamedHelper.WithMembers(SyntaxFactory.List(renamedHelper.Members.Where(member =>
+                member is not MethodDeclarationSyntax method || method.Identifier.ValueText is not ("WriteValue" or "ReadValue")))));
+        }
         foreach (var method in helper.Members.OfType<MethodDeclarationSyntax>())
         {
             if (method.Body == null || method.Identifier.ValueText is not ("WriteValue" or "ReadValue")) continue;
@@ -60,6 +73,24 @@ internal static class JsonOperationTemplates
                 .WithTypeParameterList(helper.TypeParameterList).WithConstraintClauses(helper.ConstraintClauses));
         }
         return root.ReplaceNode(container, container.WithMembers(SyntaxFactory.List(containerMembers))).ToFullString();
+    }
+
+    /// <summary>Creates a stable identifier suffix for one closed formatter type.</summary>
+    /// <param name="identity">The fully qualified formatter type identity.</param>
+    /// <returns>A source-safe suffix that distinguishes closed generic constructions.</returns>
+    private static string GetStableSuffix(string identity)
+    {
+        var safe = new StringBuilder(identity.Length);
+        unchecked
+        {
+            ulong hash = 14695981039346656037UL;
+            foreach (char character in identity)
+            {
+                hash = (hash ^ character) * 1099511628211UL;
+                safe.Append(char.IsLetterOrDigit(character) ? character : '_');
+            }
+            return safe.Append('_').Append(hash.ToString("x16", System.Globalization.CultureInfo.InvariantCulture)).ToString();
+        }
     }
 
     /// <summary>Qualifies every reference to a helper-owned member with the helper's own type identity.</summary>

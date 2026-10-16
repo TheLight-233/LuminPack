@@ -32,17 +32,20 @@ namespace LuminPack.SourceGenerator
             /// <summary>Initializes a new instance of <c>AnalysisState</c>.</summary>
             /// <param name="mainSymbol">The main symbol used by this operation.</param>
             /// <param name="metadata">The language, framework, and generation settings.</param>
-            internal AnalysisState(ISymbol mainSymbol, MetaInfo metadata)
+            /// <param name="includeExternalProperties">Whether public read/write properties are included for an external root.</param>
+            internal AnalysisState(ISymbol mainSymbol, MetaInfo metadata, bool includeExternalProperties)
             {
                 MainSymbol = mainSymbol;
                 Location = mainSymbol.Locations.FirstOrDefault();
                 Metadata = metadata;
+                IncludeExternalProperties = includeExternalProperties;
             }
 
             internal ISymbol CurrentSymbol;
             internal readonly ISymbol MainSymbol;
             internal readonly Location Location;
             internal readonly MetaInfo Metadata;
+            internal readonly bool IncludeExternalProperties;
             internal readonly HashSet<INamedTypeSymbol> ProcessedTypes =
                 new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         }

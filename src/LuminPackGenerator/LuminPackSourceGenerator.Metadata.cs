@@ -34,7 +34,9 @@ namespace LuminPack.SourceGenerator
             var previousDiagnostics = TypeMetaChecker.PushDiagnosticScope();
             try
             {
-                _analysisState = new AnalysisState(symbol, metadata);
+                bool includeExternalProperties = symbol is INamedTypeSymbol rootType &&
+                    !SymbolEqualityComparer.Default.Equals(rootType.ContainingAssembly, compilation.Assembly);
+                _analysisState = new AnalysisState(symbol, metadata, includeExternalProperties);
                 var dataInfo = CreateLuminDataInfoCore(symbol, compilation);
                 if (TypeMetaChecker.CurrentDiagnostics.Count != 0)
                 {
@@ -495,7 +497,7 @@ namespace LuminPack.SourceGenerator
                     {
                         if (member.IsStatic) continue;
                         if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
-                        if (!IsAutoProperty(member)) continue;
+                        if (!IsAutoProperty(member, _analysisState.IncludeExternalProperties)) continue;
                         if (parent != null &&
                             member.DeclaredAccessibility == Accessibility.Private &&
                             TypeMetaChecker.TryCheckIncludeAttribute(member))

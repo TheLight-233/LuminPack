@@ -187,5 +187,14 @@ namespace LuminPack.SourceGenerator
                 .Any(f =>
                     f.Name == standardBackingFieldName);
         }
+
+        /// <summary>Recognizes writable public metadata properties on an explicitly selected external root.</summary>
+        /// <param name="property">The property being inspected.</param>
+        /// <param name="includeExternalProperties">Whether the current root is explicitly marked from another assembly.</param>
+        /// <returns>Whether the property can be emitted as a generated serialization member.</returns>
+        public static bool IsAutoProperty(IPropertySymbol property, bool includeExternalProperties)
+            => IsAutoProperty(property) || includeExternalProperties &&
+               property.GetMethod?.DeclaredAccessibility == Accessibility.Public &&
+               property.SetMethod?.DeclaredAccessibility == Accessibility.Public;
     }
 }

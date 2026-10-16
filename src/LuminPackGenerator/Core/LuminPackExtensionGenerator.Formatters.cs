@@ -43,7 +43,7 @@ public static partial class LuminPackExtensionGenerator
             .Where(static type => !ContainsTypeParameter(type))
             .Where(IsAotVisible)
             .Where(type => !IsCustomGeneratorType(type) || SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly))
-            .Where(IsStaticFormatterCandidate)
+            .Where(type => IsStaticFormatterCandidate(type, analysis))
             .OrderBy(static type => FormatterTypeName.Get(type), StringComparer.Ordinal)
             .GroupBy(static type => FormatterTypeName.Get(type), StringComparer.Ordinal)
             .Select(static group => group.First())
@@ -106,6 +106,13 @@ public static partial class LuminPackExtensionGenerator
     /// <param name="type">The type or symbol to analyze.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     internal static bool IsStaticFormatterCandidate(ITypeSymbol type)
+        => IsStaticFormatterCandidate(type, analysis: null);
+
+    /// <summary>Determines whether a type has a generated or built-in formatter in the current compilation.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <param name="analysis">The compilation-local packable index, when available.</param>
+    /// <returns>Whether a static formatter can be generated for the type.</returns>
+    internal static bool IsStaticFormatterCandidate(ITypeSymbol type, CompilationTypeAnalysis analysis)
     {
         if (type.TypeKind == TypeKind.Enum)
         {
@@ -118,7 +125,7 @@ public static partial class LuminPackExtensionGenerator
                 TypeArguments.Length: 1
             } nullable)
         {
-            return IsStaticFormatterCandidate(nullable.TypeArguments[0]);
+            return IsStaticFormatterCandidate(nullable.TypeArguments[0], analysis);
         }
 
         // Arrays are only known when their leaf graph is known. Treating every
@@ -126,7 +133,7 @@ public static partial class LuminPackExtensionGenerator
         // InputControl[] leak into generated formatter sets.
         if (type is IArrayTypeSymbol array)
         {
-            return IsStaticFormatterCandidate(array.ElementType);
+            return IsStaticFormatterCandidate(array.ElementType, analysis);
         }
 
         if (type is not INamedTypeSymbol named)
@@ -138,12 +145,13 @@ public static partial class LuminPackExtensionGenerator
             return false;
         }
 
-        if (named.ContainingType is not null && !HasPackableAttribute(named))
+        bool isPackable = analysis?.IsPackable(named) ?? HasPackableAttribute(named);
+        if (named.ContainingType is not null && !isPackable)
         {
             return false;
         }
 
-        if (HasPackableAttribute(named))
+        if (isPackable)
         {
             return true;
         }
@@ -159,7 +167,7 @@ public static partial class LuminPackExtensionGenerator
         // Registered generic formatters are templates. Emit an extension only for
         // a closed construction whose entire argument graph is itself known or
         // [LuminPackable].
-        return !named.IsUnboundGenericType && named.TypeArguments.All(IsStaticFormatterCandidate);
+        return !named.IsUnboundGenericType && named.TypeArguments.All(argument => IsStaticFormatterCandidate(argument, analysis));
     }
 
     /// <summary>Builds the formatter extensions source from the supplied metadata.</summary>

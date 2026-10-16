@@ -46,6 +46,28 @@ internal static class SerializerCustomFormatterRegression
                 public static void DeserializeJson(ref LuminPackJsonReader reader, ref CustomRaw value) => value.Number = reader.ReadInt() ^ 85;
             }
             [LuminPackable] public sealed class Nested { public CustomValue Value = null!; public CustomValue Missing = null!; }
+            [LuminPackable] public sealed class CallbackChild
+            {
+                [LuminPackInclude] private int _value;
+                public CallbackChild() => _value = 73;
+                public int GetValue() => _value;
+                public void SetValue(int value) => _value = value;
+            }
+            [LuminPackable(GeneratorType.Custom)] public sealed class CallbackCustom
+            {
+                public static CallbackChild Current = new();
+                public static void Serialize(ref LuminPackWriter writer, in CallbackCustom value) => writer.WriteValue(Current);
+                public static void Deserialize(ref LuminPackReader reader, ref CallbackCustom value)
+                { reader.ReadValue(ref Current); value = new(); }
+            }
+            [LuminPackable] public sealed class CallbackOwner { public CallbackCustom Value = new(); }
+            [LuminPackable] public sealed class UnusedCallbackChild { [LuminPackInclude] private int _value = 91; }
+            [LuminPackable(GeneratorType.Custom)] public sealed class UnusedCallbackCustom
+            {
+                public static void Serialize(ref LuminPackWriter writer, in UnusedCallbackCustom value) => writer.WriteValue(new UnusedCallbackChild());
+                public static void Deserialize(ref LuminPackReader reader, ref UnusedCallbackCustom value)
+                { UnusedCallbackChild child = new(); reader.ReadValue(ref child); value = new(); }
+            }
             [LuminPackable] public struct RawOwner { public int Prefix; public CustomRaw Value; public int Suffix; }
             [LuminPackable] public sealed class GenericOwner<T> { public T Value = default!; public T[] Values = []; }
             [LuminPackable] public sealed class Host
@@ -107,6 +129,11 @@ internal static class SerializerCustomFormatterRegression
                     LuminPackSerializer.Deserialize(genericBytes.AsSpan(), ref genericResult);
                     if (genericResult.Value.Number != 31 || genericResult.Values[0].Number != 31) throw new Exception("Generic custom bypass.");
                     if (LuminPackSerializer.Sizeof(generic) != genericBytes.Length) throw new Exception("Generic custom size mismatch.");
+                    var callbackBytes = LuminPackSerializer.Serialize(new CallbackOwner());
+                    CallbackCustom.Current.SetValue(0);
+                    CallbackOwner callbackResult = new();
+                    LuminPackSerializer.Deserialize(callbackBytes.AsSpan(), ref callbackResult);
+                    if (CallbackCustom.Current.GetValue() != 73) throw new Exception("Custom callback packable dependency was not generated.");
                     return 1;
                 }
                 private static void Validate(Host value)
@@ -131,9 +158,10 @@ internal static class SerializerCustomFormatterRegression
             GeneratorDriver driver = CSharpGeneratorDriver.Create(
                 [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminMapSourceGenerator().AsSourceGenerator()], parseOptions: parse);
             driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out _);
+            var generatedSources = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
             var errors = output.GetDiagnostics().Concat(driver.GetRunResult().Diagnostics).Where(item => item.Severity == DiagnosticSeverity.Error);
             if (errors.Any()) throw new InvalidOperationException(string.Join(Environment.NewLine, errors));
-            var stateMethods = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+            var stateMethods = generatedSources
                 .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
                 .Where(method => method.TypeParameterList == null && method.ParameterList.Parameters.Count == 2 &&
                     method.ParameterList.Parameters[0].Identifier.ValueText is "writer" or "reader" or "evaluator" &&
@@ -145,6 +173,14 @@ internal static class SerializerCustomFormatterRegression
                     .Where(method => method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().Contains("CustomValue", StringComparison.Ordinal) == true))
                     .Select(method => method.ToString()).Take(10));
                 throw new InvalidOperationException("Custom state overloads must invoke the registry directly: " + stateMethods.Length + ". " + candidates);
+            }
+            if (mode == "Minimal")
+            {
+                string dispatch = string.Join(Environment.NewLine, generatedSources
+                    .Where(file => file.HintName.StartsWith("LuminPack.Dispatch.", StringComparison.Ordinal))
+                    .Select(file => file.SourceText.ToString()));
+                if (dispatch.Contains("UnusedCallbackChild", StringComparison.Ordinal))
+                    throw new InvalidOperationException("An unreachable Custom callback dependency survived Minimal pruning.");
             }
             using var image = new MemoryStream();
             var emit = output.Emit(image);

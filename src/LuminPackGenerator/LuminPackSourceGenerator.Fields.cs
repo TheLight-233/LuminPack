@@ -352,7 +352,7 @@ namespace LuminPack.SourceGenerator
 
                         if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
 
-                        if (!IsAutoProperty(member)) continue;
+                        if (!IsAutoProperty(member, _analysisState.IncludeExternalProperties)) continue;
 
                         if (TypeMetaChecker.TryCheckIncludeAttribute(member) && !member.Type.IsAnonymousType)
                         {
@@ -490,7 +490,7 @@ namespace LuminPack.SourceGenerator
 
                         if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
 
-                        if (!IsAutoProperty(member)) continue;
+                        if (!IsAutoProperty(member, _analysisState.IncludeExternalProperties)) continue;
 
                         if (TypeMetaChecker.TryCheckIncludeAttribute(member))
                         {
@@ -642,7 +642,7 @@ namespace LuminPack.SourceGenerator
 
                 if (member is IPropertySymbol property)
                 {
-                    if (!IsAutoProperty(property)) continue;
+                    if (!IsAutoProperty(property, _analysisState.IncludeExternalProperties)) continue;
 
                     typeName = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     isValue = property.Type.IsValueType;
@@ -849,7 +849,7 @@ namespace LuminPack.SourceGenerator
 
                 if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
 
-                if (!IsAutoProperty(member)) continue;
+                if (!IsAutoProperty(member, _analysisState.IncludeExternalProperties)) continue;
 
                 if (member.DeclaredAccessibility == Accessibility.Private &&
                     TypeMetaChecker.TryCheckIncludeAttribute(member))
@@ -982,7 +982,7 @@ namespace LuminPack.SourceGenerator
 
                 if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
 
-                if (!IsAutoProperty(member)) continue;
+                if (!IsAutoProperty(member, _analysisState.IncludeExternalProperties)) continue;
 
                 bool shouldInclude = TypeMetaChecker.TryCheckIncludeAttribute(member);
 
