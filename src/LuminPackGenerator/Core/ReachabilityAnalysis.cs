@@ -812,14 +812,21 @@ internal static class ReachabilityAnalysisCache
     /// <param name="analysis">The analysis used by this operation.</param>
     private static void ExpandPackableMembers(Compilation compilation, INamedTypeSymbol packable, ISet<ITypeSymbol> types, CompilationTypeAnalysis analysis)
     {
-        foreach (ISymbol member in packable.GetMembers())
+        bool external = analysis.IsAssemblyPackable(packable) && packable.DeclaringSyntaxReferences.Length == 0;
+        var inspected = external ? ReferencedTypeMetadata.Resolve(packable, compilation) : packable;
+        var members = inspected.GetMembers().AsEnumerable();
+        if (external)
+            for (var parent = inspected.BaseType; parent != null &&
+                 parent.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType); parent = parent.BaseType)
+                members = members.Concat(parent.GetMembers());
+        foreach (ISymbol member in members)
         {
             ITypeSymbol? memberType = member switch
             {
                 IFieldSymbol { IsStatic: false, IsImplicitlyDeclared: false } field =>
                     IsSerializedField(field) ? field.Type : null,
-                IPropertySymbol { IsStatic: false } property when IsAutoProperty(property) ||
-                    analysis.IsAssemblyPackable(packable) && IsPublicSettableProperty(property) =>
+                IPropertySymbol { IsStatic: false } property when (external
+                    ? LuminPackSourceGenerator.IsAutoProperty(property) : IsAutoProperty(property)) =>
                     IsSerializedProperty(property) ? property.Type : null,
                 _ => null
             };
@@ -828,6 +835,7 @@ internal static class ReachabilityAnalysisCache
             {
                 continue;
             }
+            if (external) memberType = ReferencedTypeMetadata.ToCurrent(memberType, compilation);
 
             // A member whose type still contains this packable's own type parameters cannot be
             // expanded to a concrete formatter here; the closed construction is reached through the
@@ -866,13 +874,6 @@ internal static class ReachabilityAnalysisCache
     private static bool IsSerializedProperty(IPropertySymbol property)
         => !TypeMetaChecker.TryCheckIgnoreAttribute(property) &&
            (TypeMetaChecker.TryCheckIncludeAttribute(property) || IsPubliclyAccessible(property.DeclaredAccessibility));
-
-    /// <summary>Determines whether a metadata property can be populated from the consuming assembly.</summary>
-    /// <param name="property">The property used by this operation.</param>
-    /// <returns>Whether the property has public accessors for both serialization directions.</returns>
-    private static bool IsPublicSettableProperty(IPropertySymbol property)
-        => property.GetMethod?.DeclaredAccessibility == Accessibility.Public &&
-           property.SetMethod?.DeclaredAccessibility == Accessibility.Public;
 
     /// <summary>Determines whether the supplied value has the publicly accessible classification.</summary>
     /// <param name="accessibility">The accessibility used by this operation.</param>

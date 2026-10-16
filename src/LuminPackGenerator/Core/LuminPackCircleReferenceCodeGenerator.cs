@@ -34,7 +34,8 @@ public static class LuminPackCircleReferenceCodeGenerator
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            int size = 1;");
+        int slotCount = data.fields.Count == 0 ? 0 : (int)data.fields.Max(field => field.Order) + 1;
+        sb.AppendLine($"            int size = {1 + slotCount - data.fields.Count};");
         sb.AppendLine("            size += LuminPackEvaluator.CalculateVarInt(id);");
         sb.AppendLine();
         sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value);");
@@ -67,7 +68,7 @@ public static class LuminPackCircleReferenceCodeGenerator
         string classFullName = TypeMetaChecker.BuildFormatterClassName(data);
         string classGlobalName = data.classFullName;
         bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
-        uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
+        uint memberCount = data.fields.Count == 0 ? 0 : data.fields.Max(x => x.Order) + 1;
 
         if (data.isGeneric)
         {
@@ -133,7 +134,7 @@ public static class LuminPackCircleReferenceCodeGenerator
             }
             sb.AppendLine($"            writer.WriteVarInt(id);");
             //sb.AppendLine($"            writer.Advance(LuminPackEvaluator.CalculateVarInt(id));");
-            if (data.fields.Count <= MaxParametersPerCall)
+            if (data.fields.Count > 0 && data.fields.Count <= MaxParametersPerCall)
             {
                 // Write up to 15 fields in one call.
                 sb.Append($"            writer.Advance(writer.WriteUnmanaged(");
@@ -188,7 +189,7 @@ public static class LuminPackCircleReferenceCodeGenerator
             sb.AppendLine("            try");
             sb.AppendLine("            {");
             sb.AppendLine($"                var tempWriter = new LuminPackWriter(writerBuffer, writer.OptionState);");
-            sb.AppendLine($"                Span<int> offsets = stackalloc int[{data.fields.Max(x => x.Order) + 1}];");
+            sb.AppendLine($"                Span<int> offsets = stackalloc int[{memberCount}];");
             // Process members in order, skipping empty entries.
             for (int order = 0; order < memberCount; order++)
             {
@@ -262,7 +263,7 @@ public static class LuminPackCircleReferenceCodeGenerator
         string classFullName = TypeMetaChecker.BuildFormatterClassName(data);
         string classGlobalName = data.classFullName;
         bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
-        uint memberCount = data.fields.Max(x => x.Order) + 1; //Start From Zero
+        uint memberCount = data.fields.Count == 0 ? 0 : data.fields.Max(x => x.Order) + 1;
 
         if (data.isGeneric)
         {
@@ -371,7 +372,7 @@ public static class LuminPackCircleReferenceCodeGenerator
 
             if (field is not null)
             {
-                sb.AppendLine($"            if (deltas[{order}] != 0)");
+                sb.AppendLine($"            if ({order} < count && deltas[{order}] != 0)");
                 sb.AppendLine("            {");
                 if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
                 {
@@ -392,11 +393,13 @@ public static class LuminPackCircleReferenceCodeGenerator
             }
             else
             {
-                sb.AppendLine($"            offset += deltas[{order}];");
+                sb.AppendLine($"            if ({order} < count) reader.Advance(deltas[{order}]);");
             }
             sb.AppendLine();
         }
 
+        sb.AppendLine($"            for (int unknownOrder = {memberCount}; unknownOrder < count; unknownOrder++)");
+        sb.AppendLine("                reader.Advance(deltas[unknownOrder]);");
         sb.AppendLine("            // Assign the field value.");
 
         // Collect public fields assigned through an object initializer.

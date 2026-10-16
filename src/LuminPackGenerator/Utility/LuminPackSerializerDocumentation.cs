@@ -137,7 +137,7 @@ internal static class LuminPackSerializerDocumentation
     {
         var contract = new XElement("contract");
         var named = type as INamedTypeSymbol;
-        if (named == null || !named.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE))
+        if (named == null || !CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named))
         {
             contract.Add(new XElement("para", type is IArrayTypeSymbol ? "Built-in array formatter: collection header followed by elements in index order." :
                 type.SpecialType == SpecialType.System_String ? "Built-in string formatter: content and null markers follow the selected string encoding and recording mode." :

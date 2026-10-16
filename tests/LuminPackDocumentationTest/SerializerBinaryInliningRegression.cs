@@ -34,6 +34,10 @@ internal static class SerializerBinaryInliningRegression
             {
                 [LuminPackInclude] private int _secret = 31;
                 public string Text = "same";
+                public string Locked { get; private set; } = "default";
+                public int Initial { get; init; } = 71;
+                public string ReadOnly { get; } = "read-only storage";
+                public void SetLocked(string value) => Locked = value;
                 public int Secret() => _secret;
             }
             [LuminPackable] public sealed class Payload
@@ -63,6 +67,8 @@ internal static class SerializerBinaryInliningRegression
                     foreach (int count in new[] { -1, 0, 3 })
                     {
                         var value = new Payload();
+                        value.First.SetLocked("first private setter");
+                        value.Second.SetLocked("second private setter");
                         if (count == 3) value.First.Text = new string('x', 1400);
                         if (count < 0) { value.Left = null!; value.Right = null!; value.Numbers = null!; }
                         else
@@ -178,6 +184,9 @@ internal static class SerializerBinaryInliningRegression
                 {
                     if (value.Head() != 47 || value.Tail != 173 || value.First.Secret() != 31 || value.Second.BaseValue() != 19)
                         throw new Exception("Private or repeated object state changed.");
+                    if (value.First.Locked != source.First.Locked || value.Second.Locked != source.Second.Locked ||
+                        value.First.Initial != source.First.Initial || value.First.ReadOnly != source.First.ReadOnly)
+                        throw new Exception("Nested private-setter, init-only, or getter-only storage changed.");
                     if (value.__lumin_p0 != 53 || value.__lumin_v2 != 59 || value.__lp0_v3 != 61)
                         throw new Exception("A source field sharing a generated naming prefix was renamed.");
                     if ((source.Left?.Count ?? -1) != (value.Left?.Count ?? -1) || (source.Right?.Count ?? -1) != (value.Right?.Count ?? -1))

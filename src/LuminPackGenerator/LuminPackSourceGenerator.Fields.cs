@@ -8,6 +8,19 @@ namespace LuminPack.SourceGenerator
         public sealed partial class LuminPackSourceGenerator : IIncrementalGenerator
     {
 
+        /// <summary>Determines whether nested storage must be accessed through a Local mirror.</summary>
+        /// <param name="member">The serialized field or auto-property.</param>
+        /// <returns>Whether ordinary access cannot read and restore the backing storage.</returns>
+        private static bool RequiresLocalAccess(ISymbol member)
+        {
+            if (member.DeclaredAccessibility is Accessibility.Private or Accessibility.ProtectedAndInternal or Accessibility.Protected)
+                return true;
+            if (member is not IPropertySymbol property) return false;
+            return property.SetMethod == null || property.SetMethod.IsInitOnly ||
+                property.SetMethod.DeclaredAccessibility is Accessibility.Private or Accessibility.ProtectedAndInternal or Accessibility.Protected ||
+                property.GetMethod?.DeclaredAccessibility is Accessibility.Private or Accessibility.ProtectedAndInternal or Accessibility.Protected;
+        }
+
         /// <summary>Records field type in the current field metadata.</summary>
         /// <param name="type">The type or symbol to analyze.</param>
         /// <param name="field">The metadata describing the field being processed.</param>
@@ -28,8 +41,10 @@ namespace LuminPack.SourceGenerator
 
             field.FieldType = type.IsReferenceType ? LuminDataType.Reference : LuminDataType.Value;
 
-            // A custom formatter owns its complete payload, including null and object framing.
-            if (global::LuminPack.Code.Core.LuminPackExtensionGenerator.IsCustomGeneratorType(type))
+            // Custom formatters own their framing. Explicit external roots use the shared operation
+            // plan so their complete Local storage metadata is also used when nested here.
+            if (global::LuminPack.Code.Core.LuminPackExtensionGenerator.IsCustomGeneratorType(type) ||
+                _analysisState.Types.IsAssemblyPackable(type))
             {
                 field.Type = LuminFiledType.Other;
                 return;
@@ -181,7 +196,8 @@ namespace LuminPack.SourceGenerator
                     string metadataName = $"{originalSymbol.ContainingNamespace}.{originalSymbol.MetadataName}";
 
                     if (CodeEmitterTypeCatalog.SupportedMetadataNames.Contains(metadataName) ||
-                        global::LuminPack.Code.Core.LuminPackExtensionGenerator.IsCustomGeneratorType(namedTypeArg))
+                        global::LuminPack.Code.Core.LuminPackExtensionGenerator.IsCustomGeneratorType(namedTypeArg) ||
+                        _analysisState.Types.IsAssemblyPackable(namedTypeArg))
                     {
                         field.Type = LuminFiledType.Other;
 
@@ -249,7 +265,8 @@ namespace LuminPack.SourceGenerator
                 string metadataName = $"{originalSymbol.ContainingNamespace}.{originalSymbol.MetadataName}";
 
                 if (CodeEmitterTypeCatalog.SupportedMetadataNames.Contains(metadataName) ||
-                    global::LuminPack.Code.Core.LuminPackExtensionGenerator.IsCustomGeneratorType(elementNamedType))
+                    global::LuminPack.Code.Core.LuminPackExtensionGenerator.IsCustomGeneratorType(elementNamedType) ||
+                    _analysisState.Types.IsAssemblyPackable(elementNamedType))
                 {
                     field.Type = LuminFiledType.Other;
 
@@ -352,7 +369,7 @@ namespace LuminPack.SourceGenerator
 
                         if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
 
-                        if (!IsAutoProperty(member, _analysisState.IncludeExternalProperties)) continue;
+                        if (!IsAutoProperty(member)) continue;
 
                         if (TypeMetaChecker.TryCheckIncludeAttribute(member) && !member.Type.IsAnonymousType)
                         {
@@ -381,10 +398,7 @@ namespace LuminPack.SourceGenerator
                             FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                             TypeName = member.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : member.Type.Name,
-                            IsPrivate = member.DeclaredAccessibility is
-                                Accessibility.Private or
-                                Accessibility.ProtectedAndInternal or
-                                Accessibility.Protected,
+                            IsPrivate = RequiresLocalAccess(member),
                             isProperty = true,
                             belongClassName = namedTypeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                         };
@@ -436,10 +450,7 @@ namespace LuminPack.SourceGenerator
                             FullTypeName = nestedMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                             TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
-                            IsPrivate = nestedMember.DeclaredAccessibility is
-                                Accessibility.Private or
-                                Accessibility.ProtectedAndInternal or
-                                Accessibility.Protected,
+                            IsPrivate = RequiresLocalAccess(nestedMember),
                             belongClassName = namedTypeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                         };
 
@@ -490,7 +501,7 @@ namespace LuminPack.SourceGenerator
 
                         if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
 
-                        if (!IsAutoProperty(member, _analysisState.IncludeExternalProperties)) continue;
+                        if (!IsAutoProperty(member)) continue;
 
                         if (TypeMetaChecker.TryCheckIncludeAttribute(member))
                         {
@@ -519,10 +530,7 @@ namespace LuminPack.SourceGenerator
                             FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                             TypeName = member.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : member.Type.Name,
-                            IsPrivate = member.DeclaredAccessibility is
-                                Accessibility.Private or
-                                Accessibility.ProtectedAndInternal or
-                                Accessibility.Protected,
+                            IsPrivate = RequiresLocalAccess(member),
                             isProperty = true,
                             belongClassName = namedTypeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                         };
@@ -577,10 +585,7 @@ namespace LuminPack.SourceGenerator
                             FullTypeName = nestedMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                             TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
-                            IsPrivate = nestedMember.DeclaredAccessibility is
-                                Accessibility.Private or
-                                Accessibility.ProtectedAndInternal or
-                                Accessibility.Protected,
+                            IsPrivate = RequiresLocalAccess(nestedMember),
                             belongClassName = namedTypeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                         };
 
@@ -613,6 +618,8 @@ namespace LuminPack.SourceGenerator
         /// <param name="localFields">The local fields used by this operation.</param>
         private static void SetClassLocalField(INamedTypeSymbol typeSymbol, List<LuminLocalFieldData> localFields)
         {
+            if (typeSymbol.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType))
+                typeSymbol = global::LuminPack.Code.Core.ReferencedTypeMetadata.Resolve(typeSymbol, _analysisState.Compilation);
 
             // Recursively process base types, excluding System.Object.
             if (typeSymbol.BaseType != null &&
@@ -621,15 +628,7 @@ namespace LuminPack.SourceGenerator
                 SetClassLocalField(typeSymbol.BaseType, localFields);
             }
 
-            // Collect current type members in declaration order.
-            var members = typeSymbol.GetMembers()
-                .Where(m => m is IPropertySymbol or IFieldSymbol)
-                .OrderBy(m =>
-                {
-                    var syntaxRef = m.DeclaringSyntaxReferences.FirstOrDefault();
-                    return syntaxRef?.GetSyntax()?.SpanStart ?? int.MaxValue;
-                })
-                .ToList();
+            var members = GetOrderedStorageMembers(typeSymbol);
 
             // Append members declared on the current type.
             foreach (var member in members)
@@ -642,7 +641,7 @@ namespace LuminPack.SourceGenerator
 
                 if (member is IPropertySymbol property)
                 {
-                    if (!IsAutoProperty(property, _analysisState.IncludeExternalProperties)) continue;
+                    if (!IsAutoProperty(property)) continue;
 
                     typeName = property.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
                     isValue = property.Type.IsValueType;
@@ -696,12 +695,30 @@ namespace LuminPack.SourceGenerator
                         _ => null
                     },
                     Name = member.Name,
+                    DeclaringTypeName = typeSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     filedOffset = offset,
                     IsValue = isValue,
                     IsPrivate = isPrivate,
                     IsProperty = isProperty,
                 });
             }
+        }
+
+        /// <summary>Preserves declaration order for both source members and imported backing storage.</summary>
+        /// <param name="type">The type whose field and property order is required.</param>
+        /// <returns>Source-ordered members or metadata fields with backing fields replaced by their properties.</returns>
+        private static List<ISymbol> GetOrderedStorageMembers(INamedTypeSymbol type)
+        {
+            if (type.DeclaringSyntaxReferences.Length != 0)
+                return type.GetMembers().Where(member => member is IPropertySymbol or IFieldSymbol)
+                    .OrderBy(member => member.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()?.SpanStart ?? int.MaxValue).ToList();
+
+            // Metadata groups properties separately from fields. Field-table order retains each
+            // automatic property's original storage position among ordinary and hidden fields.
+            var properties = type.GetMembers().OfType<IPropertySymbol>().Where(IsAutoProperty)
+                .ToDictionary(property => "<" + property.Name + ">k__BackingField", property => (ISymbol)property);
+            return type.GetMembers().OfType<IFieldSymbol>()
+                .Select(field => properties.TryGetValue(field.Name, out var property) ? property : field).ToList();
         }
 
         /// <summary>Records generic class or struct in the current field metadata.</summary>
@@ -825,6 +842,8 @@ namespace LuminPack.SourceGenerator
                 baseClassSymbol.SpecialType == SpecialType.System_Object ||
                 baseClassSymbol.SpecialType == SpecialType.System_ValueType) return;
 
+            baseClassSymbol = global::LuminPack.Code.Core.ReferencedTypeMetadata.Resolve(baseClassSymbol, _analysisState.Compilation);
+
             // Process the most distant base types first.
             ProcessBaseClassMembersForNestedClass(baseClassSymbol.BaseType, field, genericParameters);
 
@@ -849,7 +868,7 @@ namespace LuminPack.SourceGenerator
 
                 if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
 
-                if (!IsAutoProperty(member, _analysisState.IncludeExternalProperties)) continue;
+                if (!IsAutoProperty(member)) continue;
 
                 if (member.DeclaredAccessibility == Accessibility.Private &&
                     TypeMetaChecker.TryCheckIncludeAttribute(member))
@@ -886,10 +905,7 @@ namespace LuminPack.SourceGenerator
                     TypeSymbol = member.Type,
                     NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = member.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : member.Type.Name,
-                    IsPrivate = member.DeclaredAccessibility is
-                        Accessibility.Private or
-                        Accessibility.ProtectedAndInternal or
-                        Accessibility.Protected,
+                    IsPrivate = RequiresLocalAccess(member),
                     isProperty = true,
                     belongClassName = classSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                 };
@@ -950,10 +966,7 @@ namespace LuminPack.SourceGenerator
                     TypeSymbol = nestedMember.Type,
                     NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
-                    IsPrivate = nestedMember.DeclaredAccessibility is
-                        Accessibility.Private or
-                        Accessibility.ProtectedAndInternal or
-                        Accessibility.Protected,
+                    IsPrivate = RequiresLocalAccess(nestedMember),
                     belongClassName = classSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                 };
 
@@ -982,7 +995,7 @@ namespace LuminPack.SourceGenerator
 
                 if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
 
-                if (!IsAutoProperty(member, _analysisState.IncludeExternalProperties)) continue;
+                if (!IsAutoProperty(member)) continue;
 
                 bool shouldInclude = TypeMetaChecker.TryCheckIncludeAttribute(member);
 
@@ -1008,10 +1021,7 @@ namespace LuminPack.SourceGenerator
                     FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = member.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : member.Type.Name,
-                    IsPrivate = member.DeclaredAccessibility is
-                        Accessibility.Private or
-                        Accessibility.ProtectedAndInternal or
-                        Accessibility.Protected,
+                    IsPrivate = RequiresLocalAccess(member),
                     isProperty = true,
                     belongClassName = namedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                 };
@@ -1061,10 +1071,7 @@ namespace LuminPack.SourceGenerator
                     FullTypeName = nestedMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
-                    IsPrivate = nestedMember.DeclaredAccessibility is
-                        Accessibility.Private or
-                        Accessibility.ProtectedAndInternal or
-                        Accessibility.Protected,
+                    IsPrivate = RequiresLocalAccess(nestedMember),
                     belongClassName = namedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                 };
 

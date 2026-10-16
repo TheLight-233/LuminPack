@@ -1,5 +1,7 @@
 using System.Collections.Concurrent;
 using LuminPack;
+using LuminPack.Attribute;
+using LuminPackUnionContracts;
 using static LuminPackUnitTest.CircleReferenceSerializationTest;
 using static LuminPackUnitTest.CollectionTypesSerializationTest;
 using static LuminPackUnitTest.ComplexSerializationTest;
@@ -9,6 +11,8 @@ using static LuminPackUnitTest.MultiThreadSerializationTest;
 using static LuminPackUnitTest.PrimitivesSerializationTest;
 using static LuminPackUnitTest.SpecialTypesSerializationTest;
 using static LuminPackUnitTest.VersionTolerantSerializationTest;
+
+[assembly:LuminPackable(typeof(ExternalClassUnionRoot))]
 
 namespace LuminPackUnitTest
 {

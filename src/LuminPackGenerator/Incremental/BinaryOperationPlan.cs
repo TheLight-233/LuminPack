@@ -35,13 +35,15 @@ internal sealed class BinaryOperationPlan
     internal readonly string TypeName;
     internal readonly ImmutableDictionary<string, BinaryOperation> Operations;
     internal readonly ImmutableArray<MemberDeclarationSyntax> Layouts;
+    internal readonly string TemplateSource;
 
     /// <summary>Captures immutable syntax and value-only call facts.</summary>
     /// <param name="typeName">The canonical closed formatter identity.</param>
     /// <param name="operations">Available normal and specialized binary operations.</param>
     /// <param name="layouts">Private storage mirrors required by these operations.</param>
-    private BinaryOperationPlan(string typeName, ImmutableDictionary<string, BinaryOperation> operations, ImmutableArray<MemberDeclarationSyntax> layouts)
-    { TypeName = typeName; Operations = operations; Layouts = layouts; }
+    /// <param name="templateSource">The already rendered template shared with state-overload projection.</param>
+    private BinaryOperationPlan(string typeName, ImmutableDictionary<string, BinaryOperation> operations, ImmutableArray<MemberDeclarationSyntax> layouts, string templateSource = null)
+    { TypeName = typeName; Operations = operations; Layouts = layouts; TemplateSource = templateSource; }
 
     /// <summary>Analyzes only one type's templates; the temporary semantic model never enters the cached result.</summary>
     /// <param name="type">The current operation type.</param>
@@ -55,7 +57,8 @@ internal sealed class BinaryOperationPlan
         var empty = ImmutableDictionary<string, BinaryOperation>.Empty;
         if (LuminPackExtensionGenerator.IsCustomGeneratorType(type) ||
             type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE) &&
-            !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly))
+            !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly) &&
+            !CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(type))
             return new BinaryOperationPlan(name, empty, ImmutableArray<MemberDeclarationSyntax>.Empty);
 
         string source = LuminPackExtensionGenerator.GenerateOperationTemplates(type, compilation, metadata);
@@ -115,7 +118,7 @@ internal sealed class BinaryOperationPlan
         var layoutRewriter = new OperationTemplateRewriter(model, layoutNames, new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default),
             new Dictionary<IMethodSymbol, string>(SymbolEqualityComparer.Default));
         return new BinaryOperationPlan(name, operations.ToImmutable(), layouts.Select(layout =>
-            (MemberDeclarationSyntax)new ActiveOperationSyntax().Visit(layoutRewriter.Visit(layout))).ToImmutableArray());
+            (MemberDeclarationSyntax)new ActiveOperationSyntax().Visit(layoutRewriter.Visit(layout))).ToImmutableArray(), source);
     }
 
     /// <summary>Recognizes generated binary operation names without matching similarly named user methods.</summary>

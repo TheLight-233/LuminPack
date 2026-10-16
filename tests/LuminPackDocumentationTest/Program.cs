@@ -6,6 +6,31 @@ try
         .Split(Path.PathSeparator)
         .Select(path => MetadataReference.CreateFromFile(path))
         .ToArray();
+    if (args is ["--verify-assembly-packable"])
+    {
+        SerializerAssemblyPackableRegression.Run(references);
+        return 0;
+    }
+    if (args is ["--verify-external-union"])
+    {
+        SerializerExternalUnionRegression.Run(references);
+        return 0;
+    }
+    if (args is ["--verify-mechanisms", var baseline])
+    {
+        SerializerMechanismRegression.Run(references, baseline);
+        return 0;
+    }
+    if (args is ["--verify-special-modes"])
+    {
+        SerializerSpecialModeBoundaryRegression.Run(references);
+        return 0;
+    }
+    if (args is ["--verify-custom"])
+    {
+        SerializerCustomFormatterRegression.Run(references);
+        return 0;
+    }
     SerializerDocumentationRegression.Run(references);
     SerializerRootApiRegression.Run(references);
     SerializerAssemblyPackableRegression.Run(references);
@@ -16,6 +41,9 @@ try
     SerializerBinaryInliningRegression.Run(references);
     SerializerCollectionInliningRegression.Run(references);
     SerializerUnionInliningRegression.Run(references);
+    SerializerExternalUnionRegression.Run(references);
+    SerializerMechanismRegression.Run(references);
+    SerializerSpecialModeBoundaryRegression.Run(references);
     MetadataReference[]? compatibilityReferences = args.Length == 2
         ? Directory.GetFiles(args[0], "*.dll").Select(path => MetadataReference.CreateFromFile(path)).Append(MetadataReference.CreateFromFile(args[1])).ToArray()
         : null;

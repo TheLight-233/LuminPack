@@ -36,6 +36,8 @@ public static partial class LuminPackExtensionGenerator
             .Select(group => group.First()).ToArray();
         string extension = GetExtensionClassName(compilation);
         var files = ImmutableArray.CreateBuilder<FrozenGeneratedSource>();
+        var jsonDefinitions = new HashSet<string>(StringComparer.Ordinal);
+        var unionDefinitions = new HashSet<string>(StringComparer.Ordinal);
         foreach (var type in types)
         {
             string name = FormatterTypeName.Get(type);
@@ -49,10 +51,12 @@ public static partial class LuminPackExtensionGenerator
                     source = SerializerCoreProjection.Project(GenerateExtension(body, extension), compilation, metadata, cache.Operations);
                 }
                 else if (type is INamedTypeSymbol marked && analysis.IsAssemblyPackable(marked))
-                    source = SerializerCoreProjection.Project(GenerateOperationTemplates(type, compilation, metadata), compilation, metadata, cache.Operations, type);
+                    source = SerializerCoreProjection.Project(cache.Operations.Get(type, compilation, metadata).TemplateSource ??
+                        GenerateOperationTemplates(type, compilation, metadata), compilation, metadata, cache.Operations, type);
                 else if (type is INamedTypeSymbol { IsGenericType: true } named && analysis.IsPackable(named) &&
                     SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly))
-                    source = SerializerCoreProjection.Project(GenerateOperationTemplates(type, compilation, metadata), compilation, metadata, cache.Operations, type);
+                    source = SerializerCoreProjection.Project(cache.Operations.Get(type, compilation, metadata).TemplateSource ??
+                        GenerateOperationTemplates(type, compilation, metadata), compilation, metadata, cache.Operations, type);
                 else
                 {
                     GenerateFormatterExtensions(body, new LuminLocalFieldData { TypeName = name, TypeSymbol = type, Name = "value", IsValue = type.IsValueType },
@@ -65,6 +69,26 @@ public static partial class LuminPackExtensionGenerator
             }, serializerFragment: true, outputVariant: "invocation:" + (reachability == null));
             if (!string.IsNullOrEmpty(fragment.Extension))
                 files.Add(cache.Files.Wrap("LuminPack.Formatter", name, string.Empty, fragment.Extension, string.Empty));
+            if (type is INamedTypeSymbol union && union.IsAbstract && analysis.IsAssemblyPackable(union) &&
+                !SymbolEqualityComparer.Default.Equals(union.ContainingAssembly, compilation.Assembly) &&
+                unionDefinitions.Add(FormatterTypeName.Get(union.OriginalDefinition)))
+            {
+                var data = LuminPackSourceGenerator.GetSerializationMetadata(union.OriginalDefinition, compilation, metadata);
+                string unionSource = LuminPackUnionDispatchCodeGenerator.Generate(data, compilation, metadata);
+                if (!string.IsNullOrEmpty(unionSource))
+                    files.Add(cache.Files.Wrap("LuminPack.Union", FormatterTypeName.Get(union.OriginalDefinition),
+                        string.Empty, unionSource, string.Empty, () => GeneratedSourceDocumentation.Complete(
+                            SerializerCoreProjection.RewriteCalls(unionSource, compilation, metadata), metadata.ParseOptions), metadata.ParseOptions));
+            }
+            if (type is INamedTypeSymbol external && analysis.IsAssemblyPackable(external) &&
+                !SymbolEqualityComparer.Default.Equals(external.ContainingAssembly, compilation.Assembly) &&
+                jsonDefinitions.Add(FormatterTypeName.Get(external.OriginalDefinition)))
+            {
+                string template = cache.Operations.Get(type, compilation, metadata).TemplateSource;
+                if (template != null)
+                    files.Add(cache.Files.Wrap("LuminPack.JsonSupport", FormatterTypeName.Get(external.OriginalDefinition),
+                        string.Empty, template, string.Empty, () => JsonOperationTemplates.Support(template, metadata), metadata.ParseOptions));
+            }
         }
 
         var dispatchTypes = ordered.Concat(customDependencies)

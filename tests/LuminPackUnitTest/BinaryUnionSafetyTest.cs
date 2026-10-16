@@ -142,7 +142,7 @@ internal static class BinaryUnionSafetyTest
         RunCase(results, nameof(InterfaceUnionUsesStaticTagDispatch), InterfaceUnionUsesStaticTagDispatch);
         RunCase(results, nameof(KnownTagUsesStaticDeserializeSwitch), KnownTagUsesStaticDeserializeSwitch);
         RunCase(results, nameof(UnlistedUnionMemberIsRejected), UnlistedUnionMemberIsRejected);
-        RunCase(results, nameof(CrossAssemblyUnlistedMemberIsRejected), CrossAssemblyUnlistedMemberIsRejected);
+        RunCase(results, nameof(CrossAssemblyContractsRespectAssemblyRoots), CrossAssemblyContractsRespectAssemblyRoots);
         RunCase(results, nameof(RegisteredUnlistedMemberRoundTrips), RegisteredUnlistedMemberRoundTrips);
         RunCase(results, nameof(NullWideGenericAndMultipleRootsRoundTrip), NullWideGenericAndMultipleRootsRoundTrip);
         RunCase(results, nameof(ClosedGenericTagsUseConstantTimeDispatch), ClosedGenericTagsUseConstantTimeDispatch);
@@ -229,15 +229,16 @@ internal static class BinaryUnionSafetyTest
             "The second independent class-union virtual slot failed.");
     }
 
-    /// <summary>Verifies cross assembly unlisted member is rejected.</summary>
-    private static void CrossAssemblyUnlistedMemberIsRejected()
+    /// <summary>Rejects an unmarked external interface and discovers the local case of an assembly-marked external class.</summary>
+    private static void CrossAssemblyContractsRespectAssemblyRoots()
     {
         IExternalUnion value = new CrossAssemblyUnionMember { Value = 654 };
         ExternalClassUnionRoot classValue = new CrossAssemblyClassUnionMember { Value = 655 };
         AssertThrows(() => LuminPackSerializer.Serialize(value),
             "An external interface union member without a generated contract tag was accepted.");
-        AssertThrows(() => LuminPackSerializer.Serialize(classValue),
-            "An external class union member without a generated contract tag was accepted.");
+        var payload = LuminPackSerializer.Serialize(classValue);
+        Assert(LuminPackSerializer.Deserialize<ExternalClassUnionRoot>(payload) is CrossAssemblyClassUnionMember { Value: 655 },
+            "An assembly-marked external root did not discover its local case without manual registration.");
     }
 
     /// <summary>Verifies registered unlisted member round trips.</summary>

@@ -69,6 +69,8 @@ public static partial class LuminPackExtensionGenerator
             return true;
         }
 
+        if (CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(type)) return true;
+
         if (type is INamedTypeSymbol named && HasPackableAttribute(named))
         {
             return SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly);
@@ -93,6 +95,8 @@ public static partial class LuminPackExtensionGenerator
         {
             return true;
         }
+
+        if (CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(type)) return true;
 
         if (type is INamedTypeSymbol named && HasPackableAttribute(named))
         {

@@ -70,6 +70,7 @@ internal static class SerializerCustomFormatterRegression
             }
             [LuminPackable] public struct RawOwner { public int Prefix; public CustomRaw Value; public int Suffix; }
             [LuminPackable] public sealed class GenericOwner<T> { public T Value = default!; public T[] Values = []; }
+            [LuminPackable] public struct ConstrainedOwner<T> where T : unmanaged { public byte Tag; public T Value; }
             [LuminPackable] public sealed class Host
             {
                 public int Prefix;
@@ -129,6 +130,16 @@ internal static class SerializerCustomFormatterRegression
                     LuminPackSerializer.Deserialize(genericBytes.AsSpan(), ref genericResult);
                     if (genericResult.Value.Number != 31 || genericResult.Values[0].Number != 31) throw new Exception("Generic custom bypass.");
                     if (LuminPackSerializer.Sizeof(generic) != genericBytes.Length) throw new Exception("Generic custom size mismatch.");
+                    var constrained = new ConstrainedOwner<CustomRaw> { Tag = 7, Value = raw };
+                    int previousWrites = RawWrites;
+                    var constrainedBytes = LuminPackSerializer.Serialize(constrained);
+                    if (RawWrites != previousWrites + 1) throw new Exception("An unmanaged constraint bypassed its actual Custom argument.");
+                    var constrainedResult = LuminPackSerializer.Deserialize<ConstrainedOwner<CustomRaw>>(constrainedBytes);
+                    if (constrainedResult.Tag != 7 || constrainedResult.Value.Number != 31 || LuminPackSerializer.Sizeof(constrained) != constrainedBytes.Length)
+                        throw new Exception("An unmanaged-constrained Custom contract changed.");
+                    var ordinary = new ConstrainedOwner<int> { Tag = 11, Value = 127 };
+                    if (LuminPackSerializer.Serialize(ordinary).Length != System.Runtime.CompilerServices.Unsafe.SizeOf<ConstrainedOwner<int>>())
+                        throw new Exception("An unrelated Custom formatter disabled an ordinary constrained raw-copy contract.");
                     var callbackBytes = LuminPackSerializer.Serialize(new CallbackOwner());
                     CallbackCustom.Current.SetValue(0);
                     CallbackOwner callbackResult = new();

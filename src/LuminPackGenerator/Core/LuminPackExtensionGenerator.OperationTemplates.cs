@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using LuminPack.SourceGenerator;
+using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.Code.Core;
@@ -27,6 +28,8 @@ public static partial class LuminPackExtensionGenerator
             // Preserve the original generic definition's wire decisions. Analyzing a closed
             // construction can classify a formerly generic field as unmanaged and change framing.
             var data = LuminPackSourceGenerator.GetSerializationMetadata(named.OriginalDefinition, compilation, metadata);
+            using var unmanagedContract = named.IsGenericType && !SymbolEqualityComparer.Default.Equals(named, named.OriginalDefinition)
+                ? new UnmanagedContractScope(named, compilation) : null;
             name = FormatterTypeName.Get(named.OriginalDefinition);
             jsonExpandable = !data.Diagnostics.Any(diagnostic => diagnostic.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
             if (data.isUnion && data.isValueType) LuminPackUnionCodeGenerator.GenerateCaseMapStruct(data, body);
@@ -48,6 +51,6 @@ public static partial class LuminPackExtensionGenerator
         bool ownsExternalHelper = type is INamedTypeSymbol external &&
             CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(external) &&
             !SymbolEqualityComparer.Default.Equals(external.ContainingAssembly, compilation.Assembly);
-        return jsonExpandable ? JsonOperationTemplates.Prepare(source, metadata, type, ownsExternalHelper) : source;
+        return jsonExpandable ? JsonOperationTemplates.Prepare(source, metadata, ownsExternalHelper) : source;
     }
 }

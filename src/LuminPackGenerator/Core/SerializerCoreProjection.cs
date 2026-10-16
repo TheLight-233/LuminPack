@@ -35,6 +35,11 @@ internal static class SerializerCoreProjection
         var support = new List<MemberDeclarationSyntax>();
         foreach (var member in container.Members)
         {
+            if (member is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackTypeCache" })
+            {
+                dispatch.Add(member);
+                continue;
+            }
             if (member is ConstructorDeclarationSyntax constructor)
             {
                 dispatch.Add(constructor.WithIdentifier(SyntaxFactory.Identifier("FormatterDispatch")));
@@ -43,10 +48,11 @@ internal static class SerializerCoreProjection
             if (member is not MethodDeclarationSyntax method || method.ParameterList.Parameters.Count != 2 ||
                 !BinaryOperationPlan.IsOperation(method.Identifier.ValueText))
             {
+                if (closedRoot != null) continue;
                 if (member is ClassDeclarationSyntax helper && helper.Identifier.ValueText.StartsWith("Json_", StringComparison.Ordinal))
                     support.Add(helper.WithMembers(SyntaxFactory.List(helper.Members.Where(item => item is not MethodDeclarationSyntax operation ||
                         operation.Identifier.ValueText is not ("WriteValue" or "ReadValue")))));
-                else if (closedRoot == null) support.Add(member);
+                else support.Add(member);
                 continue;
             }
             string operationName = method.Identifier.ValueText;

@@ -17,7 +17,11 @@ internal sealed class CompilationTypeAnalysis
 {
     private readonly Dictionary<ITypeSymbol, INamedTypeSymbol> _formatterOwners;
     private readonly Dictionary<ITypeSymbol, INamedTypeSymbol> _layoutOwners;
-    private readonly ImmutableArray<ITypeSymbol> _assemblyPackableTypes;
+    private readonly HashSet<ITypeSymbol> _assemblyPackableTypes = new(SymbolEqualityComparer.Default);
+    private readonly HashSet<ITypeSymbol> _assemblyPackableDefinitions = new(SymbolEqualityComparer.Default);
+    private readonly HashSet<AssemblyIdentity> _markedAssemblies = new();
+    private readonly HashSet<string> _assemblyPackableNames = new(StringComparer.Ordinal);
+    private readonly HashSet<string> _assemblyDefinitionNames = new(StringComparer.Ordinal);
 
     /// <summary>Initializes a new instance of <c>CompilationTypeAnalysis</c>.</summary>
     /// <param name="formatterTypes">The formatter types used by this operation.</param>
@@ -41,7 +45,20 @@ internal sealed class CompilationTypeAnalysis
             .ToDictionary(group => group.Key, group => group.First(), System.StringComparer.Ordinal);
         DeclaredTypes = declaredTypes;
         PackableTypes = packableTypes;
-        _assemblyPackableTypes = assemblyPackableTypes;
+        foreach (var marked in assemblyPackableTypes.OfType<INamedTypeSymbol>())
+        {
+            _markedAssemblies.Add(marked.ContainingAssembly.Identity);
+            if (marked.IsUnboundGenericType)
+            {
+                _assemblyPackableDefinitions.Add(marked.OriginalDefinition);
+                _assemblyDefinitionNames.Add(AssemblyTypeIdentity(marked.OriginalDefinition));
+            }
+            else
+            {
+                _assemblyPackableTypes.Add(marked);
+                _assemblyPackableNames.Add(AssemblyTypeIdentity(marked));
+            }
+        }
         _formatterOwners = formatterOwners;
         _layoutOwners = layoutOwners;
         UsesLuminPack = usesLuminPack;
@@ -64,17 +81,19 @@ internal sealed class CompilationTypeAnalysis
     /// <returns>Whether the type is included by an assembly-level marker.</returns>
     internal bool IsAssemblyPackable(ITypeSymbol type)
     {
-        if (type is not INamedTypeSymbol named) return false;
-        foreach (ITypeSymbol target in _assemblyPackableTypes)
-        {
-            if (target is not INamedTypeSymbol marked) continue;
-            if (marked.IsUnboundGenericType
-                ? SymbolEqualityComparer.Default.Equals(marked.OriginalDefinition, named.OriginalDefinition)
-                : SymbolEqualityComparer.Default.Equals(marked, named))
-                return true;
-        }
-        return false;
+        if (type is not INamedTypeSymbol named || named.TypeKind == TypeKind.Error || named.ContainingAssembly == null) return false;
+        if (_assemblyPackableTypes.Contains(named) || _assemblyPackableDefinitions.Contains(named.OriginalDefinition)) return true;
+        // The complete metadata view has different symbols but the same assembly/type identity.
+        return _markedAssemblies.Contains(named.ContainingAssembly.Identity) &&
+            (_assemblyPackableNames.Contains(AssemblyTypeIdentity(named)) ||
+             _assemblyDefinitionNames.Contains(AssemblyTypeIdentity(named.OriginalDefinition)));
     }
+
+    /// <summary>Identifies a referenced type consistently across public and complete metadata views.</summary>
+    /// <param name="type">The definition or exact construction being inspected.</param>
+    /// <returns>An assembly-qualified canonical identity.</returns>
+    private static string AssemblyTypeIdentity(INamedTypeSymbol type)
+        => type.ContainingAssembly.Identity + "|" + FormatterTypeName.Get(type);
 
     /// <summary>Determines whether a type is marked either directly or by the consuming assembly.</summary>
     /// <param name="type">The type or construction to inspect.</param>
@@ -83,6 +102,9 @@ internal sealed class CompilationTypeAnalysis
         => type is INamedTypeSymbol named &&
            (HasPackableAttribute(named) || IsAssemblyPackable(named));
 
+    /// <summary>Determines whether a type declares its own serialization marker.</summary>
+    /// <param name="type">The type being inspected.</param>
+    /// <returns>Whether the type has a direct packable attribute.</returns>
     private static bool HasPackableAttribute(INamedTypeSymbol type)
         => type.GetAttributes().Any(static attribute =>
             attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE);
@@ -227,7 +249,7 @@ internal static class CompilationTypeAnalysisCache
         foreach (INamedTypeSymbol packable in orderedPackables)
         {
             var contribution = PackableGraphCache.GetOrBuild(compilation, packable, (owned, analyzed) =>
-                AddPackableGraph(packable, owned, analyzed, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), assemblyPackableTypes));
+                AddPackableGraph(packable, owned, analyzed, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), assemblyPackableTypes, compilation));
             // Reproduce legacy first-occurrence insertion while retaining every unowned member type.
             foreach (ITypeSymbol type in contribution.Analyzed) AddTypeGraph(type, formatterTypes);
             foreach (ITypeSymbol type in contribution.Owned)
@@ -247,7 +269,7 @@ internal static class CompilationTypeAnalysisCache
         foreach (var packable in closedPackables)
         {
             var contribution = PackableGraphCache.GetOrBuild(compilation, packable, (owned, analyzed) =>
-                AddPackableGraph(packable, owned, analyzed, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), assemblyPackableTypes));
+                AddPackableGraph(packable, owned, analyzed, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default), assemblyPackableTypes, compilation));
             foreach (var type in contribution.Analyzed) AddTypeGraph(type, formatterTypes);
         }
 
@@ -365,18 +387,27 @@ internal static class CompilationTypeAnalysisCache
     /// <param name="analyzedTypes">The analyzed types used by this operation.</param>
     /// <param name="visited">The visited used by this operation.</param>
     /// <param name="assemblyPackableTypes">The types explicitly marked on the consuming assembly.</param>
+    /// <param name="compilation">The compilation whose referenced storage metadata is inspected.</param>
+    /// <param name="includeExternalStorage">Whether an explicitly selected external root also requires this inherited storage.</param>
     private static void AddPackableGraph(
         INamedTypeSymbol packable,
         ISet<ITypeSymbol> ownedTypes,
         ISet<ITypeSymbol> analyzedTypes,
         ISet<ITypeSymbol> visited,
-        ImmutableArray<ITypeSymbol> assemblyPackableTypes)
+        ImmutableArray<ITypeSymbol> assemblyPackableTypes,
+        Compilation compilation,
+        bool includeExternalStorage = false)
     {
         if (!visited.Add(packable)) return;
         AddTypeGraph(packable, ownedTypes);
         AddTypeGraph(packable, analyzedTypes);
 
-        foreach (ISymbol member in packable.GetMembers())
+        bool external = packable.DeclaringSyntaxReferences.Length == 0 &&
+            (includeExternalStorage || IsAssemblyPackableType(packable, assemblyPackableTypes));
+        var inspected = external ? ReferencedTypeMetadata.Resolve(packable, compilation) : packable;
+        // Keep graph symbols in the original compilation, even when inspecting full metadata.
+        ITypeSymbol Current(ITypeSymbol type) => external ? ReferencedTypeMetadata.ToCurrent(type, compilation) : type;
+        foreach (ISymbol member in inspected.GetMembers())
         {
             switch (member)
             {
@@ -384,22 +415,21 @@ internal static class CompilationTypeAnalysisCache
                     // Serialize fields that are not ignored and are included or public.
                     bool fieldSerialized = !TypeMetaChecker.TryCheckIgnoreAttribute(field) &&
                         (TypeMetaChecker.TryCheckIncludeAttribute(field) || IsPubliclyAccessible(field.DeclaredAccessibility));
-                    AddMemberGraph(field.Type, ownedTypes, analyzedTypes, fieldSerialized);
+                    AddMemberGraph(Current(field.Type), ownedTypes, analyzedTypes, fieldSerialized);
                     break;
 
                 case IPropertySymbol property
-                    when !property.IsStatic && (LuminPackSourceGenerator.IsAutoProperty(property) ||
-                        IsAssemblyPackableType(packable, assemblyPackableTypes) && IsPublicSettableProperty(property)):
+                    when !property.IsStatic && LuminPackSourceGenerator.IsAutoProperty(property):
                     // Serialize auto-properties that are not ignored and are included or public.
                     bool propSerialized = !TypeMetaChecker.TryCheckIgnoreAttribute(property) &&
                         (TypeMetaChecker.TryCheckIncludeAttribute(property) || IsPubliclyAccessible(property.DeclaredAccessibility));
-                    AddMemberGraph(property.Type, ownedTypes, analyzedTypes, propSerialized);
+                    AddMemberGraph(Current(property.Type), ownedTypes, analyzedTypes, propSerialized);
                     break;
 
                 case IPropertySymbol { IsStatic: false } computedProperty:
                     // Computed read-only properties have no backing storage, are not serialized, and do not acquire ownership.
                     // Retain the type in analysis so the shared generator can provide its formatter.
-                    AddTypeGraph(computedProperty.Type, analyzedTypes);
+                    AddTypeGraph(Current(computedProperty.Type), analyzedTypes);
                     break;
             }
         }
@@ -407,7 +437,13 @@ internal static class CompilationTypeAnalysisCache
         if (packable.BaseType is { SpecialType: not SpecialType.System_Object } baseType &&
             IsPackableType(baseType, assemblyPackableTypes))
         {
-            AddPackableGraph(baseType, ownedTypes, analyzedTypes, visited, assemblyPackableTypes);
+            AddPackableGraph(baseType, ownedTypes, analyzedTypes, visited, assemblyPackableTypes, compilation, external);
+        }
+        if (external && IsAssemblyPackableType(packable, assemblyPackableTypes))
+        {
+            for (var parent = packable.BaseType; parent != null &&
+                 parent.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType); parent = parent.BaseType)
+                AddPackableGraph(parent, ownedTypes, analyzedTypes, visited, assemblyPackableTypes, compilation, includeExternalStorage: true);
         }
     }
 
@@ -434,13 +470,6 @@ internal static class CompilationTypeAnalysisCache
             Accessibility.Private or
             Accessibility.ProtectedAndInternal or
             Accessibility.Protected);
-
-    /// <summary>Determines whether a metadata property can be read and populated from the consuming assembly.</summary>
-    /// <param name="property">The property used by this operation.</param>
-    /// <returns>Whether the property has public accessors for both serialization directions.</returns>
-    private static bool IsPublicSettableProperty(IPropertySymbol property)
-        => property.GetMethod?.DeclaredAccessibility == Accessibility.Public &&
-           property.SetMethod?.DeclaredAccessibility == Accessibility.Public;
 
     /// <summary>Performs the add type graph step for the current operation.</summary>
     /// <param name="type">The type or symbol to analyze.</param>
@@ -490,7 +519,24 @@ internal static class CompilationTypeAnalysisCache
                 attribute.ConstructorArguments[0].Value is not INamedTypeSymbol type)
                 continue;
 
+            if (type.TypeKind == TypeKind.Error || type.ContainingAssembly == null) continue;
+
             if (seen.Add(type)) types.Add(type);
+        }
+        // An imported Union owns its declared case contracts just as a source-declared root does.
+        // Open case families remain open markers and are specialized only for observed constructions.
+        for (int index = 0; index < types.Count; index++)
+        {
+            if (types[index] is not INamedTypeSymbol root) continue;
+            foreach (var attribute in root.GetAttributes())
+            {
+                if (attribute.AttributeClass?.ToDisplayString() != "LuminPack.Attribute.LuminPackUnionAttribute" ||
+                    attribute.ConstructorArguments.Length != 2 ||
+                    attribute.ConstructorArguments[1].Value is not INamedTypeSymbol member ||
+                    member.TypeKind == TypeKind.Error)
+                    continue;
+                if (seen.Add(member)) types.Add(member);
+            }
         }
         return types.ToImmutable();
     }

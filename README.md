@@ -455,7 +455,13 @@ using LuminPack.Attribute;
 
 非泛型类型直接传入 `typeof(MyModel)`；开放泛型用 `typeof(GenericModel<>)`、`typeof(TripleModel<,,>)` 标记整个泛型定义。生成器会为项目中实际使用的闭合类型（例如 `GenericModel<int>`）生成具体的 `LuminPackSerializer` 重载，因此这些静态调用不需要再手动注册。可以为多个类型添加多个程序集特性。
 
-跨程序集生成遵守类型可访问性边界：生成代码序列化公开字段和同时具有公开 getter/setter 的公开属性。程序集元数据无法区分自动属性与计算属性，因此该根类型上的公开读写属性都会参与序列化。私有成员上的 `[LuminPackInclude]` 无法授予消费程序集访问权限；反序列化还需要可访问的构造函数。`LuminPackSerializer.Register<T>` 仍保留给运行期动态类型、源生成器无法静态分析的类型，以及其他需要显式提供 formatter 的场景。
+普通跨程序集类和泛型类型使用同一套分析规则。生成器读取完整字段元数据，以原有的 **Local 副本 + Unsafe.As** 机制访问私有字段和自动属性的 backing field；隐藏的未序列化字段仍保留为布局占位。`[LuminPackInclude]`、`[LuminPackIgnore]` 和私有 setter 沿用既有语义，计算属性不参与序列化。类型本身以及反序列化使用的构造函数仍需可访问。具体重载和显式泛型调用都支持被标记的类型，`LuminPackSerializer.Register<T>` 仍保留给运行期动态类型和需要显式提供 formatter 的场景。
+
+这些标记完整遵守当前裁剪模式：Full 保留完整具体 API，Light 将被声明类型作为额外根，Minimal 只为实际调用保留具体重载。开放泛型只为实际观察到的闭合类型生成代码。
+
+外部 Union 根也可这样声明；当前项目的 partial 子类会直接 override 原根的生成虚方法，无需手动注册。普通 Union 仍走虚方法，泛型 Union 保留虚方法和所需的缓存槽位 switch。为允许跨程序集调用和 override，生成的虚方法现在为 `public`，并以 `EditorBrowsable(Never)` 隐藏提示；引用的 Union 若仍由旧生成器生成 internal 槽位，需要重新构建。引用程序集内已经编译的 case 保留其原有方法体和泛型兜底边界。
+
+维护和重构必须遵守 [完整机制约束](docs/serialization-mechanism-contract.md)，涵盖版本容忍、循环引用、值类型、布局、集合、回调、池化、JSON、压缩等全部模块。
 
 LuminPack 有两处运行时手动注册机制，均以 **函数指针（`delegate*`）** 方式传入静态方法。注册表以 **MethodTable 地址（`nint`）** 为键、
 存储方法指针，不持有强 `Type` 引用，保持 ALC 安全。注册后生成类型的**热路径不受任何影响**，

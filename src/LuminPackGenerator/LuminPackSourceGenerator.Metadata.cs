@@ -34,9 +34,10 @@ namespace LuminPack.SourceGenerator
             var previousDiagnostics = TypeMetaChecker.PushDiagnosticScope();
             try
             {
-                bool includeExternalProperties = symbol is INamedTypeSymbol rootType &&
-                    !SymbolEqualityComparer.Default.Equals(rootType.ContainingAssembly, compilation.Assembly);
-                _analysisState = new AnalysisState(symbol, metadata, includeExternalProperties);
+                var types = CompilationTypeAnalysisCache.GetOrCreate(compilation);
+                if (symbol is INamedTypeSymbol rootType && !rootType.IsAbstract)
+                    symbol = ReferencedTypeMetadata.Resolve(rootType, compilation);
+                _analysisState = new AnalysisState(symbol, metadata, types, compilation);
                 var dataInfo = CreateLuminDataInfoCore(symbol, compilation);
                 if (TypeMetaChecker.CurrentDiagnostics.Count != 0)
                 {
@@ -75,7 +76,8 @@ namespace LuminPack.SourceGenerator
                 isGeneric = typeSymbol.IsGenericType,
                 isValueType = typeSymbol.TypeKind == TypeKind.Struct,
                 TypeSymbol = typeSymbol,
-                CanGenerateUnionDispatch = LuminPackUnionDispatchUtilities.CanGeneratePartial(typeSymbol, compilation),
+                CanGenerateUnionDispatch = LuminPackUnionDispatchUtilities.CanGeneratePartial(typeSymbol, compilation) ||
+                    LuminPackUnionDispatchUtilities.CanUseReferencedDispatch(typeSymbol, compilation),
                 enableBurst = false,
                 generatorType = TypeMetaChecker.CheckGeneratorType(typeSymbol),
             };
@@ -402,6 +404,8 @@ namespace LuminPack.SourceGenerator
                     baseClassSymbol.SpecialType == SpecialType.System_Object ||
                     baseClassSymbol.SpecialType == SpecialType.System_ValueType) return;
 
+                baseClassSymbol = ReferencedTypeMetadata.Resolve(baseClassSymbol, _analysisState.Compilation);
+
                 #region Base type initialization
 
                 var currentParent = dataInfo;
@@ -483,10 +487,7 @@ namespace LuminPack.SourceGenerator
             {
                 if (symbol == null) return;
 
-                var allMembers = symbol.GetMembers()
-                    .Where(m => m is IPropertySymbol or IFieldSymbol)
-                    .OrderBy(m => m.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()?.SpanStart ?? int.MaxValue)
-                    .ToList();
+                var allMembers = GetOrderedStorageMembers(symbol);
 
                 foreach (var rawMember in allMembers)
                 {
@@ -497,7 +498,7 @@ namespace LuminPack.SourceGenerator
                     {
                         if (member.IsStatic) continue;
                         if (TypeMetaChecker.TryCheckIgnoreAttribute(member)) continue;
-                        if (!IsAutoProperty(member, _analysisState.IncludeExternalProperties)) continue;
+                        if (!IsAutoProperty(member)) continue;
                         if (parent != null &&
                             member.DeclaredAccessibility == Accessibility.Private &&
                             TypeMetaChecker.TryCheckIncludeAttribute(member))

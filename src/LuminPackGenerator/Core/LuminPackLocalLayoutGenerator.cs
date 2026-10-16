@@ -248,7 +248,9 @@ public static class LuminPackLocalLayoutGenerator
 
                 // The most derived level owns whatever no earlier level identified, so a slot whose
                 // owner cannot be determined is still mirrored instead of being dropped.
-                if (ownNames is null || ownNames.Contains(flattenedFields[f].Name))
+                if (flattenedFields[f].DeclaringTypeName != null
+                    ? flattenedFields[f].DeclaringTypeName == chain[i].ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
+                    : ownNames is null || ownNames.Contains(flattenedFields[f].Name))
                 {
                     claimed[f] = true;
                     own.Add(flattenedFields[f]);

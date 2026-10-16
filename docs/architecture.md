@@ -1,5 +1,7 @@
 # Architecture and maintenance boundaries
 
+All implementation work is subject to the [LuminPack mechanism contract](serialization-mechanism-contract.md). It records mandatory storage, dispatch, specialized-mode, runtime, mapping, and incremental invariants, with historical authority and validation requirements.
+
 ## Runtime and generator
 
 `src/LuminPack` contains the binary and JSON readers and writers, size evaluation, operation state, collections, buffers, compression, cryptography, and mapping runtime. Unsafe storage views remain near the code that depends on their layout. Their field sequence and conditional layout are compatibility-sensitive.
@@ -82,6 +84,8 @@ Each retained payload has one state implementation per binary write, binary read
 
 Ordinary `WriteValue`, `ReadValue`, and `CalculateOffset` extension implementations are no longer published per type. Five generic compatibility extensions forward to Serializer state APIs. Specialized compression, fresh-read, and polymorphic compatibility methods also contain only forwarding calls. A nested `FormatterDispatch` type owns the single switch per generic operation and its registration constructor, so direct concrete state calls do not trigger generic dispatch registration.
 
+The compact-id cache belongs to that same generated dispatcher. Independent assemblies must not assign their different dense table positions to one shared runtime `TypeId` field. The existing public runtime cache type remains available for compatibility.
+
 Concrete state implementations expand cached operation templates before documentation is added. A temporary semantic model binds only one type's existing emitter output; completed plans retain immutable syntax, canonical type names, passing conventions, and call slots. They retain no compilation, semantic model, or symbols. The same dependency guards used for type emission also protect operation reuse.
 
 Within one concrete type emission, nested plans are validated once and each state operation is expanded once. Convenience overloads reuse its method rather than copying its field body. These emission-local caches do not survive a compilation change. Common generic APIs and their XML have a separate generator-instance cache guarded by all generation and parse settings, without retaining the compilation used to document them.
@@ -91,6 +95,10 @@ Expanded bodies and private layouts stay as syntax nodes through call projection
 Each expansion receives independent local identities. Compiler-bound declarations and references are marked before instantiation, so repeated fields and nested collections cannot share locals, and source members that happen to use a generated naming prefix remain unchanged. Formatter returns become local exits. Ordinary static dictionary helpers and private-member accessors are expanded too. Private layout hierarchies are copied into the concrete partial with root-specific names and unchanged storage order. Heap-backed reader spans receive the parameter reader's escape context through a zero-length lifetime seed before their original initialization. Stack-allocated storage retains its local scope.
 
 Generic packable templates come from the original generic definition and are then closed through type substitution. Reanalyzing a closed construction can change unmanaged classification and wire framing. Actual closed generic payloads receive concrete state specializations; open generic implementations retain dispatch at fields whose type is still unknown. Nullable annotations on unconstrained parameters must remain annotations rather than introduce a new nullable-value wrapper. Recursive and custom formatter calls retain a shared state boundary.
+
+An emission-local, exception-safe `UnmanagedContractScope` resolves actual arguments only for raw-copy/Custom eligibility. It restores an unmanaged constraint's established raw-copy path for ordinary closed arguments and excludes actual Custom storage. It does not upgrade an originally unconstrained generic definition into an unmanaged wire contract. Its thread-local semantic state is restored before an operation plan is cached.
+
+Referenced storage analysis uses a compilation-local complete metadata view. Local fields carry the exact declaring storage level, so a source type inheriting a referenced base preserves that base's private placeholders and backing fields in the correct mirror level. The ordinary source symbols and consuming compilation remain the authority for source generation and virtual-slot ownership.
 
 Binary, JSON, and size state methods use these operation plans. Buffered asynchronous, sequence, JSON string, and character-span convenience entries keep their original staging and transcoding rules while calling those methods. JSON lookup methods, literal getters, and cached property names remain in their shared per-type helper, preserving cache ownership and initialization boundaries. Redundant JSON helper read/write bodies are removed. Qualifying helper references must leave qualified type and namespace names intact, even when their spelling matches a helper member.
 

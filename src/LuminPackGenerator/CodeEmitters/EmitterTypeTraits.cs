@@ -20,7 +20,9 @@ internal static class EmitterTypeTraits
     {
         if (type is not null && ContainsUndeterminedTypeParameter(type))
         {
-            isUnmanaged = false;
+            // Keep a proven unmanaged constraint's original raw path when its actual argument
+            // is available and does not carry a Custom contract. Unknown arguments stay conservative.
+            isUnmanaged = type.IsUnmanagedType && CanUseUnmanagedSerialization(type);
             return true;
         }
         if (type?.IsUnmanagedType == true)
@@ -49,8 +51,12 @@ internal static class EmitterTypeTraits
     /// <param name="type">The value type considered for raw copying.</param>
     /// <returns>Whether raw copying preserves every nested formatter boundary.</returns>
     internal static bool CanUseUnmanagedSerialization(ITypeSymbol type)
-        => type?.IsUnmanagedType == true && !ContainsUndeterminedTypeParameter(type) &&
-           !ContainsCustomFormatter(type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
+    {
+        if (type?.IsUnmanagedType != true) return false;
+        var storage = UnmanagedContractScope.Resolve(type);
+        return !ContainsUndeterminedTypeParameter(storage) &&
+            !ContainsCustomFormatter(storage, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
+    }
 
     /// <summary>Finds custom contracts inside finite unmanaged storage without following reference graphs.</summary>
     /// <param name="type">The current storage type.</param>

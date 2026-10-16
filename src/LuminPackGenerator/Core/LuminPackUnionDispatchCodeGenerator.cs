@@ -30,8 +30,9 @@ internal static class LuminPackUnionDispatchCodeGenerator
         var suffix = GetSlotSuffix(root);
         var extensionType = "global::LuminPack.Generated.LuminPackExtensions_" +
             SanitizeAssemblyName(compilation.AssemblyName ?? "Assembly");
-        AppendPartialType(sb, root, (builder, indent) =>
-            AppendRootMethods(builder, indent, root, suffix, metaInfo));
+        if (LuminPackUnionDispatchUtilities.IsCurrentCompilation(root, compilation))
+            AppendPartialType(sb, root, (builder, indent) =>
+                AppendRootMethods(builder, indent, root, suffix, metaInfo));
 
         foreach (var group in data.UnionMembers
                      .Where(member => IsFastPathMember(data, member))
@@ -79,7 +80,7 @@ internal static class LuminPackUnionDispatchCodeGenerator
     {
         var padding = new string(' ', indent * 4);
         var rootType = root.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
-        var modifier = root.TypeKind == TypeKind.Interface ? string.Empty : "internal virtual ";
+        var modifier = root.TypeKind == TypeKind.Interface ? string.Empty : "public virtual ";
         var entryType = "global::LuminPack.Code.LuminUnionFormatterEntry";
 
         // The cross-assembly manual registration registry uses function pointers (delegate*),
@@ -124,6 +125,7 @@ internal static class LuminPackUnionDispatchCodeGenerator
         }
 
         AppendMethodAttribute(sb, padding);
+        AppendHiddenAttribute(sb, padding);
         sb.AppendLine($"{padding}{modifier}void __LuminPackUnionSerialize_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer)");
         sb.AppendLine($"{padding}{{");
         if (metaInfo.AllowUnsafe && metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
@@ -140,6 +142,7 @@ internal static class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine();
 
         AppendMethodAttribute(sb, padding);
+        AppendHiddenAttribute(sb, padding);
         sb.AppendLine($"{padding}{modifier}void __LuminPackUnionSerializeJson_{suffix}(ref global::LuminPack.Core.LuminPackJsonWriter writer)");
         sb.AppendLine($"{padding}{{");
         if (metaInfo.AllowUnsafe && metaInfo.RegisterMode != LuminPackRegisterMode.Disabled)
@@ -156,6 +159,7 @@ internal static class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine();
 
         AppendMethodAttribute(sb, padding);
+        AppendHiddenAttribute(sb, padding);
         sb.AppendLine($"{padding}{modifier}void __LuminPackUnionCalculateOffset_{suffix}(ref global::LuminPack.Core.LuminPackEvaluator evaluator)");
         sb.AppendLine($"{padding}{{");
         sb.AppendLine($"{padding}    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(((object)this).GetType(), typeof({rootType}));");
@@ -189,7 +193,7 @@ internal static class LuminPackUnionDispatchCodeGenerator
         var isInterface = root.TypeKind == TypeKind.Interface;
         var prefix = isInterface
             ? $"void {rootType}."
-            : (canSeal ? "internal sealed override void " : "internal override void ");
+            : (canSeal ? "public sealed override void " : "public override void ");
 
         if (RequiresClosedGenericDispatch(members))
         {
@@ -198,6 +202,7 @@ internal static class LuminPackUnionDispatchCodeGenerator
         }
 
         AppendMethodAttribute(sb, padding);
+        AppendHiddenAttribute(sb, padding);
         sb.AppendLine($"{padding}{prefix}__LuminPackUnionSerialize_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer)");
         sb.AppendLine($"{padding}{{");
         AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.Binary, extensionType);
@@ -205,6 +210,7 @@ internal static class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine();
 
         AppendMethodAttribute(sb, padding);
+        AppendHiddenAttribute(sb, padding);
         sb.AppendLine($"{padding}{prefix}__LuminPackUnionSerializeJson_{suffix}(ref global::LuminPack.Core.LuminPackJsonWriter writer)");
         sb.AppendLine($"{padding}{{");
         AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.Json, extensionType);
@@ -212,6 +218,7 @@ internal static class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine();
 
         AppendMethodAttribute(sb, padding);
+        AppendHiddenAttribute(sb, padding);
         sb.AppendLine($"{padding}{prefix}__LuminPackUnionCalculateOffset_{suffix}(ref global::LuminPack.Core.LuminPackEvaluator evaluator)");
         sb.AppendLine($"{padding}{{");
         AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.CalculateOffset, extensionType);
@@ -465,6 +472,14 @@ internal static class LuminPackUnionDispatchCodeGenerator
     private static void AppendMethodAttribute(StringBuilder sb, string padding)
     {
         sb.AppendLine($"{padding}[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+    }
+
+    /// <summary>Hides framework dispatch slots from ordinary API completion.</summary>
+    /// <param name="sb">The generated source builder.</param>
+    /// <param name="padding">The declaration indentation.</param>
+    private static void AppendHiddenAttribute(StringBuilder sb, string padding)
+    {
+        sb.AppendLine($"{padding}[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
     }
 
     /// <summary>Determines whether derived union member are present.</summary>

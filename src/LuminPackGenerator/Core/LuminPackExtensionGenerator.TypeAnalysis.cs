@@ -29,10 +29,15 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("        {");
         foreach (DispatchEntry d in dispatch)
         {
-            sb.AppendLine("            global::LuminPack.LuminPackTypeCache<" + d.Name + ">.TypeId = " + d.Id + "u;");
+            sb.AppendLine("            LuminPackTypeCache<" + d.Name + ">.TypeId = " + d.Id + "u;");
         }
         sb.AppendLine("        }");
         sb.AppendLine();
+        // Compact ids describe this assembly's switch, not a process-wide formatter ordering.
+        sb.AppendLine("        private static class LuminPackTypeCache<T>");
+        sb.AppendLine("        {");
+        sb.AppendLine("            internal static uint TypeId = uint.MaxValue;");
+        sb.AppendLine("        }");
         publish("Registration", sb.ToString());
         sb.Clear();
         AppendGenericSwitch(sb, dispatch, "WriteValue", "ref this LuminPackWriter writer", scopedIn, "T value", metaInfo, op: "write", isJson: false, unsafeAs, throwNoFormatter);
@@ -76,7 +81,7 @@ public static partial class LuminPackExtensionGenerator
         string unsafeAs,
         string throwNoFormatter)
     {
-        string cacheType = "global::LuminPack.LuminPackTypeCache";
+        string cacheType = "LuminPackTypeCache";
         string registryTryGet = "global::LuminPack.Code.LuminPackFormatterRegistry.TryGetValue(global::LuminPack.Code.LuminPackMarshal.GetMethodTable(typeof(T)), out var __entry)";
         sb.AppendLine("        [global::LuminPack.Attribute.Preserve]");
         sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.AggressiveInlining)]");

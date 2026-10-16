@@ -9,6 +9,8 @@ public sealed class LuminLocalFieldData
     public Microsoft.CodeAnalysis.ITypeSymbol TypeSymbol;
     /// <summary>Stores the name.</summary>
     public string Name;
+    /// <summary>Stores the exact declaring storage level, including constructed generic arguments.</summary>
+    public string DeclaringTypeName;
     /// <summary>Gets the identifier.</summary>
     public string Identifier =>
         Microsoft.CodeAnalysis.CSharp.SyntaxFacts.GetKeywordKind(Name) != Microsoft.CodeAnalysis.CSharp.SyntaxKind.None ||

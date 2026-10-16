@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -20,10 +19,9 @@ internal static class JsonOperationTemplates
     /// <summary>Projects one type's generated JSON helper into directly expandable operations.</summary>
     /// <param name="source">This type's temporary formatter source.</param>
     /// <param name="metadata">The consuming parse settings.</param>
-    /// <param name="closedRoot">The closed formatter type whose helper may need a unique identity.</param>
     /// <param name="retainHelper">Whether this output owns a helper unavailable from a source-declared root.</param>
     /// <returns>Direct JSON operations that reference the shared per-type helper members.</returns>
-    internal static string Prepare(string source, MetaInfo metadata, ITypeSymbol closedRoot, bool retainHelper)
+    internal static string Prepare(string source, MetaInfo metadata, bool retainHelper)
     {
         var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions).GetRoot();
         var container = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
@@ -32,15 +30,10 @@ internal static class JsonOperationTemplates
         var helper = container.Members.OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(type => type.Identifier.ValueText.StartsWith("Json_", StringComparison.Ordinal));
         if (helper == null) return source;
-        // Each closed root owns a distinct helper name so multiple closed constructions of one
-        // generic external type can contribute their cache declarations to the partial container.
-        // The helper remains generic because its operation signatures are emitted from the open type.
-        string helperName = retainHelper
-            ? helper.Identifier.ValueText + "__" + GetStableSuffix(FormatterTypeName.Get(closedRoot))
-            : helper.Identifier.ValueText;
-        var renamedHelper = helper.WithIdentifier(SyntaxFactory.Identifier(helperName));
+        // One generic helper is shared by every closed construction. CLR generic statics keep
+        // each closed type's cache separate while the generated helper implementation is emitted once.
         string qualified = "global::LuminPack.Generated." + container.Identifier.ValueText + "." +
-            helperName + (helper.TypeParameterList?.ToString() ?? string.Empty);
+            helper.Identifier.ValueText + (helper.TypeParameterList?.ToString() ?? string.Empty);
         var members = new HashSet<string>(StringComparer.Ordinal);
         foreach (var member in helper.Members)
         {
@@ -63,7 +56,7 @@ internal static class JsonOperationTemplates
               method.ParameterList.Parameters.FirstOrDefault()?.Type?.ToString().Contains("LuminPackJson") == true)).ToList();
         if (retainHelper)
         {
-            containerMembers.Add(renamedHelper.WithMembers(SyntaxFactory.List(renamedHelper.Members.Where(member =>
+            containerMembers.Add(helper.WithMembers(SyntaxFactory.List(helper.Members.Where(member =>
                 member is not MethodDeclarationSyntax method || method.Identifier.ValueText is not ("WriteValue" or "ReadValue")))));
         }
         foreach (var method in helper.Members.OfType<MethodDeclarationSyntax>())
@@ -75,22 +68,20 @@ internal static class JsonOperationTemplates
         return root.ReplaceNode(container, container.WithMembers(SyntaxFactory.List(containerMembers))).ToFullString();
     }
 
-    /// <summary>Creates a stable identifier suffix for one closed formatter type.</summary>
-    /// <param name="identity">The fully qualified formatter type identity.</param>
-    /// <returns>A source-safe suffix that distinguishes closed generic constructions.</returns>
-    private static string GetStableSuffix(string identity)
+    /// <summary>Extracts the shared JSON cache from a completed operation template.</summary>
+    /// <param name="source">The template containing the retained helper.</param>
+    /// <param name="metadata">The consuming parse settings.</param>
+    /// <returns>Only the helper and its original enclosing declarations.</returns>
+    internal static string Support(string source, MetaInfo metadata)
     {
-        var safe = new StringBuilder(identity.Length);
-        unchecked
-        {
-            ulong hash = 14695981039346656037UL;
-            foreach (char character in identity)
-            {
-                hash = (hash ^ character) * 1099511628211UL;
-                safe.Append(char.IsLetterOrDigit(character) ? character : '_');
-            }
-            return safe.Append('_').Append(hash.ToString("x16", System.Globalization.CultureInfo.InvariantCulture)).ToString();
-        }
+        var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions).GetRoot();
+        var container = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+            .First(type => type.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
+        var helpers = container.Members.OfType<ClassDeclarationSyntax>()
+            .Where(type => type.Identifier.ValueText.StartsWith("Json_", StringComparison.Ordinal));
+        var support = root.ReplaceNode(container, container.WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(helpers)))
+            .NormalizeWhitespace("    ", Environment.NewLine).ToFullString();
+        return GeneratedSourceDocumentation.Complete(support, metadata.ParseOptions);
     }
 
     /// <summary>Qualifies every reference to a helper-owned member with the helper's own type identity.</summary>

@@ -40,6 +40,8 @@ Tests may deliberately throw caller exceptions or assertion failures. Those fixt
 
 ## Serialization and layout compatibility
 
+The [LuminPack mechanism contract](docs/serialization-mechanism-contract.md) is mandatory for all production and generator changes. It covers every runtime and generation subsystem, with the historical baseline and regression anchors. Passing round trips or reducing generated output does not authorize substituting an established mechanism.
+
 Changes to names, member order, enum values, null markers, string modes, framing, and unsafe storage views can affect persisted data. Public members that have no call sites in this repository can still be used by package consumers or generated code.
 
 Remove private code only after checking references, generated references, callbacks, reflection use, and conditional compilation. Layout mirror fields, padding members, and storage placeholders can be necessary even when no ordinary field access references them.
