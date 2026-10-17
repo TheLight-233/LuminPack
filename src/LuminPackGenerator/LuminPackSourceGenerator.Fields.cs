@@ -451,6 +451,7 @@ namespace LuminPack.SourceGenerator
                             NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                             TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
                             IsPrivate = RequiresLocalAccess(nestedMember),
+                            IsVolatile = nestedMember.IsVolatile,
                             belongClassName = namedTypeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                         };
 
@@ -586,6 +587,7 @@ namespace LuminPack.SourceGenerator
                             NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                             TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
                             IsPrivate = RequiresLocalAccess(nestedMember),
+                            IsVolatile = nestedMember.IsVolatile,
                             belongClassName = namedTypeArg.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                         };
 
@@ -967,6 +969,7 @@ namespace LuminPack.SourceGenerator
                     NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
                     IsPrivate = RequiresLocalAccess(nestedMember),
+                    IsVolatile = nestedMember.IsVolatile,
                     belongClassName = classSymbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                 };
 
@@ -1072,6 +1075,7 @@ namespace LuminPack.SourceGenerator
                     NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,
                     IsPrivate = RequiresLocalAccess(nestedMember),
+                    IsVolatile = nestedMember.IsVolatile,
                     belongClassName = namedType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                 };
 

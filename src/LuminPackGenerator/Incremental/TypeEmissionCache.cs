@@ -73,8 +73,9 @@ internal sealed class TypeEmissionCache
         if (serializerFragment == true) Interlocked.Increment(ref IncrementalGenerationMetrics.SerializerFragmentBuilds);
         else if (serializerFragment == false) Interlocked.Increment(ref IncrementalGenerationMetrics.PackableModelBuilds);
         var emission = build();
-        var dependencies = lookup.Facts.Dependencies(type, compilation, lookup.Union);
-        var entry = new Entry(lookup.Facts.ProjectGuard, metadata, tier, lookup.DependencyGuard, dependencies, emission, version ?? new object());
+        var dependencies = lookup.Facts.Dependencies(type, compilation, lookup.Union, out bool dependsOnUnion);
+        var entry = new Entry(lookup.Facts.ProjectGuard, metadata, tier, lookup.DependencyGuard, dependencies, emission, version ?? new object(),
+            dependsOnUnion ? lookup.Facts.UnionUniverse : null);
         lock (_gate)
         {
             if (_latestProjectIdentity == lookup.Facts.Identity) _entries[lookup.Name] = entry;
@@ -145,6 +146,7 @@ internal sealed class TypeEmissionCache
         private readonly MetaInfo _metadata;
         private readonly LuminPackGenerationTier _tier;
         private readonly string _dependencyGuard;
+        private readonly string _unionUniverse;
         private readonly SyntaxTree[] _trees;
         internal readonly object Emission;
         internal readonly object Version;
@@ -157,13 +159,15 @@ internal sealed class TypeEmissionCache
         /// <param name="trees">The source dependency closure.</param>
         /// <param name="emission">The frozen output plan.</param>
         /// <param name="version">The immutable identity exposed to the incremental analysis input.</param>
-        internal Entry(object projectGuard, MetaInfo metadata, LuminPackGenerationTier tier, string dependencyGuard, SyntaxTree[] trees, object emission, object version)
+        /// <param name="unionUniverse">Candidate relationships when a nested Union operation affects the output.</param>
+        internal Entry(object projectGuard, MetaInfo metadata, LuminPackGenerationTier tier, string dependencyGuard, SyntaxTree[] trees, object emission, object version, string unionUniverse)
         {
             _projectGuard = projectGuard;
             _metadata = new MetaInfo(metadata.ParseOptions, metadata.CSharpVersion, metadata.IsNet8, metadata.IsNet9_OR_GREATER, metadata.AllowUnsafe, metadata.RegisterMode)
                 { IsForUnity = metadata.IsForUnity };
             _tier = tier;
             _dependencyGuard = dependencyGuard;
+            _unionUniverse = unionUniverse;
             _trees = trees;
             Emission = emission;
             Version = version;
@@ -179,7 +183,7 @@ internal sealed class TypeEmissionCache
         internal bool Matches(Compilation compilation, CompilationFacts facts, MetaInfo metadata, LuminPackGenerationTier tier, string dependencyGuard)
         {
             if (!facts.MatchesProject(_projectGuard) || !MetaInfoValueComparer.Instance.Equals(_metadata, metadata) ||
-                _tier != tier || _dependencyGuard != dependencyGuard) return false;
+                _tier != tier || _dependencyGuard != dependencyGuard || _unionUniverse != null && _unionUniverse != facts.UnionUniverse) return false;
             return _trees.All(compilation.ContainsSyntaxTree);
         }
     }
@@ -248,9 +252,11 @@ internal sealed class TypeEmissionCache
         /// <param name="root">The root being analyzed.</param>
         /// <param name="compilation">The current compilation.</param>
         /// <param name="union">Whether project-local derived members affect this root.</param>
+        /// <param name="dependsOnUnion">Receives whether any nested operation reads automatic Union membership.</param>
         /// <returns>The declaring syntax trees that must survive for reuse.</returns>
-        internal SyntaxTree[] Dependencies(ITypeSymbol root, Compilation compilation, bool union)
+        internal SyntaxTree[] Dependencies(ITypeSymbol root, Compilation compilation, bool union, out bool dependsOnUnion)
         {
+            dependsOnUnion = union;
             var pending = new Stack<ITypeSymbol>();
             var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
             var trees = new HashSet<SyntaxTree>();
@@ -280,6 +286,19 @@ internal sealed class TypeEmissionCache
                 foreach (var argument in named.TypeArguments) pending.Push(argument);
                 if (!SymbolEqualityComparer.Default.Equals(named, named.OriginalDefinition)) { pending.Push(named.OriginalDefinition); continue; }
                 if (named.DeclaringSyntaxReferences.Length == 0) continue;
+                // Collection templates and enclosing class bodies now also select the
+                // fixed cursor protocol from their nested Union's complete case graph.
+                if (named.IsAbstract)
+                {
+                    dependsOnUnion = true;
+                    foreach (var candidate in _unionCandidates)
+                    {
+                        bool related = candidate.AllInterfaces.Any(@interface => SymbolEqualityComparer.Default.Equals(@interface.OriginalDefinition, named));
+                        for (var parent = candidate.BaseType; parent != null && !related; parent = parent.BaseType)
+                            related = SymbolEqualityComparer.Default.Equals(parent.OriginalDefinition, named);
+                        if (related) pending.Push(candidate);
+                    }
+                }
                 DirectDependencies direct;
                 lock (_direct)
                 {

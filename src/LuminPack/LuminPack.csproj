@@ -10,7 +10,7 @@
     <WarningsAsErrors>$(WarningsAsErrors);CS0419;CS1570;CS1572;CS1573;CS1574;CS1584;CS1587;CS1591;CS1658</WarningsAsErrors>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
     <PackageId>LuminPack</PackageId>
-    <Version>1.1.9</Version>
+    <Version>1.2.0</Version>
     <Authors>TheLight233</Authors>
     <Description>Ultra-performance binary and json serializer with source generator support</Description>
     <PackageTags>serialization;binary;json;high-performance;luminpack;sourcegenerator</PackageTags>

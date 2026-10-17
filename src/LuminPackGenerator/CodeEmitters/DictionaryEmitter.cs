@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using LuminPack.Code;
 
@@ -123,10 +124,21 @@ public static class DictionaryEmitter
     {
         string keyType = GetFirstGeneric(fieldData.TypeName);
         string valueType = GetSecondGeneric(fieldData.TypeName);
-        bool unmanagedPair = fieldData.TypeSymbol is Microsoft.CodeAnalysis.INamedTypeSymbol dictionaryType &&
-                             dictionaryType.TypeArguments.Length == 2 &&
-                             EmitterTypeTraits.CanUseUnmanagedSerialization(dictionaryType.TypeArguments[0]) &&
-                             EmitterTypeTraits.CanUseUnmanagedSerialization(dictionaryType.TypeArguments[1]);
+        var dictionaryType = fieldData.TypeSymbol as Microsoft.CodeAnalysis.INamedTypeSymbol;
+        bool rawKey = dictionaryType?.TypeArguments.Length == 2 &&
+                      EmitterTypeTraits.CanUseUnmanagedSerialization(dictionaryType.TypeArguments[0]);
+        bool rawValue = dictionaryType?.TypeArguments.Length == 2 &&
+                        EmitterTypeTraits.CanUseUnmanagedSerialization(dictionaryType.TypeArguments[1]);
+        bool unmanagedPair = rawKey && rawValue;
+        bool directRawKey = !unmanagedPair && rawKey && HasRawEntryContract(dictionaryType.TypeArguments[0]);
+        bool directRawValue = !unmanagedPair && rawValue && HasRawEntryContract(dictionaryType.TypeArguments[1]);
+        bool localUnionCursor = directRawKey && fieldData.UnionCursorSuffix != null;
+        bool stringKey = dictionaryType?.TypeArguments.Length == 2 &&
+                         dictionaryType.TypeArguments[0].SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String;
+        bool stringValue = dictionaryType?.TypeArguments.Length == 2 &&
+                           dictionaryType.TypeArguments[1].SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String;
+        bool stableStringHeaders = (stringKey || stringValue) &&
+                                   (stringKey || directRawKey) && (stringValue || directRawValue);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
@@ -161,15 +173,28 @@ public static class DictionaryEmitter
             sb.AppendLine("                }");
             sb.AppendLine();
             sb.AppendLine("                int version = dictionaryView._version;");
-            sb.AppendLine("                ref var entryRef = ref LuminPackMarshal.GetArrayReference(dictionaryView._entries);");
-            sb.AppendLine("                for (nint i = 0; i < count; i++)");
+            if (localUnionCursor) sb.AppendLine("                int nextIndex = index;");
+            if (stableStringHeaders) sb.AppendLine("                int stringRecordLength = writer.StringRecordLength();");
+            sb.AppendLine("                ref var entryRef = ref LuminPackMarshal.GetNotNullArrayReference(dictionaryView._entries!);");
+            sb.AppendLine("                for (int i = 0; i < count; i++)");
             sb.AppendLine("                {");
-            sb.AppendLine("                    ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryRef, i);");
-            sb.AppendLine("                    " + keyType + " key = entry.Key;");
-            sb.AppendLine("                    writer.WriteValue(in key);");
-            sb.AppendLine("                    " + valueType + " itemValue = entry.Value;");
-            sb.AppendLine("                    writer.WriteValue(in itemValue);");
+            sb.AppendLine("                    ref var entry = ref entryRef;");
+            if (localUnionCursor)
+            {
+                sb.AppendLine($"                    global::System.Runtime.CompilerServices.Unsafe.CopyBlockUnaligned(ref writer.GetSpanReference(nextIndex), ref global::System.Runtime.CompilerServices.Unsafe.As<{keyType}, byte>(ref entry.Key), (uint)global::System.Runtime.CompilerServices.Unsafe.SizeOf<{keyType}>());");
+                sb.AppendLine($"                    nextIndex += global::System.Runtime.CompilerServices.Unsafe.SizeOf<{keyType}>();");
+                sb.AppendLine($"                    {valueType} itemValue = entry.Value;");
+                sb.AppendLine("                    if (itemValue is null) { writer.GetSpanReference(nextIndex) = 255; nextIndex++; }");
+                sb.AppendLine($"                    else nextIndex = itemValue.__LuminPackUnionSerializeCursor_{fieldData.UnionCursorSuffix}(ref writer, nextIndex);");
+            }
+            else
+            {
+                AppendDenseBinaryElementWrite(sb, keyType, "Key", "key", directRawKey, stableStringHeaders && stringKey);
+                AppendDenseBinaryElementWrite(sb, valueType, "Value", "itemValue", directRawValue, stableStringHeaders && stringValue);
+            }
+            sb.AppendLine("                    entryRef = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryRef, 1);");
             sb.AppendLine("                }");
+            if (localUnionCursor) sb.AppendLine("                writer.CurrentIndex = nextIndex;");
             sb.AppendLine("                if (dictionaryView._version != version || dictionaryView._count != count || dictionaryView._freeCount != 0)");
             sb.AppendLine("                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();");
             sb.AppendLine("            }");
@@ -178,12 +203,13 @@ public static class DictionaryEmitter
             sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
             sb.AppendLine($"            static void WriteSparseDictionary(ref global::LuminPack.Core.LuminPackWriter writer, global::System.Collections.Generic.Dictionary<{keyType}, {valueType}> source)");
             sb.AppendLine("            {");
+            if (stableStringHeaders) sb.AppendLine("                int stringRecordLength = writer.StringRecordLength();");
             sb.AppendLine("                foreach (var item in source)");
             sb.AppendLine("                {");
             sb.AppendLine("                    " + keyType + " key = item.Key;");
-            sb.AppendLine("                    writer.WriteValue(in key);");
+            AppendBinaryElementWrite(sb, "key", "                    ", stableStringHeaders && stringKey);
             sb.AppendLine("                    " + valueType + " itemValue = item.Value;");
-            sb.AppendLine("                    writer.WriteValue(in itemValue);");
+            AppendBinaryElementWrite(sb, "itemValue", "                    ", stableStringHeaders && stringValue);
             sb.AppendLine("                }");
             sb.AppendLine("                writer.CheckBuffer();");
             sb.AppendLine("            }");
@@ -201,14 +227,14 @@ public static class DictionaryEmitter
             sb.AppendLine("                {");
             sb.AppendLine("                    int version = dictionaryView._version;");
             sb.AppendLine("                    ref var entryRef = ref LuminPackMarshal.GetArrayReference(dictionaryView._entries);");
-            sb.AppendLine("                    for (nint i = 0; i < count; i++)");
+            sb.AppendLine("                    int entryOffset = index;");
+            sb.AppendLine("                    for (int i = 0; i < count; i++)");
             sb.AppendLine("                    {");
-            sb.AppendLine("                        ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryRef, i);");
-            sb.AppendLine("                        int entryOffset = index;");
-            sb.AppendLine("                        entryOffset += writer.WriteUnmanaged(ref entryOffset, entry.Key);");
-            sb.AppendLine("                        entryOffset += writer.WriteUnmanaged(ref entryOffset, entry.Value);");
-            sb.AppendLine("                        writer.Advance(entryOffset - index);");
+            sb.AppendLine("                        ref var entry = ref entryRef;");
+            sb.AppendLine("                        entryOffset += writer.WriteUnmanaged(ref entryOffset, entry.Key, entry.Value);");
+            sb.AppendLine("                        entryRef = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryRef, 1);");
             sb.AppendLine("                    }");
+            sb.AppendLine("                    writer.Advance(entryOffset - index);");
             sb.AppendLine("                    if (dictionaryView._version != version || dictionaryView._count != count || dictionaryView._freeCount != 0)");
             sb.AppendLine("                        global::LuminPack.Code.LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();");
             sb.AppendLine("                    return;");
@@ -236,6 +262,58 @@ public static class DictionaryEmitter
         {
             sb.AppendLine("            writer.CheckBuffer();");
         }
+    }
+
+    /// <summary>Excludes specialized root framing from the direct mixed-entry storage optimization.</summary>
+    /// <param name="type">A member already proven unmanaged and free of nested Custom contracts.</param>
+    /// <returns>Whether its selected root operation uses ordinary raw storage.</returns>
+    private static bool HasRawEntryContract(Microsoft.CodeAnalysis.ITypeSymbol type)
+    {
+        if (type is not Microsoft.CodeAnalysis.INamedTypeSymbol named) return true;
+        return TypeMetaChecker.CheckGeneratorType(named) == GeneratorType.Object &&
+               !named.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() is
+                   LuminPackSourceGenerator.LUMIN_UNION_ATTRIBUTE or "System.Runtime.CompilerServices.UnionAttribute");
+    }
+
+    /// <summary>Copies a proven raw entry member directly or evaluates its selected formatter in order.</summary>
+    /// <param name="sb">The generated source builder.</param>
+    /// <param name="type">The concrete member type.</param>
+    /// <param name="member">The entry field name.</param>
+    /// <param name="local">The evaluated formatter argument name.</param>
+    /// <param name="raw">Whether the member's complete contract is unmanaged storage.</param>
+    /// <param name="cachedStringHeader">Whether the selected string framing is stable.</param>
+    private static void AppendDenseBinaryElementWrite(StringBuilder sb, string type, string member, string local,
+        bool raw, bool cachedStringHeader)
+    {
+        const string indent = "                    ";
+        if (raw)
+        {
+            // This helper is emitted only inside the dense 64-bit storage-view branch.
+            // Copy each member separately: entry metadata and inter-member gaps are not wire data.
+            sb.AppendLine(indent + "global::System.Runtime.CompilerServices.Unsafe.CopyBlockUnaligned(ref writer.GetSpanReference(index),");
+            sb.AppendLine(indent + $"    ref global::System.Runtime.CompilerServices.Unsafe.As<{type}, byte>(ref entry.{member}), (uint)global::System.Runtime.CompilerServices.Unsafe.SizeOf<{type}>());");
+            sb.AppendLine(indent + $"writer.Advance(global::System.Runtime.CompilerServices.Unsafe.SizeOf<{type}>());");
+            return;
+        }
+        sb.AppendLine(indent + type + " " + local + " = entry." + member + ";");
+        AppendBinaryElementWrite(sb, local, indent, cachedStringHeader);
+    }
+
+    /// <summary>Reuses the selected string formatter when a dictionary has no state-changing element operation.</summary>
+    /// <param name="sb">The generated source builder.</param>
+    /// <param name="value">The evaluated element local.</param>
+    /// <param name="indent">Statement indentation.</param>
+    /// <param name="cachedStringHeader">Whether string recording mode is stable throughout this loop.</param>
+    private static void AppendBinaryElementWrite(StringBuilder sb, string value, string indent, bool cachedStringHeader)
+    {
+        if (!cachedStringHeader)
+        {
+            sb.AppendLine(indent + "writer.WriteValue(in " + value + ");");
+            return;
+        }
+        sb.AppendLine(indent + "{");
+        StringEmitter.AppendSerializeCode(sb, value, "stringRecordLength", indent + "    ");
+        sb.AppendLine(indent + "}");
     }
 
     /// <summary>Appends binary reading statements for dictionary values.</summary>
@@ -269,6 +347,12 @@ public static class DictionaryEmitter
                              EmitterTypeTraits.CanUseUnmanagedSerialization(dictionaryType.TypeArguments[1]);
 
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
+        if (unmanagedPair)
+        {
+            sb.AppendLine("            int inputLength = reader.GetSpan().Length;");
+            sb.AppendLine("            if ((uint)index > (uint)inputLength || (uint)(inputLength - index) < sizeof(int))");
+            sb.AppendLine("                global::LuminPack.Code.LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + sizeof(int)));");
+        }
         sb.AppendLine();
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
         sb.AppendLine("            {");
@@ -295,6 +379,12 @@ public static class DictionaryEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
+        if (unmanagedPair)
+        {
+            sb.AppendLine($"            int payloadLength = checked(length * (global::System.Runtime.CompilerServices.Unsafe.SizeOf<{keyType}>() + global::System.Runtime.CompilerServices.Unsafe.SizeOf<{valueType}>()));");
+            sb.AppendLine("            if ((uint)payloadLength > (uint)(inputLength - index))");
+            sb.AppendLine("                global::LuminPack.Code.LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + payloadLength));");
+        }
         sb.AppendLine("            if (global::System.IntPtr.Size != 8)");
         sb.AppendLine("            {");
         sb.AppendLine($"                var fallback = new global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>(length);");
@@ -324,31 +414,41 @@ public static class DictionaryEmitter
         sb.AppendLine();
         sb.AppendLine($"            var result = new global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>(length);");
         sb.AppendLine("            var dictionaryView = LuminPackMarshal.GetDictionaryView(result);");
-        sb.AppendLine("            ref var entryRef = ref LuminPackMarshal.GetArrayReference(dictionaryView._entries);");
+        sb.AppendLine("            var entries = dictionaryView._entries!;");
+        if (unmanagedPair)
+            sb.AppendLine("            ref var entryRef = ref LuminPackMarshal.GetNotNullArrayReference(entries);");
         sb.AppendLine();
         sb.AppendLine("            for (int i = 0; i < length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryRef, (nint)(uint)i);");
         if (unmanagedPair)
         {
+            sb.AppendLine("                ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryRef, (nint)(uint)i);");
+
             sb.AppendLine("                int entryOffset = index;");
-            sb.AppendLine("                entryOffset += reader.ReadUnmanaged(ref entryOffset, out entry.Key);");
-            sb.AppendLine("                entryOffset += reader.ReadUnmanaged(ref entryOffset, out entry.Value);");
+            sb.AppendLine("                entryOffset += reader.ReadUnmanaged(ref entryOffset, out entry.Key, out entry.Value);");
             sb.AppendLine("                reader.Advance(entryOffset - index);");
         }
         else
         {
-            sb.AppendLine("                reader.ReadValue(ref entry.Key!);");
-            sb.AppendLine("                reader.ReadValue(ref entry.Value!);");
+            // A fresh entry starts with default values. Read into local roots so
+            // expanded Union arms do not keep a heap destination byref alive.
+            sb.AppendLine($"                {keyType} key = default!;");
+            sb.AppendLine($"                {valueType} itemValue = default!;");
+            sb.AppendLine("                reader.ReadValue(ref key!);");
+            sb.AppendLine("                reader.ReadValue(ref itemValue!);");
+            sb.AppendLine("                ref var entry = ref entries[i];");
+            sb.AppendLine("                entry.Key = key;");
+            sb.AppendLine("                entry.Value = itemValue;");
         }
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            if (!LuminPackMarshal.TryRebuildFreshDictionaryBuckets(dictionaryView, length))");
         sb.AppendLine("            {");
+        sb.AppendLine("                ref var fallbackEntries = ref LuminPackMarshal.GetNotNullArrayReference(entries);");
         sb.AppendLine($"                var fallback = new global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>(length);");
         sb.AppendLine("                for (int i = 0; i < length; i++)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref entryRef, (nint)(uint)i);");
+        sb.AppendLine("                    ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref fallbackEntries, (nint)(uint)i);");
         sb.AppendLine("                    fallback.Add(entry.Key, entry.Value);");
         sb.AppendLine("                }");
         sb.AppendLine("                result = fallback;");

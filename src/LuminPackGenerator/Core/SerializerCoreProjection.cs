@@ -105,6 +105,15 @@ internal static class SerializerCoreProjection
                     method = method.WithTypeParameterList(null).WithConstraintClauses(default)
                         .WithParameterList(method.ParameterList.WithParameters(method.ParameterList.Parameters.Replace(method.ParameterList.Parameters[1], payload)));
                 }
+                if (name == "SerializeUnion" && type.IsReferenceType)
+                {
+                    // A class reference already fits in one argument register. The Union
+                    // wrapper's local must not escape to a stack slot solely to pass `in`.
+                    // The operation still snapshots input before touching any fields.
+                    var payload = method.ParameterList.Parameters[1];
+                    method = method.WithParameterList(method.ParameterList.WithParameters(method.ParameterList.Parameters.Replace(payload,
+                        payload.WithModifiers(default))));
+                }
                 if (!contexts.TryGetValue(typeName, out var context))
                     contexts.Add(typeName, context = new BinaryEntryInlining(type, compilation, metadata, plans));
                 bool write = closedRoot != null ? operationName.StartsWith("Write", StringComparison.Ordinal) : parameters[1].Modifiers.Any(SyntaxKind.InKeyword);
@@ -123,6 +132,27 @@ internal static class SerializerCoreProjection
                     else body = SyntaxFactory.Block(expanded);
                     method = method.WithBody(body).WithExpressionBody(null).WithSemicolonToken(default);
                 }
+            }
+            // Field expansion and JIT inlining have different budgets. Let the
+            // runtime size loop-bearing APIs instead of forcing their entire
+            // graph into every convenience entry and Union caller.
+            if (state is "LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" &&
+                method.Body?.DescendantNodes().Any(node => node is ForStatementSyntax or ForEachStatementSyntax or
+                    ForEachVariableStatementSyntax or WhileStatementSyntax or DoStatementSyntax) == true)
+            {
+                method = method.WithAttributeLists(SyntaxFactory.List(method.AttributeLists.Select(list =>
+                    list.WithAttributes(SyntaxFactory.SeparatedList(list.Attributes.Where(attribute =>
+                        !attribute.Name.ToString().EndsWith("MethodImpl", StringComparison.Ordinal) ||
+                        attribute.ArgumentList?.ToString().Contains("AggressiveInlining") != true))))
+                    .Where(list => list.Attributes.Count != 0)));
+            }
+            if (state == "LuminPack.Core.LuminPackWriter" && name is "Serialize" or "SerializeUnion")
+                method = method.WithBody(BinaryEntryCursorAliases.Rewrite(method.Body));
+            if (name == "SerializeUnion" && state == "LuminPack.Core.LuminPackWriter" && method.TypeParameterList == null &&
+                FixedUnionCursorPlan.CanUsePayload(type, compilation, metadata))
+            {
+                FixedUnionCursorProjection.Append(method, core);
+                continue;
             }
             core.Add(method);
         }
@@ -229,6 +259,9 @@ internal static class SerializerCoreProjection
         /// <returns>The unified call or the unchanged invocation.</returns>
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
         {
+            if (node.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "SerializeUnion" } union &&
+                union.Expression.ToString() == "global::LuminPack.LuminPackSerializer")
+                return WithoutUnionInputReference((InvocationExpressionSyntax)base.VisitInvocationExpression(node));
             if (node.Expression is not MemberAccessExpressionSyntax access || !BinaryOperationPlan.IsOperation(access.Name.Identifier.ValueText))
                 return base.VisitInvocationExpression(node);
             if (_model.GetSymbolInfo(node).Symbol is IMethodSymbol { IsExtensionMethod: true } existing &&
@@ -244,8 +277,19 @@ internal static class SerializerCoreProjection
                 SyntaxFactory.Argument((ExpressionSyntax)Visit(access.Expression)).WithRefKindKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword))));
             string name = MethodName(access.Name.Identifier.ValueText, state.Contains("Json"));
             SimpleNameSyntax target = access.Name is GenericNameSyntax generic ? generic.WithIdentifier(SyntaxFactory.Identifier(name)) : SyntaxFactory.IdentifierName(name);
-            return node.WithExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+            var rewritten = node.WithExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
                 SyntaxFactory.ParseExpression("global::LuminPack.LuminPackSerializer"), target)).WithArgumentList(arguments);
+            return name == "SerializeUnion" ? WithoutUnionInputReference(rewritten) : rewritten;
+        }
+
+        /// <summary>Allows class Union payload references to travel directly in an argument register.</summary>
+        /// <param name="node">A call to the unique Union payload implementation.</param>
+        /// <returns>The same arguments with an implicit input passing convention.</returns>
+        private static InvocationExpressionSyntax WithoutUnionInputReference(InvocationExpressionSyntax node)
+        {
+            var arguments = node.ArgumentList.Arguments;
+            if (arguments.Count != 2 || !arguments[1].RefKindKeyword.IsKind(SyntaxKind.InKeyword)) return node;
+            return node.WithArgumentList(node.ArgumentList.WithArguments(arguments.Replace(arguments[1], arguments[1].WithRefKindKeyword(default))));
         }
     }
 }

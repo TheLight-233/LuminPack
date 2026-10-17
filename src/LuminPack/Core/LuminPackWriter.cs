@@ -83,7 +83,7 @@ namespace LuminPack.Core
         {
 
             _optionState = option ?? LuminPackWriterOptionalState.NullOption;
-            var ptr = bufferReference.GetPinnableReference();
+            ref var ptr = ref Unsafe.AsRef(in bufferReference.GetPinnableReference());
             _bufferReference = CreateSpan(ref ptr, bufferReference.Length);
 #if NET8_0_OR_GREATER
             _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
@@ -102,14 +102,13 @@ namespace LuminPack.Core
             _optionState = option ?? LuminPackWriterOptionalState.NullOption;
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
-            _bufferReference = bufferWriter.BeginWrite(ref _currentIndex);
+            _bufferReference = bufferWriter.BeginWrite(out _currentIndex);
 #if NET8_0_OR_GREATER
             _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
 #else
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
             _writerBuffer = bufferWriter;
-            _currentIndex = 0;
             _stringSerializationMode = GetStringSerializationMode(_optionState.Option);
         }
 
@@ -119,14 +118,13 @@ namespace LuminPack.Core
         internal LuminPackWriter(LuminBufferWriter bufferWriter)
         {
             _optionState = bufferWriter.WriterState;
-            _bufferReference = bufferWriter.BeginWrite(ref _currentIndex);
+            _bufferReference = bufferWriter.BeginWrite(out _currentIndex);
 #if NET8_0_OR_GREATER
             _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
 #else
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
             _writerBuffer = bufferWriter;
-            _currentIndex = 0;
             _stringSerializationMode = GetStringSerializationMode(bufferWriter.Option);
         }
 
@@ -134,9 +132,7 @@ namespace LuminPack.Core
         /// <param name="option">The configuration to apply to this operation.</param>
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static byte GetStringSerializationMode(LuminPackSerializerOption option) =>
-            (byte)((option.StringEncoding is LuminPackStringEncoding.UTF16 ? 2 : 0) |
-                   (option.StringRecording is LuminPackStringRecording.Length ? 1 : 0));
+        private static byte GetStringSerializationMode(LuminPackSerializerOption option) => option.StringSerializationMode;
 
         /// <summary>
         /// Returns a reference to the span's first element.
@@ -247,13 +243,17 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// Flushes the writer's pending output.
+        /// Releases the destination span and resets its cursor without modifying caller memory.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Flush()
         {
             _bufferReference = null;
+#if NET8_0_OR_GREATER
+            _bufferStart = ref Unsafe.NullRef<byte>();
+#else
             _bufferStart = default;
+#endif
             _currentIndex = 0;
         }
 
@@ -607,6 +607,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void WriteEmptyOrNullUtf8LengthHeader(int index, int length)
         {
+            EnsureCapacity(index, 8);
             // Both words belong to the record, even when the reader ignores the
             // character count. Initialize them together in a reused buffer.
             long header = (long)(uint)length | ((long)length << 32);
@@ -893,11 +894,13 @@ namespace LuminPack.Core
         {
             if (string.IsNullOrEmpty(value) || value.Length is 0)
             {
+                EnsureCapacity(index, 1);
                 WriteStringRecordTokenHeader(ref index);
                 return 0;
             }
 
-            var status = StringSerializer.Serialize(value, _bufferReference.Slice(index), out var _, out var bytesWritten, replaceInvalidSequences: false);
+            var destination = (uint)index <= (uint)_bufferReference.Length ? _bufferReference.Slice(index) : Span<byte>.Empty;
+            var status = StringSerializer.Serialize(value, destination, out var _, out var bytesWritten, replaceInvalidSequences: false);
 
             if (status != OperationStatus.Done)
             {
@@ -907,6 +910,7 @@ namespace LuminPack.Core
                     LuminPackExceptionHelper.ThrowFailedEncoding(status);
             }
 
+            EnsureCapacity(index, checked(bytesWritten + 1));
             var tokenIndex = index + bytesWritten;
             WriteStringRecordTokenHeader(ref tokenIndex);
 
@@ -923,9 +927,11 @@ namespace LuminPack.Core
         {
             if (length is 0)
             {
+                EnsureCapacity(index, 1);
                 WriteStringRecordTokenHeader(ref index);
                 return;
             }
+            if (length > 0) EnsureCapacity(index, checked(length + 1));
             var status = StringSerializer.Serialize(value.AsSpan(), _bufferReference.Slice(index, length), out _, out var bytesWritten, replaceInvalidSequences: false);
 
             if (status != OperationStatus.Done)
@@ -946,11 +952,13 @@ namespace LuminPack.Core
         {
             if (value.Length is 0)
             {
+                EnsureCapacity(index, 1);
                 WriteStringRecordTokenHeader(ref index);
                 return 0;
             }
 
-            var status = StringSerializer.Serialize(value, _bufferReference.Slice(index), out _, out var bytesWritten, replaceInvalidSequences: false);
+            var destination = (uint)index <= (uint)_bufferReference.Length ? _bufferReference.Slice(index) : Span<byte>.Empty;
+            var status = StringSerializer.Serialize(value, destination, out _, out var bytesWritten, replaceInvalidSequences: false);
             if (status != OperationStatus.Done)
             {
                 if (status == OperationStatus.DestinationTooSmall)
@@ -959,6 +967,7 @@ namespace LuminPack.Core
                     LuminPackExceptionHelper.ThrowFailedEncoding(status);
             }
 
+            EnsureCapacity(index, checked(bytesWritten + 1));
             var tokenIndex = index + bytesWritten;
             WriteStringRecordTokenHeader(ref tokenIndex);
 
@@ -1063,6 +1072,7 @@ namespace LuminPack.Core
                 return;
             }
 
+            if (length > 0) EnsureCapacity(index, checked(length + 8));
             WriteStringRecordLengthHeader(ref index, length);
 
             int index1 = index + 4;
@@ -1097,7 +1107,8 @@ namespace LuminPack.Core
             }
 
             var startIndex = index + 8;
-            var status = StringSerializer.Serialize(value, _bufferReference.Slice(startIndex), out _, out var bytesWritten, replaceInvalidSequences: false);
+            var destination = (uint)startIndex <= (uint)_bufferReference.Length ? _bufferReference.Slice(startIndex) : Span<byte>.Empty;
+            var status = StringSerializer.Serialize(value, destination, out _, out var bytesWritten, replaceInvalidSequences: false);
             if (status != OperationStatus.Done)
             {
                 if (status == OperationStatus.DestinationTooSmall)
@@ -1156,11 +1167,15 @@ namespace LuminPack.Core
         {
             if (string.IsNullOrEmpty(value) || value.Length is 0)
             {
+                EnsureCapacity(index, 2);
                 WriteStringRecordTokenHeader(ref index);
                 return 0;
             }
 
-            StringSerializer.Serialize(value, _bufferReference.Slice(index), out _, out var bytesWritten, SerializeMode.Utf16, replaceInvalidSequences: false);
+            int bytesWritten = checked(value.Length * sizeof(char));
+            EnsureCapacity(index, checked(bytesWritten + 2));
+            Unsafe.CopyBlockUnaligned(ref GetSpanReference(index),
+                ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), (uint)bytesWritten);
 
             var tokenIndex = index + bytesWritten;
 
@@ -1178,11 +1193,13 @@ namespace LuminPack.Core
         {
             if (length is 0)
             {
+                EnsureCapacity(index, 2);
                 WriteStringRecordTokenHeader(ref index);
 
                 return;
             }
 
+            if (length > 0) EnsureCapacity(index, checked(length + 2));
             StringSerializer.Serialize(value, _bufferReference.Slice(index, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
 
             var tokenIndex = index + length;
@@ -1201,13 +1218,16 @@ namespace LuminPack.Core
         {
             if (value.Length is 0)
             {
+                EnsureCapacity(index, 2);
                 WriteStringRecordTokenHeader(ref index);
                 return 0;
             }
 
             var length = checked(value.Length * 2);
+            EnsureCapacity(index, checked(length + 2));
 
-            StringSerializer.Serialize(value, _bufferReference.Slice(index, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
+            Unsafe.CopyBlockUnaligned(ref GetSpanReference(index),
+                ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value)), (uint)length);
 
             var tokenIndex = index + length;
 
@@ -1225,21 +1245,25 @@ namespace LuminPack.Core
         {
             if (value is null)
             {
+                EnsureCapacity(index, 4);
                 WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
                 return 0;
             }
 
             if (value.Length is 0)
             {
+                EnsureCapacity(index, 4);
                 WriteStringRecordLengthHeader(ref index, 0);
                 return 0;
             }
 
-            var length = unchecked(value.Length * 2);
+            var length = checked(value.Length * sizeof(char));
+            EnsureCapacity(index, checked(length + 4));
 
             WriteStringRecordLengthHeader(ref index, length);
             var startIndex = index + 4;
-            StringSerializer.Serialize(value, _bufferReference.Slice(startIndex, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
+            Unsafe.CopyBlockUnaligned(ref GetSpanReference(startIndex),
+                ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), (uint)length);
 
             return length;
         }
@@ -1253,16 +1277,19 @@ namespace LuminPack.Core
         {
             if (value is null)
             {
+                EnsureCapacity(index, 4);
                 WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
                 return;
             }
 
             if (length is 0 || value.Length is 0)
             {
+                EnsureCapacity(index, 4);
                 WriteStringRecordLengthHeader(ref index, 0);
                 return;
             }
 
+            if (length > 0) EnsureCapacity(index, checked(length + 4));
             WriteStringRecordLengthHeader(ref index, length);
 
             var startIndex = index + 4;
@@ -1279,17 +1306,20 @@ namespace LuminPack.Core
         {
             if (value.Length is 0)
             {
+                EnsureCapacity(index, 4);
                 WriteStringRecordLengthHeader(ref index, 0);
                 return 0;
             }
 
             var length = checked(value.Length * sizeof(char));
+            EnsureCapacity(index, checked(length + 4));
 
             WriteStringRecordLengthHeader(ref index, length);
 
             var startIndex = index + 4;
 
-            StringSerializer.Serialize(value, _bufferReference.Slice(startIndex, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
+            Unsafe.CopyBlockUnaligned(ref GetSpanReference(startIndex),
+                ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value)), (uint)length);
 
             return length;
         }

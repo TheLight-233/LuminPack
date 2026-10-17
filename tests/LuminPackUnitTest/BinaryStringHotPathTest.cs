@@ -1,5 +1,6 @@
 using System.Buffers.Binary;
 using System.Text;
+using System.Runtime.InteropServices;
 using LuminPack.Core;
 using LuminPack.Option;
 using LuminPack.Utility;
@@ -10,6 +11,38 @@ namespace LuminPackUnitTest;
 /// <summary>Provides binary string hot path test functionality.</summary>
 public class BinaryStringHotPathTest
 {
+    /// <summary>Preserves constructor snapshots after option edits and record copies, including unknown enum values.</summary>
+    [Fact]
+    public void WriterModeSnapshotsFollowOptionMutationsAndCopies()
+    {
+        var options = new LuminPackSerializerOption();
+        var state = new LuminPackWriterOptionalState(options);
+        foreach (var encoding in new[] { LuminPackStringEncoding.UTF8, LuminPackStringEncoding.UTF16, (LuminPackStringEncoding)255 })
+        foreach (var recording in new[] { LuminPackStringRecording.Length, LuminPackStringRecording.Token, (LuminPackStringRecording)255 })
+        {
+            options.StringEncoding = encoding;
+            options.StringRecording = recording;
+            Span<byte> destination = new byte[64];
+            var writer = new LuminPackWriter(ref destination, state);
+            var copy = options with { };
+            Assert.Equal(new LuminPackSerializerOption { StringEncoding = encoding, StringRecording = recording }, copy);
+            options.StringEncoding = encoding == LuminPackStringEncoding.UTF16 ? LuminPackStringEncoding.UTF8 : LuminPackStringEncoding.UTF16;
+            options.StringRecording = recording == LuminPackStringRecording.Length ? LuminPackStringRecording.Token : LuminPackStringRecording.Length;
+            Span<byte> expected = new byte[64];
+            var original = new LuminPackWriter(ref expected, new LuminPackWriterOptionalState(copy));
+            int index = 0;
+            int expectedIndex = 0;
+            int written = writer.WriteString(ref index, "abc");
+            int expectedLength = original.WriteString(ref expectedIndex, "abc");
+            Assert.Equal(expectedLength, written);
+            Assert.Equal(original.StringRecordLength(), writer.StringRecordLength());
+            Assert.True(destination.SequenceEqual(expected));
+            var changed = copy with { StringEncoding = options.StringEncoding, StringRecording = options.StringRecording };
+            Assert.Equal(options, changed);
+            Assert.Equal(options.GetHashCode(), changed.GetHashCode());
+        }
+    }
+
     /// <summary>Verifies both dispatch overloads preserve all modes.</summary>
     /// <param name="encoding">The encoding used by this operation.</param>
     /// <param name="recording">The recording used by this operation.</param>
@@ -98,6 +131,30 @@ public class BinaryStringHotPathTest
             int offset = 0;
             try { return reader.ReadStringAndAdvance(ref offset); }
             catch { Assert.Equal(0, offset); throw; }
+        }
+    }
+
+    /// <summary>Preserves raw UTF-16 code units and exact destination boundaries for computed string and span lengths.</summary>
+    [Fact]
+    public void ComputedUtf16LengthsCopyExactRawCodeUnits()
+    {
+        var options = new LuminPackSerializerOption { StringEncoding = LuminPackStringEncoding.UTF16 };
+        var state = new LuminPackWriterOptionalState();
+        state.Init(options);
+        foreach (string text in Enumerable.Range(0, 70).Select(length => new string('x', length))
+            .Concat(new[] { "\uD800", "\uDC00", "first\0last", "\u4e2d\ud83c\udf1f\u00e9", new string('y', 100_000) }))
+        foreach (bool spanInput in new[] { false, true })
+        {
+            int payloadLength = text.Length * sizeof(char);
+            byte[] bytes = Enumerable.Repeat((byte)0xCC, payloadLength + 6).ToArray();
+            Span<byte> destination = bytes.AsSpan(1, payloadLength + sizeof(int));
+            var writer = new LuminPackWriter(ref destination, state);
+            int written = spanInput ? writer.WriteUtf16WithLength(0, text.AsSpan()) : writer.WriteUtf16WithLength(0, text);
+            Assert.Equal(payloadLength, written);
+            Assert.Equal(payloadLength, BinaryPrimitives.ReadInt32LittleEndian(bytes.AsSpan(1)));
+            Assert.True(MemoryMarshal.AsBytes(text.AsSpan()).SequenceEqual(bytes.AsSpan(5, payloadLength)));
+            Assert.Equal(0xCC, bytes[0]);
+            Assert.Equal(0xCC, bytes[^1]);
         }
     }
 

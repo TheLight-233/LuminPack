@@ -171,7 +171,13 @@ public static partial class LuminPackCodeGenerator
                     };
                     string fullGenericTypeName = GetFullGenericTypeName(field.GenericType, elementField.ClassName, elementField.ClassGenericType);
                     bool isRootCollection = isFirst && depth == 0;
-                    if (isRootCollection)
+                    bool useFreshRawArray = isRootCollection && !field.IsCompress &&
+                        (!IsReferenceGenericType(field.GenericType.FirstOrDefault()) || IsPureValueTypeStruct(elementField));
+                    if (useFreshRawArray)
+                    {
+                        sb.AppendLine(indentation + "var " + field.Name + "TempArray" + depthSuffix + " = reader.CreateFreshListArray<" + fullGenericTypeName + ">(" + field.Name + "Count" + depthSuffix + ", out " + targetObj + ");");
+                    }
+                    else if (isRootCollection)
                     {
                         sb.AppendLine(indentation + "var " + field.Name + "TempSpan" + depthSuffix + " = reader.CreateFreshListSpan<" + fullGenericTypeName + ">(" + field.Name + "Count" + depthSuffix + ", out " + targetObj + ");");
                     }
@@ -211,7 +217,7 @@ public static partial class LuminPackCodeGenerator
                         }
                         else
                         {
-                            sb.AppendLine(indentation + "reader.ReadUnmanagedSpan(ref " + field.Name + "ListOffset" + depthSuffix + ", ref " + field.Name + "TempSpan" + depthSuffix + ", " + field.Name + "Count" + depthSuffix + ", out var " + field.Name + "TempLength" + depthSuffix + ");");
+                            AppendRawListRead(sb, indentation, field.Name, depthSuffix, useFreshRawArray);
                             sb.AppendLine(indentation + "LuminPackMarshal.SetListSize(" + targetObj + ", " + field.Name + "Count" + depthSuffix + ");");
                             sb.AppendLine(indentation + field.Name + "ListOffset" + depthSuffix + " += " + field.Name + "TempLength" + depthSuffix + ";");
                         }
@@ -240,7 +246,7 @@ public static partial class LuminPackCodeGenerator
                         else if (depth > 0)
                         {
                             sb.AppendLine($"{indentation}var {field.Name}TempSpan{depthSuffix} = LuminPackMarshal.GetListSpan(element__{depth - 1}, {field.Name}Count{depthSuffix});");
-                            sb.AppendLine(indentation + "reader.ReadUnmanagedSpan(ref " + offset + ", ref " + field.Name + "TempSpan" + depthSuffix + ", " + field.Name + "Count" + depthSuffix + ", out var " + field.Name + "TempLength" + depthSuffix + ");");
+                            AppendRawListRead(sb, indentation, field.Name, depthSuffix, useFreshRawArray);
                             sb.AppendLine($"{indentation}LuminPackMarshal.SetListSize(element__{depth - 1}, {field.Name}Count{depthSuffix});");
                         }
                         else
@@ -249,7 +255,7 @@ public static partial class LuminPackCodeGenerator
                             {
                                 sb.AppendLine(indentation + "var " + field.Name + "TempSpan" + depthSuffix + " = LuminPackMarshal.GetListSpan(" + targetObj + "!, " + field.Name + "Count" + depthSuffix + ");");
                             }
-                            sb.AppendLine(indentation + "reader.ReadUnmanagedSpan(ref " + offset + ", ref " + field.Name + "TempSpan" + depthSuffix + ", " + field.Name + "Count" + depthSuffix + ", out var " + field.Name + "TempLength" + depthSuffix + ");");
+                            AppendRawListRead(sb, indentation, field.Name, depthSuffix, useFreshRawArray);
                             sb.AppendLine(indentation + "LuminPackMarshal.SetListSize(" + targetObj + ", " + field.Name + "Count" + depthSuffix + ");");
                         }
                         sb.AppendLine(indentation + field.Name + "ListOffset" + depthSuffix + " += " + field.Name + "TempLength" + depthSuffix + ";");
@@ -414,11 +420,11 @@ public static partial class LuminPackCodeGenerator
                         }
                         else if (depth > 0)
                         {
-                            sb.AppendLine($"{indentation}reader.ReadFreshUnmanagedArray(ref {offset}, element__{depth - 1}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
+                            sb.AppendLine($"{indentation}reader.ReadFreshUnmanagedArray(ref {field.Name}ListOffset{depthSuffix}, element__{depth - 1}, {field.Name}Count{depthSuffix}, out var {field.Name}TempLength{depthSuffix});");
                         }
                         else
                         {
-                            sb.AppendLine(indentation + "reader.ReadFreshUnmanagedArray(ref " + offset + ", " + targetObj + "!, " + field.Name + "Count" + depthSuffix + ", out var " + field.Name + "TempLength" + depthSuffix + ");");
+                            sb.AppendLine(indentation + "reader.ReadFreshUnmanagedArray(ref " + field.Name + "ListOffset" + depthSuffix + ", " + targetObj + "!, " + field.Name + "Count" + depthSuffix + ", out var " + field.Name + "TempLength" + depthSuffix + ");");
                         }
                         sb.AppendLine(indentation + field.Name + "ListOffset" + depthSuffix + " += " + field.Name + "TempLength" + depthSuffix + ";");
                         break;
@@ -547,7 +553,7 @@ public static partial class LuminPackCodeGenerator
                                 }
                                 if (TryGenerateFixedUnmanagedRead(sb, field.ClassFields, j, mergeEndIndex2,
                                     member => useNestedTarget2 ? resultVariable4 + "." + member.Identifier : parentName + field.Name + member.Name + "Temp" + depthSuffix,
-                                    offset, indentation))
+                                    offset, indentation, copyToStorage: useNestedTarget2))
                                 {
                                     j = mergeEndIndex2;
                                     continue;
@@ -743,6 +749,19 @@ public static partial class LuminPackCodeGenerator
         }
     }
 
+    /// <summary>Reuses the raw array core for freshly allocated list storage without changing reusable span paths.</summary>
+    /// <param name="sb">The generated source builder.</param>
+    /// <param name="indent">Statement indentation.</param>
+    /// <param name="name">The original field's generated local prefix.</param>
+    /// <param name="suffix">The nesting suffix.</param>
+    /// <param name="freshArray">Whether the list owns an exactly sized fresh backing array.</param>
+    private static void AppendRawListRead(StringBuilder sb, string indent, string name, string suffix, bool freshArray)
+    {
+        string storage = freshArray ? name + "TempArray" + suffix : "ref " + name + "TempSpan" + suffix;
+        sb.AppendLine(indent + "reader." + (freshArray ? "ReadFreshUnmanagedArray" : "ReadUnmanagedSpan") +
+            "(ref " + name + "ListOffset" + suffix + ", " + storage + ", " + name + "Count" + suffix + ", out var " + name + "TempLength" + suffix + ");");
+    }
+
     /// <summary>Appends binary deserialization statements for the analyzed type.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
@@ -771,7 +790,7 @@ public static partial class LuminPackCodeGenerator
             return;
         }
         bool canConstructDirectly = data.RentPoolMethod == null && (data.SelectedConstructor == null || data.SelectedConstructor.Parameters.Count == 0);
-        bool canUseLocalOffset = canConstructDirectly && data.fields.All((LuminDataField field) => !ContainsNestedFormatterCall(field));
+        bool canUseLocalOffset = canConstructDirectly;
         sb.AppendLine();
         sb.AppendLine(canUseLocalOffset ? "            int offset = reader.GetCurrentSpanIndex();" : "            ref int offset = ref reader.GetCurrentSpanOffset();");
         if (!canConstructDirectly || data.fields.Any(static field => !CanDeserializeDirectlyIntoConstructedObject(field)))
@@ -895,9 +914,11 @@ public static partial class LuminPackCodeGenerator
                     {
                         mergeEndIndex2 = fieldIndex + 14;
                     }
+                    // Union payloads expand into tag-switch arms; keep their established
+                    // grouped reads rather than introducing additional interior-reference locals.
                     if (TryGenerateFixedUnmanagedRead(sb, data.fields, fieldIndex, mergeEndIndex2,
                         member => canConstructDirectly && CanDeserializeDirectlyIntoConstructedObject(member) ? "result." + member.Identifier : member.Name + "Temp",
-                        "offset", "            "))
+                        "offset", "            ", copyToStorage: canConstructDirectly && !polymorphism))
                     {
                         fieldIndex = mergeEndIndex2;
                         continue;
@@ -922,17 +943,7 @@ public static partial class LuminPackCodeGenerator
                     continue;
                 }
             }
-            bool previousFieldUsesFormatter4 = fieldIndex > 0 && data.fields[fieldIndex - 1].Type == LuminFiledType.Other;
-            if (canUseLocalOffset && nestedField.Type == LuminFiledType.Other && !previousFieldUsesFormatter4)
-            {
-                sb.AppendLine("            reader.FlushCurrentIndex(offset);");
-            }
             GenerateDeserializeCode(sb, nestedField, fieldTarget4, "span", "offset", 3, 0, isFirst: true, "", isArray: false, isList: false, "_", isPrivateFiled: false, "", collectionHeadAlreadyRead: false, canConstructDirectly && CanDeserializeDirectlyIntoConstructedObject(nestedField));
-            bool nextFieldUsesFormatter5 = fieldIndex + 1 < data.fields.Count && data.fields[fieldIndex + 1].Type == LuminFiledType.Other;
-            if (canUseLocalOffset && nestedField.Type == LuminFiledType.Other && !nextFieldUsesFormatter5 && fieldIndex + 1 < data.fields.Count)
-            {
-                sb.AppendLine("            offset = reader.GetCurrentSpanIndex();");
-            }
             LuminFiledType type2 = nestedField.Type;
             if (type2 != LuminFiledType.String && type2 != LuminFiledType.Struct && type2 != LuminFiledType.Other)
             {
@@ -941,7 +952,7 @@ public static partial class LuminPackCodeGenerator
         }
         sb.AppendLine();
         sb.AppendLine("            // Construct the object and populate its members.");
-        if (canUseLocalOffset && (data.fields.Count == 0 || data.fields[data.fields.Count - 1].Type != LuminFiledType.Other))
+        if (canUseLocalOffset)
         {
             sb.AppendLine("            reader.FlushCurrentIndex(offset);");
         }
@@ -960,10 +971,13 @@ public static partial class LuminPackCodeGenerator
                 sb.AppendLine("            {");
                 sb.AppendLine("                value = result;");
                 sb.AppendLine("            }");
+                sb.AppendLine("            else");
+                sb.AppendLine("            {");
                 foreach (LuminDataField field in data.fields.Where(static field => CanDeserializeDirectlyIntoConstructedObject(field)))
                 {
                     sb.AppendLine("                value." + field.Identifier + " = result." + field.Identifier + ";");
                 }
+                sb.AppendLine("            }");
             }
             if (data.fields.Any(static field => !CanDeserializeDirectlyIntoConstructedObject(field)))
             {

@@ -14,17 +14,26 @@ internal static class BinaryEntryLocalScopes
     /// <summary>Normalizes operation lifetimes in a complete projected serializer source file.</summary>
     /// <param name="root">The projected source root.</param>
     /// <returns>The same root with compatible lexical storage scopes.</returns>
-    internal static SyntaxNode NormalizeRoot(SyntaxNode root) => new StateTemporaries().Visit(root);
+    internal static SyntaxNode NormalizeRoot(SyntaxNode root)
+        => BinaryEntryCursorLocals.NormalizeRoot(new StateTemporaries().Visit(root));
 
     /// <summary>Preserves a parameter reader's caller-wide value escape context for expanded span storage.</summary>
     private sealed class StateTemporaries : CSharpSyntaxRewriter
     {
+        /// <summary>Skips operation bodies that cannot require binary reader escape-scope normalization.</summary>
+        /// <param name="node">The projected method.</param>
+        /// <returns>The unchanged method or its normalized binary reader body.</returns>
+        public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
+            => node.ParameterList.Parameters.FirstOrDefault()?.Type?.ToString().EndsWith("LuminPackReader", StringComparison.Ordinal) == true
+                ? base.VisitMethodDeclaration(node) : node;
+
         /// <summary>Seeds span locals from the original reader before their unchanged initialization.</summary>
         /// <param name="node">An expanded operation block.</param>
         /// <returns>The same execution order with reader-compatible span storage.</returns>
         public override SyntaxNode VisitBlock(BlockSyntax node)
         {
-            var statements = new List<StatementSyntax>();
+            List<StatementSyntax> statements = null;
+            int index = 0;
             foreach (var statement in node.Statements)
             {
                 var visited = (StatementSyntax)Visit(statement);
@@ -35,6 +44,7 @@ internal static class BinaryEntryLocalScopes
                     local.Declaration.Type.DescendantNodesAndSelf().OfType<GenericNameSyntax>().FirstOrDefault() is { } span && span.Identifier.ValueText is "Span" or "ReadOnlySpan" &&
                     node.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.ParameterList.Parameters[0].Type?.ToString().EndsWith("LuminPackReader", StringComparison.Ordinal) == true)
                 {
+                    statements ??= node.Statements.Take(index).ToList();
                     var variable = local.Declaration.Variables[0];
                     var seed = SyntaxFactory.ParseExpression("reader.CreateSpan<" + span.TypeArgumentList.Arguments[0] +
                         ">(ref global::System.Runtime.CompilerServices.Unsafe.As<byte, " + span.TypeArgumentList.Arguments[0] + ">(ref reader.GetCurrentSpanReference()), 0)");
@@ -45,9 +55,15 @@ internal static class BinaryEntryLocalScopes
                     statements.Add(SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(SyntaxKind.SimpleAssignmentExpression,
                         SyntaxFactory.IdentifierName(variable.Identifier), variable.Initializer.Value)).WithTrailingTrivia(local.GetTrailingTrivia()));
                 }
-                else statements.Add(visited);
+                else
+                {
+                    if (statements is null && !ReferenceEquals(visited, statement))
+                        statements = node.Statements.Take(index).ToList();
+                    statements?.Add(visited);
+                }
+                index++;
             }
-            return node.WithStatements(SyntaxFactory.List(statements));
+            return statements is null ? node : node.WithStatements(SyntaxFactory.List(statements));
         }
     }
 

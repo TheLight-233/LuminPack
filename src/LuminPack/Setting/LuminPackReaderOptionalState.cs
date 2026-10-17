@@ -63,14 +63,16 @@ namespace LuminPack.Option
         /// <param name="options">The configuration to apply to this operation.</param>
         public void Init(LuminPackSerializerOption? options)
         {
-            Option = options ?? LuminPackSerializerOption.InternalDefault;
+            var nextOption = options ?? LuminPackSerializerOption.InternalDefault;
+            if (!ReferenceEquals(Option, nextOption))
+                Option = nextOption;
         }
 
         /// <summary>Clears state retained by the previous operation so it can be reused.</summary>
         public void Reset()
         {
             ResetOperationState();
-            Option = LuminPackSerializerOption.InternalDefault;
+            Init(null);
         }
 
         /// <summary>Clears transient reader operation state while preserving the configured option.</summary>

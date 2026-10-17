@@ -59,7 +59,7 @@ public static partial class LuminPackExtensionGenerator
                         GenerateOperationTemplates(type, compilation, metadata), compilation, metadata, cache.Operations, type);
                 else
                 {
-                    GenerateFormatterExtensions(body, new LuminLocalFieldData { TypeName = name, TypeSymbol = type, Name = "value", IsValue = type.IsValueType },
+                    GenerateFormatterExtensions(body, CreateOperationField(type, compilation, metadata),
                         metadata, new HashSet<string>(StringComparer.Ordinal), emitOptionalVariants: true);
                     source = SerializerCoreProjection.Project(GenerateExtension(body, extension), compilation, metadata, cache.Operations);
                 }

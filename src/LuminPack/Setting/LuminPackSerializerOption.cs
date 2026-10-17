@@ -41,11 +41,36 @@ namespace LuminPack.Option
         };
 
 
+        private LuminPackStringEncoding _stringEncoding;
+        private LuminPackStringRecording _stringRecording;
+        private byte _stringSerializationMode = 1;
+
+        /// <summary>Gets the current encoding/recording combination for a binary writer snapshot.</summary>
+        internal byte StringSerializationMode => _stringSerializationMode;
+
         /// <summary>Gets or sets the encoding used for string payloads.</summary>
-        public LuminPackStringEncoding StringEncoding { get; set; } = LuminPackStringEncoding.UTF8;
+        public LuminPackStringEncoding StringEncoding
+        {
+            get => _stringEncoding;
+            set
+            {
+                _stringEncoding = value;
+                _stringSerializationMode = (byte)((_stringSerializationMode & 1) |
+                    (value is LuminPackStringEncoding.UTF16 ? 2 : 0));
+            }
+        }
 
         /// <summary>Gets or sets whether strings use length prefixes or terminator tokens.</summary>
-        public LuminPackStringRecording StringRecording { get; set; } = LuminPackStringRecording.Length;
+        public LuminPackStringRecording StringRecording
+        {
+            get => _stringRecording;
+            set
+            {
+                _stringRecording = value;
+                _stringSerializationMode = (byte)((_stringSerializationMode & 2) |
+                    (value is LuminPackStringRecording.Length ? 1 : 0));
+            }
+        }
 
         /// <summary>Gets or sets the standard format used by supported formatted values.</summary>
         public StandardFormat StandardFormat { get; set; } = new('G');
@@ -73,8 +98,9 @@ namespace LuminPack.Option
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void ResetToDefault()
         {
-            StringEncoding = LuminPackStringEncoding.UTF8;
-            StringRecording = LuminPackStringRecording.Length;
+            _stringEncoding = LuminPackStringEncoding.UTF8;
+            _stringRecording = LuminPackStringRecording.Length;
+            _stringSerializationMode = 1;
             StandardFormat = new StandardFormat('G');
             MaxJsonDepth = 1024;
             ValidateJsonSyntax = false;

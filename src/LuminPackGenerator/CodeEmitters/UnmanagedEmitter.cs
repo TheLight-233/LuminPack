@@ -12,8 +12,7 @@ public static class UnmanagedEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
-        sb.AppendLine("            Unsafe.WriteUnaligned(ref writer.GetCurrentSpanReference(), value);");
-        sb.AppendLine($"            writer.Advance(Unsafe.SizeOf<{data.TypeName}>());");
+        sb.AppendLine("            writer.Advance(writer.WriteUnmanaged(value));");
     }
 
     /// <summary>Appends binary reading statements for unmanaged values.</summary>
@@ -21,8 +20,7 @@ public static class UnmanagedEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
-        sb.AppendLine($"            value = Unsafe.ReadUnaligned<{data.TypeName}>(ref reader.GetCurrentSpanReference());");
-        sb.AppendLine($"            reader.Advance(Unsafe.SizeOf<{data.TypeName}>());");
+        sb.AppendLine("            reader.Advance(reader.ReadUnmanaged(out value));");
     }
 
     /// <summary>Appends statements that calculate the binary payload size.</summary>

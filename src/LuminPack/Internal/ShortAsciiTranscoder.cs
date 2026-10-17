@@ -33,8 +33,11 @@ internal static class ShortAsciiTranscoder
         ref ushort input = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(source));
         if (length < 8)
         {
-            var chars = Vector128.Create(Vector64.LoadUnsafe(ref input),
-                Vector64.LoadUnsafe(ref input, (nuint)(length - 4)));
+            var chars = Unsafe.SizeOf<IntPtr>() == 8
+                ? Vector128.Create(Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref input)),
+                    Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref input, length - 4)))).AsUInt16()
+                : Vector128.Create(Vector64.LoadUnsafe(ref input),
+                    Vector64.LoadUnsafe(ref input, (nuint)(length - 4)));
             if (Vector128.GreaterThanAny(chars, Vector128.Create((ushort)0x7F)))
                 return false;
             var packed = Vector128.Narrow(chars, chars);
@@ -56,8 +59,16 @@ internal static class ShortAsciiTranscoder
             return false;
 
         ref byte output = ref MemoryMarshal.GetReference(destination);
-        Unsafe.WriteUnaligned(ref output, bytes.GetLower());
-        Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, length - 8), bytes.GetUpper());
+        if (Unsafe.SizeOf<IntPtr>() == 8)
+        {
+            Unsafe.WriteUnaligned(ref output, bytes.AsUInt64().GetElement(0));
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, length - 8), bytes.AsUInt64().GetElement(1));
+        }
+        else
+        {
+            Unsafe.WriteUnaligned(ref output, bytes.GetLower());
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref output, length - 8), bytes.GetUpper());
+        }
         return true;
     }
 

@@ -156,6 +156,17 @@ namespace LuminPack.Core
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + count));
         }
 
+        /// <summary>Validates a raw collection copy before accessing its complete payload in every build.</summary>
+        /// <param name="index">The first payload byte after the collection header.</param>
+        /// <param name="byteLength">The checked number of payload bytes to copy.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ValidateCollectionPayload(int index, int byteLength)
+        {
+            if ((uint)index > (uint)_bufferReference.Length ||
+                (uint)byteLength > (uint)(_bufferReference.Length - index))
+                LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + byteLength));
+        }
+
         /// <summary>
         /// Advances the target pointer.
         /// </summary>
@@ -184,13 +195,17 @@ namespace LuminPack.Core
         }
 
         /// <summary>
-        /// Flushes the writer's pending output.
+        /// Releases the input span and resets its cursor without modifying caller memory.
         /// </summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Flush()
         {
             _bufferReference = null;
+#if NET8_0_OR_GREATER
+            _bufferStart = ref Unsafe.NullRef<byte>();
+#else
             _bufferStart = default;
+#endif
             _currentIndex = 0;
         }
 
@@ -924,6 +939,11 @@ namespace LuminPack.Core
 
                 if (utf16Length == length)
                 {
+                    if ((uint)(length - 1) <= 2)
+                    {
+                        var tinyString = ReadTinyAsciiString(ref Unsafe.Add(ref spanRef, 4), length);
+                        if (tinyString is not null) return tinyString;
+                    }
                     if (Vector128.IsHardwareAccelerated && (uint)(length - 4) <= 28)
                     {
                         var shortString = length <= 16
@@ -1460,8 +1480,9 @@ namespace LuminPack.Core
         public void ReadFreshUnmanagedArray<T>(scoped ref int index, T[] array, int length, out int spanOffset)
             where T : struct
         {
+            var byteLength = checked(length * Unsafe.SizeOf<T>());
+            ValidateCollectionPayload(index, byteLength);
             ref var dest = ref LuminPackMarshal.GetArrayDataReference(array);
-            var byteLength = length * Unsafe.SizeOf<T>();
 
 #if NET8_0_OR_GREATER
             Unsafe.CopyBlockUnaligned(ref dest, ref Unsafe.Add(ref _bufferStart, (nint)(uint)index), (uint)byteLength);
@@ -1482,6 +1503,7 @@ namespace LuminPack.Core
         public void ReadUnmanagedSpan<T>(scoped ref int index, scoped ref Span<T> span, int length, out int spanOffset)
             where T : struct
         {
+            ValidateCollectionPayload(index, checked(length * Unsafe.SizeOf<T>()));
             DangerousReadUnmanagedSpan(ref index, ref span, length, out spanOffset);
         }
 
@@ -2205,6 +2227,27 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Reads one to three ASCII bytes without pinning input or preparing a decoder callback.</summary>
+        /// <param name="source">The validated payload's first byte.</param>
+        /// <param name="length">The payload length, from one through three bytes.</param>
+        /// <returns>A fresh decoded string, or null when the validating UTF-8 path is required.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static string? ReadTinyAsciiString(ref byte source, int length)
+        {
+            uint first = source;
+            if (first >= 0x80) return null;
+            if (length == 1) return new string((char)first, 1);
+            uint last = Unsafe.Add(ref source, length - 1);
+            uint middle = length == 3 ? Unsafe.Add(ref source, 1) : 0u;
+            if ((last | middle) >= 0x80) return null;
+            string result = new string('\0', length);
+            ref char output = ref Unsafe.AsRef(in result.GetPinnableReference());
+            output = (char)first;
+            Unsafe.Add(ref output, length - 1) = (char)last;
+            if (length == 3) Unsafe.Add(ref output, 1) = (char)middle;
+            return result;
+        }
+
         /// <summary>Reads short ascii string from the current input.</summary>
         /// <param name="source">The input data to process.</param>
         /// <param name="length">The number of bytes or elements to process.</param>
@@ -2225,8 +2268,13 @@ namespace LuminPack.Core
                 return shortResult;
             }
 
-            var bytes = Vector128.Create(Vector64.LoadUnsafe(ref source),
-                Vector64.LoadUnsafe(ref source, (nuint)(length - 8)));
+            // Scalar lane construction avoids stack staging on 64-bit. Retain
+            // the existing vector-load path on 32-bit runtimes.
+            var bytes = Unsafe.SizeOf<IntPtr>() == 8
+                ? Vector128.Create(Unsafe.ReadUnaligned<ulong>(ref source),
+                    Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, length - 8))).AsByte()
+                : Vector128.Create(Vector64.LoadUnsafe(ref source),
+                    Vector64.LoadUnsafe(ref source, (nuint)(length - 8)));
             // A matching byte/char count is only a hint; invalid UTF-8 must still
             // go through the validating decoder. No string is published yet.
             if (bytes.ExtractMostSignificantBits() != 0) return null;

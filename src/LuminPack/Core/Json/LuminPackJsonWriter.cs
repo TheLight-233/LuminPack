@@ -96,7 +96,7 @@ namespace LuminPack.Core
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
 
-            _bufferReference = bufferWriter.BeginWrite(ref _currentIndex);
+            _bufferReference = bufferWriter.BeginWrite(out _currentIndex);
 #if NET8_0_OR_GREATER
             _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
 #else
@@ -105,7 +105,6 @@ namespace LuminPack.Core
             _writerBuffer = bufferWriter;
             _output = null;
             _committedBytes = 0;
-            _currentIndex = 0;
             _depth = 0;
             _isFirstElement = true;
             SerializeStringAsUtf8 = _state.Option.StringEncoding is LuminPackStringEncoding.UTF8;
@@ -117,7 +116,7 @@ namespace LuminPack.Core
         internal LuminPackJsonWriter(LuminBufferWriter bufferWriter)
         {
             _state = bufferWriter.WriterState;
-            _bufferReference = bufferWriter.BeginWrite(ref _currentIndex);
+            _bufferReference = bufferWriter.BeginWrite(out _currentIndex);
 #if NET8_0_OR_GREATER
             _bufferStart = ref MemoryMarshal.GetReference(_bufferReference);
 #else
@@ -126,7 +125,6 @@ namespace LuminPack.Core
             _writerBuffer = bufferWriter;
             _output = null;
             _committedBytes = 0;
-            _currentIndex = 0;
             _depth = 0;
             _isFirstElement = true;
             SerializeStringAsUtf8 = bufferWriter.Option.StringEncoding is LuminPackStringEncoding.UTF8;

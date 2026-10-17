@@ -276,25 +276,6 @@ public static partial class LuminPackCodeGenerator
         };
     }
 
-    /// <summary>Determines whether the metadata contains nested formatter call.</summary>
-    /// <param name="field">The metadata describing the field being processed.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    private static bool ContainsNestedFormatterCall(LuminDataField field)
-    {
-        if (field.Type == LuminFiledType.Other)
-        {
-            return true;
-        }
-        foreach (LuminDataField classField in field.ClassFields)
-        {
-            if (classField.Type == LuminFiledType.Other || ContainsNestedFormatterCall(classField))
-            {
-                return true;
-            }
-        }
-        return false;
-    }
-
     /// <summary>Determines whether the metadata contains serialized string record.</summary>
     /// <param name="field">The metadata describing the field being processed.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>

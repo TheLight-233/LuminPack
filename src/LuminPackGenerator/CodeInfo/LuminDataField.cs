@@ -76,6 +76,8 @@ namespace LuminPack.Code
         public uint FixLength = int.MaxValue;
         /// <summary>Stores the is private.</summary>
         public bool IsPrivate;
+        /// <summary>Whether the original field requires volatile access semantics.</summary>
+        public bool IsVolatile;
         /// <summary>Stores the is compress.</summary>
         public bool IsCompress;
 

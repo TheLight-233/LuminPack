@@ -14,6 +14,10 @@ namespace LuminPack.Code.Core;
 /// <summary>Expands typed operation plans directly into one concrete serializer contribution.</summary>
 internal sealed class BinaryEntryInlining
 {
+    internal const string OperationLocalAnnotation = "LuminPack.ExpandedOperationLocal";
+    internal const string ExpandedIdentityAnnotation = "LuminPack.ExpandedIdentity";
+    private static readonly SyntaxAnnotation CursorLocal = new SyntaxAnnotation(OperationLocalAnnotation);
+    private static readonly SyntaxAnnotation ExpandedIdentity = new SyntaxAnnotation(ExpandedIdentityAnnotation);
     private readonly Compilation _compilation;
     private readonly MetaInfo _metadata;
     private readonly BinaryOperationPlanCache _cache;
@@ -162,11 +166,14 @@ internal sealed class BinaryEntryInlining
     {
         private readonly string _prefix;
         private readonly string _layoutPrefix;
+        private readonly System.Collections.Immutable.ImmutableHashSet<string> _cursorLocals;
 
         /// <summary>Captures the operation instance and concrete root's layout namespace.</summary>
         /// <param name="prefix">The unique operation instance prefix.</param>
         /// <param name="layoutPrefix">The stable root-specific private mirror prefix.</param>
-        internal InstanceNames(string prefix, string layoutPrefix) { _prefix = prefix; _layoutPrefix = layoutPrefix; }
+        /// <param name="cursorLocals">Only integer cursor identities requiring later lifetime normalization.</param>
+        internal InstanceNames(string prefix, string layoutPrefix, System.Collections.Immutable.ImmutableHashSet<string> cursorLocals = null)
+        { _prefix = prefix; _layoutPrefix = layoutPrefix; _cursorLocals = cursorLocals; }
 
         /// <summary>Renames only compiler-created template identities.</summary>
         /// <param name="token">The template token.</param>
@@ -178,7 +185,8 @@ internal sealed class BinaryEntryInlining
             string replacement = name.StartsWith(BinaryOperationPlan.Prefix + "layout_", StringComparison.Ordinal)
                 ? _layoutPrefix + name.Substring((BinaryOperationPlan.Prefix + "layout_").Length)
                 : _prefix + name.Substring(BinaryOperationPlan.Prefix.Length);
-            return SyntaxFactory.Identifier(replacement).WithTriviaFrom(token);
+            var renamed = SyntaxFactory.Identifier(replacement).WithTriviaFrom(token).WithAdditionalAnnotations(ExpandedIdentity);
+            return _cursorLocals?.Contains(name) == true ? renamed.WithAdditionalAnnotations(CursorLocal) : renamed;
         }
     }
 
@@ -202,7 +210,7 @@ internal sealed class BinaryEntryInlining
         /// <param name="state">The original writer or reader storage, preserving its escape scope.</param>
         internal OperationExpansion(BinaryEntryInlining owner, BinaryOperationPlan plan, BinaryOperation operation, string prefix, string exit, HashSet<string> stack,
             ExpressionSyntax state)
-            : base(prefix, owner._layoutPrefix)
+            : base(prefix, owner._layoutPrefix, operation.CursorLocals)
         { _owner = owner; _plan = plan; _operation = operation; _exit = exit; _stack = stack; _state = state; }
 
         /// <summary>Uses the caller's writer or reader directly without narrowing its ref-escape scope through a local alias.</summary>

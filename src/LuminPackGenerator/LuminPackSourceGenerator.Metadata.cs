@@ -605,6 +605,7 @@ namespace LuminPack.SourceGenerator
                             Name = fieldMember.Name,
                             FullTypeName = fieldMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             TypeSymbol = fieldMember.Type,
+                            IsVolatile = fieldMember.IsVolatile,
                             NameSpace = fieldMember.Type.ContainingNamespace?.ToString() ??
                                         fieldMember.ContainingNamespace?.ToString() ??
                                         "Your.Data.Namespace",

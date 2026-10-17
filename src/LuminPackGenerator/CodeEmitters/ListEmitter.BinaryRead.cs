@@ -23,15 +23,25 @@ public static partial class ListEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateFreshDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        GenerateDeserializeCodeCore(fieldData, sb, freshValue: true);
+        GenerateFreshDeserializeCode(fieldData, sb, useArrayDataIntrinsic: false);
+    }
+
+    /// <summary>Appends fresh-list reading statements using only APIs available on the selected target.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="useArrayDataIntrinsic">Whether the target exposes the intrinsic array data reference API.</param>
+    public static void GenerateFreshDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb, bool useArrayDataIntrinsic)
+    {
+        GenerateDeserializeCodeCore(fieldData, sb, freshValue: true, useArrayDataIntrinsic);
     }
 
     /// <summary>Appends binary reading statements for list values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="freshValue">The fresh value used by this operation.</param>
+    /// <param name="useArrayDataIntrinsic">Whether the target exposes the intrinsic array data reference API.</param>
     private static void GenerateDeserializeCodeCore(
-        LuminLocalFieldData fieldData, StringBuilder sb, bool freshValue)
+        LuminLocalFieldData fieldData, StringBuilder sb, bool freshValue, bool useArrayDataIntrinsic = false)
     {
         var elementType = GetFirstGeneric(fieldData.TypeName);
         bool elementClassificationKnown = EmitterTypeTraits.TryGetIsUnmanaged(
@@ -108,18 +118,35 @@ public static partial class ListEmitter
         sb.AppendLine();
         if (freshValue)
         {
+            var element = EmitterTypeTraits.GetFirstTypeArgument(fieldData);
+            bool knownReference = element?.IsReferenceType == true;
+            if (element?.IsValueType != true)
+            {
+                if (!knownReference)
+                {
+                    sb.AppendLine($"            if (!typeof({elementType}).IsValueType)");
+                    sb.AppendLine("            {");
+                }
+                string indent = knownReference ? "            " : "                ";
+                if (!useArrayDataIntrinsic)
+                    sb.AppendLine(indent + "ref var referenceItems = ref LuminPackMarshal.DangerousGetArrayDataReference(items);");
+                sb.AppendLine(indent + "for (int i = 0; i < items.Length; i++)");
+                sb.AppendLine(indent + "{");
+                sb.AppendLine(indent + $"    {elementType} item = default!;");
+                sb.AppendLine(indent + "    reader.ReadValue(ref item);");
+                string destination = useArrayDataIntrinsic
+                    ? "global::System.Runtime.InteropServices.MemoryMarshal.GetArrayDataReference(items)"
+                    : "referenceItems";
+                sb.AppendLine(indent + "    global::System.Runtime.CompilerServices.Unsafe.Add(ref " + destination + ", (nint)(uint)i) = item;");
+                sb.AppendLine(indent + "}");
+                sb.AppendLine(indent + "return;");
+                // Concrete reference elements must not expand a second, unreachable
+                // copy of their entire formatter graph in the value-type loop.
+                if (knownReference) return;
+                sb.AppendLine("            }");
+                sb.AppendLine();
+            }
             sb.AppendLine("            ref var first = ref LuminPackMarshal.DangerousGetArrayDataReference(items);");
-            sb.AppendLine($"            if (!typeof({elementType}).IsValueType)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                for (nint i = 0; i < length; i++)");
-            sb.AppendLine("                {");
-            sb.AppendLine($"                    {elementType} item = default!;");
-            sb.AppendLine("                    reader.ReadValue(ref item);");
-            sb.AppendLine("                    global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i) = item;");
-            sb.AppendLine("                }");
-            sb.AppendLine("                return;");
-            sb.AppendLine("            }");
-            sb.AppendLine();
             sb.AppendLine("            for (nint i = 0; i < length; i++)");
             sb.AppendLine("            {");
             sb.AppendLine("                reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");

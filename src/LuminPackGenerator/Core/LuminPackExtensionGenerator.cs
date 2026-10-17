@@ -385,7 +385,7 @@ public static partial class LuminPackExtensionGenerator
             : "        [global::System.Runtime.CompilerServices.MethodImpl(MethodImplOptions.NoInlining)]");
         sb.AppendLine(metaInfo.IsNet8 ? ("        public static void ReadFreshValue(ref this LuminPackReader reader, scoped ref " + typeName + " value)") : ("        public static void ReadFreshValue(ref this LuminPackReader reader, ref " + typeName + " value)"));
         sb.AppendLine("        {");
-        ListEmitter.GenerateFreshDeserializeCode(localData, sb);
+        ListEmitter.GenerateFreshDeserializeCode(localData, sb, metaInfo.IsNet8);
         sb.AppendLine("        }");
         sb.AppendLine();
     }

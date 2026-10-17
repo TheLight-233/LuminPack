@@ -145,6 +145,13 @@ internal static class SerializerCustomFormatterRegression
                     CallbackOwner callbackResult = new();
                     LuminPackSerializer.Deserialize(callbackBytes.AsSpan(), ref callbackResult);
                     if (CallbackCustom.Current.GetValue() != 73) throw new Exception("Custom callback packable dependency was not generated.");
+                    var customKeys = new Dictionary<CustomRaw, string> { [raw] = "custom-key" };
+                    previousWrites = RawWrites;
+                    var customKeyBytes = LuminPackSerializer.Serialize(customKeys);
+                    if (RawWrites != previousWrites + 1) throw new Exception("A mixed dictionary bypassed its unmanaged Custom key.");
+                    var customKeyResult = LuminPackSerializer.Deserialize<Dictionary<CustomRaw, string>>(customKeyBytes);
+                    if (customKeyResult[raw] != "custom-key" || LuminPackSerializer.Sizeof(customKeys) != customKeyBytes.Length)
+                        throw new Exception("An unmanaged Custom dictionary key changed its formatter contract.");
                     return 1;
                 }
                 private static void Validate(Host value)

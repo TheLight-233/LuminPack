@@ -271,20 +271,22 @@ public sealed class LuminBufferWriter : IDisposable
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public unsafe void SetCurrentIndexPtr(ref int index)
     {
-        _currentIndex = (int*)Unsafe.AsPointer(ref index);
-        _buffer.SetCurrentIndexPtr(_currentIndex);
+        int* position = (int*)Unsafe.AsPointer(ref index);
+        _currentIndex = position;
+        _buffer.SetCurrentIndexPtr(position);
     }
 
     /// <summary>Prepares the buffer and its operation state for a new write.</summary>
-    /// <param name="index">The position at which the operation starts.</param>
+    /// <param name="index">Receives zero and supplies the cursor storage published to both buffer owners.</param>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal unsafe Span<byte> BeginWrite(ref int index)
+    internal unsafe Span<byte> BeginWrite(out int index)
     {
         index = 0;
         _writtenCount = 0;
-        _currentIndex = (int*)Unsafe.AsPointer(ref index);
-        _buffer.SetCurrentIndexPtr(_currentIndex);
+        int* position = (int*)Unsafe.AsPointer(ref index);
+        _currentIndex = position;
+        _buffer.SetCurrentIndexPtr(position);
         return GetFullSpan();
     }
 

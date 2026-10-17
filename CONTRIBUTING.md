@@ -20,6 +20,8 @@ The documentation test uses the installed SDK's Roslyn assemblies so it can comp
 
 ## Source conventions
 
+README is reserved for project introduction, installation and usage. Release notes, version-change summaries, upgrade/migration notices and development/performance experiment reports belong under `docs`, never in README. Installation examples may reference the current package version. This is a mandatory repository documentation boundary.
+
 - Follow `.editorconfig`: four spaces for C#, UTF-8 text, and consistent line endings. `.gitattributes` retains binary/archive and generated-artifact classification.
 - Use English for implementation comments, XML documentation, diagnostics, examples, and maintenance documents. README files are the language exception. Represent multilingual test fixtures with Unicode escapes while preserving their actual values.
 - Document every explicitly declared method, constructor, operator, and conversion with XML comments. Include meaningful summaries, parameter descriptions, generic type parameters, and return values. Use ordinary comments for local functions and lambdas, whose documentation is not emitted as member XML by the compiler.

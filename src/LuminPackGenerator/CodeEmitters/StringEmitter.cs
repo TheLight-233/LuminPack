@@ -11,9 +11,19 @@ public static class StringEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
-        sb.AppendLine("            int offset = writer.WriteString(value) + writer.StringRecordLength();");
-        sb.AppendLine("            writer.Advance(offset);");
-        sb.AppendLine("            writer.CheckBuffer();");
+        AppendSerializeCode(sb, "value", "writer.StringRecordLength()", "            ");
+    }
+
+    /// <summary>Shares the string formatter body with collection loops that can prove a stable recording mode.</summary>
+    /// <param name="sb">The generated source builder.</param>
+    /// <param name="value">The already evaluated string expression.</param>
+    /// <param name="recordLength">The original header expression or a proven stable cached value.</param>
+    /// <param name="indent">Statement indentation.</param>
+    internal static void AppendSerializeCode(StringBuilder sb, string value, string recordLength, string indent)
+    {
+        sb.AppendLine(indent + "int offset = writer.WriteString(" + value + ") + " + recordLength + ";");
+        sb.AppendLine(indent + "writer.Advance(offset);");
+        sb.AppendLine(indent + "writer.CheckBuffer();");
     }
 
     /// <summary>Appends binary reading statements for string values.</summary>

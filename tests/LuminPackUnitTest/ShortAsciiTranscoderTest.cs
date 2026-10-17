@@ -41,7 +41,7 @@ public class ShortAsciiTranscoderTest
     [Fact]
     public void ShortBinaryDecoderRejectsForgedAsciiHeadersAndTruncation()
     {
-        for (int length = 4; length <= 32; length++)
+        for (int length = 1; length <= 32; length++)
         {
             byte[] payload = new byte[8 + length];
             BitConverter.GetBytes(length).CopyTo(payload, 0);
@@ -57,9 +57,12 @@ public class ShortAsciiTranscoderTest
             }
 
             // Valid non-ASCII UTF-8 still disagrees with the forged UTF-16 length.
-            payload[8] = 0xC3;
-            payload[9] = 0xA9;
-            Assert.ThrowsAny<Exception>(() => Read(payload));
+            if (length >= 2)
+            {
+                payload[8] = 0xC3;
+                payload[9] = 0xA9;
+                Assert.ThrowsAny<Exception>(() => Read(payload));
+            }
             payload.AsSpan(8).Fill((byte)'x');
             for (int prefix = 0; prefix < payload.Length; prefix++)
             {
@@ -76,7 +79,8 @@ public class ShortAsciiTranscoderTest
             ReadOnlySpan<byte> span = payload;
             var reader = new LuminPackReader(ref span);
             int offset = 0;
-            return reader.ReadStringAndAdvance(ref offset);
+            try { return reader.ReadStringAndAdvance(ref offset); }
+            catch { Assert.Equal(0, offset); throw; }
         }
     }
 
@@ -115,7 +119,7 @@ public class ShortAsciiTranscoderTest
     public void EveryAsciiCharacterEscapesAndRoundtripsAtEveryVectorPosition(LuminPackStringEncoding encoding)
     {
         var option = new LuminPackSerializerOption { StringEncoding = encoding, ValidateJsonSyntax = true };
-        for (int length = 4; length <= 32; length++)
+        for (int length = 1; length <= 32; length++)
             for (int position = 0; position < length; position++)
                 for (int code = 0; code < 128; code++)
                 {

@@ -67,19 +67,30 @@ namespace LuminPack.Option
         /// <param name="options">The configuration to apply to this operation.</param>
         public void Init(LuminPackSerializerOption? options)
         {
-            Option = options ?? LuminPackSerializerOption.InternalDefault;
+            var nextOption = options ?? LuminPackSerializerOption.InternalDefault;
+            if (!ReferenceEquals(Option, nextOption))
+                Option = nextOption;
         }
 
         /// <summary>Clears state retained by the previous operation so it can be reused.</summary>
         public void Reset()
         {
             ResetOperationState();
-            Option = LuminPackSerializerOption.InternalDefault;
+            Init(null);
         }
 
         /// <summary>Clears transient writer operation state while preserving the configured option.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ResetOperationState()
+        {
+            // No reference can be retained before the first id is assigned.
+            if (_nextId == 0) return;
+            ResetReferences();
+        }
+
+        /// <summary>Clears a nonempty reference table without expanding its cleanup into each entry point.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void ResetReferences()
         {
             ObjectToRef.Clear();
             _nextId = 0;

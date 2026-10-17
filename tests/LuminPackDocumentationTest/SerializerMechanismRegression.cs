@@ -198,7 +198,7 @@ internal static class SerializerMechanismRegression
             (int)entry.GetMethod("SparseSize")!.Invoke(null, null)!, (int)entry.GetMethod("SparseBytes")!.Invoke(null, null)!);
     }
 
-    /// <summary>Normalizes only the explicitly authorized move from extension owners to Serializer state methods.</summary>
+    /// <summary>Normalizes API ownership and class-reference input passing while retaining dispatch and framing.</summary>
     private sealed class ApiOwnerNames : CSharpSyntaxRewriter
     {
         /// <summary>Maps payload API owners and operation spellings without changing dispatch or framing syntax.</summary>
@@ -217,8 +217,17 @@ internal static class SerializerMechanismRegression
                 "CalculateOffset" => "Sizeof",
                 _ => access.Name.Identifier.ValueText
             };
-            return node.WithExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+            var canonical = node.WithExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
                 SyntaxFactory.IdentifierName("PayloadApi"), access.Name.WithIdentifier(SyntaxFactory.Identifier(name))));
+            // Omitting `in` still binds value-type `in` parameters. Class payloads now
+            // carry the same object reference in a register instead of a local stack slot.
+            if (name == "SerializeUnion" && canonical.ArgumentList.Arguments.Count == 2 &&
+                canonical.ArgumentList.Arguments[1].RefKindKeyword.IsKind(SyntaxKind.InKeyword))
+            {
+                var arguments = canonical.ArgumentList.Arguments;
+                canonical = canonical.WithArgumentList(canonical.ArgumentList.WithArguments(arguments.Replace(arguments[1], arguments[1].WithRefKindKeyword(default))));
+            }
+            return canonical;
         }
     }
 

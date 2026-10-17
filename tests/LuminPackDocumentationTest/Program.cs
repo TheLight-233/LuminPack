@@ -31,6 +31,16 @@ try
         SerializerCustomFormatterRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-codegen-performance"])
+    {
+        SerializerCodegenPerformanceRegression.Run(references);
+        return 0;
+    }
+    if (args is ["--verify-union-cursor"])
+    {
+        SerializerUnionCursorRegression.Run(references);
+        return 0;
+    }
     SerializerDocumentationRegression.Run(references);
     SerializerRootApiRegression.Run(references);
     SerializerAssemblyPackableRegression.Run(references);
@@ -43,6 +53,8 @@ try
     SerializerUnionInliningRegression.Run(references);
     SerializerExternalUnionRegression.Run(references);
     SerializerMechanismRegression.Run(references);
+    SerializerCodegenPerformanceRegression.Run(references);
+    SerializerUnionCursorRegression.Run(references);
     SerializerSpecialModeBoundaryRegression.Run(references);
     MetadataReference[]? compatibilityReferences = args.Length == 2
         ? Directory.GetFiles(args[0], "*.dll").Select(path => MetadataReference.CreateFromFile(path)).Append(MetadataReference.CreateFromFile(args[1])).ToArray()

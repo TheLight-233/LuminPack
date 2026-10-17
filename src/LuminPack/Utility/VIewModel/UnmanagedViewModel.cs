@@ -5,6 +5,9 @@ namespace LuminPack.Utility.ViewModel;
 
 #pragma warning disable CS0168
 
+// These views concatenate complete raw values without adding inter-value padding.
+// Keep each declaration packed: 32-bit Reader/Writer block copies use its exact size.
+
 /// <summary>Provides unmanaged view model functionality.</summary>
 internal static class UnmanagedViewModel
 {
@@ -341,7 +344,7 @@ internal static class UnmanagedViewModel
 
 /// <summary>Provides unmanaged view model functionality.</summary>
 /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1>
 {
     private readonly T1 Value1;
@@ -360,7 +363,7 @@ internal readonly record struct UnmanagedViewModel<T1>
 /// <summary>Provides unmanaged view model functionality.</summary>
 /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
 /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 public readonly record struct UnmanagedViewModel<T1, T2>
 {
     private readonly T1 Value1;
@@ -391,7 +394,7 @@ public readonly record struct UnmanagedViewModel<T1, T2>
 /// <typeparam name="T1">The type represented by <c>T1</c>.</typeparam>
 /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
 /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3>
 {
     private readonly T1 Value1;
@@ -428,7 +431,7 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3>
 /// <typeparam name="T2">The type represented by <c>T2</c>.</typeparam>
 /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
 /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4>
 {
     private readonly T1 Value1;
@@ -471,7 +474,7 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4>
 /// <typeparam name="T3">The type represented by <c>T3</c>.</typeparam>
 /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
 /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5>
 {
     private readonly T1 Value1;
@@ -520,7 +523,7 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5>
 /// <typeparam name="T4">The type represented by <c>T4</c>.</typeparam>
 /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
 /// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6>
 {
     private readonly T1 Value1;
@@ -575,7 +578,7 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6>
 /// <typeparam name="T5">The type represented by <c>T5</c>.</typeparam>
 /// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
 /// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>
 {
     private readonly T1 Value1;
@@ -636,7 +639,7 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7>
 /// <typeparam name="T6">The type represented by <c>T6</c>.</typeparam>
 /// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
 /// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8>
 {
     private readonly T1 Value1;
@@ -703,7 +706,7 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
 /// <typeparam name="T7">The type represented by <c>T7</c>.</typeparam>
 /// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
 /// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9>
 {
     private readonly T1 Value1;
@@ -776,7 +779,7 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
 /// <typeparam name="T8">The type represented by <c>T8</c>.</typeparam>
 /// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
 /// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10>
 {
     private readonly T1 Value1;
@@ -855,7 +858,7 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
 /// <typeparam name="T9">The type represented by <c>T9</c>.</typeparam>
 /// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
 /// <typeparam name="T11">The type represented by <c>T11</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11>
 {
     private readonly T1 Value1;
@@ -940,7 +943,7 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
 /// <typeparam name="T10">The type represented by <c>T10</c>.</typeparam>
 /// <typeparam name="T11">The type represented by <c>T11</c>.</typeparam>
 /// <typeparam name="T12">The type represented by <c>T12</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12>
 {
     private readonly T1 Value1;
@@ -1031,7 +1034,7 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
 /// <typeparam name="T11">The type represented by <c>T11</c>.</typeparam>
 /// <typeparam name="T12">The type represented by <c>T12</c>.</typeparam>
 /// <typeparam name="T13">The type represented by <c>T13</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13>
 {
     private readonly T1 Value1;
@@ -1128,7 +1131,7 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
 /// <typeparam name="T12">The type represented by <c>T12</c>.</typeparam>
 /// <typeparam name="T13">The type represented by <c>T13</c>.</typeparam>
 /// <typeparam name="T14">The type represented by <c>T14</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14>
 {
     private readonly T1 Value1;
@@ -1231,7 +1234,7 @@ internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T
 /// <typeparam name="T13">The type represented by <c>T13</c>.</typeparam>
 /// <typeparam name="T14">The type represented by <c>T14</c>.</typeparam>
 /// <typeparam name="T15">The type represented by <c>T15</c>.</typeparam>
-[StructLayout(LayoutKind.Sequential)]
+[StructLayout(LayoutKind.Sequential, Pack = 1)]
 internal readonly record struct UnmanagedViewModel<T1, T2, T3, T4, T5, T6, T7, T8, T9, T10, T11, T12, T13, T14, T15>
 {
     private readonly T1 Value1;

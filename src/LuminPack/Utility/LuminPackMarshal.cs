@@ -87,6 +87,17 @@ public static class LuminPackMarshal
     {
         if (list is null) return;
 
+#if NET8_0_OR_GREATER
+        if (list.Count == size)
+        {
+            // SetCount still invalidates enumerators when the size is unchanged.
+            // A valid List already has sufficient capacity for its current count.
+            ref var current = ref As<List<T?>, ListView<T?>>(ref list);
+            current._version++;
+            return;
+        }
+#endif
+
         if (list.Capacity < size)
             list.Capacity = size;
 
@@ -280,6 +291,27 @@ public static class LuminPackMarshal
     public static HashSetView<T?> GetHashSetView<T>(HashSet<T?>? set)
     {
         return Unsafe.As<HashSet<T?>, HashSetView<T?>>(ref set!);
+    }
+
+    /// <summary>Gets the occupied entry range through the current runtime's HashSet storage layout.</summary>
+    /// <param name="view">The existing storage view, including sparse entry slots.</param>
+    /// <typeparam name="T">The set element type.</typeparam>
+    /// <returns>The number of occupied or free entry slots to inspect, not the public live count.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static int GetHashSetEntryCount<T>(HashSetView<T> view) => GetHashSetCountReference(view);
+
+    /// <summary>Selects the actual count field without applying the 64-bit reference-slot placeholder on x86.</summary>
+    /// <param name="view">The set whose bucket, entry and comparer reference slots are shared by both layouts.</param>
+    /// <typeparam name="T">The set element type.</typeparam>
+    /// <returns>The original set's count storage, allowing bucket rebuilds to publish it correctly.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static ref int GetHashSetCountReference<T>(HashSetView<T> view)
+    {
+#if !NETSTANDARD2_1
+        if (IntPtr.Size == 4)
+            return ref Unsafe.As<HashSetView<T>, HashSet32View<T>>(ref view)._count;
+#endif
+        return ref view._count;
     }
 
     /// <summary>Obtains the non null pinnable reference for the supplied input.</summary>
@@ -611,7 +643,7 @@ public static class LuminPackMarshal
     public static unsafe ref T GetNotNullArrayReference<T>(T[] array)
     {
 #if NET8_0_OR_GREATER
-        return ref Unsafe.As<byte, T>(ref Unsafe.AddByteOffset(ref Unsafe.As<RawData>(array).Data, (nuint)(Unsafe.AsRef<MethodTable>(GetMethodTable((object)array).ToPointer()).BaseSize - 2 * sizeof(IntPtr))));
+        return ref MemoryMarshal.GetArrayDataReference(array);
 #else
         return ref DangerousGetArrayDataReference(array!);
 #endif
@@ -642,7 +674,7 @@ public static class LuminPackMarshal
             return ref Unsafe.NullRef<T>();
 
 #if NET8_0_OR_GREATER
-        return ref Unsafe.As<byte, T>(ref Unsafe.AddByteOffset(ref Unsafe.As<RawData>(array).Data, (nuint)(Unsafe.AsRef<MethodTable>(GetMethodTable((object)array).ToPointer()).BaseSize - 2 * sizeof(IntPtr))));
+        return ref MemoryMarshal.GetArrayDataReference(array);
 #else
         return ref DangerousGetArrayDataReference(array!);
 #endif
@@ -1445,6 +1477,10 @@ public static class LuminPackMarshal
         uint bucketCount,
         ulong fastModMultiplier)
     {
+        // A hash already inside the bucket range is its own remainder.
+        if (hashCode < bucketCount)
+            return hashCode;
+
         // IntPtr.Size is a platform constant for JIT and AOT compilation,
         // The JIT normally folds this condition outside the loop.
         if (IntPtr.Size == 8)
@@ -1634,10 +1670,9 @@ public static class LuminPackMarshal
         // on runtimes that materialize EqualityComparer<TKey>.Default in _comparer.
         if (typeof(TKey).IsValueType)
         {
-            var comparer = EqualityComparer<TKey>.Default;
+            ref var entry = ref entriesRef;
             for (int i = 0; i < count; i++)
             {
-                ref var entry = ref Unsafe.Add(ref entriesRef, (nint)(uint)i);
                 if (entry.Key is null)
                     return false;
 
@@ -1653,7 +1688,9 @@ public static class LuminPackMarshal
                 while ((uint)previous < (uint)i)
                 {
                     ref var candidate = ref Unsafe.Add(ref entriesRef, (nint)(uint)previous);
-                    if (candidate.HashCode == hashCode && comparer.Equals(candidate.Key, entry.Key))
+                    // Keep the default comparer in the collision path so primitive
+                    // specializations can fold equality without retaining its instance.
+                    if (candidate.HashCode == hashCode && EqualityComparer<TKey>.Default.Equals(candidate.Key, entry.Key))
                         return false;
 
                     previous = candidate.Next;
@@ -1664,14 +1701,15 @@ public static class LuminPackMarshal
                 entry.HashCode = hashCode;
                 entry.Next = bucket - 1;
                 bucket = i + 1;
+                entry = ref Unsafe.Add(ref entry, 1);
             }
         }
         else
         {
             var comparer = view._comparer ?? EqualityComparer<TKey>.Default;
+            ref var entry = ref entriesRef;
             for (int i = 0; i < count; i++)
             {
-                ref var entry = ref Unsafe.Add(ref entriesRef, (nint)(uint)i);
                 if (entry.Key is null)
                     return false;
 
@@ -1699,6 +1737,7 @@ public static class LuminPackMarshal
                 entry.HashCode = hashCode;
                 entry.Next = bucket - 1;
                 bucket = i + 1;
+                entry = ref Unsafe.Add(ref entry, 1);
             }
         }
 
@@ -1771,7 +1810,7 @@ public static class LuminPackMarshal
                 bucket = i + 1;
             }
 
-            view._count = count;
+            GetHashSetCountReference(view) = count;
 
 #if NETSTANDARD2_1
             view._lastIndex = count;
@@ -1793,13 +1832,13 @@ public static class LuminPackMarshal
 
 #if NETSTANDARD2_1
             uint hashCode =
-                unchecked(
+                entry.Value is null ? 0u : unchecked(
                     (uint)(
                         comparer.GetHashCode(entry.Value!) &
                         0x7FFFFFFF));
 #else
             uint hashCode =
-                unchecked(
+                entry.Value is null ? 0u : unchecked(
                     (uint)comparer.GetHashCode(entry.Value!));
 #endif
 
@@ -1820,7 +1859,7 @@ public static class LuminPackMarshal
             bucket = i + 1;
         }
 
-        view._count = count;
+        GetHashSetCountReference(view) = count;
 
 #if NETSTANDARD2_1
         view._lastIndex = count;
@@ -1906,6 +1945,8 @@ public static class LuminPackMarshal
 #endif
         /// <summary>Stores the comparer.</summary>
         public IEqualityComparer<T> _comparer;
+        // Preserve the legacy reference slot. On modern 64-bit runtimes its
+        // space matches the cached multiplier; x86 count access uses HashSet32View.
         private object sync;
 
         /// <summary>Provides entry functionality.</summary>
@@ -1919,6 +1960,24 @@ public static class LuminPackMarshal
             public T Value;
         }
     }
+
+#if !NETSTANDARD2_1
+    /// <summary>Mirrors modern 32-bit HashSet storage, which has no cached 64-bit FastMod field.</summary>
+    /// <typeparam name="T">The element type, retaining the existing raw entry representation.</typeparam>
+    [Preserve]
+    private sealed class HashSet32View<T>
+    {
+        // Auto layout groups the same three reference fields before the integer state.
+        // Keep every state slot even when only count is accessed by this view.
+        public int[] _buckets;
+        public HashSetView<T>.Entry[] _entries;
+        public int _count;
+        public int _freeList;
+        public int _freeCount;
+        public int _version;
+        public IEqualityComparer<T> _comparer;
+    }
+#endif
 
     /// <summary>Provides align helper functionality.</summary>
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>

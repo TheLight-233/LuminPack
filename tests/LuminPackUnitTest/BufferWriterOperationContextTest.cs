@@ -13,10 +13,48 @@ internal static class BufferWriterOperationContextTest
     internal static void Run(List<string> results)
     {
         RunCase(results, nameof(DefaultAndCustomOptionsResetOnReturn), DefaultAndCustomOptionsResetOnReturn);
+        RunCase(results, nameof(RepeatedOptionIdentityPreservesStateLifetime), RepeatedOptionIdentityPreservesStateLifetime);
         RunCase(results, nameof(WriterAndReaderStateResetPerOperation), WriterAndReaderStateResetPerOperation);
         RunCase(results, nameof(JsonUsesBufferOwnedOption), JsonUsesBufferOwnedOption);
         RunCase(results, nameof(NestedBuffersKeepIndependentContexts), NestedBuffersKeepIndependentContexts);
         RunCase(results, nameof(ConcurrentBuffersKeepIndependentContexts), ConcurrentBuffersKeepIndependentContexts);
+    }
+
+    /// <summary>Verifies repeated configuration preserves identity while reset still clears reference tracking.</summary>
+    private static void RepeatedOptionIdentityPreservesStateLifetime()
+    {
+        var defaultOption = new LuminPackReaderOptionalState().Option;
+        var option = new LuminPackSerializerOption();
+        var reader = new LuminPackReaderOptionalState(option);
+        var writer = new LuminPackWriterOptionalState(option);
+        var marker = new object();
+        reader.AddObjectReference(7, marker);
+        writer.GetOrAddReference(marker);
+        reader.Init(option);
+        writer.Init(option);
+        option.StringEncoding = LuminPackStringEncoding.UTF16;
+        Assert(ReferenceEquals(reader.Option, option) && ReferenceEquals(writer.Option, option) &&
+               reader.Option.StringEncoding == LuminPackStringEncoding.UTF16,
+            "Repeated Init replaced the caller's mutable option.");
+        Assert(ReferenceEquals(reader.GetObjectReference(7), marker) && writer.GetOrAddReference(marker).existsReference,
+            "Init cleared active reference tracking.");
+        reader.Reset();
+        writer.Reset();
+        Assert(ReferenceEquals(reader.Option, defaultOption) && ReferenceEquals(writer.Option, defaultOption),
+            "Reset did not restore the default option identity.");
+        reader.AddObjectReference(7, marker);
+        writer.GetOrAddReference(marker);
+        reader.Reset();
+        writer.Reset();
+        AssertThrows(() => reader.GetObjectReference(7), "Default-option Reset retained reader references.");
+        var reference = writer.GetOrAddReference(marker);
+        Assert(!reference.existsReference && reference.id == 0, "Default-option Reset retained writer reference ids.");
+        reader.Init(option);
+        writer.Init(option);
+        reader.ResetOperationState();
+        writer.ResetOperationState();
+        Assert(ReferenceEquals(reader.Option, option) && ReferenceEquals(writer.Option, option),
+            "Operation-only reset replaced caller-owned options.");
     }
 
     /// <summary>Verifies default and custom options reset on return.</summary>

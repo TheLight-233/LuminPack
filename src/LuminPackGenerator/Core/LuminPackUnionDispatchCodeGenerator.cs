@@ -9,7 +9,7 @@ using Microsoft.CodeAnalysis.CSharp;
 namespace LuminPack.Code.Core;
 
 /// <summary>Provides lumin pack union dispatch code generator functionality.</summary>
-internal static class LuminPackUnionDispatchCodeGenerator
+internal static partial class LuminPackUnionDispatchCodeGenerator
 {
     /// <summary>Builds dispatch and registration members for an eligible union root.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
@@ -30,9 +30,10 @@ internal static class LuminPackUnionDispatchCodeGenerator
         var suffix = GetSlotSuffix(root);
         var extensionType = "global::LuminPack.Generated.LuminPackExtensions_" +
             SanitizeAssemblyName(compilation.AssemblyName ?? "Assembly");
+        var cursorPlan = FixedUnionCursorPlan.GetRoot(data.TypeSymbol, compilation, metaInfo);
         if (LuminPackUnionDispatchUtilities.IsCurrentCompilation(root, compilation))
             AppendPartialType(sb, root, (builder, indent) =>
-                AppendRootMethods(builder, indent, root, suffix, metaInfo));
+                AppendRootMethods(builder, indent, root, suffix, metaInfo, cursorPlan != null));
 
         foreach (var group in data.UnionMembers
                      .Where(member => IsFastPathMember(data, member))
@@ -47,7 +48,9 @@ internal static class LuminPackUnionDispatchCodeGenerator
             var canSeal = root.TypeKind == TypeKind.Class && !HasDerivedUnionMember(data, definition);
 
             AppendPartialType(sb, definition, (builder, indent) =>
-                AppendMemberMethods(builder, indent, data, root, matchedRoot, members, suffix, extensionType, canSeal));
+                AppendMemberMethods(builder, indent, data, root, matchedRoot, members, suffix, extensionType, canSeal,
+                    members.Count == 1 && cursorPlan != null && !definition.IsGenericType,
+                    members.Count == 1 && cursorPlan?.Contains(members[0].Type) == true));
         }
 
         return sb.ToString();
@@ -71,17 +74,20 @@ internal static class LuminPackUnionDispatchCodeGenerator
     /// <param name="root">The root used by this operation.</param>
     /// <param name="suffix">The suffix used by this operation.</param>
     /// <param name="metaInfo">The language, framework, and generation settings.</param>
+    /// <param name="cursor">Whether this root has an eligible fixed cursor-returning case.</param>
     private static void AppendRootMethods(
         StringBuilder sb,
         int indent,
         INamedTypeSymbol root,
         string suffix,
-        MetaInfo metaInfo)
+        MetaInfo metaInfo,
+        bool cursor)
     {
         var padding = new string(' ', indent * 4);
         var rootType = root.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         var modifier = root.TypeKind == TypeKind.Interface ? string.Empty : "public virtual ";
         var entryType = "global::LuminPack.Code.LuminUnionFormatterEntry";
+        if (cursor) AppendCursorRoot(sb, padding, rootType, suffix);
 
         // The cross-assembly manual registration registry uses function pointers (delegate*),
         // which require an unsafe context.  When the project does not enable AllowUnsafeBlocks,
@@ -176,6 +182,8 @@ internal static class LuminPackUnionDispatchCodeGenerator
     /// <param name="suffix">The suffix used by this operation.</param>
     /// <param name="extensionType">The extension type used by this operation.</param>
     /// <param name="canSeal">The can seal used by this operation.</param>
+    /// <param name="cursor">Whether this non-generic case participates in the root's returning protocol.</param>
+    /// <param name="fixedCursor">Whether its complete fixed payload can leave the cursor unpublished.</param>
     private static void AppendMemberMethods(
         StringBuilder sb,
         int indent,
@@ -185,7 +193,9 @@ internal static class LuminPackUnionDispatchCodeGenerator
         IReadOnlyList<LuminUnionMemberInfo> members,
         string suffix,
         string extensionType,
-        bool canSeal)
+        bool canSeal,
+        bool cursor,
+        bool fixedCursor)
     {
         var padding = new string(' ', indent * 4);
         var bodyPadding = new string(' ', (indent + 1) * 4);
@@ -208,6 +218,8 @@ internal static class LuminPackUnionDispatchCodeGenerator
         AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.Binary, extensionType);
         sb.AppendLine($"{padding}}}");
         sb.AppendLine();
+
+        if (cursor) AppendCursorMember(sb, padding, members[0], suffix, canSeal, fixedCursor);
 
         AppendMethodAttribute(sb, padding);
         AppendHiddenAttribute(sb, padding);

@@ -99,41 +99,111 @@ public static partial class LuminPackCodeGenerator
     /// <param name="indent">The indentation level of the generated statements.</param>
     /// <param name="advanceWriter">The advance writer used by this operation.</param>
     /// <param name="writeHeader">The write header used by this operation.</param>
+    /// <param name="separateHeaderOn32Bit">Whether the original 32-bit path writes its header outside the packed field view.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool TryGenerateFixedUnmanagedWrite(StringBuilder sb, List<LuminDataField> fields,
         int first, int last, Func<LuminDataField, string> fieldPath, string offset, string indent,
-        bool advanceWriter, bool writeHeader = false)
+        bool advanceWriter, bool writeHeader = false, bool separateHeaderOn32Bit = false)
     {
         // Direct field loads let the JIT avoid keeping one byref per argument alive.
-        // Keep getters and arbitrary unmanaged structs on the existing in-parameter path.
+        // Keep getters and private storage on the existing in-parameter path.
+        bool containsStruct = false;
+        bool containsVolatile = false;
         for (int i = first; i <= last; i++)
         {
-            if (!IsFixedLengthType(fields[i].Type) || fields[i].IsPrivate || fields[i].isProperty)
+            if (fields[i].IsPrivate || fields[i].isProperty ||
+                (!IsFixedLengthType(fields[i].Type) && !EmitterTypeTraits.CanUseUnmanagedSerialization(fields[i].TypeSymbol)))
             {
                 return false;
             }
+            containsStruct |= !IsFixedLengthType(fields[i].Type);
+            containsVolatile |= fields[i].IsVolatile;
         }
 
         sb.AppendLine(indent + "{");
-        sb.AppendLine(indent + "    ref byte __luminFixedBlock = ref writer.GetSpanReference(" + offset + ");");
-        int size = 0;
+        string bodyIndent = indent + "    ";
+        // Keep typed access and proven bulk copies on 64-bit; IL2CPP needs packed block copies on 32-bit.
+        sb.AppendLine(indent + "    if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8)");
+        sb.AppendLine(indent + "    {");
+        sb.AppendLine(bodyIndent + "    ref byte __luminFixedBlock = ref writer.GetSpanReference(" + offset + ");");
+        string size = "0";
         if (writeHeader)
         {
-            sb.AppendLine(indent + "    __luminFixedBlock = (byte)" + fields.Count + ";");
-            size = 1;
+            sb.AppendLine(bodyIndent + "    __luminFixedBlock = (byte)" + fields.Count + ";");
+            size = "1";
+        }
+        bool copyAdjacentFields = last > first && !containsVolatile;
+        if (copyAdjacentFields)
+        {
+            sb.AppendLine(bodyIndent + "    ref byte __luminSourceBlock = ref Unsafe.As<" + GetGeneratedTypeName(fields[first]) + ", byte>(ref Unsafe.AsRef(in " + fieldPath(fields[first]) + "));");
+            var adjacent = new List<string>();
+            string sourceOffset = GetUnmanagedFieldSize(fields[first]);
+            for (int i = first + 1; i <= last; i++)
+            {
+                adjacent.Add("Unsafe.ByteOffset(ref __luminSourceBlock, ref Unsafe.As<" + GetGeneratedTypeName(fields[i]) +
+                    ", byte>(ref Unsafe.AsRef(in " + fieldPath(fields[i]) + "))) == (nint)(" + sourceOffset + ")");
+                sourceOffset += " + " + GetUnmanagedFieldSize(fields[i]);
+            }
+            sb.AppendLine(bodyIndent + "    if (" + string.Join(" && ", adjacent) + ")");
+            sb.AppendLine(bodyIndent + "    {");
+            string destination = writeHeader ? "Unsafe.Add(ref __luminFixedBlock, 1)" : "__luminFixedBlock";
+            sb.AppendLine(bodyIndent + "        Unsafe.CopyBlockUnaligned(ref " + destination + ", ref __luminSourceBlock, (uint)(" + sourceOffset + "));");
+            sb.AppendLine(bodyIndent + "    }");
+            sb.AppendLine(bodyIndent + "    else");
+            sb.AppendLine(bodyIndent + "    {");
         }
         for (int i = first; i <= last; i++)
         {
-            string destination = size == 0 ? "__luminFixedBlock" : "Unsafe.Add(ref __luminFixedBlock, " + size + ")";
-            sb.AppendLine(indent + "    Unsafe.WriteUnaligned(ref " + destination + ", " + fieldPath(fields[i]) + ");");
-            size += int.Parse(GetFixedFieldLength(fields[i]));
+            string destination = size == "0" ? "__luminFixedBlock" : "Unsafe.Add(ref __luminFixedBlock, " + size + ")";
+            sb.AppendLine(bodyIndent + (copyAdjacentFields ? "        " : "    ") + "Unsafe.WriteUnaligned(ref " + destination + ", " + fieldPath(fields[i]) + ");");
+            string fieldSize = GetUnmanagedFieldSize(fields[i]);
+            size = int.TryParse(size, out int total) && int.TryParse(fieldSize, out int length)
+                ? (total + length).ToString() : size == "0" ? fieldSize : size + " + " + fieldSize;
         }
-        sb.AppendLine(indent + (advanceWriter ? "    writer.Advance(" + size + ");" : "    " + offset + " += " + size + ";"));
+        if (copyAdjacentFields) sb.AppendLine(bodyIndent + "    }");
+        sb.AppendLine(bodyIndent + (advanceWriter ? "    writer.Advance(" + size + ");" : "    " + offset + " += " + size + ";"));
+        sb.AppendLine(indent + "    }");
+        sb.AppendLine(indent + "    else");
+        sb.AppendLine(indent + "    {");
+        if (!containsStruct)
+        {
+            // Primitive batches are tightly concatenated on the wire. A
+            // naturally aligned aggregate would introduce padding on x86.
+            sb.AppendLine(indent + "        int __lumin32Offset = " + offset + ";");
+            if (writeHeader)
+            {
+                sb.AppendLine(indent + "        writer.WriteObjectHeader(ref __lumin32Offset, " + fields.Count + ");");
+                sb.AppendLine(indent + "        __lumin32Offset += 1;");
+            }
+            for (int i = first; i <= last; i++)
+                sb.AppendLine(indent + "        __lumin32Offset += writer.WriteUnmanaged(ref __lumin32Offset, " + fieldPath(fields[i]) + ");");
+            sb.AppendLine(indent + (advanceWriter ? "        writer.Advance(" + size + ");" : "        " + offset + " = __lumin32Offset;"));
+        }
+        else
+        {
+            string arguments = string.Join(", ", fields.GetRange(first, last - first + 1).ConvertAll(field => fieldPath(field)));
+            if (writeHeader && separateHeaderOn32Bit)
+            {
+                sb.AppendLine(indent + "        writer.WriteObjectHeader(ref " + offset + ", " + fields.Count + ");");
+                sb.AppendLine(indent + "        " + offset + " += 1;");
+            }
+            else if (writeHeader) arguments = "(byte)" + fields.Count + ", " + arguments;
+            sb.AppendLine(indent + (advanceWriter
+                ? "        writer.Advance(writer.WriteUnmanaged(" + arguments + "));"
+                : "        " + offset + " += writer.WriteUnmanaged(ref " + offset + ", " + arguments + ");"));
+        }
+        sb.AppendLine(indent + "    }");
         sb.AppendLine(indent + "}");
         return true;
     }
 
-    /// <summary>Attempts to generate fixed unmanaged read and reports whether it succeeded.</summary>
+    /// <summary>Builds a constant or JIT-specializable byte width without inferring a struct's layout.</summary>
+    /// <param name="field">An already validated raw unmanaged field.</param>
+    /// <returns>The field's complete storage width, including its own padding.</returns>
+    private static string GetUnmanagedFieldSize(LuminDataField field) => IsFixedLengthType(field.Type)
+        ? GetFixedFieldLength(field) : "Unsafe.SizeOf<" + GetGeneratedTypeName(field) + ">()";
+
+    /// <summary>Emits fixed reads with proven storage copies where the operation context permits them.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="fields">The fields used by this operation.</param>
     /// <param name="first">The first used by this operation.</param>
@@ -141,31 +211,76 @@ public static partial class LuminPackCodeGenerator
     /// <param name="fieldPath">The expression that accesses the field in generated code.</param>
     /// <param name="offset">The position at which the operation starts.</param>
     /// <param name="indent">The indentation level of the generated statements.</param>
+    /// <param name="copyToStorage">Whether this operation permits copies into its constructed public field storage.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     private static bool TryGenerateFixedUnmanagedRead(StringBuilder sb, List<LuminDataField> fields,
-        int first, int last, Func<LuminDataField, string> fieldPath, string offset, string indent)
+        int first, int last, Func<LuminDataField, string> fieldPath, string offset, string indent, bool copyToStorage)
     {
-        int length = 0;
+        bool containsStruct = false;
+        bool containsVolatile = false;
         for (int i = first; i <= last; i++)
         {
-            if (!IsFixedLengthType(fields[i].Type) || fields[i].IsPrivate || fields[i].isProperty || fields[i].IsCompress)
+            if (fields[i].IsPrivate || fields[i].isProperty || fields[i].IsCompress ||
+                (!IsFixedLengthType(fields[i].Type) &&
+                 (!copyToStorage || !EmitterTypeTraits.CanUseUnmanagedSerialization(fields[i].TypeSymbol))))
                 return false;
-            length += int.Parse(GetFixedFieldLength(fields[i]));
+            containsStruct |= !IsFixedLengthType(fields[i].Type);
+            containsVolatile |= fields[i].IsVolatile;
         }
-        // Load the source once and assign fields directly instead of preparing
-        // simultaneous out references. Constructors and private/property paths
-        // retain their existing local-value and commit rules.
+        // Constructor and pool temporaries retain their established grouped read.
+        // Taking their addresses would inhibit promotion and change commit behavior.
+        var sizes = new List<string>();
+        for (int i = first; i <= last; i++) sizes.Add(GetUnmanagedFieldSize(fields[i]));
+        string length = string.Join(" + ", sizes);
+        bool copyAdjacentFields = copyToStorage && last > first && !containsVolatile;
+        string arguments = string.Join(", ", fields.GetRange(first, last - first + 1).ConvertAll(field => "out " + fieldPath(field)));
         sb.AppendLine(indent + "{");
-        sb.AppendLine(indent + "    reader.EnsureReadable(" + offset + ", " + length + ");");
-        sb.AppendLine(indent + "    ref byte __luminReadBlock = ref reader.GetSpanReference(" + offset + ");");
-        int position = 0;
-        for (int i = first; i <= last; i++)
+        string bodyIndent = indent + "    ";
+        sb.AppendLine(indent + "    if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8)");
+        sb.AppendLine(indent + "    {");
+        sb.AppendLine(bodyIndent + "    reader.EnsureReadable(" + offset + ", " + length + ");");
+        sb.AppendLine(bodyIndent + "    ref byte __luminReadBlock = ref reader.GetSpanReference(" + offset + ");");
+        if (copyAdjacentFields)
         {
-            string source = position == 0 ? "__luminReadBlock" : "Unsafe.Add(ref __luminReadBlock, " + position + ")";
-            sb.AppendLine(indent + "    " + fieldPath(fields[i]) + " = Unsafe.ReadUnaligned<" + GetGeneratedTypeName(fields[i]) + ">(ref " + source + ");");
-            position += int.Parse(GetFixedFieldLength(fields[i]));
+            sb.AppendLine(bodyIndent + "    ref byte __luminTargetBlock = ref Unsafe.As<" + GetGeneratedTypeName(fields[first]) + ", byte>(ref " + fieldPath(fields[first]) + ");");
+            var adjacent = new List<string>();
+            string targetOffset = GetUnmanagedFieldSize(fields[first]);
+            for (int i = first + 1; i <= last; i++)
+            {
+                adjacent.Add("Unsafe.ByteOffset(ref __luminTargetBlock, ref Unsafe.As<" + GetGeneratedTypeName(fields[i]) +
+                    ", byte>(ref " + fieldPath(fields[i]) + ")) == (nint)(" + targetOffset + ")");
+                targetOffset += " + " + GetUnmanagedFieldSize(fields[i]);
+            }
+            sb.AppendLine(bodyIndent + "    if (" + string.Join(" && ", adjacent) + ")");
+            sb.AppendLine(bodyIndent + "    {");
+            sb.AppendLine(bodyIndent + "        Unsafe.CopyBlockUnaligned(ref __luminTargetBlock, ref __luminReadBlock, (uint)(" + length + "));");
+            sb.AppendLine(bodyIndent + "    }");
+            sb.AppendLine(bodyIndent + "    else");
+            sb.AppendLine(bodyIndent + "    {");
         }
-        sb.AppendLine(indent + "    " + offset + " += " + length + ";");
+        if (containsStruct)
+            sb.AppendLine(bodyIndent + (copyAdjacentFields ? "        " : "    ") + "reader.ReadUnmanaged(ref " + offset + ", " + arguments + ");");
+        else
+        {
+            string position = "0";
+            for (int i = first; i <= last; i++)
+            {
+                string source = position == "0" ? "__luminReadBlock" : "Unsafe.Add(ref __luminReadBlock, " + position + ")";
+                sb.AppendLine(bodyIndent + (copyAdjacentFields ? "        " : "    ") + fieldPath(fields[i]) + " = Unsafe.ReadUnaligned<" + GetGeneratedTypeName(fields[i]) + ">(ref " + source + ");");
+                position += " + " + GetUnmanagedFieldSize(fields[i]);
+            }
+        }
+        if (copyAdjacentFields) sb.AppendLine(bodyIndent + "    }");
+        sb.AppendLine(bodyIndent + "    " + offset + " += " + length + ";");
+        sb.AppendLine(indent + "    }");
+        sb.AppendLine(indent + "    else");
+        sb.AppendLine(indent + "    {");
+        if (containsStruct)
+            sb.AppendLine(indent + "        " + offset + " += reader.ReadUnmanaged(ref " + offset + ", " + arguments + ");");
+        else
+            for (int i = first; i <= last; i++)
+                sb.AppendLine(indent + "        " + offset + " += reader.ReadUnmanaged(ref " + offset + ", out " + fieldPath(fields[i]) + ");");
+        sb.AppendLine(indent + "    }");
         sb.AppendLine(indent + "}");
         return true;
     }

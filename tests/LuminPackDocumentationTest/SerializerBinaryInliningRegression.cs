@@ -235,7 +235,8 @@ internal static class SerializerBinaryInliningRegression
                     Require(symbol == null || !symbol.ContainingType.Name.StartsWith("LuminPackExtensions_", StringComparison.Ordinal),
                         "A concrete " + method.Identifier.ValueText + " entry retained a generated formatter or accessor call: " + call);
                 }
-                Require(!method.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Any(), "A generated dictionary helper remained behind a local call boundary.");
+                Require(method.DescendantNodes().OfType<LocalFunctionStatementSyntax>().All(local => local.AttributeLists.ToString().Contains("MethodImplOptions.NoInlining", StringComparison.Ordinal)),
+                    "An ordinary generated dictionary helper remained behind a local call boundary.");
             }
         }
         Require(inspected == 14, "Expected every concrete binary, asynchronous, JSON, and size payload entry.");
@@ -248,11 +249,12 @@ internal static class SerializerBinaryInliningRegression
         foreach (var method in implementations)
         {
             var model = output.GetSemanticModel(method.SyntaxTree);
-            Require(!method.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Any(), "A state implementation retained an ordinary local formatter helper.");
+            Require(method.DescendantNodes().OfType<LocalFunctionStatementSyntax>().All(local => local.AttributeLists.ToString().Contains("MethodImplOptions.NoInlining", StringComparison.Ordinal)),
+                "A state implementation retained an ordinary local formatter helper.");
             foreach (var call in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
                 var symbol = model.GetSymbolInfo(call).Symbol as IMethodSymbol;
-                Require(symbol?.ContainingType.Name != "LuminPackSerializer" &&
+                Require((symbol?.ContainingType.Name != "LuminPackSerializer" || symbol.MethodKind == MethodKind.LocalFunction) &&
                     !(symbol?.ContainingType.Name.StartsWith("LuminPackExtensions_", StringComparison.Ordinal) ?? false),
                     "An ordinary payload field retained a serializer or extension call instead of expanding: " + call);
             }

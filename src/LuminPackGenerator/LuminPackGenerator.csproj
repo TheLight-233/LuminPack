@@ -10,7 +10,7 @@
     <IsAnalyzer>true</IsAnalyzer>
     <IsRoslynComponent>true</IsRoslynComponent>
     <PackageId>LuminPackGenerator</PackageId>
-    <Version>1.1.9</Version>
+    <Version>1.2.0</Version>
     <Authors>TheLight233</Authors>
     <Description>LuminPack Source Generator</Description>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>

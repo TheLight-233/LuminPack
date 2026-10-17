@@ -15,8 +15,7 @@ public static class EnumEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
-        sb.AppendLine("            global::System.Runtime.CompilerServices.Unsafe.WriteUnaligned(ref writer.GetCurrentSpanReference(), value);");
-        sb.AppendLine("            writer.Advance(global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + data.TypeName + ">());");
+        UnmanagedEmitter.GenerateSerializeCode(data, sb);
     }
 
     /// <summary>Appends binary reading statements for enum values.</summary>
@@ -25,8 +24,7 @@ public static class EnumEmitter
     public static void GenerateDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
         sb.AppendLine("            reader.EnsureReadable(reader.GetCurrentSpanOffset(), global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + data.TypeName + ">());");
-        sb.AppendLine("            value = global::System.Runtime.CompilerServices.Unsafe.ReadUnaligned<" + data.TypeName + ">(ref reader.GetCurrentSpanReference());");
-        sb.AppendLine("            reader.Advance(global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + data.TypeName + ">());");
+        UnmanagedEmitter.GenerateDeserializeCode(data, sb);
     }
 
     /// <summary>Appends statements that calculate the binary payload size.</summary>

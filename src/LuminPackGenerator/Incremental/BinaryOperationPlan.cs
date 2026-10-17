@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using System.Threading;
 using LuminPack.Code.Core;
@@ -104,7 +105,9 @@ internal sealed class BinaryOperationPlan
             foreach (var local in method.Body.DescendantNodes().OfType<LocalFunctionStatementSyntax>())
             {
                 var localSymbol = model.GetDeclaredSymbol(local) as IMethodSymbol;
-                if (localSymbol is { ReturnsVoid: true, IsStatic: true } && local.Body != null)
+                if (localSymbol is { ReturnsVoid: true, IsStatic: true } && local.Body != null &&
+                    !localSymbol.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.MethodImplAttribute" &&
+                        attribute.ConstructorArguments.Length == 1 && attribute.ConstructorArguments[0].Value is int options && (options & (int)MethodImplOptions.NoInlining) != 0))
                     localMethods.Add(localSymbol, operationName + ":local:" + local.SpanStart);
             }
             foreach (var local in method.Body.DescendantNodes().OfType<LocalFunctionStatementSyntax>())
@@ -138,6 +141,7 @@ internal sealed class BinaryOperationPlan
 /// <summary>Stores a bound operation as immutable syntax, formal parameters, and typed expansion slots.</summary>
 internal sealed class BinaryOperation
 {
+    internal readonly ImmutableHashSet<string> CursorLocals;
     internal readonly BlockSyntax Body;
     internal readonly ImmutableArray<BinaryOperationParameter> Parameters;
     internal readonly ImmutableDictionary<string, BinaryOperationCall> Calls;
@@ -146,8 +150,10 @@ internal sealed class BinaryOperation
     /// <param name="body">The template body with stable local names and call annotations.</param>
     /// <param name="parameters">Formal parameter storage requirements.</param>
     /// <param name="calls">Typed nested operation slots.</param>
-    private BinaryOperation(BlockSyntax body, ImmutableArray<BinaryOperationParameter> parameters, ImmutableDictionary<string, BinaryOperationCall> calls)
-    { Body = body; Parameters = parameters; Calls = calls; }
+    /// <param name="cursorLocals">Compiler-bound integer cursor identities, or null when none exist; no symbols are retained.</param>
+    private BinaryOperation(BlockSyntax body, ImmutableArray<BinaryOperationParameter> parameters, ImmutableDictionary<string, BinaryOperationCall> calls,
+        ImmutableHashSet<string> cursorLocals)
+    { Body = body; Parameters = parameters; Calls = calls; CursorLocals = cursorLocals; }
 
     /// <summary>Resolves local identities and nested argument types before discarding all semantic objects.</summary>
     /// <param name="model">The temporary template semantic model.</param>
@@ -161,6 +167,7 @@ internal sealed class BinaryOperation
         Dictionary<ISymbol, string> layouts, Dictionary<IMethodSymbol, string> localMethods, Dictionary<string, string> typeArguments)
     {
         var names = new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default);
+        ImmutableHashSet<string>.Builder cursorLocals = null;
         var parameters = ImmutableArray.CreateBuilder<BinaryOperationParameter>();
         for (int index = 0; index < method.Parameters.Length; index++)
         {
@@ -171,13 +178,17 @@ internal sealed class BinaryOperation
         }
         foreach (var node in body.DescendantNodes())
         {
-            if (node is not (VariableDeclaratorSyntax or ForEachStatementSyntax or SingleVariableDesignationSyntax or CatchDeclarationSyntax or ParameterSyntax or LabeledStatementSyntax)) continue;
+            if (node is not (VariableDeclaratorSyntax or ForEachStatementSyntax or SingleVariableDesignationSyntax or CatchDeclarationSyntax or ParameterSyntax or LabeledStatementSyntax or LocalFunctionStatementSyntax)) continue;
             var symbol = model.GetDeclaredSymbol(node);
             if (symbol != null && !names.ContainsKey(symbol)) names.Add(symbol, BinaryOperationPlan.Prefix + "v" + names.Count);
+            if (symbol is ILocalSymbol { Type.SpecialType: SpecialType.System_Int32, RefKind: RefKind.None } &&
+                node is VariableDeclaratorSyntax { Initializer.Value: InvocationExpressionSyntax { ArgumentList.Arguments.Count: 0,
+                    Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "GetCurrentSpanIndex" } } })
+                (cursorLocals ??= ImmutableHashSet.CreateBuilder<string>(StringComparer.Ordinal)).Add(names[symbol]);
         }
         var rewriter = new OperationTemplateRewriter(model, layouts, names, localMethods,
             method.Parameters.FirstOrDefault()?.Type.ToDisplayString() == "LuminPack.Core.LuminPackReader", typeArguments);
-        return new BinaryOperation((BlockSyntax)new ActiveOperationSyntax().Visit(rewriter.Visit(body)), parameters.ToImmutable(), rewriter.Calls.ToImmutableDictionary(StringComparer.Ordinal));
+        return new BinaryOperation((BlockSyntax)new ActiveOperationSyntax().Visit(rewriter.Visit(body)), parameters.ToImmutable(), rewriter.Calls.ToImmutableDictionary(StringComparer.Ordinal), cursorLocals?.ToImmutable());
     }
 }
 
@@ -416,6 +427,7 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
             ParameterSyntax value => value.Identifier == token,
             TypeDeclarationSyntax value => value.Identifier == token,
             MethodDeclarationSyntax value => value.Identifier == token,
+            LocalFunctionStatementSyntax value => value.Identifier == token,
             LabeledStatementSyntax value => value.Identifier == token,
             _ => false
         };
