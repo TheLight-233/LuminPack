@@ -94,13 +94,17 @@ internal static class LuminPackSerializerDocumentation
 
                 remarks.Add(new XElement("para", "Concrete overload for ", TypeLink(type), ". ",
                     type.IsValueType ? "Value type." : "Reference type.", " ", type.IsUnmanagedType ? "Contains no managed references." : "Uses managed reference handling."));
-                if (!contracts.TryGetValue(type, out var contract))
+                if (!UsesOperationState(method))
                 {
-                    contract = BuildContract(type, compilation, metadata);
-                    contracts.Add(type, contract);
+                    if (!contracts.TryGetValue(type, out var contract))
+                    {
+                        contract = BuildContract(type, compilation, metadata);
+                        contracts.Add(type, contract);
+                    }
+
+                    foreach (var element in contract.Elements()) remarks.Add(new XElement(element));
                 }
 
-                foreach (var element in contract.Elements()) remarks.Add(new XElement(element));
                 var typeId = type.GetDocumentationCommentId();
                 if (typeId != null) documentation.Add(new XElement("seealso", new XAttribute("cref", typeId)));
             }
@@ -214,6 +218,21 @@ internal static class LuminPackSerializerDocumentation
         }
         if (data.callBackMethods.Count != 0) contract.Add(new XElement("para", "Callbacks: ", string.Join(", ", data.callBackMethods.Select(callback => callback.Item1 + " (" + callback.Item2 + ")")), "."));
         return contract;
+    }
+
+    /// <summary>Determines whether a method is a per-operation state implementation instead of a caller-facing overload.</summary>
+    /// <param name="method">The generated method whose documentation is being completed.</param>
+    /// <returns><see langword="true" /> when the first parameter is one of the runtime operation states.</returns>
+    private static bool UsesOperationState(MethodDeclarationSyntax method)
+    {
+        if (method.ParameterList.Parameters.Count == 0) return false;
+        TypeSyntax type = method.ParameterList.Parameters[0].Type;
+        while (type is RefTypeSyntax reference) type = reference.Type;
+        string name = type?.ToString() ?? string.Empty;
+        int separator = name.LastIndexOf('.');
+        if (separator >= 0) name = name.Substring(separator + 1);
+        return name == "LuminPackWriter" || name == "LuminPackReader" || name == "LuminPackEvaluator" ||
+               name == "LuminPackJsonWriter" || name == "LuminPackJsonReader";
     }
 
     /// <summary>Documents the buffer, return-value, and lifetime semantics distinguishing an overload.</summary>

@@ -35,6 +35,7 @@ public static class PriorityQueueEmitter
         sb.AppendLine();
         sb.AppendLine("            foreach (var item in value.UnorderedItems)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                writer.WriteValue(item.Element);");
         sb.AppendLine("                writer.WriteValue(item.Priority);");
         sb.AppendLine("            }");

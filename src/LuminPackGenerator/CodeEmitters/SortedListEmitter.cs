@@ -32,6 +32,7 @@ public static class SortedListEmitter
         sb.AppendLine();
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                writer.WriteValue(item.Key);");
         sb.AppendLine("                writer.WriteValue(item.Value);");
         sb.AppendLine("            }");

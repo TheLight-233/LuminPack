@@ -35,6 +35,7 @@ public static class HashSetEmitter
         sb.AppendLine();
         sb.AppendLine("            while ((uint) setIndex < (uint) LuminPackMarshal.GetHashSetEntryCount(setView))");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                ref var local = ref Unsafe.Add(ref arrayRef, setIndex++);");
         sb.AppendLine("                if (LuminPackMarshal.IsHashTableEntryActive(local.HashCode, local.Next))");
         sb.AppendLine("                {");

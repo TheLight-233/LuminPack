@@ -1,5 +1,11 @@
 using BenchmarkDotNet.Running;
 
+if (args.Length >= 3 && args[0] == "--capacity-ratios")
+{
+    LibraryRatioProbe.RunCapacity(args[1], args.Skip(2).ToArray());
+    return;
+}
+
 if (args.Length >= 3 && args[0] == "--ratios-union")
 {
     LibraryRatioProbe.RunUnion(int.Parse(args[1], System.Globalization.CultureInfo.InvariantCulture), args.Skip(2).ToArray());

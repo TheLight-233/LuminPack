@@ -1,4 +1,5 @@
 using System.Text;
+using System.Runtime.InteropServices;
 using LuminPack.Core;
 using LuminPack.Option;
 using LuminPack.Utility;
@@ -9,6 +10,29 @@ namespace LuminPackUnitTest;
 /// <summary>Protects complete string payloads and terminators independently of pooled buffer capacity.</summary>
 public class StringCapacityBoundaryTest
 {
+    /// <summary>Checks exact raw UTF-16 payload coverage across scalar/vector widths and unaligned destinations.</summary>
+    [Fact]
+    public void ShortUtf16CopiesPreserveRawCodeUnitsAndExactBoundaries()
+    {
+        for (int length = 0; length <= 256; length++)
+        {
+            string value = new string(Enumerable.Range(0, length).Select(index => "\0\uD800A\uDC00\uFFFF\u4E2D"[index % 6]).ToArray());
+            byte[] expected = MemoryMarshal.AsBytes(value.AsSpan()).ToArray();
+            foreach (int start in new[] { 0, 1, 3, 7, 15 })
+            {
+                int size = sizeof(int) + expected.Length;
+                byte[] bytes = Enumerable.Repeat((byte)0xCD, start + size + 16).ToArray();
+                Span<byte> destination = bytes.AsSpan(start, size);
+                var writer = new LuminPackWriter(ref destination);
+                Assert.Equal(expected.Length, writer.WriteUtf16WithLength(0, value));
+                Assert.Equal(expected.Length, BitConverter.ToInt32(bytes, start));
+                Assert.True(bytes.AsSpan(start + sizeof(int), expected.Length).SequenceEqual(expected));
+                Assert.False(bytes.AsSpan(0, start).ContainsAnyExcept((byte)0xCD));
+                Assert.False(bytes.AsSpan(start + size).ContainsAnyExcept((byte)0xCD));
+            }
+        }
+    }
+
     /// <summary>Writes beyond a fresh native buffer through computed, span, and supplied-length operations.</summary>
     /// <param name="encoding">The payload encoding.</param>
     /// <param name="recording">The string framing mode.</param>

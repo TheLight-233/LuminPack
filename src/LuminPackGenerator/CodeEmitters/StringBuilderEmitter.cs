@@ -15,6 +15,7 @@ public static class StringBuilderEmitter
         sb.AppendLine("            ");
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.EnsureAdditionalCapacity(sizeof(int));");
         sb.AppendLine("                writer.WriteNullCollectionHeader(ref index);");
         sb.AppendLine("                ");
         sb.AppendLine("                writer.Advance(4);");
@@ -24,6 +25,7 @@ public static class StringBuilderEmitter
         sb.AppendLine("            ");
         sb.AppendLine("#if NET8_0_OR_GREATER");
         sb.AppendLine("            ");
+        sb.AppendLine("            writer.EnsureAdditionalCapacity(checked(sizeof(int) + value.Length * sizeof(char)));");
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Length);");
         sb.AppendLine("            ");
         sb.AppendLine("            writer.Advance(4);");
@@ -42,10 +44,10 @@ public static class StringBuilderEmitter
         sb.AppendLine("            ");
         sb.AppendLine("#else");
         sb.AppendLine("            var text = value.ToString();");
+        sb.AppendLine("            var length = checked(text.Length * sizeof(char));");
+        sb.AppendLine("            writer.EnsureAdditionalCapacity(checked(sizeof(int) + length));");
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, text.Length);");
         sb.AppendLine("            writer.Advance(sizeof(int));");
-        sb.AppendLine("            var length = checked(text.Length * sizeof(char));");
-        sb.AppendLine("            writer.EnsureAdditionalCapacity(length);");
         sb.AppendLine("            ref var destination = ref writer.GetSpanReference(index);");
         sb.AppendLine("            ref var source = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(global::System.Runtime.InteropServices.MemoryMarshal.AsBytes(text.AsSpan()));");
         sb.AppendLine("            global::System.Runtime.CompilerServices.Unsafe.CopyBlockUnaligned(ref destination, ref source, (uint)length);");

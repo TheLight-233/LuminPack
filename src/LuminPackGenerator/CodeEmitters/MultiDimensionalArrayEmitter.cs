@@ -45,6 +45,7 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("            ref var first = ref global::System.Runtime.CompilerServices.Unsafe.As<byte, " + elementType + ">(ref global::LuminPack.Code.LuminPackMarshal.DangerousGetArrayDataReference<" + elementType + ">(value));");
         sb.AppendLine("            for (nint i = 0; i < value.Length; i++)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                ref " + elementType + " item = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i);");
         sb.AppendLine("                writer.WriteValue(in item);");
         sb.AppendLine("            }");

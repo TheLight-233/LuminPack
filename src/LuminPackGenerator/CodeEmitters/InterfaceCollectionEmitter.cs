@@ -38,6 +38,7 @@ public static class InterfaceEnumerableEmitter
         sb.AppendLine("                    writer.Advance(sizeof(int));");
         sb.AppendLine("                    foreach (ref var item in array.AsSpan())");
         sb.AppendLine("                    {");
+        sb.AppendLine("                        writer.CheckBuffer();");
         sb.AppendLine("                        writer.WriteValue(in item);");
         sb.AppendLine("                    }");
         sb.AppendLine("                    writer.CheckBuffer();");
@@ -68,6 +69,7 @@ public static class InterfaceEnumerableEmitter
         sb.AppendLine("                        writer.Advance(sizeof(int));");
         sb.AppendLine("                        foreach (var item in span)");
         sb.AppendLine("                        {");
+        sb.AppendLine("                            writer.CheckBuffer();");
         sb.AppendLine("                            var temp = item;");
         sb.AppendLine("                            writer.WriteValue(in temp!);");
         sb.AppendLine("                        }");
@@ -86,6 +88,7 @@ public static class InterfaceEnumerableEmitter
         sb.AppendLine();
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
+        sb.AppendLine("                    writer.CheckBuffer();");
         sb.AppendLine("                    var v = item;");
         sb.AppendLine("                    writer.WriteValue(in v);");
         sb.AppendLine("                }");
@@ -104,6 +107,7 @@ public static class InterfaceEnumerableEmitter
         sb.AppendLine("                    count = 0;");
         sb.AppendLine("                    foreach (var item in value)");
         sb.AppendLine("                    {");
+        sb.AppendLine("                        tempWriter.CheckBuffer();");
         sb.AppendLine("                        count++;");
         sb.AppendLine("                        var v = item;");
         sb.AppendLine("                        tempWriter.WriteValue(in v);");
@@ -205,6 +209,7 @@ public static class InterfaceListEmitter
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                var temp = item;");
         sb.AppendLine("                writer.WriteValue(in temp);");
         sb.AppendLine("            }");
@@ -287,6 +292,7 @@ public static class InterfaceDictionaryEmitter
         sb.AppendLine();
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                writer.WriteValue(item.Key);");
         sb.AppendLine("                writer.WriteValue(item.Value);");
         sb.AppendLine("            }");
@@ -357,6 +363,7 @@ public static class InterfaceReadOnlyDictionaryEmitter
         sb.AppendLine();
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                writer.WriteValue(item.Key);");
         sb.AppendLine("                writer.WriteValue(item.Value);");
         sb.AppendLine("            }");
@@ -427,6 +434,7 @@ public static class InterfaceLookupEmitter
         sb.AppendLine();
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                writer.WriteValue(item.Key);");
         sb.AppendLine($"                global::System.Collections.Generic.IEnumerable<{elementType}> elements = item;");
         sb.AppendLine("                writer.WriteValue(in elements);");
@@ -689,6 +697,7 @@ public static class InterfaceSetEmitter
         sb.AppendLine();
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                var v = item;");
         sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");
@@ -755,6 +764,7 @@ public static class InterfaceReadOnlySetEmitter
         sb.AppendLine();
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                var v = item;");
         sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");
@@ -827,6 +837,7 @@ internal static class InterfaceCollectionEmitterHelper
         sb.AppendLine("                    writer.Advance(sizeof(int));");
         sb.AppendLine("                    foreach (ref var item in array.AsSpan())");
         sb.AppendLine("                    {");
+        sb.AppendLine("                        writer.CheckBuffer();");
         sb.AppendLine("                        writer.WriteValue(in item);");
         sb.AppendLine("                    }");
         sb.AppendLine("                    writer.CheckBuffer();");
@@ -857,6 +868,7 @@ internal static class InterfaceCollectionEmitterHelper
         sb.AppendLine("                        writer.Advance(sizeof(int));");
         sb.AppendLine("                        foreach (var item in span)");
         sb.AppendLine("                        {");
+        sb.AppendLine("                            writer.CheckBuffer();");
         sb.AppendLine("                            var temp = item;");
         sb.AppendLine("                            writer.WriteValue(in temp!);");
         sb.AppendLine("                        }");
@@ -870,6 +882,7 @@ internal static class InterfaceCollectionEmitterHelper
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                var v = item;");
         sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");

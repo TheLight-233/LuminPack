@@ -411,31 +411,34 @@ internal static class SerializerCodegenPerformanceRegression
     /// <summary>Preserves ref reassignment, name observations and nested bindings while removing generated cursor aliases.</summary>
     private static void VerifyCursorAliasStorage()
     {
-        var rewrite = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.Code.Core.BinaryEntryCursorAliases", throwOnError: true)!
-            .GetMethod("Rewrite", BindingFlags.Static | BindingFlags.NonPublic)!;
-        foreach (var (text, remove, marked) in new[]
+        var aliasType = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.Code.Core.BinaryEntryCursorAliases", throwOnError: true)!;
+        foreach (string state in new[] { "writer", "reader" })
         {
-            ("{ ref var __lpCursor = ref writer.GetCurrentSpanOffset(); writer.WriteCollectionHeader(ref __lpCursor, 2); __lpCursor += 4; }", true, true),
-            ("{ ref int __lpCursor = ref writer.GetCurrentSpanOffset(); __lpCursor += 4; }", true, true),
-            ("{ ref int __lpCursor = ref writer.GetCurrentSpanOffset(); __lpCursor = ref other; __lpCursor += 4; }", false, true),
-            ("{ ref int __lpCursor = ref writer.GetCurrentSpanOffset(); var name = nameof(__lpCursor); __lpCursor += 4; }", false, true),
-            ("{ { ref int __lpCursor = ref writer.GetCurrentSpanOffset(); __lpCursor += 4; } { ref int __lpCursor = ref other; __lpCursor += 8; } }", false, true),
-            ("{ ref int __lpCursor = ref writer.GetCurrentSpanOffset(); writer = ref other; __lpCursor += 4; }", false, true),
-            ("{ ref int __lpCursor = ref writer.GetCurrentSpanOffset(); __lpCursor += 4; }", false, false)
-        })
-        {
-            var block = (BlockSyntax)SyntaxFactory.ParseStatement(text);
-            if (marked)
-                block = block.ReplaceTokens(block.DescendantTokens().Where(token => token.ValueText == "__lpCursor"),
-                    (token, _) => token.WithAdditionalAnnotations(new SyntaxAnnotation("LuminPack.ExpandedIdentity")));
-            var result = (BlockSyntax)rewrite.Invoke(null, [block])!;
-            Require(result.DescendantNodes().OfType<LocalDeclarationStatementSyntax>().Any(statement => statement.Declaration.Type is RefTypeSyntax) != remove,
-                "Cursor alias rewriting changed a name-sensitive, rebound or unmarked storage reference.");
-            if (remove)
-                Require(result.DescendantNodes().OfType<IdentifierNameSyntax>().All(identifier => identifier.Identifier.ValueText != "__lpCursor"),
-                    "A removed cursor alias retained an unbound use.");
-            else
-                Require(result.ToFullString() == block.ToFullString(), "A guarded cursor body changed its original bindings.");
+            var rewrite = aliasType.GetMethod(state == "writer" ? "Rewrite" : "RewriteReader", BindingFlags.Static | BindingFlags.NonPublic)!;
+            foreach (var (text, remove, marked) in new[]
+            {
+                ("{ ref var __lpCursor = ref writer.GetCurrentSpanOffset(); writer.WriteCollectionHeader(ref __lpCursor, 2); __lpCursor += 4; }", true, true),
+                ("{ ref int __lpCursor = ref writer.GetCurrentSpanOffset(); __lpCursor += 4; }", true, true),
+                ("{ ref int __lpCursor = ref writer.GetCurrentSpanOffset(); __lpCursor = ref other; __lpCursor += 4; }", false, true),
+                ("{ ref int __lpCursor = ref writer.GetCurrentSpanOffset(); var name = nameof(__lpCursor); __lpCursor += 4; }", false, true),
+                ("{ { ref int __lpCursor = ref writer.GetCurrentSpanOffset(); __lpCursor += 4; } { ref int __lpCursor = ref other; __lpCursor += 8; } }", false, true),
+                ("{ ref int __lpCursor = ref writer.GetCurrentSpanOffset(); writer = ref other; __lpCursor += 4; }", false, true),
+                ("{ ref int __lpCursor = ref writer.GetCurrentSpanOffset(); __lpCursor += 4; }", false, false)
+            })
+            {
+                var block = (BlockSyntax)SyntaxFactory.ParseStatement(text.Replace("writer", state, StringComparison.Ordinal));
+                if (marked)
+                    block = block.ReplaceTokens(block.DescendantTokens().Where(token => token.ValueText == "__lpCursor"),
+                        (token, _) => token.WithAdditionalAnnotations(new SyntaxAnnotation("LuminPack.ExpandedIdentity")));
+                var result = (BlockSyntax)rewrite.Invoke(null, [block])!;
+                Require(result.DescendantNodes().OfType<LocalDeclarationStatementSyntax>().Any(statement => statement.Declaration.Type is RefTypeSyntax) != remove,
+                    "Cursor alias rewriting changed a name-sensitive, rebound or unmarked storage reference.");
+                if (remove)
+                    Require(result.DescendantNodes().OfType<IdentifierNameSyntax>().All(identifier => identifier.Identifier.ValueText != "__lpCursor"),
+                        "A removed cursor alias retained an unbound use.");
+                else
+                    Require(result.ToFullString() == block.ToFullString(), "A guarded cursor body changed its original bindings.");
+            }
         }
     }
 

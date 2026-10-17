@@ -15,6 +15,7 @@ internal static class CollectionEmitterHelper
         sb.AppendLine("                writer.Advance(4);");
         sb.AppendLine("                foreach (ref var item in span)");
         sb.AppendLine("                {");
+        sb.AppendLine("                    writer.CheckBuffer();");
         sb.AppendLine("                    writer.WriteValue(in item!);");
         sb.AppendLine("                }");
         sb.AppendLine("                writer.CheckBuffer();");

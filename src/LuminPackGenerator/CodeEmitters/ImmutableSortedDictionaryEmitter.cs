@@ -30,6 +30,7 @@ public static class ImmutableSortedDictionaryEmitter
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                var key = item.Key;");
         sb.AppendLine("                writer.WriteValue(in key);");
         sb.AppendLine("                var itemValue = item.Value;");

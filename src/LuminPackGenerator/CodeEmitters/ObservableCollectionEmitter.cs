@@ -44,6 +44,7 @@ public static class ObservableCollectionEmitter
         sb.AppendLine();
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
+        sb.AppendLine("                    writer.CheckBuffer();");
         sb.AppendLine("                    var temp = item;");
         sb.AppendLine("                    writer.WriteValue(in temp);");
         sb.AppendLine("                }");

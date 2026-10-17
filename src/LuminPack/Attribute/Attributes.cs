@@ -1,5 +1,38 @@
 namespace LuminPack.Attribute;
 
+/// <summary>
+/// User guarantee that a type's complete serialized length never exceeds the writer's buffer growth
+/// threshold (87.5 percent of the initial segment, see <c>LuminBufferWriter.InitialBufferSize</c>).
+/// <para>
+/// The generator relies on this guarantee to remove every container-layer capacity check emitted from
+/// the type's own serialization body, relying on the caller reserving the complete record. A wrong
+/// guarantee can therefore produce an out-of-range write past the segment end and heap corruption,
+/// exactly like the value being larger than the declared threshold. In DEBUG builds the generator also
+/// emits one length assertion that fails in development when the guarantee is violated; Release output
+/// is untouched. Do not apply it to a type whose graph can exceed the threshold.
+/// </para>
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = false)]
+public sealed class LuminPackBoundedAttribute : System.Attribute
+{
+}
+
+/// <summary>
+/// User guarantee that a polymorphic base has exactly one implementation in every assembly that can
+/// observe it. <para>
+/// When the guarantee holds (and the single case is sealed, or the base is not visible outside the
+/// assembly) the generated code may call that implementation directly instead of performing virtual
+/// or interface dispatch. The default "only one subclass exists in the current assembly" is NOT
+/// sufficient: another assembly could still add a subclass, which would silently drop the polymorphic
+/// frame and produce wrong wire data. Only apply this attribute when the base cannot be extended
+/// elsewhere.
+/// </para>
+/// </summary>
+[AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = false, Inherited = false)]
+public sealed class LuminPackSingleImplementationAttribute : System.Attribute
+{
+}
+
 /// <summary>Marks a type for source-generated serialization or registers a referenced type for generation.</summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface | AttributeTargets.Assembly, AllowMultiple = true, Inherited = false)]
 public sealed class LuminPackableAttribute : System.Attribute

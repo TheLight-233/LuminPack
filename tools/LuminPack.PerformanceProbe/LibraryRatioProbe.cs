@@ -8,6 +8,29 @@ internal static class LibraryRatioProbe
 {
     private static object? _sink;
 
+    /// <summary>Measures unchanged collection fixtures against all original binary reference libraries.</summary>
+    /// <param name="fixtureName">SimpleBenchmark, SerializeBenchmark, or PolymorphismBenchmark.</param>
+    /// <param name="directories">Retained images; exclude unsafe polymorphism baselines.</param>
+    internal static void RunCapacity(string fixtureName, params string[] directories)
+    {
+        Process.GetCurrentProcess().ProcessorAffinity = (nint)256;
+        string[] operations = ["LuminPackSerialize", "MemoryPackSerialize", "MessagePackSerialize", "NinoSerialize",
+            "LuminPackDeserialize", "MemoryPackDeserialize", "MessagePackDeserialize", "NinoDeserialize"];
+        var fixtures = directories.Select(directory =>
+        {
+            var type = BenchmarkImage.Load(directory).GetType("LuminPackBenchmark." + fixtureName, true)!;
+            object instance = Activator.CreateInstance(type)!;
+            type.GetMethod("SetUp")!.Invoke(instance, null);
+            string prefix = Path.GetFileName(Path.TrimEndingDirectorySeparator(directory)) + ".";
+            return (Names: operations.Select(name => prefix + name).ToArray(),
+                Actions: operations.Select(name => Bind(type.GetMethod(name)!, instance)).ToArray(),
+                Cleanup: type.GetMethod("CleanUp")!.CreateDelegate<Action>(instance));
+        }).ToArray();
+        bool simple = fixtureName == "SimpleBenchmark";
+        MeasureFixtures(fixtures, simple ? 4096 : 128, simple ? 131072 : 1024,
+            simple ? 16384 : 512, operations.Length, 4);
+    }
+
     /// <summary>Checks and measures identical fixed/managed Union distributions against common references.</summary>
     /// <param name="fixedPercent">The percentage of fixed payloads in the dictionary.</param>
     /// <param name="directories">Complete retained images with the same distribution fixture.</param>

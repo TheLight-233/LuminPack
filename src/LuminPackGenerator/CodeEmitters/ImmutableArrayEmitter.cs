@@ -45,6 +45,7 @@ public static class ImmutableArrayEmitter
         sb.AppendLine("                        writer.Advance(sizeof(int));");
         sb.AppendLine("                        foreach (var item in span)");
         sb.AppendLine("                        {");
+        sb.AppendLine("                            writer.CheckBuffer();");
         sb.AppendLine("                            var temp = item;");
         sb.AppendLine("                            writer.WriteValue(in temp!);");
         sb.AppendLine("                        }");

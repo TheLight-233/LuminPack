@@ -116,6 +116,8 @@ Documentation parsing is enabled locally even when the consuming compilation use
 
 `LuminPackSerializerDocumentation` adds overload-specific type and member details. It reuses the packable metadata analysis, so the documented contract follows the formatter's member filtering and ordering instead of independently guessing from public reflection shape. Per-type XML fragments are reused across overloads within one generation call.
 
+The reuse boundary is also the publication boundary. The complete type contract — generation mode, CLR layout, payload framing, and the ordered member table — is attached to the caller-facing serializer overloads. The per-type operation state implementations on `LuminPackSerializer` keep their summary, parameter, return-value, type-link, and overload-usage comments, and do not repeat that contract in every state body. Documentation trivia carries no IL or metadata, so this placement changes generated text only.
+
 The generated documentation distinguishes:
 
 - CLR layout kind, explicit offsets, pack and size attributes when present.

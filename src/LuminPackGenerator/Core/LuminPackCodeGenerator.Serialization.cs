@@ -158,11 +158,13 @@ public static partial class LuminPackCodeGenerator
                     }
                     sb.AppendLine(indentation + "foreach (ref var v" + depthSuffix + " in " + field.Name + "TempSpan" + depthSuffix + ")");
                     sb.AppendLine(indentation + "{");
+                    if (elementField4.Type != LuminFiledType.String)
+                        sb.AppendLine(indentation + "    writer.CheckBuffer(" + field.Name + "ListOffset" + depthSuffix + ");");
                     if (elementField4.Type == LuminFiledType.String)
                     {
                         sb.AppendLine(indentation + "    if (v" + depthSuffix + " == null)");
                         sb.AppendLine(indentation + "    {");
-                        sb.AppendLine(indentation + "        writer.WriteNullStringHeader(ref " + field.Name + "ListOffset" + depthSuffix + ");");
+                        sb.AppendLine(indentation + "        writer.WriteString(ref " + field.Name + "ListOffset" + depthSuffix + ", v" + depthSuffix + ");");
                         sb.AppendLine(indentation + "        " + field.Name + "ListOffset" + depthSuffix + " += " + stringRecordLength + ";");
                         sb.AppendLine(indentation + "        continue;");
                         sb.AppendLine(indentation + "    }");
@@ -390,12 +392,14 @@ public static partial class LuminPackCodeGenerator
                     }
                     sb.AppendLine(indentation + "for (int i" + depthSuffix + " = 0; i" + depthSuffix + " < " + field.Name + "Count" + depthSuffix + "; i" + depthSuffix + "++)");
                     sb.AppendLine(indentation + "{");
+                    if (elementField.Type != LuminFiledType.String)
+                        sb.AppendLine(indentation + "    writer.CheckBuffer(" + field.Name + "ListOffset" + depthSuffix + ");");
                     sb.AppendLine(indentation + "    ref var v" + depthSuffix + " = ref " + fieldPath + "[i" + depthSuffix + "];");
                     if (elementField.Type == LuminFiledType.String)
                     {
                         sb.AppendLine(indentation + "    if (v" + depthSuffix + " == null)");
                         sb.AppendLine(indentation + "    {");
-                        sb.AppendLine(indentation + "        writer.WriteNullStringHeader(ref " + field.Name + "ListOffset" + depthSuffix + ");");
+                        sb.AppendLine(indentation + "        writer.WriteString(ref " + field.Name + "ListOffset" + depthSuffix + ", v" + depthSuffix + ");");
                         sb.AppendLine(indentation + "        " + field.Name + "ListOffset" + depthSuffix + " += " + stringRecordLength + ";");
                         sb.AppendLine(indentation + "        continue;");
                         sb.AppendLine(indentation + "    }");

@@ -33,6 +33,7 @@ public static class ImmutableQueueEmitter
         sb.AppendLine("                var count = 0;");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
+        sb.AppendLine("                    tempWriter.CheckBuffer();");
         sb.AppendLine("                    count++;");
         sb.AppendLine("                    var v = item;");
         sb.AppendLine("                    tempWriter.WriteValue(in v);");

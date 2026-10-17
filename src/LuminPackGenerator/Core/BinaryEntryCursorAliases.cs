@@ -7,13 +7,24 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.Code.Core;
 
-/// <summary>Removes redundant generated aliases of the writer's stable cursor storage.</summary>
+/// <summary>Removes redundant generated aliases of stable binary operation cursor storage.</summary>
 internal static class BinaryEntryCursorAliases
 {
     /// <summary>Uses the original ref-return expression without retaining another interior-reference local.</summary>
     /// <param name="body">The expanded binary writer body with collision-free generated local names.</param>
     /// <returns>The same operation and cursor publication order with fewer byref aliases.</returns>
-    internal static BlockSyntax Rewrite(BlockSyntax body)
+    internal static BlockSyntax Rewrite(BlockSyntax body) => RewriteState(body, "writer");
+
+    /// <summary>Uses the same Reader cursor address without retaining another interior-reference local.</summary>
+    /// <param name="body">The expanded binary reader body with collision-free generated local names.</param>
+    /// <returns>The same reads and publications with fewer byref aliases.</returns>
+    internal static BlockSyntax RewriteReader(BlockSyntax body) => RewriteState(body, "reader");
+
+    /// <summary>Substitutes only compiler-marked aliases of the selected operation's stable cursor storage.</summary>
+    /// <param name="body">The expanded binary operation.</param>
+    /// <param name="state">The original state parameter identity.</param>
+    /// <returns>The operation with guarded aliases removed.</returns>
+    private static BlockSyntax RewriteState(BlockSyntax body, string state)
     {
         if (body == null) return body;
         var declarations = body.DescendantNodes().OfType<LocalDeclarationStatementSyntax>().Where(statement =>
@@ -24,9 +35,9 @@ internal static class BinaryEntryCursorAliases
             reference.Expression is InvocationExpressionSyntax invocation &&
             invocation.Expression is MemberAccessExpressionSyntax
             {
-                Expression: IdentifierNameSyntax { Identifier.ValueText: "writer" },
+                Expression: IdentifierNameSyntax receiver,
                 Name.Identifier.ValueText: "GetCurrentSpanOffset"
-            } && invocation.ArgumentList.Arguments.Count == 0).ToArray();
+            } && receiver.Identifier.ValueText == state && invocation.ArgumentList.Arguments.Count == 0).ToArray();
         if (declarations.Length == 0) return body;
         var nodes = body.DescendantNodes().ToArray();
         var names = nodes.Select(node => node switch
@@ -42,7 +53,7 @@ internal static class BinaryEntryCursorAliases
         var rebound = new HashSet<string>(nodes.OfType<AssignmentExpressionSyntax>()
             .Where(assignment => assignment.Right is RefExpressionSyntax && assignment.Left is IdentifierNameSyntax)
             .Select(assignment => ((IdentifierNameSyntax)assignment.Left).Identifier.ValueText), StringComparer.Ordinal);
-        if (rebound.Contains("writer")) return body;
+        if (rebound.Contains(state)) return body;
         var observedNames = new HashSet<string>(nodes.OfType<InvocationExpressionSyntax>()
             .Where(invocation => invocation.Expression is IdentifierNameSyntax { Identifier.ValueText: "nameof" })
             .SelectMany(invocation => invocation.ArgumentList.Arguments)
@@ -57,19 +68,21 @@ internal static class BinaryEntryCursorAliases
         if (removable.Length == 0) return body;
         var aliases = new HashSet<string>(removable.Select(statement => statement.Declaration.Variables[0].Identifier.ValueText), StringComparer.Ordinal);
         var withoutAliases = body.RemoveNodes(removable, SyntaxRemoveOptions.KeepExteriorTrivia);
-        return (BlockSyntax)new AliasRewriter(aliases).Visit(withoutAliases);
+        return (BlockSyntax)new AliasRewriter(aliases, state).Visit(withoutAliases);
     }
 
     /// <summary>Substitutes collision-free local expressions while leaving member names untouched.</summary>
     private sealed class AliasRewriter : CSharpSyntaxRewriter
     {
         private readonly HashSet<string> _aliases;
+        private readonly string _state;
 
         /// <summary>Stores the generated aliases proven unique in this operation.</summary>
         /// <param name="aliases">The alias identifiers eligible for substitution.</param>
-        internal AliasRewriter(HashSet<string> aliases) => _aliases = aliases;
+        /// <param name="state">The original state parameter owning the cursor field.</param>
+        internal AliasRewriter(HashSet<string> aliases, string state) { _aliases = aliases; _state = state; }
 
-        /// <summary>Reuses the writer's original cursor address at each alias use.</summary>
+        /// <summary>Reuses the original cursor address at each alias use.</summary>
         /// <param name="node">The generated identifier expression.</param>
         /// <returns>The original identifier or the equivalent ref-return invocation.</returns>
         public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
@@ -79,7 +92,7 @@ internal static class BinaryEntryCursorAliases
                 node.Parent is QualifiedNameSyntax or AliasQualifiedNameSyntax or NameColonSyntax)
                 return base.VisitIdentifierName(node);
             return SyntaxFactory.InvocationExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
-                SyntaxFactory.IdentifierName("writer"), SyntaxFactory.IdentifierName("GetCurrentSpanOffset"))).WithTriviaFrom(node);
+                SyntaxFactory.IdentifierName(_state), SyntaxFactory.IdentifierName("GetCurrentSpanOffset"))).WithTriviaFrom(node);
         }
     }
 }

@@ -151,6 +151,9 @@ public sealed class LuminBufferWriter : IDisposable
 
     private BufferSegment _buffer;
 
+    /// <summary>Gets the current native buffer growth threshold.</summary>
+    internal int BufferCheckLimit => _buffer.ResizeThreshold;
+
     private unsafe int* _currentIndex;
 
     internal int _writtenCount;
@@ -585,6 +588,9 @@ internal unsafe struct BufferSegment : IDisposable
 {
     IntPtr _buffer;
     int _resizeThreshold;
+
+    /// <summary>Gets the established 87.5 percent growth threshold.</summary>
+    internal readonly int ResizeThreshold => _resizeThreshold;
     int* _written;
     int _totalLength;
     bool _disposed;

@@ -82,6 +82,11 @@ internal static class SerializerUnionCursorRegression
                     "A non-fixed case bypassed publication or its original virtual operation.");
             Require(methods.Any(method => method.Body?.ToString().Contains("__LuminPackUnionSerializeCursor_", StringComparison.Ordinal) == true &&
                 method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer" }), "The retained dictionary did not reach the fixed virtual protocol.");
+            Require(methods.SelectMany(method => method.DescendantNodes().OfType<AssignmentExpressionSyntax>()).Any(assignment =>
+                assignment.Right is InvocationExpressionSyntax { ArgumentList.Arguments.Count: 1,
+                    Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "CheckBuffer" } } check &&
+                assignment.Left.ToString() == check.ArgumentList.Arguments[0].Expression.ToString()),
+                "The dictionary must check and reuse its actual unpublished cursor rather than the stale shared index.");
             if (mode == "Minimal") Require(!cursorSlots.Any(method => method.Parent is ClassDeclarationSyntax parent && parent.Identifier.ValueText is "UnusedRoot" or "UnusedCase"),
                 "Minimal retained an unused Union cursor family.");
             Execute(output);

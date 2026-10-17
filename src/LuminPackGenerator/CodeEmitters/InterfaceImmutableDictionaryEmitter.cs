@@ -32,6 +32,7 @@ public static class InterfaceImmutableDictionaryEmitter
         sb.AppendLine();
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                var key = item.Key;");
         sb.AppendLine("                writer.WriteValue(in key);");
         sb.AppendLine("                var itemValue = item.Value;");

@@ -46,10 +46,11 @@ public static class ConcurrentStackEmitter
         sb.AppendLine("                writer.Advance(4);");
         sb.AppendLine();
         sb.AppendLine("                for (i = i - 1; i >= 0; i--)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    var v = rentArray[i];");
-        sb.AppendLine("                    writer.WriteValue(in v);");
-        sb.AppendLine("                }");
+                sb.AppendLine("                {");
+                sb.AppendLine("                    writer.CheckBuffer();");
+                sb.AppendLine("                    var v = rentArray[i];");
+                sb.AppendLine("                    writer.WriteValue(in v);");
+                sb.AppendLine("                }");
         sb.AppendLine();
         sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("            }");

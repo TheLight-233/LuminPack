@@ -71,6 +71,8 @@ public static partial class ListEmitter
         sb.AppendLine();
         sb.AppendLine("            foreach (ref var item in span)");
         sb.AppendLine("            {");
+        if (EmitterTypeTraits.GetFirstTypeArgument(fieldData)?.SpecialType != Microsoft.CodeAnalysis.SpecialType.System_String)
+            sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                writer.WriteValue(in item!);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
@@ -152,6 +154,8 @@ public static partial class ListEmitter
         sb.AppendLine();
         sb.AppendLine("            foreach (ref var item in span)");
         sb.AppendLine("            {");
+        if (EmitterTypeTraits.GetFirstTypeArgument(fieldData)?.SpecialType != Microsoft.CodeAnalysis.SpecialType.System_String)
+            sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine($"                {elementCallSerialize}");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");

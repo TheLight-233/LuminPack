@@ -33,6 +33,7 @@ public static class FrozenDictionaryEmitter
         sb.AppendLine("            var i = 0;");
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                i++;");
         sb.AppendLine("                var key = item.Key;");
         sb.AppendLine("                writer.WriteValue(in key);");

@@ -68,6 +68,8 @@ public static class ArrayEmitter
         sb.AppendLine();
         sb.AppendLine("            foreach (ref var item in value.AsSpan())");
         sb.AppendLine("            {");
+        if ((fieldData.TypeSymbol as Microsoft.CodeAnalysis.IArrayTypeSymbol)?.ElementType.SpecialType != Microsoft.CodeAnalysis.SpecialType.System_String)
+            sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                writer.WriteValue(in item);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
@@ -335,6 +337,8 @@ public static class ArrayEmitter
         sb.AppendLine();
         sb.AppendLine("            foreach (ref var item in value.AsSpan())");
         sb.AppendLine("            {");
+        if ((fieldData.TypeSymbol as Microsoft.CodeAnalysis.IArrayTypeSymbol)?.ElementType.SpecialType != Microsoft.CodeAnalysis.SpecialType.System_String)
+            sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine($"                {elementCallSerialize}");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");

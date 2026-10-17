@@ -148,6 +148,8 @@ internal static class SerializerCoreProjection
             }
             if (state == "LuminPack.Core.LuminPackWriter" && name is "Serialize" or "SerializeUnion")
                 method = method.WithBody(BinaryEntryCursorAliases.Rewrite(method.Body));
+            if (state == "LuminPack.Core.LuminPackReader" && name is "Deserialize" or "DeserializeUnion")
+                method = method.WithBody(BinaryEntryCursorAliases.RewriteReader(method.Body));
             if (name == "SerializeUnion" && state == "LuminPack.Core.LuminPackWriter" && method.TypeParameterList == null &&
                 FixedUnionCursorPlan.CanUsePayload(type, compilation, metadata))
             {

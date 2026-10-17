@@ -32,6 +32,7 @@ public static class LinkedListEmitter
         sb.AppendLine();
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                var v = item;");
         sb.AppendLine("                writer.WriteValue(in v);");
         sb.AppendLine("            }");

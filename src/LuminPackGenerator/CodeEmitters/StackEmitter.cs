@@ -60,6 +60,7 @@ public static class StackEmitter
             sb.AppendLine("            writer.Advance(sizeof(int));");
             sb.AppendLine("            foreach (ref var item in span)");
             sb.AppendLine("            {");
+            sb.AppendLine("                writer.CheckBuffer();");
             sb.AppendLine("                writer.WriteValue(in item!);");
             sb.AppendLine("            }");
             sb.AppendLine("            writer.CheckBuffer();");
@@ -83,6 +84,7 @@ public static class StackEmitter
             sb.AppendLine("            writer.Advance(sizeof(int));");
             sb.AppendLine("            foreach (ref var item in span)");
             sb.AppendLine("            {");
+            sb.AppendLine("                writer.CheckBuffer();");
             sb.AppendLine("                writer.WriteValue(in item!);");
             sb.AppendLine("            }");
             sb.AppendLine("            writer.CheckBuffer();");
@@ -128,7 +130,11 @@ public static class StackEmitter
                 sb.AppendLine("                }");
             }
         }
-        sb.AppendLine("                for (var i = size - 1; i >= 0; i--) writer.WriteValue(buffer[i]);");
+        sb.AppendLine("                for (var i = size - 1; i >= 0; i--)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    writer.CheckBuffer();");
+        sb.AppendLine("                    writer.WriteValue(buffer[i]);");
+        sb.AppendLine("                }");
         sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("            }");
         sb.AppendLine("            finally");

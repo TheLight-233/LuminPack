@@ -178,6 +178,8 @@ public static class DictionaryEmitter
             sb.AppendLine("                ref var entryRef = ref LuminPackMarshal.GetNotNullArrayReference(dictionaryView._entries!);");
             sb.AppendLine("                for (int i = 0; i < count; i++)");
             sb.AppendLine("                {");
+            if (!stringKey)
+                sb.AppendLine(localUnionCursor ? "                    nextIndex = writer.CheckBuffer(nextIndex);" : "                    writer.CheckBuffer();");
             sb.AppendLine("                    ref var entry = ref entryRef;");
             if (localUnionCursor)
             {
@@ -206,6 +208,7 @@ public static class DictionaryEmitter
             if (stableStringHeaders) sb.AppendLine("                int stringRecordLength = writer.StringRecordLength();");
             sb.AppendLine("                foreach (var item in source)");
             sb.AppendLine("                {");
+            if (!stringKey) sb.AppendLine("                    writer.CheckBuffer();");
             sb.AppendLine("                    " + keyType + " key = item.Key;");
             AppendBinaryElementWrite(sb, "key", "                    ", stableStringHeaders && stringKey);
             sb.AppendLine("                    " + valueType + " itemValue = item.Value;");

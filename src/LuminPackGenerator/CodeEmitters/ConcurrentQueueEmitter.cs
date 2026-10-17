@@ -37,6 +37,7 @@ public static class ConcurrentQueueEmitter
         sb.AppendLine("            var i = 0;");
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
+        sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                i++;");
         sb.AppendLine("                var v = item;");
         sb.AppendLine("                writer.WriteValue(in v);");
