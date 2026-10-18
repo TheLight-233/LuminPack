@@ -14,4 +14,4 @@ Performance decisions must account for local machine variability. Prioritize Lum
 
 Use English for code, comments, XML, diagnostics, tests, and maintenance documents; README is the exception. Do not remove storage placeholders or externally usable/generated members based only on ordinary call-site searches. Run the relevant structural, historical, runtime, and incremental checks specified by the contract.
 
-README is project introduction, installation and usage documentation. Do not put release notes, version-change summaries, upgrade/migration notices or development/performance experiment reports in README. Keep those records under docs. Installation examples may reference the current package version without describing version changes.
+README is project introduction, installation and usage documentation. Do not put release notes, version-change summaries, upgrade/migration notices or development/performance experiment reports in README. Those records are kept out of version control, not under docs. Installation examples may reference the current package version without describing version changes.

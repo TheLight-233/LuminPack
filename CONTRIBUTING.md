@@ -22,7 +22,7 @@ The legacy xUnit suites use `RuntimeStateCollection` because their pool regressi
 
 ## Source conventions
 
-README is reserved for project introduction, installation and usage. Release notes, version-change summaries, upgrade/migration notices and development/performance experiment reports belong under `docs`, never in README. Installation examples may reference the current package version. This is a mandatory repository documentation boundary.
+README is reserved for project introduction, installation and usage. Release notes, version-change summaries, upgrade/migration notices and development/performance experiment reports are kept out of version control, never in README; `docs` holds only maintained reference material. Installation examples may reference the current package version. This is a mandatory repository documentation boundary.
 
 - Follow `.editorconfig`: four spaces for C#, UTF-8 text, and consistent line endings. `.gitattributes` retains binary/archive and generated-artifact classification.
 - Use English for implementation comments, XML documentation, diagnostics, examples, and maintenance documents. README files are the language exception. Represent multilingual test fixtures with Unicode escapes while preserving their actual values.
