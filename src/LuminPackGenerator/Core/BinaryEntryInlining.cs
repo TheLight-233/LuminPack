@@ -16,6 +16,8 @@ internal sealed class BinaryEntryInlining
 {
     internal const string OperationLocalAnnotation = "LuminPack.ExpandedOperationLocal";
     internal const string ExpandedIdentityAnnotation = "LuminPack.ExpandedIdentity";
+    internal const string OptionScopeAnnotation = "LuminPack.CompiledMemberProfile";
+    internal const string PayloadAnnotation = "LuminPack.OperationPayload";
     private static readonly SyntaxAnnotation CursorLocal = new SyntaxAnnotation(OperationLocalAnnotation);
     private static readonly SyntaxAnnotation ExpandedIdentity = new SyntaxAnnotation(ExpandedIdentityAnnotation);
     private readonly Compilation _compilation;
@@ -48,8 +50,14 @@ internal sealed class BinaryEntryInlining
     internal BlockSyntax ExpandCore(string operation)
     {
         string state = operation == "CalculateOffset" ? "evaluator" : operation.StartsWith("Read", StringComparison.Ordinal) ? "reader" : "writer";
-        return Expand(GetPlan(_root), operation, new ExpressionSyntax[] { SyntaxFactory.IdentifierName(state), SyntaxFactory.IdentifierName("value") },
+        var expanded = Expand(GetPlan(_root), operation, new ExpressionSyntax[] { SyntaxFactory.IdentifierName(state), SyntaxFactory.IdentifierName("value") },
             new[] { true, true }, new HashSet<string>(StringComparer.Ordinal));
+        if (expanded == null) return null;
+        expanded = (BlockSyntax)new ReservedCapacityRegions().Visit(expanded);
+        return CompiledOptionProjection.Apply(expanded, CompiledOptions.Resolve(_root, _compilation), state,
+            operation == "CalculateOffset" ? "LuminPackEvaluator" : operation.EndsWith(":json", StringComparison.Ordinal)
+                ? operation.StartsWith("Read", StringComparison.Ordinal) ? "LuminPackJsonReader" : "LuminPackJsonWriter"
+                : operation.StartsWith("Read", StringComparison.Ordinal) ? "LuminPackReader" : "LuminPackWriter");
     }
 
     /// <summary>Validates an operation plan once within this immutable emission context.</summary>
@@ -72,9 +80,10 @@ internal sealed class BinaryEntryInlining
     /// <param name="arguments">Already evaluated caller expressions in original argument order.</param>
     /// <param name="aliases">Arguments with referenceable storage.</param>
     /// <param name="stack">The current recursive expansion path.</param>
+    /// <param name="optionProfile">A containing member's statically selected profile, if present.</param>
     /// <returns>The expanded block, or null at a retained recursive/custom boundary.</returns>
     private BlockSyntax Expand(BinaryOperationPlan plan, string operationName, IReadOnlyList<ExpressionSyntax> arguments,
-        IReadOnlyList<bool> aliases, HashSet<string> stack)
+        IReadOnlyList<bool> aliases, HashSet<string> stack, string optionProfile = null)
     {
         string key = plan.TypeName + "|" + operationName;
         if (stack.Contains(key) || !plan.Operations.TryGetValue(operationName, out var operation)) return null;
@@ -121,11 +130,31 @@ internal sealed class BinaryEntryInlining
         }
         var path = new HashSet<string>(stack, StringComparer.Ordinal) { key };
         var body = (BlockSyntax)new OperationExpansion(this, plan, operation, prefix, exit, path, arguments[0]).Visit(operation.Body);
-        statements.AddRange(body.Statements);
+        if (optionProfile != null && !operationName.EndsWith(":json", StringComparison.Ordinal))
+            body = CompiledOptionProjection.Apply(body, plan.Options, arguments[0].ToString(), operation.Parameters[0].Type, optionProfile);
+        bool guaranteed = plan.GuaranteedMaxBytes > 0 && operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackWriter" &&
+            !operationName.Contains(":local:");
+        if (guaranteed)
+        {
+            string state = arguments[0].ToString();
+            statements.Add(SyntaxFactory.ParseStatement("int " + prefix + "boundedStart = " + state + ".GetCurrentSpanIndex();"));
+            statements.Add(SyntaxFactory.ParseStatement(state + ".EnsureAdditionalCapacity(" + plan.GuaranteedMaxBytes + ");"));
+            statements.Add(body.WithAdditionalAnnotations(new SyntaxAnnotation(BinaryCollectionCapacity.ReservedAnnotation),
+                new SyntaxAnnotation(BinaryCollectionCapacity.GuaranteedAnnotation, plan.GuaranteedMaxBytes.ToString(System.Globalization.CultureInfo.InvariantCulture))));
+        }
+        else statements.AddRange(body.Statements);
         if (body.DescendantNodes().OfType<GotoStatementSyntax>().Any(jump => jump.Expression is IdentifierNameSyntax target && target.Identifier.ValueText == exit))
             statements.Add(SyntaxFactory.LabeledStatement(exit, SyntaxFactory.EmptyStatement()));
+        if (guaranteed)
+        {
+            string state = arguments[0].ToString();
+            statements.Add(SyntaxFactory.ParseStatement("global::System.Diagnostics.Debug.Assert(" + state + ".GetCurrentSpanIndex() - " + prefix +
+                "boundedStart <= " + plan.GuaranteedMaxBytes + ", \"The LuminPackBounded complete-record guarantee was violated.\");"));
+            statements.Add(SyntaxFactory.ParseStatement(state + ".CompleteReservedRecord();"));
+        }
         Interlocked.Increment(ref IncrementalGenerationMetrics.BinaryOperationExpansions);
-        return SyntaxFactory.Block(statements);
+        var result = SyntaxFactory.Block(statements);
+        return optionProfile == null ? result : result.WithAdditionalAnnotations(new SyntaxAnnotation(OptionScopeAnnotation, optionProfile));
     }
 
     /// <summary>Obtains the compiler-marked identity of one private operation support declaration.</summary>
@@ -186,6 +215,9 @@ internal sealed class BinaryEntryInlining
                 ? _layoutPrefix + name.Substring((BinaryOperationPlan.Prefix + "layout_").Length)
                 : _prefix + name.Substring(BinaryOperationPlan.Prefix.Length);
             var renamed = SyntaxFactory.Identifier(replacement).WithTriviaFrom(token).WithAdditionalAnnotations(ExpandedIdentity);
+            if (token.HasAnnotations(BinaryCollectionCapacity.WriterAnnotation))
+                renamed = renamed.WithAdditionalAnnotations(new SyntaxAnnotation(BinaryCollectionCapacity.WriterAnnotation));
+            renamed = renamed.WithAdditionalAnnotations(token.GetAnnotations(OperationTemplateRewriter.StateAnnotation).ToArray());
             return _cursorLocals?.Contains(name) == true ? renamed.WithAdditionalAnnotations(CursorLocal) : renamed;
         }
     }
@@ -232,8 +264,11 @@ internal sealed class BinaryEntryInlining
             var arguments = call.ArgumentList.Arguments.Select(argument => (ExpressionSyntax)Visit(argument.Expression)).ToList();
             if (slot.Reduced) arguments.Insert(0, (ExpressionSyntax)Visit(((MemberAccessExpressionSyntax)call.Expression).Expression));
             var plan = slot.Local ? _plan : _owner.GetPlan(_owner.Resolve(slot.TypeName));
-            var expanded = _owner.Expand(plan, slot.Operation, arguments, slot.Aliases, _stack);
-            return expanded == null ? base.VisitExpressionStatement(node) : expanded.WithTriviaFrom(node);
+            var expanded = _owner.Expand(plan, slot.Operation, arguments, slot.Aliases, _stack, slot.OptionProfile);
+            if (expanded != null) return expanded.WithTriviaFrom(node);
+            var retained = (ExpressionStatementSyntax)base.VisitExpressionStatement(node);
+            retained = retained.WithExpression(retained.Expression.WithAdditionalAnnotations(new SyntaxAnnotation(PayloadAnnotation, slot.TypeName)));
+            return slot.OptionProfile == null ? retained : retained.WithAdditionalAnnotations(new SyntaxAnnotation(OptionScopeAnnotation, slot.OptionProfile));
         }
 
         /// <summary>Converts formatter returns to local exits so entry completion and cleanup still execute.</summary>

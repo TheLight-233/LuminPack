@@ -20,7 +20,7 @@ public class BufferWriterOperationContextBenchmark
     [ThreadStatic] private static LuminPackWriterOptionalState? t_legacyWriterState;
     [ThreadStatic] private static LuminPackReaderOptionalState? t_legacyReaderState;
 
-    private readonly LuminPackSerializerOption _customOption = new()
+    private readonly BenchmarkProfile _customOption = new()
     {
         StringEncoding = LuminPackStringEncoding.UTF16,
         StringRecording = LuminPackStringRecording.Length
@@ -58,13 +58,13 @@ public class BufferWriterOperationContextBenchmark
         _fastBuffer = new LuminBufferWriter(true);
         _fastCustomBuffer = new LuminBufferWriter(true);
         _fastReadBuffer = new LuminBufferWriter(true);
-        _fastCustomBuffer.Option.StringEncoding = LuminPackStringEncoding.UTF16;
-        _fastCustomBuffer.Option.StringRecording = LuminPackStringRecording.Length;
 
         _smallPayload = LuminPackSerializer.Serialize(_small);
         LuminPackSerializer.Serialize(_small, _fastReadBuffer);
 
         LegacySerialize(_small, _legacyBuffer, null);
+        _fastBuffer.ResetCore();
+        _fastBuffer.WriterState.ResetOperationState();
         LuminPackSerializer.Serialize(_small, _fastBuffer);
         LegacyDeserialize(_smallPayload);
         _ = LuminPackSerializer.Deserialize<ContextSmall>(_fastReadBuffer);
@@ -91,7 +91,12 @@ public class BufferWriterOperationContextBenchmark
     /// <summary>Measures buffer context serialize small default for the configured benchmark input.</summary>
     [Benchmark]
     [BenchmarkCategory("SerializeSmallDefault")]
-    public void BufferContextSerializeSmallDefault() => LuminPackSerializer.Serialize(_small, _fastBuffer);
+    public void BufferContextSerializeSmallDefault()
+    {
+        _fastBuffer.ResetCore();
+        _fastBuffer.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize(_small, _fastBuffer);
+    }
 
     /// <summary>Measures legacy serialize small custom for the configured benchmark input.</summary>
     [Benchmark(Baseline = true)]
@@ -101,7 +106,12 @@ public class BufferWriterOperationContextBenchmark
     /// <summary>Measures buffer context serialize small custom for the configured benchmark input.</summary>
     [Benchmark]
     [BenchmarkCategory("SerializeSmallCustom")]
-    public void BufferContextSerializeSmallCustom() => LuminPackSerializer.Serialize(_small, _fastCustomBuffer);
+    public void BufferContextSerializeSmallCustom()
+    {
+        _fastCustomBuffer.ResetCore();
+        _fastCustomBuffer.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(_small, _fastCustomBuffer);
+    }
 
     /// <summary>Measures legacy serialize medium for the configured benchmark input.</summary>
     [Benchmark(Baseline = true)]
@@ -111,7 +121,12 @@ public class BufferWriterOperationContextBenchmark
     /// <summary>Measures buffer context serialize medium for the configured benchmark input.</summary>
     [Benchmark]
     [BenchmarkCategory("SerializeMedium")]
-    public void BufferContextSerializeMedium() => LuminPackSerializer.Serialize(_medium, _fastBuffer);
+    public void BufferContextSerializeMedium()
+    {
+        _fastBuffer.ResetCore();
+        _fastBuffer.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize(_medium, _fastBuffer);
+    }
 
     /// <summary>Measures legacy serialize nested for the configured benchmark input.</summary>
     [Benchmark(Baseline = true)]
@@ -121,7 +136,12 @@ public class BufferWriterOperationContextBenchmark
     /// <summary>Measures buffer context serialize nested for the configured benchmark input.</summary>
     [Benchmark]
     [BenchmarkCategory("SerializeNested")]
-    public void BufferContextSerializeNested() => LuminPackSerializer.Serialize(_nested, _fastBuffer);
+    public void BufferContextSerializeNested()
+    {
+        _fastBuffer.ResetCore();
+        _fastBuffer.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize(_nested, _fastBuffer);
+    }
 
     /// <summary>Measures legacy deserialize small for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
@@ -142,17 +162,19 @@ public class BufferWriterOperationContextBenchmark
     /// <param name="option">The configuration to apply to this operation.</param>
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static void LegacySerialize<T>(T? value, LuminBufferWriter buffer, LuminPackSerializerOption? option)
+    private static void LegacySerialize<T>(T? value, LuminBufferWriter buffer, BenchmarkProfile? option)
     {
         var state = t_legacyWriterState ??= new LuminPackWriterOptionalState();
-        state.Init(option);
+        buffer.ResetCore();
+        var writer = new LuminPackWriter(buffer, state);
         try
         {
-            var writer = new LuminPackWriter(buffer, state);
-            writer.WriteValue(value);
+            if (option is null) LuminPackSerializer.Serialize<T, LuminPackDefaultOptions>(ref writer, value);
+            else LuminPackSerializer.Serialize<T, LuminPackUtf16LengthOptions>(ref writer, value);
         }
         finally
         {
+            buffer.CompleteWrite(writer.CurrentIndex);
             state.Reset();
         }
     }
@@ -164,7 +186,6 @@ public class BufferWriterOperationContextBenchmark
     private static ContextSmall? LegacyDeserialize(ReadOnlySpan<byte> payload)
     {
         var state = t_legacyReaderState ??= new LuminPackReaderOptionalState();
-        state.Init(null);
         try
         {
             var reader = new LuminPackReader(ref payload, state);

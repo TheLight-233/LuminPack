@@ -52,23 +52,14 @@ namespace LuminPack.Core
 
         private readonly LuminPackWriterOptionalState _optionState;
 
-        // 0: UTF8+Token, 1: UTF8+Length, 2: UTF16+Token, 3: UTF16+Length.
-        private readonly byte _stringSerializationMode;
-        /// <summary>Gets the serialize string as utf8.</summary>
-        private bool SerializeStringAsUtf8 => (_stringSerializationMode & 2) == 0;
-        /// <summary>Gets the serialize string record as token.</summary>
-        private bool SerializeStringRecordAsToken => (_stringSerializationMode & 1) == 0;
-
         /// <summary>Gets the option state.</summary>
         public LuminPackWriterOptionalState OptionState => _optionState;
-        /// <summary>Gets the option.</summary>
-        public LuminPackSerializerOption Option => _optionState.Option;
 
         /// <summary>Gets the current index.</summary>
         public ref int CurrentIndex => ref _currentIndex;
 
         /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
-        /// <param name="option">The configuration to apply to this operation.</param>
+        /// <param name="option">The shared reference-tracking state, or null for the default operation state.</param>
         public LuminPackWriter(LuminPackWriterOptionalState? option = null)
         {
             _optionState = option ?? LuminPackWriterOptionalState.NullOption;
@@ -77,12 +68,12 @@ namespace LuminPack.Core
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
             _currentIndex = 0;
-            _stringSerializationMode = GetStringSerializationMode(_optionState.Option);
+
         }
 
         /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
         /// <param name="bufferReference">The buffer reference used by this operation.</param>
-        /// <param name="option">The configuration to apply to this operation.</param>
+        /// <param name="option">The shared reference-tracking state, or null for the default operation state.</param>
         public LuminPackWriter(ref Span<byte> bufferReference, LuminPackWriterOptionalState? option = null)
         {
 
@@ -92,12 +83,12 @@ namespace LuminPack.Core
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
             _currentIndex = 0;
-            _stringSerializationMode = GetStringSerializationMode(_optionState.Option);
+
         }
 
         /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
         /// <param name="bufferReference">The buffer reference used by this operation.</param>
-        /// <param name="option">The configuration to apply to this operation.</param>
+        /// <param name="option">The shared reference-tracking state, or null for the default operation state.</param>
         public LuminPackWriter(ref ReadOnlySpan<byte> bufferReference, LuminPackWriterOptionalState? option = null)
         {
 
@@ -108,12 +99,12 @@ namespace LuminPack.Core
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
             _currentIndex = 0;
-            _stringSerializationMode = GetStringSerializationMode(_optionState.Option);
+
         }
 
         /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
         /// <param name="bufferWriter">The writer receiving the output data.</param>
-        /// <param name="option">The configuration to apply to this operation.</param>
+        /// <param name="option">The shared reference-tracking state, or null for the default operation state.</param>
         public LuminPackWriter(LuminBufferWriter? bufferWriter, LuminPackWriterOptionalState? option = null)
         {
             _optionState = option ?? LuminPackWriterOptionalState.NullOption;
@@ -125,7 +116,7 @@ namespace LuminPack.Core
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
             _writerBuffer = bufferWriter;
-            _stringSerializationMode = GetStringSerializationMode(_optionState.Option);
+
         }
 
         /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
@@ -140,14 +131,8 @@ namespace LuminPack.Core
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
             _writerBuffer = bufferWriter;
-            _stringSerializationMode = GetStringSerializationMode(bufferWriter.Option);
-        }
 
-        /// <summary>Obtains the string serialization mode for the supplied input.</summary>
-        /// <param name="option">The configuration to apply to this operation.</param>
-        /// <returns>The result of the operation.</returns>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static byte GetStringSerializationMode(LuminPackSerializerOption option) => option.StringSerializationMode;
+        }
 
         /// <summary>
         /// Returns a reference to the span's first element.
@@ -173,9 +158,16 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         internal void EnsureCapacity(int index, int count)
         {
-            if ((uint)index <= (uint)_bufferLength &&
-                (uint)count <= (uint)(_bufferLength - index))
-                return;
+            if (Unsafe.SizeOf<IntPtr>() == 8)
+            {
+                // Widen both unsigned inputs so a single comparison also rejects negative values and overflow.
+                if ((ulong)(uint)index + (uint)count <= (uint)_bufferLength) return;
+            }
+            else
+            {
+                if ((uint)index <= (uint)_bufferLength &&
+                    (uint)count <= (uint)(_bufferLength - index)) return;
+            }
 
             EnsureCapacitySlow(index, count);
         }
@@ -422,14 +414,7 @@ namespace LuminPack.Core
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetStringLength(string? value)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return 0;
-            }
-
-            return SerializeStringAsUtf8 ? LuminPackMarshal.CalculateStringByteCount(value) : checked(value.Length * 2);
-        }
+        { return GetStringLength<global::LuminPack.Option.LuminPackDefaultOptions>(value); }
 
         /// <summary>
         /// Calculates the string payload size, including its header or terminator.
@@ -438,29 +423,13 @@ namespace LuminPack.Core
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetStringWriteLength(string? value)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                return SerializeStringRecordAsToken ? 1 : 8;
-            }
-
-            if (SerializeStringAsUtf8)
-                return SerializeStringRecordAsToken
-                    ? LuminPackMarshal.CalculateStringByteCount(value) + 1
-                    : LuminPackMarshal.CalculateStringByteCount(value) + 8;
-            return SerializeStringRecordAsToken
-                ? checked(value.Length * 2) + 1
-                : checked(value.Length * 2) + 4;
-        }
+        { return GetStringWriteLength<global::LuminPack.Option.LuminPackDefaultOptions>(value); }
 
         /// <summary>Returns the size of the string header used by the current recording mode.</summary>
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int StringRecordLength()
-        {
-            // UTF-16 token mode uses a two-byte 0x0000 terminator because individual zero bytes are common within code units.
-            return SerializeStringRecordAsToken ? (SerializeStringAsUtf8 ? 1 : 2) : SerializeStringAsUtf8 ? 8 : 4;
-        }
+        { return StringRecordLength<global::LuminPack.Option.LuminPackDefaultOptions>(); }
 
         /// <summary>
         /// Calculates the byte size of an unmanaged array.
@@ -562,45 +531,14 @@ namespace LuminPack.Core
         /// <param name="index"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteNullStringHeader(ref int index)
-        {
-            if (SerializeStringRecordAsToken)
-            {
-                WriteStringRecordTokenHeader(ref index);
-                return;
-            }
-
-            if (SerializeStringAsUtf8)
-            {
-                WriteNullUtf8LengthHeader(ref index);
-                return;
-            }
-
-            WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
-        }
+        { WriteNullStringHeader<global::LuminPack.Option.LuminPackDefaultOptions>(ref index); }
 
         /// <summary>Writes null string header to the current output.</summary>
         /// <param name="index">The position at which the operation starts.</param>
         /// <param name="offset">Receives the offset produced by the operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteNullStringHeader(ref int index, out int offset)
-        {
-            if (SerializeStringRecordAsToken)
-            {
-                WriteStringRecordTokenHeader(ref index);
-                offset = SerializeStringAsUtf8 ? 1 : 2;
-                return;
-            }
-
-            if (SerializeStringAsUtf8)
-            {
-                WriteNullUtf8LengthHeader(ref index);
-                offset = sizeof(int) * 2;
-                return;
-            }
-
-            WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
-            offset = sizeof(int);
-        }
+        { WriteNullStringHeader<global::LuminPack.Option.LuminPackDefaultOptions>(ref index, out offset); }
 
         /// <summary>
         /// Writes the string terminator.
@@ -608,26 +546,7 @@ namespace LuminPack.Core
         /// <param name="index"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteStringRecordTokenHeader(ref int index)
-        {
-            if (SerializeStringAsUtf8)
-            {
-                // UTF-8 token mode uses a single zero-byte terminator.
-#if NET8_0_OR_GREATER
-                Unsafe.Add(ref _bufferStart, (nint)(uint)index) = 0;
-#else
-                Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index) = 0;
-#endif
-            }
-            else
-            {
-                // UTF-16 token mode terminates at the two-byte null character 0x0000.
-#if NET8_0_OR_GREATER
-                Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index), (ushort)0);
-#else
-                Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index), (ushort)0);
-#endif
-            }
-        }
+        { WriteStringRecordTokenHeader<global::LuminPack.Option.LuminPackDefaultOptions>(ref index); }
 
         /// <summary>
         /// Writes the string length header.
@@ -637,11 +556,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteStringRecordLengthHeader(ref int index, int length)
         {
-#if NET8_0_OR_GREATER
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index), length);
-#else
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index), length);
-#endif
+            Unsafe.CopyBlockUnaligned(ref GetSpanReference(index), ref Unsafe.As<int, byte>(ref length), sizeof(int));
         }
 
         /// <summary>Writes null utf8 length header to the current output.</summary>
@@ -661,12 +576,7 @@ namespace LuminPack.Core
             EnsureCapacity(index, 8);
             // Both words belong to the record, even when the reader ignores the
             // character count. Initialize them together in a reused buffer.
-            long header = (long)(uint)length | ((long)length << 32);
-#if NET8_0_OR_GREATER
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index), header);
-#else
-            Unsafe.WriteUnaligned(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index), header);
-#endif
+            WriteReservedUtf8Header(index, length, length);
         }
 
         /// <summary>Writes object header to the current output.</summary>
@@ -811,22 +721,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
 #endif
         public int WriteString(string? value)
-        {
-#if NET8_0_OR_GREATER
-            return _stringSerializationMode == 1
-                ? WriteUtf8WithLength(_currentIndex, value)
-                : WriteStringOtherMode(_currentIndex, value);
-#else
-            var mode = _stringSerializationMode;
-            if (mode == 3)
-                return WriteUtf16WithLength(_currentIndex, value);
-            if (mode == 1)
-                return WriteUtf8WithLength(_currentIndex, value);
-            return mode == 0
-                ? WriteUtf8WithToken(_currentIndex, value)
-                : WriteUtf16WithToken(_currentIndex, value);
-#endif
-        }
+        { return WriteString<global::LuminPack.Option.LuminPackDefaultOptions>(value); }
 
         /// <summary>
         /// Writes a string with a known length.
@@ -834,19 +729,9 @@ namespace LuminPack.Core
         /// <param name="value"></param>
         /// <param name="length"></param>
         /// <returns>The number of bytes contributed to the payload.</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteString(string? value, int length)
-        {
-            var mode = _stringSerializationMode;
-            if (mode == 3)
-                WriteUtf16WithLength(_currentIndex, value, length);
-            else if (mode == 1)
-                WriteUtf8WithLength(_currentIndex, value, length);
-            else if (mode == 0)
-                WriteUtf8WithToken(_currentIndex, value, length);
-            else
-                WriteUtf16WithToken(_currentIndex, value, length);
-        }
+        { WriteString<global::LuminPack.Option.LuminPackDefaultOptions>(value, length); }
 
         /// <summary>
         /// Writes a string using the configured encoding and recording mode.
@@ -860,22 +745,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
 #endif
         public int WriteString(ref int index, string? value)
-        {
-#if NET8_0_OR_GREATER
-            return _stringSerializationMode == 1
-                ? WriteUtf8WithLength(index, value)
-                : WriteStringOtherMode(index, value);
-#else
-            var mode = _stringSerializationMode;
-            if (mode == 3)
-                return WriteUtf16WithLength(index, value);
-            if (mode == 1)
-                return WriteUtf8WithLength(index, value);
-            return mode == 0
-                ? WriteUtf8WithToken(index, value)
-                : WriteUtf16WithToken(index, value);
-#endif
-        }
+        { return WriteString<global::LuminPack.Option.LuminPackDefaultOptions>(ref index, value); }
 
 #if NET8_0_OR_GREATER
         // Only the small mode test is inlined into generated parsers. Each mode
@@ -884,16 +754,9 @@ namespace LuminPack.Core
         /// <param name="index">The position at which the operation starts.</param>
         /// <param name="value">The value consumed or produced by this operation.</param>
         /// <returns>The result of the operation.</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private int WriteStringOtherMode(int index, string? value)
-        {
-            var mode = _stringSerializationMode;
-            if (mode == 3)
-                return WriteUtf16WithLength(index, value);
-            return mode == 0
-                ? WriteUtf8WithToken(index, value)
-                : WriteUtf16WithToken(index, value);
-        }
+        { return WriteStringOtherMode<global::LuminPack.Option.LuminPackDefaultOptions>(index, value); }
 #endif
 
         /// <summary>
@@ -903,19 +766,9 @@ namespace LuminPack.Core
         /// <param name="value"></param>
         /// <param name="length"></param>
         /// <returns>The number of bytes contributed to the payload.</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteString(ref int index, string? value, int length)
-        {
-            var mode = _stringSerializationMode;
-            if (mode == 3)
-                WriteUtf16WithLength(index, value, length);
-            else if (mode == 1)
-                WriteUtf8WithLength(index, value, length);
-            else if (mode == 0)
-                WriteUtf8WithToken(index, value, length);
-            else
-                WriteUtf16WithToken(index, value, length);
-        }
+        { WriteString<global::LuminPack.Option.LuminPackDefaultOptions>(ref index, value, length); }
 
         /// <summary>
         /// Writes a string from a read-only character span.
@@ -923,18 +776,9 @@ namespace LuminPack.Core
         /// /// <param name="index"></param>
         /// <param name="value"></param>
         /// <returns>The number of bytes contributed to the payload.</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteString(ref int index, ReadOnlySpan<char> value)
-        {
-            var mode = _stringSerializationMode;
-            if (mode == 3)
-                return WriteUtf16WithLength(index, value);
-            if (mode == 1)
-                return WriteUtf8WithLength(index, value);
-            return mode == 0
-                ? WriteUtf8WithToken(index, value)
-                : WriteUtf16WithToken(index, value);
-        }
+        { return WriteString<global::LuminPack.Option.LuminPackDefaultOptions>(ref index, value); }
 
         /// <summary>Writes utf8 with token to the current output.</summary>
         /// <param name="index">The position at which the operation starts.</param>
@@ -942,32 +786,7 @@ namespace LuminPack.Core
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteUtf8WithToken(int index, string? value)
-        {
-            if (string.IsNullOrEmpty(value) || value.Length is 0)
-            {
-                EnsureCapacity(index, 1);
-                WriteStringRecordTokenHeader(ref index);
-                return 0;
-            }
-
-            var destination = (uint)index <= (uint)_bufferLength ? _bufferReference.Slice(index) : Span<byte>.Empty;
-            var status = StringSerializer.Serialize(value, destination, out var _, out var bytesWritten, replaceInvalidSequences: false);
-
-            if (status != OperationStatus.Done)
-            {
-                if (status == OperationStatus.DestinationTooSmall)
-                    bytesWritten = RetryWriteUtf8WithToken(index, value);
-                else
-                    LuminPackExceptionHelper.ThrowFailedEncoding(status);
-            }
-
-            EnsureCapacity(index, checked(bytesWritten + 1));
-            var tokenIndex = index + bytesWritten;
-            WriteStringRecordTokenHeader(ref tokenIndex);
-
-            return bytesWritten;
-
-        }
+        { return WriteUtf8WithToken<global::LuminPack.Option.LuminPackDefaultOptions>(index, value); }
 
         /// <summary>Writes utf8 with token to the current output.</summary>
         /// <param name="index">The position at which the operation starts.</param>
@@ -975,24 +794,7 @@ namespace LuminPack.Core
         /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUtf8WithToken(int index, string? value, int length)
-        {
-            if (length is 0)
-            {
-                EnsureCapacity(index, 1);
-                WriteStringRecordTokenHeader(ref index);
-                return;
-            }
-            if (length > 0) EnsureCapacity(index, checked(length + 1));
-            var status = StringSerializer.Serialize(value.AsSpan(), _bufferReference.Slice(index, length), out _, out var bytesWritten, replaceInvalidSequences: false);
-
-            if (status != OperationStatus.Done)
-            {
-                LuminPackExceptionHelper.ThrowFailedEncoding(status);
-            }
-
-            var tokenIndex = index + length;
-            WriteStringRecordTokenHeader(ref tokenIndex);
-        }
+        { WriteUtf8WithToken<global::LuminPack.Option.LuminPackDefaultOptions>(index, value, length); }
 
         /// <summary>Writes utf8 with token to the current output.</summary>
         /// <param name="index">The position at which the operation starts.</param>
@@ -1000,30 +802,7 @@ namespace LuminPack.Core
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteUtf8WithToken(int index, ReadOnlySpan<char> value)
-        {
-            if (value.Length is 0)
-            {
-                EnsureCapacity(index, 1);
-                WriteStringRecordTokenHeader(ref index);
-                return 0;
-            }
-
-            var destination = (uint)index <= (uint)_bufferLength ? _bufferReference.Slice(index) : Span<byte>.Empty;
-            var status = StringSerializer.Serialize(value, destination, out _, out var bytesWritten, replaceInvalidSequences: false);
-            if (status != OperationStatus.Done)
-            {
-                if (status == OperationStatus.DestinationTooSmall)
-                    bytesWritten = RetryWriteUtf8WithToken(index, value);
-                else
-                    LuminPackExceptionHelper.ThrowFailedEncoding(status);
-            }
-
-            EnsureCapacity(index, checked(bytesWritten + 1));
-            var tokenIndex = index + bytesWritten;
-            WriteStringRecordTokenHeader(ref tokenIndex);
-
-            return bytesWritten;
-        }
+        { return WriteUtf8WithToken<global::LuminPack.Option.LuminPackDefaultOptions>(index, value); }
 
 #if NET8_0_OR_GREATER
         /// <summary>Writes utf8 with length to the current output.</summary>
@@ -1064,8 +843,7 @@ namespace LuminPack.Core
             // general transcoder's argument frame. Validate before writing.
             if (ShortAsciiTranscoder.TryEncode(source, dest, escapeJson: false))
             {
-                Unsafe.WriteUnaligned(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index),
-                    ((ulong)(uint)value.Length << 32) | (uint)value.Length);
+                WriteReservedUtf8Header(index, value.Length, value.Length);
                 return value.Length;
             }
             return WriteUtf8WithLengthSlow(index, source, dest);
@@ -1215,25 +993,7 @@ namespace LuminPack.Core
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteUtf16WithToken(int index, string? value)
-        {
-            if (string.IsNullOrEmpty(value) || value.Length is 0)
-            {
-                EnsureCapacity(index, 2);
-                WriteStringRecordTokenHeader(ref index);
-                return 0;
-            }
-
-            int bytesWritten = checked(value.Length * sizeof(char));
-            EnsureCapacity(index, checked(bytesWritten + 2));
-            Unsafe.CopyBlockUnaligned(ref GetSpanReference(index),
-                ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), (uint)bytesWritten);
-
-            var tokenIndex = index + bytesWritten;
-
-            WriteStringRecordTokenHeader(ref tokenIndex);
-
-            return bytesWritten;
-        }
+        { return WriteUtf16WithToken<global::LuminPack.Option.LuminPackDefaultOptions>(index, value); }
 
         /// <summary>Writes utf16 with token to the current output.</summary>
         /// <param name="index">The position at which the operation starts.</param>
@@ -1241,22 +1001,7 @@ namespace LuminPack.Core
         /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void WriteUtf16WithToken(int index, string? value, int length)
-        {
-            if (length is 0)
-            {
-                EnsureCapacity(index, 2);
-                WriteStringRecordTokenHeader(ref index);
-
-                return;
-            }
-
-            if (length > 0) EnsureCapacity(index, checked(length + 2));
-            StringSerializer.Serialize(value, _bufferReference.Slice(index, length), out _, out _, SerializeMode.Utf16, replaceInvalidSequences: false);
-
-            var tokenIndex = index + length;
-
-            WriteStringRecordTokenHeader(ref tokenIndex);
-        }
+        { WriteUtf16WithToken<global::LuminPack.Option.LuminPackDefaultOptions>(index, value, length); }
 
 
 
@@ -1266,26 +1011,7 @@ namespace LuminPack.Core
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int WriteUtf16WithToken(int index, ReadOnlySpan<char> value)
-        {
-            if (value.Length is 0)
-            {
-                EnsureCapacity(index, 2);
-                WriteStringRecordTokenHeader(ref index);
-                return 0;
-            }
-
-            var length = checked(value.Length * 2);
-            EnsureCapacity(index, checked(length + 2));
-
-            Unsafe.CopyBlockUnaligned(ref GetSpanReference(index),
-                ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value)), (uint)length);
-
-            var tokenIndex = index + length;
-
-            WriteStringRecordTokenHeader(ref tokenIndex);
-
-            return length;
-        }
+        { return WriteUtf16WithToken<global::LuminPack.Option.LuminPackDefaultOptions>(index, value); }
 
         /// <summary>Copies an already reserved UTF-16 payload using exact overlapping short lanes.</summary>
         /// <param name="destination">The first reserved destination byte.</param>
@@ -1332,30 +1058,60 @@ namespace LuminPack.Core
         /// <param name="index">The position at which the operation starts.</param>
         /// <param name="value">The value consumed or produced by this operation.</param>
         /// <returns>The result of the operation.</returns>
+#if NET8_0_OR_GREATER
+        [MethodImpl(MethodImplOptions.NoInlining)]
+#else
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
+#endif
         public int WriteUtf16WithLength(int index, string? value)
         {
-            if (value is null)
+            int length = value is null ? 0 : checked(value.Length * sizeof(char));
+            if (IntPtr.Size == 8)
             {
-                EnsureCapacity(index, 4);
-                WriteStringRecordLengthHeader(ref index, LuminPackCode.NullCollection);
-                return 0;
+#if NET8_0_OR_GREATER
+                uint shortLimit = global::System.Runtime.Intrinsics.Vector256.IsHardwareAccelerated ? 64u : 32u;
+#else
+                const uint shortLimit = 16;
+#endif
+                if ((uint)length <= shortLimit && (ulong)(uint)index + (uint)length + sizeof(int) <= (uint)_bufferLength)
+                    return WriteUtf16LengthReservedCore(index, value, length);
+                return WriteUtf16LengthSlow(index, value, length);
             }
-
-            if (value.Length is 0)
-            {
-                EnsureCapacity(index, 4);
-                WriteStringRecordLengthHeader(ref index, 0);
-                return 0;
-            }
-
-            var length = checked(value.Length * sizeof(char));
             EnsureCapacity(index, checked(length + 4));
+            return WriteUtf16LengthReservedCore(index, value, length);
+        }
 
-            WriteStringRecordLengthHeader(ref index, length);
-            var startIndex = index + 4;
-            CopyUtf16Payload(ref GetSpanReference(startIndex),
-                ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), (uint)length);
+        /// <summary>Keeps growth and long payload calls outside the short UTF-16 record's register lifetimes.</summary>
+        /// <param name="index">The original record position.</param>
+        /// <param name="value">The original string, including null and empty values.</param>
+        /// <param name="length">The checked payload byte count, excluding its header.</param>
+        /// <returns>The actual payload byte count.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private int WriteUtf16LengthSlow(int index, string? value, int length)
+        {
+            EnsureCapacity(index, checked(length + sizeof(int)));
+            return WriteUtf16LengthReservedCore(index, value, length);
+        }
+
+        /// <summary>Writes one original UTF-16 length record after its complete capacity has been established.</summary>
+        /// <param name="index">The already reserved record position.</param>
+        /// <param name="value">The original string, including null and empty values.</param>
+        /// <param name="length">The checked payload byte count, excluding its header.</param>
+        /// <returns>The actual payload byte count.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private int WriteUtf16LengthReservedCore(int index, string? value, int length)
+        {
+            WriteStringRecordLengthHeader(ref index, value is null ? LuminPackCode.NullCollection : length);
+            if (length != 0)
+            {
+                // The complete payload length proves a non-null source; avoid rebuilding a nullable span.
+                CopyUtf16Payload(ref GetSpanReference(index + 4),
+#if NET8_0_OR_GREATER
+                    ref Unsafe.As<char, byte>(ref Unsafe.AsRef(in value!.GetPinnableReference())), (uint)length);
+#else
+                    ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), (uint)length);
+#endif
+            }
 
             return length;
         }

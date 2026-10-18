@@ -19,7 +19,7 @@ public class DictionaryStringWriterTest
     [InlineData(LuminPackStringEncoding.UTF16, LuminPackStringRecording.Token)]
     public void DenseSparseAndGrowingPayloadsKeepElementFraming(LuminPackStringEncoding encoding, LuminPackStringRecording recording)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding, StringRecording = recording };
+        var option = new TestSerializationProfile { StringEncoding = encoding, StringRecording = recording };
         foreach (bool sparse in new[] { false, true })
         {
             var keyStrings = new Dictionary<string, long>();
@@ -43,14 +43,13 @@ public class DictionaryStringWriterTest
             byte[] storage = new byte[200000];
             Span<byte> span = storage;
             var state = new LuminPackWriterOptionalState();
-            state.Init(option);
             var writer = new LuminPackWriter(ref span, state);
             int index = 0;
             writer.WriteCollectionHeader(ref index, keyStrings.Count);
             writer.Advance(4);
             foreach (var pair in keyStrings)
             {
-                WriteText(ref writer, pair.Key);
+                WriteText(ref writer, pair.Key, option);
                 index = writer.GetCurrentSpanIndex();
                 writer.Advance(writer.WriteUnmanaged(ref index, pair.Value));
             }
@@ -66,7 +65,7 @@ public class DictionaryStringWriterTest
             {
                 index = writer.GetCurrentSpanIndex();
                 writer.Advance(writer.WriteUnmanaged(ref index, pair.Key));
-                WriteText(ref writer, pair.Value);
+                WriteText(ref writer, pair.Value, option);
             }
             byte[] valueBytes = LuminPackSerializer.Serialize(valueStrings, option);
             Assert.Equal(storage.AsSpan(0, writer.GetCurrentSpanIndex()).ToArray(), valueBytes);
@@ -78,8 +77,8 @@ public class DictionaryStringWriterTest
             writer.Advance(4);
             foreach (var pair in bothStrings)
             {
-                WriteText(ref writer, pair.Key);
-                WriteText(ref writer, pair.Value);
+                WriteText(ref writer, pair.Key, option);
+                WriteText(ref writer, pair.Value, option);
             }
             byte[] bothBytes = LuminPackSerializer.Serialize(bothStrings, option);
             Assert.Equal(storage.AsSpan(0, writer.GetCurrentSpanIndex()).ToArray(), bothBytes);
@@ -90,6 +89,7 @@ public class DictionaryStringWriterTest
     /// <summary>Writes one element through the original string core and recording-width lookup.</summary>
     /// <param name="writer">The caller-owned destination.</param>
     /// <param name="value">The element's text.</param>
-    private static void WriteText(ref LuminPackWriter writer, string value)
-        => writer.Advance(writer.WriteString(value) + writer.StringRecordLength());
+    /// <param name="option">The statically selected test profile.</param>
+    private static void WriteText(ref LuminPackWriter writer, string value, TestSerializationProfile option)
+        => writer.Advance(writer.WriteStringFor(option, value) + writer.StringRecordLengthFor(option));
 }

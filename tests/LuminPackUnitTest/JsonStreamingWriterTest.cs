@@ -17,7 +17,7 @@ public class JsonStreamingWriterTest
     [InlineData(LuminPackStringEncoding.UTF16)]
     public void StreamingMatchesContiguousOutputAcrossChunks(LuminPackStringEncoding encoding)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding };
+        var option = new TestSerializationProfile { StringEncoding = encoding };
         var value = new IBufferModel
         {
             Id = 123,
@@ -25,8 +25,7 @@ public class JsonStreamingWriterTest
             Numbers = Enumerable.Range(0, 2000).ToList()
         };
         using var contiguous = new LuminPack.Utility.LuminBufferWriter(true);
-        contiguous.Option.StringEncoding = encoding;
-        LuminPackSerializer.SerializeJson(value, contiguous);
+        LuminPackSerializer.SerializeJson(value, contiguous, option);
         byte[] expectedBytes = contiguous.GetSpan().ToArray();
         var output = new ChunkWriter();
         LuminPackSerializer.SerializeJson(value, output, option);
@@ -42,7 +41,7 @@ public class JsonStreamingWriterTest
     [InlineData(LuminPackStringEncoding.UTF16)]
     public void RawFragmentsAndEscapedPropertyNamesCrossChunks(LuminPackStringEncoding encoding)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding };
+        var option = new TestSerializationProfile { StringEncoding = encoding };
         string name = new string('\u4e2d', 4000) + "\"\\\n😀";
         var value = new Dictionary<string, string> { [name] = new string('x', 9000) + "😀" };
         var output = new ChunkWriter();

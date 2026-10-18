@@ -7,6 +7,8 @@ namespace LuminPack.Code
     /// <summary>Describes the type, storage, ordering, and formatting policy of one serialized member.</summary>
     public sealed class LuminDataField
     {
+        /// <summary>Stores the member's immutable declaration-time serialization profile.</summary>
+        internal LuminPack.SourceGenerator.CompiledOptions Options;
         /// <summary>Stores the type.</summary>
         public LuminFiledType Type;
         /// <summary>Stores the name.</summary>

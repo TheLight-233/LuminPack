@@ -71,8 +71,9 @@ internal static class JsonOperationTemplates
     /// <summary>Extracts the shared JSON cache from a completed operation template.</summary>
     /// <param name="source">The template containing the retained helper.</param>
     /// <param name="metadata">The consuming parse settings.</param>
+    /// <param name="compilation">The consuming compilation's profile and type declarations.</param>
     /// <returns>Only the helper and its original enclosing declarations.</returns>
-    internal static string Support(string source, MetaInfo metadata)
+    internal static string Support(string source, MetaInfo metadata, Compilation compilation)
     {
         var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions).GetRoot();
         var container = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
@@ -81,6 +82,8 @@ internal static class JsonOperationTemplates
             .Where(type => type.Identifier.ValueText.StartsWith("Json_", StringComparison.Ordinal));
         var support = root.ReplaceNode(container, container.WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(helpers)))
             .NormalizeWhitespace("    ", Environment.NewLine).ToFullString();
+        support = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(null, compilation))
+            .Visit(CSharpSyntaxTree.ParseText(support, metadata.ParseOptions).GetRoot()).NormalizeWhitespace().ToFullString();
         return GeneratedSourceDocumentation.Complete(support, metadata.ParseOptions);
     }
 

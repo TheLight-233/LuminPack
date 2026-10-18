@@ -118,7 +118,7 @@ public class ShortAsciiTranscoderTest
     [InlineData(LuminPackStringEncoding.UTF16)]
     public void EveryAsciiCharacterEscapesAndRoundtripsAtEveryVectorPosition(LuminPackStringEncoding encoding)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding, ValidateJsonSyntax = true };
+        var option = new TestSerializationProfile { StringEncoding = encoding, ValidateJsonSyntax = true };
         for (int length = 1; length <= 32; length++)
             for (int position = 0; position < length; position++)
                 for (int code = 0; code < 128; code++)

@@ -124,6 +124,27 @@ var result = LuminPackSerializer.Deserialize<Person>(buffer);
 var resultJson = LuminPackSerializer.DeserializeJson<Person>(bufferJson);
 ```
 
+### 复用与追加缓冲区
+
+接收 `LuminBufferWriter` 的二进制和 JSON 写入重载从当前游标追加，保留此前内容及引用跟踪状态。调用方独占缓冲区，并负责在开始独立会话前重置：
+
+```csharp
+using var output = new LuminPack.Utility.LuminBufferWriter(true);
+LuminPackSerializer.Serialize(item, output);
+int firstEnd = output.CurrentIndex;
+LuminPackSerializer.Serialize(item, output);
+// output.GetSpan() contains both records, in order.
+
+output.ResetForReuse(); // Clear payload and reference tables; retain native capacity.
+LuminPackSerializer.Serialize(item, output);
+```
+
+`ResetForReuse()` 清空内容和读写引用表并保留容量；`Reset()` 也清空引用表，并释放非空缓冲区的原生存储。`ResetCore()` 及复制／压缩的 `AndReset` 方法只清空内容，不清空引用表。写入抛出异常后，已写内容和引用状态仍保留；再次开始独立写入前调用 `ResetForReuse()`。租借缓冲区归还池时会完整清理。
+
+如果只重新开始写入会话，需要保留读取状态，可以依次调用 `output.ResetCore()` 和 `output.WriterState.ResetOperationState()`；这会清空内容和写引用表，读取引用表保持不变。
+
+多次追加的循环引用对象共享引用表，需要用同一个 `LuminPackReader` 和读取状态依次读取；独立读取各条记录时，应在写入每条记录前完整重置引用状态。JSON 追加不会自动插入分隔符，调用方应记录文档边界。返回数组／字符串的便捷重载自行管理缓冲区和状态。
+
 <a id="basetypes"></a>
 ## 📋 LuminPack基础类型
 
@@ -228,6 +249,22 @@ LuminPack不依赖构造函数反序列化，因此您可以随意定义构造�
 LuminPack默认支持 **`0 ~ 249`** 个成员字段
 
 <a id="luminpackableobject"></a>
+### 序列化大小担保
+
+当类型的完整二进制序列化长度有明确上限时，可以使用 `[LuminPackBounded(maxBytes)]`。集合可按元素数量一次预留容量，担保类型内部的容器写入复用这份预留。
+
+```csharp
+[LuminPackable, LuminPackBounded(128)]
+public sealed class SmallRecord
+{
+    public int Id;
+    public string Label = "";
+    public int[] Values = Array.Empty<int>();
+}
+```
+
+例如上面的类型，在 `Label.Length <= 10` 且 `Values.Length <= 16` 时，包含记录头及所有嵌套数据的长度可担保不超过 128 字节。使用者负责保证所有实例在所用编码选项下满足上限；错误担保可能导致越界写。没有可靠上限的类型应保留默认容量检查。游标始终按实际写入长度前进，担保不会改变数据格式。
+
 ## 🔍 `[LuminPackableObject]`
 
 \[LuminPackableObject]可以作用于任何字段以及属性，这将告诉LuminPackCodeGenerator不要直接解析该字段并写入Myclass的解析器，而是通过注册在LuminPack的Myclass2的解析器去解析。通常情况下，这会损失大概30%的性能，因此如果您遇到源代码生成器生成错误代码等情况，可以尝试用\[LuminPackableObject]标记字段或属性。
@@ -535,12 +572,12 @@ private static void ReadFooA(ref LuminPackReader reader, ref global::MyLib.IFoo 
 private static void WriteJsonFooA(ref LuminPackJsonWriter writer, ref global::MyLib.IFoo value)
 {
     writer.WriteObjectStart();
-    if (writer.Option.StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
+    if (default(LuminPack.Option.LuminPackDefaultOptions).StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
         writer.WritePropertyName(LuminPackConstUtf8.TypeU8);
     else
         writer.WritePropertyName(LuminPackConstUtf8.TypeU16);
     writer.WriteInt(0);
-    if (writer.Option.StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
+    if (default(LuminPack.Option.LuminPackDefaultOptions).StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
         writer.WritePropertyName(LuminPackConstUtf8.ValueU8);
     else
         writer.WritePropertyName(LuminPackConstUtf8.ValueU16);
@@ -569,6 +606,42 @@ unsafe
 * 二进制写 / 读、JSON 写 / 读四个方法指针均为必填；`Sizeof` 对该类注册成员仍会抛出（与生成成员的槽行为一致）。
 * 注册表定义在基类 partial 上（基类自身程序集生成），`Register` 调用与序列化发生在同一进程内即可，跨程序集使用。
 * 同样适用于"基类声明在序列化程序集、子类未被生成器列入 union"的场景（如未标记 `[LuminPackable]` 的子类）。
+
+## 编译期序列化选项
+
+`LuminPackOption` 可以声明在程序集、类型、字段和属性上。只覆盖特性中显式设置的属性，其余选项继承外层作用域。二进制格式允许不同字段使用不同字符串编码和记录方式；读写双方必须使用一致的声明。
+
+```csharp
+using LuminPack.Attribute;
+using LuminPack.Option;
+
+[assembly: LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF16)]
+
+[LuminPackable]
+public sealed class Message
+{
+    public string Title { get; set; } = "";
+
+    [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8,
+        StringRecording = LuminPackStringRecording.Token)]
+    public string Label { get; set; } = "";
+}
+```
+
+可设置 `StringEncoding`、`StringRecording`、`MaxJsonDepth`、`ValidateJsonSyntax` 和 `StandardFormat`。`StandardFormat` 是提供给显式格式化与 Custom 核心方法的常量，不会自动改变内置数值、日期格式器的规范表示。
+
+JSON 的编码、深度限制与严格语法校验应用于整个文档，由根类型决定；字段特性不会在一个文档内混用两种编码。未声明时，默认 UTF-8、长度记录、最大 JSON 深度 1024，使用可信输入读取路径。
+
+显式选择其他配置时，可以使用无状态值类型配置参数。便捷入口、流式入口、异步入口和接收 Writer／Reader 的入口均传递同一个编译期配置，例如：
+
+```csharp
+byte[] bytes = LuminPackSerializer.Serialize<Message, LuminPackUtf16LengthOptions>(message);
+Message copy = LuminPackSerializer.Deserialize<Message, LuminPackUtf16LengthOptions>(bytes);
+```
+
+内置配置包括 `LuminPackDefaultOptions`、`LuminPackUtf8TokenOptions`、`LuminPackUtf16LengthOptions`、`LuminPackUtf16TokenOptions`。显式标记的二进制字段仍遵循它自己的声明。缓冲区只负责数据和引用跟踪，不保存可变配置对象。
+
+手写格式器可以直接调用 `writer.WriteString<TOptions>(...)`、`reader.ReadStringAndAdvance<TOptions>(...)` 等核心方法，并用 `LuminPackSerializer.Register<T, TOptions>(...)` 注册对应配置的已闭合方法指针。未按配置单独注册时，二进制格式器保留自己定义的表示。普通 JSON 注册采用 UTF-8；UTF-16 文档须提供对应配置的 JSON 注册，避免混用编码。
 
 <a id="custom-formatter"></a>
 ## ✍️ GeneratorType.Custom —— 用户手写格式化器
@@ -733,7 +806,7 @@ LuminPack 针对 Unity 和 .NET Standard 2.1 进行了专门适配与优化，�
 <a id="json-spec"></a>
 ## 📜 JSON 格式规范
 
-LuminPack 按照以下规则生成 JSON 文本。默认使用 UTF-8 处理字符串，也可通过 `LuminPackSerializerOption.Utf16` 选择 UTF-16。序列化和反序列化必须使用一致的字符编码选项。
+LuminPack 按照以下规则生成 JSON 文本。默认使用 UTF-8 处理字符串，也可通过根类型上的 `[LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF16)]` 选择 UTF-16。序列化和反序列化必须使用一致的字符编码选项。
 
 ### 基础值
 
@@ -745,7 +818,7 @@ LuminPack 按照以下规则生成 JSON 文本。默认使用 UTF-8 处理字符
 | `string`、`char` | JSON string，并按 JSON 规则转义 |
 | `Guid`、`DateTime`、`DateTimeOffset`、`TimeSpan` 等 | JSON string |
 
-JSON number 只能保证表示有限浮点值；`NaN`、`PositiveInfinity` 和 `NegativeInfinity` 不属于标准 JSON 数字，不应用于需要跨库交换的 JSON 数据。LuminPack 在序列化这些值时抛出异常，反序列化时超出目标类型表示范围的数字（如 `1e999`）同样被拒绝。反序列化默认限制 JSON 嵌套深度（`LuminPackSerializerOption.MaxJsonDepth`，默认 1024）。
+JSON number 只能保证表示有限浮点值；`NaN`、`PositiveInfinity` 和 `NegativeInfinity` 不属于标准 JSON 数字，不应用于需要跨库交换的 JSON 数据。LuminPack 在序列化这些值时抛出异常，反序列化时超出目标类型表示范围的数字（如 `1e999`）同样被拒绝。反序列化默认限制 JSON 嵌套深度（`LuminPackOptionAttribute.MaxJsonDepth`，默认 1024）。
 
 ### 对象
 

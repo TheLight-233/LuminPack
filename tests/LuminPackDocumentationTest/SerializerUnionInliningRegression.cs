@@ -56,19 +56,27 @@ internal static class SerializerUnionInliningRegression
                         if (value is not UnknownCat && LuminPackSerializer.Sizeof(value) != LuminPackSerializer.Sizeof<Animal>(value))
                             throw new Exception("Union size evaluation changed.");
                         foreach (var encoding in new[] { LuminPack.Option.LuminPackStringEncoding.UTF8, LuminPack.Option.LuminPackStringEncoding.UTF16 })
-                        {
-                            var option = new LuminPack.Option.LuminPackSerializerOption { StringEncoding = encoding };
-                            Events.Clear();
-                            string expectedJson = LuminPackSerializer.SerializeJson<Animal>(value, option);
-                            callbacks = string.Join(",", Events);
-                            Events.Clear();
-                            string actualJson = LuminPackSerializer.SerializeJson(value, option);
-                            if (actualJson != expectedJson || callbacks != string.Join(",", Events)) throw new Exception("Union JSON wire or callbacks changed.");
-                            Animal jsonValue = null!;
-                            LuminPackSerializer.DeserializeJson(actualJson, ref jsonValue, option);
-                            if (value is null ? jsonValue is not null : jsonValue is null) throw new Exception("Union JSON null changed.");
-                        }
-                        var buffer = LuminBufferWriterPool.Rent();
+            {
+                if (encoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)
+                    RunProfile<global::LuminPack.Option.LuminPackDefaultOptions>();
+                else
+                    RunProfile<global::LuminPack.Option.LuminPackUtf16LengthOptions>();
+                void RunProfile<TProfile>()
+                    where TProfile : struct, global::LuminPack.Option.ILuminPackOptions
+                {
+                    Events.Clear();
+                    string expectedJson = LuminPackSerializer.SerializeJson<Animal, TProfile>(value);
+                    callbacks = string.Join(",", Events);
+                    Events.Clear();
+                    string actualJson = LuminPackSerializer.SerializeJson<TProfile>(value);
+                    if (actualJson != expectedJson || callbacks != string.Join(",", Events))
+                        throw new Exception("Union JSON wire or callbacks changed.");
+                    Animal jsonValue = null!;
+                    LuminPackSerializer.DeserializeJson<TProfile>(actualJson, ref jsonValue);
+                    if (value is null ? jsonValue is not null : jsonValue is null)
+                        throw new Exception("Union JSON null changed.");
+                }
+            }            var buffer = LuminBufferWriterPool.Rent();
                         try
                         {
                             Events.Clear();
@@ -140,11 +148,7 @@ internal static class SerializerUnionInliningRegression
                 // Convenience entries forward to the sole state implementation. The state implementation
                 // retains the hidden virtual Union boundary and never dispatches through a type map.
                 Require(!perTypeFormatter, "A union entry retained a formatter call: " + method);
-                var implementations = calls.Select(call => model.GetSymbolInfo(call).Symbol as IMethodSymbol)
-                    .Where(symbol => symbol?.ContainingType.Name == "LuminPackSerializer" && symbol.Parameters.Length == 2 &&
-                        symbol.Parameters[0].Type.ContainingNamespace.ToDisplayString() == "LuminPack.Core")
-                    .SelectMany(symbol => symbol!.DeclaringSyntaxReferences.Select(reference => reference.GetSyntax()))
-                    .OfType<MethodDeclarationSyntax>().ToArray();
+                var implementations = StateImplementations(method, output).ToArray();
                 Require(implementations.Length == 1, "A Union convenience entry must call exactly one state implementation: " + name);
                 calls = implementations[0].DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
 
@@ -179,6 +183,31 @@ internal static class SerializerUnionInliningRegression
         var assembly = Assembly.Load(image.ToArray());
         Require((int)assembly.GetType("Entry")!.GetMethod("Check")!.Invoke(null, null)! == 11, "Union execution matrix was incomplete.");
         Console.WriteLine("Passed direct class/interface union cases, wide tags, inherited virtual fallback, closed/open generic priority, callback order, and generic wire parity.");
+    }
+
+    /// <summary>Follows declaration and profile convenience forwards to the unique complete state body.</summary>
+    /// <param name="entry">A concrete convenience entry.</param>
+    /// <param name="compilation">The generated compilation providing bound calls.</param>
+    /// <returns>Complete state implementations reachable through same-operation forwards.</returns>
+    private static IEnumerable<MethodDeclarationSyntax> StateImplementations(MethodDeclarationSyntax entry, Compilation compilation)
+    {
+        var pending = new Queue<MethodDeclarationSyntax>();
+        var visited = new HashSet<MethodDeclarationSyntax>();
+        pending.Enqueue(entry);
+        while (pending.TryDequeue(out var method))
+        {
+            if (!visited.Add(method)) continue;
+            var model = compilation.GetSemanticModel(method.SyntaxTree);
+            var forwards = method.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                .Select(call => model.GetSymbolInfo(call).Symbol as IMethodSymbol)
+                .Where(symbol => symbol?.ContainingType.Name == "LuminPackSerializer" && symbol.Name == entry.Identifier.ValueText)
+                .SelectMany(symbol => symbol!.DeclaringSyntaxReferences.Select(reference => reference.GetSyntax()))
+                .OfType<MethodDeclarationSyntax>().ToArray();
+            bool state = method.ParameterList.Parameters.Count == 2 &&
+                model.GetDeclaredSymbol(method)!.Parameters[0].Type.ContainingNamespace.ToDisplayString() == "LuminPack.Core";
+            if (state && forwards.Length == 0) yield return method;
+            else foreach (var forward in forwards) pending.Enqueue(forward);
+        }
     }
 
     /// <summary>Reports a union expansion regression.</summary>

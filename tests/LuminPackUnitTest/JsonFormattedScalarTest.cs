@@ -253,7 +253,7 @@ public class JsonFormattedScalarTest
     {
         Assert.Equal(expected, LuminPackSerializer.SerializeJson(value));
 
-        string utf16 = LuminPackSerializer.SerializeJson(value, new LuminPackSerializerOption
+        string utf16 = LuminPackSerializer.SerializeJson(value, new TestSerializationProfile
         {
             StringEncoding = LuminPackStringEncoding.UTF16
         });

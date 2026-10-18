@@ -1,8 +1,26 @@
 using BenchmarkDotNet.Running;
 
+if (args is ["--codegen-capacity-tiers", var capacityTierCodegenImage])
+{
+    SerializerCodegenProbe.RunCapacityTiers(capacityTierCodegenImage);
+    return;
+}
+
+if (args.Length >= 2 && args[0] == "--ratios-capacity-tiers")
+{
+    LibraryRatioProbe.RunCapacityTiers(args.Skip(1).ToArray());
+    return;
+}
+
 if (args.Length >= 3 && args[0] == "--capacity-ratios")
 {
     LibraryRatioProbe.RunCapacity(args[1], args.Skip(2).ToArray());
+    return;
+}
+
+if (args.Length >= 3 && args[0] == "--capacity-common-ratios")
+{
+    LibraryRatioProbe.RunCapacityCommon(args[1], args.Skip(2).ToArray());
     return;
 }
 
@@ -147,6 +165,9 @@ if (args.Length < 4 || args[0] != "--baseline" || args[2] != "--candidate")
     Console.Error.WriteLine("       --il <build-directory> <payload-type-name-fragment> [exact-method-name]");
     Console.Error.WriteLine("       --ratios <build-directory> [additional-build-directory ...]");
     Console.Error.WriteLine("       --ratios-write <build-directory> [additional-build-directory ...]");
+    Console.Error.WriteLine("       --capacity-common-ratios <fixture> <build-directory> [additional-build-directory ...]");
+    Console.Error.WriteLine("       --ratios-capacity-tiers <build-directory> [additional-build-directory ...]");
+    Console.Error.WriteLine("       --codegen-capacity-tiers <build-directory>");
     Console.Error.WriteLine("       --ratios-character <build-directory> [additional-build-directory ...]");
     Console.Error.WriteLine("       --ratios-strings <shape> <build-directory> [additional-build-directory ...]");
     Console.Error.WriteLine("       --ratios-dictionary-sides <build-directory> [additional-build-directory ...]");

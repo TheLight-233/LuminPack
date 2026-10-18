@@ -97,7 +97,12 @@ public class ClassFieldCopyBenchmark
                 _lp = LuminPackSerializer.Serialize(primitive);
                 _mp = MemoryPackSerializer.Serialize(primitive);
                 _np = NinoSerializer.Serialize(primitive);
-                _luminWrite = () => LuminPackSerializer.Serialize(primitive, _lumin);
+                _luminWrite = () =>
+                {
+                    _lumin.ResetCore();
+                    _lumin.WriterState.ResetOperationState();
+                    LuminPackSerializer.Serialize(primitive, _lumin);
+                };
                 _memoryWrite = () => { _memory.ResetWrittenCount(); MemoryPackSerializer.Serialize(_memory, primitive); };
                 _ninoWrite = () => { _nino.ResetWrittenCount(); NinoSerializer.Serialize(primitive, _nino); };
                 _luminRead = () => _sink = LuminPackSerializer.Deserialize<PrimitiveFieldGroup>(_lp);
@@ -109,7 +114,12 @@ public class ClassFieldCopyBenchmark
                 _lp = LuminPackSerializer.Serialize(structs);
                 _mp = MemoryPackSerializer.Serialize(structs);
                 _np = NinoSerializer.Serialize(structs);
-                _luminWrite = () => LuminPackSerializer.Serialize(structs, _lumin);
+                _luminWrite = () =>
+                {
+                    _lumin.ResetCore();
+                    _lumin.WriterState.ResetOperationState();
+                    LuminPackSerializer.Serialize(structs, _lumin);
+                };
                 _memoryWrite = () => { _memory.ResetWrittenCount(); MemoryPackSerializer.Serialize(_memory, structs); };
                 _ninoWrite = () => { _nino.ResetWrittenCount(); NinoSerializer.Serialize(structs, _nino); };
                 _luminRead = () => _sink = LuminPackSerializer.Deserialize<StructFieldGroup>(_lp);
@@ -121,7 +131,12 @@ public class ClassFieldCopyBenchmark
                 _lp = LuminPackSerializer.Serialize(gapped);
                 _mp = MemoryPackSerializer.Serialize(gapped);
                 _np = NinoSerializer.Serialize(gapped);
-                _luminWrite = () => LuminPackSerializer.Serialize(gapped, _lumin);
+                _luminWrite = () =>
+                {
+                    _lumin.ResetCore();
+                    _lumin.WriterState.ResetOperationState();
+                    LuminPackSerializer.Serialize(gapped, _lumin);
+                };
                 _memoryWrite = () => { _memory.ResetWrittenCount(); MemoryPackSerializer.Serialize(_memory, gapped); };
                 _ninoWrite = () => { _nino.ResetWrittenCount(); NinoSerializer.Serialize(gapped, _nino); };
                 _luminRead = () => _sink = LuminPackSerializer.Deserialize<GappedFieldGroup>(_lp);

@@ -19,7 +19,7 @@ public class JsonFusedStringScannerTest
     [InlineData(LuminPackStringEncoding.UTF16, true)]
     public void EscapesControlsAndTruncationsAgreeAcrossScanBoundaries(LuminPackStringEncoding encoding, bool strict)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding, ValidateJsonSyntax = strict };
+        var option = new TestSerializationProfile { StringEncoding = encoding, ValidateJsonSyntax = strict };
         foreach (int length in new[] { 0, 1, 7, 15, 16, 17, 24, 31, 32, 63, 128 })
         {
             string prefix = new('x', length);

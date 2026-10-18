@@ -41,6 +41,7 @@ namespace LuminPack.SourceGenerator
                 Metadata = metadata;
                 Types = types;
                 Compilation = compilation;
+                CurrentOptions = CompiledOptions.Resolve(mainSymbol, compilation);
             }
 
             internal ISymbol CurrentSymbol;
@@ -49,6 +50,7 @@ namespace LuminPack.SourceGenerator
             internal readonly MetaInfo Metadata;
             internal readonly CompilationTypeAnalysis Types;
             internal readonly Compilation Compilation;
+            internal CompiledOptions CurrentOptions;
             internal readonly HashSet<INamedTypeSymbol> ProcessedTypes =
                 new HashSet<INamedTypeSymbol>(SymbolEqualityComparer.Default);
         }

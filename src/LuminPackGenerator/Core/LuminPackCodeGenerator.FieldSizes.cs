@@ -15,6 +15,8 @@ public static partial class LuminPackCodeGenerator
     /// <returns>The result of the operation.</returns>
     private static string GetSerializeFieldLength(LuminDataField field, int depth, string stringRecordLength, string multList = "_")
     {
+        if (field.Type == LuminFiledType.String && field.Options?.IsDeclared == true)
+            stringRecordLength = field.Options.HeaderLength.ToString(System.Globalization.CultureInfo.InvariantCulture);
         return GetFieldLength(field, depth, multList, "writer").Replace("writer.StringRecordLength()", stringRecordLength);
     }
 

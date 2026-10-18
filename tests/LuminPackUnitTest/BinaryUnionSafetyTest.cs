@@ -288,12 +288,12 @@ internal static class BinaryUnionSafetyTest
     private static void WriteJsonRegisteredMember(ref LuminPackJsonWriter writer, ref IFastInterfaceUnion value)
     {
         writer.WriteObjectStart();
-        if (writer.Option.StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
+        if (default(LuminPack.Option.LuminPackDefaultOptions).StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
             writer.WritePropertyName(LuminPackConstUtf8.TypeU8);
         else
             writer.WritePropertyName(LuminPackConstUtf8.TypeU16);
         writer.WriteInt(100);
-        if (writer.Option.StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
+        if (default(LuminPack.Option.LuminPackDefaultOptions).StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
             writer.WritePropertyName(LuminPackConstUtf8.ValueU8);
         else
             writer.WritePropertyName(LuminPackConstUtf8.ValueU16);

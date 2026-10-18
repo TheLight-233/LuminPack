@@ -9,16 +9,14 @@ public static class LuminPackEvaluatorOptionalStatePool
     private static readonly ConcurrentQueue<LuminPackEvaluatorOptionState> _queue = new();
 
     /// <summary>Obtains a reusable instance from the pool, creating one when needed.</summary>
-    /// <param name="options">The configuration to apply to this operation.</param>
     /// <returns>The result of the operation.</returns>
-    public static LuminPackEvaluatorOptionState Rent(LuminPackSerializerOption? options)
+    public static LuminPackEvaluatorOptionState Rent()
     {
         if (!_queue.TryDequeue(out var state))
         {
             state = new LuminPackEvaluatorOptionState();
         }
 
-        state.Init(options);
         return state;
     }
 
@@ -40,16 +38,12 @@ public sealed class LuminPackEvaluatorOptionState : IDisposable
     /// <summary>Gets or sets the object to ref.</summary>
     private Dictionary<object, uint> ObjectToRef { get; set; }
 
-    /// <summary>Gets or sets the option.</summary>
-    public LuminPackSerializerOption Option { get; private set; }
-
     /// <summary>Initializes a new instance of <c>LuminPackEvaluatorOptionState</c>.</summary>
-    /// <param name="option">The configuration to apply to this operation.</param>
-    public LuminPackEvaluatorOptionState(LuminPackSerializerOption? option = null)
+    public LuminPackEvaluatorOptionState()
     {
         ObjectToRef = new Dictionary<object, uint>(ReferenceEqualityComparer.Instance);
         _nextId = 0;
-        Option = option ?? LuminPackSerializerOption.InternalDefault;
+
     }
 
     /// <summary>Initializes a new instance of <c>LuminPackEvaluatorOptionState</c>.</summary>
@@ -58,21 +52,14 @@ public sealed class LuminPackEvaluatorOptionState : IDisposable
     {
         ObjectToRef = new Dictionary<object, uint>(ReferenceEqualityComparer.Instance);
         _nextId = 0;
-        Option = LuminPackSerializerOption.InternalDefault;
-    }
 
-    /// <summary>Initializes operation state with the supplied serialization options.</summary>
-    /// <param name="options">The configuration to apply to this operation.</param>
-    public void Init(LuminPackSerializerOption? options)
-    {
-        Option = options ?? LuminPackSerializerOption.InternalDefault;
     }
 
     /// <summary>Clears state retained by the previous operation so it can be reused.</summary>
     public void Reset()
     {
         ObjectToRef.Clear();
-        Option = null!;
+
         _nextId = 0;
     }
 
@@ -109,6 +96,6 @@ public sealed class LuminPackEvaluatorOptionState : IDisposable
     /// <summary>Releases the resources or pooled state owned by this instance.</summary>
     void IDisposable.Dispose()
     {
-        Option = null;
+
     }
 }

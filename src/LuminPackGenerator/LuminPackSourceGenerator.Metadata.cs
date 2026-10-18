@@ -60,6 +60,11 @@ namespace LuminPack.SourceGenerator
         {
             var typeSymbol = (INamedTypeSymbol)symbol;
 
+            if (typeSymbol.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackBoundedAttribute") &&
+                !CodeEmitters.EmitterTypeTraits.TryGetBoundedMaxBytes(typeSymbol, out _))
+                TypeMetaChecker.CurrentDiagnostics.Add(Diagnostic.Create(DiagnosticDescriptors.InvalidBoundedSize,
+                    typeSymbol.Locations.FirstOrDefault(), typeSymbol.ToDisplayString()));
+
             if (typeSymbol.ContainingType != null)
             {
                 CheckNestedClassAccessibility(typeSymbol);
@@ -520,6 +525,7 @@ namespace LuminPack.SourceGenerator
 
                         var field = new LuminDataField
                         {
+                            Options = CompiledOptions.ResolveMember(member, _analysisState.CurrentOptions),
                             Name = member.Name,
                             FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             TypeSymbol = member.Type,
@@ -602,6 +608,7 @@ namespace LuminPack.SourceGenerator
 
                         var field = new LuminDataField
                         {
+                            Options = CompiledOptions.ResolveMember(fieldMember, _analysisState.CurrentOptions),
                             Name = fieldMember.Name,
                             FullTypeName = fieldMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             TypeSymbol = fieldMember.Type,

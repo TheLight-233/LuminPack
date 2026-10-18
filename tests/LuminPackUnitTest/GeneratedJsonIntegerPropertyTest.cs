@@ -21,7 +21,7 @@ public class GeneratedJsonIntegerPropertyTest
     [InlineData(LuminPackStringEncoding.UTF16)]
     public void GeneratedPropertiesKeepIntegerExtremesNamesAndFallbacks(LuminPackStringEncoding encoding)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding };
+        var option = new TestSerializationProfile { StringEncoding = encoding };
         var jsonOption = new JsonSerializerOptions
         {
             IncludeFields = true,
@@ -121,12 +121,9 @@ public class GeneratedJsonIntegerPropertyTest
         static void Write(byte[] bytes, int length, int cursor, bool utf16)
         {
             Span<byte> span = bytes.AsSpan(1, bytes.Length - 2);
-            var writer = new LuminPackJsonWriter(ref span, new LuminPackWriterOptionalState(new LuminPackSerializerOption
-            {
-                StringEncoding = utf16 ? LuminPackStringEncoding.UTF16 : LuminPackStringEncoding.UTF8
-            }));
+            var writer = new LuminPackJsonWriter(ref span, new LuminPackWriterOptionalState());
             writer.CurrentIndex = cursor;
-            writer.WriteGeneratedInteger(0, 0, length, 0);
+            if (utf16) writer.WriteGeneratedInteger<LuminPackUtf16LengthOptions>(0, 0, length, 0); else writer.WriteGeneratedInteger<LuminPackDefaultOptions>(0, 0, length, 0);
         }
     }
 

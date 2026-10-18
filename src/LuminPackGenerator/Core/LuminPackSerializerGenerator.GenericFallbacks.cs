@@ -53,7 +53,7 @@ public static partial class LuminPackSerializerGenerator
             string modifier = write ? "in" : "ref";
             sb.AppendLine("        /// <summary>Processes <typeparamref name=\"T\"/> using the supplied operation state.</summary>");
             sb.AppendLine("        /// <typeparam name=\"T\">The serialized payload type.</typeparam>");
-            sb.AppendLine("        /// <param name=\"state\">The existing operation state, including options and reference tracking.</param>");
+            sb.AppendLine("        /// <param name=\"state\">The existing operation state, including its cursor and reference tracking.</param>");
             sb.AppendLine("        /// <param name=\"value\">The payload storage.</param>");
             sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
             sb.Append("        public static void ").Append(operation).Append("<T>(ref global::LuminPack.Core.LuminPack").Append(state)

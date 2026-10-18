@@ -56,7 +56,7 @@ public static partial class LuminPackExtensionGenerator
     /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
     /// <param name="json">The json used by this operation.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
-    private static bool CanRegisterFormatter(ITypeSymbol type, Compilation compilation, bool json)
+    internal static bool CanRegisterFormatter(ITypeSymbol type, Compilation compilation, bool json)
     {
         if (IsCustomGeneratorType(type))
         {
@@ -86,7 +86,7 @@ public static partial class LuminPackExtensionGenerator
     /// <param name="type">The type or symbol to analyze.</param>
     /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
-    private static bool CanRegisterCalculateFormatter(ITypeSymbol type, Compilation compilation)
+    internal static bool CanRegisterCalculateFormatter(ITypeSymbol type, Compilation compilation)
     {
         if (IsCustomGeneratorType(type))
             return CustomFormatterAnalyzer.Analyze((INamedTypeSymbol)type).CalculateOffset != null;

@@ -125,4 +125,69 @@ internal static class EmitterTypeTraits
             _ => false
         };
     }
+
+    /// <summary>Fully qualified name of the bounded-size guarantee attribute.</summary>
+    private const string BoundedAttributeName = "LuminPack.Attribute.LuminPackBoundedAttribute";
+
+    /// <summary>Reads the guaranteed maximum serialized length declared by the bounded-size attribute.</summary>
+    /// <param name="type">The type or symbol to analyze.</param>
+    /// <param name="maxBytes">Receives the guaranteed maximum complete serialized length in bytes.</param>
+    /// <returns>Whether the type declares a usable bounded-size guarantee.</returns>
+    internal static bool TryGetBoundedMaxBytes(ITypeSymbol type, out int maxBytes)
+    {
+        maxBytes = 0;
+        if (type is null) return false;
+        foreach (AttributeData attribute in type.GetAttributes())
+        {
+            if (attribute.AttributeClass?.ToDisplayString() != BoundedAttributeName) continue;
+            if (attribute.ConstructorArguments.Length != 1) return false;
+            if (attribute.ConstructorArguments[0].Value is not int declared || declared <= 0) return false;
+            maxBytes = declared;
+            return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Tries to express the serialized upper bound of one value of the supplied type as C# source, using
+    /// <c>Unsafe.SizeOf</c> for existing raw values or an explicit complete-record guarantee. Containers,
+    /// nested object graphs, Union slots, Custom formatters and tolerant/circle-reference records are not
+    /// expressible and therefore fall back to the per-element check.
+    /// </summary>
+    /// <param name="type">The type whose value is being written.</param>
+    /// <param name="boundExpression">Receives a C# expression for the element bound.</param>
+    /// <returns>Whether a statically expressible upper bound exists.</returns>
+    internal static bool TryGetElementUpperBound(ITypeSymbol type, out string boundExpression)
+    {
+        boundExpression = null;
+        if (type is null) return false;
+
+        if (TryGetBoundedMaxBytes(type, out int boundedMaxBytes))
+        {
+            // The guarantee covers the complete record, so a container can reserve count * MaxBytes once.
+            boundExpression = boundedMaxBytes.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return true;
+        }
+
+        if (type.SpecialType == SpecialType.System_String)
+        {
+            // String bounds require a container-local Length prescan rather than a constant element size.
+            return false;
+        }
+
+        if (type is INamedTypeSymbol named && named.GetAttributes().Any(attribute =>
+            attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE) &&
+            TypeMetaChecker.CheckGeneratorType(named) != GeneratorType.Object) return false;
+        if (type.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == "System.Runtime.CompilerServices.UnionAttribute")) return false;
+        if (TryGetIsUnmanaged(type, out bool isUnmanaged) && isUnmanaged)
+        {
+            boundExpression = "global::System.Runtime.CompilerServices.Unsafe.SizeOf<" +
+                              FormatterTypeName.Get(type) + ">()";
+            return true;
+        }
+
+        return false;
+    }
+
 }

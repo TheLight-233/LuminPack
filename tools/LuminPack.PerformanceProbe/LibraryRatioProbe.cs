@@ -6,29 +6,103 @@ using System.Runtime.CompilerServices;
 /// <summary>Interleaves unchanged fixture operations with reference libraries to expose machine variability.</summary>
 internal static class LibraryRatioProbe
 {
+    /// <summary>Measures equivalent checked and guaranteed records against the same reference serializer.</summary>
+    /// <param name="directories">Complete images containing the same capacity-tier fixture.</param>
+    internal static void RunCapacityTiers(params string[] directories)
+    {
+        Process.GetCurrentProcess().ProcessorAffinity = (nint)256;
+        string[] names = ["LuminPackSerialize", "CheckedSerialize", "MemoryPackSerialize"];
+        var fixtures = directories.Select(directory =>
+        {
+            string file = File.Exists(Path.Combine(directory, "LuminPackCapacityBenchmark.dll")) ? "LuminPackCapacityBenchmark.dll" : "LuminPackBenchmark.dll";
+            var type = BenchmarkImage.Load(directory, file).GetType("LuminPackBenchmark.CapacityTierBenchmark", true)!;
+            object fixture = Activator.CreateInstance(type)!;
+            type.GetMethod("SetUp")!.Invoke(fixture, null);
+            string prefix = Path.GetFileName(Path.TrimEndingDirectorySeparator(directory)) + ".";
+            return (names.Select(name => prefix + name).ToArray(), names.Select(name => Bind(type.GetMethod(name)!, fixture)).ToArray(),
+                type.GetMethod("CleanUp")!.CreateDelegate<Action>(fixture));
+        }).ToArray();
+        MeasureFixtures(fixtures, 128, 256, 256, names.Length, names.Length);
+    }
+
     private static object? _sink;
 
     /// <summary>Measures unchanged collection fixtures against all original binary reference libraries.</summary>
     /// <param name="fixtureName">SimpleBenchmark, SerializeBenchmark, or PolymorphismBenchmark.</param>
     /// <param name="directories">Retained images; exclude unsafe polymorphism baselines.</param>
-    internal static void RunCapacity(string fixtureName, params string[] directories)
+    internal static void RunCapacity(string fixtureName, params string[] directories) => RunCapacityCore(fixtureName, false, directories);
+
+    /// <summary>Uses one reference-library fixture for all retained LuminPack images to avoid independent type-cache layouts.</summary>
+    /// <param name="fixtureName">The unchanged benchmark fixture type name.</param>
+    /// <param name="directories">Complete retained images built from the same fixture sources.</param>
+    internal static void RunCapacityCommon(string fixtureName, params string[] directories) => RunCapacityCore(fixtureName, true, directories);
+
+    /// <summary>Binds unchanged fixtures and selects independent or shared reference caches before measurement.</summary>
+    /// <param name="fixtureName">The unchanged benchmark fixture type name.</param>
+    /// <param name="commonReferences">Whether all LuminPack results share the same reference serializer instances.</param>
+    /// <param name="directories">The complete retained benchmark images.</param>
+    private static void RunCapacityCore(string fixtureName, bool commonReferences, string[] directories)
     {
         Process.GetCurrentProcess().ProcessorAffinity = (nint)256;
         string[] operations = ["LuminPackSerialize", "MemoryPackSerialize", "MessagePackSerialize", "NinoSerialize",
             "LuminPackDeserialize", "MemoryPackDeserialize", "MessagePackDeserialize", "NinoDeserialize"];
+        var instances = new List<object>();
         var fixtures = directories.Select(directory =>
         {
             var type = BenchmarkImage.Load(directory).GetType("LuminPackBenchmark." + fixtureName, true)!;
             object instance = Activator.CreateInstance(type)!;
             type.GetMethod("SetUp")!.Invoke(instance, null);
+            instances.Add(instance);
             string prefix = Path.GetFileName(Path.TrimEndingDirectorySeparator(directory)) + ".";
             return (Names: operations.Select(name => prefix + name).ToArray(),
                 Actions: operations.Select(name => Bind(type.GetMethod(name)!, instance)).ToArray(),
                 Cleanup: type.GetMethod("CleanUp")!.CreateDelegate<Action>(instance));
         }).ToArray();
         bool simple = fixtureName == "SimpleBenchmark";
+        if (commonReferences)
+        {
+            SynchronizeCapacityInputs(fixtureName, instances);
+            var shared = fixtures[0];
+            int[] referenceIndices = [1, 5, 2, 6, 3, 7];
+            fixtures = fixtures.Select(fixture => (Names: new[] { fixture.Names[0], fixture.Names[4] },
+                Actions: new[] { fixture.Actions[0], fixture.Actions[4] }, fixture.Cleanup)).Append((
+                Names: referenceIndices.Select(index => "reference." + operations[index]).ToArray(),
+                Actions: referenceIndices.Select(index => shared.Actions[index]).ToArray(), Cleanup: (Action)(static () => { }))).ToArray();
+        }
         MeasureFixtures(fixtures, simple ? 4096 : 128, simple ? 131072 : 1024,
-            simple ? 16384 : 512, operations.Length, 4);
+            simple ? 16384 : 512, commonReferences ? 2 : operations.Length, commonReferences ? 1 : 4);
+    }
+
+    /// <summary>Clones one original payload across image-local model types without changing benchmark methods.</summary>
+    /// <param name="fixtureName">The original fixture's declared model and buffer shape.</param>
+    /// <param name="instances">Already initialized retained-image fixtures, with the canonical reference first.</param>
+    private static void SynchronizeCapacityInputs(string fixtureName, List<object> instances)
+    {
+        const BindingFlags fields = BindingFlags.Instance | BindingFlags.NonPublic;
+        bool character = fixtureName == "SerializeBenchmark";
+        string bytesName = character ? "_luminBuffer" : "buffer1";
+        string modelName = character ? "_data" : "myClass";
+        string writerName = character ? "_luminWriter" : "luminBufferWriter";
+        byte[] payload = (byte[])instances[0].GetType().GetField(bytesName, fields)!.GetValue(instances[0])!;
+        foreach (object fixture in instances)
+        {
+            var type = fixture.GetType();
+            object writer = type.GetField(writerName, fields)!.GetValue(fixture)!;
+            writer.GetType().GetMethod("LoadSequence")!.Invoke(writer, [new System.Buffers.ReadOnlySequence<byte>(payload)]);
+            var model = type.GetField(modelName, fields)!;
+            var serializer = type.Assembly.GetType("LuminPack.LuminPackSerializer", true)!;
+            bool compiledUtf16 = fixtureName != "SimpleBenchmark" && writer.GetType().Assembly.GetType("LuminPack.Option.LuminPackUtf16LengthOptions") != null;
+            var read = serializer.GetMethods(BindingFlags.Public | BindingFlags.Static).Single(method =>
+                method.Name == "Deserialize" && method.IsGenericMethodDefinition && method.GetGenericArguments().Length == (compiledUtf16 ? 2 : 1) &&
+                method.GetParameters() is [var parameter] && parameter.ParameterType == writer.GetType());
+            Type[] arguments = compiledUtf16 ? [model.FieldType, writer.GetType().Assembly.GetType("LuminPack.Option.LuminPackUtf16LengthOptions", true)!] : [model.FieldType];
+            object restored = read.MakeGenericMethod(arguments).Invoke(null, [writer])!;
+            model.SetValue(fixture, restored);
+            type.GetField(bytesName, fields)!.SetValue(fixture, payload);
+            type.GetMethod("LuminPackSerialize")!.Invoke(fixture, null);
+            var copy = (Memory<byte>)writer.GetType().GetMethod("GetMemory")!.Invoke(writer, [0])!;
+            if (!copy.Span.SequenceEqual(payload)) throw new InvalidOperationException("Canonical capacity fixture changed wire bytes across images.");
+        }
     }
 
     /// <summary>Checks and measures identical fixed/managed Union distributions against common references.</summary>

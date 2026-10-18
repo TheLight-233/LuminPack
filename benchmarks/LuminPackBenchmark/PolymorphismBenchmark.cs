@@ -655,13 +655,7 @@ public class PolymorphismBenchmark
     private byte[] buffer3;
     private byte[] buffer4;
 
-    private LuminPackSerializerOption _option = new LuminPackSerializerOption()
-    {
-        StringEncoding = LuminPackStringEncoding.UTF16,
-        StringRecording = LuminPackStringRecording.Length
-    };
-
-    /// <summary>Updates the up used by the current operation.</summary>
+/// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void SetUp()
     {
@@ -692,10 +686,7 @@ public class PolymorphismBenchmark
             }
         }
 
-        buffer1 = LuminPackSerializer.Serialize(myClass, _option);
-        luminBufferWriter.Option.StringEncoding = _option.StringEncoding;
-        luminBufferWriter.Option.StringRecording = _option.StringRecording;
-        luminBufferWriter.Option.StandardFormat = _option.StandardFormat;
+        buffer1 = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(myClass);
         buffer2 = MemoryPackSerializer.Serialize(myClass);
         buffer3 = MessagePackSerializer.Serialize(myClass);
         buffer4 = NinoSerializer.Serialize(myClass);
@@ -712,7 +703,9 @@ public class PolymorphismBenchmark
     [Benchmark]
     public void LuminPackSerialize()
     {
-        LuminPackSerializer.Serialize(myClass, luminBufferWriter);
+        luminBufferWriter.ResetCore();
+        luminBufferWriter.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(myClass, luminBufferWriter);
     }
 
     /// <summary>Measures memory pack serialize for the configured benchmark input.</summary>
@@ -743,7 +736,7 @@ public class PolymorphismBenchmark
     [Benchmark]
     public void LuminPackDeserialize()
     {
-        var res = LuminPackSerializer.Deserialize<PolymorphismClassBase>(buffer1, _option);
+        var res = LuminPackSerializer.Deserialize<PolymorphismClassBase, LuminPackUtf16LengthOptions>(buffer1);
     }
 
     /// <summary>Measures memory pack deserialize for the configured benchmark input.</summary>

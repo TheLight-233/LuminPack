@@ -65,11 +65,13 @@ internal static class SerializerPartitionRegression
             ["B.cs"] = "[LuminPack.Attribute.LuminPackable] public class B { [LuminPack.Attribute.LuminPackInclude] private long Independent; }",
             ["Shared.cs"] = "[LuminPack.Attribute.LuminPackable] public class Shared { [LuminPack.Attribute.LuminPackInclude] private long SharedValue; }",
             ["Parents.cs"] = "[LuminPack.Attribute.LuminPackable] public class First { public Shared Item = new(); } [LuminPack.Attribute.LuminPackable] public class Second { public Shared Item = new(); }",
-            ["Base.cs"] = "[LuminPack.Attribute.LuminPackable] public class Base { [LuminPack.Attribute.LuminPackInclude] private int BaseValue; } [LuminPack.Attribute.LuminPackable] public class Derived : Base { [LuminPack.Attribute.LuminPackInclude] private long DerivedValue; }",
+            ["Base.cs"] = "[LuminPack.Attribute.LuminPackable] public class Base { private int StoragePadding; public int BaseValue; } [LuminPack.Attribute.LuminPackable] public class Derived : Base { [LuminPack.Attribute.LuminPackInclude] private long DerivedValue; }",
         };
         var input = CSharpCompilation.Create("LayoutPartitions", sources.Select(pair => CSharpSyntaxTree.ParseText(pair.Value, Parse, pair.Key)), references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         var driver = NewDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out _);
+        Require(!driver.GetRunResult().Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error),
+            string.Join(Environment.NewLine, driver.GetRunResult().Diagnostics));
         CheckErrors(output);
         var before = AllFiles(driver);
         var layoutFiles = before.Where(pair => pair.Key.StartsWith("LuminPack.LocalLayouts.", StringComparison.Ordinal)).ToArray();
@@ -227,7 +229,8 @@ internal static class SerializerPartitionRegression
     private static void CheckErrors(Compilation compilation)
     {
         var errors = compilation.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
-        Require(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(error => error.ToString())));
+        Require(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(error => error + Environment.NewLine +
+            error.Location.SourceTree?.GetText().Lines[error.Location.GetLineSpan().StartLinePosition.Line].ToString())));
     }
 
     /// <summary>Reports a failed partition or incremental boundary.</summary>

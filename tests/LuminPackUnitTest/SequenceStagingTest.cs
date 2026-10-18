@@ -50,7 +50,7 @@ public class SequenceStagingTest
     [InlineData(LuminPackStringEncoding.UTF16)]
     public void StagedSequencesPreserveKnownOptionsAndConsumedLength(LuminPackStringEncoding encoding)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding };
+        var option = new TestSerializationProfile { StringEncoding = encoding };
         var value = new IBufferModel { Id = 42, Name = new string('\u4e2d', 10_000) + "😀", Numbers = [1, 2, 3] };
         byte[] payload = LuminPackSerializer.Serialize(value, option);
         ReadOnlySequence<byte> sequence = Split(payload);

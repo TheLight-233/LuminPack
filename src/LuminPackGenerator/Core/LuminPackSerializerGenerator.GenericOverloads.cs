@@ -13,35 +13,25 @@ public static partial class LuminPackSerializerGenerator
                 /// <summary>Writes a value using the exclusive buffer's binary operation context.</summary>
                 /// <typeparam name="T">The value type.</typeparam>
                 /// <param name="value">The value to serialize.</param>
-                /// <param name="writerBuffer">The exclusive destination and configuration context.</param>
-                /// <remarks>Preserves the buffer's configured options and clears only temporary operation state.</remarks>
+                /// <param name="writerBuffer">The exclusive destination and reference-tracking context.</param>
+                /// <remarks>Appends without resetting contents or reference state. Call ResetForReuse for an independent session or after failure.</remarks>
                 __ACCESS__ static void Serialize<T>(in T value, LuminBufferWriter writerBuffer)
                 {
-                    var state = writerBuffer.WriterState;
-                    try { SerializeCore(writerBuffer, state, in value); }
-                    catch (global::System.Exception exception)
-                    {
-                        writerBuffer.ResetCore();
-                        global::LuminPack.Code.LuminPackExceptionHelper.Rethrow(exception);
-                    }
-                    finally { state.ResetOperationState(); }
+                    var writer = new LuminPackWriter(writerBuffer, writerBuffer.WriterState);
+                    try { writer.WriteValue(in value); }
+                    finally { writerBuffer.CompleteWrite(writer.CurrentIndex); }
                 }
 
                 /// <summary>Writes JSON using the exclusive buffer's operation context.</summary>
                 /// <typeparam name="T">The value type.</typeparam>
                 /// <param name="value">The value to serialize.</param>
-                /// <param name="writerBuffer">The exclusive destination and encoding/configuration context.</param>
-                /// <remarks>Preserves the buffer's configured options and clears only temporary operation state.</remarks>
+                /// <param name="writerBuffer">The exclusive destination and reference-tracking context.</param>
+                /// <remarks>Appends without resetting contents or reference state. Call ResetForReuse for an independent session or after failure.</remarks>
                 __ACCESS__ static void SerializeJson<T>(T value, LuminBufferWriter writerBuffer)
                 {
-                    var state = writerBuffer.WriterState;
-                    try { SerializeJsonCore(writerBuffer, state, in value); }
-                    catch (global::System.Exception exception)
-                    {
-                        writerBuffer.ResetCore();
-                        global::LuminPack.Code.LuminPackExceptionHelper.Rethrow(exception);
-                    }
-                    finally { state.ResetOperationState(); }
+                    var writer = new LuminPackJsonWriter(writerBuffer, writerBuffer.WriterState);
+                    try { writer.WriteValue(in value); }
+                    finally { writerBuffer.CompleteWrite(writer.CurrentIndex); }
                 }
 
                 /// <summary>Serializes a value and asynchronously writes and flushes its binary payload.</summary>
@@ -115,10 +105,10 @@ public static partial class LuminPackSerializerGenerator
 
                 /// <summary>Reads JSON using the exclusive buffer's reader context.</summary>
                 /// <typeparam name="T">The target type.</typeparam>
-                /// <param name="bufferWriter">The JSON bytes and encoding/configuration context.</param>
+                /// <param name="bufferWriter">The JSON bytes and reference-tracking context.</param>
                 /// <param name="value">Receives the deserialized value.</param>
                 /// <returns>The consumed byte count.</returns>
-                /// <remarks>Preserves configured options and clears only temporary operation state.</remarks>
+                /// <remarks>Uses compiled options and clears only temporary operation state.</remarks>
                 __ACCESS__ static int DeserializeJson<T>(LuminBufferWriter bufferWriter, ref T value)
                 {
                     var state = bufferWriter.ReaderState;
@@ -141,7 +131,7 @@ public static partial class LuminPackSerializerGenerator
                 /// <summary>Writes <typeparamref name="T"/> using its selected formatter and caller-owned JSON state.</summary>
                 /// <typeparam name="T">The payload type.</typeparam>
                 /// <param name="buffer">The destination storage.</param>
-                /// <param name="state">The initialized encoding and operation context.</param>
+                /// <param name="state">The initialized reference-tracking context.</param>
                 /// <param name="value">The value to serialize.</param>
                 private static void SerializeJsonCore<T>(LuminBufferWriter buffer, LuminPackWriterOptionalState state, in T value)
                 {

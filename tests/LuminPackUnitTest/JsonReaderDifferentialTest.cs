@@ -21,10 +21,10 @@ namespace LuminPackUnitTest;
 /// <summary>Provides json reader differential test functionality.</summary>
 public class JsonReaderDifferentialTest
 {
-    private static readonly LuminPackSerializerOption s_strictUtf8 =
-        LuminPackSerializerOption.Utf8 with { ValidateJsonSyntax = true };
-    private static readonly LuminPackSerializerOption s_strictUtf16 =
-        LuminPackSerializerOption.Utf16 with { ValidateJsonSyntax = true };
+    private static readonly TestSerializationProfile s_strictUtf8 =
+        TestSerializationProfile.Utf8 with { ValidateJsonSyntax = true };
+    private static readonly TestSerializationProfile s_strictUtf16 =
+        TestSerializationProfile.Utf16 with { ValidateJsonSyntax = true };
 
     private const int CaseCount = 4000;
 
@@ -228,11 +228,11 @@ public class JsonReaderDifferentialTest
         {
             byte[] buffer = Encoding.UTF8.GetBytes(json);
             Span<byte> span = buffer;
-            var reader = new LuminPackJsonReader(ref span, new LuminPackReaderOptionalState(s_strictUtf8));
-            while (reader.Read())
-                reader.Skip();
+            var reader = new LuminPackJsonReader(ref span, new LuminPackReaderOptionalState());
+            while (reader.ReadFor(s_strictUtf8))
+                reader.SkipFor(s_strictUtf8);
 
-            reader.EnsureEndOfDocument();
+            reader.EnsureEndOfDocumentFor(s_strictUtf8);
             return true;
         }
         catch (Exception)

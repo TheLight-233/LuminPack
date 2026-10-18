@@ -22,7 +22,7 @@ internal static class SimpleWireVerification
                 var serializer = fixtureType.Assembly.GetType("LuminPack.LuminPackSerializer", throwOnError: true)!;
                 var root = fixtureType.Assembly.GetType("LuminPackBenchmark.SimpleClassBase", throwOnError: true)!;
                 var read = serializer.GetMethods(BindingFlags.Public | BindingFlags.Static).Single(method =>
-                    method.Name == "Deserialize" && method.IsGenericMethodDefinition &&
+                    method.Name == "Deserialize" && method.IsGenericMethodDefinition && method.GetGenericArguments().Length == 1 &&
                     method.GetParameters() is [var parameter] && parameter.ParameterType == buffer.GetType());
                 object restored = read.MakeGenericMethod(root).Invoke(null, [buffer])!;
                 fixtureType.GetField("myClass", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(target.Fixture, restored);

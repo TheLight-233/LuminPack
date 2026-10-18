@@ -15,9 +15,13 @@ public class CollectionCapacityComparison
     {
         get
         {
-            foreach (string fixture in new[] { "SimpleWrite", "CharacterWrite", "CharacterRead", "PolyWrite", "PolyRead" })
-                foreach (string provider in new[] { "Original", "Checked", "Candidate", "MemoryPack", "MessagePack" })
-                    if (provider != "Original" || !fixture.StartsWith("Poly", StringComparison.Ordinal)) yield return fixture + ":" + provider;
+            bool tierReview = Environment.GetEnvironmentVariable("LUMINPACK_CAPACITY_COMPARISON") == "tiers";
+            bool compiledReview = Environment.GetEnvironmentVariable("LUMINPACK_CAPACITY_OPTION") == "1";
+            string[]? selected = Environment.GetEnvironmentVariable("LUMINPACK_CAPACITY_FIXTURES")?.Split(',');
+            foreach (string fixture in new[] { "SimpleWrite", "SimpleRead", "CharacterWrite", "CharacterRead", "PolyWrite", "PolyRead" })
+                foreach (string provider in compiledReview ? new[] { "Original", "Option", "Candidate", "MemoryPack", "MessagePack" } : new[] { "Original", "Checked", "Candidate", "MemoryPack", "MessagePack" })
+                    if ((selected is null || selected.Contains(fixture, StringComparer.Ordinal)) && (!tierReview || provider != "Checked") &&
+                        (tierReview || provider != "Original" || !fixture.StartsWith("Poly", StringComparison.Ordinal))) yield return fixture + ":" + provider;
         }
     }
 
@@ -32,7 +36,7 @@ public class CollectionCapacityComparison
         string[] parts = Case.Split(':');
         string provider = parts[1];
         string root = Environment.GetEnvironmentVariable("LUMINPACK_CAPACITY_IMAGES")!;
-        string image = provider switch { "Original" => "original", "Checked" => "safe", _ => "candidate" };
+        string image = provider switch { "Original" => "original", "Checked" => "safe", "Option" => "option", _ => "candidate" };
         string fixture = parts[0].StartsWith("Simple", StringComparison.Ordinal) ? "SimpleBenchmark" :
             parts[0].StartsWith("Character", StringComparison.Ordinal) ? "SerializeBenchmark" : "PolymorphismBenchmark";
         string library = provider is "MemoryPack" or "MessagePack" ? provider : "LuminPack";

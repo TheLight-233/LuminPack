@@ -8,7 +8,7 @@ namespace LuminPackBenchmark;
 /// <summary>Provides character assembly probe functionality.</summary>
 internal static class CharacterAssemblyProbe
 {
-    private static readonly LuminPackSerializerOption Strict = new() { ValidateJsonSyntax = true };
+    private static readonly BenchmarkProfile Strict = new() { ValidateJsonSyntax = true };
     /// <summary>Measures run fixed fields for the configured benchmark input.</summary>
     internal static void RunFixedFields()
     {
@@ -66,7 +66,12 @@ internal static class CharacterAssemblyProbe
     /// <param name="writer">The writer receiving the output data.</param>
     /// <param name="data">The metadata describing the serializable type.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static void WriteBinary(LuminBufferWriter writer, CharacterSaveData data) => LuminPackSerializer.Serialize(data, writer);
+    internal static void WriteBinary(LuminBufferWriter writer, CharacterSaveData data)
+    {
+        writer.ResetCore();
+        writer.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize(data, writer);
+    }
     /// <summary>Reads binary from the current input.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <returns>The result of the operation.</returns>
@@ -76,7 +81,12 @@ internal static class CharacterAssemblyProbe
     /// <param name="writer">The writer receiving the output data.</param>
     /// <param name="data">The metadata describing the serializable type.</param>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal static void WriteJson(LuminBufferWriter writer, CharacterSaveData data) => LuminPackSerializer.SerializeJson(data, writer);
+    internal static void WriteJson(LuminBufferWriter writer, CharacterSaveData data)
+    {
+        writer.ResetCore();
+        writer.WriterState.ResetOperationState();
+        LuminPackSerializer.SerializeJson(data, writer);
+    }
     /// <summary>Reads json from the current input.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <returns>The result of the operation.</returns>

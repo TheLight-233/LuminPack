@@ -28,6 +28,7 @@ public static partial class LuminPackCodeGenerator
     /// <param name="targetIsKnownFresh">The target is known fresh used by this operation.</param>
     private static void GenerateDeserializeCode(StringBuilder sb, LuminDataField field, string targetObj, string span, string offset, int indent, int depth, bool isFirst = true, string fieldPath = "", bool isArray = false, bool isList = false, string multList = "_", bool isPrivateFiled = false, string parentName = "", bool collectionHeadAlreadyRead = false, bool targetIsKnownFresh = false)
     {
+        using var optionScope = new CompiledOptionFieldScope(sb, field.Options, field.Type == LuminFiledType.Other && field.TypeSymbol != null ? FormatterTypeName.Get(field.TypeSymbol) : null);
         string indentation = new string(' ', indent * 4);
         string depthSuffix = $"{multList}{depth}";
         switch (field.Type)

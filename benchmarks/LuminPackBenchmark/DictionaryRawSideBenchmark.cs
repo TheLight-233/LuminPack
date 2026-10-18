@@ -32,13 +32,12 @@ public class DictionaryRawSideBenchmark
     private readonly LuminBufferWriter _lumin = LuminBufferWriterPool.Rent();
     private readonly ArrayBufferWriter<byte> _memory = new(65536);
     private readonly NinoArrayBufferWriter _nino = new(65536);
-    private readonly LuminPackSerializerOption _option = new() { StringEncoding = LuminPackStringEncoding.UTF8 };
+    private readonly BenchmarkProfile _option = new() { StringEncoding = LuminPackStringEncoding.UTF8 };
 
     /// <summary>Creates deterministic dense entries and validates both mixed dictionary shapes.</summary>
     [GlobalSetup]
     public void Setup()
     {
-        _lumin.Option.StringEncoding = LuminPackStringEncoding.UTF8;
         for (int index = 0; index < 64; index++)
         {
             var raw = new DictionaryRawPayload { A = index, B = index * 17, C = -index, D = index * 31 };
@@ -58,7 +57,12 @@ public class DictionaryRawSideBenchmark
 
     /// <summary>Writes a raw key followed by a string value.</summary>
     [Benchmark]
-    public void LuminPackKey() => LuminPackSerializer.Serialize(_keys, _lumin);
+    public void LuminPackKey()
+    {
+        _lumin.ResetCore();
+        _lumin.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize(_keys, _lumin);
+    }
 
     /// <summary>Writes the same key fixture using MemoryPack and explicit destination reset.</summary>
     [Benchmark]
@@ -78,7 +82,12 @@ public class DictionaryRawSideBenchmark
 
     /// <summary>Writes a string key followed by a raw value.</summary>
     [Benchmark]
-    public void LuminPackValue() => LuminPackSerializer.Serialize(_values, _lumin);
+    public void LuminPackValue()
+    {
+        _lumin.ResetCore();
+        _lumin.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize(_values, _lumin);
+    }
 
     /// <summary>Writes the same value fixture using MemoryPack and explicit destination reset.</summary>
     [Benchmark]

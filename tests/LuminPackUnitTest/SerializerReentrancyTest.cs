@@ -7,8 +7,8 @@ namespace LuminPackUnitTest;
 /// <summary>Provides serializer reentrancy test functionality.</summary>
 internal static class SerializerReentrancyTest
 {
-    private static readonly LuminPackSerializerOption OuterOption =
-        LuminPackSerializerOption.Token with { StringEncoding = LuminPackStringEncoding.UTF16 };
+    private static readonly TestSerializationProfile OuterOption =
+        TestSerializationProfile.Token with { StringEncoding = LuminPackStringEncoding.UTF16 };
 
     /// <summary>Verifies run.</summary>
     /// <param name="results">The results used by this operation.</param>
@@ -16,8 +16,8 @@ internal static class SerializerReentrancyTest
     {
         RunCase(results, nameof(BinaryCallbacksCanReenterSerializer), BinaryCallbacksCanReenterSerializer);
         RunCase(results, nameof(JsonCallbacksCanReenterSerializer), JsonCallbacksCanReenterSerializer);
-        RunCase(results, nameof(PublicDefaultMutationDoesNotChangeImplicitDefaults),
-            PublicDefaultMutationDoesNotChangeImplicitDefaults);
+        RunCase(results, nameof(ExplicitProfilesDoNotChangeImplicitDefaults),
+            ExplicitProfilesDoNotChangeImplicitDefaults);
     }
 
     /// <summary>Verifies binary callbacks can reenter serializer.</summary>
@@ -42,29 +42,14 @@ internal static class SerializerReentrancyTest
             "A nested callback serialization corrupted the outer JSON serializer state.");
     }
 
-    /// <summary>Verifies public default mutation does not change implicit defaults.</summary>
-    private static void PublicDefaultMutationDoesNotChangeImplicitDefaults()
+    /// <summary>Verifies that separate closed profiles cannot mutate the implicit default operation.</summary>
+    private static void ExplicitProfilesDoNotChangeImplicitDefaults()
     {
         var expected = LuminPackSerializer.Serialize("stable-default");
-        var shared = LuminPackSerializerOption.Default;
-        var originalEncoding = shared.StringEncoding;
-        var originalRecording = shared.StringRecording;
-        var originalFormat = shared.StandardFormat;
-
-        try
-        {
-            shared.StringEncoding = LuminPackStringEncoding.UTF16;
-            shared.StringRecording = LuminPackStringRecording.Token;
-            var actual = LuminPackSerializer.Serialize("stable-default");
-            Assert(actual.AsSpan().SequenceEqual(expected),
-                "Mutating the public Default instance changed option-less serialization globally.");
-        }
-        finally
-        {
-            shared.StringEncoding = originalEncoding;
-            shared.StringRecording = originalRecording;
-            shared.StandardFormat = originalFormat;
-        }
+        var alternate = LuminPackSerializer.Serialize<string, LuminPackUtf16TokenOptions>("stable-default");
+        Assert(!alternate.AsSpan().SequenceEqual(expected), "The explicit profile did not select its own wire representation.");
+        var actual = LuminPackSerializer.Serialize("stable-default");
+        Assert(actual.AsSpan().SequenceEqual(expected), "An explicit profile changed implicit serialization defaults.");
     }
 
     /// <summary>Verifies run case.</summary>

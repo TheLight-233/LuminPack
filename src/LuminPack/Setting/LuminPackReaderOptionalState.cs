@@ -11,16 +11,14 @@ namespace LuminPack.Option
         private static readonly ConcurrentQueue<LuminPackReaderOptionalState> _queue = new();
 
         /// <summary>Obtains a reusable instance from the pool, creating one when needed.</summary>
-        /// <param name="options">The configuration to apply to this operation.</param>
         /// <returns>The result of the operation.</returns>
-        public static LuminPackReaderOptionalState Rent(LuminPackSerializerOption? options)
+        public static LuminPackReaderOptionalState Rent()
         {
             if (!_queue.TryDequeue(out var state))
             {
                 state = new LuminPackReaderOptionalState();
             }
 
-            state.Init(options);
             return state;
         }
 
@@ -40,15 +38,11 @@ namespace LuminPack.Option
 
         private readonly LuminCircleReferenceMap<uint, object> refToObject;
 
-        /// <summary>Gets or sets the option.</summary>
-        public LuminPackSerializerOption Option { get; private set; }
-
         /// <summary>Initializes a new instance of <c>LuminPackReaderOptionalState</c>.</summary>
-        /// <param name="option">The configuration to apply to this operation.</param>
-        public LuminPackReaderOptionalState(LuminPackSerializerOption? option = null)
+        public LuminPackReaderOptionalState()
         {
             refToObject = new LuminCircleReferenceMap<uint, object>();
-            Option = option ?? LuminPackSerializerOption.InternalDefault;
+
         }
 
         /// <summary>Initializes a new instance of <c>LuminPackReaderOptionalState</c>.</summary>
@@ -56,26 +50,17 @@ namespace LuminPack.Option
         private LuminPackReaderOptionalState(bool _)
         {
             refToObject = new LuminCircleReferenceMap<uint, object>();
-            Option = LuminPackSerializerOption.InternalDefault;
-        }
 
-        /// <summary>Initializes operation state with the supplied serialization options.</summary>
-        /// <param name="options">The configuration to apply to this operation.</param>
-        public void Init(LuminPackSerializerOption? options)
-        {
-            var nextOption = options ?? LuminPackSerializerOption.InternalDefault;
-            if (!ReferenceEquals(Option, nextOption))
-                Option = nextOption;
         }
 
         /// <summary>Clears state retained by the previous operation so it can be reused.</summary>
         public void Reset()
         {
             ResetOperationState();
-            Init(null);
+
         }
 
-        /// <summary>Clears transient reader operation state while preserving the configured option.</summary>
+        /// <summary>Clears transient reader reference tracking for reuse by the next operation.</summary>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ResetOperationState()
         {
@@ -109,7 +94,7 @@ namespace LuminPack.Option
         /// <summary>Releases the resources or pooled state owned by this instance.</summary>
         void IDisposable.Dispose()
         {
-            Option = null;
+
         }
     }
 

@@ -29,8 +29,8 @@ public sealed partial class CjkDoc
 [MemoryDiagnoser]
 public class JsonStringReturnBenchmark
 {
-    private static readonly LuminPackSerializerOption Utf8Option = new() { StringEncoding = LuminPackStringEncoding.UTF8 };
-    private static readonly LuminPackSerializerOption Utf16Option = new() { StringEncoding = LuminPackStringEncoding.UTF16 };
+    private static readonly BenchmarkProfile Utf8Option = new() { StringEncoding = LuminPackStringEncoding.UTF8 };
+    private static readonly BenchmarkProfile Utf16Option = new() { StringEncoding = LuminPackStringEncoding.UTF16 };
 
     private CjkDoc _cjk = null!;
     private CharacterSaveData _ascii = null!;

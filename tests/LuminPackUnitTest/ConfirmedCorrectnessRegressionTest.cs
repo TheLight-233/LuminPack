@@ -242,11 +242,8 @@ internal static class ConfirmedCorrectnessRegressionTest
                binary.@class == value.@class && binary.\u4e2d\u6587\u5b57\u6bb5 == value.\u4e2d\u6587\u5b57\u6bb5,
             "Generated binary code did not handle escaped identifiers.");
 
-        var jsonOption = new LuminPackSerializerOption { StringEncoding = LuminPackStringEncoding.UTF8 };
+        var jsonOption = new TestSerializationProfile { StringEncoding = LuminPackStringEncoding.UTF8 };
         using var jsonBuffer = new LuminBufferWriter(true);
-        jsonBuffer.Option.StringEncoding = jsonOption.StringEncoding;
-        jsonBuffer.Option.StringRecording = jsonOption.StringRecording;
-        jsonBuffer.Option.StandardFormat = jsonOption.StandardFormat;
         LuminPackSerializer.SerializeJson(value, jsonBuffer);
         var json = System.Text.Encoding.UTF8.GetString(jsonBuffer.GetSpan());
         Assert(json.Contains("\u0022\u4E2D\u6587\u5B57\u6BB5\u0022", StringComparison.Ordinal),
@@ -266,7 +263,7 @@ internal static class ConfirmedCorrectnessRegressionTest
 
         var utf8 = LuminPackSerializer.DeserializeJson<JsonFreshSmallModel>(json);
         var utf16 = LuminPackSerializer.DeserializeJson<JsonFreshSmallModel>(json,
-            new LuminPackSerializerOption { StringEncoding = LuminPackStringEncoding.UTF16 });
+            new TestSerializationProfile { StringEncoding = LuminPackStringEncoding.UTF16 });
         var scalar = LuminPackSerializer.DeserializeJson<JsonFreshScalarModel>(scalarJson);
 
         Assert(utf8 is not null && utf8.MissingNumber == 0 && utf8.Nested is not null &&

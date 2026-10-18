@@ -18,11 +18,21 @@ internal static class CharacterWireVerification
                     .SetValue(target.Fixture, source.Payload);
                 object restored = target.Fixture.GetType().GetMethod("LuminPackDeserialize")!.Invoke(target.Fixture, null)!;
                 var serializer = target.Fixture.GetType().Assembly.GetType("LuminPack.LuminPackSerializer", throwOnError: true)!;
-                var write = serializer.GetMethods(BindingFlags.Public | BindingFlags.Static).Single(method =>
-                    method.Name == "Serialize" && !method.IsGenericMethod && method.ReturnType == typeof(byte[]) &&
-                    method.GetParameters() is [var payload, var option] &&
-                    payload.ParameterType.GetElementType() == restored.GetType() && option.ParameterType == target.Options.GetType());
-                byte[] rewritten = (byte[])write.Invoke(null, [restored, target.Options])!;
+                var write = serializer.GetMethods(BindingFlags.Public | BindingFlags.Static).SingleOrDefault(method =>
+                    method.Name == "Serialize" && method.ReturnType == typeof(byte[]) &&
+                    (method.GetParameters()[0].ParameterType.GetElementType() ?? method.GetParameters()[0].ParameterType) ==
+                        target.Fixture.GetType().GetMethod("LuminPackDeserialize")!.ReturnType &&
+                    (target.Options == null ? method.IsGenericMethodDefinition && method.GetGenericArguments().Length == 1 && method.GetParameters().Length == 1 :
+                        !method.IsGenericMethod && method.GetParameters() is [_, var option] && option.ParameterType == target.Options.GetType())) ??
+                    throw new InvalidOperationException("Missing character array entry in " + target.Directory + " (options " + target.Options?.GetType() + "): " +
+                        string.Join("; ", serializer.GetMethods(BindingFlags.Public | BindingFlags.Static).Where(method => method.Name == "Serialize" &&
+                            method.GetParameters()[0].ParameterType.ToString().Contains("CharacterSaveData", StringComparison.Ordinal)).Select(method => method.ToString())));
+                if (target.Options == null)
+                {
+                    var optionsAssembly = write.GetGenericArguments()[0].GetGenericParameterConstraints().Single(type => type.IsInterface).Assembly;
+                    write = write.MakeGenericMethod(optionsAssembly.GetType("LuminPack.Option.LuminPackUtf16LengthOptions", true)!);
+                }
+                byte[] rewritten = (byte[])write.Invoke(null, target.Options == null ? [restored] : [restored, target.Options])!;
                 if (!rewritten.AsSpan().SequenceEqual(source.Payload))
                     throw new InvalidOperationException($"Character wire mismatch: {source.Directory} -> {target.Directory}.");
             }
@@ -37,7 +47,7 @@ internal static class CharacterWireVerification
     /// <summary>Initializes an unchanged original fixture in its own retained-image load context.</summary>
     /// <param name="directory">A complete benchmark output directory.</param>
     /// <returns>The fixture, its original payload, and its serialization options.</returns>
-    private static (string Directory, object Fixture, byte[] Payload, object Options) Load(string directory)
+    private static (string Directory, object Fixture, byte[] Payload, object? Options) Load(string directory)
     {
         var assembly = BenchmarkImage.Load(directory);
         var type = assembly.GetType("LuminPackBenchmark.SerializeBenchmark", throwOnError: true)!;
@@ -45,6 +55,6 @@ internal static class CharacterWireVerification
         type.GetMethod("SetUp")!.Invoke(fixture, null);
         return (directory, fixture,
             (byte[])type.GetField("_luminBuffer", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(fixture)!,
-            type.GetField("luminPackSerializerOption", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(fixture)!);
+            type.GetField("luminPackSerializerOption", BindingFlags.Instance | BindingFlags.NonPublic)?.GetValue(fixture));
     }
 }

@@ -8,6 +8,15 @@ internal static class DiagnosticDescriptors
     private const string Category = "LuminPack.SourceGeneration";
     private const string UnionCategory = "LuminPack.SourceGeneration.Union";
 
+    /// <summary>Rejects declaration constants that cannot describe a supported representation.</summary>
+    public static readonly DiagnosticDescriptor InvalidCompiledOption = Error(
+        "LuminPack110", "Invalid compiled serialization option", "Invalid LuminPackOption property '{0}': {1}");
+
+    /// <summary>Rejects unusable complete-record capacity guarantees.</summary>
+    public static readonly DiagnosticDescriptor InvalidBoundedSize = Error(
+        "LuminPack109", "Invalid serialized size guarantee",
+        "Type '{0}' declares an invalid LuminPackBounded maximum; MaxBytes must be a positive Int32 complete-record byte bound.");
+
     // Packable type and member validation.
     /// <summary>Stores the static class.</summary>
     public static readonly DiagnosticDescriptor StaticClass = Error(

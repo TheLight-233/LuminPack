@@ -13,8 +13,9 @@ public static partial class LuminPackExtensionGenerator
     /// <param name="metaInfo">Current language, framework, and registration settings.</param>
     /// <param name="extensionClassName">The common partial extension container.</param>
     /// <param name="dispatch">Stable dense ids and operation capabilities.</param>
+    /// <param name="fallback">The consuming assembly's constants for unknown registered types.</param>
     /// <param name="publish">Receives a fixed operation identity and its unchanged declaration text.</param>
-    private static void BuildGenericDispatchParts(MetaInfo metaInfo, string extensionClassName, DispatchEntry[] dispatch, System.Action<string, string> publish)
+    private static void BuildGenericDispatchParts(MetaInfo metaInfo, string extensionClassName, DispatchEntry[] dispatch, CompiledOptions fallback, System.Action<string, string> publish)
     {
         var sb = new StringBuilder();
         string scopedIn = metaInfo.IsNet8 ? "scoped in " : "in ";
@@ -37,6 +38,39 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("        private static class LuminPackTypeCache<T>");
         sb.AppendLine("        {");
         sb.AppendLine("            internal static uint TypeId = uint.MaxValue;");
+        sb.AppendLine("        }");
+        sb.AppendLine("        internal static global::LuminPack.Option.LuminPackStringEncoding __LuminPackJsonEncoding<T>()");
+        sb.AppendLine("        {");
+        sb.AppendLine("            switch (LuminPackTypeCache<T>.TypeId)");
+        sb.AppendLine("            {");
+        foreach (DispatchEntry d in dispatch.Where(entry => entry.Options.Encoding != fallback.Encoding))
+            sb.AppendLine("                case " + d.Id + "u: return (global::LuminPack.Option.LuminPackStringEncoding)" + d.Options.Encoding + ";");
+        sb.AppendLine("                default: return (global::LuminPack.Option.LuminPackStringEncoding)" + fallback.Encoding + ";");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine("        internal static bool __LuminPackJsonReadBoundary<T>(ref global::LuminPack.Core.LuminPackJsonReader reader, bool complete)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            switch (LuminPackTypeCache<T>.TypeId)");
+        sb.AppendLine("            {");
+        foreach (var group in dispatch.Where(entry => entry.Options.Identity != fallback.Identity).GroupBy(entry => entry.Options.Identity))
+        {
+            foreach (DispatchEntry d in group) sb.AppendLine("                case " + d.Id + "u:");
+            string profile = group.First().Options.TypeName;
+            sb.AppendLine("                    if (complete) { reader.EnsureEndOfDocument<" + profile + ">(); return true; }");
+            sb.AppendLine("                    return reader.Read<" + profile + ">();");
+        }
+        sb.AppendLine("                default:");
+        sb.AppendLine("                    if (complete) { reader.EnsureEndOfDocument<" + fallback.TypeName + ">(); return true; }");
+        sb.AppendLine("                    return reader.Read<" + fallback.TypeName + ">();");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
+        sb.AppendLine("        internal static global::LuminPack.Option.LuminPackStringEncoding __LuminPackJsonEncoding<T, TOptions>() where TOptions : struct, global::LuminPack.Option.ILuminPackOptions");
+        sb.AppendLine("            => typeof(TOptions) == typeof(global::LuminPack.Option.LuminPackDeclaredOptions) ? __LuminPackJsonEncoding<T>() : default(TOptions).StringEncoding;");
+        sb.AppendLine("        internal static bool __LuminPackJsonReadBoundary<T, TOptions>(ref global::LuminPack.Core.LuminPackJsonReader reader, bool complete) where TOptions : struct, global::LuminPack.Option.ILuminPackOptions");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (typeof(TOptions) == typeof(global::LuminPack.Option.LuminPackDeclaredOptions)) return __LuminPackJsonReadBoundary<T>(ref reader, complete);");
+        sb.AppendLine("            if (complete) { reader.EnsureEndOfDocument<TOptions>(); return true; }");
+        sb.AppendLine("            return reader.Read<TOptions>();");
         sb.AppendLine("        }");
         publish("Registration", sb.ToString());
         sb.Clear();

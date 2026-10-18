@@ -27,7 +27,7 @@ internal static class CharacterSaveDataJsonJitProbe
     internal static void Run()
     {
         var data = CharacterSaveData.Create();
-        var option = new LuminPackSerializerOption
+        var option = new BenchmarkProfile
         {
             StringEncoding = LuminPackStringEncoding.UTF16,
             StringRecording = LuminPackStringRecording.Length
@@ -73,7 +73,7 @@ internal static class CharacterSaveDataJsonJitProbe
     [MethodImpl(MethodImplOptions.NoInlining)]
     internal static void RunInitializerControl()
     {
-        var option = new LuminPackSerializerOption
+        var option = new BenchmarkProfile
         {
             StringEncoding = LuminPackStringEncoding.UTF16,
             StringRecording = LuminPackStringRecording.Length

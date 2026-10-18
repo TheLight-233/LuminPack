@@ -21,6 +21,11 @@ try
         SerializerMechanismRegression.Run(references, baseline);
         return 0;
     }
+    if (args is ["--verify-mechanisms", var analyzer, var runtime])
+    {
+        SerializerMechanismRegression.Run(references, analyzer, runtime);
+        return 0;
+    }
     if (args is ["--verify-special-modes"])
     {
         SerializerSpecialModeBoundaryRegression.Run(references);
@@ -31,6 +36,28 @@ try
         SerializerCustomFormatterRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-partitions"])
+    {
+        SerializerPartitionRegression.Run(references);
+        return 0;
+    }
+    if (args is ["--verify-inlining"])
+    {
+        SerializerBinaryInliningRegression.Run(references);
+        SerializerCollectionInliningRegression.Run(references);
+        SerializerUnionInliningRegression.Run(references);
+        return 0;
+    }
+    if (args is ["--verify-mechanisms"])
+    {
+        SerializerMechanismRegression.Run(references);
+        return 0;
+    }
+    if (args is ["--verify-union-inlining"])
+    {
+        SerializerUnionInliningRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-codegen-performance"])
     {
         SerializerCodegenPerformanceRegression.Run(references);
@@ -39,6 +66,16 @@ try
     if (args is ["--verify-union-cursor"])
     {
         SerializerUnionCursorRegression.Run(references);
+        return 0;
+    }
+    if (args is ["--verify-capacity-tiers"])
+    {
+        SerializerCapacityTierRegression.Run(references);
+        return 0;
+    }
+    if (args is ["--verify-compiled-options"])
+    {
+        SerializerCompiledOptionRegression.Run(references);
         return 0;
     }
     SerializerDocumentationRegression.Run(references);
@@ -55,6 +92,8 @@ try
     SerializerMechanismRegression.Run(references);
     SerializerCodegenPerformanceRegression.Run(references);
     SerializerUnionCursorRegression.Run(references);
+    SerializerCapacityTierRegression.Run(references);
+    SerializerCompiledOptionRegression.Run(references);
     SerializerSpecialModeBoundaryRegression.Run(references);
     MetadataReference[]? compatibilityReferences = args.Length == 2
         ? Directory.GetFiles(args[0], "*.dll").Select(path => MetadataReference.CreateFromFile(path)).Append(MetadataReference.CreateFromFile(args[1])).ToArray()

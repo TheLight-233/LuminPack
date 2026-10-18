@@ -154,6 +154,28 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                         ? ReachabilityAnalysisCache.GetOrCreate(compilation, effectiveTier)
                         : null;
 
+                    var optionProfiles = new System.Collections.Generic.Dictionary<string, CompiledOptions>(StringComparer.Ordinal);
+                    var assemblyProfile = CompiledOptions.Resolve(null, compilation);
+                    if (!assemblyProfile.IsDefault) optionProfiles[assemblyProfile.Identity] = assemblyProfile;
+                    foreach (var diagnostic in CompiledOptions.Validate(compilation.Assembly)) spc.ReportDiagnostic(diagnostic);
+                    foreach (var type in CompilationTypeAnalysisCache.GetOrCreate(compilation).FormatterTypes.Concat(
+                        CompilationTypeAnalysisCache.GetOrCreate(compilation).DeclaredTypes.Select(declaration => (ITypeSymbol)declaration.Symbol)).Distinct<ITypeSymbol>(SymbolEqualityComparer.Default))
+                    {
+                        foreach (var diagnostic in CompiledOptions.Validate(type)) spc.ReportDiagnostic(diagnostic);
+                        var profile = CompiledOptions.Resolve(type, compilation);
+                        if (!profile.IsDefault) optionProfiles[profile.Identity] = profile;
+                        foreach (var member in type.GetMembers().Where(member => member is IFieldSymbol or IPropertySymbol))
+                        {
+                            foreach (var diagnostic in CompiledOptions.Validate(member)) spc.ReportDiagnostic(diagnostic);
+                            profile = CompiledOptions.Resolve(member, compilation);
+                            if (!profile.IsDefault) optionProfiles[profile.Identity] = profile;
+                        }
+                    }
+                    var optionDeclarations = optionProfiles.Values.SelectMany(profile => profile.Declarations()).GroupBy(pair => pair.Key, StringComparer.Ordinal)
+                        .OrderBy(group => group.Key, StringComparer.Ordinal).Select(group => group.First().Value).ToArray();
+                    if (optionDeclarations.Length != 0)
+                        spc.AddSource("LuminPackOptions.g.cs", string.Join(Environment.NewLine, optionDeclarations));
+
                     foreach (var formatter in LuminPackExtensionGenerator.GenerateInvocationFiles(compilation, meta, reachability, invocationSupport))
                         spc.AddSource(formatter.Name, formatter.Text);
 

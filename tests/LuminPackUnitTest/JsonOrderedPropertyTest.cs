@@ -18,7 +18,7 @@ public class JsonOrderedPropertyTest
     [InlineData(LuminPackStringEncoding.UTF16, true)]
     public void OrderedAndFallbackPathsCanAlternate(LuminPackStringEncoding encoding, bool strict)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding, ValidateJsonSyntax = strict };
+        var option = new TestSerializationProfile { StringEncoding = encoding, ValidateJsonSyntax = strict };
         // Ordered prefix, unknown nested value, escaped name, reordered field,
         // whitespace, duplicate and then an ordered suffix in the same object.
         const string json = "{\"F00\":10,\"F01\":11,\"unknown\":{\"x\":[{\"F02\":99}]}," +
@@ -45,7 +45,7 @@ public class JsonOrderedPropertyTest
     [InlineData(LuminPackStringEncoding.UTF16)]
     public void StrictOrderedPathRejectsMalformedSeparatorsAndTruncations(LuminPackStringEncoding encoding)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding, ValidateJsonSyntax = true };
+        var option = new TestSerializationProfile { StringEncoding = encoding, ValidateJsonSyntax = true };
         string[] invalid =
         {
             "{\"F00\":0\"F01\":1}", "{,\"F00\":0}", "{\"F00\":0,,\"F01\":1}",
@@ -74,7 +74,7 @@ public class JsonOrderedPropertyTest
     [InlineData(LuminPackStringEncoding.UTF16)]
     public void RandomPropertyOrdersPreserveValues(LuminPackStringEncoding encoding)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding, ValidateJsonSyntax = true };
+        var option = new TestSerializationProfile { StringEncoding = encoding, ValidateJsonSyntax = true };
         var random = new Random(20261011);
         for (int i = 0; i < 100; i++)
         {

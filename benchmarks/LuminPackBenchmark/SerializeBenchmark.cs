@@ -1066,13 +1066,7 @@ public class SerializeBenchmark
     private byte[] _msgpackBuffer;
     private byte[] _ninoBuffer;
 
-    private LuminPackSerializerOption luminPackSerializerOption = new LuminPackSerializerOption()
-    {
-        StringEncoding = LuminPackStringEncoding.UTF16,
-        StringRecording = LuminPackStringRecording.Length
-    };
-
-    private MemoryPackSerializerOptions memoryPackSerializerOption = new MemoryPackSerializerOptions()
+private MemoryPackSerializerOptions memoryPackSerializerOption = new MemoryPackSerializerOptions()
     {
         StringEncoding = StringEncoding.Utf16
     };
@@ -1081,10 +1075,7 @@ public class SerializeBenchmark
     [GlobalSetup]
     public void SetUp()
     {
-        _luminWriter.Option.StringEncoding = luminPackSerializerOption.StringEncoding;
-        _luminWriter.Option.StringRecording = luminPackSerializerOption.StringRecording;
-        _luminWriter.Option.StandardFormat = luminPackSerializerOption.StandardFormat;
-        _luminBuffer = LuminPackSerializer.Serialize(_data, luminPackSerializerOption);
+        _luminBuffer = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(_data);
         _memoryBuffer = MemoryPackSerializer.Serialize(_data, memoryPackSerializerOption);
         _msgpackBuffer = MessagePackSerializer.Serialize(_data);
         _ninoBuffer = NinoSerializer.Serialize(_data);
@@ -1097,7 +1088,11 @@ public class SerializeBenchmark
     /// <summary>Measures lumin pack serialize for the configured benchmark input.</summary>
     [Benchmark(Baseline = true)]
     public void LuminPackSerialize()
-        => LuminPackSerializer.Serialize(_data, _luminWriter);
+    {
+        _luminWriter.ResetCore();
+        _luminWriter.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(_data, _luminWriter);
+    }
 
     /// <summary>Measures memory pack serialize for the configured benchmark input.</summary>
     [Benchmark]
@@ -1127,7 +1122,7 @@ public class SerializeBenchmark
     /// <returns>The result of the operation.</returns>
     [Benchmark]
     public CharacterSaveData LuminPackDeserialize()
-        => LuminPackSerializer.Deserialize<CharacterSaveData>(_luminBuffer, luminPackSerializerOption);
+        => LuminPackSerializer.Deserialize<CharacterSaveData, LuminPackUtf16LengthOptions>(_luminBuffer);
 
     /// <summary>Measures memory pack deserialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>

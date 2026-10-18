@@ -87,7 +87,7 @@ public static partial class LuminPackExtensionGenerator
                 string template = cache.Operations.Get(type, compilation, metadata).TemplateSource;
                 if (template != null)
                     files.Add(cache.Files.Wrap("LuminPack.JsonSupport", FormatterTypeName.Get(external.OriginalDefinition),
-                        string.Empty, template, string.Empty, () => JsonOperationTemplates.Support(template, metadata), metadata.ParseOptions));
+                        string.Empty, template, string.Empty, () => JsonOperationTemplates.Support(template, metadata, compilation), metadata.ParseOptions));
             }
         }
 
@@ -98,11 +98,11 @@ public static partial class LuminPackExtensionGenerator
             .Select(group => group.First());
         var dispatch = dispatchTypes.Select((type, index) => new DispatchEntry(index, FormatterTypeName.Get(type),
             CanRegisterFormatter(type, compilation, json: false), CanRegisterFormatter(type, compilation, json: true),
-            CanRegisterCalculateFormatter(type, compilation))).Where(entry => entry.Binary || entry.Json || entry.Calculate).ToArray();
-        var key = new StringBuilder(extension).Append('|');
+            CanRegisterCalculateFormatter(type, compilation), CompiledOptions.Resolve(type, compilation))).Where(entry => entry.Binary || entry.Json || entry.Calculate).ToArray();
+        var key = new StringBuilder(extension).Append('|').Append(CompiledOptions.Resolve(null, compilation).Identity).Append('|');
         foreach (var entry in dispatch)
             key.Append(entry.Id).Append(':').Append(entry.Name.Length).Append(':').Append(entry.Name).Append(':')
-                .Append(entry.Binary).Append(':').Append(entry.Json).Append(':').Append(entry.Calculate).Append(';');
+                .Append(entry.Binary).Append(':').Append(entry.Json).Append(':').Append(entry.Calculate).Append(':').Append(entry.Options.Identity).Append(';');
         string identity = key.ToString();
         foreach (var part in DispatchFiles(compilation, metadata, cache, extension, dispatch, identity)) files.Add(part);
         files.Add(new FrozenGeneratedSource("LuminPack.FormatterBridges.g.cs", SerializerCoreProjection.Bridges(extension, metadata)));
@@ -199,7 +199,7 @@ public static partial class LuminPackExtensionGenerator
                 if (changed == null)
                 {
                     changed = new Dictionary<string, string>(StringComparer.Ordinal);
-                    BuildGenericDispatchParts(metadata, extension, dispatch, (part, body) => changed.Add(part,
+                    BuildGenericDispatchParts(metadata, extension, dispatch, CompiledOptions.Resolve(null, compilation), (part, body) => changed.Add(part,
                         SerializerCoreProjection.Project(GenerateExtension(new StringBuilder(body), extension), compilation, metadata, cache.Operations)));
                 }
                 return changed[name];

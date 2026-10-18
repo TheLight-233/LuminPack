@@ -99,23 +99,32 @@ internal static class BufferResizeColdPathRegressionTest
     private static void JsonCheckPreservesValidPayloadAcrossMultipleGrowths()
     {
         using var buffer = new LuminBufferWriter(true);
-        var state = new LuminPackWriterOptionalState(new LuminPackSerializerOption
-        {
-            StringEncoding = LuminPackStringEncoding.UTF8
-        });
+        var state = new LuminPackWriterOptionalState();
         var writer = new LuminPackJsonWriter(buffer, state);
         var first = new string('A', GrowthBlockLength);
         var second = new string('B', GrowthBlockLength);
         var initialCapacity = buffer.TotalLength;
 
-        writer.WriteArrayStart();
-        writer.WriteString(first);
+        writer.WriteArrayStartFor(new TestSerializationProfile
+        {
+            StringEncoding = LuminPackStringEncoding.UTF8
+        });
+        writer.WriteStringFor(new TestSerializationProfile
+        {
+            StringEncoding = LuminPackStringEncoding.UTF8
+        },first);
         buffer.Check(ref writer);
         var firstGrowthCapacity = buffer.TotalLength;
-        writer.WriteString(second);
+        writer.WriteStringFor(new TestSerializationProfile
+        {
+            StringEncoding = LuminPackStringEncoding.UTF8
+        },second);
         buffer.Check(ref writer);
         var secondGrowthCapacity = buffer.TotalLength;
-        writer.WriteArrayEnd();
+        writer.WriteArrayEndFor(new TestSerializationProfile
+        {
+            StringEncoding = LuminPackStringEncoding.UTF8
+        });
 
         Assert(firstGrowthCapacity > initialCapacity,
             "The first JSON threshold crossing did not grow the buffer.");
@@ -137,15 +146,13 @@ internal static class BufferResizeColdPathRegressionTest
             Values = Enumerable.Range(0, 200_000).ToArray(),
             Suffix = new string('Z', 230_000)
         };
-        var option = new LuminPackSerializerOption
+        var option = new TestSerializationProfile
         {
             StringEncoding = LuminPackStringEncoding.UTF8,
             StringRecording = LuminPackStringRecording.Length
         };
 
         using var buffer = new LuminBufferWriter(true);
-        buffer.Option.StringEncoding = option.StringEncoding;
-        buffer.Option.StringRecording = option.StringRecording;
         LuminPackSerializer.Serialize(value, buffer);
 
         Assert(buffer.CurrentIndex > 1_000_000 && buffer.TotalLength > 1_000_000,

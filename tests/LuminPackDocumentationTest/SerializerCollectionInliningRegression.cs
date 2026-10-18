@@ -95,6 +95,7 @@ internal static class SerializerCollectionInliningRegression
         Require(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(diagnostic => diagnostic.ToString() +
             (diagnostic.Location.SourceTree == null ? "" : "\n" + diagnostic.Location.SourceTree.GetText().Lines[diagnostic.Location.GetLineSpan().StartLinePosition.Line]))));
         int inspected = 0;
+        var signatures = new List<string>();
         foreach (var tree in output.SyntaxTrees.Where(tree => Path.GetFileName(tree.FilePath).StartsWith("LuminPackSerializer.", StringComparison.Ordinal)))
         {
             var model = output.GetSemanticModel(tree);
@@ -102,6 +103,8 @@ internal static class SerializerCollectionInliningRegression
                 method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().StartsWith("global::Model", StringComparison.Ordinal) == true)))
             {
                 inspected++;
+                if (method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().TrimEnd('?') == "global::Model0"))
+                    signatures.Add(method.Identifier.ValueText + method.ParameterList);
                 // Contract: JSON entries are now fully expanded exactly like binary and size entries,
                 // so no concrete collection entry may retain a shared per-type formatter call.
                 foreach (var call in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
@@ -114,7 +117,7 @@ internal static class SerializerCollectionInliningRegression
                 }
             }
         }
-        Require(inspected == shapes.Length * 5, "The repeated collection fixture did not select every expected entry.");
+        Require(inspected == shapes.Length * 5, "The repeated collection fixture did not select every expected entry; found " + inspected + ". " + string.Join("; ", signatures));
         using var image = new MemoryStream();
         var emit = output.Emit(image);
         Require(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics));

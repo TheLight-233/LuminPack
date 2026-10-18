@@ -96,19 +96,11 @@ public class JsonBenchmark
         },
     };
 
-    private readonly LuminPackSerializerOption _luminOptions = new()
-    {
-        StringEncoding = LuminPackStringEncoding.UTF8,
-    };
-
     /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void SetUp()
     {
-        _bufferWriter.Option.StringEncoding = _luminOptions.StringEncoding;
-        _bufferWriter.Option.StringRecording = _luminOptions.StringRecording;
-        _bufferWriter.Option.StandardFormat = _luminOptions.StandardFormat;
-        _luminPackJson = LuminPackSerializer.SerializeJson(_data, _luminOptions);
+        _luminPackJson = LuminPackSerializer.SerializeJson<CharacterSaveData, LuminPackDefaultOptions>(_data);
         _systemTextJson = System.Text.Json.JsonSerializer.Serialize(_data, StjOptions);
         _newtonsoftJson = JsonConvert.SerializeObject(_data, NjSettings);
         _redoxJson = REDox.Json.JsonSerializer.Serialize(_data, RedoxSettings);
@@ -124,7 +116,11 @@ public class JsonBenchmark
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Serialize")]
     public void LuminPackSerializeToJson()
-        => LuminPackSerializer.SerializeJson(_data, _bufferWriter);
+    {
+        _bufferWriter.ResetCore();
+        _bufferWriter.WriterState.ResetOperationState();
+        LuminPackSerializer.SerializeJson<CharacterSaveData, LuminPackDefaultOptions>(_data, _bufferWriter);
+    }
 
     /// <summary>Measures system text json serialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
@@ -154,7 +150,7 @@ public class JsonBenchmark
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Deserialize")]
     public CharacterSaveData LuminPackDeserializeFromJson()
-        => LuminPackSerializer.DeserializeJson<CharacterSaveData>(_luminPackJson, _luminOptions);
+        => LuminPackSerializer.DeserializeJson<CharacterSaveData, LuminPackDefaultOptions>(_luminPackJson);
 
     /// <summary>Measures system text json deserialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>

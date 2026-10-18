@@ -9,7 +9,7 @@ namespace LuminPack.Core;
 
 /// <summary>Accumulates the binary payload size without materializing serialized output.</summary>
 [StructLayout(LayoutKind.Auto)]
-public unsafe ref struct LuminPackEvaluator : IDisposable
+public unsafe ref partial struct LuminPackEvaluator : IDisposable
 {
     private readonly int* _valuePtr; // Store a pointer to the target value.
 
@@ -17,11 +17,7 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
 
     /// <summary>Gets the option state.</summary>
     public LuminPackEvaluatorOptionState OptionState => _optionState;
-    /// <summary>Gets the option.</summary>
-    public LuminPackSerializerOption Option => _optionState.Option;
 
-    private readonly bool SerializeStringAsUtf8;
-    private readonly bool SerializeStringRecordAsToken;
 
     /// <summary>
     /// Initializes the evaluator with a reference to the target byte-count accumulator.
@@ -33,21 +29,19 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
 
         _optionState = LuminPackEvaluatorOptionState.NullOption;
 
-        SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
-        SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
+
     }
 
     /// <summary>Initializes a new instance of <c>LuminPackEvaluator</c>.</summary>
     /// <param name="target">The target used by this operation.</param>
-    /// <param name="option">The configuration to apply to this operation.</param>
+    /// <param name="option">The shared reference-tracking state, or null for the default operation state.</param>
     public LuminPackEvaluator(ref int target, LuminPackEvaluatorOptionState? option = null)
     {
         _valuePtr = (int*)Unsafe.AsPointer(ref target);
 
         _optionState = option ?? LuminPackEvaluatorOptionState.NullOption;
 
-        SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
-        SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
+
     }
 
     /// <summary>
@@ -91,25 +85,13 @@ public unsafe ref struct LuminPackEvaluator : IDisposable
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int GetStringLength(scoped ref string? value)
-    {
-        return (SerializeStringAsUtf8, SerializeStringRecordAsToken) switch
-        {
-            (true, true) => checked(CalculateStringUtf8(ref value) + 1),
-            (true, false) => checked(CalculateStringUtf8(ref value) + sizeof(int) * 2),
-            (false, true) => checked(CalculateStringUtf16(ref value) + sizeof(ushort)),
-            (false, false) => checked(CalculateStringUtf16(ref value) + sizeof(int))
-        };
-    }
+    { return GetStringLength<global::LuminPack.Option.LuminPackDefaultOptions>(ref value); }
 
     /// <summary>Returns the size of the string header used by the current recording mode.</summary>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public int StringRecordLength()
-    {
-        return SerializeStringRecordAsToken
-            ? (SerializeStringAsUtf8 ? 1 : sizeof(ushort))
-            : (SerializeStringAsUtf8 ? sizeof(int) * 2 : sizeof(int));
-    }
+    { return StringRecordLength<global::LuminPack.Option.LuminPackDefaultOptions>(); }
 
     /// <summary>Calculates the serialized size contribution of string utf8.</summary>
     /// <param name="value">The value consumed or produced by this operation.</param>

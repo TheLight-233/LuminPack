@@ -83,6 +83,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static WeaponItem RoundTripWeapon(LuminBufferWriter buffer, WeaponItem value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializeWeapon(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -98,6 +99,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static ArmorItem RoundTripArmor(LuminBufferWriter buffer, ArmorItem value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializeArmor(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -113,6 +115,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static ConsumableItem RoundTripConsumable(LuminBufferWriter buffer, ConsumableItem value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializeConsumable(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -128,6 +131,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static MountItem RoundTripMount(LuminBufferWriter buffer, MountItem value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializeMount(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -143,6 +147,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static QuestItem RoundTripQuest(LuminBufferWriter buffer, QuestItem value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializeQuest(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -158,6 +163,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static PetItem RoundTripPet(LuminBufferWriter buffer, PetItem value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializePet(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -173,6 +179,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static RelicItem RoundTripRelic(LuminBufferWriter buffer, RelicItem value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializeRelic(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -188,6 +195,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static ActiveSkill RoundTripActiveSkill(LuminBufferWriter buffer, ActiveSkill value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializeActiveSkill(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -203,6 +211,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static PassiveSkill RoundTripPassiveSkill(LuminBufferWriter buffer, PassiveSkill value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializePassiveSkill(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -218,6 +227,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static UltimateSkill RoundTripUltimateSkill(LuminBufferWriter buffer, UltimateSkill value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializeUltimateSkill(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -233,6 +243,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static SupportSkill RoundTripSupportSkill(LuminBufferWriter buffer, SupportSkill value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializeSupportSkill(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -248,6 +259,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static CombatEventLog RoundTripCombatEvent(LuminBufferWriter buffer, CombatEventLog value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializeCombatEvent(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -263,6 +275,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static CraftingEventLog RoundTripCraftingEvent(LuminBufferWriter buffer, CraftingEventLog value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializeCraftingEvent(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -278,6 +291,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static TradeEventLog RoundTripTradeEvent(LuminBufferWriter buffer, TradeEventLog value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializeTradeEvent(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -293,6 +307,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     /// <returns>The result of the operation.</returns>
     private static AchievementEventLog RoundTripAchievementEvent(LuminBufferWriter buffer, AchievementEventLog value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         SerializeAchievementEvent(ref writer, value);
         ReadOnlySpan<byte> payload = writer.GetSpan();
@@ -369,6 +384,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void SerializeItemList(LuminBufferWriter buffer, List<ItemBase> value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         writer.WriteValue(value);
     }
@@ -379,6 +395,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void SerializeSkillList(LuminBufferWriter buffer, List<SkillBase> value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         writer.WriteValue(value);
     }
@@ -389,6 +406,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void SerializeEventList(LuminBufferWriter buffer, List<EventLogBase> value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         writer.WriteValue(value);
     }
@@ -399,6 +417,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void SerializeIntDictionary(LuminBufferWriter buffer, Dictionary<int, int> value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         writer.WriteValue(value);
     }
@@ -409,6 +428,7 @@ internal static class CharacterSaveDataConcreteJitProbe
     [MethodImpl(MethodImplOptions.NoInlining)]
     private static void SerializeStringDictionary(LuminBufferWriter buffer, Dictionary<string, long> value)
     {
+        buffer.ResetForReuse();
         var writer = new LuminPackWriter(buffer);
         writer.WriteValue(value);
     }

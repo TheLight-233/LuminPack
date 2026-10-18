@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.Loader;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -10,7 +11,8 @@ internal static class SerializerMechanismRegression
     /// <summary>Protects private storage views and both Union dispatch mechanisms against historical drift.</summary>
     /// <param name="references">Runtime and platform references.</param>
     /// <param name="historicalAnalyzer">An optional analyzer built from the recorded historical baseline.</param>
-    internal static void Run(MetadataReference[] references, string? historicalAnalyzer = null)
+    /// <param name="historicalRuntime">The matching legacy runtime, required after the approved options API change.</param>
+    internal static void Run(MetadataReference[] references, string? historicalAnalyzer = null, string? historicalRuntime = null)
     {
         var current = Inspect(references, [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminMapSourceGenerator().AsSourceGenerator()], "CurrentMechanisms");
         Require(current.SparseSize == current.SparseBytes, "Sparse version slots were omitted from current size evaluation.");
@@ -19,9 +21,14 @@ internal static class SerializerMechanismRegression
             var historical = Assembly.LoadFile(Path.GetFullPath(historicalAnalyzer));
             var generators = new[] { "LuminPackSourceGenerator", "LuminMapSourceGenerator" }
                 .Select(name => ((IIncrementalGenerator)Activator.CreateInstance(historical.GetType("LuminPack.SourceGenerator." + name, throwOnError: true)!)!).AsSourceGenerator()).ToArray();
-            var baseline = Inspect(references, generators, "HistoricalMechanisms");
+            Require(historicalRuntime != null, "A historical runtime is required to execute the former runtime-options API.");
+            var baselineReferences = references.Where(reference => Path.GetFileName(reference.Display) != "LuminPack.dll")
+                .Append(MetadataReference.CreateFromFile(Path.GetFullPath(historicalRuntime!))).ToArray();
+            var baseline = Inspect(baselineReferences, generators, "HistoricalMechanisms", historicalRuntime);
             Require(current.Wire == baseline.Wire, "Binary bytes, JSON text, callback order, or size results differ from the historical analyzer.");
-            Require(current.UnionBodies.SequenceEqual(baseline.UnionBodies), "A Union virtual body or generic cached-slot switch differs from the historical analyzer.");
+            Require(current.UnionBodies.SequenceEqual(baseline.UnionBodies), "A Union virtual body or generic cached-slot switch differs from the historical analyzer.\n" +
+                string.Join("\n", current.UnionBodies.Zip(baseline.UnionBodies).Where(pair => pair.First != pair.Second)
+                    .Take(1).Select(pair => "Current: " + pair.First + "\nHistorical: " + pair.Second)));
             Require(baseline.SparseBytes == current.SparseBytes && baseline.SparseSize + 1 == current.SparseSize,
                 "The recorded historical sparse-slot size fix changed beyond the single missing length-table byte.");
             Console.WriteLine("Passed historical mechanism parity: Union bodies, binary/JSON output, version gaps, cycles/shared references, value layouts, nullable/enums, collection order, callbacks, and size results.");
@@ -33,10 +40,11 @@ internal static class SerializerMechanismRegression
     /// <param name="references">Runtime references.</param>
     /// <param name="generators">The analyzer pair under review.</param>
     /// <param name="name">The isolated output assembly name.</param>
+    /// <param name="historicalRuntime">An optional isolated runtime for the legacy API fixture.</param>
     /// <returns>Observable serialization output and canonical hidden Union bodies.</returns>
-    private static (string Wire, string[] UnionBodies, int SparseSize, int SparseBytes) Inspect(MetadataReference[] references, ISourceGenerator[] generators, string name)
+    private static (string Wire, string[] UnionBodies, int SparseSize, int SparseBytes) Inspect(MetadataReference[] references, ISourceGenerator[] generators, string name, string? historicalRuntime = null)
     {
-        const string source = """
+        string source = """
             using System;
             using System.Collections.Generic;
             using System.Runtime.InteropServices;
@@ -156,16 +164,29 @@ internal static class SerializerMechanismRegression
                     byte[] bytes = LuminPackSerializer.Serialize(value);
                     results.Add(Convert.ToHexString(bytes));
                     if (recordSize) results.Add(LuminPackSerializer.Sizeof(value).ToString());
-                    foreach (var encoding in new[] { LuminPack.Option.LuminPackStringEncoding.UTF8, LuminPack.Option.LuminPackStringEncoding.UTF16 })
-                    {
-                        var option = new LuminPack.Option.LuminPackSerializerOption { StringEncoding = encoding };
-                        string json = LuminPackSerializer.SerializeJson(value, option);
-                        var restored = LuminPackSerializer.DeserializeJson<T>(json, option);
-                        results.Add(LuminPackSerializer.SerializeJson(restored, option));
-                    }
+                    JSON_PROFILE_LOOP
                 }
             }
             """;
+        string profileLoop = historicalRuntime == null ? """
+            AddJson<LuminPack.Option.LuminPackDefaultOptions>();
+            AddJson<LuminPack.Option.LuminPackUtf16LengthOptions>();
+            void AddJson<TProfile>() where TProfile : struct, LuminPack.Option.ILuminPackOptions
+            {
+                string json = LuminPackSerializer.SerializeJson<T, TProfile>(value);
+                var restored = LuminPackSerializer.DeserializeJson<T, TProfile>(json);
+                results.Add(LuminPackSerializer.SerializeJson<T, TProfile>(restored));
+            }
+            """ : """
+            foreach (var encoding in new[] { LuminPack.Option.LuminPackStringEncoding.UTF8, LuminPack.Option.LuminPackStringEncoding.UTF16 })
+            {
+                var options = new LuminPack.Option.LuminPackSerializerOption { StringEncoding = encoding };
+                string json = LuminPackSerializer.SerializeJson(value, options);
+                var restored = LuminPackSerializer.DeserializeJson<T>(json, options);
+                results.Add(LuminPackSerializer.SerializeJson(restored, options));
+            }
+            """;
+        source = source.Replace("JSON_PROFILE_LOOP", profileLoop, StringComparison.Ordinal);
         var parse = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Parse,
             preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]);
         var input = CSharpCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, parse, "Mechanisms.cs")], references,
@@ -181,21 +202,30 @@ internal static class SerializerMechanismRegression
         var methods = output.SyntaxTrees.Skip(1).SelectMany(tree => tree.GetRoot().DescendantNodes()).OfType<MethodDeclarationSyntax>()
             .Where(method => method.Identifier.ValueText.StartsWith("__LuminPackUnion", StringComparison.Ordinal)).ToArray();
         var ordinary = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Case" }).ToArray();
-        Require(ordinary.Length == 3 && ordinary.All(method => method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
+        Require(ordinary.Length == (historicalRuntime == null ? 10 : 3) && ordinary.All(method => method.TypeParameterList == null && method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
             !method.DescendantNodes().OfType<SwitchStatementSyntax>().Any()), "An ordinary Union override acquired a switch or lost virtual dispatch.");
         var generic = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "GenericCase" }).ToArray();
-        Require(generic.Length == 3 && generic.All(method => method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
+        Require(generic.Length == (historicalRuntime == null ? 10 : 3) && generic.All(method => method.TypeParameterList == null && method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
             method.DescendantNodes().OfType<SwitchStatementSyntax>().Any(statement => statement.Expression.ToString().StartsWith("__LuminPackUnionDispatchSlot_", StringComparison.Ordinal))),
             "A generic Union override lost its cached-slot switch.");
-        var bodies = methods.Select(method => ((TypeDeclarationSyntax)method.Parent!).Identifier.ValueText + ":" + method.Identifier.ValueText + ":" +
+        var bodies = methods.Where(method => method.TypeParameterList == null && !method.Identifier.ValueText.Contains("_Options_", StringComparison.Ordinal))
+            .Select(method => ((TypeDeclarationSyntax)method.Parent!).Identifier.ValueText + ":" + method.Identifier.ValueText + ":" +
             new ApiOwnerNames().Visit(method.Body)!.NormalizeWhitespace().ToFullString()).Order(StringComparer.Ordinal).ToArray();
         using var image = new MemoryStream();
         var emit = output.Emit(image);
         Require(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics));
-        var assembly = Assembly.Load(image.ToArray());
-        var entry = assembly.GetType("Entry")!;
-        return ((string)entry.GetMethod("Capture")!.Invoke(null, null)!, bodies,
-            (int)entry.GetMethod("SparseSize")!.Invoke(null, null)!, (int)entry.GetMethod("SparseBytes")!.Invoke(null, null)!);
+        var context = new AssemblyLoadContext(name, isCollectible: true);
+        if (historicalRuntime != null)
+            context.LoadFromAssemblyPath(Path.GetFullPath(historicalRuntime));
+        try
+        {
+            image.Position = 0;
+            var assembly = context.LoadFromStream(image);
+            var entry = assembly.GetType("Entry")!;
+            return ((string)entry.GetMethod("Capture")!.Invoke(null, null)!, bodies,
+                (int)entry.GetMethod("SparseSize")!.Invoke(null, null)!, (int)entry.GetMethod("SparseBytes")!.Invoke(null, null)!);
+        }
+        finally { context.Unload(); }
     }
 
     /// <summary>Normalizes API ownership and class-reference input passing while retaining dispatch and framing.</summary>
@@ -206,6 +236,14 @@ internal static class SerializerMechanismRegression
         /// <returns>The canonical invocation or the unchanged call.</returns>
         public override SyntaxNode? VisitInvocationExpression(InvocationExpressionSyntax node)
         {
+            node = (InvocationExpressionSyntax)base.VisitInvocationExpression(node)!;
+            if (node.Expression is MemberAccessExpressionSyntax { Name: GenericNameSyntax compiledCall } compiledAccess)
+            {
+                var arguments = SyntaxFactory.SeparatedList(compiledCall.TypeArgumentList.Arguments.Where(argument =>
+                    !argument.ToString().StartsWith("global::LuminPack.Option.LuminPack", StringComparison.Ordinal)));
+                node = node.WithExpression(compiledAccess.WithName(arguments.Count == 0 ? SyntaxFactory.IdentifierName(compiledCall.Identifier) :
+                    compiledCall.WithTypeArgumentList(compiledCall.TypeArgumentList.WithArguments(arguments))));
+            }
             if (node.Expression is not MemberAccessExpressionSyntax access ||
                 !(access.Expression.ToString().Contains("LuminPackExtensions_", StringComparison.Ordinal) ||
                   access.Expression.ToString() == "global::LuminPack.LuminPackSerializer")) return base.VisitInvocationExpression(node);
@@ -219,6 +257,13 @@ internal static class SerializerMechanismRegression
             };
             var canonical = node.WithExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
                 SyntaxFactory.IdentifierName("PayloadApi"), access.Name.WithIdentifier(SyntaxFactory.Identifier(name))));
+            if (canonical.Expression is MemberAccessExpressionSyntax { Name: GenericNameSyntax profileCall } &&
+                profileCall.TypeArgumentList.Arguments.Last().ToString().Contains("LuminPack.Option.", StringComparison.Ordinal))
+            {
+                var arguments = profileCall.TypeArgumentList.Arguments.RemoveAt(profileCall.TypeArgumentList.Arguments.Count - 1);
+                canonical = canonical.WithExpression(((MemberAccessExpressionSyntax)canonical.Expression).WithName(arguments.Count == 0
+                    ? SyntaxFactory.IdentifierName(name) : profileCall.WithTypeArgumentList(profileCall.TypeArgumentList.WithArguments(arguments))));
+            }
             // Omitting `in` still binds value-type `in` parameters. Class payloads now
             // carry the same object reference in a register instead of a local stack slot.
             if (name == "SerializeUnion" && canonical.ArgumentList.Arguments.Count == 2 &&
@@ -229,6 +274,13 @@ internal static class SerializerMechanismRegression
             }
             return canonical;
         }
+
+        /// <summary>Normalizes the explicitly approved replacement of the runtime encoding snapshot with a compiled constant.</summary>
+        /// <param name="node">An encoding property access in the canonical Union body.</param>
+        /// <returns>The original option spelling for historical mechanism comparison.</returns>
+        public override SyntaxNode? VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
+            => node.Expression is DefaultExpressionSyntax && node.Name.Identifier.ValueText == "StringEncoding"
+                ? SyntaxFactory.ParseExpression("writer.Option.StringEncoding") : base.VisitMemberAccessExpression(node);
     }
 
     /// <summary>Reports a mechanism or historical parity failure.</summary>

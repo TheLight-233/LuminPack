@@ -9,8 +9,8 @@ namespace LuminPackUnitTest;
 /// <summary>Provides strict json functionality.</summary>
 internal static class StrictJson
 {
-    internal static readonly LuminPack.Option.LuminPackSerializerOption Utf8 =
-        LuminPack.Option.LuminPackSerializerOption.Utf8 with { ValidateJsonSyntax = true };
+    internal static readonly LuminPack.Option.TestSerializationProfile Utf8 =
+        LuminPack.Option.TestSerializationProfile.Utf8 with { ValidateJsonSyntax = true };
 }
 
 /// <summary>Provides stray number probe model functionality.</summary>

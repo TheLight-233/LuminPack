@@ -57,7 +57,7 @@ public class JsonPropertyDispatchTest
     [InlineData(LuminPackStringEncoding.UTF16)]
     public void SmallModelsMatchLengthsAndActualNames(LuminPackStringEncoding encoding)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding };
+        var option = new TestSerializationProfile { StringEncoding = encoding };
         var result = LuminPackSerializer.DeserializeJson<JsonSmallDispatchModel>(
             "{\u0022AZ\u0022:{\u0022ignored\u0022:[\u0022escape\\n\u0022]},\u0022A\\u0042\u0022:2,\u0022\u540D\u79F0\u0022:\u0022\u4E2D\u6587\uD83D\uDE00\u0022,\u0022AA\u0022:1,\u0022aa\u0022:99}", option);
         Assert.NotNull(result);
@@ -73,7 +73,7 @@ public class JsonPropertyDispatchTest
     [InlineData(LuminPackStringEncoding.UTF16)]
     public void LargeModelsVerifyNamesAndSkipUnknownValues(LuminPackStringEncoding encoding)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding };
+        var option = new TestSerializationProfile { StringEncoding = encoding };
         var result = LuminPackSerializer.DeserializeJson<JsonLargeDispatchModel>(
             "{\"F11\":11,\"F99\":[{\"x\":\"\\u4F60\"}],\"F0\\u0030\":1,\"F01\":2,\"f02\":99}", option);
         Assert.NotNull(result);
@@ -90,7 +90,7 @@ public class JsonPropertyDispatchTest
     [InlineData(LuminPackStringEncoding.UTF16)]
     public void ReferenceMetadataIsMatchedInTheCorrectEncoding(LuminPackStringEncoding encoding)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding };
+        var option = new TestSerializationProfile { StringEncoding = encoding };
         var node = new CircleReferenceSerializationTest.SimpleNode { Name = "\u4E2D\u6587\uD83D\uDE00" };
         node.Parent = node;
         string json = LuminPackSerializer.SerializeJson(node, option);

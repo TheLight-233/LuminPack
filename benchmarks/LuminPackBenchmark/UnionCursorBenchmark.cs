@@ -26,7 +26,6 @@ public class UnionCursorBenchmark
     [GlobalSetup]
     public void Setup()
     {
-        _lumin.Option.StringEncoding = LuminPackStringEncoding.UTF8;
         for (int index = 0; index < 32; index++)
             _data.Add(index, index < 32 * FixedPercent / 100
                 ? new CursorFixedPayload { Number = index * 7 }
@@ -49,7 +48,12 @@ public class UnionCursorBenchmark
 
     /// <summary>Writes the selected Union distribution using the existing reusable destination.</summary>
     [Benchmark]
-    public void LuminPackWrite() => LuminPackSerializer.Serialize(_data, _lumin);
+    public void LuminPackWrite()
+    {
+        _lumin.ResetCore();
+        _lumin.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize(_data, _lumin);
+    }
 
     /// <summary>Writes the same UTF-8 values with an explicitly reset MemoryPack destination.</summary>
     [Benchmark]

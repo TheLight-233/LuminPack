@@ -17,8 +17,8 @@ internal static class BufferWriterSerializationTest
     {
         RunCase(results, nameof(ExternalBinarySerializationPublishesExactLength),
             ExternalBinarySerializationPublishesExactLength);
-        RunCase(results, nameof(ReusedBinaryWriterDropsOldTail),
-            ReusedBinaryWriterDropsOldTail);
+        RunCase(results, nameof(ReusedBinaryWriterAppendsRecords),
+            ReusedBinaryWriterAppendsRecords);
         RunCase(results, nameof(ExternalJsonSerializationPublishesExactLength),
             ExternalJsonSerializationPublishesExactLength);
         RunCase(results, nameof(ToArrayAndResetReturnsExactPayloadAndClears),
@@ -60,8 +60,8 @@ internal static class BufferWriterSerializationTest
             "Published payload could not be deserialized.");
     }
 
-    /// <summary>Verifies reused binary writer drops old tail.</summary>
-    private static void ReusedBinaryWriterDropsOldTail()
+    /// <summary>Verifies appended records preserve the complete preceding payload.</summary>
+    private static void ReusedBinaryWriterAppendsRecords()
     {
         var longValue = new string('L', 16 * 1024) + "-long-tail";
         const string shortValue = "short";
@@ -74,12 +74,12 @@ internal static class BufferWriterSerializationTest
             "First serialization did not publish the expected long payload.");
 
         LuminPackSerializer.Serialize(shortValue, writer);
-        Assert(writer.CurrentIndex == expectedShort.Length,
-            $"Reused writer kept an old length of {writer.CurrentIndex}; expected {expectedShort.Length}.");
-        Assert(writer.GetSpan().Length == expectedShort.Length,
-            "Reused writer exposed bytes beyond the short payload.");
-        Assert(writer.GetSpan().SequenceEqual(expectedShort),
-            "Reused writer retained data from the previous payload.");
+        Assert(writer.CurrentIndex == expectedLong.Length + expectedShort.Length &&
+            writer.GetSpan()[..expectedLong.Length].SequenceEqual(expectedLong) &&
+            writer.GetSpan()[expectedLong.Length..].SequenceEqual(expectedShort),
+            "Appending a short record changed the previous record or its new suffix.");
+        writer.ResetForReuse();
+        LuminPackSerializer.Serialize(shortValue, writer);
         Assert(LuminPackSerializer.Deserialize<string>(writer.GetSpan()) == shortValue,
             "Short payload from the reused writer could not be deserialized.");
     }
@@ -96,6 +96,7 @@ internal static class BufferWriterSerializationTest
         Assert(writer.CurrentIndex == expectedLong.Length && writer.GetSpan().SequenceEqual(expectedLong),
             "External JSON writer did not publish the expected long payload.");
 
+        writer.ResetForReuse();
         LuminPackSerializer.SerializeJson(shortValue, writer);
         var expectedShort = Encoding.UTF8.GetBytes(LuminPackSerializer.SerializeJson(shortValue));
         Assert(writer.CurrentIndex == expectedShort.Length,
@@ -266,7 +267,7 @@ internal static class BufferWriterSerializationTest
     /// <summary>Verifies utf16 token size matches serialized length.</summary>
     private static void Utf16TokenSizeMatchesSerializedLength()
     {
-        var option = LuminPackSerializerOption.Token with
+        var option = TestSerializationProfile.Token with
         {
             StringEncoding = LuminPackStringEncoding.UTF16
         };

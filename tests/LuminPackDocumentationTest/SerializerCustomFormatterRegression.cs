@@ -114,6 +114,12 @@ internal static class SerializerCustomFormatterRegression
                     LuminPackSerializer.DeserializeJson(json, ref jsonValue);
                     Validate(jsonValue);
                     if (JsonWrites != Writes || JsonReads != JsonWrites) throw new Exception($"Custom JSON bypass: {JsonWrites}/{JsonReads} vs {Writes}.");
+                    int previousJsonWrites = JsonWrites;
+                    bool encodingRejected = false;
+                    try { _ = LuminPackSerializer.SerializeJson<CustomValue, LuminPack.Option.LuminPackUtf16LengthOptions>(value.Left); }
+                    catch (Exception) { encodingRejected = true; }
+                    if (!encodingRejected || JsonWrites != previousJsonWrites)
+                        throw new Exception("A UTF-8 Custom formatter entered a UTF-16 JSON document.");
                     CustomRaw raw = new() { Number = 31 };
                     var rawBytes = LuminPackSerializer.Serialize(raw);
                     if (rawBytes.Length != 1) throw new Exception("Custom root used raw storage.");
@@ -184,7 +190,14 @@ internal static class SerializerCustomFormatterRegression
                 .Where(method => method.TypeParameterList == null && method.ParameterList.Parameters.Count == 2 &&
                     method.ParameterList.Parameters[0].Identifier.ValueText is "writer" or "reader" or "evaluator" &&
                     method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::CustomValue").ToArray();
-            if (stateMethods.Length != 5 || stateMethods.Any(method => !method.ToString().Contains("LuminPackFormatterRegistry.TryGetValue", StringComparison.Ordinal)))
+            var compiledMethods = generatedSources.SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+                .Where(method => method.TypeParameterList?.Parameters.Count == 1 && method.ParameterList.Parameters.Count == 2 &&
+                    method.ParameterList.Parameters[0].Identifier.ValueText is "writer" or "reader" or "evaluator" &&
+                    method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::CustomValue").ToArray();
+            if (stateMethods.Length != 5 || compiledMethods.Length != 5 || compiledMethods.Any(method =>
+                !method.ToString().Contains("LuminPackFormatterRegistry<", StringComparison.Ordinal) ||
+                !method.ToString().Contains(method.Identifier.ValueText.EndsWith("Json", StringComparison.Ordinal) ? ".TryGetJsonValue" : ".TryGetValue", StringComparison.Ordinal) ||
+                !method.ToString().Contains("delegate*", StringComparison.Ordinal)))
             {
                 string candidates = string.Join(" | ", driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
                     .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())

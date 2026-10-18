@@ -176,7 +176,7 @@ internal static class JsonWriterSafetyTest
         Assert(utf8Document.RootElement.GetString() == value,
             "UTF-8 JSON escaping or surrogate-pair encoding changed the string.");
 
-        var utf16 = LuminPackSerializer.SerializeJson(value, new LuminPackSerializerOption
+        var utf16 = LuminPackSerializer.SerializeJson(value, new TestSerializationProfile
         {
             StringEncoding = LuminPackStringEncoding.UTF16
         });

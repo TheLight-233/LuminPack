@@ -140,7 +140,7 @@ internal static class WriterReaderCorrectnessRegressionTest
             @class = new string('\u754c', 200_000),
             \u4e2d\u6587\u5b57\u6bb5 = "tail"
         };
-        var option = new LuminPackSerializerOption
+        var option = new TestSerializationProfile
         {
             StringEncoding = LuminPackStringEncoding.UTF8,
             StringRecording = LuminPackStringRecording.Length

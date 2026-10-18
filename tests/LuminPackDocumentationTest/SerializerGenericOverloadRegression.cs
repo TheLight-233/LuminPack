@@ -24,6 +24,7 @@ internal static class SerializerGenericOverloadRegression
         var input = CSharpCompilation.Create("GenericOverloadLibrary", [CSharpSyntaxTree.ParseText(models, Parse, "Models.cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         var driver = NewDriver().RunGeneratorsAndUpdateCompilation(input, out var library, out _);
+        CheckAppendEntries(driver);
         Require(ConcreteMethods(driver).Length == 0, "A library without concrete calls retained concrete serializer entries.");
         byte[] image = Emit(library);
         const string consumer = """
@@ -40,53 +41,78 @@ internal static class SerializerGenericOverloadRegression
                 {
                     int cases = 0;
                     foreach (var encoding in new[] { LuminPackStringEncoding.UTF8, LuminPackStringEncoding.UTF16 })
+            {
+                if (encoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)
+                    RunProfile<global::LuminPack.Option.LuminPackDefaultOptions>();
+                else
+                    RunProfile<global::LuminPack.Option.LuminPackUtf16LengthOptions>();
+                void RunProfile<TProfile>()
+                    where TProfile : struct, global::LuminPack.Option.ILuminPackOptions
+                {
+                    var value = new GenericPayload
                     {
-                        var option = new LuminPackSerializerOption { StringEncoding = encoding };
-                        var value = new GenericPayload { Value = 97, Text = new string('\u03bb', 1400) };
-                        byte[] expected = LuminPackSerializer.Serialize(in value, option);
-                        string json = LuminPackSerializer.SerializeJson(value, option);
-                        byte[] jsonBytes = (encoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(json);
-                        var buffer = LuminBufferWriterPool.Rent();
-                        try
-                        {
-                            buffer.Option.StringEncoding = encoding;
-                            LuminPackSerializer.Serialize(in value, buffer);
-                            if (!buffer.GetSpan().SequenceEqual(expected)) throw new Exception("Buffer-owned binary fallback ignored its configuration.");
-                            GenericPayload restored = null!;
-                            LuminPackSerializer.Deserialize(buffer, ref restored);
-                            Validate(value, restored);
-                            buffer.ResetCore();
-                            LuminPackSerializer.SerializeJson(value, buffer);
-                            if (!buffer.GetSpan().SequenceEqual(jsonBytes)) throw new Exception("Buffer-owned JSON fallback ignored its encoding.");
-                            if (LuminPackSerializer.DeserializeJson(buffer, ref restored) != jsonBytes.Length) throw new Exception("Buffer JSON consumed-byte count changed.");
-                            Validate(value, restored);
-                            if (buffer.Option.StringEncoding != encoding) throw new Exception("A generic buffer operation reset persistent configuration.");
-                            if (LuminPackSerializer.DeserializeJson(json, ref restored, option) != jsonBytes.Length) throw new Exception("String JSON consumed-byte count changed.");
-                            Validate(value, restored);
-                            if (LuminPackSerializer.DeserializeJson(json.AsSpan(), ref restored, option) != jsonBytes.Length) throw new Exception("Character JSON consumed-byte count changed.");
-                            Validate(value, restored);
-                            if (LuminPackSerializer.DeserializeJson(jsonBytes.AsSpan(), ref restored, option) != jsonBytes.Length) throw new Exception("Byte JSON consumed-byte count changed.");
-                            Validate(value, restored);
-                        }
-                        finally { LuminBufferWriterPool.Return(buffer); }
-                        using var stream = new MemoryStream();
-                        LuminPackSerializer.SerializeAsync(stream, value, option).GetAwaiter().GetResult();
-                        if (!stream.ToArray().AsSpan().SequenceEqual(expected)) throw new Exception("Async generic fallback changed the binary payload.");
-                        stream.Position = 0;
-                        Validate(value, LuminPackSerializer.DeserializeAsync<GenericPayload>(stream, option).GetAwaiter().GetResult());
-                        using var cancelled = new MemoryStream();
-                        try
-                        {
-                            LuminPackSerializer.SerializeAsync(cancelled, value, option, new CancellationToken(true)).GetAwaiter().GetResult();
-                            throw new Exception("Async cancellation was ignored.");
-                        }
-                        catch (OperationCanceledException) { }
-                        using var recovered = new MemoryStream();
-                        LuminPackSerializer.SerializeAsync(recovered, value, option).GetAwaiter().GetResult();
-                        if (!recovered.ToArray().AsSpan().SequenceEqual(expected)) throw new Exception("Cancelled write leaked pooled operation state.");
-                        cases++;
+                        Value = 97,
+                        Text = new string ('\u03bb', 1400)
+                    };
+                    byte[] expected = LuminPackSerializer.Serialize<GenericPayload, TProfile>(in value);
+                    string json = LuminPackSerializer.SerializeJson<GenericPayload, TProfile>(value);
+                    byte[] jsonBytes = (encoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(json);
+                    var buffer = LuminBufferWriterPool.Rent();
+                    try
+                    {
+                        LuminPackSerializer.Serialize<GenericPayload, TProfile>(in value, buffer);
+                        if (!buffer.GetSpan().SequenceEqual(expected))
+                            throw new Exception("Buffer-owned binary fallback ignored its configuration.");
+                        GenericPayload restored = null!;
+                        LuminPackSerializer.Deserialize<GenericPayload, TProfile>(buffer, ref restored);
+                        Validate(value, restored);
+                        buffer.ResetCore();
+                        LuminPackSerializer.SerializeJson<GenericPayload, TProfile>(value, buffer);
+                        if (!buffer.GetSpan().SequenceEqual(jsonBytes))
+                            throw new Exception("Buffer-owned JSON fallback ignored its encoding.");
+                        if (LuminPackSerializer.DeserializeJson<GenericPayload, TProfile>(buffer, ref restored) != jsonBytes.Length)
+                            throw new Exception("Buffer JSON consumed-byte count changed.");
+                        Validate(value, restored);
+                        if (typeof(LuminBufferWriter).GetProperty("Option") != null)
+                            throw new Exception("The buffer retained mutable configuration.");
+                        if (LuminPackSerializer.DeserializeJson<GenericPayload, TProfile>(json, ref restored) != jsonBytes.Length)
+                            throw new Exception("String JSON consumed-byte count changed.");
+                        Validate(value, restored);
+                        if (LuminPackSerializer.DeserializeJson<GenericPayload, TProfile>(json.AsSpan(), ref restored) != jsonBytes.Length)
+                            throw new Exception("Character JSON consumed-byte count changed.");
+                        Validate(value, restored);
+                        if (LuminPackSerializer.DeserializeJson<GenericPayload, TProfile>(jsonBytes.AsSpan(), ref restored) != jsonBytes.Length)
+                            throw new Exception("Byte JSON consumed-byte count changed.");
+                        Validate(value, restored);
                     }
-                    return cases;
+                    finally
+                    {
+                        LuminBufferWriterPool.Return(buffer);
+                    }
+
+                    using var stream = new MemoryStream();
+                    LuminPackSerializer.SerializeAsync<GenericPayload, TProfile>(stream, value).GetAwaiter().GetResult();
+                    if (!stream.ToArray().AsSpan().SequenceEqual(expected))
+                        throw new Exception("Async generic fallback changed the binary payload.");
+                    stream.Position = 0;
+                    Validate(value, LuminPackSerializer.DeserializeAsync<GenericPayload, TProfile>(stream).GetAwaiter().GetResult());
+                    using var cancelled = new MemoryStream();
+                    try
+                    {
+                        LuminPackSerializer.SerializeAsync<GenericPayload, TProfile>(cancelled, value, new CancellationToken(true)).GetAwaiter().GetResult();
+                        throw new Exception("Async cancellation was ignored.");
+                    }
+                    catch (OperationCanceledException)
+                    {
+                    }
+
+                    using var recovered = new MemoryStream();
+                    LuminPackSerializer.SerializeAsync<GenericPayload, TProfile>(recovered, value).GetAwaiter().GetResult();
+                    if (!recovered.ToArray().AsSpan().SequenceEqual(expected))
+                        throw new Exception("Cancelled write leaked pooled operation state.");
+                    cases++;
+                }
+            }        return cases;
                 }
                 private static void Validate(GenericPayload expected, GenericPayload actual)
                 {
@@ -137,6 +163,27 @@ internal static class SerializerGenericOverloadRegression
         var generators = new List<ISourceGenerator> { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminMapSourceGenerator().AsSourceGenerator() };
         if (additional != null) generators.Add(additional);
         return CSharpGeneratorDriver.Create(generators, parseOptions: Parse);
+    }
+
+    /// <summary>Checks caller-buffer ownership and exceptional cursor detachment in shared compiled-profile entries.</summary>
+    /// <param name="driver">The completed generator driver.</param>
+    private static void CheckAppendEntries(GeneratorDriver driver)
+    {
+        var methods = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+            .SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, Parse).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
+        var entries = methods.Where(method => method.Identifier.ValueText is "Serialize" or "SerializeJson" &&
+            method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "LuminBufferWriter")).ToArray();
+        Require(entries.Length >= 4, "Shared binary/JSON default and compiled-profile append entries are missing.");
+        foreach (var entry in entries)
+            Require(!entry.ToString().Contains("ResetCore(", StringComparison.Ordinal) &&
+                !entry.ToString().Contains("ResetOperationState(", StringComparison.Ordinal) &&
+                !entry.DescendantNodes().OfType<CatchClauseSyntax>().Any(),
+                "A caller-buffer write entry still clears or catches the caller's session.");
+        var boundEntries = entries.Where(method => method.DescendantNodes().OfType<ObjectCreationExpressionSyntax>()
+            .Any(creation => creation.Type.ToString() is "LuminPackWriter" or "LuminPackJsonWriter")).ToArray();
+        Require(boundEntries.Length >= 2 && boundEntries.All(method => method.DescendantNodes().OfType<FinallyClauseSyntax>()
+            .Any(clause => clause.ToString().Contains("CompleteWrite("))),
+            "Shared append entries no longer detach their temporary cursor on exceptional exit.");
     }
 
     /// <summary>Obtains concrete public serializer declarations without counting shared generic cores.</summary>

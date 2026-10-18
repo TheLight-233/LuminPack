@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>13</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LuminPackGenerationMode>Light</LuminPackGenerationMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <CompilerVisibleProperty Include="LuminPackGenerationMode" />
+    <ProjectReference Include="../../src/LuminPackGenerator/LuminPackGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="../../src/LuminPack/LuminPack.csproj" />
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.6" />
+    <PackageReference Include="MemoryPack" Version="1.21.4" />
+  </ItemGroup>
+</Project>

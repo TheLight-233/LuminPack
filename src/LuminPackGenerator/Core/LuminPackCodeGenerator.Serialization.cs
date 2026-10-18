@@ -34,6 +34,9 @@ public static partial class LuminPackCodeGenerator
     /// <param name="stateOffset">The cached root cursor, or null for shared state.</param>
     private static void GenerateSerializeCode(StringBuilder sb, LuminDataField field, string fieldPath, string span, string offset, int indent, int depth, bool isMultClass = false, string stringRecordLength = "writer.StringRecordLength()", string stateOffset = null)
     {
+        using var optionScope = new CompiledOptionFieldScope(sb, field.Options, field.Type == LuminFiledType.Other && field.TypeSymbol != null ? FormatterTypeName.Get(field.TypeSymbol) : null);
+        if (field.Options?.IsDeclared == true)
+            stringRecordLength = field.Options.HeaderLength.ToString(System.Globalization.CultureInfo.InvariantCulture);
         string indentation = new string(' ', indent * 4);
         string depthSuffix = $"_{depth}";
         switch (field.Type)
@@ -170,10 +173,7 @@ public static partial class LuminPackCodeGenerator
                         sb.AppendLine(indentation + "    }");
                         sb.AppendLine(indentation + "    int strLen_" + depthSuffix + " = writer.WriteString(ref " + field.Name + "ListOffset" + depthSuffix + ", v" + depthSuffix + ");");
                         sb.AppendLine(indentation + "    " + field.Name + "ListOffset" + depthSuffix + " += strLen_" + depthSuffix + " + " + stringRecordLength + ";");
-                        if (isMultClass)
-                        {
-                            sb.AppendLine(indentation + "    " + offset + " = " + field.Name + "ListOffset" + depthSuffix + ";");
-                        }
+
                     }
                     else
                     {
@@ -185,6 +185,7 @@ public static partial class LuminPackCodeGenerator
                                 sb.AppendLine(indentation + "    // Unmanaged struct");
                                 sb.AppendLine(indentation + "    " + field.Name + "ListOffset" + depthSuffix + " += writer.WriteUnmanaged(ref " + field.Name + "ListOffset" + depthSuffix + ", v" + depthSuffix + ");");
                                 sb.AppendLine(indentation + "}");
+                                if (isMultClass) sb.AppendLine(indentation + offset + " = " + field.Name + "ListOffset" + depthSuffix + ";");
                                 break;
                             }
                             if (elementField4.Type == LuminFiledType.Class)
@@ -342,6 +343,7 @@ public static partial class LuminPackCodeGenerator
                         }
                     }
                     sb.AppendLine(indentation + "}");
+                    if (isMultClass) sb.AppendLine(indentation + offset + " = " + field.Name + "ListOffset" + depthSuffix + ";");
                     break;
                 }
             case LuminFiledType.Array:
@@ -405,10 +407,7 @@ public static partial class LuminPackCodeGenerator
                         sb.AppendLine(indentation + "    }");
                         sb.AppendLine(indentation + "    int strLen_" + depthSuffix + " = writer.WriteString(ref " + field.Name + "ListOffset" + depthSuffix + ", v" + depthSuffix + ");");
                         sb.AppendLine(indentation + "    " + field.Name + "ListOffset" + depthSuffix + " += strLen_" + depthSuffix + " + " + stringRecordLength + ";");
-                        if (isMultClass)
-                        {
-                            sb.AppendLine(indentation + "    " + offset + " = " + field.Name + "ListOffset" + depthSuffix + ";");
-                        }
+
                     }
                     else
                     {
@@ -420,6 +419,7 @@ public static partial class LuminPackCodeGenerator
                                 sb.AppendLine(indentation + "    // Unmanaged struct");
                                 sb.AppendLine(indentation + "    " + field.Name + "ListOffset" + depthSuffix + " += writer.WriteUnmanaged(ref " + field.Name + "ListOffset" + depthSuffix + ", v" + depthSuffix + ");");
                                 sb.AppendLine(indentation + "}");
+                                if (isMultClass) sb.AppendLine(indentation + offset + " = " + field.Name + "ListOffset" + depthSuffix + ";");
                                 break;
                             }
                             string elementExpression = "v" + depthSuffix;
@@ -573,6 +573,7 @@ public static partial class LuminPackCodeGenerator
                         }
                     }
                     sb.AppendLine(indentation + "}");
+                    if (isMultClass) sb.AppendLine(indentation + offset + " = " + field.Name + "ListOffset" + depthSuffix + ";");
                     break;
                 }
             case LuminFiledType.Struct:
@@ -842,6 +843,8 @@ public static partial class LuminPackCodeGenerator
         sb.AppendLine();
         for (int fieldIndex5 = fieldIndex2; fieldIndex5 < data.fields.Count; fieldIndex5++)
         {
+            string memberHeaderLength = data.fields[fieldIndex5].Options?.IsDeclared == true
+                ? data.fields[fieldIndex5].Options.HeaderLength.ToString(System.Globalization.CultureInfo.InvariantCulture) : stringHeaderLength;
             string fieldVariable5 = ((data.fields[fieldIndex5].IsPrivate || data.fields[fieldIndex5].isProperty) ? "local" : (isUnmanaged ? "serializeValue" : "value"));
             LuminFiledType type;
             if (data.fields[fieldIndex5].FieldType == LuminDataType.Reference && data.fields[fieldIndex5].Type != LuminFiledType.Other)
@@ -849,7 +852,7 @@ public static partial class LuminPackCodeGenerator
                 string fieldVariable6 = "serialize" + data.fields[fieldIndex5].Name + "Field";
                 sb.AppendLine("            if (" + fieldVariable5 + "." + data.fields[fieldIndex5].Identifier + " is { } " + fieldVariable6 + ")");
                 sb.AppendLine("            {");
-                GenerateSerializeCode(sb, data.fields[fieldIndex5], fieldVariable6, "span", "offset", 4, 0, isMultClass: false, stringHeaderLength, stateOffset);
+                GenerateSerializeCode(sb, data.fields[fieldIndex5], fieldVariable6, "span", "offset", 4, 0, isMultClass: false, memberHeaderLength, stateOffset);
                 if (data.fields[fieldIndex5].Type != LuminFiledType.Class)
                 {
                     string serializeFieldLength = GetSerializeFieldLength(data.fields[fieldIndex5], 0, stringHeaderLength);
@@ -877,8 +880,8 @@ public static partial class LuminPackCodeGenerator
                     case LuminFiledType.String:
                         sb.AppendLine("            else");
                         sb.AppendLine("            {");
-                        sb.AppendLine("                writer.WriteNullStringHeader(ref offset);");
-                        sb.AppendLine("                offset += " + stringHeaderLength + ";");
+                        sb.AppendLine("                writer.WriteNullStringHeader" + (data.fields[fieldIndex5].Options == null ? "" : "<" + data.fields[fieldIndex5].Options.ScopeTypeName + ">") + "(ref offset);");
+                        sb.AppendLine("                offset += " + memberHeaderLength + ";");
                         sb.AppendLine("            }");
                         break;
                     default:
@@ -926,7 +929,7 @@ public static partial class LuminPackCodeGenerator
                     continue;
                 }
             }
-            GenerateSerializeCode(sb, data.fields[fieldIndex5], fieldVariable5 + "." + data.fields[fieldIndex5].Identifier, "span", "offset", 3, 0, isMultClass: false, stringHeaderLength, stateOffset);
+            GenerateSerializeCode(sb, data.fields[fieldIndex5], fieldVariable5 + "." + data.fields[fieldIndex5].Identifier, "span", "offset", 3, 0, isMultClass: false, memberHeaderLength, stateOffset);
             type = data.fields[fieldIndex5].Type;
             if (type != LuminFiledType.Struct && type != LuminFiledType.Other)
             {

@@ -50,6 +50,17 @@ internal static class IncrementalGenerationChecks
         Verify("global payload alias", alias, Replace(alias, "Aliases.cs", "IncrementalChecks.A", "IncrementalChecks.B"), expectedRoot: "B");
         var fallback = Replace(minimal, "Utility.cs", "=> 17;", "{ int Local(int value) => value; return Local(17); }");
         Verify("retained unsupported local function", fallback, Replace(fallback, "A.cs", "= 1", "= 2"), requireFallback: true);
+        var compiledOptions = Replace(minimal, "A.cs", "public int Value = 1;",
+            "[LuminPack.Attribute.LuminPackOption(StringEncoding = LuminPack.Option.LuminPackStringEncoding.UTF8)] public string Text = \"value\";");
+        Verify("compiled member option", compiledOptions, Replace(compiledOptions, "A.cs", "StringEncoding.UTF8", "StringEncoding.UTF16"));
+        Verify("compiled assembly option", minimal, Replace(minimal, "Options.cs", ".Minimal)]",
+            ".Minimal)] [assembly: LuminPack.Attribute.LuminPackOption(StringEncoding = LuminPack.Option.LuminPackStringEncoding.UTF16)]"));
+        var unmarkedString = Replace(minimal, "A.cs", "public int Value = 1;", "public string Text = \"value\";");
+        Verify("compiled default-valued assembly declaration", unmarkedString, Replace(unmarkedString, "Options.cs", ".Minimal)]",
+            ".Minimal)] [assembly: LuminPack.Attribute.LuminPackOption(StringEncoding = LuminPack.Option.LuminPackStringEncoding.UTF8)]"));
+        var declaredOptions = Replace(minimal, "A.cs", "public partial class A",
+            "[LuminPack.Attribute.LuminPackOption(ValidateJsonSyntax = false)] public partial class A");
+        Verify("compiled root JSON validation", declaredOptions, Replace(declaredOptions, "A.cs", "ValidateJsonSyntax = false", "ValidateJsonSyntax = true"));
         VerifyDiagnosticReuse(resolvedReferences, "Shared.cs");
         VerifyDiagnosticReuse(resolvedReferences, string.Empty);
     }

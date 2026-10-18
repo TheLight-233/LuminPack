@@ -22,7 +22,7 @@ public class OptimizationBenchmark
     private byte[] _json = null!;
     private string _jsonString = null!;
     private LuminBufferWriter _writer = null!;
-    private static readonly LuminPackSerializerOption Strict = new() { ValidateJsonSyntax = true };
+    private static readonly BenchmarkProfile Strict = new() { ValidateJsonSyntax = true };
 
     /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
@@ -70,12 +70,22 @@ public class OptimizationBenchmark
     /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData JsonReadStrictUtf8() => LuminPackSerializer.DeserializeJson<CharacterSaveData>(_json, Strict);
     /// <summary>Measures json write buffer for the configured benchmark input.</summary>
-    [Benchmark] public void JsonWriteBuffer() => LuminPackSerializer.SerializeJson(_data, _writer);
+    [Benchmark] public void JsonWriteBuffer()
+    {
+        _writer.ResetCore();
+        _writer.WriterState.ResetOperationState();
+        LuminPackSerializer.SerializeJson(_data, _writer);
+    }
     /// <summary>Measures json write string for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
     [Benchmark] public string JsonWriteString() => LuminPackSerializer.SerializeJson(_data);
     /// <summary>Measures binary write buffer for the configured benchmark input.</summary>
-    [Benchmark] public void BinaryWriteBuffer() => LuminPackSerializer.Serialize(_data, _writer);
+    [Benchmark] public void BinaryWriteBuffer()
+    {
+        _writer.ResetCore();
+        _writer.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize(_data, _writer);
+    }
     /// <summary>Measures binary read for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData BinaryRead() => LuminPackSerializer.Deserialize<CharacterSaveData>(_binary);
@@ -91,7 +101,7 @@ public class JsonNumberReadOptimizationBenchmark
     public string Shape { get; set; } = "Fixed";
     private byte[] _floats = null!;
     private byte[] _doubles = null!;
-    private readonly LuminPackReaderOptionalState _state = new(new LuminPackSerializerOption());
+    private readonly LuminPackReaderOptionalState _state = new();
 
     /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
@@ -143,13 +153,13 @@ public class JsonInputShapeOptimizationBenchmark
     [Params("Reversed", "Indented", "Utf16")]
     public string Shape { get; set; } = "Reversed";
     private string _json = null!;
-    private LuminPackSerializerOption _option = null!;
+    private BenchmarkProfile _option = null!;
 
     /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
-        _option = new LuminPackSerializerOption
+        _option = new BenchmarkProfile
         {
             StringEncoding = Shape == "Utf16" ? LuminPackStringEncoding.UTF16 : LuminPackStringEncoding.UTF8,
             ValidateJsonSyntax = true
@@ -216,7 +226,7 @@ public class SerializerComparisonBenchmark
     private byte[] _stjJson = null!;
     private byte[] _luminBinary = null!;
     private byte[] _memoryBinary = null!;
-    private static readonly LuminPackSerializerOption Strict = new() { ValidateJsonSyntax = true };
+    private static readonly BenchmarkProfile Strict = new() { ValidateJsonSyntax = true };
     private static readonly OptimizationJsonContext Context = new(new JsonSerializerOptions
     {
         IncludeFields = true,

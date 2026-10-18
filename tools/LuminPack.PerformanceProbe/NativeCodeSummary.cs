@@ -16,8 +16,10 @@ internal static class NativeCodeSummary
             var instructions = lines.Where(line => Regex.IsMatch(line, @"^[a-z][a-z0-9]*\s")).ToArray();
             int end = section.IndexOf("G_M000_IG02:", StringComparison.Ordinal);
             string prologue = end >= 0 ? section[..end] : string.Empty;
-            var frame = Regex.Match(prologue, @"sub\s+rsp,\s+(\d+)");
-            int subtraction = frame.Success ? int.Parse(frame.Groups[1].Value) : 0;
+            var frame = Regex.Match(prologue, @"sub\s+rsp,\s+(0[xX][0-9a-fA-F]+|\d+)");
+            string frameSize = frame.Groups[1].Value;
+            int subtraction = !frame.Success ? 0 : frameSize.StartsWith("0x", StringComparison.OrdinalIgnoreCase)
+                ? Convert.ToInt32(frameSize[2..], 16) : int.Parse(frameSize, System.Globalization.CultureInfo.InvariantCulture);
             int pushes = Regex.Matches(prologue, @"(?m)^\s*push\s+").Count;
             var bytes = Regex.Match(section, @"; Total bytes of code (\d+)");
             methods.Add(new

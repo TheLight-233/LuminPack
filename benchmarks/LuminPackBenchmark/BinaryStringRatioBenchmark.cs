@@ -27,7 +27,7 @@ public class BinaryStringRatioBenchmark
     public string Shape { get; set; } = "Short";
     private BinaryRatioStrings _data = null!;
     private byte[] _lp = null!, _mp = null!;
-    private LuminPackSerializerOption _option = null!;
+    private BenchmarkProfile _option = null!;
     private MemoryPack.MemoryPackSerializerOptions _mpOption = null!;
 
     /// <summary>Updates the up used by the current operation.</summary>

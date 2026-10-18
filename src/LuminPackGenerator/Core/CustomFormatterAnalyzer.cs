@@ -246,7 +246,7 @@ internal static class CustomFormatterAnalyzer
             anyError = true;
         }
 
-        if (!method.ReturnsVoid || method.Parameters.Length != 2 ||
+        if (method.IsGenericMethod || !method.ReturnsVoid || method.Parameters.Length != 2 ||
             !ParameterMatches(method.Parameters[0], firstParameterType, RefKind.Ref) ||
             !ParameterMatches(method.Parameters[1], secondParameterType, secondParameterRefKind))
         {

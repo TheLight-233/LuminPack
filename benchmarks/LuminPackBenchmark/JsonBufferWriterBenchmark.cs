@@ -48,6 +48,8 @@ public class JsonBufferWriterBenchmark
     public int BufferedCopy()
     {
         _output.Clear();
+        _intermediate.ResetCore();
+        _intermediate.WriterState.ResetOperationState();
         LuminPackSerializer.SerializeJson(_value, _intermediate);
         var bytes = _intermediate.GetSpan();
         bytes.CopyTo(_output.GetSpan(bytes.Length));

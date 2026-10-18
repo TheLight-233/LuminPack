@@ -50,7 +50,7 @@ public class GeneratedFixedFieldWriteTest
     public void MixedWidthsKeepExistingWireBytesAndOffsetBounds(LuminPackStringEncoding encoding)
     {
         var value = CreateValue();
-        var option = new LuminPackSerializerOption { StringEncoding = encoding };
+        var option = new TestSerializationProfile { StringEncoding = encoding };
         byte[] expected = ReferenceWrite(value, option);
         Assert.Equal(expected, LuminPackSerializer.Serialize(value, option));
         var copy = LuminPackSerializer.Deserialize<FixedPrimitiveWriteModel>(expected, option);
@@ -66,7 +66,7 @@ public class GeneratedFixedFieldWriteTest
         {
             byte[] guarded = Enumerable.Repeat((byte)0xCC, prefix + fixedExpected.Length + 9).ToArray();
             Span<byte> destination = guarded.AsSpan(prefix, fixedExpected.Length);
-            using var state = new LuminPackWriterOptionalState(option);
+            using var state = new LuminPackWriterOptionalState();
             var writer = new LuminPackWriter(ref destination, state);
             writer.WriteValue(in fixedValue);
             Assert.Equal(fixedExpected.Length, writer.CurrentIndex);
@@ -86,7 +86,7 @@ public class GeneratedFixedFieldWriteTest
             Array = new[] { item, null!, item },
             List = new List<FixedPrimitiveWriteModel> { null!, item }
         };
-        byte[] child = ReferenceWrite(item, LuminPackSerializerOption.Default);
+        byte[] child = ReferenceWrite(item, TestSerializationProfile.Default);
         using var expected = new MemoryStream();
         expected.WriteByte(2);
         expected.Write(BitConverter.GetBytes(3));
@@ -148,17 +148,17 @@ public class GeneratedFixedFieldWriteTest
     /// <param name="value">The value consumed or produced by this operation.</param>
     /// <param name="option">The configuration to apply to this operation.</param>
     /// <returns>The result of the operation.</returns>
-    private static byte[] ReferenceWrite(FixedPrimitiveWriteModel value, LuminPackSerializerOption option)
+    private static byte[] ReferenceWrite(FixedPrimitiveWriteModel value, TestSerializationProfile option)
     {
         Span<byte> span = new byte[1024];
-        using var state = new LuminPackWriterOptionalState(option);
+        using var state = new LuminPackWriterOptionalState();
         var writer = new LuminPackWriter(ref span, state);
         writer.Advance(writer.WriteUnmanaged((byte)21, value.Id));
-        writer.Advance(writer.WriteString(value.Prefix) + writer.StringRecordLength());
+        writer.Advance(writer.WriteStringFor(option,value.Prefix) + writer.StringRecordLengthFor(option));
         writer.Advance(writer.WriteUnmanaged(value.U8, value.I8, value.Flag, value.I16, value.U16, value.Character,
             value.I32, value.U32, value.I64, value.U64, value.F32, value.F64, value.Decimal, value.Small, value.Medium));
         writer.Advance(writer.WriteUnmanaged(value.Wide));
-        writer.Advance(writer.WriteString(value.Suffix) + writer.StringRecordLength());
+        writer.Advance(writer.WriteStringFor(option,value.Suffix) + writer.StringRecordLengthFor(option));
         writer.Advance(writer.WriteUnmanaged(value.Marker, value.End));
         return writer.GetSpan().ToArray();
     }

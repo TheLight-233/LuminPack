@@ -15,23 +15,17 @@ internal static class CharacterSaveDataJitProbe
     internal static void Run()
     {
         var data = CharacterSaveData.Create();
-        var option = new LuminPackSerializerOption
-        {
-            StringEncoding = LuminPackStringEncoding.UTF16,
-            StringRecording = LuminPackStringRecording.Length
-        };
-        var payload = LuminPackSerializer.Serialize(data, option);
+        var payload = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(data);
         var writer = LuminBufferWriterPool.Rent();
-        writer.Option.StringEncoding = option.StringEncoding;
-        writer.Option.StringRecording = option.StringRecording;
 
         CharacterSaveData? result = null;
         try
         {
             for (var i = 0; i < Iterations; i++)
             {
-                LuminPackSerializer.Serialize(data, writer);
-                result = LuminPackSerializer.Deserialize<CharacterSaveData>(payload, option);
+                writer.ResetForReuse();
+                LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(data, writer);
+                result = LuminPackSerializer.Deserialize<CharacterSaveData, LuminPackUtf16LengthOptions>(payload);
             }
         }
         finally

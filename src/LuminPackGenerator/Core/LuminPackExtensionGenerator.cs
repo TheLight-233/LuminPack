@@ -62,13 +62,15 @@ public static partial class LuminPackExtensionGenerator
         /// <param name="binary">The binary used by this operation.</param>
         /// <param name="json">The json used by this operation.</param>
         /// <param name="calculate">The calculate used by this operation.</param>
-        public DispatchEntry(int id, string name, bool binary, bool json, bool calculate)
+        /// <param name="options">The immutable declaration-time profile.</param>
+        public DispatchEntry(int id, string name, bool binary, bool json, bool calculate, CompiledOptions options)
         {
             Id = id;
             Name = name;
             Binary = binary;
             Json = json;
             Calculate = calculate;
+            Options = options;
         }
 
         /// <summary>Gets the id.</summary>
@@ -79,6 +81,7 @@ public static partial class LuminPackExtensionGenerator
         public bool Binary { get; }
         /// <summary>Gets the json.</summary>
         public bool Json { get; }
+        internal CompiledOptions Options { get; }
         /// <summary>Gets the calculate.</summary>
         public bool Calculate { get; }
     }

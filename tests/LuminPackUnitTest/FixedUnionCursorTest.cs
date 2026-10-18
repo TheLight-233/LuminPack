@@ -56,7 +56,7 @@ public class FixedUnionCursorTest
         Assert.Equal(source.Keys, copy.Keys);
         Assert.Equal(22, Assert.IsType<FixedCase>(copy[2]).Number);
     }
-    /// <summary>Preserves exception cleanup when a legacy fallback fails after an unpublished fixed entry.</summary>
+    /// <summary>Publishes the pending cursor on legacy failure and allows an explicit caller reset before retry.</summary>
     [Fact]
     public void CursorFallbackRetainsExceptionCleanupAndReuse()
     {
@@ -71,9 +71,10 @@ public class FixedUnionCursorTest
             LegacyCase.Throw = true;
             var error = Assert.Throws<InvalidOperationException>(() => LuminPackSerializer.Serialize(in source, destination));
             Assert.Equal("Controlled legacy-slot failure.", error.Message);
-            Assert.Equal(0, destination.CurrentIndex);
+            Assert.Equal(17, destination.CurrentIndex);
         }
         finally { LegacyCase.Throw = false; }
+        destination.ResetForReuse();
         LuminPackSerializer.Serialize(in source, destination);
         var copy = LuminPackSerializer.Deserialize<Dictionary<int, CursorRoot?>>(destination.GetSpan());
         Assert.Equal(22, Assert.IsType<FixedCase>(copy[2]).Number);
@@ -96,7 +97,7 @@ public class FixedUnionCursorTest
         Assert.Equal(payload, LuminPackSerializer.Serialize(copy));
     }
 
-    /// <summary>Retains failure and destination cleanup for an unknown runtime case.</summary>
+    /// <summary>Retains the failure cursor for an unknown runtime case until the caller explicitly resets.</summary>
     [Fact]
     public void UnknownRuntimeCaseStillFailsAndReleasesTheOperation()
     {
@@ -107,8 +108,9 @@ public class FixedUnionCursorTest
         };
         using var destination = new LuminBufferWriter(true);
         Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Serialize(in source, destination));
-        Assert.Equal(0, destination.CurrentIndex);
+        Assert.Equal(17, destination.CurrentIndex);
         source[2] = new FixedCase { Number = 73 };
+        destination.ResetForReuse();
         LuminPackSerializer.Serialize(in source, destination);
         var copy = LuminPackSerializer.Deserialize<Dictionary<int, CursorRoot?>>(destination.GetSpan());
         Assert.Equal(73, Assert.IsType<FixedCase>(copy[2]).Number);

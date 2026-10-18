@@ -19,7 +19,7 @@ public class JsonSimpleDecimalTest
     [InlineData(LuminPackStringEncoding.UTF16, true)]
     public void DecimalFastPathAndFallbackAgreeBitForBitWithSystemTextJson(LuminPackStringEncoding encoding, bool strict)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding, ValidateJsonSyntax = strict };
+        var option = new TestSerializationProfile { StringEncoding = encoding, ValidateJsonSyntax = strict };
         var literals = new List<string>
         {
             "0", "-0", "-0.0", "0.000000000000000000000000", "-0.000000000000000000000000",

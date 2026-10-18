@@ -1,20 +1,26 @@
 namespace LuminPack.Attribute;
 
 /// <summary>
-/// User guarantee that a type's complete serialized length never exceeds the writer's buffer growth
-/// threshold (87.5 percent of the initial segment, see <c>LuminBufferWriter.InitialBufferSize</c>).
+/// User guarantee that a type's complete serialized length never exceeds <see cref="MaxBytes"/>.
 /// <para>
-/// The generator relies on this guarantee to remove every container-layer capacity check emitted from
-/// the type's own serialization body, relying on the caller reserving the complete record. A wrong
-/// guarantee can therefore produce an out-of-range write past the segment end and heap corruption,
-/// exactly like the value being larger than the declared threshold. In DEBUG builds the generator also
-/// emits one length assertion that fails in development when the guarantee is violated; Release output
-/// is untouched. Do not apply it to a type whose graph can exceed the threshold.
+/// The generator relies on this guarantee to remove every container-layer capacity check emitted from the
+/// type's own serialization body, and a container of such elements reserves count * MaxBytes once instead
+/// of checking each element. A wrong guarantee can therefore produce an out-of-range write past the segment
+/// end and heap corruption. In DEBUG builds the generator also emits a completed-length assertion.
+/// The bound includes all headers, fields and nested values, in every supported writer option mode.
+/// A root reserves this complete bound before writing. The cursor advances by the actual bytes written.
+/// Bounds must be positive; a larger bound can cause additional buffer allocation.
 /// </para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct, AllowMultiple = false, Inherited = false)]
 public sealed class LuminPackBoundedAttribute : System.Attribute
 {
+    /// <summary>Initializes the guarantee with the maximum complete serialized length of one value.</summary>
+    /// <param name="maxBytes">The maximum complete serialized length of one value, in bytes.</param>
+    public LuminPackBoundedAttribute(int maxBytes) => MaxBytes = maxBytes;
+
+    /// <summary>Gets the maximum complete serialized length of one value, in bytes.</summary>
+    public int MaxBytes { get; }
 }
 
 /// <summary>

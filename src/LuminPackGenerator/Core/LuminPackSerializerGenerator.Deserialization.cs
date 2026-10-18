@@ -47,7 +47,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("        /// <param name=\"value\">Receives the deserialized value.</param>");
         sb.AppendLine("        /// <returns>The number of bytes consumed from the buffer.</returns>");
         sb.AppendLine("        /// <remarks>");
-        sb.AppendLine("        /// Configuration comes from <see cref=\"LuminBufferWriter.Option\"/> and persists until the buffer is returned.");
+        sb.AppendLine("        /// Configuration is compiled from declarations; the buffer owns only bytes and reference state.");
         sb.AppendLine("        /// <see cref=\"LuminBufferWriterPool.Return\"/> restores defaults and clears both operation states. This method does");
         sb.AppendLine("        /// not use thread-static optional state and requires exclusive ownership of <paramref name=\"bufferWriter\"/>.");
         sb.AppendLine("        /// </remarks>");

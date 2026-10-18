@@ -23,7 +23,6 @@ public class BinaryFallbackOptimizationBenchmark
     public void Setup()
     {
         _writer = LuminBufferWriterPool.Rent();
-        _writer.Option.StringEncoding = LuminPackStringEncoding.UTF8;
         _value = new BinaryStringBatch
         {
             Values = Enumerable.Range(0, 512).Select(i => Shape == "Unicode"
@@ -37,7 +36,12 @@ public class BinaryFallbackOptimizationBenchmark
     /// <summary>Measures cleanup for the configured benchmark input.</summary>
     [GlobalCleanup] public void Cleanup() => LuminBufferWriterPool.Return(_writer);
     /// <summary>Writes  to the current output.</summary>
-    [Benchmark] public void Write() => LuminPackSerializer.Serialize(_value, _writer);
+    [Benchmark] public void Write()
+    {
+        _writer.ResetCore();
+        _writer.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize(_value, _writer);
+    }
     /// <summary>Reads  from the current input.</summary>
     /// <returns>The result of the operation.</returns>
     [Benchmark] public BinaryStringBatch Read() => LuminPackSerializer.Deserialize<BinaryStringBatch>(_bytes);

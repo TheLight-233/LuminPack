@@ -16,7 +16,7 @@ public class ContinuationOptimizationBenchmark
     private byte[] _binary = null!;
     private byte[] _json = null!;
     private LuminBufferWriter _writer = null!;
-    private static readonly LuminPackSerializerOption Strict = new() { ValidateJsonSyntax = true };
+    private static readonly BenchmarkProfile Strict = new() { ValidateJsonSyntax = true };
 
     /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
@@ -36,12 +36,22 @@ public class ContinuationOptimizationBenchmark
     /// <summary>Measures cleanup for the configured benchmark input.</summary>
     [GlobalCleanup] public void Cleanup() => LuminBufferWriterPool.Return(_writer);
     /// <summary>Measures binary write for the configured benchmark input.</summary>
-    [Benchmark] public void BinaryWrite() => LuminPackSerializer.Serialize(_data, _writer);
+    [Benchmark] public void BinaryWrite()
+    {
+        _writer.ResetCore();
+        _writer.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize(_data, _writer);
+    }
     /// <summary>Measures binary read for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData BinaryRead() => LuminPackSerializer.Deserialize<CharacterSaveData>(_binary);
     /// <summary>Measures json write for the configured benchmark input.</summary>
-    [Benchmark] public void JsonWrite() => LuminPackSerializer.SerializeJson(_data, _writer);
+    [Benchmark] public void JsonWrite()
+    {
+        _writer.ResetCore();
+        _writer.WriterState.ResetOperationState();
+        LuminPackSerializer.SerializeJson(_data, _writer);
+    }
     /// <summary>Measures json write string for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
     [Benchmark] public string JsonWriteString() => LuminPackSerializer.SerializeJson(_data);
@@ -85,12 +95,22 @@ public class MediumStringOptimizationBenchmark
     /// <summary>Measures cleanup for the configured benchmark input.</summary>
     [GlobalCleanup] public void Cleanup() => LuminBufferWriterPool.Return(_writer);
     /// <summary>Measures binary write for the configured benchmark input.</summary>
-    [Benchmark] public void BinaryWrite() => LuminPackSerializer.Serialize(_data, _writer);
+    [Benchmark] public void BinaryWrite()
+    {
+        _writer.ResetCore();
+        _writer.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize(_data, _writer);
+    }
     /// <summary>Measures binary read for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
     [Benchmark] public BinaryStringBatch BinaryRead() => LuminPackSerializer.Deserialize<BinaryStringBatch>(_binary);
     /// <summary>Measures json write for the configured benchmark input.</summary>
-    [Benchmark] public void JsonWrite() => LuminPackSerializer.SerializeJson(_data, _writer);
+    [Benchmark] public void JsonWrite()
+    {
+        _writer.ResetCore();
+        _writer.WriterState.ResetOperationState();
+        LuminPackSerializer.SerializeJson(_data, _writer);
+    }
     /// <summary>Measures json read for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
     [Benchmark] public BinaryStringBatch JsonRead() => LuminPackSerializer.DeserializeJson<BinaryStringBatch>(_json);

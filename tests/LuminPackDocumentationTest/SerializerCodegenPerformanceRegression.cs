@@ -134,6 +134,7 @@ internal static class SerializerCodegenPerformanceRegression
                     {
                         for (int i = 0; i < 2; i++)
                         {
+                            buffer.ResetForReuse();
                             LuminPackSerializer.Serialize(value, buffer);
                             if (!buffer.GetSpan().SequenceEqual(expected)) throw new Exception("Reusable Union output changed.");
                         }
@@ -242,7 +243,7 @@ internal static class SerializerCodegenPerformanceRegression
             .SelectMany(result => result.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
         var payload = methods.Single(method => method.Identifier.ValueText == "SerializeUnionAt" &&
             method.ParameterList.Parameters.Count == 4 && method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::FixedChild");
-        var originalPayload = methods.Single(method => method.Identifier.ValueText == "SerializeUnion" &&
+        var originalPayload = methods.Single(method => method.TypeParameterList == null && method.Identifier.ValueText == "SerializeUnion" &&
             method.ParameterList.Parameters.Count == 2 && method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::FixedChild");
         Require(originalPayload.Body!.Statements.Count == 1 && originalPayload.Body.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal),
             "The original entry duplicated its fixed field implementation instead of publishing the shared result.");
@@ -253,18 +254,18 @@ internal static class SerializerCodegenPerformanceRegression
             "Unmanaged structs no longer use independent direct field writes.");
         Require(payload.Body.ToString().Contains("Unsafe.ByteOffset", StringComparison.Ordinal) &&
             payload.Body.ToString().Contains("Unsafe.CopyBlockUnaligned", StringComparison.Ordinal), "The proven 64-bit adjacent-field bulk copy was removed.");
-        var readPayload = methods.Single(method => method.Identifier.ValueText == "DeserializeUnion" &&
+        var readPayload = methods.Single(method => method.TypeParameterList == null && method.Identifier.ValueText == "DeserializeUnion" &&
             method.ParameterList.Parameters.Count == 2 && method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::FixedChild");
         Require(readPayload.Body!.ToString().Contains("reader.ReadUnmanaged", StringComparison.Ordinal), "A fixed struct reader bypassed the shared architecture-compatible core.");
         Require(!readPayload.Body.ToString().Contains("Unsafe.CopyBlockUnaligned", StringComparison.Ordinal),
             "A Union payload acquired the additional raw destination copy instead of its established grouped read.");
-        var fixedReader = methods.Single(method => method.Identifier.ValueText == "Deserialize" &&
+        var fixedReader = methods.Single(method => method.TypeParameterList == null && method.Identifier.ValueText == "Deserialize" &&
             method.ParameterList.Parameters.Count == 2 && method.ParameterList.Parameters[0].Type!.ToString().Contains("LuminPackReader", StringComparison.Ordinal) &&
             method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::FixedChild");
         Require(fixedReader.Body!.ToString().Contains("Unsafe.ByteOffset", StringComparison.Ordinal) &&
             fixedReader.Body.ToString().Contains("Unsafe.CopyBlockUnaligned", StringComparison.Ordinal),
             "A raw field reader omitted the proven contiguous destination copy.");
-        var listReader = methods.Single(method => method.Identifier.ValueText == "Deserialize" &&
+        var listReader = methods.Single(method => method.TypeParameterList?.Parameters.Count == 1 && method.Identifier.ValueText == "Deserialize" &&
             method.ParameterList.Parameters.Count == 2 && method.ParameterList.Parameters[0].Type!.ToString().Contains("LuminPackReader", StringComparison.Ordinal) &&
             method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::ListGraph");
         Require(!listReader.DescendantNodes().OfType<MemberAccessExpressionSyntax>().Any(member => member.Name.Identifier.ValueText == "IsValueType"),
@@ -282,7 +283,7 @@ internal static class SerializerCodegenPerformanceRegression
                 !architecture.Else.Statement.ToString().Contains("Unsafe.ReadUnaligned", StringComparison.Ordinal),
                 "Typed fixed-value unsafe access escaped into the 32-bit IL2CPP path.");
         }
-        var sequences = methods.Where(method => method.Identifier.ValueText == "Deserialize" &&
+        var sequences = methods.Where(method => method.TypeParameterList?.Parameters.Count == 1 && method.Identifier.ValueText == "Deserialize" &&
             method.ParameterList.Parameters.Any(parameter => parameter.Type!.ToString().Contains("ReadOnlySequence", StringComparison.Ordinal)) &&
             method.ParameterList.Parameters.Any(parameter => parameter.Type!.ToString().TrimEnd('?') is "global::Raw" or "global::LargeRaw")).ToArray();
         Require(sequences.Length >= 2, "The architecture regression did not retain concrete unmanaged sequence entries.");
@@ -296,7 +297,7 @@ internal static class SerializerCodegenPerformanceRegression
         }
         foreach (string operation in new[] { "Serialize", "Deserialize" })
         {
-            var entry = methods.Single(method => method.Identifier.ValueText == operation && method.ParameterList.Parameters.Count == 2 &&
+            var entry = methods.Single(method => method.TypeParameterList == null && method.Identifier.ValueText == operation && method.ParameterList.Parameters.Count == 2 &&
                 method.ParameterList.Parameters[0].Type!.ToString().Contains(operation == "Serialize" ? "LuminPackWriter" : "LuminPackReader", StringComparison.Ordinal) &&
                 method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::Contiguous");
             Require(entry.DescendantNodes().OfType<InvocationExpressionSyntax>().Count(call => call.Expression.ToString().EndsWith(".GetCurrentSpanIndex", StringComparison.Ordinal)) == 1,
@@ -307,15 +308,16 @@ internal static class SerializerCodegenPerformanceRegression
             call.Expression.ToString().Contains("EnsureReadable", StringComparison.Ordinal) ||
             call.Expression.ToString().Contains("CheckBuffer", StringComparison.Ordinal)),
             "A fixed-length field batch acquired a per-value buffer bounds check.");
-        var volatileWriter = methods.Single(method => method.Identifier.ValueText == "Serialize" &&
+        var volatileWriter = methods.Single(method => method.TypeParameterList == null && method.Identifier.ValueText == "Serialize" &&
             method.ParameterList.Parameters.Count == 2 && method.ParameterList.Parameters[0].Type!.ToString().Contains("LuminPackWriter", StringComparison.Ordinal) &&
             method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::VolatileGroup");
         Require(!volatileWriter.Body!.ToString().Contains("Unsafe.CopyBlockUnaligned", StringComparison.Ordinal), "A grouped memory copy bypassed a volatile field load.");
-        var volatileReader = methods.Single(method => method.Identifier.ValueText == "Deserialize" &&
+        var volatileReader = methods.Single(method => method.TypeParameterList == null && method.Identifier.ValueText == "Deserialize" &&
             method.ParameterList.Parameters.Count == 2 && method.ParameterList.Parameters[0].Type!.ToString().Contains("LuminPackReader", StringComparison.Ordinal) &&
             method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::VolatileGroup");
         Require(!volatileReader.Body!.ToString().Contains("Unsafe.CopyBlockUnaligned", StringComparison.Ordinal), "A grouped memory copy bypassed a volatile field store.");
-        var dispatch = methods.Single(method => method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal) &&
+        var dispatch = methods.Single(method => method.TypeParameterList == null && !method.Identifier.ValueText.Contains("_Options_", StringComparison.Ordinal) &&
+            method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal) &&
             method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "FixedChild" });
         Require(dispatch.Modifiers.Any(SyntaxKind.OverrideKeyword) && dispatch.Body!.ToString().Contains("WriteUnionHeader(11)", StringComparison.Ordinal) &&
             dispatch.Body.ToString().Contains("LuminPackSerializer.SerializeUnion", StringComparison.Ordinal), "The Union virtual/tag/payload mechanism changed.");

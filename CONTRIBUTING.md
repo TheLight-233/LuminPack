@@ -18,6 +18,8 @@ dotnet test tests/LuminPackUnitTest/LuminPackUnitTest.csproj -c Release
 
 The documentation test uses the installed SDK's Roslyn assemblies so it can compile generated code using current language features. The existing concurrency, emitter-shape, and incremental invalidation regressions exercise the generator's older Roslyn dependency separately. The incremental check compares retained and fresh drivers, checks affected model/analysis-transform counts and Roslyn tracked-step reasons, and verifies cached diagnostic callbacks and exact trees with duplicate or empty paths. It also requires cached aggregate construction for unrelated Full/Minimal edits and invalidation when a method body introduces a new formatter type. Identical output alone does not prove that analysis was skipped.
 
+The legacy xUnit suites use `RuntimeStateCollection` because their pool regressions drain shared process-wide caches and assert exact contents. Keep those suites isolated from concurrent borrowers in other test collections. The collection changes test scheduling only; do not relax pool assertions or modify production pooling to accommodate a competing test.
+
 ## Source conventions
 
 README is reserved for project introduction, installation and usage. Release notes, version-change summaries, upgrade/migration notices and development/performance experiment reports belong under `docs`, never in README. Installation examples may reference the current package version. This is a mandatory repository documentation boundary.

@@ -23,17 +23,8 @@ Console.WriteLine($"WIRE {args[0].ToUpperInvariant()} OK: {directory}");
 /// <summary>Provides wire fixtures functionality.</summary>
 internal static class WireFixtures
 {
-    private static readonly LuminPackSerializerOption Utf8Length = new()
-    {
-        StringEncoding = LuminPackStringEncoding.UTF8,
-        StringRecording = LuminPackStringRecording.Length
-    };
-
-    private static readonly LuminPackSerializerOption Utf16Length = new()
-    {
-        StringEncoding = LuminPackStringEncoding.UTF16,
-        StringRecording = LuminPackStringRecording.Length
-    };
+    private const bool Utf8Length = false;
+    private const bool Utf16Length = true;
 
     /// <summary>Writes  to the current output.</summary>
     /// <param name="directory">The directory used by this operation.</param>
@@ -143,17 +134,17 @@ internal static class WireFixtures
     /// <param name="directory">The directory used by this operation.</param>
     /// <param name="name">The name used by this operation.</param>
     /// <param name="value">The value consumed or produced by this operation.</param>
-    /// <param name="option">The configuration to apply to this operation.</param>
+    /// <param name="utf16">Whether this fixture selects the closed UTF-16 length profile.</param>
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
-    private static void Put<T>(string directory, string name, T value, LuminPackSerializerOption? option = null)
+    private static void Put<T>(string directory, string name, T value, bool utf16 = false)
     {
         var writerBuffer = LuminBufferWriterPool.Rent();
         try
         {
             var state = new LuminPackWriterOptionalState();
-            state.Init(option);
             var writer = new LuminPackWriter(writerBuffer, state);
-            writer.WriteValue(in value);
+            if (utf16) LuminPackSerializer.Serialize<T, LuminPackUtf16LengthOptions>(ref writer, in value);
+            else LuminPackSerializer.Serialize<T, LuminPackDefaultOptions>(ref writer, in value);
             writerBuffer.CompleteWrite(writer.CurrentIndex);
             File.WriteAllBytes(Path.Combine(directory, name + ".bin"), writerBuffer.GetSpan().ToArray());
             state.Reset();
@@ -167,11 +158,12 @@ internal static class WireFixtures
     /// <summary>Obtains the requested value from the supplied input.</summary>
     /// <param name="directory">The directory used by this operation.</param>
     /// <param name="name">The name used by this operation.</param>
-    /// <param name="option">The configuration to apply to this operation.</param>
+    /// <param name="utf16">Whether this fixture selects the closed UTF-16 length profile.</param>
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     /// <returns>The result of the operation.</returns>
-    private static T Get<T>(string directory, string name, LuminPackSerializerOption? option = null) =>
-        LuminPackSerializer.Deserialize<T>(File.ReadAllBytes(Path.Combine(directory, name + ".bin")), option);
+    private static T Get<T>(string directory, string name, bool utf16 = false) => utf16
+        ? LuminPackSerializer.Deserialize<T, LuminPackUtf16LengthOptions>(File.ReadAllBytes(Path.Combine(directory, name + ".bin")))
+        : LuminPackSerializer.Deserialize<T, LuminPackDefaultOptions>(File.ReadAllBytes(Path.Combine(directory, name + ".bin")));
 
     /// <summary>Checks  against the operation's requirements.</summary>
     /// <param name="condition">The condition used by this operation.</param>

@@ -78,6 +78,7 @@ internal static class SerializerAssemblyPackableRegression
             using LuminPack;
             using LuminPack.Attribute;
             [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
+            [assembly: LuminPackOption(StringEncoding = LuminPack.Option.LuminPackStringEncoding.UTF16)]
             [assembly: LuminPackable(typeof(ExternalLibrary.ExternalModel<>))]
             [assembly: LuminPackable(typeof(ExternalLibrary.ExternalNote))]
             [assembly: LuminPackable(typeof(ExternalLibrary.AnnotatedModel<>))]

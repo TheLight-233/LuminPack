@@ -35,6 +35,11 @@ internal static class SerializerCoreProjection
         var support = new List<MemberDeclarationSyntax>();
         foreach (var member in container.Members)
         {
+            if (member is MethodDeclarationSyntax optionsMethod && optionsMethod.Identifier.ValueText.StartsWith("__LuminPackJson", StringComparison.Ordinal))
+            {
+                dispatch.Add(optionsMethod);
+                continue;
+            }
             if (member is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackTypeCache" })
             {
                 dispatch.Add(member);
@@ -174,7 +179,8 @@ internal static class SerializerCoreProjection
         var projected = root.WithMembers(SyntaxFactory.List(namespaces))
             .AddUsings(SyntaxFactory.UsingDirective(SyntaxFactory.ParseName("global::LuminPack.Generated")));
         var projectedTree = CSharpSyntaxTree.Create(projected, metadata.ParseOptions);
-        var rewritten = new CallRewriter(compilation.AddSyntaxTrees(projectedTree).GetSemanticModel(projectedTree)).Visit(projectedTree.GetRoot());
+        var rewritten = new CallRewriter(compilation.AddSyntaxTrees(projectedTree).GetSemanticModel(projectedTree), compilation).Visit(projectedTree.GetRoot());
+        rewritten = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(closedRoot, compilation)).Visit(rewritten);
         var normalized = (CompilationUnitSyntax)BinaryEntryLocalScopes.NormalizeRoot(rewritten).NormalizeWhitespace("    ", Environment.NewLine);
         normalized = normalized.WithLeadingTrivia(SyntaxFactory.ParseLeadingTrivia("#nullable enable" + Environment.NewLine).AddRange(normalized.GetLeadingTrivia()));
         return LuminPackSerializerDocumentation.Enhance(normalized, closedRoot != null ? new[] { closedRoot } : contexts.Keys.Select(name => types[name]).ToArray(), compilation, metadata);
@@ -198,7 +204,8 @@ internal static class SerializerCoreProjection
     internal static string RewriteCalls(string source, Compilation compilation, MetaInfo metadata)
     {
         var tree = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions);
-        return new CallRewriter(compilation.AddSyntaxTrees(tree).GetSemanticModel(tree)).Visit(tree.GetRoot()).ToFullString();
+        var rewritten = new CallRewriter(compilation.AddSyntaxTrees(tree).GetSemanticModel(tree), compilation).Visit(tree.GetRoot());
+        return new CompiledOperationProjection(compilation, CompiledOptions.Resolve(null, compilation)).Visit(rewritten).ToFullString();
     }
 
     /// <summary>Preserves direct state extension calls through five shared generic forwarding methods.</summary>
@@ -250,24 +257,84 @@ internal static class SerializerCoreProjection
     /// <summary>Changes calls only when their receiver or explicit first argument is a runtime state struct.</summary>
     private sealed class CallRewriter : CSharpSyntaxRewriter
     {
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Compilation, OperationCatalog> Catalogs = new();
         private readonly SemanticModel _model;
+        private readonly HashSet<string> _knownTypes;
+        private readonly HashSet<string> _knownJsonTypes;
+        private readonly HashSet<string> _knownSizeTypes;
 
         /// <summary>Captures the temporary model without retaining it in generated results.</summary>
         /// <param name="model">The current projected file binding.</param>
-        internal CallRewriter(SemanticModel model) { _model = model; }
+        /// <param name="compilation">The unchanged input compilation sharing the formatter catalog.</param>
+        internal CallRewriter(SemanticModel model, Compilation compilation)
+        {
+            _model = model;
+            var catalog = Catalogs.GetValue(compilation, current => new OperationCatalog(current));
+            _knownTypes = catalog.Binary;
+            _knownJsonTypes = catalog.Json;
+            _knownSizeTypes = catalog.Size;
+        }
+
+        /// <summary>Shares symbol-free operation capabilities across source contributions in one compilation.</summary>
+        private sealed class OperationCatalog
+        {
+            internal readonly HashSet<string> Binary;
+            internal readonly HashSet<string> Json;
+            internal readonly HashSet<string> Size;
+
+            /// <summary>Captures formatter spellings once without retaining compiler symbols.</summary>
+            /// <param name="compilation">The unchanged consumer compilation.</param>
+            internal OperationCatalog(Compilation compilation)
+            {
+                var types = LuminPackExtensionGenerator.GetOrderedFormatterTypes(compilation);
+                Binary = new HashSet<string>(types.Where(type => LuminPackExtensionGenerator.CanRegisterFormatter(type, compilation, false)).Select(FormatterTypeName.Get), StringComparer.Ordinal);
+                Json = new HashSet<string>(types.Where(type => LuminPackExtensionGenerator.CanRegisterFormatter(type, compilation, true)).Select(FormatterTypeName.Get), StringComparer.Ordinal);
+                Size = new HashSet<string>(types.Where(type => LuminPackExtensionGenerator.CanRegisterCalculateFormatter(type, compilation)).Select(FormatterTypeName.Get), StringComparer.Ordinal);
+            }
+        }
 
         /// <summary>Projects a generated operation invocation to its state-based overload.</summary>
         /// <param name="node">The original invocation.</param>
         /// <returns>The unified call or the unchanged invocation.</returns>
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
         {
+            if (node.Expression is MemberAccessExpressionSyntax jsonUnion &&
+                (jsonUnion.Name.Identifier.ValueText.StartsWith("__LuminPackUnionSerializeJson_", StringComparison.Ordinal) ||
+                 jsonUnion.Name.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal) ||
+                 jsonUnion.Name.Identifier.ValueText.StartsWith("__LuminPackUnionCalculateOffset_", StringComparison.Ordinal)))
+            {
+                string prefix = jsonUnion.Name.Identifier.ValueText.StartsWith("__LuminPackUnionSerializeJson_", StringComparison.Ordinal) ? "__LuminPackUnionSerializeJson_" :
+                    jsonUnion.Name.Identifier.ValueText.StartsWith("__LuminPackUnionCalculateOffset_", StringComparison.Ordinal) ? "__LuminPackUnionCalculateOffset_" : "__LuminPackUnionSerialize_";
+                string suffix = jsonUnion.Name.Identifier.ValueText.Substring(prefix.Length);
+                var pending = new Stack<ITypeSymbol>();
+                var visited = new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default);
+                var receiver = _model.GetTypeInfo(jsonUnion.Expression).Type;
+                if (receiver != null) pending.Push(receiver);
+                while (pending.Count != 0)
+                {
+                    var current = pending.Pop();
+                    if (!visited.Add(current)) continue;
+                    if (current is ITypeParameterSymbol parameter)
+                    {
+                        foreach (var constraint in parameter.ConstraintTypes) pending.Push(constraint);
+                        continue;
+                    }
+                    if (current is not INamedTypeSymbol named) continue;
+                    if (LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(named.OriginalDefinition) == suffix)
+                        return base.VisitInvocationExpression(node).WithAdditionalAnnotations(new SyntaxAnnotation(
+                            CompiledOperationProjection.UnionRootAnnotation, FormatterTypeName.Get(named)));
+                    if (named.BaseType != null) pending.Push(named.BaseType);
+                    foreach (var contract in named.Interfaces) pending.Push(contract);
+                }
+            }
             if (node.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "SerializeUnion" } union &&
                 union.Expression.ToString() == "global::LuminPack.LuminPackSerializer")
                 return WithoutUnionInputReference((InvocationExpressionSyntax)base.VisitInvocationExpression(node));
             if (node.Expression is not MemberAccessExpressionSyntax access || !BinaryOperationPlan.IsOperation(access.Name.Identifier.ValueText))
                 return base.VisitInvocationExpression(node);
             if (_model.GetSymbolInfo(node).Symbol is IMethodSymbol { IsExtensionMethod: true } existing &&
-                existing.DeclaringSyntaxReferences.Any(reference => reference.SyntaxTree != _model.SyntaxTree))
+                existing.DeclaringSyntaxReferences.Any(reference => reference.SyntaxTree != _model.SyntaxTree) &&
+                !node.Ancestors().OfType<ClassDeclarationSyntax>().Any(type => type.Identifier.ValueText == "FormatterDispatch"))
                 return base.VisitInvocationExpression(node);
             string state = _model.GetTypeInfo(access.Expression).Type?.ToDisplayString();
             bool reduced = IsState(state);
@@ -279,6 +346,31 @@ internal static class SerializerCoreProjection
                 SyntaxFactory.Argument((ExpressionSyntax)Visit(access.Expression)).WithRefKindKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword))));
             string name = MethodName(access.Name.Identifier.ValueText, state.Contains("Json"));
             SimpleNameSyntax target = access.Name is GenericNameSyntax generic ? generic.WithIdentifier(SyntaxFactory.Identifier(name)) : SyntaxFactory.IdentifierName(name);
+            if (access.Name is not GenericNameSyntax && _model.GetSymbolInfo(node).Symbol is IMethodSymbol { IsGenericMethod: true } inferred)
+                target = SyntaxFactory.GenericName(SyntaxFactory.Identifier(name), SyntaxFactory.TypeArgumentList(
+                    SyntaxFactory.SeparatedList(inferred.TypeArguments.Select(type => SyntaxFactory.ParseTypeName(FormatterTypeName.Get(type))))));
+            if (target is not GenericNameSyntax && node.ArgumentList.Arguments.Count > (reduced ? 0 : 1))
+            {
+                var payload = _model.GetTypeInfo(node.ArgumentList.Arguments[reduced ? 0 : 1].Expression).Type;
+                string frozenPayload = node.GetAnnotations(BinaryEntryInlining.PayloadAnnotation).Select(annotation => annotation.Data).SingleOrDefault();
+                var known = name == "Sizeof" ? _knownSizeTypes : state.Contains("Json") ? _knownJsonTypes : _knownTypes;
+                if (frozenPayload != null && !known.Contains(frozenPayload))
+                    target = SyntaxFactory.GenericName(SyntaxFactory.Identifier(name), SyntaxFactory.TypeArgumentList(
+                        SyntaxFactory.SingletonSeparatedList(SyntaxFactory.ParseTypeName(frozenPayload))));
+                else if (payload != null && (payload.TypeKind == TypeKind.TypeParameter ||
+                    !known.Contains(FormatterTypeName.Get(payload))))
+                    target = SyntaxFactory.GenericName(SyntaxFactory.Identifier(name), SyntaxFactory.TypeArgumentList(
+                        SyntaxFactory.SingletonSeparatedList(SyntaxFactory.ParseTypeName(FormatterTypeName.Get(payload)))));
+            }
+            if (name is "SerializeUnion" or "DeserializeUnion" or "DeserializeFresh" &&
+                _model.GetTypeInfo(node.ArgumentList.Arguments[reduced ? 0 : 1].Expression).Type is INamedTypeSymbol openPayload &&
+                LuminPackExtensionGenerator.ContainsTypeParameter(openPayload))
+            {
+                var owners = new Stack<INamedTypeSymbol>();
+                for (var owner = openPayload; owner != null; owner = owner.ContainingType) owners.Push(owner);
+                var openArguments = owners.SelectMany(owner => owner.TypeArguments).Select(argument => SyntaxFactory.ParseTypeName(FormatterTypeName.Get(argument)));
+                target = SyntaxFactory.GenericName(SyntaxFactory.Identifier(name), SyntaxFactory.TypeArgumentList(SyntaxFactory.SeparatedList(openArguments)));
+            }
             var rewritten = node.WithExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
                 SyntaxFactory.ParseExpression("global::LuminPack.LuminPackSerializer"), target)).WithArgumentList(arguments);
             return name == "SerializeUnion" ? WithoutUnionInputReference(rewritten) : rewritten;

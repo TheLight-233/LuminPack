@@ -49,15 +49,13 @@ internal sealed class SerializerApiUsageAnalysis
         var metadata = new MetaInfo(options, options.LanguageVersion, options.PreprocessorSymbolNames.Contains("NET8_0_OR_GREATER"),
             options.PreprocessorSymbolNames.Contains("NET9_0_OR_GREATER"),
             compilation.Options is CSharpCompilationOptions { AllowUnsafe: true }, LuminPackGenerationTierResolver.RegisterModeFromAssembly(compilation));
-        var existing = compilation.GetTypeByMetadataName(SerializerName);
         SyntaxTree? signatures = null;
         var kinds = new Dictionary<int, SerializerApiKind>();
         var bindingCompilation = compilation;
-        if (existing == null || !existing.Locations.Any(location => location.IsInSource))
-        {
-            signatures = LuminPackSerializerGenerator.GetApiSignatures(compilation, metadata, out kinds);
-            bindingCompilation = compilation.AddSyntaxTrees(signatures);
-        }
+        // A consumer's partial helper declaration does not provide the framework's
+        // overloads. Bind roots against the complete generated signature surface.
+        signatures = LuminPackSerializerGenerator.GetApiSignatures(compilation, metadata, out kinds);
+        bindingCompilation = compilation.AddSyntaxTrees(signatures);
 
         var payloads = new List<ITypeSymbol>();
         var invocations = new List<IMethodSymbol?>();
@@ -158,8 +156,10 @@ internal sealed class SerializerApiUsageAnalysis
             ?? (method.IsGenericMethod && method.TypeArguments.Length != 0 ? method.TypeArguments[0] : null);
         if (payload == null) return;
         payloads.Add(payload);
-        if (method.IsGenericMethod) return;
         var declaration = method.DeclaringSyntaxReferences.FirstOrDefault(reference => reference.SyntaxTree == signatures);
+        // Only concrete profile variants have a concrete signature identity. Generic
+        // value-returning reads have no `value` parameter and must remain fallback roots.
+        if (method.IsGenericMethod && (declaration == null || !kinds.ContainsKey(declaration.Span.Start))) return;
         var apis = declaration != null && kinds.TryGetValue(declaration.Span.Start, out var kind) ? kind : Family(method.Name);
         string name = FormatterTypeName.Get(payload);
         _apis.TryGetValue(name, out var previous);

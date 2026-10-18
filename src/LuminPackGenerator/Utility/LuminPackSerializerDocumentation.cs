@@ -243,13 +243,17 @@ internal static class LuminPackSerializerDocumentation
         var parameters = method.ParameterList.Parameters;
         bool json = method.Identifier.ValueText.Contains("Json");
         if (parameters.Count >= 2 && parameters[0].Identifier.ValueText is "writer" or "reader" or "evaluator" or "state")
-            remarks.Add(new XElement("para", "Uses the supplied operation state directly, preserving its options, buffer position, and reference tracking. The caller owns operation initialization and completion."));
+            remarks.Add(new XElement("para", "Uses the supplied operation state directly, preserving its buffer position and reference tracking. Options are bound at compilation. The caller owns operation initialization and completion."));
         if (method.Identifier.ValueText is "SerializeUnion" or "DeserializeUnion")
             remarks.Add(new XElement("para", "Processes a concrete Union case body. The Union tag replaces the ordinary object header and is handled by the hidden Union dispatch method."));
         if (method.Identifier.ValueText == "SerializeUnionAt")
             remarks.Add(new XElement("para", "Shared fixed-case body. A supplied narrow tag is written before the same ordered fields; a null tag means the original virtual wrapper already emitted it. Returns an absolute byte index. The caller publishes the result before state-observing boundaries; this method does not start or finish an operation."));
         if (parameters.Any(parameter => parameter.Type?.ToString() == "LuminBufferWriter"))
-            remarks.Add(new XElement("para", "Uses the caller-owned reusable buffer and its options. The caller must exclusively own the buffer for the duration of the operation."));
+        {
+            remarks.Add(new XElement("para", "Uses the caller-owned reusable buffer and its reference-tracking state. The caller must exclusively own the buffer for the duration of the operation."));
+            if (method.Identifier.ValueText.StartsWith("Serialize", StringComparison.Ordinal))
+                remarks.Add(new XElement("para", "Appends at the current absolute position without resetting payload or reference state. Call ResetForReuse before an independent session or after failure. Partial output and reference state remain after an exception; the cursor binding is always detached."));
+        }
         if (parameters.Any(parameter => parameter.Type?.ToString().EndsWith("IBufferWriter<byte>", StringComparison.Ordinal) == true))
             remarks.Add(new XElement("para", "Writes to the supplied IBufferWriter<byte> and advances it by the produced byte count; the destination remains caller-owned."));
         if (method.Identifier.ValueText != "Sizeof" && parameters.Any(parameter => parameter.Identifier.ValueText == "value" && parameter.Modifiers.Any(SyntaxKind.RefKeyword)))

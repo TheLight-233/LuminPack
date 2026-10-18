@@ -11,35 +11,26 @@ namespace LuminPackUnitTest;
 /// <summary>Provides binary string hot path test functionality.</summary>
 public class BinaryStringHotPathTest
 {
-    /// <summary>Preserves constructor snapshots after option edits and record copies, including unknown enum values.</summary>
+    /// <summary>Uses different closed kernels over the same state without retaining a mutable mode snapshot.</summary>
     [Fact]
     public void WriterModeSnapshotsFollowOptionMutationsAndCopies()
     {
-        var options = new LuminPackSerializerOption();
-        var state = new LuminPackWriterOptionalState(options);
-        foreach (var encoding in new[] { LuminPackStringEncoding.UTF8, LuminPackStringEncoding.UTF16, (LuminPackStringEncoding)255 })
-        foreach (var recording in new[] { LuminPackStringRecording.Length, LuminPackStringRecording.Token, (LuminPackStringRecording)255 })
+        var state = new LuminPackWriterOptionalState();
+        foreach (var encoding in new[] { LuminPackStringEncoding.UTF8, LuminPackStringEncoding.UTF16 })
+        foreach (var recording in new[] { LuminPackStringRecording.Length, LuminPackStringRecording.Token })
         {
-            options.StringEncoding = encoding;
-            options.StringRecording = recording;
+            var profile = new TestSerializationProfile { StringEncoding = encoding, StringRecording = recording };
             Span<byte> destination = new byte[64];
             var writer = new LuminPackWriter(ref destination, state);
-            var copy = options with { };
-            Assert.Equal(new LuminPackSerializerOption { StringEncoding = encoding, StringRecording = recording }, copy);
-            options.StringEncoding = encoding == LuminPackStringEncoding.UTF16 ? LuminPackStringEncoding.UTF8 : LuminPackStringEncoding.UTF16;
-            options.StringRecording = recording == LuminPackStringRecording.Length ? LuminPackStringRecording.Token : LuminPackStringRecording.Length;
             Span<byte> expected = new byte[64];
-            var original = new LuminPackWriter(ref expected, new LuminPackWriterOptionalState(copy));
+            var original = new LuminPackWriter(ref expected, state);
             int index = 0;
-            int expectedIndex = 0;
-            int written = writer.WriteString(ref index, "abc");
-            int expectedLength = original.WriteString(ref expectedIndex, "abc");
+            int written = writer.WriteStringFor(profile, ref index, "abc");
+            int expectedLength = encoding == LuminPackStringEncoding.UTF16
+                ? recording == LuminPackStringRecording.Token ? original.WriteUtf16WithToken<LuminPackUtf16TokenOptions>(0, "abc") : original.WriteUtf16WithLength(0, "abc")
+                : recording == LuminPackStringRecording.Token ? original.WriteUtf8WithToken<LuminPackUtf8TokenOptions>(0, "abc") : original.WriteUtf8WithLength(0, "abc");
             Assert.Equal(expectedLength, written);
-            Assert.Equal(original.StringRecordLength(), writer.StringRecordLength());
             Assert.True(destination.SequenceEqual(expected));
-            var changed = copy with { StringEncoding = options.StringEncoding, StringRecording = options.StringRecording };
-            Assert.Equal(options, changed);
-            Assert.Equal(options.GetHashCode(), changed.GetHashCode());
         }
     }
 
@@ -53,11 +44,9 @@ public class BinaryStringHotPathTest
     [InlineData(LuminPackStringEncoding.UTF16, LuminPackStringRecording.Token)]
     public void BothDispatchOverloadsPreserveAllModes(LuminPackStringEncoding encoding, LuminPackStringRecording recording)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = encoding, StringRecording = recording };
+        var option = new TestSerializationProfile { StringEncoding = encoding, StringRecording = recording };
         var state = new LuminPackWriterOptionalState();
-        state.Init(option);
         var readState = new LuminPackReaderOptionalState();
-        readState.Init(option);
         foreach (string? text in new[] { null, "", "a", "abcd1234", "\u4E2D\u6587\u00E9\uD83C\uDF1F" })
         {
             Span<byte> first = new byte[256], second = new byte[256];
@@ -65,14 +54,14 @@ public class BinaryStringHotPathTest
             var writer2 = new LuminPackWriter(ref second, state);
             writer1.Advance(3);
             int offset = 3;
-            int length = writer1.WriteString(text);
-            Assert.Equal(length, writer2.WriteString(ref offset, text));
+            int length = writer1.WriteStringFor(option, text);
+            Assert.Equal(length, writer2.WriteStringFor(option, ref offset, text));
             Assert.Equal(3, offset);
             Assert.Equal(first.ToArray(), second.ToArray());
             var reader = new LuminPackReader(ref first, readState);
             Assert.Equal(recording == LuminPackStringRecording.Token ? text ?? "" : text,
-                reader.ReadStringAndAdvance(ref offset));
-            Assert.Equal(3 + length + writer1.StringRecordLength(), offset);
+                reader.ReadStringAndAdvanceFor(option, ref offset));
+            Assert.Equal(3 + length + writer1.StringRecordLengthFor(option), offset);
         }
     }
 
@@ -138,9 +127,8 @@ public class BinaryStringHotPathTest
     [Fact]
     public void ComputedUtf16LengthsCopyExactRawCodeUnits()
     {
-        var options = new LuminPackSerializerOption { StringEncoding = LuminPackStringEncoding.UTF16 };
+        var options = new TestSerializationProfile { StringEncoding = LuminPackStringEncoding.UTF16 };
         var state = new LuminPackWriterOptionalState();
-        state.Init(options);
         foreach (string text in Enumerable.Range(0, 70).Select(length => new string('x', length))
             .Concat(new[] { "\uD800", "\uDC00", "first\0last", "\u4e2d\ud83c\udf1f\u00e9", new string('y', 100_000) }))
         foreach (bool spanInput in new[] { false, true })

@@ -101,8 +101,8 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("{");
         string prelude = sb.ToString();
         sb.AppendLine("    /// <summary>Provides convenience and reusable-buffer APIs for LuminPack binary and JSON serialization.</summary>");
-        sb.AppendLine("    /// <remarks>Convenience overloads accept per-call options. Overloads accepting <see cref=\"LuminBufferWriter\"/> use");
-        sb.AppendLine("    /// the option and operation state owned by that writer for a ThreadStatic-free high-performance path.</remarks>");
+        sb.AppendLine("    /// <remarks>Options are compiled from declarations or stateless profile types. Overloads accepting <see cref=\"LuminBufferWriter\"/> use");
+        sb.AppendLine("    /// the reference-tracking state owned by that writer for a ThreadStatic-free high-performance path.</remarks>");
         sb.AppendLine("    public static class LuminPackSerializer");
         sb.AppendLine("    {");
         sb.AppendLine("        [ThreadStatic]");
@@ -131,7 +131,7 @@ public static partial class LuminPackSerializerGenerator
         }
 
         _currentAccess = "public";
-        string documentedTail = fragments.GetCommon(metaInfo, () =>
+        string documentedTail = fragments.GetCommon(metaInfo, CompiledOptions.Resolve(null, compilation).Identity, () =>
         {
             var tail = new StringBuilder();
             AppendGenericFallbacks(tail, metaInfo);
@@ -224,7 +224,12 @@ public static partial class LuminPackSerializerGenerator
     {
         string header = "namespace LuminPack" + Environment.NewLine + "{" + Environment.NewLine + "    public static class LuminPackSerializer" + Environment.NewLine + "    {" + Environment.NewLine;
         string footer = "    }" + Environment.NewLine + "}" + Environment.NewLine;
-        string documented = LuminPackSerializerDocumentation.Enhance(header + fragment + footer, types, compilation, metadata);
+        string compiled = CompiledOptionApiProjection.Rewrite(header + fragment + footer,
+            CompiledOptions.Resolve(types.FirstOrDefault(), compilation), metadata.ParseOptions);
+        compiled = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(types.FirstOrDefault(), compilation))
+            .Visit(Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(compiled, metadata.ParseOptions).GetRoot()).ToFullString();
+        compiled = System.Text.RegularExpressions.Regex.Replace(compiled, "(?m)^\\s*/// <param name\\s*=\\s*\"(?:option|options)\">[^\\r\\n]*\\r?\\n", string.Empty);
+        string documented = LuminPackSerializerDocumentation.Enhance(compiled, types, compilation, metadata);
         return documented.Substring(header.Length, documented.Length - header.Length - footer.Length);
     }
 

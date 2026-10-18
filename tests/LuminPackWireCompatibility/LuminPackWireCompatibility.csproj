@@ -8,9 +8,7 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
   <ItemGroup>
-    <Reference Include="LuminPack">
-      <HintPath>..\..\src\LuminPack\bin\Release\net8.0\LuminPack.dll</HintPath>
-    </Reference>
-    <Analyzer Include="..\..\src\LuminPackGenerator\bin\Release\netstandard2.0\LuminPackGenerator.dll" />
+    <ProjectReference Include="..\..\src\LuminPack\LuminPack.csproj" />
+    <ProjectReference Include="..\..\src\LuminPackGenerator\LuminPackGenerator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
   </ItemGroup>
 </Project>

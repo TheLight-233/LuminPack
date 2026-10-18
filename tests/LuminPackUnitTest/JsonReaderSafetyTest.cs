@@ -11,7 +11,7 @@ namespace LuminPackUnitTest;
 /// <summary>Provides json reader safety test functionality.</summary>
 internal static class JsonReaderSafetyTest
 {
-    private static readonly LuminPackSerializerOption Utf16 = new()
+    private static readonly TestSerializationProfile Utf16 = new()
     {
         StringEncoding = LuminPackStringEncoding.UTF16
     };
@@ -113,28 +113,29 @@ internal static class JsonReaderSafetyTest
 
     /// <summary>Verifies skip document.</summary>
     /// <param name="bytes">The bytes used by this operation.</param>
-    /// <param name="state">The reusable state associated with the operation.</param>
-    private static void SkipDocument(byte[] bytes, LuminPackReaderOptionalState state)
+    /// <param name="state">The reusable reference state.</param>
+    /// <param name="option">The statically selected test profile.</param>
+    private static void SkipDocument(byte[] bytes, LuminPackReaderOptionalState state, TestSerializationProfile option)
     {
         ReadOnlySpan<byte> source = bytes;
         var reader = new LuminPackJsonReader(ref source, state);
-        Assert(reader.Read(), "Skip test did not read its first token.");
-        reader.Skip();
-        reader.EnsureEndOfDocument();
+        Assert(reader.ReadFor(option), "Skip test did not read its first token.");
+        reader.SkipFor(option);
+        reader.EnsureEndOfDocumentFor(option);
     }
 
     /// <summary>Verifies skipped escaped strings do not allocate.</summary>
     private static void SkippedEscapedStringsDoNotAllocate()
     {
         string json = "[\"" + string.Concat(Enumerable.Repeat("text\\n\\u4F60\\uD83D\\uDE00\\\\", 1000)) + "\"]";
-        foreach (var option in new[] { new LuminPackSerializerOption(), Utf16 })
+        foreach (var option in new[] { new TestSerializationProfile(), Utf16 })
         {
             byte[] bytes = option.StringEncoding == LuminPackStringEncoding.UTF8
                 ? Encoding.UTF8.GetBytes(json) : Encoding.Unicode.GetBytes(json);
-            var state = new LuminPackReaderOptionalState(option);
-            SkipDocument(bytes, state); // Warm shared search tables and JIT before measuring.
+            var state = new LuminPackReaderOptionalState();
+            SkipDocument(bytes, state, option); // Warm shared search tables and JIT before measuring.
             long start = GC.GetAllocatedBytesForCurrentThread();
-            for (int iteration = 0; iteration < 10; iteration++) SkipDocument(bytes, state);
+            for (int iteration = 0; iteration < 10; iteration++) SkipDocument(bytes, state, option);
             Assert(GC.GetAllocatedBytesForCurrentThread() == start,
                 "Skipping escaped JSON strings allocated an unescape scratch buffer.");
         }
@@ -190,7 +191,7 @@ internal static class JsonReaderSafetyTest
     /// <summary>Verifies assert nested union.</summary>
     /// <param name="value">The value consumed or produced by this operation.</param>
     /// <param name="option">The configuration to apply to this operation.</param>
-    private static void AssertNestedUnion(ISerializable value, LuminPackSerializerOption? option)
+    private static void AssertNestedUnion(ISerializable value, TestSerializationProfile? option)
     {
         var json = LuminPackSerializer.SerializeJson(value, option);
         var result = LuminPackSerializer.DeserializeJson<ISerializable>(json, option);
@@ -300,20 +301,12 @@ internal static class JsonReaderSafetyTest
     /// <param name="option">The configuration to apply to this operation.</param>
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     /// <returns>The result of the operation.</returns>
-    private static T? RoundTrip<T>(T value, LuminPackSerializerOption? option = null)
+    private static T? RoundTrip<T>(T value, TestSerializationProfile? option = null)
     {
         var buffer = LuminBufferWriterPool.Rent();
         try
         {
-            var state = new LuminPackWriterOptionalState();
-            state.Init(option);
-            var writer = new LuminPackJsonWriter(buffer, state);
-            writer.WriteValue(in value);
-            var json = writer.Option.StringEncoding is LuminPackStringEncoding.UTF8
-                ? Encoding.UTF8.GetString(writer.GetSpan())
-                : Encoding.Unicode.GetString(writer.GetSpan());
-            state.Reset();
-
+            string json = LuminPackSerializer.SerializeJson(value, option);
             var result = LuminPackSerializer.DeserializeJson<T>(json, option);
             if (typeof(T).IsValueType)
             {

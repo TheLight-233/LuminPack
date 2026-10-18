@@ -30,15 +30,14 @@ public class BinaryOptimizationBenchmark
     private byte[] _characterBytes = null!;
     private byte[] _stringBytes = null!;
     private LuminBufferWriter _writer = null!;
-    private LuminPackSerializerOption _option = null!;
+    private BenchmarkProfile _option = null!;
 
     /// <summary>Updates the up used by the current operation.</summary>
     [GlobalSetup]
     public void Setup()
     {
-        _option = new LuminPackSerializerOption { StringEncoding = Encoding };
+        _option = new BenchmarkProfile { StringEncoding = Encoding };
         _writer = LuminBufferWriterPool.Rent();
-        _writer.Option.StringEncoding = Encoding;
         _character = OptimizationBenchmark.CreateDeterministicData();
         _strings = new BinaryStringBatch
         {
@@ -59,12 +58,22 @@ public class BinaryOptimizationBenchmark
     /// <summary>Measures cleanup for the configured benchmark input.</summary>
     [GlobalCleanup] public void Cleanup() => LuminBufferWriterPool.Return(_writer);
     /// <summary>Measures character write for the configured benchmark input.</summary>
-    [Benchmark] public void CharacterWrite() => LuminPackSerializer.Serialize(_character, _writer);
+    [Benchmark] public void CharacterWrite()
+    {
+        _writer.ResetCore();
+        _writer.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize(_character, _writer, _option);
+    }
     /// <summary>Measures character read for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
     [Benchmark] public CharacterSaveData CharacterRead() => LuminPackSerializer.Deserialize<CharacterSaveData>(_characterBytes, _option);
     /// <summary>Measures string batch write for the configured benchmark input.</summary>
-    [Benchmark] public void StringBatchWrite() => LuminPackSerializer.Serialize(_strings, _writer);
+    [Benchmark] public void StringBatchWrite()
+    {
+        _writer.ResetCore();
+        _writer.WriterState.ResetOperationState();
+        LuminPackSerializer.Serialize(_strings, _writer, _option);
+    }
     /// <summary>Measures string batch read for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
     [Benchmark] public BinaryStringBatch StringBatchRead() => LuminPackSerializer.Deserialize<BinaryStringBatch>(_stringBytes, _option);

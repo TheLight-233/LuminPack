@@ -19,6 +19,7 @@ public static partial class LuminPackCodeGenerator
     /// <param name="multList">The prefix used to distinguish nested collection variables.</param>
     private static void GenerateSerializeLengthCode(StringBuilder sb, LuminDataField field, string fieldPath, int indent, int depth, string multList = "_")
     {
+        using var optionScope = new CompiledOptionFieldScope(sb, field.Options, field.Type == LuminFiledType.Other && field.TypeSymbol != null ? FormatterTypeName.Get(field.TypeSymbol) : null);
         string indentation = new string(' ', indent * 4);
         string depthSuffix = $"{multList}{depth}";
         switch (field.Type)
@@ -433,7 +434,7 @@ public static partial class LuminPackCodeGenerator
                 // CalculateOffset<T> fallback.
                 sb.AppendLine(indentation + "{");
                 sb.AppendLine(indentation + "    var __luminPackOffsetValue = " + fieldPath + ";");
-                sb.AppendLine(indentation + "    evaluator.CalculateOffset(ref __luminPackOffsetValue);");
+                sb.AppendLine(indentation + "    evaluator.CalculateOffset<" + (field.TypeSymbol == null ? field.FullTypeName : FormatterTypeName.Get(field.TypeSymbol)) + ">(ref __luminPackOffsetValue);");
                 sb.AppendLine(indentation + "}");
                 break;
         }
@@ -472,6 +473,8 @@ public static partial class LuminPackCodeGenerator
         stringBuilder.AppendLine();
         for (int index = 0; index < data.fields.Count; index++)
         {
+            using var optionScope = new CompiledOptionFieldScope(stringBuilder, data.fields[index].Options,
+                data.fields[index].Type == LuminFiledType.Other && data.fields[index].TypeSymbol != null ? FormatterTypeName.Get(data.fields[index].TypeSymbol) : null);
             string owner = (data.fields[index].IsPrivate || data.fields[index].isProperty) ? "local" : "value";
             if (data.fields[index].FieldType == LuminDataType.Reference && data.fields[index].Type != LuminFiledType.Other)
             {

@@ -63,11 +63,9 @@ public partial class VariableCollectionCapacityTest
             Array = Enumerable.Range(0, 10000).Select(index => index % 3 == 0 ? null! : new string('x', index % 97)).ToArray(),
             Tail = 917
         };
-        var option = new LuminPackSerializerOption { StringEncoding = encoding, StringRecording = recording };
+        var option = new TestSerializationProfile { StringEncoding = encoding, StringRecording = recording };
         using var buffer = new LuminBufferWriter(true);
-        buffer.Option.StringEncoding = encoding;
-        buffer.Option.StringRecording = recording;
-        LuminPackSerializer.Serialize(value, buffer);
+        LuminPackSerializer.Serialize(value, buffer, option);
         byte[] bytes = buffer.GetSpan().ToArray();
         var copy = LuminPackSerializer.Deserialize<Graph>(bytes, option);
         Assert.Equal(value.Items.Select(text => text ?? ""), copy.Items.Select(text => text ?? ""));
@@ -84,14 +82,12 @@ public partial class VariableCollectionCapacityTest
     [InlineData(2)]
     public void CompletedPayloadNearSegmentEndPreservesFixedTail(int shape)
     {
-        var option = new LuminPackSerializerOption { StringEncoding = LuminPackStringEncoding.UTF16, StringRecording = LuminPackStringRecording.Length };
+        var option = new TestSerializationProfile { StringEncoding = LuminPackStringEncoding.UTF16, StringRecording = LuminPackStringRecording.Length };
         using var buffer = new LuminBufferWriter(true);
-        buffer.Option.StringEncoding = option.StringEncoding;
-        buffer.Option.StringRecording = option.StringRecording;
         if (shape == 0)
         {
             var value = new TextEdge { Text = new string('x', 16381), Tail = 1917 };
-            LuminPackSerializer.Serialize(value, buffer);
+            LuminPackSerializer.Serialize(value, buffer, option);
             Assert.Equal(value.Tail, LuminPackSerializer.Deserialize<TextEdge>(buffer.GetSpan(), option).Tail);
         }
         else
@@ -99,7 +95,7 @@ public partial class VariableCollectionCapacityTest
             var value = new CollectionEdge { Tail = 1917 };
             if (shape == 1) value.List = [new string('x', 16379)];
             else value.Array = [new string('x', 16377)];
-            LuminPackSerializer.Serialize(value, buffer);
+            LuminPackSerializer.Serialize(value, buffer, option);
             var copy = LuminPackSerializer.Deserialize<CollectionEdge>(buffer.GetSpan(), option);
             Assert.Equal(value.Tail, copy.Tail);
             Assert.Equal(value.List, copy.List);

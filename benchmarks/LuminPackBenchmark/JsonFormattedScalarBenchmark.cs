@@ -16,8 +16,8 @@ public class JsonFormattedScalarBenchmark
 {
     private const int Count = 1000;
 
-    private static readonly LuminPackSerializerOption Utf8Option = new() { StringEncoding = LuminPackStringEncoding.UTF8 };
-    private static readonly LuminPackSerializerOption Utf16Option = new() { StringEncoding = LuminPackStringEncoding.UTF16 };
+    private static readonly BenchmarkProfile Utf8Option = new() { StringEncoding = LuminPackStringEncoding.UTF8 };
+    private static readonly BenchmarkProfile Utf16Option = new() { StringEncoding = LuminPackStringEncoding.UTF16 };
 
     private DateTimeOffset[] _offsets = null!;
     private DateTime[] _dates = null!;
@@ -49,11 +49,11 @@ public class JsonFormattedScalarBenchmark
     [Benchmark(Baseline = true)]
     public int DateTimeOffset_ToStringThenWriteString()
     {
-        var state = new LuminPackWriterOptionalState(Utf8Option);
+        var state = new LuminPackWriterOptionalState();
         Span<byte> buffer = _buffer;
         var writer = new LuminPackJsonWriter(ref buffer, state);
         foreach (var value in _offsets)
-            writer.WriteString(value.ToString("O"));
+            writer.WriteString<LuminPackDefaultOptions>(value.ToString("O"));
         return writer.CurrentIndex;
     }
 
@@ -62,7 +62,7 @@ public class JsonFormattedScalarBenchmark
     [Benchmark]
     public int DateTimeOffset_DirectFormat()
     {
-        var state = new LuminPackWriterOptionalState(Utf8Option);
+        var state = new LuminPackWriterOptionalState();
         Span<byte> buffer = _buffer;
         var writer = new LuminPackJsonWriter(ref buffer, state);
         foreach (var value in _offsets)
@@ -75,11 +75,11 @@ public class JsonFormattedScalarBenchmark
     [Benchmark]
     public int DateTime_ToStringThenWriteString()
     {
-        var state = new LuminPackWriterOptionalState(Utf8Option);
+        var state = new LuminPackWriterOptionalState();
         Span<byte> buffer = _buffer;
         var writer = new LuminPackJsonWriter(ref buffer, state);
         foreach (var value in _dates)
-            writer.WriteString(value.ToString("O"));
+            writer.WriteString<LuminPackDefaultOptions>(value.ToString("O"));
         return writer.CurrentIndex;
     }
 
@@ -88,7 +88,7 @@ public class JsonFormattedScalarBenchmark
     [Benchmark]
     public int DateTime_DirectFormat()
     {
-        var state = new LuminPackWriterOptionalState(Utf8Option);
+        var state = new LuminPackWriterOptionalState();
         Span<byte> buffer = _buffer;
         var writer = new LuminPackJsonWriter(ref buffer, state);
         foreach (var value in _dates)
@@ -101,11 +101,11 @@ public class JsonFormattedScalarBenchmark
     [Benchmark]
     public int Guid_ToStringThenWriteString()
     {
-        var state = new LuminPackWriterOptionalState(Utf8Option);
+        var state = new LuminPackWriterOptionalState();
         Span<byte> buffer = _buffer;
         var writer = new LuminPackJsonWriter(ref buffer, state);
         foreach (var value in _guids)
-            writer.WriteString(value.ToString());
+            writer.WriteString<LuminPackDefaultOptions>(value.ToString());
         return writer.CurrentIndex;
     }
 
@@ -114,7 +114,7 @@ public class JsonFormattedScalarBenchmark
     [Benchmark]
     public int Guid_DirectFormat()
     {
-        var state = new LuminPackWriterOptionalState(Utf8Option);
+        var state = new LuminPackWriterOptionalState();
         Span<byte> buffer = _buffer;
         var writer = new LuminPackJsonWriter(ref buffer, state);
         foreach (var value in _guids)
@@ -127,11 +127,11 @@ public class JsonFormattedScalarBenchmark
     [Benchmark]
     public int TimeSpan_ToStringThenWriteString()
     {
-        var state = new LuminPackWriterOptionalState(Utf8Option);
+        var state = new LuminPackWriterOptionalState();
         Span<byte> buffer = _buffer;
         var writer = new LuminPackJsonWriter(ref buffer, state);
         foreach (var value in _spans)
-            writer.WriteString(value.ToString());
+            writer.WriteString<LuminPackDefaultOptions>(value.ToString());
         return writer.CurrentIndex;
     }
 
@@ -140,7 +140,7 @@ public class JsonFormattedScalarBenchmark
     [Benchmark]
     public int TimeSpan_DirectFormat()
     {
-        var state = new LuminPackWriterOptionalState(Utf8Option);
+        var state = new LuminPackWriterOptionalState();
         Span<byte> buffer = _buffer;
         var writer = new LuminPackJsonWriter(ref buffer, state);
         foreach (var value in _spans)
@@ -153,11 +153,11 @@ public class JsonFormattedScalarBenchmark
     [Benchmark]
     public int DateTimeOffset_DirectFormat_Utf16()
     {
-        var state = new LuminPackWriterOptionalState(Utf16Option);
+        var state = new LuminPackWriterOptionalState();
         Span<byte> buffer = _buffer;
         var writer = new LuminPackJsonWriter(ref buffer, state);
         foreach (var value in _offsets)
-            writer.WriteDateTimeOffset(value);
+            writer.WriteDateTimeOffset<LuminPackUtf16LengthOptions>(value);
         return writer.CurrentIndex;
     }
 }

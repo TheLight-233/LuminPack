@@ -27,6 +27,18 @@ namespace LuminPack.SourceGenerator
         /// <param name="genericParameters">The generic parameters in the current type scope.</param>
         private static void ProcessFieldType(ITypeSymbol type, LuminDataField field, List<string> genericParameters = null)
         {
+            var previous = _analysisState.CurrentOptions;
+            _analysisState.CurrentOptions = field.Options ?? previous;
+            try { ProcessFieldTypeCore(type, field, genericParameters); }
+            finally { _analysisState.CurrentOptions = previous; }
+        }
+
+        /// <summary>Classifies a field while its declaration-time option scope is active.</summary>
+        /// <param name="type">The original member type.</param>
+        /// <param name="field">The canonical member metadata.</param>
+        /// <param name="genericParameters">The original generic-definition parameters.</param>
+        private static void ProcessFieldTypeCore(ITypeSymbol type, LuminDataField field, List<string> genericParameters)
+        {
             field.TypeSymbol = type;
             if (TypeMetaChecker.TryCheckIsNotRefLike(type))
             {
@@ -394,6 +406,7 @@ namespace LuminPack.SourceGenerator
 
                         var nestedField = new LuminDataField
                         {
+                            Options = CompiledOptions.ResolveMember(member, _analysisState.CurrentOptions),
                             Name = member.Name,
                             FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
@@ -446,6 +459,7 @@ namespace LuminPack.SourceGenerator
 
                         var nestedField = new LuminDataField
                         {
+                            Options = CompiledOptions.ResolveMember(nestedMember, _analysisState.CurrentOptions),
                             Name = nestedMember.Name,
                             FullTypeName = nestedMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
@@ -527,6 +541,7 @@ namespace LuminPack.SourceGenerator
 
                         var nestedField = new LuminDataField
                         {
+                            Options = CompiledOptions.ResolveMember(member, _analysisState.CurrentOptions),
                             Name = member.Name,
                             FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
@@ -582,6 +597,7 @@ namespace LuminPack.SourceGenerator
 
                         var nestedField = new LuminDataField
                         {
+                            Options = CompiledOptions.ResolveMember(nestedMember, _analysisState.CurrentOptions),
                             Name = nestedMember.Name,
                             FullTypeName = nestedMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                             NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
@@ -902,7 +918,8 @@ namespace LuminPack.SourceGenerator
 
                 var nestedField = new LuminDataField
                 {
-                    Name = member.Name,
+                    Options = CompiledOptions.ResolveMember(member, _analysisState.CurrentOptions),
+                            Name = member.Name,
                     FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     TypeSymbol = member.Type,
                     NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
@@ -963,7 +980,8 @@ namespace LuminPack.SourceGenerator
 
                 var nestedField = new LuminDataField
                 {
-                    Name = nestedMember.Name,
+                    Options = CompiledOptions.ResolveMember(nestedMember, _analysisState.CurrentOptions),
+                            Name = nestedMember.Name,
                     FullTypeName = nestedMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     TypeSymbol = nestedMember.Type,
                     NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
@@ -1020,7 +1038,8 @@ namespace LuminPack.SourceGenerator
 
                 var nestedField = new LuminDataField
                 {
-                    Name = member.Name,
+                    Options = CompiledOptions.ResolveMember(member, _analysisState.CurrentOptions),
+                            Name = member.Name,
                     FullTypeName = member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     NameSpace = member.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = member.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : member.Type.Name,
@@ -1070,7 +1089,8 @@ namespace LuminPack.SourceGenerator
 
                 var nestedField = new LuminDataField
                 {
-                    Name = nestedMember.Name,
+                    Options = CompiledOptions.ResolveMember(nestedMember, _analysisState.CurrentOptions),
+                            Name = nestedMember.Name,
                     FullTypeName = nestedMember.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat),
                     NameSpace = nestedMember.Type.ContainingNamespace?.ToString() ?? "Your.Data.Namespace",
                     TypeName = nestedMember.Type is INamedTypeSymbol nestedNamedType ? nestedNamedType.ToDisplayString() : nestedMember.Type.Name,

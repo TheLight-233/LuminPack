@@ -7,6 +7,7 @@ namespace LuminPackUnitTest
     /// Console mode runs the full suite (dotnet run); xUnit mode (dotnet test) runs the same
     /// suite one test case per logical group, asserting every collected result passed.
     /// </summary>
+    [Collection(nameof(RuntimeStateCollection))]
     public class LuminPackXUnitTests
     {
         /// <summary>Verifies run.</summary>

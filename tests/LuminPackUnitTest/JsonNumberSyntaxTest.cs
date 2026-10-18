@@ -22,10 +22,10 @@ public sealed partial class NumberSyntaxProbe
 /// <summary>Provides json number syntax test functionality.</summary>
 public class JsonNumberSyntaxTest
 {
-    private static readonly LuminPackSerializerOption s_strictUtf8 =
-        LuminPackSerializerOption.Utf8 with { ValidateJsonSyntax = true };
-    private static readonly LuminPackSerializerOption s_strictUtf16 =
-        LuminPackSerializerOption.Utf16 with { ValidateJsonSyntax = true };
+    private static readonly TestSerializationProfile s_strictUtf8 =
+        TestSerializationProfile.Utf8 with { ValidateJsonSyntax = true };
+    private static readonly TestSerializationProfile s_strictUtf16 =
+        TestSerializationProfile.Utf16 with { ValidateJsonSyntax = true };
 
     /// <summary>Gets the integer literals.</summary>
     public static TheoryData<string> IntegerLiterals => new()

@@ -46,6 +46,7 @@ internal static class SerializerExternalUnionRegression
             using LuminPack.Attribute;
             using ForeignUnion;
             [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
+            [assembly: LuminPackOption(StringEncoding = LuminPack.Option.LuminPackStringEncoding.UTF16)]
             [assembly: LuminPackable(typeof(Root))]
             [assembly: LuminPackable(typeof(IRoot))]
             [assembly: LuminPackable(typeof(GenericRoot<>))]
@@ -105,7 +106,7 @@ internal static class SerializerExternalUnionRegression
                 "A source case lost the private layout slots of its referenced base.");
             var overrides = generated.Where(method => method.Identifier.ValueText.StartsWith("__LuminPackUnion", StringComparison.Ordinal) &&
                 method.Parent is TypeDeclarationSyntax { Identifier.ValueText: "LocalCase" }).ToArray();
-            Require(overrides.Length == 3 && overrides.All(method => method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
+            Require(overrides.Length == 10 && overrides.All(method => method.TypeParameterList == null && method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
                 method.Modifiers.Any(SyntaxKind.PublicKeyword) && !method.DescendantNodes().OfType<SwitchStatementSyntax>().Any()),
                 "An imported ordinary root lost its plain virtual overrides: " + mode);
             Require(overrides.All(method => method.GetLeadingTrivia().Any(trivia => trivia.HasStructure &&
@@ -113,7 +114,7 @@ internal static class SerializerExternalUnionRegression
                 "An imported root override lost XML or its hidden-completion attribute.");
             var genericOverrides = generated.Where(method => method.Identifier.ValueText.StartsWith("__LuminPackUnion", StringComparison.Ordinal) &&
                 method.Parent is TypeDeclarationSyntax { Identifier.ValueText: "LocalGeneric" }).ToArray();
-            Require(genericOverrides.Length == 3 && genericOverrides.All(method => method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
+            Require(genericOverrides.Length == 10 && genericOverrides.All(method => method.TypeParameterList == null && method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
                 method.DescendantNodes().OfType<SwitchStatementSyntax>().Any(statement => statement.Expression.ToString().StartsWith("__LuminPackUnionDispatchSlot_", StringComparison.Ordinal))),
                 "An imported generic root lost its virtual plus cached-slot switch: " + mode);
             Require(!generated.Any(method => method.Identifier.ValueText == "Register" &&

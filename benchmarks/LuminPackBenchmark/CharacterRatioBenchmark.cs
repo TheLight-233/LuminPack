@@ -28,7 +28,7 @@ public abstract class CharacterRatioFixture
     /// <summary>Stores the lumin binary.</summary>
     protected byte[] LuminBinary = null!, MemoryBinary = null!, LuminJson = null!, StjJson = null!;
     /// <summary>Stores the strict.</summary>
-    protected static readonly LuminPackSerializerOption Strict = new() { ValidateJsonSyntax = true };
+    private protected static readonly BenchmarkProfile Strict = new() { ValidateJsonSyntax = true };
     /// <summary>Stores the context.</summary>
     private protected static readonly OptimizationJsonContext Context = new(new JsonSerializerOptions
     {

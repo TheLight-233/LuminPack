@@ -74,7 +74,7 @@ internal static class ReaderBoundaryValidationTest
     /// <summary>Verifies utf8 token without terminator is rejected.</summary>
     private static void Utf8TokenWithoutTerminatorIsRejected()
     {
-        var option = LuminPackSerializerOption.Token with { StringEncoding = LuminPackStringEncoding.UTF8 };
+        var option = TestSerializationProfile.Token with { StringEncoding = LuminPackStringEncoding.UTF8 };
         AssertThrows(() => ScanToken(new byte[] { 1, 2, 3 }, option),
             "An unterminated UTF-8 token string was accepted.");
     }
@@ -82,7 +82,7 @@ internal static class ReaderBoundaryValidationTest
     /// <summary>Verifies utf16 token without terminator is rejected.</summary>
     private static void Utf16TokenWithoutTerminatorIsRejected()
     {
-        var option = LuminPackSerializerOption.Token with { StringEncoding = LuminPackStringEncoding.UTF16 };
+        var option = TestSerializationProfile.Token with { StringEncoding = LuminPackStringEncoding.UTF16 };
         AssertThrows(() => ScanToken(new byte[] { 0x41, 0, 0x42, 0, 0x43 }, option),
             "An unterminated/odd-sized UTF-16 token string was accepted.");
     }
@@ -90,13 +90,13 @@ internal static class ReaderBoundaryValidationTest
     /// <summary>Verifies scan token.</summary>
     /// <param name="bytes">The bytes used by this operation.</param>
     /// <param name="option">The configuration to apply to this operation.</param>
-    private static void ScanToken(byte[] bytes, LuminPackSerializerOption option)
+    private static void ScanToken(byte[] bytes, TestSerializationProfile option)
     {
-        using var state = new LuminPackReaderOptionalState(option);
+        using var state = new LuminPackReaderOptionalState();
         ReadOnlySpan<byte> span = bytes;
         var reader = new LuminPackReader(ref span, state);
         int index = 0;
-        reader.ReadStringLength(ref index, out _);
+        reader.ReadStringLengthFor(option, ref index, out _);
     }
 
     /// <summary>Verifies oversized unmanaged payload is rejected before allocation.</summary>
@@ -227,7 +227,7 @@ internal static class ReaderBoundaryValidationTest
     {
         const string value = "ASCII \u4E2D\u6587 \uD83D\uDE00";
 
-        foreach (var option in new[] { LuminPackSerializerOption.Utf8, LuminPackSerializerOption.Utf16WithLength })
+        foreach (var option in new[] { TestSerializationProfile.Utf8, TestSerializationProfile.Utf16WithLength })
         {
             var payload = LuminPackSerializer.Serialize(value, option);
             var result = LuminPackSerializer.Deserialize<string>(payload, option);
@@ -239,11 +239,11 @@ internal static class ReaderBoundaryValidationTest
     private static void LengthStringPayloadBoundsAreValidated()
     {
         AssertThrows(() => ReadForgedStringLength(CreateLengthString(100, 0, utf8: true, prefix: 5),
-                LuminPackSerializerOption.Utf8, 5),
+                TestSerializationProfile.Utf8, 5),
             "A UTF-8 string length larger than the remaining payload was accepted.");
 
         AssertThrows(() => ReadForgedStringLength(CreateLengthString(3, 2, utf8: false),
-                LuminPackSerializerOption.Utf16WithLength, 0),
+                TestSerializationProfile.Utf16WithLength, 0),
             "A UTF-16 string payload missing one byte was accepted.");
     }
 
@@ -253,7 +253,7 @@ internal static class ReaderBoundaryValidationTest
         foreach (int length in new[] { -2, int.MinValue })
         {
             AssertInvalidData(() => ReadForgedStringLength(CreateLengthString(length, 0, utf8: true),
-                    LuminPackSerializerOption.Utf8, 0),
+                    TestSerializationProfile.Utf8, 0),
                 $"Invalid string length {length} was accepted.");
         }
     }
@@ -263,7 +263,7 @@ internal static class ReaderBoundaryValidationTest
     {
         const int prefix = 16;
         AssertThrows(() => ReadForgedStringLength(CreateLengthString(int.MaxValue, 0, utf8: true, prefix: prefix),
-                LuminPackSerializerOption.Utf8, prefix),
+                TestSerializationProfile.Utf8, prefix),
             "A string length whose index/header/length sum overflows Int32 was accepted.");
     }
 
@@ -285,12 +285,12 @@ internal static class ReaderBoundaryValidationTest
     /// <param name="bytes">The bytes used by this operation.</param>
     /// <param name="option">The configuration to apply to this operation.</param>
     /// <param name="index">The position at which the operation starts.</param>
-    private static void ReadForgedStringLength(byte[] bytes, LuminPackSerializerOption option, int index)
+    private static void ReadForgedStringLength(byte[] bytes, TestSerializationProfile option, int index)
     {
-        using var state = new LuminPackReaderOptionalState(option);
+        using var state = new LuminPackReaderOptionalState();
         ReadOnlySpan<byte> span = bytes;
         var reader = new LuminPackReader(ref span, state);
-        reader.ReadStringLength(ref index, out _);
+        reader.ReadStringLengthFor(option, ref index, out _);
     }
 
     /// <summary>Verifies multi segment sequence is read completely.</summary>

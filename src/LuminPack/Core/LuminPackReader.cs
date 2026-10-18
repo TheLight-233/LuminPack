@@ -34,16 +34,12 @@ namespace LuminPack.Core
 
         private readonly LuminPackReaderOptionalState _optionState;
 
-        private readonly bool SerializeStringAsUtf8;
-        private readonly bool SerializeStringRecordAsToken;
 
         /// <summary>Gets the option state.</summary>
         public LuminPackReaderOptionalState OptionState => _optionState;
-        /// <summary>Gets the option.</summary>
-        public LuminPackSerializerOption Option => _optionState.Option;
 
         /// <summary>Initializes a new instance of <c>LuminPackReader</c>.</summary>
-        /// <param name="option">The configuration to apply to this operation.</param>
+        /// <param name="option">The shared reference-tracking state, or null for the default operation state.</param>
         public LuminPackReader(LuminPackReaderOptionalState? option = null)
         {
 
@@ -51,13 +47,12 @@ namespace LuminPack.Core
             _bufferReference = default;
             _currentIndex = 0;
 
-            SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
-            SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
+
         }
 
         /// <summary>Initializes a new instance of <c>LuminPackReader</c>.</summary>
         /// <param name="bufferReference">The buffer reference used by this operation.</param>
-        /// <param name="option">The configuration to apply to this operation.</param>
+        /// <param name="option">The shared reference-tracking state, or null for the default operation state.</param>
         public LuminPackReader(ref Span<byte> bufferReference, LuminPackReaderOptionalState? option = null)
         {
             _optionState = option ?? LuminPackReaderOptionalState.NullOption;
@@ -69,13 +64,12 @@ namespace LuminPack.Core
 #endif
             _currentIndex = 0;
 
-            SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
-            SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
+
         }
 
         /// <summary>Initializes a new instance of <c>LuminPackReader</c>.</summary>
         /// <param name="bufferReference">The buffer reference used by this operation.</param>
-        /// <param name="option">The configuration to apply to this operation.</param>
+        /// <param name="option">The shared reference-tracking state, or null for the default operation state.</param>
         public LuminPackReader(ref ReadOnlySpan<byte> bufferReference, LuminPackReaderOptionalState? option = null)
         {
             _optionState = option ?? LuminPackReaderOptionalState.NullOption;
@@ -87,13 +81,12 @@ namespace LuminPack.Core
 #endif
             _currentIndex = 0;
 
-            SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
-            SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
+
         }
 
         /// <summary>Initializes a new instance of <c>LuminPackReader</c>.</summary>
         /// <param name="bufferReference">The buffer reference used by this operation.</param>
-        /// <param name="option">The configuration to apply to this operation.</param>
+        /// <param name="option">The shared reference-tracking state, or null for the default operation state.</param>
         public LuminPackReader(ref ReadOnlySequence<byte> bufferReference, LuminPackReaderOptionalState? option = null)
         {
             _optionState = option ?? LuminPackReaderOptionalState.NullOption;
@@ -109,8 +102,7 @@ namespace LuminPack.Core
 #endif
             _currentIndex = 0;
 
-            SerializeStringAsUtf8 = _optionState.Option.StringEncoding is LuminPackStringEncoding.UTF8;
-            SerializeStringRecordAsToken = _optionState.Option.StringRecording is LuminPackStringRecording.Token;
+
         }
 
         /// <summary>Initializes a new instance of <c>LuminPackReader</c>.</summary>
@@ -126,8 +118,8 @@ namespace LuminPack.Core
             _bufferStart = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_bufferReference));
 #endif
             _currentIndex = 0;
-            SerializeStringAsUtf8 = bufferWriter.Option.StringEncoding is LuminPackStringEncoding.UTF8;
-            SerializeStringRecordAsToken = bufferWriter.Option.StringRecording is LuminPackStringRecording.Token;
+
+
         }
 
 
@@ -337,16 +329,7 @@ namespace LuminPack.Core
         /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool PeekIsNullString(ref int index)
-        {
-            return SerializeStringRecordAsToken
-#if NET8_0_OR_GREATER
-                ? Unsafe.Add(ref _bufferStart, (nint)(uint)index) == 0
-                : Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index)) == LuminPackCode.NullCollection;
-#else
-                ? Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index) == 0
-                : Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index)) == LuminPackCode.NullCollection;
-#endif
-        }
+        { return PeekIsNullString<global::LuminPack.Option.LuminPackDefaultOptions>(ref index); }
 
         /// <summary>Attempts to read object head and reports whether it succeeded.</summary>
         /// <param name="index">The position at which the operation starts.</param>
@@ -387,36 +370,14 @@ namespace LuminPack.Core
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadStringHead(ref int index, out int length)
-        {
-            if (SerializeStringRecordAsToken)
-                LuminPackExceptionHelper.ThrowFailedParseStringWithLength();
-
-#if NET8_0_OR_GREATER
-            length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index));
-#else
-            length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index));
-#endif
-
-            ValidateStringLength(index, length);
-
-            return length is not LuminPackCode.NullCollection;
-        }
+        { return TryReadStringHead<global::LuminPack.Option.LuminPackDefaultOptions>(ref index, out length); }
 
         /// <summary>Validates string length before the operation continues.</summary>
         /// <param name="index">The position at which the operation starts.</param>
         /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ValidateStringLength(int index, int length)
-        {
-            if (length < 0 && length != LuminPackCode.NullCollection)
-                LuminPackExceptionHelper.ThrowInvalidStringLength(length);
-
-            int headerSize = SerializeStringAsUtf8 ? sizeof(int) * 2 : sizeof(int);
-            if ((uint)index > (uint)_bufferReference.Length ||
-                (uint)headerSize > (uint)(_bufferReference.Length - index) ||
-                (length >= 0 && (uint)length > (uint)(_bufferReference.Length - index - headerSize)))
-                LuminPackExceptionHelper.ThrowInSufficientBuffer(length);
-        }
+        { ValidateStringLength<global::LuminPack.Option.LuminPackDefaultOptions>(index, length); }
 
         /// <summary>
         /// Calculates the binary string encoding length.
@@ -425,208 +386,13 @@ namespace LuminPack.Core
         /// <param name="length"></param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ReadStringLength(ref int index, out int length)
-        {
-            if (SerializeStringRecordAsToken)
-            {
-                var remaining = _bufferReference.Slice(index);
-                if (SerializeStringAsUtf8)
-                {
-                    length = remaining.IndexOf((byte)0);
-                }
-                else
-                {
-                    var characters = MemoryMarshal.Cast<byte, ushort>(remaining.Slice(0, remaining.Length & ~1));
-                    var characterLength = characters.IndexOf((ushort)0);
-                    length = characterLength < 0 ? -1 : checked(characterLength * sizeof(ushort));
-                }
-
-                if (length < 0)
-                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidDataException("String token terminator was not found.");
-                return;
-            }
-
-            EnsureReadable(index, sizeof(int));
-            if (SerializeStringRecordAsToken)
-            {
-#if NET8_0_OR_GREATER
-                ref byte start = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
-#else
-                ref byte start = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
-#endif
-
-                if (!SerializeStringAsUtf8)
-                {
-                    // UTF-16 token mode scans for the first zero-valued ushort.
-                    // Scan UTF-16 code units; scanning bytes would mistake zero high bytes for delimiters.
-#if NET8_0_OR_GREATER
-                    if (Vector512.IsHardwareAccelerated)
-                    {
-                        ref ushort cStart = ref Unsafe.As<byte, ushort>(ref start);
-                        ref ushort current = ref cStart;
-                        var zero = Vector512<ushort>.Zero;
-                        while (true)
-                        {
-                            ulong mask = Vector512.Equals(Vector512.LoadUnsafe(ref current), zero)
-                                            .ExtractMostSignificantBits();
-                            if (mask != 0)
-                            {
-                                int position = BitOperations.TrailingZeroCount(mask);
-                                length = (int)(nint)Unsafe.ByteOffset(
-                                    ref Unsafe.As<ushort, byte>(ref cStart),
-                                    ref Unsafe.As<ushort, byte>(ref current)) + position * 2;
-                                return;
-                            }
-                            current = ref Unsafe.Add(ref current, Vector512<ushort>.Count);
-                        }
-                    }
-                    else if (Vector256.IsHardwareAccelerated)
-                    {
-                        ref ushort cStart = ref Unsafe.As<byte, ushort>(ref start);
-                        ref ushort current = ref cStart;
-                        var zero = Vector256<ushort>.Zero;
-                        while (true)
-                        {
-                            uint mask = Vector256.Equals(Vector256.LoadUnsafe(ref current), zero)
-                                            .ExtractMostSignificantBits();
-                            if (mask != 0)
-                            {
-                                int position = BitOperations.TrailingZeroCount(mask);
-                                length = (int)(nint)Unsafe.ByteOffset(
-                                    ref Unsafe.As<ushort, byte>(ref cStart),
-                                    ref Unsafe.As<ushort, byte>(ref current)) + position * 2;
-                                return;
-                            }
-                            current = ref Unsafe.Add(ref current, Vector256<ushort>.Count);
-                        }
-                    }
-                    else if (Vector128.IsHardwareAccelerated)
-                    {
-                        ref ushort cStart = ref Unsafe.As<byte, ushort>(ref start);
-                        ref ushort current = ref cStart;
-                        var zero = Vector128<ushort>.Zero;
-                        while (true)
-                        {
-                            uint mask = Vector128.Equals(Vector128.LoadUnsafe(ref current), zero)
-                                            .ExtractMostSignificantBits();
-                            if (mask != 0)
-                            {
-                                int position = BitOperations.TrailingZeroCount(mask);
-                                length = (int)(nint)Unsafe.ByteOffset(
-                                    ref Unsafe.As<ushort, byte>(ref cStart),
-                                    ref Unsafe.As<ushort, byte>(ref current)) + position * 2;
-                                return;
-                            }
-                            current = ref Unsafe.Add(ref current, Vector128<ushort>.Count);
-                        }
-                    }
-                    else
-#endif
-                    {
-                        ref char cStart = ref Unsafe.As<byte, char>(ref start);
-                        int charLen = 0;
-                        while (Unsafe.Add(ref cStart, charLen) != '\0') charLen++;
-                        length = charLen * 2;
-                    }
-                    return;
-                }
-
-#if NET8_0_OR_GREATER
-                if (Vector512.IsHardwareAccelerated && Vector512<byte>.Count > 1)
-                {
-                    ref byte current = ref start;
-                    Vector512<byte> zero = Vector512<byte>.Zero;
-
-                    while (true)
-                    {
-                        Vector512<byte> data = Vector512.LoadUnsafe(ref current);
-                        Vector512<byte> equalsZero = Vector512.Equals(data, zero);
-                        ulong mask = equalsZero.ExtractMostSignificantBits();
-
-                        if (mask != 0)
-                        {
-                            int position = BitOperations.TrailingZeroCount(mask);
-                            length = (int)((nint)Unsafe.ByteOffset(ref start, ref current) + position);
-                            return;
-                        }
-
-                        current = ref Unsafe.Add(ref current, Vector512<byte>.Count);
-                    }
-                }
-                else if (Vector256.IsHardwareAccelerated && Vector256<byte>.Count > 1)
-                {
-                    ref byte current = ref start;
-                    Vector256<byte> zero = Vector256<byte>.Zero;
-
-                    while (true)
-                    {
-                        Vector256<byte> data = Vector256.LoadUnsafe(ref current);
-                        Vector256<byte> equalsZero = Vector256.Equals(data, zero);
-                        uint mask = equalsZero.ExtractMostSignificantBits();
-
-                        if (mask != 0)
-                        {
-                            int position = BitOperations.TrailingZeroCount(mask);
-                            length = (int)((nint)Unsafe.ByteOffset(ref start, ref current) + position);
-                            return;
-                        }
-
-                        current = ref Unsafe.Add(ref current, Vector256<byte>.Count);
-                    }
-                }
-                else if (Vector128.IsHardwareAccelerated && Vector128<byte>.Count > 1)
-                {
-                    ref byte current = ref start;
-                    Vector128<byte> zero = Vector128<byte>.Zero;
-
-                    while (true)
-                    {
-                        Vector128<byte> data = Vector128.LoadUnsafe(ref current);
-                        Vector128<byte> equalsZero = Vector128.Equals(data, zero);
-                        uint mask = equalsZero.ExtractMostSignificantBits();
-
-                        if (mask != 0)
-                        {
-                            int position = BitOperations.TrailingZeroCount(mask);
-                            length = (int)((nint)Unsafe.ByteOffset(ref start, ref current) + position);
-                            return;
-                        }
-
-                        current = ref Unsafe.Add(ref current, Vector128<byte>.Count);
-                    }
-                }
-                else
-#endif
-                {
-                    ref byte current = ref start;
-                    int len = 0;
-                    while (current != 0)
-                    {
-                        current = ref Unsafe.Add(ref current, 1);
-                        len++;
-                    }
-                    length = len;
-                }
-            }
-            else
-            {
-#if NET8_0_OR_GREATER
-                length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index));
-#else
-                length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index));
-#endif
-                ValidateStringLength(index, length);
-            }
-
-        }
+        { ReadStringLength<global::LuminPack.Option.LuminPackDefaultOptions>(ref index, out length); }
 
         /// <summary>Returns the size of the string header used by the current recording mode.</summary>
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int StringRecordLength()
-        {
-            // UTF-16 token mode uses a two-byte 0x0000 terminator because individual zero bytes are common within code units.
-            return SerializeStringRecordAsToken ? (SerializeStringAsUtf8 ? 1 : 2) : SerializeStringAsUtf8 ? 8 : 4;
-        }
+        { return StringRecordLength<global::LuminPack.Option.LuminPackDefaultOptions>(); }
 
         /// <summary>
         /// Reads one string record and advances the supplied absolute offset.
@@ -635,66 +401,17 @@ namespace LuminPack.Core
         /// </summary>
         /// <param name="index">The position at which the operation starts.</param>
         /// <returns>The result of the operation.</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string? ReadStringAndAdvance(ref int index)
-        {
-            bool isUtf8 = SerializeStringAsUtf8;
-            if (SerializeStringRecordAsToken)
-            {
-                return ReadTokenStringAndAdvance(ref index, isUtf8);
-            }
-
-            int recordLength = isUtf8 ? sizeof(int) * 2 : sizeof(int);
-            int bufferLength = _bufferReference.Length;
-            if ((uint)index > (uint)bufferLength ||
-                (uint)recordLength > (uint)(bufferLength - index))
-            {
-                LuminPackExceptionHelper.ThrowInSufficientBuffer(recordLength);
-            }
-
-#if NET8_0_OR_GREATER
-            int length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref _bufferStart, (nint)(uint)index));
-#else
-            int length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index));
-#endif
-
-            if (length < 0)
-            {
-                if (length != LuminPackCode.NullCollection)
-                    LuminPackExceptionHelper.ThrowInvalidStringLength(length);
-                index += recordLength;
-                return null;
-            }
-            else if ((uint)length > (uint)(bufferLength - index - recordLength))
-            {
-                LuminPackExceptionHelper.ThrowInSufficientBuffer(length);
-            }
-
-            var value = length == 0
-                ? string.Empty
-                : isUtf8
-                    ? ReadUtf8StringWithLength(index, length)
-                    : ReadUtf16StringWithLength(index, length);
-            index += length + recordLength;
-            return value;
-        }
+        { return ReadStringAndAdvance<global::LuminPack.Option.LuminPackDefaultOptions>(ref index); }
 
         /// <summary>Reads token string and advance from the current input.</summary>
         /// <param name="index">The position at which the operation starts.</param>
         /// <param name="isUtf8">The is utf8 used by this operation.</param>
         /// <returns>The result of the operation.</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadTokenStringAndAdvance(ref int index, bool isUtf8)
-        {
-            ReadStringLength(ref index, out var length);
-            // Token mode has no null marker: null and empty are both encoded as an empty
-            // token and must therefore deserialize to string.Empty.
-            var value = isUtf8
-                ? ReadUtf8StringWithToken(index, length)
-                : ReadUtf16StringWithToken(index, length);
-            index += length + (isUtf8 ? 1 : 2);
-            return value;
-        }
+        { return ReadTokenStringAndAdvance<global::LuminPack.Option.LuminPackDefaultOptions>(ref index, isUtf8); }
 
         /// <summary>
         /// Generator-only fast path for a list that is known to be newly allocated. It publishes
@@ -733,26 +450,9 @@ namespace LuminPack.Core
         /// </summary>
         /// <param name="index">The position at which the operation starts.</param>
         /// <returns>The result of the operation.</returns>
-        [MethodImpl(MethodImplOptions.NoInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public List<string>? ReadStringListAndAdvance(ref int index)
-        {
-            if (!TryReadCollectionHead(ref index, out int count))
-            {
-                index += sizeof(int);
-                return null;
-            }
-
-            var value = new List<string>(count);
-            int itemOffset = index + sizeof(int);
-            var items = LuminPackMarshal.DangerousGetFreshListArray(value, count);
-            for (int i = 0; i < items.Length; i++)
-            {
-                items[i] = ReadStringAndAdvance(ref itemOffset)!;
-            }
-
-            index = itemOffset;
-            return value;
-        }
+        { return ReadStringListAndAdvance<global::LuminPack.Option.LuminPackDefaultOptions>(ref index); }
 
         /// <summary>
         /// Reads a serialized string.
@@ -760,15 +460,7 @@ namespace LuminPack.Core
         /// <returns></returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string? ReadString()
-        {
-            if (SerializeStringAsUtf8)
-                return SerializeStringRecordAsToken
-                    ? ReadUtf8StringWithToken(_currentIndex)
-                    : ReadUtf8StringWithLength(_currentIndex);
-            return SerializeStringRecordAsToken
-                ? ReadUtf16StringWithToken(_currentIndex)
-                : ReadUtf16StringWithLength(_currentIndex);
-        }
+        { return ReadString<global::LuminPack.Option.LuminPackDefaultOptions>(); }
 
         /// <summary>
         /// Reads a string with a known length.
@@ -777,15 +469,7 @@ namespace LuminPack.Core
         /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string? ReadString(int length)
-        {
-            if (SerializeStringAsUtf8)
-                return SerializeStringRecordAsToken
-                    ? ReadUtf8StringWithToken(_currentIndex, length)
-                    : ReadUtf8StringWithLength(_currentIndex, length);
-            return SerializeStringRecordAsToken
-                ? ReadUtf16StringWithToken(_currentIndex, length)
-                : ReadUtf16StringWithLength(_currentIndex, length);
-        }
+        { return ReadString<global::LuminPack.Option.LuminPackDefaultOptions>(length); }
 
         /// <summary>
         /// Reads a serialized string.
@@ -794,15 +478,7 @@ namespace LuminPack.Core
         /// <param name="index">The position at which the operation starts.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string? ReadString(ref int index)
-        {
-            if (SerializeStringAsUtf8)
-                return SerializeStringRecordAsToken
-                    ? ReadUtf8StringWithToken(index)
-                    : ReadUtf8StringWithLength(index);
-            return SerializeStringRecordAsToken
-                ? ReadUtf16StringWithToken(index)
-                : ReadUtf16StringWithLength(index);
-        }
+        { return ReadString<global::LuminPack.Option.LuminPackDefaultOptions>(ref index); }
 
         /// <summary>
         /// Reads a string with a known length.
@@ -812,32 +488,14 @@ namespace LuminPack.Core
         /// <param name="length">The number of bytes or elements to process.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string? ReadString(int index, int length)
-        {
-            if (SerializeStringAsUtf8)
-                return SerializeStringRecordAsToken
-                    ? ReadUtf8StringWithToken(index, length)
-                    : ReadUtf8StringWithLength(index, length);
-            return SerializeStringRecordAsToken
-                ? ReadUtf16StringWithToken(index, length)
-                : ReadUtf16StringWithLength(index, length);
-        }
+        { return ReadString<global::LuminPack.Option.LuminPackDefaultOptions>(index, length); }
 
         /// <summary>Reads utf8 string with token from the current input.</summary>
         /// <param name="index">The position at which the operation starts.</param>
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf8StringWithToken(int index)
-        {
-            ReadStringLength(ref index, out var length);
-
-#if NET8_0_OR_GREATER
-            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
-#else
-            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
-#endif
-
-            return Encoding.UTF8.GetString(CreateSpan(ref spanRef, length));
-        }
+        { return ReadUtf8StringWithToken<global::LuminPack.Option.LuminPackDefaultOptions>(index); }
 
         /// <summary>Reads utf8 string with token from the current input.</summary>
         /// <param name="index">The position at which the operation starts.</param>
@@ -845,32 +503,14 @@ namespace LuminPack.Core
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf8StringWithToken(int index, int length)
-        {
-#if NET8_0_OR_GREATER
-            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
-#else
-            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
-#endif
-
-            return Encoding.UTF8.GetString(CreateSpan(ref spanRef, length));
-        }
+        { return ReadUtf8StringWithToken<global::LuminPack.Option.LuminPackDefaultOptions>(index, length); }
 
         /// <summary>Reads utf16 string with token from the current input.</summary>
         /// <param name="index">The position at which the operation starts.</param>
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf16StringWithToken(int index)
-        {
-            ReadStringLength(ref index, out var length);
-
-#if NET8_0_OR_GREATER
-            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
-#else
-            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
-#endif
-
-            return Encoding.Unicode.GetString(CreateSpan(ref spanRef, length));
-        }
+        { return ReadUtf16StringWithToken<global::LuminPack.Option.LuminPackDefaultOptions>(index); }
 
         /// <summary>Reads utf16 string with token from the current input.</summary>
         /// <param name="index">The position at which the operation starts.</param>
@@ -878,26 +518,14 @@ namespace LuminPack.Core
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf16StringWithToken(int index, int length)
-        {
-#if NET8_0_OR_GREATER
-            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index);
-#else
-            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index);
-#endif
-
-            return Encoding.Unicode.GetString(CreateSpan(ref spanRef, length));
-        }
+        { return ReadUtf16StringWithToken<global::LuminPack.Option.LuminPackDefaultOptions>(index, length); }
 
         /// <summary>Reads utf8 string with length from the current input.</summary>
         /// <param name="index">The position at which the operation starts.</param>
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf8StringWithLength(int index)
-        {
-            ReadStringLength(ref index, out var length);
-
-            return ReadUtf8StringWithLength(index, length);
-        }
+        { return ReadUtf8StringWithLength<global::LuminPack.Option.LuminPackDefaultOptions>(index); }
 
         /// <summary>Reads utf8 string with length from the current input.</summary>
         /// <param name="index">The position at which the operation starts.</param>
@@ -905,74 +533,7 @@ namespace LuminPack.Core
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf8StringWithLength(int index, int length)
-        {
-            if (length < 0) return null;
-            if (length == 0) return string.Empty;
-
-            int index1 = index + 4;
-#if NET8_0_OR_GREATER
-            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index1);
-#else
-            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index1);
-#endif
-
-            var utf16Length = Unsafe.ReadUnaligned<int>(ref spanRef);
-
-#if NETSTANDARD2_1
-            // Unity Mono's implementation of the custom span decoder can report
-            // InvalidData for valid four-byte UTF-8 scalar values (for example emoji).
-            // The runtime decoder is correct on Unity and this branch is isolated to
-            // the Unity-targeted netstandard2.1 build.
-            return Encoding.UTF8.GetString(
-                LuminPackMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref spanRef, 4), length));
-#else
-
-            if (utf16Length <= 0)
-            {
-                var src = LuminPackMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref spanRef, 4), length);
-                return Encoding.UTF8.GetString(src);
-            }
-            else
-            {
-                if ((uint)utf16Length > (uint)length)
-                    LuminPackExceptionHelper.ThrowFailedEncoding(OperationStatus.InvalidData);
-
-                if (utf16Length == length)
-                {
-                    if ((uint)(length - 1) <= 2)
-                    {
-                        var tinyString = ReadTinyAsciiString(ref Unsafe.Add(ref spanRef, 4), length);
-                        if (tinyString is not null) return tinyString;
-                    }
-                    if (Vector128.IsHardwareAccelerated && (uint)(length - 4) <= 28)
-                    {
-                        var shortString = length <= 16
-                            ? ReadShortAsciiString(ref Unsafe.Add(ref spanRef, 4), length)
-                            : ShortAsciiTranscoder.TryDecodeMedium(ref Unsafe.Add(ref spanRef, 4), length);
-                        if (shortString is not null) return shortString;
-                    }
-                    unsafe
-                    {
-                        fixed (byte* p = &Unsafe.Add(ref spanRef, 4))
-                        {
-                            var asciiBytes = new ReadOnlySpan<byte>(p, length);
-                            if (Ascii.IsValid(asciiBytes))
-                                return string.Create(length, new AsciiStringState(p, length), DecodeAsciiString);
-                        }
-                    }
-                }
-
-                unsafe
-                {
-                    fixed (byte* p = &Unsafe.Add(ref spanRef, 4))
-                    {
-                        return string.Create(utf16Length, new Utf8StringState(p, length), DecodeUtf8String);
-                    }
-                }
-            }
-#endif
-
-        }
+        { return ReadUtf8StringWithLength<global::LuminPack.Option.LuminPackDefaultOptions>(index, length); }
 
 
         /// <summary>Reads utf16 string with length from the current input.</summary>
@@ -980,11 +541,7 @@ namespace LuminPack.Core
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf16StringWithLength(int index)
-        {
-            ReadStringLength(ref index, out var length);
-
-            return ReadUtf16StringWithLength(index, length);
-        }
+        { return ReadUtf16StringWithLength<global::LuminPack.Option.LuminPackDefaultOptions>(index); }
 
         /// <summary>Reads utf16 string with length from the current input.</summary>
         /// <param name="index">The position at which the operation starts.</param>
@@ -992,29 +549,7 @@ namespace LuminPack.Core
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadUtf16StringWithLength(int index, int length)
-        {
-            if (length < 0) return null;
-            if (length == 0) return string.Empty;
-
-            if ((length & 1) != 0)
-            {
-                LuminPackExceptionHelper.ThrowFailedEncoding(OperationStatus.InvalidData);
-            }
-
-            int index1 = index + 4;
-            var utf16Length = length >> 1;
-
-#if NET8_0_OR_GREATER
-            ref var spanRef = ref Unsafe.Add(ref _bufferStart, (nint)(uint)index1);
-#else
-            ref var spanRef = ref Unsafe.Add(ref Unsafe.AsRef<byte>(_bufferStart), (nint)(uint)index1);
-#endif
-
-            fixed (byte* p = &spanRef)
-            {
-                return new string((char*)p, 0, utf16Length);
-            }
-        }
+        { return ReadUtf16StringWithLength<global::LuminPack.Option.LuminPackDefaultOptions>(index, length); }
 
         /// <summary>Reads object header from the current input.</summary>
         /// <param name="index">The position at which the operation starts.</param>

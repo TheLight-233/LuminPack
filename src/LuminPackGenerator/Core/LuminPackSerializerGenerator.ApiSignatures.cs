@@ -55,7 +55,7 @@ public static partial class LuminPackSerializerGenerator
         System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.ApiSignatureBuilds);
         const string placeholder = "global::__LuminPackAnalysisPayload";
         const string header = "using System; using System.Buffers; using System.IO; using System.Threading; using System.Threading.Tasks; " +
-            "using LuminPack.Core; using LuminPack.Option; using LuminPack.Utility; namespace LuminPack { public static class LuminPackSerializer {";
+            "using LuminPack.Core; using LuminPack.Option; using LuminPack.Utility; namespace LuminPack { public static partial class LuminPackSerializer {";
         string previousAccess = _currentAccess;
         var previousClassification = _currentContainsReferences;
         _currentAccess = "public";
@@ -75,14 +75,18 @@ public static partial class LuminPackSerializerGenerator
                     string signature = templates[index].Replace(placeholder, typeName);
                     if (!HasPublicSignature(type))
                         signature = signature.Replace("public static", "internal static");
-                    source.AppendLine(signature);
-                    orderedKinds.Add((SerializerApiKind)(1 << index));
+                    foreach (string variant in ProfileSignatures(signature, metadata))
+                    {
+                        source.AppendLine(variant);
+                        orderedKinds.Add((SerializerApiKind)(1 << index));
+                    }
                 }
             }
             var shared = new StringBuilder();
             AppendGenericFallbacks(shared, metadata);
             AppendCompressDecompress(shared);
-            foreach (string signature in ReadSignatures(shared.ToString(), metadata)) source.AppendLine(signature);
+            foreach (string signature in ReadSignatures(shared.ToString(), metadata))
+                foreach (string variant in ProfileSignatures(signature, metadata)) source.AppendLine(variant);
             source.Append("} }");
             var tree = CSharpSyntaxTree.ParseText(source.ToString(), metadata.ParseOptions,
                 path: "LuminPack.ApiSignatures.analysis.cs");
@@ -104,7 +108,8 @@ public static partial class LuminPackSerializerGenerator
     /// <returns>Body-free declarations suitable for semantic overload resolution.</returns>
     private static IEnumerable<string> ReadSignatures(string methods, MetaInfo metadata)
     {
-        var tree = CSharpSyntaxTree.ParseText("class Analysis {" + methods + "}", metadata.ParseOptions);
+        var tree = CSharpSyntaxTree.ParseText(CompiledOptionApiProjection.Rewrite("class Analysis {" + methods + "}",
+            CompiledOptions.Default, metadata.ParseOptions), metadata.ParseOptions);
         foreach (var method in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
             var modifiers = SyntaxFactory.TokenList(method.Modifiers.Where(token => !token.IsKind(SyntaxKind.AsyncKeyword)))
@@ -112,6 +117,27 @@ public static partial class LuminPackSerializerGenerator
             yield return method.WithAttributeLists(default).WithModifiers(modifiers).WithBody(null).WithExpressionBody(null)
                 .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.SemicolonToken)).WithoutTrivia().NormalizeWhitespace().ToFullString();
         }
+    }
+
+    /// <summary>Exposes compiled state overloads to the same semantic trimming analysis as their default entries.</summary>
+    /// <param name="signature">One original body-free method declaration.</param>
+    /// <param name="metadata">The consumer's language settings.</param>
+    /// <returns>The default signature and its stateless-profile variant when applicable.</returns>
+    private static IEnumerable<string> ProfileSignatures(string signature, MetaInfo metadata)
+    {
+        yield return signature;
+        var method = SyntaxFactory.ParseMemberDeclaration(signature, options: metadata.ParseOptions) as MethodDeclarationSyntax;
+        string state = method?.ParameterList.Parameters.FirstOrDefault()?.Type?.ToString();
+        if (state == null || !(state.EndsWith("LuminPackWriter", StringComparison.Ordinal) || state.EndsWith("LuminPackReader", StringComparison.Ordinal) ||
+            state.EndsWith("LuminPackEvaluator", StringComparison.Ordinal) || state.EndsWith("LuminPackJsonWriter", StringComparison.Ordinal) || state.EndsWith("LuminPackJsonReader", StringComparison.Ordinal) ||
+            method.Identifier.ValueText is "Serialize" or "Deserialize" or "Sizeof" or "SerializeJson" or "DeserializeJson" or "SerializeAsync" or "DeserializeAsync" or "Register")) yield break;
+        string profile = "__LuminProfile";
+        while (method.TypeParameterList?.Parameters.Any(parameter => parameter.Identifier.ValueText == profile) == true) profile += "_";
+        var parameters = (method.TypeParameterList?.Parameters ?? default).Add(SyntaxFactory.TypeParameter(profile));
+        method = method.WithTypeParameterList(SyntaxFactory.TypeParameterList(parameters)).AddConstraintClauses(
+            SyntaxFactory.TypeParameterConstraintClause(profile).AddConstraints(SyntaxFactory.ClassOrStructConstraint(SyntaxKind.StructConstraint),
+                SyntaxFactory.TypeConstraint(SyntaxFactory.ParseTypeName("global::LuminPack.Option.ILuminPackOptions"))));
+        yield return method.NormalizeWhitespace().ToFullString();
     }
 
     /// <summary>Keeps only generated syntax, value settings, and offsets across compilations.</summary>

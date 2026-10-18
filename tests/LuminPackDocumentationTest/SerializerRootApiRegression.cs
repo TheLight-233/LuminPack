@@ -47,15 +47,17 @@ internal static class SerializerRootApiRegression
         for (int index = 0; index < calls.Length; index++)
         {
             string entry = "public static class Entry { public static void Call(Payload value, LuminBufferWriter buffer, Stream stream, byte[] bytes, string text, ReadOnlySequence<byte> sequence) { " + calls[index] + " } }";
-            var input = Create(references, "Minimal", entry);
+            var input = Create(references, "Minimal", entry).AddSyntaxTrees(CSharpSyntaxTree.ParseText(
+                "namespace LuminPack { public static partial class LuminPackSerializer { public static int Helper() => 17; } }", Parse, "Helpers.cs"));
             var driver = Run(input, out var output);
             var concrete = Concrete(driver, "Payload");
             Require(concrete.Length == 1, "Expected exactly one selected concrete overload for case " + index + "; got " + concrete.Length);
             Require(Concrete(driver, "Unused").Length == 0, "Unused concrete APIs survived Minimal pruning.");
             Require(!driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Any(file => file.HintName.Contains("Unused", StringComparison.Ordinal)), "Unused formatter survived Minimal first-build pruning.");
             Require(concrete[0].GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)), "Selected overload lost its XML documentation.");
-            var call = input.SyntaxTrees.Last().GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().Last();
-            if (index is 5 or 9 or 10) call = input.SyntaxTrees.Last().GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().First();
+            var callTree = input.SyntaxTrees.Single(tree => tree.GetRoot().ToString().Contains("public static class Entry", StringComparison.Ordinal));
+            var call = callTree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().Last();
+            if (index is 5 or 9 or 10) call = callTree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().First();
             var selected = output.GetSemanticModel(call.SyntaxTree).GetSymbolInfo(call).Symbol as IMethodSymbol;
             Require(selected is { IsGenericMethod: false }, "Selected call unexpectedly fell back to a generic API for case " + index);
         }
@@ -83,7 +85,7 @@ internal static class SerializerRootApiRegression
         Require(Concrete(forwardedGroup, "Payload").Length == 0 && forwardedGroup.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
             .Any(file => file.HintName.Contains("Payload", StringComparison.Ordinal)), "A generic forwarding method group lost its closed formatter root.");
 
-        var group = Run(Create(references, "Minimal", "public static class Entry { public static Func<Payload, LuminPack.Option.LuminPackSerializerOption?, int> Group = S.Sizeof; }"), out _);
+        var group = Run(Create(references, "Minimal", "public static class Entry { public static Func<Payload, int> Group = S.Sizeof; }"), out _);
         Require(Concrete(group, "Payload").Length == 1, "Contextual method groups must retain their selected overload.");
         VerifyTransition(references);
         VerifyUnrelatedEdit(references);
@@ -125,16 +127,24 @@ internal static class SerializerRootApiRegression
                     S.Deserialize(bytes.AsSpan(), ref restored);
                     if (restored.Child.Value != 913 || S.Sizeof(value) != bytes.Length) throw new Exception("Binary or nested formatter parity failed.");
                     foreach (var encoding in new[] { LuminPack.Option.LuminPackStringEncoding.UTF8, LuminPack.Option.LuminPackStringEncoding.UTF16 })
-                    {
-                        var option = new LuminPack.Option.LuminPackSerializerOption { StringEncoding = encoding };
-                        string json = S.SerializeJson(value, option);
-                        Parent fromJson = null!;
-                        S.DeserializeJson(json, ref fromJson, option);
-                        if (fromJson.Child.Value != 913) throw new Exception("Selected JSON string/ref or nested formatter parity failed.");
-                        S.DeserializeJson(json.AsSpan(), ref fromJson, option);
-                        if (fromJson.Child.Value != 913) throw new Exception("Selected JSON character/ref parity failed.");
-                    }
-                    return Convert.ToHexString(bytes);
+            {
+                if (encoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)
+                    RunProfile<global::LuminPack.Option.LuminPackDefaultOptions>();
+                else
+                    RunProfile<global::LuminPack.Option.LuminPackUtf16LengthOptions>();
+                void RunProfile<TProfile>()
+                    where TProfile : struct, global::LuminPack.Option.ILuminPackOptions
+                {
+                    string json = S.SerializeJson<Parent, TProfile>(value);
+                    Parent fromJson = null!;
+                    S.DeserializeJson<Parent, TProfile>(json, ref fromJson);
+                    if (fromJson.Child.Value != 913)
+                        throw new Exception("Selected JSON string/ref or nested formatter parity failed.");
+                    S.DeserializeJson<Parent, TProfile>(json.AsSpan(), ref fromJson);
+                    if (fromJson.Child.Value != 913)
+                        throw new Exception("Selected JSON character/ref parity failed.");
+                }
+            }        return Convert.ToHexString(bytes);
                 }
             }
             """;
