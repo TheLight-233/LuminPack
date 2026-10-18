@@ -24,7 +24,9 @@ internal static class SerializerDocumentationRegression
     private static void VerifyDocumentationMode(MetadataReference[] references, DocumentationMode documentationMode)
     {
         const string source = """
+            #nullable enable
             using System;
+            using System.Collections.Generic;
             using System.Runtime.InteropServices;
             using LuminPack;
             using LuminPack.Attribute;
@@ -36,6 +38,8 @@ internal static class SerializerDocumentationRegression
                 [LuminPackOrder(2)] public string Name = "";
                 [LuminPackOrder(0)] public int Id;
                 [LuminPackInclude, LuminPackOrder(1)] private long _secret;
+                [LuminPackOrder(3)] public List<(int Code, int Count)> Entries = new();
+                [LuminPackOrder(4)] public string? Note;
             }
 
             [LuminPackable, StructLayout(LayoutKind.Explicit, Size = 24)]
@@ -73,7 +77,37 @@ internal static class SerializerDocumentationRegression
         {
             var documentedSyntax = CSharpSyntaxTree.ParseText(file.SourceText, options.WithDocumentationMode(DocumentationMode.Parse)).GetRoot();
             foreach (var method in documentedSyntax.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
+            {
                 Require(method.GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)), "Missing generated method documentation: " + method);
+                var documentation = ReadDocumentation(method);
+                Require(documentation.Elements("summary").Count() == 1 && !string.IsNullOrWhiteSpace(documentation.Element("summary")!.Value),
+                    "Generated method documentation must contain one meaningful summary: " + method.GetFirstToken());
+                foreach (var parameter in method.ParameterList.Parameters)
+                    Require(documentation.Elements("param").Count(element => (string?)element.Attribute("name") == parameter.Identifier.ValueText) == 1,
+                        "Generated method documentation must describe each parameter exactly once: " + parameter);
+                if (method is MethodDeclarationSyntax { TypeParameterList: { } typeParameters })
+                    foreach (var parameter in typeParameters.Parameters)
+                        Require(documentation.Elements("typeparam").Count(element => (string?)element.Attribute("name") == parameter.Identifier.ValueText) == 1,
+                            "Generated method documentation must describe each type parameter exactly once: " + parameter);
+                if (method is MethodDeclarationSyntax stateMethod &&
+                    (stateMethod.Identifier.ValueText.StartsWith("Serialize", StringComparison.Ordinal) ||
+                     stateMethod.Identifier.ValueText.StartsWith("Deserialize", StringComparison.Ordinal) || stateMethod.Identifier.ValueText == "Sizeof") &&
+                    stateMethod.ParameterList.Parameters.FirstOrDefault()?.Identifier.ValueText is "writer" or "reader" or "evaluator" or "state")
+                {
+                    string usage = documentation.Element("remarks")?.Value ?? string.Empty;
+                    Require(usage.Contains("state directly", StringComparison.Ordinal) && usage.Contains("buffer position", StringComparison.Ordinal) &&
+                        usage.Contains("reference tracking", StringComparison.Ordinal) && usage.Contains("Options are compile-time", StringComparison.Ordinal) &&
+                        usage.Contains("caller owns initialization and completion", StringComparison.Ordinal),
+                        "State overload documentation lost buffer, reference, option, or lifetime ownership semantics.");
+                }
+                if (method.Modifiers.Count != 0)
+                {
+                    int column = method.Modifiers[0].GetLocation().GetLineSpan().StartLinePosition.Character;
+                    foreach (var attribute in method.AttributeLists)
+                        Require(attribute.GetLocation().GetLineSpan().StartLinePosition.Character == column,
+                            "Generated method attributes must retain their declaration's indentation: " + attribute);
+                }
+            }
         }
 
         var serializerFiles = generated.Where(file => file.HintName.StartsWith("LuminPackSerializer.", StringComparison.Ordinal)).ToArray();
@@ -87,9 +121,21 @@ internal static class SerializerDocumentationRegression
         foreach (var overload in modelOverloads)
         {
             var documentation = ReadDocumentation(overload);
-            Require(documentation.Descendants("see").Any(element => (string?)element.Attribute("cref") == "T:DocumentationModel"), "Missing concrete type link: " + overload.Identifier);
+            Require(documentation.Element("summary")!.Elements("see").Any(element =>
+                (string?)element.Attribute("cref") == "T:DocumentationModel" && element.IsEmpty),
+                "Missing compact concrete type link in the overload summary: " + overload.Identifier);
+            Require(documentation.Element("remarks")!.Value.Contains("Reference type. Uses managed reference handling.", StringComparison.Ordinal),
+                "Compact overload remarks lost the value/reference or managed-storage classification.");
+            Require(documentation.Descendants("see").Any(element =>
+                ((string?)element.Attribute("cref"))?.StartsWith("T:System.Collections.Generic.List{", StringComparison.Ordinal) == true &&
+                element.Value == "System.Collections.Generic.List<(int Code, int Count)>"),
+                "Generic member documentation lost its closed arguments or named tuple elements.");
+            Require(documentation.Descendants("see").Any(element =>
+                (string?)element.Attribute("cref") == "T:System.String" && element.Value == "string?"),
+                "Nullable member documentation lost its annotated reference type marker.");
             var memberNames = documentation.Descendants("list").First().Elements("item").Select(item => item.Element("term")!.Value).ToArray();
-            Require(memberNames.Length == 3 && memberNames[0].EndsWith(".Id", StringComparison.Ordinal) && memberNames[1].EndsWith("._secret", StringComparison.Ordinal) && memberNames[2].EndsWith(".Name", StringComparison.Ordinal),
+            Require(memberNames.Length == 5 && memberNames[0].EndsWith(".Id", StringComparison.Ordinal) && memberNames[1].EndsWith("._secret", StringComparison.Ordinal) &&
+                memberNames[2].EndsWith(".Name", StringComparison.Ordinal) && memberNames[3].EndsWith(".Entries", StringComparison.Ordinal) && memberNames[4].EndsWith(".Note", StringComparison.Ordinal),
                 "Documented member order or Include/Ignore filtering differs from the formatter contract.");
             Require(!documentation.Value.Contains("Ignored", StringComparison.Ordinal), "Ignored object member leaked into the documented contract.");
             if (overload.ReturnType.ToString() == "int" && overload.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() is "ReadOnlySpan<char>" or "string"))
@@ -100,6 +146,8 @@ internal static class SerializerDocumentationRegression
         var raw = ReadDocumentation(methods.First(method => method.Identifier.ValueText == "Serialize" && method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "global::DocumentationRaw")));
         Require(raw.Value.Contains("Explicit", StringComparison.Ordinal) && raw.Value.Contains("runtime-defined", StringComparison.Ordinal) == false, "Explicit storage offsets should come from FieldOffset attributes.");
         Require(raw.Value.Contains("padding", StringComparison.Ordinal) && raw.Value.Contains("Ignored", StringComparison.Ordinal), "Unmanaged storage documentation must include ignored storage and padding semantics.");
+        Require(raw.Element("remarks")!.Value.Contains("Value type. Contains no managed references.", StringComparison.Ordinal),
+            "Compact unmanaged remarks lost the value/reference or managed-storage classification.");
         var jsonMembers = raw.Descendants("list").Last().Elements("item").Select(item => item.Element("term")!.Value).ToArray();
         Require(jsonMembers.SequenceEqual(new[] { "Key", "Value" }), "JSON member selection must remain distinct from unmanaged storage copying.");
         Require(serializer.Contains("Generation mode: <c>VersionTolerant</c>", StringComparison.Ordinal), "Missing version-tolerant mode documentation.");
@@ -119,7 +167,7 @@ internal static class SerializerDocumentationRegression
     /// <summary>Parses the XML comment associated with a generated method.</summary>
     /// <param name="method">The generated declaration.</param>
     /// <returns>The documentation element containing summary, remarks, and parameter details.</returns>
-    private static XElement ReadDocumentation(MethodDeclarationSyntax method)
+    private static XElement ReadDocumentation(BaseMethodDeclarationSyntax method)
     {
         string xml = string.Join(Environment.NewLine, method.GetLeadingTrivia().Where(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)).Select(trivia => trivia.ToFullString()));
         return XElement.Parse("<documentation>" + Regex.Replace(xml, @"^[ \t]*///[ ]?", "", RegexOptions.Multiline) + "</documentation>");

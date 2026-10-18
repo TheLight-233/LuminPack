@@ -12,6 +12,7 @@ internal static class SerializerCodegenPerformanceRegression
     internal static void Run(MetadataReference[] references)
     {
         VerifyCursorAliasStorage();
+        SerializerPayloadAliasRegression.Run(references);
         const string source = """
             using System;
             using System.Buffers;
@@ -275,6 +276,12 @@ internal static class SerializerCodegenPerformanceRegression
         Require(listReader.DescendantNodes().OfType<VariableDeclaratorSyntax>().Any(variable => variable.Identifier.ValueText.StartsWith("__luminSwitchCursor", StringComparison.Ordinal)) &&
             listReader.Body.ToString().Contains(".__luminSwitchCursor0", StringComparison.Ordinal),
             "Exclusive cursor storage was omitted or renamed a matching user field.");
+        var listReaderModel = output.GetSemanticModel(listReader.SyntaxTree);
+        Require(!listReader.DescendantNodes().OfType<LocalDeclarationStatementSyntax>().Any(local =>
+            local.Declaration.Type is RefTypeSyntax referenceType && referenceType.ReadOnlyKeyword.RawKind == 0 &&
+            local.Declaration.Variables.Any(variable => variable.Initializer?.Value is RefExpressionSyntax reference &&
+                reference.Expression is IdentifierNameSyntax identifier && listReaderModel.GetSymbolInfo(identifier).Symbol is ILocalSymbol)),
+            "A fresh list reader retained a writable parameter alias of stable local storage.");
         foreach (var entry in new[] { payload, fixedReader })
         {
             var architecture = entry.DescendantNodes().OfType<IfStatementSyntax>().Single(statement =>

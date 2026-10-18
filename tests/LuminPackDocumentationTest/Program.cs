@@ -63,6 +63,11 @@ try
         SerializerCodegenPerformanceRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-source-presentation"])
+    {
+        SerializerSourcePresentationRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-union-cursor"])
     {
         SerializerUnionCursorRegression.Run(references);
@@ -91,6 +96,7 @@ try
     SerializerExternalUnionRegression.Run(references);
     SerializerMechanismRegression.Run(references);
     SerializerCodegenPerformanceRegression.Run(references);
+    SerializerSourcePresentationRegression.Run(references);
     SerializerUnionCursorRegression.Run(references);
     SerializerCapacityTierRegression.Run(references);
     SerializerCompiledOptionRegression.Run(references);

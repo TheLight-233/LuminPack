@@ -105,8 +105,8 @@ internal static class SerializerCollectionInliningRegression
                 inspected++;
                 if (method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().TrimEnd('?') == "global::Model0"))
                     signatures.Add(method.Identifier.ValueText + method.ParameterList);
-                // Contract: JSON entries are now fully expanded exactly like binary and size entries,
-                // so no concrete collection entry may retain a shared per-type formatter call.
+                // Concrete entries call Serializer state implementations; selected JSON bodies
+                // can share those implementations without returning to legacy formatter dispatch.
                 foreach (var call in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
                 {
                     var symbol = model.GetSymbolInfo(call).Symbol as IMethodSymbol;

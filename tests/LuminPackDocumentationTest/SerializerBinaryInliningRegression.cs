@@ -264,19 +264,31 @@ internal static class SerializerBinaryInliningRegression
                 method.ParameterList.Parameters[0].Type?.ToString().Contains("LuminPack", StringComparison.Ordinal) == true &&
                 method.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "Sizeof").ToArray();
         Require(implementations.Length == 5, "Expected one state implementation for each payload operation.");
+        VerifyJsonIntegerFallback(implementations.Single(method => method.Identifier.ValueText == "SerializeJson"));
+        var sharedJsonCalls = new Dictionary<ISymbol, int>(SymbolEqualityComparer.Default);
         foreach (var method in implementations)
         {
             var model = output.GetSemanticModel(method.SyntaxTree);
+            VerifyRootBindings(method, model);
             Require(method.DescendantNodes().OfType<LocalFunctionStatementSyntax>().All(local => local.AttributeLists.ToString().Contains("MethodImplOptions.NoInlining", StringComparison.Ordinal)),
                 "A state implementation retained an ordinary local formatter helper.");
             foreach (var call in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
             {
                 var symbol = model.GetSymbolInfo(call).Symbol as IMethodSymbol;
+                if (method.Identifier.ValueText.EndsWith("Json", StringComparison.Ordinal) &&
+                    SerializerExecutionAssertions.IsConcreteJsonStateCall(symbol))
+                {
+                    var target = symbol!.OriginalDefinition;
+                    sharedJsonCalls[target] = sharedJsonCalls.TryGetValue(target, out int count) ? count + 1 : 1;
+                    continue;
+                }
                 Require((symbol?.ContainingType.Name != "LuminPackSerializer" || symbol.MethodKind == MethodKind.LocalFunction) &&
                     !(symbol?.ContainingType.Name.StartsWith("LuminPackExtensions_", StringComparison.Ordinal) ?? false),
                     "An ordinary payload field retained a serializer or extension call instead of expanding: " + call);
             }
         }
+        Require(sharedJsonCalls.Values.Any(count => count > 1),
+            "Repeated large JSON fields no longer share one concrete state implementation.");
         var bridges = output.SyntaxTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
             .Where(method => method.Identifier.ValueText is "WriteValue" or "ReadValue" or "CalculateOffset" &&
                 method.Parent is ClassDeclarationSyntax owner && owner.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal)).ToArray();
@@ -298,6 +310,60 @@ internal static class SerializerBinaryInliningRegression
         var assembly = Assembly.Load(image.ToArray());
         Require((int)assembly.GetType("Entry")!.GetMethod("Check")!.Invoke(null, null)! == 6, "Nested collection execution did not cover every case.");
         Console.WriteLine("Passed complete binary entry expansion, repeated types/local identities, managed dictionary helpers, private inherited layouts, reuse, and generic wire parity.");
+    }
+
+    /// <summary>Requires the state body to use its own root bindings without a second expansion frame.</summary>
+    /// <param name="method">One concrete state implementation with nested operations already expanded.</param>
+    /// <param name="model">The model distinguishing actual parameter references from matching user member names.</param>
+    private static void VerifyRootBindings(MethodDeclarationSyntax method, SemanticModel model)
+    {
+        var payload = model.GetDeclaredSymbol(method.ParameterList.Parameters[1]);
+        var aliases = method.DescendantNodes().OfType<VariableDeclaratorSyntax>().Where(variable =>
+            variable.Initializer?.Value is RefExpressionSyntax reference &&
+            SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(reference.Expression).Symbol, payload));
+        Require(!aliases.Any(), "A root operation introduced a redundant payload ref alias.");
+        Require(method.Body!.Statements.FirstOrDefault() is not BlockSyntax,
+            "A root operation retained the nested-expansion wrapper scope.");
+        if (!method.Identifier.ValueText.StartsWith("Serialize", StringComparison.Ordinal)) return;
+        var snapshot = method.Body.Statements.OfType<LocalDeclarationStatementSyntax>().SelectMany(statement => statement.Declaration.Variables)
+            .Single(variable => variable.Initializer != null &&
+                SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(variable.Initializer.Value).Symbol, payload));
+        var snapshotSymbol = model.GetDeclaredSymbol(snapshot);
+        Require(!method.Body.Statements.OfType<LocalDeclarationStatementSyntax>().SelectMany(statement => statement.Declaration.Variables)
+                .Any(variable => variable.Initializer != null &&
+                    SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(variable.Initializer.Value).Symbol, snapshotSymbol)),
+            "A root writer copied its complete payload snapshot a second time.");
+    }
+
+    /// <summary>Preserves the fused integer path without re-emitting its unreachable literal branch in the fallback.</summary>
+    /// <param name="writer">The fully expanded JSON state implementation.</param>
+    private static void VerifyJsonIntegerFallback(MethodDeclarationSyntax writer)
+    {
+        var fused = writer.DescendantNodes().OfType<IfStatementSyntax>().Where(statement =>
+            statement.Statement is ExpressionStatementSyntax
+            {
+                Expression: InvocationExpressionSyntax
+                {
+                    Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "WriteGeneratedInteger" }
+                }
+            } && statement.Condition.IsKind(SyntaxKind.LogicalAndExpression)).ToArray();
+        Require(fused.Length != 0, "The JSON fixture no longer exercises a fused integer property.");
+        foreach (var branch in fused)
+        {
+            var condition = (BinaryExpressionSyntax)branch.Condition;
+            Require(condition.Right.ToString() == "global::System.BitConverter.IsLittleEndian" &&
+                branch.Else?.Statement is BlockSyntax, "The fused integer guard no longer establishes the fallback's architecture.");
+            var fallback = ((BlockSyntax)branch.Else!.Statement).Statements.OfType<IfStatementSyntax>().First();
+            Require(SyntaxFactory.AreEquivalent(condition.Left, fallback.Condition) &&
+                fallback.Statement is ExpressionStatementSyntax
+                {
+                    Expression: InvocationExpressionSyntax
+                    {
+                        Expression: MemberAccessExpressionSyntax { Name.Identifier.ValueText: "WriteRaw" }
+                    }
+                } && fallback.Statement.ToString().Contains("Utf8_", StringComparison.Ordinal) && fallback.Else != null,
+                "The known big-endian UTF-8 fallback duplicated the fused literal path or omitted the UTF-16 alternative.");
+        }
     }
 
     /// <summary>Reports a generated-code contract failure.</summary>
