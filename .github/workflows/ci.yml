@@ -92,6 +92,46 @@ jobs:
           dotnet run --project tests/LuminPackWireCompatibility/LuminPackWireCompatibility.csproj -c Release -- write .tmp/wire-baseline
           dotnet run --project tests/LuminPackWireCompatibility/LuminPackWireCompatibility.csproj -c Release -- verify .tmp/wire-baseline
 
+  # Bounded BenchmarkDotNet run. Benchmark timing is machine-dependent, so this
+  # job runs once on a single platform rather than in the multi-platform matrix.
+  # The filter keeps only SimpleBenchmark, SerializeBenchmark and JsonBenchmark;
+  # the remaining long-running classes stay out of routine CI.
+  benchmark:
+    name: Benchmark
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      # The benchmark project targets net10.0 only; the solution it references
+      # also carries net11.0 targets, so install the preview SDK alongside it.
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+          cache: true
+          cache-dependency-path: |
+            **/*.csproj
+            LuminPack.sln
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+
+      # BenchmarkDotNet prompts interactively without --filter, so the selection
+      # must be explicit. The filters are anchored prefixes to avoid pulling in
+      # unrelated classes such as StringDeserializeBenchmark.
+      - name: Run benchmarks
+        run: dotnet run --project benchmarks/LuminPackBenchmark/LuminPackBenchmark.csproj -c Release -f net10.0 -p:PublishAot=false -p:GeneratePackageOnBuild=false -p:UseSharedCompilation=false -- --filter 'LuminPackBenchmark.SimpleBenchmark.*' 'LuminPackBenchmark.SerializeBenchmark.*' 'LuminPackBenchmark.JsonBenchmark.*' --artifacts "$GITHUB_WORKSPACE/.tmp/benchmark-artifacts" --buildTimeout 300
+
+      - name: Upload benchmark artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-artifacts
+          path: .tmp/benchmark-artifacts
+          if-no-files-found: warn
+
   # 32-bit execution coverage. GitHub-hosted Windows runners are 64-bit only, so
   # this job targets a self-hosted Windows runner carrying the custom `x86`
   # label. The repository's established x86 procedure is the net9 win-x86 RID:
