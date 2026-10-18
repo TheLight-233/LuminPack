@@ -85,7 +85,7 @@ Review every new emitter, runtime subsystem, attribute, setting, and conditional
 Run [CONTRIBUTING](../CONTRIBUTING.md)'s checks. `SerializerMechanismRegression` can additionally execute both analyzer versions on identical models and compare Union virtual bodies after payload API-owner renaming and normalization of optional `in` call-site syntax, exact binary bytes, JSON text, version gaps, cycles/shared aliases, values/layouts, nullable/enums, collection order, callbacks, and size results:
 
 ```text
-dotnet run --project tests/LuminPackDocumentationTest -c Release -- --verify-mechanisms <absolute-path-to-historical-LuminPackGenerator.dll>
+dotnet run --project tests/LuminPackDocumentationTest -c Release -- --verify-mechanisms <absolute-path-to-historical-LuminPackGenerator.dll> <absolute-path-to-historical-LuminPack.dll>
 ```
 
 The historical comparison separately records the corrected sparse-slot size result: the original analyzer omitted one zero-length slot-table byte, while both analyzers write identical bytes. `SerializerSpecialModeBoundaryRegression` covers trailing additions/removals, complete consumption, gaps, and empty schemas in both specialized modes. `SerializerCustomFormatterRegression` checks that an actual unmanaged Custom argument retains its formatter while an ordinary constrained argument in the same compilation retains raw copying.

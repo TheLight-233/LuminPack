@@ -142,7 +142,7 @@ internal sealed class BinaryOperationPlan
     /// <param name="original">The original token whose trivia is retained.</param>
     /// <returns>An explicitly marked generated identifier.</returns>
     internal static SyntaxToken Identity(string name, SyntaxToken original)
-        => SyntaxFactory.Identifier(name).WithTriviaFrom(original).WithAdditionalAnnotations(new SyntaxAnnotation(NameAnnotation));
+        => SyntaxFactory.Identifier(name).WithTriviaFrom(original).WithAdditionalAnnotations(new SyntaxAnnotation(NameAnnotation, original.ValueText));
 }
 
 /// <summary>Stores a bound operation as immutable syntax, formal parameters, and typed expansion slots.</summary>
@@ -181,7 +181,7 @@ internal sealed class BinaryOperation
             var parameter = method.Parameters[index];
             string name = BinaryOperationPlan.Prefix + "p" + index;
             names.Add(parameter, name);
-            parameters.Add(new BinaryOperationParameter(name, ClosedOperationTypes.Name(parameter.Type, typeArguments), parameter.RefKind));
+            parameters.Add(new BinaryOperationParameter(name, ClosedOperationTypes.Name(parameter.Type, typeArguments), parameter.RefKind, parameter.Name));
         }
         foreach (var node in body.DescendantNodes())
         {
@@ -206,12 +206,15 @@ internal sealed class BinaryOperationParameter
     internal readonly string Name;
     internal readonly string Type;
     internal readonly RefKind RefKind;
+    internal readonly string OriginalName;
 
     /// <summary>Captures one formal parameter.</summary>
     /// <param name="name">Its stable template identity.</param>
     /// <param name="type">Its fully qualified type.</param>
     /// <param name="refKind">Its original passing convention.</param>
-    internal BinaryOperationParameter(string name, string type, RefKind refKind) { Name = name; Type = type; RefKind = refKind; }
+    /// <param name="originalName">Its original role name, retained only for final local presentation.</param>
+    internal BinaryOperationParameter(string name, string type, RefKind refKind, string originalName)
+    { Name = name; Type = type; RefKind = refKind; OriginalName = originalName; }
 }
 
 /// <summary>Identifies a nested operation independently of the compilation that discovered it.</summary>

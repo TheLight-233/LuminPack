@@ -132,18 +132,18 @@ internal static class SerializerCoreProjection
                         var value = method.ParameterList.Parameters[1];
                         method = method.WithParameterList(method.ParameterList.WithParameters(method.ParameterList.Parameters.Replace(value,
                             value.WithIdentifier(SyntaxFactory.Identifier("input")))));
-                        body = SyntaxFactory.Block(SyntaxFactory.ParseStatement("var value = input;"), expanded);
+                        body = expanded.WithStatements(expanded.Statements.Insert(0, SyntaxFactory.ParseStatement("var value = input;")));
                     }
-                    else body = SyntaxFactory.Block(expanded);
+                    else body = expanded;
                     method = method.WithBody(body).WithExpressionBody(null).WithSemicolonToken(default);
                 }
             }
             // Field expansion and JIT inlining have different budgets. Let the
             // runtime size loop-bearing APIs instead of forcing their entire
             // graph into every convenience entry and Union caller.
-            if (state is "LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" &&
-                method.Body?.DescendantNodes().Any(node => node is ForStatementSyntax or ForEachStatementSyntax or
-                    ForEachVariableStatementSyntax or WhileStatementSyntax or DoStatementSyntax) == true)
+            if (state is "LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" or
+                    "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader" &&
+                GeneratedExecutionPolicy.LetRuntimeChooseInlining(method.Body, state.Contains("Json")))
             {
                 method = method.WithAttributeLists(SyntaxFactory.List(method.AttributeLists.Select(list =>
                     list.WithAttributes(SyntaxFactory.SeparatedList(list.Attributes.Where(attribute =>
@@ -181,7 +181,10 @@ internal static class SerializerCoreProjection
         var projectedTree = CSharpSyntaxTree.Create(projected, metadata.ParseOptions);
         var rewritten = new CallRewriter(compilation.AddSyntaxTrees(projectedTree).GetSemanticModel(projectedTree), compilation).Visit(projectedTree.GetRoot());
         rewritten = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(closedRoot, compilation)).Visit(rewritten);
-        var normalized = (CompilationUnitSyntax)BinaryEntryLocalScopes.NormalizeRoot(rewritten).NormalizeWhitespace("    ", Environment.NewLine);
+        rewritten = BinaryEntryLocalScopes.NormalizeRoot(rewritten);
+        rewritten = GeneratedOperationScopes.Rewrite(rewritten);
+        rewritten = GeneratedOperationNames.Rewrite(rewritten);
+        var normalized = (CompilationUnitSyntax)rewritten.NormalizeWhitespace("    ", Environment.NewLine);
         normalized = normalized.WithLeadingTrivia(SyntaxFactory.ParseLeadingTrivia("#nullable enable" + Environment.NewLine).AddRange(normalized.GetLeadingTrivia()));
         return LuminPackSerializerDocumentation.Enhance(normalized, closedRoot != null ? new[] { closedRoot } : contexts.Keys.Select(name => types[name]).ToArray(), compilation, metadata);
     }

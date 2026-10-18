@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using LuminPack.Code;
@@ -23,9 +22,8 @@ internal static class LuminPackSerializerDocumentation
     /// <returns>The serializer source with expanded XML documentation and unchanged executable tokens.</returns>
     internal static string Enhance(string source, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata)
     {
-        source = GeneratedSourceDocumentation.Complete(source, metadata.ParseOptions);
-        var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.Parse)).GetRoot();
-        return Enhance(root, source, types, compilation, metadata);
+        var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.Parse)).GetCompilationUnitRoot();
+        return Enhance(root, types, compilation, metadata);
     }
 
     /// <summary>Documents a projected state implementation without reparsing its complete method bodies.</summary>
@@ -52,7 +50,7 @@ internal static class LuminPackSerializerDocumentation
     {
         var typeLookup = types.ToDictionary(type => FormatterTypeName.Get(type), StringComparer.Ordinal);
         var contracts = new Dictionary<ITypeSymbol, XElement>(SymbolEqualityComparer.Default);
-        var edits = new List<(int Start, int Length, string Text)>();
+        var methods = new Dictionary<BaseMethodDeclarationSyntax, BaseMethodDeclarationSyntax>();
 
         foreach (var method in root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<MethodDeclarationSyntax>())
         {
@@ -70,9 +68,9 @@ internal static class LuminPackSerializerDocumentation
                 if (task != null) typeLookup.TryGetValue(task.TypeArgumentList.Arguments[0].ToString(), out type);
             }
 
-            var trivia = method.GetLeadingTrivia().FirstOrDefault(item => item.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia));
-            if (trivia.RawKind == 0) continue;
-            string xml = Regex.Replace(trivia.ToFullString(), "^[ \\t]*///[ ]?", "", RegexOptions.Multiline);
+            var trivia = method.GetLeadingTrivia().Where(item => item.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)).ToArray();
+            if (trivia.Length == 0) continue;
+            string xml = Regex.Replace(string.Join(Environment.NewLine, trivia.Select(item => item.ToFullString())), "^[ \\t]*///[ ]?", "", RegexOptions.Multiline);
             var documentation = XElement.Parse("<documentation>" + xml + "</documentation>");
             var remarks = documentation.Element("remarks");
             if (remarks == null)
@@ -92,8 +90,8 @@ internal static class LuminPackSerializerDocumentation
                         TypeLink(type), name == "Sizeof" ? "." : json ? " using JSON." : " using the binary format.");
                 }
 
-                remarks.Add(new XElement("para", "Concrete overload for ", TypeLink(type), ". ",
-                    type.IsValueType ? "Value type." : "Reference type.", " ", type.IsUnmanagedType ? "Contains no managed references." : "Uses managed reference handling."));
+                remarks.Add(new XElement("para", type.IsValueType ? "Value type." : "Reference type.", " ",
+                    type.IsUnmanagedType ? "Contains no managed references." : "Uses managed reference handling."));
                 if (!UsesOperationState(method))
                 {
                     if (!contracts.TryGetValue(type, out var contract))
@@ -115,21 +113,11 @@ internal static class LuminPackSerializerDocumentation
             }
 
             AddOverloadUsage(remarks, method);
-            int column = method.GetLocation().GetLineSpan().StartLinePosition.Character;
-            string indentation = new string(' ', column);
+            string indentation = GeneratedSourceDocumentation.GetIndentation(method, source, out _);
             string content = string.Join(Environment.NewLine + indentation + "/// ", documentation.Nodes().Select(node => node.ToString()).SelectMany(text => text.Replace("\r\n", "\n").Split('\n')));
-            edits.Add((trivia.FullSpan.Start, trivia.FullSpan.Length, "/// " + content + Environment.NewLine));
+            methods.Add(method, GeneratedSourceDocumentation.WithDocumentation(method, "/// " + content + Environment.NewLine, indentation));
         }
-
-        var result = new StringBuilder(source.Length + edits.Sum(edit => edit.Text.Length));
-        int copied = 0;
-        foreach (var edit in edits.OrderBy(edit => edit.Start))
-        {
-            result.Append(source, copied, edit.Start - copied).Append(edit.Text);
-            copied = edit.Start + edit.Length;
-        }
-
-        return result.Append(source, copied, source.Length - copied).ToString();
+        return root.ReplaceNodes(methods.Keys, (method, _) => methods[method]).ToFullString();
     }
 
     /// <summary>Documents a type's generation mode, physical layout, and ordered member contract.</summary>
@@ -243,7 +231,7 @@ internal static class LuminPackSerializerDocumentation
         var parameters = method.ParameterList.Parameters;
         bool json = method.Identifier.ValueText.Contains("Json");
         if (parameters.Count >= 2 && parameters[0].Identifier.ValueText is "writer" or "reader" or "evaluator" or "state")
-            remarks.Add(new XElement("para", "Uses the supplied operation state directly, preserving its buffer position and reference tracking. Options are bound at compilation. The caller owns operation initialization and completion."));
+            remarks.Add(new XElement("para", "Uses supplied state directly, preserving buffer position and reference tracking. Options are compile-time; caller owns initialization and completion."));
         if (method.Identifier.ValueText is "SerializeUnion" or "DeserializeUnion")
             remarks.Add(new XElement("para", "Processes a concrete Union case body. The Union tag replaces the ordinary object header and is handled by the hidden Union dispatch method."));
         if (method.Identifier.ValueText == "SerializeUnionAt")
@@ -281,7 +269,14 @@ internal static class LuminPackSerializerDocumentation
     /// <summary>Builds a navigable C# XML documentation reference for a concrete type.</summary>
     /// <param name="type">The type to display.</param>
     /// <returns>A type link or a code element when the type has no documentation identifier.</returns>
-    private static XElement TypeLink(ITypeSymbol type) => type == null ? new XElement("c", "formatter-defined") : SymbolLink(type);
+    private static XElement TypeLink(ITypeSymbol type)
+    {
+        if (type == null) return new XElement("c", "formatter-defined");
+        string id = type.GetDocumentationCommentId();
+        // Display text retains nullable markers and tuple element names, including nested arguments.
+        return id == null || type.NullableAnnotation == NullableAnnotation.Annotated || type is INamedTypeSymbol { IsGenericType: true } ? SymbolLink(type) :
+            new XElement("see", new XAttribute("cref", id));
+    }
 
     /// <summary>Builds a navigable symbol link while displaying its concrete C# name.</summary>
     /// <param name="symbol">The type, field, or property to display.</param>

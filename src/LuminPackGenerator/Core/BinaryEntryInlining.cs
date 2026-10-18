@@ -51,8 +51,10 @@ internal sealed class BinaryEntryInlining
     {
         string state = operation == "CalculateOffset" ? "evaluator" : operation.StartsWith("Read", StringComparison.Ordinal) ? "reader" : "writer";
         var expanded = Expand(GetPlan(_root), operation, new ExpressionSyntax[] { SyntaxFactory.IdentifierName(state), SyntaxFactory.IdentifierName("value") },
-            new[] { true, true }, new HashSet<string>(StringComparer.Ordinal));
+            new[] { true, true }, new HashSet<string>(StringComparer.Ordinal), root: true);
         if (expanded == null) return null;
+        if (operation.StartsWith("Read", StringComparison.Ordinal) && !operation.EndsWith(":json", StringComparison.Ordinal))
+            expanded = BinaryEntryPayloadAliases.Rewrite(expanded);
         expanded = (BlockSyntax)new ReservedCapacityRegions().Visit(expanded);
         return CompiledOptionProjection.Apply(expanded, CompiledOptions.Resolve(_root, _compilation), state,
             operation == "CalculateOffset" ? "LuminPackEvaluator" : operation.EndsWith(":json", StringComparison.Ordinal)
@@ -81,12 +83,14 @@ internal sealed class BinaryEntryInlining
     /// <param name="aliases">Arguments with referenceable storage.</param>
     /// <param name="stack">The current recursive expansion path.</param>
     /// <param name="optionProfile">A containing member's statically selected profile, if present.</param>
+    /// <param name="root">Whether the operation already owns the serializer's parameter bindings and return boundary.</param>
     /// <returns>The expanded block, or null at a retained recursive/custom boundary.</returns>
     private BlockSyntax Expand(BinaryOperationPlan plan, string operationName, IReadOnlyList<ExpressionSyntax> arguments,
-        IReadOnlyList<bool> aliases, HashSet<string> stack, string optionProfile = null)
+        IReadOnlyList<bool> aliases, HashSet<string> stack, string optionProfile = null, bool root = false)
     {
         string key = plan.TypeName + "|" + operationName;
         if (stack.Contains(key) || !plan.Operations.TryGetValue(operationName, out var operation)) return null;
+        if (!root && GeneratedExecutionPolicy.Reuse(operationName, operation)) return null;
         if (arguments.Count != operation.Parameters.Length)
             return LuminPackExceptionHelper.ThrowInvalidOperationException<BlockSyntax>("Inline operation parameter mismatch: " + key);
         var requiredSupport = new HashSet<string>(operation.Body.DescendantTokens().Where(token => token.GetAnnotations(BinaryOperationPlan.NameAnnotation).Any())
@@ -111,11 +115,19 @@ internal sealed class BinaryEntryInlining
             index = 0;
         }
         string prefix = "__lp" + _next++ + "_";
-        string exit = prefix + "exit";
+        bool guaranteed = plan.GuaranteedMaxBytes > 0 && operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackWriter" &&
+            !operationName.Contains(":local:");
+        string exit = root && !guaranteed ? null : prefix + "exit";
         var statements = new List<StatementSyntax>();
+        var rootBindings = root ? new Dictionary<string, ExpressionSyntax>(StringComparer.Ordinal) : null;
         for (int index = 0; index < arguments.Count; index++)
         {
             var parameter = operation.Parameters[index];
+            if (root)
+            {
+                rootBindings.Add(parameter.Name, arguments[index]);
+                continue;
+            }
             if (index == 0 && IsCoreState(parameter)) continue;
             string name = prefix + parameter.Name.Substring(BinaryOperationPlan.Prefix.Length);
             string argument = arguments[index].WithoutTrivia().ToString();
@@ -126,14 +138,35 @@ internal sealed class BinaryEntryInlining
                 RefKind.None or RefKind.In => parameter.Type + " " + name + " = " + argument + ";",
                 _ => LuminPackExceptionHelper.ThrowInvalidOperationException<string>("Unsupported inline parameter passing convention: " + parameter.RefKind)
             };
-            statements.Add(SyntaxFactory.ParseStatement(declaration));
+            var binding = (LocalDeclarationStatementSyntax)SyntaxFactory.ParseStatement(declaration);
+            var variable = binding.Declaration.Variables[0];
+            variable = variable.WithIdentifier(variable.Identifier.WithAdditionalAnnotations(ExpandedIdentity,
+                new SyntaxAnnotation(GeneratedOperationNames.RoleAnnotation, parameter.OriginalName)))
+                .WithInitializer(SyntaxFactory.EqualsValueClause(parameter.RefKind == RefKind.Ref || parameter.RefKind == RefKind.In && aliases[index]
+                    ? SyntaxFactory.RefExpression(arguments[index]) : arguments[index]));
+            if (parameter.RefKind == RefKind.Ref)
+                variable = variable.WithIdentifier(variable.Identifier.WithAdditionalAnnotations(new SyntaxAnnotation(BinaryEntryPayloadAliases.BindingAnnotation)));
+            binding = binding.WithDeclaration(binding.Declaration.WithVariables(SyntaxFactory.SingletonSeparatedList(variable)));
+            statements.Add(binding);
         }
         var path = new HashSet<string>(stack, StringComparer.Ordinal) { key };
-        var body = (BlockSyntax)new OperationExpansion(this, plan, operation, prefix, exit, path, arguments[0]).Visit(operation.Body);
+        var template = operation.Body;
+        // The write entry already snapshots its input once. Reuse that storage only when
+        // the template's first statement is its sole read of the original formal parameter.
+        if (root && operation.Parameters.Length == 2 && operation.Parameters[1].RefKind == RefKind.In &&
+            template.Statements.FirstOrDefault() is LocalDeclarationStatementSyntax snapshot &&
+            snapshot.Declaration.Type is not RefTypeSyntax && snapshot.Declaration.Variables.Count == 1 &&
+            snapshot.Declaration.Variables[0].Initializer?.Value is IdentifierNameSyntax input &&
+            input.Identifier.ValueText == operation.Parameters[1].Name && input.Identifier.HasAnnotations(BinaryOperationPlan.NameAnnotation) &&
+            template.DescendantNodes().OfType<IdentifierNameSyntax>().Count(identifier => identifier.Identifier.ValueText == input.Identifier.ValueText &&
+                identifier.Identifier.HasAnnotations(BinaryOperationPlan.NameAnnotation)) == 1)
+        {
+            rootBindings.Add(snapshot.Declaration.Variables[0].Identifier.ValueText, arguments[1]);
+            template = template.WithStatements(template.Statements.RemoveAt(0));
+        }
+        var body = (BlockSyntax)new OperationExpansion(this, plan, operation, prefix, exit, path, arguments[0], rootBindings).Visit(template);
         if (optionProfile != null && !operationName.EndsWith(":json", StringComparison.Ordinal))
             body = CompiledOptionProjection.Apply(body, plan.Options, arguments[0].ToString(), operation.Parameters[0].Type, optionProfile);
-        bool guaranteed = plan.GuaranteedMaxBytes > 0 && operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackWriter" &&
-            !operationName.Contains(":local:");
         if (guaranteed)
         {
             string state = arguments[0].ToString();
@@ -144,7 +177,8 @@ internal sealed class BinaryEntryInlining
         }
         else statements.AddRange(body.Statements);
         if (body.DescendantNodes().OfType<GotoStatementSyntax>().Any(jump => jump.Expression is IdentifierNameSyntax target && target.Identifier.ValueText == exit))
-            statements.Add(SyntaxFactory.LabeledStatement(exit, SyntaxFactory.EmptyStatement()));
+            statements.Add(SyntaxFactory.LabeledStatement(SyntaxFactory.Identifier(exit).WithAdditionalAnnotations(
+                new SyntaxAnnotation(GeneratedOperationNames.RoleAnnotation, "end")), SyntaxFactory.EmptyStatement()));
         if (guaranteed)
         {
             string state = arguments[0].ToString();
@@ -215,6 +249,11 @@ internal sealed class BinaryEntryInlining
                 ? _layoutPrefix + name.Substring((BinaryOperationPlan.Prefix + "layout_").Length)
                 : _prefix + name.Substring(BinaryOperationPlan.Prefix.Length);
             var renamed = SyntaxFactory.Identifier(replacement).WithTriviaFrom(token).WithAdditionalAnnotations(ExpandedIdentity);
+            if (!name.StartsWith(BinaryOperationPlan.Prefix + "layout_", StringComparison.Ordinal))
+            {
+                string role = token.GetAnnotations(BinaryOperationPlan.NameAnnotation).Select(annotation => annotation.Data).FirstOrDefault();
+                if (!string.IsNullOrEmpty(role)) renamed = renamed.WithAdditionalAnnotations(new SyntaxAnnotation(GeneratedOperationNames.RoleAnnotation, role));
+            }
             if (token.HasAnnotations(BinaryCollectionCapacity.WriterAnnotation))
                 renamed = renamed.WithAdditionalAnnotations(new SyntaxAnnotation(BinaryCollectionCapacity.WriterAnnotation));
             renamed = renamed.WithAdditionalAnnotations(token.GetAnnotations(OperationTemplateRewriter.StateAnnotation).ToArray());
@@ -231,6 +270,7 @@ internal sealed class BinaryEntryInlining
         private readonly string _exit;
         private readonly HashSet<string> _stack;
         private readonly ExpressionSyntax _state;
+        private readonly IReadOnlyDictionary<string, ExpressionSyntax> _rootBindings;
 
         /// <summary>Creates one operation instance's syntax emitter.</summary>
         /// <param name="owner">The current concrete contribution.</param>
@@ -240,17 +280,26 @@ internal sealed class BinaryEntryInlining
         /// <param name="exit">The formatter-local return label.</param>
         /// <param name="stack">The current recursive path.</param>
         /// <param name="state">The original writer or reader storage, preserving its escape scope.</param>
+        /// <param name="rootBindings">Original root parameter storage and any proven equivalent entry snapshot.</param>
         internal OperationExpansion(BinaryEntryInlining owner, BinaryOperationPlan plan, BinaryOperation operation, string prefix, string exit, HashSet<string> stack,
-            ExpressionSyntax state)
+            ExpressionSyntax state, IReadOnlyDictionary<string, ExpressionSyntax> rootBindings = null)
             : base(prefix, owner._layoutPrefix, operation.CursorLocals)
-        { _owner = owner; _plan = plan; _operation = operation; _exit = exit; _stack = stack; _state = state; }
+        { _owner = owner; _plan = plan; _operation = operation; _exit = exit; _stack = stack; _state = state; _rootBindings = rootBindings; }
 
         /// <summary>Uses the caller's writer or reader directly without narrowing its ref-escape scope through a local alias.</summary>
         /// <param name="node">A template identifier.</param>
         /// <returns>The original state expression or an independently named local.</returns>
         public override SyntaxNode VisitIdentifierName(IdentifierNameSyntax node)
-            => node.Identifier.ValueText == BinaryOperationPlan.Prefix + "p0" && node.Identifier.GetAnnotations(BinaryOperationPlan.NameAnnotation).Any() && IsCoreState(_operation.Parameters[0])
-                ? _state.WithTriviaFrom(node) : base.VisitIdentifierName(node);
+        {
+            if (node.Identifier.HasAnnotations(BinaryOperationPlan.NameAnnotation))
+            {
+                if (_rootBindings != null && _rootBindings.TryGetValue(node.Identifier.ValueText, out var binding))
+                    return binding.WithTriviaFrom(node);
+                if (node.Identifier.ValueText == BinaryOperationPlan.Prefix + "p0" && IsCoreState(_operation.Parameters[0]))
+                    return _state.WithTriviaFrom(node);
+            }
+            return base.VisitIdentifierName(node);
+        }
 
         /// <summary>Expands ordinary formatter and static local helper calls; recursive/custom calls retain their original boundary.</summary>
         /// <param name="node">The frozen expression statement.</param>
@@ -276,10 +325,11 @@ internal sealed class BinaryEntryInlining
         /// <returns>A formatter-local jump, or an unchanged nested-function return.</returns>
         public override SyntaxNode VisitReturnStatement(ReturnStatementSyntax node)
         {
-            if (node.Ancestors().Any(parent => parent is LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax)) return base.VisitReturnStatement(node);
+            if (_exit == null || node.Ancestors().Any(parent => parent is LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax)) return base.VisitReturnStatement(node);
             if (node.Expression != null)
                 return LuminPackExceptionHelper.ThrowInvalidOperationException<SyntaxNode>("A void binary operation returned a value.");
-            return SyntaxFactory.GotoStatement(SyntaxKind.GotoStatement, SyntaxFactory.IdentifierName(_exit)).WithTriviaFrom(node);
+            return SyntaxFactory.GotoStatement(SyntaxKind.GotoStatement, SyntaxFactory.IdentifierName(SyntaxFactory.Identifier(_exit)
+                .WithAdditionalAnnotations(new SyntaxAnnotation(GeneratedOperationNames.RoleAnnotation, "end")))).WithTriviaFrom(node);
         }
     }
 }

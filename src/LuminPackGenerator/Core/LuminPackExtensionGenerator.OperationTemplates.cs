@@ -19,10 +19,9 @@ public static partial class LuminPackExtensionGenerator
     {
         var body = new StringBuilder();
         string name = FormatterTypeName.Get(type);
-        // A type whose analysis produced an error emits no formatter extension, so its JSON
-        // operation cannot reference the absent per-type helper.  Such types keep the original
-        // direct formatter call boundary instead of a JSON expansion.
-        bool jsonExpandable = true;
+        // Only valid non-Union packable roots declare a JSON helper. Built-in and Union
+        // operations already have their final container shape and need no helper projection.
+        bool projectJsonHelper = false;
         if (type is INamedTypeSymbol named && CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named))
         {
             // Preserve the original generic definition's wire decisions. Analyzing a closed
@@ -31,7 +30,8 @@ public static partial class LuminPackExtensionGenerator
             using var unmanagedContract = named.IsGenericType && !SymbolEqualityComparer.Default.Equals(named, named.OriginalDefinition)
                 ? new UnmanagedContractScope(named, compilation) : null;
             name = FormatterTypeName.Get(named.OriginalDefinition);
-            jsonExpandable = !data.Diagnostics.Any(diagnostic => diagnostic.Severity == Microsoft.CodeAnalysis.DiagnosticSeverity.Error);
+            // Invalid models keep their original formatter boundary because their helper is absent.
+            projectJsonHelper = !data.isUnion && !data.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
             if (data.isUnion && data.isValueType) LuminPackUnionCodeGenerator.GenerateCaseMapStruct(data, body);
             GenerateRootBinaryExtensions(body, data, name, metadata);
             GenerateRootJsonExtensions(body, data, name, metadata);
@@ -48,7 +48,7 @@ public static partial class LuminPackExtensionGenerator
         bool ownsExternalHelper = type is INamedTypeSymbol external &&
             CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(external) &&
             !SymbolEqualityComparer.Default.Equals(external.ContainingAssembly, compilation.Assembly);
-        return jsonExpandable ? JsonOperationTemplates.Prepare(source, metadata, ownsExternalHelper) : source;
+        return projectJsonHelper ? JsonOperationTemplates.Prepare(source, metadata, ownsExternalHelper) : source;
     }
 
     /// <summary>Attaches canonical cursor dispatch facts to the selected built-in formatter operation.</summary>

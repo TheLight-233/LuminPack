@@ -108,9 +108,9 @@ public static partial class LuminPackSerializerGenerator
     /// <returns>Body-free declarations suitable for semantic overload resolution.</returns>
     private static IEnumerable<string> ReadSignatures(string methods, MetaInfo metadata)
     {
-        var tree = CSharpSyntaxTree.ParseText(CompiledOptionApiProjection.Rewrite("class Analysis {" + methods + "}",
-            CompiledOptions.Default, metadata.ParseOptions), metadata.ParseOptions);
-        foreach (var method in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+        var root = CSharpSyntaxTree.ParseText("class Analysis {" + methods + "}", metadata.ParseOptions).GetRoot();
+        root = new CompiledOptionApiProjection(CompiledOptions.Default).Visit(root);
+        foreach (var method in root.DescendantNodes().OfType<MethodDeclarationSyntax>())
         {
             var modifiers = SyntaxFactory.TokenList(method.Modifiers.Where(token => !token.IsKind(SyntaxKind.AsyncKeyword)))
                 .Add(SyntaxFactory.Token(SyntaxKind.ExternKeyword));

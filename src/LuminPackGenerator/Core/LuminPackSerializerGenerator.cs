@@ -5,6 +5,8 @@ using System.Linq;
 using System.Text;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.Code.Core;
 
@@ -214,7 +216,7 @@ public static partial class LuminPackSerializerGenerator
         builder.Append(' ', indent).AppendLine(read ? "global::LuminPack.LuminPackSerializer.DeserializeJson(ref reader, ref value);" : "global::LuminPack.LuminPackSerializer.SerializeJson(ref writer, in value);");
     }
 
-    /// <summary>Uses a temporary syntax wrapper to preserve legacy indentation and XML formatting.</summary>
+    /// <summary>Projects and documents one facade fragment through a single parsed syntax tree.</summary>
     /// <param name="fragment">The unchanged method block.</param>
     /// <param name="types">Concrete documentation lookup types for this block.</param>
     /// <param name="compilation">The compilation supplying contract metadata.</param>
@@ -224,12 +226,13 @@ public static partial class LuminPackSerializerGenerator
     {
         string header = "namespace LuminPack" + Environment.NewLine + "{" + Environment.NewLine + "    public static class LuminPackSerializer" + Environment.NewLine + "    {" + Environment.NewLine;
         string footer = "    }" + Environment.NewLine + "}" + Environment.NewLine;
-        string compiled = CompiledOptionApiProjection.Rewrite(header + fragment + footer,
-            CompiledOptions.Resolve(types.FirstOrDefault(), compilation), metadata.ParseOptions);
-        compiled = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(types.FirstOrDefault(), compilation))
-            .Visit(Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(compiled, metadata.ParseOptions).GetRoot()).ToFullString();
-        compiled = System.Text.RegularExpressions.Regex.Replace(compiled, "(?m)^\\s*/// <param name\\s*=\\s*\"(?:option|options)\">[^\\r\\n]*\\r?\\n", string.Empty);
-        string documented = LuminPackSerializerDocumentation.Enhance(compiled, types, compilation, metadata);
+        string source = System.Text.RegularExpressions.Regex.Replace(header + fragment + footer,
+            "(?m)^\\s*/// <param name\\s*=\\s*\"(?:option|options)\">[^\\r\\n]*\\r?\\n", string.Empty);
+        var options = CompiledOptions.Resolve(types.FirstOrDefault(), compilation);
+        var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.Parse)).GetCompilationUnitRoot();
+        root = (CompilationUnitSyntax)new CompiledOptionApiProjection(options).Visit(root);
+        root = (CompilationUnitSyntax)new CompiledOperationProjection(compilation, options).Visit(root);
+        string documented = LuminPackSerializerDocumentation.Enhance(root, types, compilation, metadata);
         return documented.Substring(header.Length, documented.Length - header.Length - footer.Length);
     }
 

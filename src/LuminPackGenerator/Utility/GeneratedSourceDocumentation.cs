@@ -12,7 +12,7 @@ namespace LuminPack.SourceGenerator;
 /// <summary>Supplies documentation for generated methods without rewriting their executable tokens.</summary>
 internal static class GeneratedSourceDocumentation
 {
-    /// <summary>Adds XML comments to generated methods that do not already have documentation.</summary>
+    /// <summary>Completes generated XML comments while retaining existing member descriptions.</summary>
     /// <param name="source">The complete source file to document.</param>
     /// <param name="options">The consuming compilation's language and conditional compilation options.</param>
     /// <returns>The source with documentation inserted before undocumented method declarations.</returns>
@@ -22,29 +22,27 @@ internal static class GeneratedSourceDocumentation
         return CompleteRoot(root).ToFullString();
     }
 
-    /// <summary>Adds method documentation directly to an already parsed generated tree.</summary>
+    /// <summary>Completes method documentation directly on an already parsed generated tree.</summary>
     /// <param name="root">A source root with documentation parsing enabled.</param>
     /// <returns>The same executable syntax with missing XML trivia inserted.</returns>
     internal static SyntaxNode CompleteRoot(SyntaxNode root)
     {
         string source = root.ToFullString();
-        var methods = new Dictionary<BaseMethodDeclarationSyntax, string>();
+        var methods = new Dictionary<BaseMethodDeclarationSyntax, BaseMethodDeclarationSyntax>();
         foreach (var method in root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<BaseMethodDeclarationSyntax>())
         {
-            if (method.GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
-                                                      trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia)))
-            {
-                continue;
-            }
+            var existing = method.GetLeadingTrivia().Where(IsDocumentation).ToArray();
+            var elements = existing.Select(trivia => trivia.GetStructure()).OfType<DocumentationCommentTriviaSyntax>()
+                .SelectMany(comment => comment.Content).OfType<XmlElementSyntax>().ToArray();
+            var names = new HashSet<string>(elements.Select(element => element.StartTag.Name.LocalName.ValueText), StringComparer.Ordinal);
+            var parameters = new HashSet<string>(elements.Where(element => element.StartTag.Name.LocalName.ValueText == "param")
+                .SelectMany(element => element.StartTag.Attributes.OfType<XmlNameAttributeSyntax>())
+                .Select(attribute => attribute.Identifier.Identifier.ValueText), StringComparer.Ordinal);
+            var typeParameters = new HashSet<string>(elements.Where(element => element.StartTag.Name.LocalName.ValueText == "typeparam")
+                .SelectMany(element => element.StartTag.Attributes.OfType<XmlNameAttributeSyntax>())
+                .Select(attribute => attribute.Identifier.Identifier.ValueText), StringComparer.Ordinal);
 
-            int position = method.SpanStart;
-            int lineStart = source.LastIndexOf('\n', Math.Max(0, position - 1)) + 1;
-            string indentation = source.Substring(lineStart, position - lineStart);
-            bool startsOnOwnLine = indentation.All(character => character == ' ' || character == '\t');
-            if (!startsOnOwnLine)
-            {
-                indentation = new string(' ', method.Ancestors().OfType<TypeDeclarationSyntax>().Count() * 4);
-            }
+            string indentation = GetIndentation(method, source, out bool startsOnOwnLine);
 
             var documentation = new StringBuilder();
             if (!startsOnOwnLine)
@@ -52,10 +50,14 @@ internal static class GeneratedSourceDocumentation
                 documentation.AppendLine().Append(indentation);
             }
 
-            documentation.Append("/// <summary>").Append(GetSummary(method)).AppendLine("</summary>");
+            if (!names.Contains("summary"))
+                documentation.Append("/// <summary>").Append(GetSummary(method)).AppendLine("</summary>");
+            bool missing = !names.Contains("summary");
             foreach (var parameter in method.ParameterList.Parameters)
             {
                 string name = parameter.Identifier.ValueText;
+                if (parameters.Contains(name)) continue;
+                missing = true;
                 documentation.Append(indentation).Append("/// <param name=\"").Append(Escape(name)).Append("\">")
                     .Append(GetParameterDescription(parameter)).AppendLine("</param>");
             }
@@ -67,20 +69,26 @@ internal static class GeneratedSourceDocumentation
                     foreach (var parameter in declaration.TypeParameterList.Parameters)
                     {
                         string name = parameter.Identifier.ValueText;
+                        if (typeParameters.Contains(name)) continue;
+                        missing = true;
                         documentation.Append(indentation).Append("/// <typeparam name=\"").Append(Escape(name))
                             .Append("\">The type represented by <c>").Append(Escape(name)).AppendLine("</c>.</typeparam>");
                     }
                 }
 
-                if (!declaration.ReturnType.IsKind(SyntaxKind.PredefinedType) ||
-                    ((PredefinedTypeSyntax)declaration.ReturnType).Keyword.Kind() != SyntaxKind.VoidKeyword)
+                if (!names.Contains("returns") && (!declaration.ReturnType.IsKind(SyntaxKind.PredefinedType) ||
+                    ((PredefinedTypeSyntax)declaration.ReturnType).Keyword.Kind() != SyntaxKind.VoidKeyword))
                 {
+                    missing = true;
                     documentation.Append(indentation).AppendLine("/// <returns>The value produced by the generated operation.</returns>");
                 }
             }
-
-            documentation.Append(indentation);
-            methods.Add(method, documentation.ToString());
+            if (!missing && existing.Length <= 1) continue;
+            var combined = new StringBuilder();
+            foreach (var trivia in existing)
+                combined.AppendLine(trivia.ToFullString().TrimEnd());
+            combined.Append(documentation);
+            methods.Add(method, WithDocumentation(method, combined.ToString(), indentation));
         }
 
         if (methods.Count == 0)
@@ -91,21 +99,72 @@ internal static class GeneratedSourceDocumentation
         return new DocumentationInserter(methods).Visit(root);
     }
 
+    /// <summary>Recognizes structured XML comments without treating ordinary comments as documentation.</summary>
+    /// <param name="trivia">The leading trivia attached to a generated declaration.</param>
+    /// <returns>Whether the trivia contains an XML documentation comment.</returns>
+    private static bool IsDocumentation(SyntaxTrivia trivia) => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
+        trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia);
+
+    /// <summary>Uses the declaration line rather than a detached attribute's trivia to recover indentation.</summary>
+    /// <param name="method">The generated declaration.</param>
+    /// <param name="source">Its enclosing root's exact text.</param>
+    /// <param name="startsOnOwnLine">Whether the declaration follows only whitespace on its line.</param>
+    /// <returns>The existing indentation or the enclosing declarations' normal indentation.</returns>
+    internal static string GetIndentation(BaseMethodDeclarationSyntax method, string source, out bool startsOnOwnLine)
+    {
+        var token = method.Modifiers.Count != 0 ? method.Modifiers[0] : method is MethodDeclarationSyntax declaration
+            ? declaration.ReturnType.GetFirstToken() : method.GetFirstToken();
+        int position = token.SpanStart;
+        int lineStart = source.LastIndexOf('\n', Math.Max(0, position - 1)) + 1;
+        string indentation = source.Substring(lineStart, position - lineStart);
+        startsOnOwnLine = indentation.All(character => character == ' ' || character == '\t');
+        return startsOnOwnLine ? indentation : new string(' ', method.Ancestors().Count(node =>
+            node is TypeDeclarationSyntax or NamespaceDeclarationSyntax) * 4);
+    }
+
+    /// <summary>Replaces only XML trivia and restores indentation before the first declaration token or attribute.</summary>
+    /// <param name="method">The generated method whose executable syntax must remain unchanged.</param>
+    /// <param name="documentation">Complete XML comment text, ending with a line break.</param>
+    /// <param name="indentation">The declaration's original indentation.</param>
+    /// <returns>The same declaration with one complete documentation block.</returns>
+    internal static BaseMethodDeclarationSyntax WithDocumentation(BaseMethodDeclarationSyntax method, string documentation, string indentation)
+    {
+        string normalized = string.Join(Environment.NewLine + indentation,
+            documentation.Replace("\r\n", "\n").TrimEnd().Split('\n').Select(line => line.TrimStart(' ', '\t'))) + Environment.NewLine;
+        var replacement = SyntaxFactory.ParseLeadingTrivia(normalized);
+        var leading = new List<SyntaxTrivia>();
+        bool inserted = false;
+        foreach (var trivia in method.GetLeadingTrivia())
+        {
+            if (IsDocumentation(trivia))
+            {
+                if (!inserted) leading.AddRange(replacement);
+                inserted = true;
+            }
+            else leading.Add(trivia);
+        }
+        if (!inserted) leading.AddRange(replacement);
+        while (leading.Count != 0 && leading[leading.Count - 1].IsKind(SyntaxKind.WhitespaceTrivia))
+            leading.RemoveAt(leading.Count - 1);
+        if (indentation.Length != 0) leading.Add(SyntaxFactory.Whitespace(indentation));
+        return method.WithLeadingTrivia(leading);
+    }
+
     /// <summary>Inserts XML trivia while avoiding traversal of unchanged executable bodies.</summary>
     private sealed class DocumentationInserter : CSharpSyntaxRewriter
     {
-        private readonly Dictionary<BaseMethodDeclarationSyntax, string> _methods;
+        private readonly Dictionary<BaseMethodDeclarationSyntax, BaseMethodDeclarationSyntax> _methods;
 
         /// <summary>Captures missing documentation for declarations in the current root.</summary>
-        /// <param name="methods">Method identities and their exact XML prefixes.</param>
-        internal DocumentationInserter(Dictionary<BaseMethodDeclarationSyntax, string> methods) { _methods = methods; }
+        /// <param name="methods">Original methods and their replacements with complete XML trivia.</param>
+        internal DocumentationInserter(Dictionary<BaseMethodDeclarationSyntax, BaseMethodDeclarationSyntax> methods) { _methods = methods; }
 
         /// <summary>Changes declaration trivia without visiting or rewriting its body.</summary>
         /// <param name="node">The current declaration or structural container.</param>
         /// <returns>The documented declaration or an unchanged structural traversal.</returns>
         public override SyntaxNode Visit(SyntaxNode node)
-            => node is BaseMethodDeclarationSyntax method ? _methods.TryGetValue(method, out string documentation)
-                ? method.WithLeadingTrivia(method.GetLeadingTrivia().AddRange(SyntaxFactory.ParseLeadingTrivia(documentation))) : method
+            => node is BaseMethodDeclarationSyntax method ? _methods.TryGetValue(method, out var documented)
+                ? documented : method
                 : base.Visit(node);
     }
 

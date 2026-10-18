@@ -354,7 +354,9 @@ public static class LuminPackJsonCodeGenerator
         sb.AppendLine("            else");
         sb.AppendLine("            {");
         sb.AppendLine("                if (isUtf8)");
-        GenerateJsonLiteralWrite(sb, field.Name, marker, utf8: true, metaInfo);
+        // The fused branch already handled little-endian UTF-8. Its UTF-8 fallback
+        // is necessarily big-endian and must use the existing raw property bytes.
+        sb.AppendLine("                    writer.WriteRaw(_json" + marker + "Utf8_" + field.Name + ");");
         sb.AppendLine("                else");
         GenerateJsonLiteralWrite(sb, field.Name, marker, utf8: false, metaInfo);
         sb.AppendLine("                writer.SetFirstElement(true);");

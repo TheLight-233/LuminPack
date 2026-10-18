@@ -142,7 +142,7 @@ public static partial class LuminPackCodeGenerator
             {
                 adjacent.Add("Unsafe.ByteOffset(ref __luminSourceBlock, ref Unsafe.As<" + GetGeneratedTypeName(fields[i]) +
                     ", byte>(ref Unsafe.AsRef(in " + fieldPath(fields[i]) + "))) == (nint)(" + sourceOffset + ")");
-                sourceOffset += " + " + GetUnmanagedFieldSize(fields[i]);
+                sourceOffset = AddUnmanagedFieldSize(sourceOffset, GetUnmanagedFieldSize(fields[i]));
             }
             sb.AppendLine(bodyIndent + "    if (" + string.Join(" && ", adjacent) + ")");
             sb.AppendLine(bodyIndent + "    {");
@@ -157,8 +157,7 @@ public static partial class LuminPackCodeGenerator
             string destination = size == "0" ? "__luminFixedBlock" : "Unsafe.Add(ref __luminFixedBlock, " + size + ")";
             sb.AppendLine(bodyIndent + (copyAdjacentFields ? "        " : "    ") + "Unsafe.WriteUnaligned(ref " + destination + ", " + fieldPath(fields[i]) + ");");
             string fieldSize = GetUnmanagedFieldSize(fields[i]);
-            size = int.TryParse(size, out int total) && int.TryParse(fieldSize, out int length)
-                ? (total + length).ToString() : size == "0" ? fieldSize : size + " + " + fieldSize;
+            size = AddUnmanagedFieldSize(size, fieldSize);
         }
         if (copyAdjacentFields) sb.AppendLine(bodyIndent + "    }");
         sb.AppendLine(bodyIndent + (advanceWriter ? "    writer.Advance(" + size + ");" : "    " + offset + " += " + size + ";"));
@@ -203,6 +202,19 @@ public static partial class LuminPackCodeGenerator
     private static string GetUnmanagedFieldSize(LuminDataField field) => IsFixedLengthType(field.Type)
         ? GetFixedFieldLength(field) : "Unsafe.SizeOf<" + GetGeneratedTypeName(field) + ">()";
 
+    /// <summary>Folds known byte widths while retaining every runtime-sized storage term in its original order.</summary>
+    /// <param name="offset">The preceding fixed fields' accumulated width.</param>
+    /// <param name="size">The next field's complete storage width.</param>
+    /// <returns>A constant sum or the unchanged ordered runtime expression.</returns>
+    private static string AddUnmanagedFieldSize(string offset, string size)
+    {
+        if (offset == "0") return size;
+        if (int.TryParse(offset, out int total) && int.TryParse(size, out int length) &&
+            total >= 0 && length >= 0 && total <= int.MaxValue - length)
+            return (total + length).ToString(System.Globalization.CultureInfo.InvariantCulture);
+        return offset + " + " + size;
+    }
+
     /// <summary>Emits fixed reads with proven storage copies where the operation context permits them.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="fields">The fields used by this operation.</param>
@@ -229,9 +241,8 @@ public static partial class LuminPackCodeGenerator
         }
         // Constructor and pool temporaries retain their established grouped read.
         // Taking their addresses would inhibit promotion and change commit behavior.
-        var sizes = new List<string>();
-        for (int i = first; i <= last; i++) sizes.Add(GetUnmanagedFieldSize(fields[i]));
-        string length = string.Join(" + ", sizes);
+        string length = "0";
+        for (int i = first; i <= last; i++) length = AddUnmanagedFieldSize(length, GetUnmanagedFieldSize(fields[i]));
         bool copyAdjacentFields = copyToStorage && last > first && !containsVolatile;
         string arguments = string.Join(", ", fields.GetRange(first, last - first + 1).ConvertAll(field => "out " + fieldPath(field)));
         sb.AppendLine(indent + "{");
@@ -249,7 +260,7 @@ public static partial class LuminPackCodeGenerator
             {
                 adjacent.Add("Unsafe.ByteOffset(ref __luminTargetBlock, ref Unsafe.As<" + GetGeneratedTypeName(fields[i]) +
                     ", byte>(ref " + fieldPath(fields[i]) + ")) == (nint)(" + targetOffset + ")");
-                targetOffset += " + " + GetUnmanagedFieldSize(fields[i]);
+                targetOffset = AddUnmanagedFieldSize(targetOffset, GetUnmanagedFieldSize(fields[i]));
             }
             sb.AppendLine(bodyIndent + "    if (" + string.Join(" && ", adjacent) + ")");
             sb.AppendLine(bodyIndent + "    {");
@@ -267,7 +278,7 @@ public static partial class LuminPackCodeGenerator
             {
                 string source = position == "0" ? "__luminReadBlock" : "Unsafe.Add(ref __luminReadBlock, " + position + ")";
                 sb.AppendLine(bodyIndent + (copyAdjacentFields ? "        " : "    ") + fieldPath(fields[i]) + " = Unsafe.ReadUnaligned<" + GetGeneratedTypeName(fields[i]) + ">(ref " + source + ");");
-                position += " + " + GetUnmanagedFieldSize(fields[i]);
+                position = AddUnmanagedFieldSize(position, GetUnmanagedFieldSize(fields[i]));
             }
         }
         if (copyAdjacentFields) sb.AppendLine(bodyIndent + "    }");

@@ -24,7 +24,7 @@ internal static class JsonOperationTemplates
     internal static string Prepare(string source, MetaInfo metadata, bool retainHelper)
     {
         var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions).GetRoot();
-        var container = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+        var container = root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(type => type.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
         if (container == null) return source;
         var helper = container.Members.OfType<ClassDeclarationSyntax>()
@@ -75,28 +75,31 @@ internal static class JsonOperationTemplates
     /// <returns>Only the helper and its original enclosing declarations.</returns>
     internal static string Support(string source, MetaInfo metadata, Compilation compilation)
     {
-        var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions).GetRoot();
-        var container = root.DescendantNodes().OfType<ClassDeclarationSyntax>()
+        var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.Parse)).GetRoot();
+        var container = root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<ClassDeclarationSyntax>()
             .First(type => type.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
         var helpers = container.Members.OfType<ClassDeclarationSyntax>()
             .Where(type => type.Identifier.ValueText.StartsWith("Json_", StringComparison.Ordinal));
-        var support = root.ReplaceNode(container, container.WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(helpers)))
-            .NormalizeWhitespace("    ", Environment.NewLine).ToFullString();
+        var support = root.ReplaceNode(container, container.WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(helpers)));
         support = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(null, compilation))
-            .Visit(CSharpSyntaxTree.ParseText(support, metadata.ParseOptions).GetRoot()).NormalizeWhitespace().ToFullString();
-        return GeneratedSourceDocumentation.Complete(support, metadata.ParseOptions);
+            .Visit(support).NormalizeWhitespace("    ", Environment.NewLine);
+        return GeneratedSourceDocumentation.CompleteRoot(support).ToFullString();
     }
 
     /// <summary>Qualifies every reference to a helper-owned member with the helper's own type identity.</summary>
     private sealed class MemberQualifier : CSharpSyntaxRewriter
     {
         private readonly HashSet<string> _members;
-        private readonly string _qualified;
+        private readonly ExpressionSyntax _qualified;
 
         /// <summary>Captures the helper's member names and its fully qualified type identity.</summary>
         /// <param name="members">Shared cache fields, properties, and lookup methods of the helper.</param>
         /// <param name="qualified">The assembly-qualified helper type name.</param>
-        internal MemberQualifier(HashSet<string> members, string qualified) { _members = members; _qualified = qualified; }
+        internal MemberQualifier(HashSet<string> members, string qualified)
+        {
+            _members = members;
+            _qualified = SyntaxFactory.ParseExpression(qualified);
+        }
 
         /// <summary>Rewrites a helper member reference without disturbing declarations or member-access names.</summary>
         /// <param name="node">The original template identifier.</param>
@@ -106,7 +109,8 @@ internal static class JsonOperationTemplates
             if (!_members.Contains(node.Identifier.ValueText) || node.Parent is QualifiedNameSyntax or AliasQualifiedNameSyntax ||
                 node.Parent is MemberAccessExpressionSyntax access && access.Name == node)
                 return base.VisitIdentifierName(node);
-            return SyntaxFactory.ParseExpression(_qualified + "." + node.Identifier.ValueText).WithTriviaFrom(node);
+            return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, _qualified, node.WithoutTrivia())
+                .WithTriviaFrom(node);
         }
     }
 }
