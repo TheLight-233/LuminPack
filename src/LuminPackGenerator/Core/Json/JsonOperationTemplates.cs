@@ -79,7 +79,8 @@ internal static class JsonOperationTemplates
         var container = root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<ClassDeclarationSyntax>()
             .First(type => type.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
         var helpers = container.Members.OfType<ClassDeclarationSyntax>()
-            .Where(type => type.Identifier.ValueText.StartsWith("Json_", StringComparison.Ordinal));
+            .Where(type => type.Identifier.ValueText.StartsWith("Json_", StringComparison.Ordinal) ||
+                type.Identifier.ValueText.StartsWith("Version_", StringComparison.Ordinal));
         var support = root.ReplaceNode(container, container.WithMembers(SyntaxFactory.List<MemberDeclarationSyntax>(helpers)));
         support = new CompiledOperationProjection(compilation, CompiledOptions.Resolve(null, compilation))
             .Visit(support).NormalizeWhitespace("    ", Environment.NewLine);

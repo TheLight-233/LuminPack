@@ -33,6 +33,12 @@ internal static class BinaryEntryLocalScopes
         public override SyntaxNode VisitBlock(BlockSyntax node)
         {
             List<StatementSyntax> statements = null;
+            var reader = node.Ancestors().Select(ancestor => ancestor switch
+                {
+                    LocalFunctionStatementSyntax local => local.ParameterList.Parameters.FirstOrDefault(),
+                    MethodDeclarationSyntax method => method.ParameterList.Parameters.FirstOrDefault(),
+                    _ => null
+                }).FirstOrDefault(parameter => parameter?.Type?.ToString().EndsWith("LuminPackReader", StringComparison.Ordinal) == true);
             int index = 0;
             foreach (var statement in node.Statements)
             {
@@ -42,12 +48,12 @@ internal static class BinaryEntryLocalScopes
                     !local.Declaration.Variables[0].Initializer.Value.DescendantNodesAndSelf().Any(expression =>
                         expression is StackAllocArrayCreationExpressionSyntax or ImplicitStackAllocArrayCreationExpressionSyntax) &&
                     local.Declaration.Type.DescendantNodesAndSelf().OfType<GenericNameSyntax>().FirstOrDefault() is { } span && span.Identifier.ValueText is "Span" or "ReadOnlySpan" &&
-                    node.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault()?.ParameterList.Parameters[0].Type?.ToString().EndsWith("LuminPackReader", StringComparison.Ordinal) == true)
+                    reader != null)
                 {
                     statements ??= node.Statements.Take(index).ToList();
                     var variable = local.Declaration.Variables[0];
-                    var seed = SyntaxFactory.ParseExpression("reader.CreateSpan<" + span.TypeArgumentList.Arguments[0] +
-                        ">(ref global::System.Runtime.CompilerServices.Unsafe.As<byte, " + span.TypeArgumentList.Arguments[0] + ">(ref reader.GetCurrentSpanReference()), 0)");
+                    var seed = SyntaxFactory.ParseExpression(reader.Identifier.Text + ".CreateSpan<" + span.TypeArgumentList.Arguments[0] +
+                        ">(ref global::System.Runtime.CompilerServices.Unsafe.As<byte, " + span.TypeArgumentList.Arguments[0] + ">(ref " + reader.Identifier.Text + ".GetCurrentSpanReference()), 0)");
                     statements.Add(local.WithModifiers(SyntaxFactory.TokenList(local.Modifiers.Where(token => !token.IsKind(SyntaxKind.ScopedKeyword))))
                         .WithDeclaration(local.Declaration.WithType(local.Declaration.Type.GetFirstToken().IsKind(SyntaxKind.ScopedKeyword)
                             ? SyntaxFactory.ParseTypeName(local.Declaration.Type.ToString().Substring("scoped".Length).TrimStart()) : local.Declaration.Type)

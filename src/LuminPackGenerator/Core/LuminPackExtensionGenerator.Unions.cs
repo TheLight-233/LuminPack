@@ -23,6 +23,26 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("                value = default;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
+        sb.AppendLine("            if (value is not null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = ReadExistingUnion(ref reader, value, tag);");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        AppendUnionDeserializeSwitch(data, sb, metaInfo, reuse: false);
+        sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        sb.AppendLine("            static " + data.classFullName + "? ReadExistingUnion(ref global::LuminPack.Core.LuminPackReader reader, " + data.classFullName + "? value, ushort tag)");
+        sb.AppendLine("            {");
+        AppendUnionDeserializeSwitch(data, sb, metaInfo, reuse: true);
+        sb.AppendLine("            }");
+    }
+
+    /// <summary>Retains the original fresh Union arms and isolates seeded case reads in a separate body.</summary>
+    /// <param name="data">The original Union contract.</param>
+    /// <param name="sb">The generated operation builder.</param>
+    /// <param name="metaInfo">The original registration and target settings.</param>
+    /// <param name="reuse">Whether an existing reference case can seed its payload.</param>
+    private static void AppendUnionDeserializeSwitch(LuminDataInfo data, StringBuilder sb, MetaInfo metaInfo, bool reuse)
+    {
         sb.AppendLine("            switch (tag)");
         sb.AppendLine("            {");
         foreach (LuminUnionMemberInfo member in data.UnionMembers)
@@ -31,19 +51,21 @@ public static partial class LuminPackExtensionGenerator
             var compatibility = GetUnionGenericCompatibility(data, member);
             sb.AppendLine("                case " + member.Id + ":");
             sb.AppendLine("                {");
-            sb.AppendLine("                    " + memberType + " member = default!;");
+            sb.AppendLine("                    " + memberType + " member = " + (!reuse || member.Type.IsValueType
+                ? "default!;"
+                : "(object?)value is " + memberType + " existing && existing.GetType() == typeof(" + memberType + ") ? existing : default!;"));
             sb.AppendLine("                    reader.ReadPolymorphismValue(ref member);");
             sb.AppendLine(compatibility.RequiresCast
                 ? "                    value = (" + data.classFullName + ")(object)member;"
                 : "                    value = member;");
-            sb.AppendLine("                    return;");
+            sb.AppendLine(reuse ? "                    return value;" : "                    return;");
             sb.AppendLine("                }");
         }
         if (!metaInfo.AllowUnsafe || metaInfo.RegisterMode == LuminPackRegisterMode.Disabled)
         {
             sb.AppendLine("                default:");
             sb.AppendLine("                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof(" + data.classFullName + ")); ");
-            sb.AppendLine("                    return;");
+            sb.AppendLine(reuse ? "                    return value;" : "                    return;");
         }
         else
         {
@@ -54,10 +76,10 @@ public static partial class LuminPackExtensionGenerator
             sb.AppendLine("                        " + data.classFullName + " __registeredValue = default!;");
             sb.AppendLine("                        unsafe { ((delegate*<ref global::LuminPack.Core.LuminPackReader, ref " + data.classFullName + ", void>)__registered.ReadValue)(ref reader, ref __registeredValue); }");
             sb.AppendLine("                        value = __registeredValue;");
-            sb.AppendLine("                        return;");
+            sb.AppendLine(reuse ? "                        return value;" : "                        return;");
             sb.AppendLine("                    }");
             sb.AppendLine("                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(tag, typeof(" + data.classFullName + ")); ");
-            sb.AppendLine("                    return;");
+            sb.AppendLine(reuse ? "                    return value;" : "                    return;");
             sb.AppendLine("                }");
         }
         sb.AppendLine("            }");

@@ -382,6 +382,37 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
+        sb.AppendLine("            if (value is not null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = ReadExistingUnion(ref reader, value, tag);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            else");
+        sb.AppendLine("            {");
+        AppendClassUnionDeserializeSwitch(data, sb, reuse: false);
+        sb.AppendLine("            }");
+        sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        sb.AppendLine($"            static {classGlobalName}? ReadExistingUnion(ref global::LuminPack.Core.LuminPackReader reader, {classGlobalName}? value, ushort tag)");
+        sb.AppendLine("            {");
+        AppendClassUnionDeserializeSwitch(data, sb, reuse: true);
+        sb.AppendLine("                return value;");
+        sb.AppendLine("            }");
+
+        foreach (var item in data.callBackMethods.Where(
+                     static callback => callback.Item2 is SerializeCallBackType.OnDeserialized))
+        {
+            sb.AppendLine(item.Item3
+                ? $"            {classGlobalName}.{item.Item1}();"
+                : $"            value?.{item.Item1}();");
+        }
+    }
+
+    /// <summary>Emits original fresh case construction or matching existing payload seeds.</summary>
+    /// <param name="data">The declared class or interface Union.</param>
+    /// <param name="sb">The generated operation builder.</param>
+    /// <param name="reuse">Whether matching reference cases may retain their storage.</param>
+    private static void AppendClassUnionDeserializeSwitch(LuminDataInfo data, StringBuilder sb, bool reuse)
+    {
+        string classGlobalName = data.classFullName;
         sb.AppendLine("            switch (tag)");
         sb.AppendLine("            {");
         foreach (LuminUnionMemberInfo member in data.UnionMembers)
@@ -389,7 +420,9 @@ public static class LuminPackUnionCodeGenerator
             string memberType = GetMemberType(data, member);
             sb.AppendLine($"                case {member.Id}:");
             sb.AppendLine("                {");
-            sb.AppendLine($"                    {memberType} member = default!;");
+            sb.AppendLine(!reuse || member.Type.IsValueType
+                ? $"                    {memberType} member = default!;"
+                : $"                    {memberType} member = (object?)value is {memberType} existing && existing.GetType() == typeof({memberType}) ? existing : default!;");
             sb.AppendLine("                    reader.ReadPolymorphismValue(ref member);");
             sb.AppendLine(member.Type.IsValueType
                 ? $"                    value = ({classGlobalName})(object)member;"
@@ -402,13 +435,6 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("                    break;");
         sb.AppendLine("            }");
 
-        foreach (var item in data.callBackMethods.Where(
-                     static callback => callback.Item2 is SerializeCallBackType.OnDeserialized))
-        {
-            sb.AppendLine(item.Item3
-                ? $"            {classGlobalName}.{item.Item1}();"
-                : $"            value?.{item.Item1}();");
-        }
     }
 
     /// <summary>Appends statements that calculate the binary payload size.</summary>

@@ -39,6 +39,20 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("        {");
         sb.AppendLine("            internal static uint TypeId = uint.MaxValue;");
         sb.AppendLine("        }");
+        sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
+        sb.AppendLine("        internal static bool __LuminPackShouldResetMember<T>(ref global::LuminPack.Core.LuminPackReader reader)");
+        sb.AppendLine("        {");
+        sb.AppendLine("            if (typeof(T).IsValueType) return false;");
+        sb.AppendLine("            switch (LuminPackTypeCache<T>.TypeId)");
+        sb.AppendLine("            {");
+        foreach (var entry in dispatch.Where(entry => entry.Binary && entry.OrdinaryObjectHeader))
+            sb.AppendLine("                case " + entry.Id + "u: return reader.PeekIsNullObject(ref reader.GetCurrentSpanOffset());");
+        foreach (var entry in dispatch.Where(entry => !entry.Binary || !entry.OrdinaryObjectHeader))
+            sb.AppendLine("                case " + entry.Id + "u: return false;");
+        // An opaque registered formatter keeps its original fresh member boundary.
+        sb.AppendLine("                default: return true;");
+        sb.AppendLine("            }");
+        sb.AppendLine("        }");
         sb.AppendLine("        internal static global::LuminPack.Option.LuminPackStringEncoding __LuminPackJsonEncoding<T>()");
         sb.AppendLine("        {");
         sb.AppendLine("            switch (LuminPackTypeCache<T>.TypeId)");

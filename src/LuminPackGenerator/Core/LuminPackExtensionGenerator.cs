@@ -63,7 +63,8 @@ public static partial class LuminPackExtensionGenerator
         /// <param name="json">The json used by this operation.</param>
         /// <param name="calculate">The calculate used by this operation.</param>
         /// <param name="options">The immutable declaration-time profile.</param>
-        public DispatchEntry(int id, string name, bool binary, bool json, bool calculate, CompiledOptions options)
+        /// <param name="ordinaryObjectHeader">Whether binary null roots retain an ordinary class instance.</param>
+        public DispatchEntry(int id, string name, bool binary, bool json, bool calculate, CompiledOptions options, bool ordinaryObjectHeader)
         {
             Id = id;
             Name = name;
@@ -71,6 +72,7 @@ public static partial class LuminPackExtensionGenerator
             Json = json;
             Calculate = calculate;
             Options = options;
+            OrdinaryObjectHeader = ordinaryObjectHeader;
         }
 
         /// <summary>Gets the id.</summary>
@@ -82,6 +84,7 @@ public static partial class LuminPackExtensionGenerator
         /// <summary>Gets the json.</summary>
         public bool Json { get; }
         internal CompiledOptions Options { get; }
+        internal bool OrdinaryObjectHeader { get; }
         /// <summary>Gets the calculate.</summary>
         public bool Calculate { get; }
     }
@@ -211,6 +214,8 @@ public static partial class LuminPackExtensionGenerator
         }
 
         GenerateRootCalculateOffsetExtension(sb, data, typeName, metaInfo);
+        if (data.generatorType == GeneratorType.VersionTolerant && !data.isUnion)
+            LuminPackVersionTolerantCodeGenerator.GenerateSchema(data, sb, metaInfo);
     }
 
     /// <summary>Builds the root calculate offset extension source from the supplied metadata.</summary>

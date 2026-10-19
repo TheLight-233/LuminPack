@@ -44,6 +44,7 @@ public static partial class LuminPackExtensionGenerator
         {
             GenerateFormatterExtensions(body, CreateOperationField(type, compilation, metadata), metadata, new HashSet<string>(StringComparer.Ordinal));
         }
+        PortableStructEmitter.AppendViews(body, type);
         string source = GenerateExtension(body, GetExtensionClassName(compilation));
         bool ownsExternalHelper = type is INamedTypeSymbol external &&
             CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(external) &&
@@ -51,7 +52,7 @@ public static partial class LuminPackExtensionGenerator
         return projectJsonHelper ? JsonOperationTemplates.Prepare(source, metadata, ownsExternalHelper) : source;
     }
 
-    /// <summary>Attaches canonical cursor dispatch facts to the selected built-in formatter operation.</summary>
+    /// <summary>Attaches canonical cursor dispatch and dictionary reuse facts to a built-in formatter operation.</summary>
     /// <param name="type">The exact operation type.</param>
     /// <param name="compilation">The current consuming compilation.</param>
     /// <param name="metadata">Complete current emission settings.</param>
@@ -61,7 +62,11 @@ public static partial class LuminPackExtensionGenerator
         var field = new LuminLocalFieldData { TypeName = FormatterTypeName.Get(type), TypeSymbol = type, Name = "value", IsValue = type.IsValueType };
         if (type is INamedTypeSymbol { MetadataName: "Dictionary`2", TypeArguments.Length: 2 } dictionary &&
             dictionary.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
+        {
             field.UnionCursorSuffix = FixedUnionCursorPlan.GetRoot(dictionary.TypeArguments[1], compilation, metadata)?.Suffix;
+            field.CanReuseDictionarySlots = dictionary.TypeArguments[0].SpecialType == SpecialType.System_Int32 &&
+                DictionarySlotReusePlan.CanReadExistingValue(dictionary.TypeArguments[1], compilation, metadata);
+        }
         return field;
     }
 }

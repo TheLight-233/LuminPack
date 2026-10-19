@@ -369,9 +369,14 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
                 span.ContainingNamespace.ToDisplayString() == "System" && span.Name is "Span" or "ReadOnlySpan" && span.TypeArguments.Length == 1)
             {
                 string element = ClosedOperationTypes.Name(span.TypeArguments[0], _typeArguments);
+                var localReader = original.Ancestors().OfType<LocalFunctionStatementSyntax>()
+                    .SelectMany(local => local.ParameterList.Parameters)
+                    .Select(parameter => _model.GetDeclaredSymbol(parameter))
+                    .FirstOrDefault(parameter => parameter?.Type.ToDisplayString() == "LuminPack.Core.LuminPackReader");
+                string readerName = localReader == null ? BinaryOperationPlan.Prefix + "p0" : Replacement(localReader);
                 var seed = SyntaxFactory.ParseExpression("reader.CreateSpan<" + element + ">(ref global::System.Runtime.CompilerServices.Unsafe.As<byte, " + element + ">(ref reader.GetCurrentSpanReference()), 0)");
                 seed = seed.ReplaceNodes(seed.DescendantNodes().OfType<IdentifierNameSyntax>().Where(identifier => identifier.Identifier.ValueText == "reader"),
-                    (originalName, current) => current.WithIdentifier(BinaryOperationPlan.Identity(BinaryOperationPlan.Prefix + "p0", originalName.Identifier)));
+                    (originalName, current) => current.WithIdentifier(BinaryOperationPlan.Identity(readerName, originalName.Identifier)));
                 var local = (LocalDeclarationStatementSyntax)visited;
                 var variable = local.Declaration.Variables[0];
                 statements.Add(local.WithDeclaration(local.Declaration.WithType(SyntaxFactory.ParseTypeName(ClosedOperationTypes.Name(span, _typeArguments)))

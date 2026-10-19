@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
 using LuminPack.SourceGenerator;
+using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
@@ -98,11 +99,11 @@ public static partial class LuminPackExtensionGenerator
             .Select(group => group.First());
         var dispatch = dispatchTypes.Select((type, index) => new DispatchEntry(index, FormatterTypeName.Get(type),
             CanRegisterFormatter(type, compilation, json: false), CanRegisterFormatter(type, compilation, json: true),
-            CanRegisterCalculateFormatter(type, compilation), CompiledOptions.Resolve(type, compilation))).Where(entry => entry.Binary || entry.Json || entry.Calculate).ToArray();
+            CanRegisterCalculateFormatter(type, compilation), CompiledOptions.Resolve(type, compilation), EmitterTypeTraits.UsesOrdinaryObjectHeader(type))).Where(entry => entry.Binary || entry.Json || entry.Calculate).ToArray();
         var key = new StringBuilder(extension).Append('|').Append(CompiledOptions.Resolve(null, compilation).Identity).Append('|');
         foreach (var entry in dispatch)
             key.Append(entry.Id).Append(':').Append(entry.Name.Length).Append(':').Append(entry.Name).Append(':')
-                .Append(entry.Binary).Append(':').Append(entry.Json).Append(':').Append(entry.Calculate).Append(':').Append(entry.Options.Identity).Append(';');
+                .Append(entry.Binary).Append(':').Append(entry.Json).Append(':').Append(entry.Calculate).Append(':').Append(entry.Options.Identity).Append(':').Append(entry.OrdinaryObjectHeader).Append(';');
         string identity = key.ToString();
         foreach (var part in DispatchFiles(compilation, metadata, cache, extension, dispatch, identity)) files.Add(part);
         files.Add(new FrozenGeneratedSource("LuminPack.FormatterBridges.g.cs", SerializerCoreProjection.Bridges(extension, metadata)));

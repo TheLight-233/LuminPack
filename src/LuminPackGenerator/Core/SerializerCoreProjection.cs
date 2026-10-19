@@ -35,7 +35,8 @@ internal static class SerializerCoreProjection
         var support = new List<MemberDeclarationSyntax>();
         foreach (var member in container.Members)
         {
-            if (member is MethodDeclarationSyntax optionsMethod && optionsMethod.Identifier.ValueText.StartsWith("__LuminPackJson", StringComparison.Ordinal))
+            if (member is MethodDeclarationSyntax optionsMethod && (optionsMethod.Identifier.ValueText.StartsWith("__LuminPackJson", StringComparison.Ordinal) ||
+                optionsMethod.Identifier.ValueText == "__LuminPackShouldResetMember"))
             {
                 dispatch.Add(optionsMethod);
                 continue;
