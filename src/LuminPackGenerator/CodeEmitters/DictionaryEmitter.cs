@@ -8,7 +8,7 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 using static CodeEmitterRegistry;
 
 /// <summary>Provides dictionary emitter functionality.</summary>
-public static class DictionaryEmitter
+public static partial class DictionaryEmitter
 
 {
     /// <summary>Appends JSON writing statements for dictionary values.</summary>
@@ -388,6 +388,12 @@ public static class DictionaryEmitter
             sb.AppendLine("            if ((uint)payloadLength > (uint)(inputLength - index))");
             sb.AppendLine("                global::LuminPack.Code.LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + payloadLength));");
         }
+        if (!freshValue)
+            AppendReusableDictionaryRead(sb, keyType, valueType,
+                fieldData.TypeSymbol is Microsoft.CodeAnalysis.INamedTypeSymbol collection &&
+                collection.TypeArguments[0].IsValueType &&
+                collection.TypeArguments[0].OriginalDefinition.SpecialType != Microsoft.CodeAnalysis.SpecialType.System_Nullable_T,
+                (fieldData.TypeSymbol as Microsoft.CodeAnalysis.INamedTypeSymbol)?.TypeArguments[1], fieldData.CanReuseDictionarySlots);
         sb.AppendLine("            if (global::System.IntPtr.Size != 8)");
         sb.AppendLine("            {");
         sb.AppendLine($"                var fallback = new global::System.Collections.Generic.Dictionary<{keyType}, {valueType}>(length);");

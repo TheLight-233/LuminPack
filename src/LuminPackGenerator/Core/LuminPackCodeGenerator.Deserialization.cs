@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using LuminPack.SourceGenerator;
+using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.Code.Core;
@@ -26,7 +27,8 @@ public static partial class LuminPackCodeGenerator
     /// <param name="parentName">The parent name used by this operation.</param>
     /// <param name="collectionHeadAlreadyRead">The collection head already read used by this operation.</param>
     /// <param name="targetIsKnownFresh">The target is known fresh used by this operation.</param>
-    private static void GenerateDeserializeCode(StringBuilder sb, LuminDataField field, string targetObj, string span, string offset, int indent, int depth, bool isFirst = true, string fieldPath = "", bool isArray = false, bool isList = false, string multList = "_", bool isPrivateFiled = false, string parentName = "", bool collectionHeadAlreadyRead = false, bool targetIsKnownFresh = false)
+    /// <param name="reuseExistingValue">Whether existing member storage is available for recursive reuse.</param>
+    private static void GenerateDeserializeCode(StringBuilder sb, LuminDataField field, string targetObj, string span, string offset, int indent, int depth, bool isFirst = true, string fieldPath = "", bool isArray = false, bool isList = false, string multList = "_", bool isPrivateFiled = false, string parentName = "", bool collectionHeadAlreadyRead = false, bool targetIsKnownFresh = false, bool reuseExistingValue = false)
     {
         using var optionScope = new CompiledOptionFieldScope(sb, field.Options, field.Type == LuminFiledType.Other && field.TypeSymbol != null ? FormatterTypeName.Get(field.TypeSymbol) : null);
         string indentation = new string(' ', indent * 4);
@@ -151,7 +153,17 @@ public static partial class LuminPackCodeGenerator
                 sb.AppendLine(indentation + targetObj + " = " + field.Name + "TempValue" + depthSuffix + ";");
                 break;
             case LuminFiledType.String:
-                sb.AppendLine(indentation + targetObj + " = reader.ReadStringAndAdvance(ref " + offset + ")!;");
+                if (reuseExistingValue && !field.IsVolatile)
+                {
+                    // The decoder still validates the record; unchanged heap storage needs no write barrier.
+                    sb.AppendLine(indentation + "{");
+                    sb.AppendLine(indentation + "    var currentString = " + targetObj + ";");
+                    sb.AppendLine(indentation + "    var decodedString = reader.ReadStringAndAdvance(ref " + offset + ", currentString);");
+                    sb.AppendLine(indentation + "    if (!global::System.Object.ReferenceEquals(currentString, decodedString)) " + targetObj + " = decodedString!;");
+                    sb.AppendLine(indentation + "}");
+                }
+                else
+                    sb.AppendLine(indentation + targetObj + " = reader.ReadStringAndAdvance(ref " + offset + (reuseExistingValue ? ", " + targetObj : "") + ")!;");
                 break;
             case LuminFiledType.List:
                 {
@@ -520,11 +532,11 @@ public static partial class LuminPackCodeGenerator
                     {
                         if (string.IsNullOrWhiteSpace(field.FullTypeName))
                         {
-                            sb.AppendLine(indentation + "var " + resultVariable4 + " = " + targetObj + " = new();");
+                            sb.AppendLine(indentation + "var " + resultVariable4 + " = " + targetObj + (reuseExistingValue ? " ??= new();" : " = new();"));
                         }
                         else
                         {
-                            sb.AppendLine(indentation + "var " + resultVariable4 + " = new " + field.FullTypeName + "();");
+                            sb.AppendLine(indentation + "var " + resultVariable4 + " = " + (reuseExistingValue ? targetObj + " ?? " : "") + "new " + field.FullTypeName + "();");
                         }
                     }
                     if (!useNestedTarget2)
@@ -533,7 +545,10 @@ public static partial class LuminPackCodeGenerator
                         foreach (LuminDataField classField in field.ClassFields)
                         {
                             string nullableSuffix5 = ((classField.FieldType == LuminDataType.Reference) ? "?" : "");
-                            sb.AppendLine(indentation + GetFieldLocalVariableType(classField) + nullableSuffix5 + " " + parentName + field.Name + classField.Name + "Temp" + depthSuffix + " = default!;");
+                            string initial = reuseExistingValue
+                                ? (field.Type == LuminFiledType.Class ? targetObj + " is null ? default! : " : "") + NestedStorage(field, classField, targetObj)
+                                : "default!";
+                            sb.AppendLine(indentation + GetFieldLocalVariableType(classField) + nullableSuffix5 + " " + parentName + field.Name + classField.Name + "Temp" + depthSuffix + " = " + initial + ";");
                         }
                         sb.AppendLine();
                     }
@@ -571,6 +586,11 @@ public static partial class LuminPackCodeGenerator
                                 j = mergeEndIndex2;
                                 continue;
                             }
+                        }
+                        if (reuseExistingValue)
+                        {
+                            GenerateReusableFieldRead(sb, nestedField2, fieldTarget6, offset, indent, depth + 1, multList + "_", parentName + field.Name + "_");
+                            continue;
                         }
                         switch (nestedField2.Type)
                         {
@@ -625,8 +645,16 @@ public static partial class LuminPackCodeGenerator
                     {
                         if (!string.IsNullOrWhiteSpace(field.FullTypeName))
                         {
+                            // Existing collection elements already hold this receiver; publish only a replacement.
+                            if (reuseExistingValue && !field.IsVolatile)
+                                sb.AppendLine(indentation + "if (!global::System.Object.ReferenceEquals(" + targetObj + ", " + resultVariable4 + "))");
                             sb.AppendLine(indentation + targetObj + " = " + resultVariable4 + ";");
                         }
+                        break;
+                    }
+                    if (reuseExistingValue)
+                    {
+                        AppendReusableNestedCommit(sb, field, targetObj, parentName, depthSuffix, indentation);
                         break;
                     }
                     List<string> constructorArgumentExpressions = new List<string>();
@@ -729,7 +757,11 @@ public static partial class LuminPackCodeGenerator
                 {
                     sb.AppendLine(indentation + "reader.FlushCurrentIndex(" + offset + ");");
                 }
-                if (field.IsCompress)
+                if (reuseExistingValue)
+                {
+                    LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.AppendReusableElementRead(sb, field.TypeSymbol, targetObj, indentation, field.IsCompress);
+                }
+                else if (field.IsCompress)
                 {
                     sb.AppendLine(indentation + "reader.ReadValueWithCompress(ref " + targetObj + ");");
                 }
@@ -769,6 +801,17 @@ public static partial class LuminPackCodeGenerator
     /// <param name="polymorphism">The polymorphism used by this operation.</param>
     public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb, bool polymorphism = false)
     {
+        if (PortableStructPlan.RequiresClosedDispatch(data.TypeSymbol))
+        {
+            sb.AppendLine("            global::LuminPack.LuminPackSerializer.FormatterDispatch.Deserialize<" + FormatterTypeName.Get(data.TypeSymbol) + ">(ref reader, ref value);");
+            return;
+        }
+        var portable = PortableStructPlan.TryCreate(data.TypeSymbol);
+        if (portable != null)
+        {
+            PortableStructEmitter.AppendValue(sb, portable, "value", FormatterTypeName.Get(data.TypeSymbol), write: false);
+            return;
+        }
         string concreteTypeName = data.classFullName;
         if (!concreteTypeName.Contains(".") && data.classNameSpace != "<global namespace>")
         {
@@ -819,6 +862,10 @@ public static partial class LuminPackCodeGenerator
             }
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
+        }
+        if (!data.isValueType || HasReusableMembers(data.fields))
+        {
+            AppendExistingObjectRead(sb, data, concreteTypeName, polymorphism);
         }
         if (!polymorphism)
         {

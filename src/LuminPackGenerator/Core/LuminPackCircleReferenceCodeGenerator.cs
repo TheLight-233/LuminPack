@@ -338,6 +338,12 @@ public static class LuminPackCircleReferenceCodeGenerator
         string constructorArgs = string.Join(", ", constructorParams);
 
         // Create the object with default argument values.
+        if (!data.isValueType)
+        {
+            sb.AppendLine("            bool reuseObject = value is not null && !reader.OptionState.IsObjectReferenceRegistered(value);");
+            sb.AppendLine("            if (!reuseObject)");
+            sb.AppendLine("            {");
+        }
         if (data.RentPoolMethod == null)
         {
             if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
@@ -361,9 +367,19 @@ public static class LuminPackCircleReferenceCodeGenerator
         }
 
 
+        if (!data.isValueType) sb.AppendLine("            }");
         // Register the object reference before reading nested members.
         sb.AppendLine($"            reader.OptionState.AddObjectReference(id, value!);");
         sb.AppendLine();
+        if (!data.isValueType)
+        {
+            sb.AppendLine("            if (reuseObject)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"            ref var reuseLocal = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value!);");
+            foreach (var field in data.fields)
+                sb.AppendLine($"            {field.Name}Temp = reuseLocal.{field.Identifier};");
+            sb.AppendLine("            }");
+        }
 
         // Deserialize into local variables.
         for (var order = 0; order < memberCount; order++)
@@ -380,10 +396,8 @@ public static class LuminPackCircleReferenceCodeGenerator
                 }
                 else
                 {
-                    if (field.IsCompress)
-                        sb.AppendLine($"                reader.ReadValueWithCompress(ref {field.Name}Temp);");
-                    else
-                        sb.AppendLine($"                reader.ReadValue(ref {field.Name}Temp);");
+                    LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.AppendReusableElementRead(sb, field.TypeSymbol,
+                        field.Name + "Temp", "                ", field.IsCompress);
                 }
                 sb.AppendLine("            }");
                 sb.AppendLine("            else");

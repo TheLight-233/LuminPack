@@ -9,6 +9,8 @@ public sealed class LuminLocalFieldData
     public Microsoft.CodeAnalysis.ITypeSymbol TypeSymbol;
     /// <summary>Stores the canonical local Union cursor slot selected for a dictionary operation, if any.</summary>
     internal string UnionCursorSuffix;
+    /// <summary>Stores the canonical proof that an int-keyed dictionary can refill existing leaf values in place.</summary>
+    internal bool CanReuseDictionarySlots;
     /// <summary>Stores the name.</summary>
     public string Name;
     /// <summary>Stores the exact declaring storage level, including constructed generic arguments.</summary>
