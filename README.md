@@ -226,11 +226,11 @@ public class MyClass2
 }
 ```
 
-LuminPack不序列化成员名或其他信息，而是按照声明的顺序序列化字段。如果类型是继承的，则按照父级→子级的内存布局顺序执行序列化。成员的顺序不能因反序列化而改变。关于模式演变，请参阅版本容忍部分。
+默认 `Object` 模式不序列化成员名，而是按照成员顺序序列化字段。如果类型是继承的，则按照父级→子级处理成员。读取此模式的数据时应保持成员顺序。需要按字段身份进行模式演变时，请参阅版本容忍部分。
 
-默认的序列化顺序和布局是按照声明顺序的，如果想要更改，您可以使用 `[LuminPackOrder()]`
+默认的序列化顺序按照声明顺序排列，可以使用 `[LuminPackOrder()]` 调整写入顺序；该属性不会改变 CLR 存储布局。
 
-注：对于循环引用和完全版本容忍模式，每个字段和属性必须注释`[LuminPackOrder()]`
+注：循环引用模式要求每个字段和属性标注 `[LuminPackOrder()]`；`VersionTolerant` 模式无需维护编号。
 
 ```csharp
 // serialize Prop0 -> Prop1
@@ -732,49 +732,39 @@ public class MyClass
 }
 ```
 
-当使用 `GenerateType.VersionTolerant` 时，它支持完全的版本容忍。
+`GeneratorType.VersionTolerant` 使用稳定的字段名匹配，支持添加、删除和调整字段顺序。重命名字段时，用 `[LuminPackOldName]` 保留旧名。
 
 ```csharp
-[LuminPackable(GenerateType.VersionTolerant)]
-public class VersionTolerantObject1
+[LuminPackable(GeneratorType.VersionTolerant)]
+public class PlayerV1
 {
-    [LuminPackOrder(0)]
-    public int MyProperty0 { get; set; } = default;
-
-    [LuminPackOrder(1)]
-    public long MyProperty1 { get; set; } = default;
-
-    [LuminPackOrder(2)]
-    public short MyProperty2 { get; set; } = default;
+    public int Id { get; set; }
+    public string? Name { get; set; }
+    public long Removed { get; set; }
 }
 
-[LuminPackable(GenerateType.VersionTolerant)]
-public class VersionTolerantObject2
+[LuminPackable(GeneratorType.VersionTolerant)]
+public class PlayerV2
 {
-    [LuminPackOrder(0)]
-    public int MyProperty0 { get; set; } = default;
+    public List<int>? Scores { get; set; }
 
-    // deleted
-    //[LuminPackOrder(1)]
-    //public long MyProperty1 { get; set; } = default;
+    [LuminPackOldName("Name")]
+    public string? DisplayName { get; set; }
 
-    [LuminPackOrder(2)]
-    public short MyProperty2 { get; set; } = default;
-
-    // added
-    [LuminPackOrder(3)]
-    public short MyProperty3 { get; set; } = default;
+    public int Id { get; set; }
 }
 ```
 
-`GenerateType.VersionTolerant` 比 `GenerateType.Object` 性能更差，使用时请注意。
+这两个模型可以双向读取各自写出的数据。未知字段按长度跳过，缺失字段设置为 `default`，包括复用已有实例时。二进制写入保留最早的旧名；连续重命名时，按时间顺序保留全部 `[LuminPackOldName]`。JSON 读取也接受旧名，写入使用当前名称。
+
+需要独立演进的嵌套模型也应使用 `VersionTolerant`。字段类型与二进制选项应保持兼容，不支持自动类型转换。`ref` 读取支持已有对象及字段实例复用。完整用法和格式说明参见 [版本容忍参考](docs/version-tolerant-serialization.md)。
 
 <a id="circular-reference"></a>
 ## 🔗 循环引用
 
 ```csharp
-// to enable circular-reference, use GenerateType.CircularReference
-[LuminPackable(GenerateType.CircularReference)]
+// to enable circular-reference, use GeneratorType.CircleReference
+[LuminPackable(GeneratorType.CircleReference)]
 public class Node
 {
     [LuminPackOrder(0)]
@@ -784,9 +774,9 @@ public class Node
 }
 ```
 
-`GenerateType.CircularReference` 具有与版本容忍相同的特性。
+`GeneratorType.CircleReference` 使用显式编号和长度表；增删字段时应保留已有编号。
 
-对象引用跟踪只对标记为 `GenerateType.CircularReference` 的对象进行。如果要跟踪任何其他对象，请对其进行包装。
+对象引用跟踪只对标记为 `GeneratorType.CircleReference` 的对象进行。如果要跟踪任何其他对象，请对其进行包装。
 
 <a id="writebuffer"></a>
 ## 💾 WriteBuffer池
@@ -879,16 +869,16 @@ Union 的 `null` 值直接写为 `null`。客户端与服务端交换 JSON 时�
 
 ### Version Tolerant Object 版本容忍对象
 
-`(byte memberCount, [varint byte-length-of-values...], [values...])`
+`(251, 1, byte profile, byte memberCount, [UTF-8 name/type metadata...], [varint payload lengths...], [payloads...])`
 
-版本容忍对象与 Object 类似，但在头部包含值的字节长度。变长整数遵循以下规范：第一个有符号字节（sbyte）是值或类型代码，接下来的 X 个字节是具体值。其中，0 到 127 对应无符号字节值，-1 到 - 120 对应有符号字节值，-121 对应字节（byte），-122 对应有符号字节（sbyte），-123 对应无符号短整数（ushort），-124 对应短整数（short），-125 对应无符号整数（uint），-126 对应整数（int），-127 对应无符号长整数（ulong），-128 对应长整数（long）。
+`255` 表示 `null`。元数据先整体写入，随后是按同一顺序排列的长度表和字段内容。名称与类型信息采用完整字节比较，字段顺序不决定其身份。详细编码规则见 [二进制格式参考](docs/version-tolerant-serialization.md#binary-framing)。
 
 ### Circular Reference Object 循环引用对象
 
 `(byte memberCount, [varint byte-length-of-values...], varint referenceId, [values...])`\
 `(250, varint referenceId)`
 
-循环引用对象类似于版本容忍对象，但如果memberCount为250，则下一个变量（unsigned-int32）为referenceId。如果不是，则在字节长度值之后写入变量referenceId。
+循环引用对象保留槽位长度表。如果 memberCount 为 250，则后续变长整数为已有对象的 referenceId；新对象在长度表之后写入 referenceId。
 
 ### String 字符串
 
