@@ -2,6 +2,7 @@ using System.Buffers;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 #if NET8_0_OR_GREATER
+using System.Runtime.Intrinsics;
 using System.Text;
 using System.Text.Unicode;
 #endif
@@ -41,11 +42,18 @@ public unsafe ref partial struct LuminPackReader
                 if (bytes > 0 && bytes <= available - start - sizeof(int) * 2)
                 {
                     if (characters > 0 && characters != current.Length) return ReadStringAndAdvance<TOptions>(ref index);
-                    ReadOnlySpan<byte> payload = MemoryMarshal.CreateReadOnlySpan(
-                        ref Unsafe.Add(ref _bufferStart, (nint)(uint)start + sizeof(int) * 2), bytes);
-                    bool matches = bytes == current.Length
-                        ? Ascii.Equals(payload, current.AsSpan())
-                        : MatchesUtf8(payload, current);
+                    ref byte payloadStart = ref Unsafe.Add(ref _bufferStart, (nint)(uint)start + sizeof(int) * 2);
+                    bool matches;
+                    if (bytes == current.Length)
+                    {
+                        // Short ASCII records dominate reuse traffic. The framework helper's fixed cost
+                        // (span construction plus a cross-assembly vector setup) outweighs its work at these
+                        // lengths, so compare short records in-assembly and keep the helper for longer ones.
+                        matches = bytes <= 16
+                            ? MatchesAsciiRecord(ref payloadStart, current)
+                            : Ascii.Equals(MemoryMarshal.CreateReadOnlySpan(ref payloadStart, bytes), current.AsSpan());
+                    }
+                    else matches = MatchesUtf8(MemoryMarshal.CreateReadOnlySpan(ref payloadStart, bytes), current);
                     if (matches)
                     {
                         // Publish only a validated match; failed reads retain their original cursor.
@@ -174,6 +182,49 @@ public unsafe ref partial struct LuminPackReader
     }
 
 #if NET8_0_OR_GREATER
+    /// <summary>Compares a short equal-length ASCII record against the candidate text inside this assembly.</summary>
+    /// <param name="source">The first payload byte; the record is <c>text.Length</c> bytes long.</param>
+    /// <param name="text">The candidate immutable text whose length equals the record's byte count.</param>
+    /// <returns>Whether every payload byte equals the matching character and every character is ASCII.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool MatchesAsciiRecord(ref byte source, string text)
+    {
+        int length = text.Length;
+        // Reading a payload window wider than the record would leave the validated range, so the
+        // overlapping-window form below is used only where the two windows stay inside it.
+        if (!Vector128.IsHardwareAccelerated || Unsafe.SizeOf<IntPtr>() != 8 || length < 4)
+        {
+            for (int i = 0; i < length; i++)
+            {
+                if (text[i] > 0x7F || (byte)text[i] != Unsafe.Add(ref source, i)) return false;
+            }
+
+            return true;
+        }
+
+        ref ushort characters = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(text.AsSpan()));
+        if (length < 8)
+        {
+            // 4 to 7 characters: the first four and the last four cover the record.
+            var chars = Vector128.Create(
+                Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref characters)),
+                Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref characters, length - 4)))).AsUInt16();
+            if (Vector128.GreaterThanAny(chars, Vector128.Create((ushort)0x7F))) return false;
+            ulong payload = Unsafe.ReadUnaligned<uint>(ref source) |
+                ((ulong)Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, length - 4)) << 32);
+            return Vector128.Narrow(chars, chars).AsUInt64().GetElement(0) == payload;
+        }
+
+        // 8 to 16 characters: the first eight and the last eight cover the record.
+        var first = Vector128.LoadUnsafe(ref characters);
+        var last = Vector128.LoadUnsafe(ref characters, (nuint)(length - 8));
+        if (Vector128.GreaterThanAny(first | last, Vector128.Create((ushort)0x7F))) return false;
+        var record = Vector128.Create(
+            Unsafe.ReadUnaligned<ulong>(ref source),
+            Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, length - 8))).AsByte();
+        return Vector128.EqualsAll(Vector128.Narrow(first, last), record);
+    }
+
     /// <summary>Compares longer Unicode payloads using bounded stack storage and the runtime transcoder.</summary>
     /// <param name="bytes">The complete UTF-8 payload.</param>
     /// <param name="text">The candidate UTF-16 text.</param>

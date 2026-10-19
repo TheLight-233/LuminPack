@@ -466,6 +466,17 @@ public partial class DeserializeReuseTest
             byte[] record = LuminPackSerializer.Serialize(text);
             CompareAsciiStringRecord(record, new string(text.ToCharArray()), true);
             CompareAsciiStringRecord(record, new string('y', length));
+            // Distinct characters expose window and lane mistakes that a uniform fill cannot.
+            var distinctChars = new char[length];
+            var otherChars = new char[length];
+            for (int index = 0; index < length; index++)
+            {
+                distinctChars[index] = (char)('A' + index % 26);
+                otherChars[index] = (char)('a' + index % 26);
+            }
+            byte[] distinctRecord = LuminPackSerializer.Serialize(new string(distinctChars));
+            CompareAsciiStringRecord(distinctRecord, new string(distinctChars), true);
+            CompareAsciiStringRecord(distinctRecord, new string(otherChars));
             if (length != 0)
             {
                 byte[] invalid = (byte[])record.Clone();
