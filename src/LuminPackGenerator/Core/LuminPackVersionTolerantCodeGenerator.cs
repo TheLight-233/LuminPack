@@ -3,338 +3,289 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using LuminPack.SourceGenerator;
+using LuminPack.SourceGenerator.CodeEmitters;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace LuminPack.Code.Core;
 
-/// <summary>Provides lumin pack version tolerant code generator functionality.</summary>
+/// <summary>Emits named version-tolerant records while preserving payload and construction mechanisms.</summary>
 public static class LuminPackVersionTolerantCodeGenerator
 {
     const int MaxParametersPerCall = 15;
 
-    /// <summary>Appends statements that calculate the binary payload size.</summary>
+    /// <summary>Emits the shared immutable member metadata for one generic definition.</summary>
+    /// <param name="data">The complete member contract.</param>
+    /// <param name="sb">The generated source.</param>
+    /// <param name="metadata">The consuming language and runtime capabilities.</param>
+    internal static void GenerateSchema(LuminDataInfo data, StringBuilder sb, MetaInfo metadata)
+    {
+        string name = data.VersionSchemaType.Substring(data.VersionSchemaType.LastIndexOf(".Version_", StringComparison.Ordinal) + 1);
+        sb.AppendLine("        internal static class " + name);
+        LuminPackExtensionGenerator.AppendGenericConstraints(sb, data);
+        sb.AppendLine("        {");
+        sb.AppendLine("            internal static readonly global::LuminPack.Core.LuminPackVersionField[] Fields = new global::LuminPack.Core.LuminPackVersionField[]");
+        sb.AppendLine("            {");
+        foreach (var field in data.fields)
+        {
+            string aliases = string.Join(", ", new[] { field.Name }.Concat(field.OldNames).Where(alias => alias != field.SerializedName).Select(Literal));
+            string representation = VersionMetadataEncoder.Representation(field);
+            sb.AppendLine("                new global::LuminPack.Core.LuminPackVersionField(" + Literal(field.SerializedName) +
+                ", new string[] { " + aliases + " }, typeof(" + field.TypeSymbol.ToDisplayString(Microsoft.CodeAnalysis.SymbolDisplayFormat.FullyQualifiedFormat) + "), " + Literal(representation) + "),");
+        }
+        sb.AppendLine("            };");
+        var bytes = metadata.IsNet8 && Enum.IsDefined(typeof(LanguageVersion), (LanguageVersion)1200) &&
+            metadata.CSharpVersion >= (LanguageVersion)1200 ? VersionMetadataEncoder.Encode(data) : null;
+        if (bytes == null)
+        {
+            sb.AppendLine("            internal static readonly byte[] Metadata = global::LuminPack.Core.LuminPackVersionField.CreateMetadata(Fields);");
+            sb.AppendLine($"            internal static readonly byte[] DefaultPrefix = global::LuminPack.Core.LuminPackVersionField.CreateDefaultPrefix(Metadata, {data.fields.Count});");
+        }
+        else
+        {
+            sb.AppendLine("            internal static global::System.ReadOnlySpan<byte> Metadata => [" + string.Join(", ", bytes) + "];");
+            sb.AppendLine("            internal static global::System.ReadOnlySpan<byte> DefaultPrefix => [251, 1, 0, " + data.fields.Count +
+                (bytes.Length == 0 ? "" : ", " + string.Join(", ", bytes)) + "];");
+        }
+        var fixedLengths = VersionMetadataEncoder.FixedLengths(data);
+        if (fixedLengths != null)
+        {
+            var fixedBytes = (bytes ?? VersionMetadataEncoder.Encode(data)).Concat(fixedLengths).ToArray();
+            string declaration = bytes == null ? "readonly byte[] " : "global::System.ReadOnlySpan<byte> ";
+            string assignment = bytes == null ? " = new byte[] { " : " => [";
+            string terminator = bytes == null ? " };" : "];";
+            sb.AppendLine("            internal static " + declaration + "FixedMetadata" + assignment + string.Join(", ", fixedBytes) + terminator);
+            sb.AppendLine("            internal static " + declaration + "DefaultFixedPrefix" + assignment + "251, 1, 0, " + data.fields.Count +
+                (fixedBytes.Length == 0 ? "" : ", " + string.Join(", ", fixedBytes)) + terminator);
+        }
+        sb.AppendLine("        }");
+    }
+
+    /// <summary>Escapes metadata as a C# string literal.</summary>
+    /// <param name="value">The exact member identity.</param>
+    /// <returns>A quoted C# string literal.</returns>
+    private static string Literal(string value) => SymbolDisplay.FormatLiteral(value, true);
+
+    /// <summary>Selects direct volatile access or the established Local storage view.</summary>
+    /// <param name="field">The member being accessed.</param>
+    /// <param name="local">The Local mirror variable.</param>
+    /// <returns>The generated storage expression.</returns>
+    private static string Access(LuminDataField field, string local = "local") => field.IsVolatile
+        ? field.IsPrivate ? "global::System.Threading.Volatile.Read(ref " + local + "." + field.Identifier + ")" : "value!." + field.Identifier
+        : local + "." + field.Identifier;
+
+    /// <summary>Assigns a reconstructed member while preserving volatile stores and private storage views.</summary>
+    /// <param name="sb">The generated statements.</param>
+    /// <param name="field">The destination member.</param>
+    /// <param name="local">The Local mirror variable.</param>
+    /// <param name="indent">The statement indentation.</param>
+    /// <param name="instance">The stable reference receiving public volatile field stores.</param>
+    private static void Assign(StringBuilder sb, LuminDataField field, string local, string indent, string instance = "value!")
+    {
+        string value = field.Name + "Temp!";
+        sb.AppendLine(indent + (field.IsVolatile ? field.IsPrivate
+            ? "global::System.Threading.Volatile.Write(ref " + local + "." + field.Identifier + ", " + value + ");"
+            : instance + "." + field.Identifier + " = " + value + ";"
+            : local + "." + field.Identifier + " = " + value + ";"));
+    }
+
+    /// <summary>Appends statements that calculate the exact named record size.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="classGlobalName">The class global name used by this operation.</param>
     public static void GenerateCalculateOffsetCode(LuminDataInfo data, StringBuilder sb, string classGlobalName)
     {
         if (!data.isValueType)
-        {
-            sb.AppendLine("            if (value is null)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                evaluator += 1;");
-            sb.AppendLine("                return;");
-            sb.AppendLine("            }");
-        }
-        sb.AppendLine();
-        int slotCount = data.fields.Count == 0 ? 0 : (int)data.fields.Max(field => field.Order) + 1;
-        sb.AppendLine($"            int size = {1 + slotCount - data.fields.Count};");
-        sb.AppendLine();
+            sb.AppendLine("            if (value is null) { evaluator += 1; return; }");
+        sb.AppendLine($"            int size = 4 + {data.VersionSchemaType}.Metadata.Length;");
         sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value);");
-        foreach (var field in data.fields)
+        for (int i = 0; i < data.fields.Count; i++)
         {
+            var field = data.fields[i];
             if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
-            {
                 sb.AppendLine($"            size += Unsafe.SizeOf<{field.TypeName}>() + LuminPackEvaluator.CalculateVarInt(Unsafe.SizeOf<{field.TypeName}>());");
-            }
             else
             {
                 sb.AppendLine($"            var {field.Name}TempLength = evaluator.Value;");
                 sb.AppendLine("            {");
-                sb.AppendLine($"                var __luminPackOffsetValue = local.@{field.Name};");
+                sb.AppendLine($"                var __luminPackOffsetValue = {Access(field)};");
                 sb.AppendLine("                evaluator.CalculateOffset(ref __luminPackOffsetValue);");
                 sb.AppendLine("            }");
                 sb.AppendLine($"            size += LuminPackEvaluator.CalculateVarInt(evaluator.Value - {field.Name}TempLength);");
             }
         }
-        sb.AppendLine();
         sb.AppendLine("            evaluator += size;");
     }
 
-    /// <summary>Appends binary serialization statements for the analyzed type.</summary>
+    /// <summary>Appends binary serialization statements using fixed batches or the shared-state buffer.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb)
     {
-        string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = TypeMetaChecker.BuildFormatterClassName(data);
         string classGlobalName = data.classFullName;
-        bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
-        uint memberCount = data.fields.Count == 0 ? 0 : data.fields.Max(x => x.Order) + 1;
-
-        if (data.isGeneric)
-        {
-            classFullName += $"<{data.GenericParameters.FirstOrDefault()}";
-            for (var i = 1; i < data.GenericParameters.Count; i++)
-            {
-                classFullName += "," + data.GenericParameters[i];
-            }
-            classFullName += ">";
-        }
-
-        if (!classGlobalName.Contains(".") && data.classNameSpace != "<global namespace>")
-        {
-            classGlobalName = "global::" + data.classNameSpace + "." + data.classFullName;
-        }
-
-        sb.AppendLine();
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerializing))
-        {
-            sb.AppendLine(item.Item3
-                ? $"            {classGlobalName}.{item.Item1}();"
-                : $"            value?.{item.Item1}();");
-        }
-        sb.AppendLine();
-
+            sb.AppendLine(item.Item3 ? $"            {classGlobalName}.{item.Item1}();" : $"            value{(data.isValueType ? "." : "?.")}{item.Item1}();");
         if (!data.isValueType)
-        {
-            sb.AppendLine("            if (value is null)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                writer.WriteNullObjectHeader();");
-            //sb.AppendLine("                writer.Advance(1);");
-            sb.AppendLine("                return;");
-            sb.AppendLine("            }");
-        }
-        sb.AppendLine();
-        sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
+            sb.AppendLine("            if (value is null) { writer.WriteNullObjectHeader(); return; }");
         sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref Unsafe.AsRef(in value));");
-        sb.AppendLine();
-        if (isAllUnmanagedType)
+        int memberCount = data.fields.Count;
+        if (LuminPackCodeGenerator.FindAllUnmanagedType(data.fields))
         {
-            sb.AppendLine($"            writer.WriteObjectHeader(ref index, {memberCount});");
-            sb.AppendLine($"            writer.Advance(1);");
-            for (int order = 0; order < memberCount; order++)
+            sb.AppendLine($"            writer.WriteVersionHeader({memberCount});");
+            sb.AppendLine($"            writer.WriteVersionMetadata({data.VersionSchemaType}.Metadata, {memberCount});");
+            for (int i = 0; i < memberCount; i++)
+                sb.AppendLine($"            writer.WriteVarInt(Unsafe.SizeOf<{data.fields[i].TypeName}>());");
+            for (int start = 0; start < memberCount; start += MaxParametersPerCall)
             {
-                var field = data.fields.FirstOrDefault(f => f.Order == order);
-                if (field is null)
-                {
-                    // WriteVarInt advances the writer itself. Advancing a second time leaves
-                    // a one-byte hole and shifts every payload after a missing order.
-                    sb.AppendLine("            writer.WriteVarInt(0);");
-                }
-                else
-                {
-                    sb.AppendLine($"            writer.WriteVarInt(System.Runtime.CompilerServices.Unsafe.SizeOf<{field.TypeName}>());");
-                    //sb.AppendLine($"            writer.Advance(LuminPackEvaluator.CalculateVarInt(System.Runtime.CompilerServices.Unsafe.SizeOf<{field.TypeName}>()));");
-                }
-                sb.AppendLine();
+                var batch = data.fields.Skip(start).Take(MaxParametersPerCall).ToArray();
+                foreach (var field in batch.Where(field => field.IsVolatile))
+                    sb.AppendLine($"            var {field.Name}Snapshot = {Access(field)};");
+                sb.AppendLine("            writer.Advance(writer.WriteUnmanaged(" + string.Join(", ", batch.Select(field => field.IsVolatile ? field.Name + "Snapshot" : Access(field))) + "));");
             }
-            if (data.fields.Count > 0 && data.fields.Count <= MaxParametersPerCall)
-            {
-                // Write up to 15 fields in one call.
-                sb.Append($"            writer.Advance(writer.WriteUnmanaged(");
-                for (var i = 0; i < data.fields.Count; i++)
-                {
-                    if (i == 0)
-                        sb.Append($"local.@{data.fields[i].Name}");
-                    else
-                        sb.Append($", local.@{data.fields[i].Name}");
-                }
-                sb.Append("));");
-            }
-            else
-            {
-                // Split more than 15 fields across multiple calls.
-                int fieldCount = data.fields.Count;
-                int processed = 0;
-
-                while (processed < fieldCount)
-                {
-                    int batchSize = Math.Min(MaxParametersPerCall, fieldCount - processed);
-
-                    sb.AppendLine();
-                    sb.Append($"            writer.Advance(writer.WriteUnmanaged(");
-
-                    // Append the current field batch.
-                    for (int i = 0; i < batchSize; i++)
-                    {
-                        if (i == 0)
-                            sb.Append($"local.@{data.fields[processed + i].Name}");
-                        else
-                            sb.Append($", local.@{data.fields[processed + i].Name}");
-                    }
-                    sb.Append("));");
-
-                    processed += batchSize;
-
-                    // Separate non-final batches with a newline.
-                    if (processed < fieldCount)
-                    {
-                        sb.AppendLine();
-                    }
-                }
-            }
-
-            sb.AppendLine();
-
         }
         else
         {
             sb.AppendLine("            var writerBuffer = global::LuminPack.Utility.LuminBufferWriterPool.Rent();");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
-            sb.AppendLine($"                var tempWriter = new LuminPackWriter(writerBuffer, writer.OptionState);");
+            sb.AppendLine("                var tempWriter = new LuminPackWriter(writerBuffer, writer.OptionState);");
             sb.AppendLine($"                Span<int> offsets = stackalloc int[{memberCount}];");
-            // Process members in order, skipping empty entries.
-            for (int order = 0; order < memberCount; order++)
+            for (int i = 0; i < memberCount; i++)
             {
-                var field = data.fields.FirstOrDefault(f => f.Order == order);
-                if (field is not null)
-                {
-                    if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
-                    {
-                        sb.AppendLine($"                tempWriter.Advance(tempWriter.WriteUnmanaged(local.@{field.Name}));");
-                    }
-                    else
-                    {
-                        if (field.IsCompress)
-                            sb.AppendLine($"                tempWriter.WriteValueWithCompress(local.@{field.Name});");
-                        else
-                            sb.AppendLine($"                tempWriter.WriteValue(local.@{field.Name});");
-                    }
-
-                }
+                var field = data.fields[i];
+                if (field.IsVolatile) sb.AppendLine($"                var {field.Name}Snapshot = {Access(field)};");
+                if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
+                    sb.AppendLine($"                tempWriter.Advance(tempWriter.WriteUnmanaged({(field.IsVolatile ? field.Name + "Snapshot" : Access(field))}));");
                 else
-                {
-                    // Record the current position for empty fields without writing payload bytes.
-                    sb.AppendLine("                // Empty field placeholder");
-                }
-                sb.AppendLine($"                offsets[{order}] = tempWriter.GetCurrentSpanIndex();");
+                    sb.AppendLine($"                tempWriter.{(field.IsCompress ? "WriteValueWithCompress" : "WriteValue")}({Access(field)});");
+                sb.AppendLine($"                offsets[{i}] = tempWriter.GetCurrentSpanIndex();");
             }
-            //sb.AppendLine($"                tempWriter.Flush();");
-            sb.AppendLine();
-            sb.AppendLine($"                writer.WriteObjectHeader(ref index, {memberCount});");
-            sb.AppendLine($"                writer.Advance(1);");
+            sb.AppendLine($"                writer.WriteVersionHeader({memberCount});");
+            sb.AppendLine($"                writer.WriteVersionMetadata({data.VersionSchemaType}.Metadata, {memberCount});");
             sb.AppendLine($"                for (int i = 0; i < {memberCount}; i++)");
-            sb.AppendLine($"                {{");
-            sb.AppendLine($"                    int delta;");
-            sb.AppendLine($"                    if (i is 0)");
-            sb.AppendLine($"                    {{");
-            sb.AppendLine($"                        delta = offsets[i];");
-            sb.AppendLine($"                    }}");
-            sb.AppendLine($"                    else");
-            sb.AppendLine($"                    {{");
-            sb.AppendLine($"                        delta = offsets[i] - offsets[i - 1];");
-            sb.AppendLine($"                    }}");
-            sb.AppendLine($"                    writer.WriteVarInt(delta);");
-            //sb.AppendLine($"                    writer.Advance(LuminPackEvaluator.CalculateVarInt(delta));");
-            sb.AppendLine($"                }}");
-            sb.AppendLine($"                writerBuffer.WriteToAndReset(ref writer);");
+            sb.AppendLine("                    writer.WriteVarInt(offsets[i] - (i == 0 ? 0 : offsets[i - 1]));");
+            sb.AppendLine("                writerBuffer.WriteToAndReset(ref writer);");
             sb.AppendLine("            }");
-            sb.AppendLine("            finally");
-            sb.AppendLine("            {");
-            sb.AppendLine("                global::LuminPack.Utility.LuminBufferWriterPool.Return(writerBuffer);");
-            sb.AppendLine("            }");
+            sb.AppendLine("            finally { global::LuminPack.Utility.LuminBufferWriterPool.Return(writerBuffer); }");
         }
-
-        sb.AppendLine();
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerialized))
-        {
-            sb.AppendLine(item.Item3
-                ? $"            {classGlobalName}.{item.Item1}();"
-                : $"            value?.{item.Item1}();");
-        }
-        sb.AppendLine();
+            sb.AppendLine(item.Item3 ? $"            {classGlobalName}.{item.Item1}();" : $"            value{(data.isValueType ? "." : "?.")}{item.Item1}();");
     }
 
-    /// <summary>Appends binary deserialization statements for the analyzed type.</summary>
+    /// <summary>Appends one field operation within its dynamic framing boundary.</summary>
+    /// <param name="sb">The generated source.</param>
+    /// <param name="field">The known receiving member.</param>
+    /// <param name="length">The recorded payload-length expression.</param>
+    /// <param name="indent">The statement indentation.</param>
+    /// <param name="restrictInput">Whether an evolved schema requires a temporary field input boundary.</param>
+    private static void AppendFieldRead(StringBuilder sb, LuminDataField field, string length, string indent, bool restrictInput = true)
+    {
+        sb.AppendLine(indent + "{");
+        indent += "    ";
+        if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
+        {
+            sb.AppendLine(indent + $"global::LuminPack.Core.LuminPackReader.ValidateVersionFieldEnd({length}, Unsafe.SizeOf<{field.TypeName}>());");
+            sb.AppendLine(indent + $"reader.Advance(reader.ReadUnmanaged(out {field.Name}Temp));");
+        }
+        else
+        {
+            sb.AppendLine(indent + $"int end = reader.GetCurrentSpanIndex() + {length};");
+            if (restrictInput)
+            {
+                sb.AppendLine(indent + $"int previousLength = reader.EnterVersionField({length});");
+                sb.AppendLine(indent + "try");
+                sb.AppendLine(indent + "{");
+                EmitterTypeTraits.AppendReusableElementRead(sb, field.TypeSymbol, field.Name + "Temp", indent + "    ", field.IsCompress);
+                sb.AppendLine(indent + "}");
+                sb.AppendLine(indent + "finally { reader.ExitVersionField(previousLength); }");
+            }
+            else EmitterTypeTraits.AppendReusableElementRead(sb, field.TypeSymbol, field.Name + "Temp", indent, field.IsCompress);
+            sb.AppendLine(indent + "global::LuminPack.Core.LuminPackReader.ValidateVersionFieldEnd(reader.GetCurrentSpanIndex(), end);");
+        }
+        sb.AppendLine(indent.Substring(4) + "}");
+    }
+
+    /// <summary>Appends reads that map complete names, skip unknown payloads and retain reusable storage.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb)
     {
-        string paraNullable = data.isValueType ? string.Empty : "?";
-        string classFullName = TypeMetaChecker.BuildFormatterClassName(data);
         string classGlobalName = data.classFullName;
-        bool isAllUnmanagedType = LuminPackCodeGenerator.FindAllUnmanagedType(data.fields);
-        uint memberCount = data.fields.Count == 0 ? 0 : data.fields.Max(x => x.Order) + 1;
-
-        if (data.isGeneric)
-        {
-            classFullName += $"<{data.GenericParameters.FirstOrDefault()}";
-            for (var i = 1; i < data.GenericParameters.Count; i++)
-            {
-                classFullName += "," + data.GenericParameters[i];
-            }
-            classFullName += ">";
-        }
-
-        if (!classGlobalName.Contains(".") && data.classNameSpace != "<global namespace>")
-        {
-            classGlobalName = "global::" + data.classNameSpace + "." + data.classFullName;
-        }
-
-        sb.AppendLine();
+        var fixedLengths = VersionMetadataEncoder.FixedLengths(data);
+        bool returnFixedFields = fixedLengths != null && data.fields.Count > 0 && data.fields.Count <= 7;
+        var reusableFields = data.fields.Where(field => field.IsVolatile ||
+            fixedLengths == null && !LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type)).ToArray();
+        string metadataMember = fixedLengths == null ? "Metadata" : "FixedMetadata";
+        string prefixMember = fixedLengths == null ? "DefaultPrefix" : "DefaultFixedPrefix";
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserializing))
-        {
-            sb.AppendLine(item.Item3
-                ? $"            {classGlobalName}.{item.Item1}();"
-                : $"            value?.{item.Item1}();");
-        }
-        sb.AppendLine();
-
-        sb.AppendLine("            ref var offset = ref reader.GetCurrentSpanOffset();");
-
-        // Declare locals for every field.
-        sb.AppendLine("            // Declare locals to hold the field values.");
+            sb.AppendLine(item.Item3 ? $"            {classGlobalName}.{item.Item1}();" : $"            value{(data.isValueType ? "." : "?.")}{item.Item1}();");
         foreach (var field in data.localFields)
+            sb.AppendLine($"            {field.TypeName}{(field.IsValue ? "" : "?")} {field.Name}Temp = default!;");
+        sb.AppendLine($"            bool sameSchema = reader.TryReadVersionSchema({data.VersionSchemaType}.{metadataMember}, {data.fields.Count}, {data.VersionSchemaType}.{prefixMember});");
+        sb.AppendLine($"            int count = sameSchema ? {data.fields.Count} : reader.ReadVersionHeader();");
+        sb.AppendLine("            if (count < 0) { value = default; return; }");
+        if (!data.isValueType && reusableFields.Length != 0)
         {
-            var nullable = field.IsValue ? "" : "?";
-            sb.AppendLine($"            {field.TypeName}{nullable} {field.Name}Temp = default!;");
+            sb.AppendLine("            if (value is not null)");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                ref var reuseLocal = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value!);");
+            foreach (var field in reusableFields)
+                sb.AppendLine($"                {field.Name}Temp = {Access(field, "reuseLocal")};");
+            sb.AppendLine("            }");
         }
-        sb.AppendLine();
-
-        sb.AppendLine("            if (!reader.TryReadObjectHead(ref offset, out var count))");
+        sb.AppendLine("            if (sameSchema)");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = default;");
-        sb.AppendLine("                reader.Advance(1);");
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine("            reader.Advance(1);");
-        sb.AppendLine();
-        sb.AppendLine("            Span<int> deltas = stackalloc int[count];");
-        sb.AppendLine("            for (int i = 0; i < count; i++)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                deltas[i] = reader.ReadVarIntInt32();");
-        //sb.AppendLine("                reader.Advance(LuminPackEvaluator.CalculateVarInt(deltas[i]));");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-
-        // Deserialize into local variables.
-        for (var order = 0; order < memberCount; order++)
+        if (fixedLengths != null)
         {
-            var field = data.fields.FirstOrDefault(f => f.Order == order);
-
-            if (field is not null)
-            {
-                sb.AppendLine($"            if ({order} < count && deltas[{order}] != 0)");
-                sb.AppendLine("            {");
-                if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
-                {
-                    sb.AppendLine($"                reader.Advance(reader.ReadUnmanaged(out {field.Name}Temp));");
-                }
-                else
-                {
-                    if (field.IsCompress)
-                        sb.AppendLine($"                reader.ReadValueWithCompress(ref {field.Name}Temp);");
-                    else
-                        sb.AppendLine($"                reader.ReadValue(ref {field.Name}Temp);");
-                }
-                sb.AppendLine("            }");
-                sb.AppendLine("            else");
-                sb.AppendLine("            {");
-                sb.AppendLine($"                {field.Name}Temp = default!;");
-                sb.AppendLine("            }");
-            }
-            else
-            {
-                sb.AppendLine($"            if ({order} < count) reader.Advance(deltas[{order}]);");
-            }
-            sb.AppendLine();
+            sb.AppendLine($"                reader.ValidateVersionPayloadSize({fixedLengths.Sum(length => (int)length)});");
+            for (int i = 0; i < data.fields.Count; i++)
+                AppendFieldRead(sb, data.fields[i], $"Unsafe.SizeOf<{data.fields[i].TypeName}>()", "                ", restrictInput: false);
         }
-
-        sb.AppendLine($"            for (int unknownOrder = {memberCount}; unknownOrder < count; unknownOrder++)");
-        sb.AppendLine("                reader.Advance(deltas[unknownOrder]);");
-        sb.AppendLine("            // Construct the object and populate its members.");
-
+        else
+        {
+            sb.AppendLine($"                reader.ValidateVersionPayloadSize({data.fields.Count});");
+            for (int i = 0; i < data.fields.Count; i++)
+                sb.AppendLine($"                int delta{i} = reader.ReadVersionLength({data.fields.Count - i - 1});");
+            sb.AppendLine("                reader.ValidateVersionPayloadSize(" + (data.fields.Count == 0 ? "0L" : "(long)" + string.Join(" + ", Enumerable.Range(0, data.fields.Count).Select(i => "delta" + i))) + ");");
+            for (int i = 0; i < data.fields.Count; i++)
+                AppendFieldRead(sb, data.fields[i], "delta" + i, "                ", restrictInput: false);
+        }
+        sb.AppendLine("            }");
+        string mappedParameters = returnFixedFields ? "" : string.Join(", ", data.fields.Select(field => "ref " + field.TypeSymbol.ToDisplayString(Microsoft.CodeAnalysis.SymbolDisplayFormat.FullyQualifiedFormat) + " " + field.Name + "Temp"));
+        string mappedArguments = returnFixedFields ? "" : string.Join(", ", data.fields.Select(field => "ref " + field.Name + "Temp"));
+        string returnedFields = string.Join(", ", data.fields.Select(field => field.Name + "Temp"));
+        string returnedTypes = string.Join(", ", data.fields.Select(field => field.TypeName));
+        string returnType = !returnFixedFields ? "void" : data.fields.Count == 1 ? returnedTypes : "(" + returnedTypes + ")";
+        string assignment = !returnFixedFields ? "" : data.fields.Count == 1 ? returnedFields + " = " : "(" + returnedFields + ") = ";
+        sb.AppendLine("            else " + assignment + "ReadEvolvedFields(ref reader, count" + (mappedArguments.Length == 0 ? "" : ", " + mappedArguments) + ");");
+        sb.AppendLine("            // Keep the uncommon mapped read separate from the same-schema native body.");
+        sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        sb.AppendLine("            static " + returnType + " ReadEvolvedFields(ref LuminPackReader reader, int count" + (mappedParameters.Length == 0 ? "" : ", " + mappedParameters) + ")");
+        sb.AppendLine("            {");
+        if (returnFixedFields)
+            foreach (var field in data.fields)
+                sb.AppendLine($"                {field.TypeName} {field.Name}Temp = default;");
+        sb.AppendLine("                Span<int> deltas = stackalloc int[count];");
+        sb.AppendLine("                Span<int> slots = stackalloc int[count];");
+        sb.AppendLine($"                Span<byte> present = stackalloc byte[{data.fields.Count}];");
+        sb.AppendLine($"                reader.ReadVersionTable({data.VersionSchemaType}.Fields, slots, deltas, present);");
+        sb.AppendLine("                for (int i = 0; i < count; i++)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    switch (slots[i])");
+        sb.AppendLine("                    {");
+        for (int i = 0; i < data.fields.Count; i++)
+        {
+            sb.AppendLine($"                        case {i}:");
+            AppendFieldRead(sb, data.fields[i], "deltas[i]", "                            ");
+            sb.AppendLine("                            break;");
+        }
+        sb.AppendLine("                        default: reader.Advance(deltas[i]); break;");
+        sb.AppendLine("                    }");
+        sb.AppendLine("                }");
+        for (int i = 0; i < data.fields.Count; i++)
+            sb.AppendLine($"                if (present[{i}] == 0) {data.fields[i].Name}Temp = default!;");
+        if (returnFixedFields)
+            sb.AppendLine("                return " + (data.fields.Count == 1 ? returnedFields : "(" + returnedFields + ")") + ";");
+        sb.AppendLine("            }");
         // Collect constructor arguments.
         var constructorParams = new List<string>();
         if (data.SelectedConstructor != null && data.SelectedConstructor.Parameters.Count > 0)
@@ -369,6 +320,12 @@ public static class LuminPackVersionTolerantCodeGenerator
             (f.IsPrivate || f.isProperty)
         ).ToList();
 
+        if (!data.isValueType)
+        {
+            sb.AppendLine("            var completedInstance = value;");
+            sb.AppendLine("            if (value is null)");
+            sb.AppendLine("            {");
+        }
         if (data.RentPoolMethod != null)
         {
             // Obtain the instance from the object pool.
@@ -395,7 +352,7 @@ public static class LuminPackVersionTolerantCodeGenerator
             // Populate all fields.
             foreach (var field in data.fields)
             {
-                sb.AppendLine($"            local.{field.Identifier} = {field.Name}Temp!;");
+                Assign(sb, field, "local", "            ");
             }
         }
         else
@@ -447,17 +404,28 @@ public static class LuminPackVersionTolerantCodeGenerator
 
                 foreach (var field in privateFields)
                 {
-                    sb.AppendLine($"            local.{field.Identifier} = {field.Name}Temp!;");
+                    Assign(sb, field, "local", "            ");
                 }
             }
         }
 
+        if (!data.isValueType)
+        {
+            sb.AppendLine("                completedInstance = value;");
+            sb.AppendLine("            }");
+            sb.AppendLine("            else");
+            sb.AppendLine("            {");
+            sb.AppendLine($"                ref var reuseLocal = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref completedInstance!);");
+            foreach (var field in data.fields)
+                Assign(sb, field, "reuseLocal", "                ", "completedInstance!");
+            sb.AppendLine("            }");
+        }
         sb.AppendLine();
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnDeserialized))
         {
             sb.AppendLine(item.Item3
                 ? $"            {classGlobalName}.{item.Item1}();"
-                : $"            value?.{item.Item1}();");
+                : $"            {(data.isValueType ? "value." : "completedInstance?.")}{item.Item1}();");
         }
         sb.AppendLine();
     }

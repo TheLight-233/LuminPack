@@ -8,6 +8,11 @@ internal static class DiagnosticDescriptors
     private const string Category = "LuminPack.SourceGeneration";
     private const string UnionCategory = "LuminPack.SourceGeneration.Union";
 
+    /// <summary>Rejects storage without a fixed architecture-independent field representation.</summary>
+    public static readonly DiagnosticDescriptor UnsupportedPortableStorage = Error(
+        "LuminPack111", "Unsupported portable struct storage",
+        "Type '{0}' uses LuminPackSupport32bit but contains unsupported storage. Use an ordinary unmanaged struct without native pointers, fixed buffers, inline arrays, runtime-sized vectors, or nested Custom contracts.");
+
     /// <summary>Rejects declaration constants that cannot describe a supported representation.</summary>
     public static readonly DiagnosticDescriptor InvalidCompiledOption = Error(
         "LuminPack110", "Invalid compiled serialization option", "Invalid LuminPackOption property '{0}': {1}");
@@ -150,7 +155,11 @@ internal static class DiagnosticDescriptors
     public static readonly DiagnosticDescriptor CircularReferenceAndVersionTolerantRequiredOrder = Error(
         "LuminPack022",
         "[LuminPackOrder] is required",
-        "Member '{0}' must be marked with [LuminPackOrder] in circular-reference or version-tolerant types.");
+        "Member '{0}' must be marked with [LuminPackOrder] in circular-reference types.");
+
+    /// <summary>Reports an invalid or ambiguous version-tolerant member identity.</summary>
+    public static readonly DiagnosticDescriptor InvalidVersionMemberName = Error(
+        "LuminPack062", "Invalid version-tolerant member name", "Type '{0}': {1}");
 
     /// <summary>Stores the circular reference and version tolerant duplicate order.</summary>
     public static readonly DiagnosticDescriptor CircularReferenceAndVersionTolerantDuplicateOrder = Error(

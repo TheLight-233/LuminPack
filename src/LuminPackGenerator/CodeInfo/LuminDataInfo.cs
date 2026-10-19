@@ -12,6 +12,9 @@ namespace LuminPack.Code
         public string classFileName;
         /// <summary>Stores the class full name.</summary>
         public string classFullName;
+
+        /// <summary>Stores the fully qualified owner of this type's cached binary schema.</summary>
+        internal string VersionSchemaType;
         /// <summary>Stores the class name space.</summary>
         public string classNameSpace = "Your Data NameSpace";
         /// <summary>Stores the is generic.</summary>

@@ -287,6 +287,7 @@ public static class TypeMetaChecker
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void FindAndSetOrderAttribute(ref LuminDataField data, IPropertySymbol property)
     {
+        data.OldNames = GetOldNames(property);
         var attributeData = property.GetAttributes();
 
         var orderAttribute = attributeData.FirstOrDefault(x => x.AttributeClass?.Name == LUMIN_PACK_ORDER);
@@ -309,6 +310,7 @@ public static class TypeMetaChecker
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void FindAndSetOrderAttribute(ref LuminDataField data, IFieldSymbol property)
     {
+        data.OldNames = GetOldNames(property);
         var attributeData = property.GetAttributes();
 
         var orderAttribute = attributeData.FirstOrDefault(x => x.AttributeClass?.Name == LUMIN_PACK_ORDER);
@@ -321,6 +323,43 @@ public static class TypeMetaChecker
                 {
                     data.Order = value;
                 }
+            }
+        }
+    }
+
+    /// <summary>Reads former binary identities without retaining attribute symbols.</summary>
+    /// <param name="member">The declared field or property.</param>
+    /// <returns>The former names in attribute declaration order.</returns>
+    private static string[] GetOldNames(ISymbol member)
+        => member.GetAttributes().Where(attribute => attribute.AttributeClass?.ToDisplayString() == "LuminPack.Attribute.LuminPackOldNameAttribute")
+            .Select(attribute => attribute.ConstructorArguments.FirstOrDefault().Value as string).ToArray();
+
+    /// <summary>Rejects empty or ambiguous identities and aliases outside the named binary mode.</summary>
+    /// <param name="data">The complete filtered member contract, including inherited fields.</param>
+    /// <param name="location">The model diagnostic location.</param>
+    internal static void ValidateVersionNames(LuminDataInfo data, Location location)
+    {
+        var names = new HashSet<string>(System.StringComparer.Ordinal);
+        foreach (var field in data.fields)
+        {
+            if (data.generatorType != GeneratorType.VersionTolerant)
+            {
+                if (field.OldNames.Length != 0)
+                    _reportContext.Add(Diagnostic.Create(DiagnosticDescriptors.InvalidVersionMemberName, location,
+                        data.className, "[LuminPackOldName] requires VersionTolerant mode."));
+                continue;
+            }
+            foreach (string name in new[] { field.Name }.Concat(field.OldNames))
+            {
+                string error = null;
+                if (string.IsNullOrEmpty(name)) error = "Serialized member names must not be null or empty.";
+                else if (!names.Add(name)) error = "Serialized member name '" + name + "' is ambiguous.";
+                else
+                {
+                    try { new System.Text.UTF8Encoding(false, true).GetByteCount(name); }
+                    catch (System.Text.EncoderFallbackException) { error = "Serialized member names must contain valid Unicode."; }
+                }
+                if (error != null) _reportContext.Add(Diagnostic.Create(DiagnosticDescriptors.InvalidVersionMemberName, location, data.className, error));
             }
         }
     }

@@ -132,6 +132,21 @@ public static class LuminPackJsonCodeGenerator
             ulong num2 = ComputeUtf16Hash(field.Name);
             sb.AppendLine($"        internal const ulong {arg2} = {num2}UL;");
         }
+        bool hasAliases = data.fields.Any(field => field.OldNames.Length != 0);
+        if (hasAliases) sb.AppendLine("        internal static class __LuminPackOldNames {");
+        for (int index = 0; index < data.fields.Count; index++)
+        {
+            for (int alias = 0; alias < data.fields[index].OldNames.Length; alias++)
+            {
+                string name = data.fields[index].OldNames[alias];
+                string suffix = "Alias_" + index + "_" + alias;
+                sb.AppendLine("        internal static readonly byte[] _utf8_" + suffix + " = new byte[] { " +
+                    string.Join(", ", Encoding.UTF8.GetBytes(name).Select(value => "(byte)" + value)) + " };");
+                sb.AppendLine("        internal static readonly char[] _utf16_" + suffix + " = new char[] { " +
+                    string.Join(", ", name.Select(value => "(char)" + (int)value)) + " };");
+            }
+        }
+        if (hasAliases) sb.AppendLine("        }");
         GenerateJsonPropertyLookup(sb, data, true);
         GenerateJsonPropertyLookup(sb, data, false);
         GenerateOrderedJsonPropertyLookup(sb, data);
@@ -165,15 +180,18 @@ public static class LuminPackJsonCodeGenerator
         string encoding = utf8 ? "Utf8" : "Utf16";
         string element = utf8 ? "byte" : "char";
         string prefix = utf8 ? "_utf8_" : "_utf16_";
-        var names = data.fields.Select((field, index) => new { field.Name, Index = index }).ToList();
+        var names = data.fields.Select((field, index) => new { field.Name, Index = index, Cache = prefix + field.Name }).ToList();
+        for (int index = 0; index < data.fields.Count; index++)
+            for (int alias = 0; alias < data.fields[index].OldNames.Length; alias++)
+                names.Add(new { Name = data.fields[index].OldNames[alias], Index = index, Cache = "__LuminPackOldNames." + prefix + "Alias_" + index + "_" + alias });
         if (data.generatorType == GeneratorType.CircleReference && !data.isValueType)
         {
-            names.Add(new { Name = "$id", Index = -2 });
-            names.Add(new { Name = "$ref", Index = -3 });
+            names.Add(new { Name = "$id", Index = -2, Cache = prefix + "id" });
+            names.Add(new { Name = "$ref", Index = -3, Cache = prefix + "ref" });
         }
         sb.AppendLine("        internal static int GetJsonPropertyIndex" + encoding + "(global::System.ReadOnlySpan<" + element + "> name)");
         sb.AppendLine("        {");
-        bool small = data.fields.Count <= 8;
+        bool small = data.fields.Count + data.fields.Sum(field => field.OldNames.Length) <= 8;
         sb.AppendLine(small
             ? "            switch (name.Length)"
             : "            switch (global::LuminPack.Internal.XxHash3.Hash64" + encoding + "(name))");
@@ -187,8 +205,8 @@ public static class LuminPackJsonCodeGenerator
             sb.AppendLine("                case " + group.Key + (small ? ":" : "UL:"));
             foreach (var item in group)
             {
-                string fieldName = item.Index == -2 ? "id" : item.Index == -3 ? "ref" : item.Name;
-                sb.AppendLine("                    if (global::System.MemoryExtensions.SequenceEqual<" + element + ">(name, " + prefix + fieldName + ")) return " + item.Index + ";");
+                string fieldName = item.Cache;
+                sb.AppendLine("                    if (global::System.MemoryExtensions.SequenceEqual<" + element + ">(name, " + fieldName + ")) return " + item.Index + ";");
             }
             sb.AppendLine("                    break;");
         }

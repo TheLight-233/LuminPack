@@ -14,6 +14,12 @@ namespace LuminPack.Code
         /// <summary>Stores the name.</summary>
         public string Name = "NewField";
 
+        /// <summary>Stores former version-tolerant names in chronological order.</summary>
+        public string[] OldNames = System.Array.Empty<string>();
+
+        /// <summary>Gets the stable name written by the version-tolerant binary contract.</summary>
+        public string SerializedName => OldNames.Length == 0 ? Name : OldNames[0];
+
         /// <summary>Gets the identifier.</summary>
         public string Identifier =>
             SyntaxFacts.GetKeywordKind(Name) != SyntaxKind.None ||

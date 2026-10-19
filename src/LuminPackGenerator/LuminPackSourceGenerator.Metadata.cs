@@ -87,6 +87,10 @@ namespace LuminPack.SourceGenerator
                 generatorType = TypeMetaChecker.CheckGeneratorType(typeSymbol),
             };
 
+            dataInfo.VersionSchemaType = "global::LuminPack.Generated." + LuminPackExtensionGenerator.GetExtensionClassNameFor(compilation) +
+                ".Version_" + LuminPackExtensionGenerator.SanitizeAssemblyName(dataInfo.classFullName) +
+                (typeSymbol.IsGenericType ? "<" + string.Join(", ", typeSymbol.TypeParameters.Select(parameter => parameter.Name)) + ">" : string.Empty);
+
             foreach (var iface in typeSymbol.AllInterfaces)
             {
                 var fullName = iface.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
@@ -108,6 +112,9 @@ namespace LuminPack.SourceGenerator
 
             //Check Layout
             TypeMetaChecker.TryCheckStructLayout(typeSymbol, dataInfo);
+            if (!CodeEmitters.PortableStructPlan.IsSupported(typeSymbol))
+                TypeMetaChecker._reportContext.Add(Diagnostic.Create(DiagnosticDescriptors.UnsupportedPortableStorage,
+                    typeSymbol.Locations.FirstOrDefault(), typeSymbol.ToDisplayString()));
 
             // .NET 11 (C# 15) union declarations lower to a struct carrying
             // [System.Runtime.CompilerServices.Union] + IUnion + one public single-parameter
@@ -303,7 +310,7 @@ namespace LuminPack.SourceGenerator
                 }
             }
 
-            if (dataInfo.generatorType is GeneratorType.CircleReference or GeneratorType.VersionTolerant)
+            if (dataInfo.generatorType is GeneratorType.CircleReference)
             {
                 TypeMetaChecker.ValidateOrderAttributesForType(typeSymbol, typeSymbol.GetMembers(), _location);
             }
@@ -375,6 +382,8 @@ namespace LuminPack.SourceGenerator
 
 
             dataInfo.fields.Sort((x, y) => x.Order.CompareTo(y.Order));
+
+            TypeMetaChecker.ValidateVersionNames(dataInfo, _location);
 
             //check member count
             if (dataInfo.fields.Count > 249)
