@@ -15,7 +15,7 @@ internal static class SerializerMechanismRegression
     internal static void Run(MetadataReference[] references, string? historicalAnalyzer = null, string? historicalRuntime = null)
     {
         var current = Inspect(references, [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminMapSourceGenerator().AsSourceGenerator()], "CurrentMechanisms");
-        Require(current.SparseSize == current.SparseBytes, "Sparse version slots were omitted from current size evaluation.");
+        Require(current.SparseSize == current.SparseBytes, "Named version metadata was omitted from current size evaluation.");
         if (historicalAnalyzer != null)
         {
             var historical = Assembly.LoadFile(Path.GetFullPath(historicalAnalyzer));
@@ -29,9 +29,11 @@ internal static class SerializerMechanismRegression
             Require(current.UnionBodies.SequenceEqual(baseline.UnionBodies), "A Union virtual body or generic cached-slot switch differs from the historical analyzer.\n" +
                 string.Join("\n", current.UnionBodies.Zip(baseline.UnionBodies).Where(pair => pair.First != pair.Second)
                     .Take(1).Select(pair => "Current: " + pair.First + "\nHistorical: " + pair.Second)));
-            Require(baseline.SparseBytes == current.SparseBytes && baseline.SparseSize + 1 == current.SparseSize,
-                "The recorded historical sparse-slot size fix changed beyond the single missing length-table byte.");
-            Console.WriteLine("Passed historical mechanism parity: Union bodies, binary/JSON output, version gaps, cycles/shared references, value layouts, nullable/enums, collection order, callbacks, and size results.");
+            Require(baseline.SparseSize + 1 == baseline.SparseBytes,
+                "The historical sparse-slot baseline no longer reproduces its recorded missing length-table byte.");
+            Require(current.SparseBytes != baseline.SparseBytes,
+                "The explicitly authorized named VersionTolerant format was not exercised.");
+            Console.WriteLine("Passed historical mechanism parity for unchanged formats and JSON; separately verified authorized named VersionTolerant evolution and exact size.");
         }
         else Console.WriteLine("Passed Local + As storage views, ordinary Union virtual dispatch, and generic Union virtual plus cached-slot switches.");
     }
@@ -134,7 +136,7 @@ internal static class SerializerMechanismRegression
                     if (gap.First != 53 || gap.Last != 59) throw new Exception("Version field-length skipping changed.");
                     var added = LuminPackSerializer.Deserialize<VersionFull>(LuminPackSerializer.Serialize(gap));
                     if (added.Middle != null || added.Last != 59) throw new Exception("Version absent-slot defaults changed.");
-                    Add(full, results); Add(gap, results, recordSize: false);
+                    Add(full, results, recordSize: false, recordBinary: false); Add(gap, results, recordSize: false, recordBinary: false);
                     var node = new Node { Name = "root" };
                     node.Next = new Node { Name = "child", Next = node }; node.Alias = node.Next;
                     var cycle = LuminPackSerializer.Deserialize<Node>(LuminPackSerializer.Serialize(node));
@@ -159,10 +161,10 @@ internal static class SerializerMechanismRegression
                 }
                 public static int SparseSize() => LuminPackSerializer.Sizeof(new VersionGap { First = 53, Last = 59 });
                 public static int SparseBytes() => LuminPackSerializer.Serialize(new VersionGap { First = 53, Last = 59 }).Length;
-                private static void Add<T>(T value, List<string> results, bool recordSize = true)
+                private static void Add<T>(T value, List<string> results, bool recordSize = true, bool recordBinary = true)
                 {
                     byte[] bytes = LuminPackSerializer.Serialize(value);
-                    results.Add(Convert.ToHexString(bytes));
+                    if (recordBinary) results.Add(Convert.ToHexString(bytes));
                     if (recordSize) results.Add(LuminPackSerializer.Sizeof(value).ToString());
                     JSON_PROFILE_LOOP
                 }

@@ -37,6 +37,11 @@ internal static class IncrementalGenerationChecks
         Verify("unrelated body", full, Replace(full, "Utility.cs", "17", "18"), 0);
         Verify("one model initializer", full, Replace(full, "A.cs", "= 1", "= 2"), 1);
         Verify("one model member", full, Replace(full, "A.cs", "int Value", "int Renamed"), 1);
+        var versioned = Replace(full, "A.cs", "[LuminPack.Attribute.LuminPackable]", "[LuminPack.Attribute.LuminPackable(LuminPack.Attribute.GeneratorType.VersionTolerant)]");
+        var oldName = Replace(versioned, "A.cs", "public int Value", "[LuminPack.Attribute.LuminPackOldName(\"Original\")] public int Value");
+        Verify("version member alias added", versioned, oldName, 1);
+        Verify("version member alias edited", oldName, Replace(oldName, "A.cs", "Original", "Former"), 1);
+        Verify("version member alias removed", oldName, versioned, 1);
         Verify("new observed formatter", full,
             Replace(full, "Utility.cs", "=> 17;", "{ var value = new System.Collections.Generic.List<decimal>(); return value.Count; }"));
 

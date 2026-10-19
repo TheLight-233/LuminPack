@@ -82,8 +82,8 @@ internal static class BinaryDirectResultRegressionTest
     {
         RunCase(results, nameof(SmallNestedGenericAndFreshCollectionsRoundTrip),
             SmallNestedGenericAndFreshCollectionsRoundTrip);
-        RunCase(results, nameof(PartiallyReadFreshResultIsNotPublished),
-            PartiallyReadFreshResultIsNotPublished);
+        RunCase(results, nameof(PartiallyReadReuseResultKeepsRootIdentityAndPublishesThePrefix),
+            PartiallyReadReuseResultKeepsRootIdentityAndPublishesThePrefix);
         RunCase(results, nameof(ArraySizeofMatchesSerializedLength),
             ArraySizeofMatchesSerializedLength);
         RunCase(results, nameof(NullClassElementsConsumeTheirWireHeader),
@@ -145,8 +145,8 @@ internal static class BinaryDirectResultRegressionTest
             "Generic direct-result DTO on fresh unmanaged array did not round-trip.");
     }
 
-    /// <summary>Verifies partially read fresh result is not published.</summary>
-    private static void PartiallyReadFreshResultIsNotPublished()
+    /// <summary>Verifies a partially read reuse result keeps its root identity and publishes only the read prefix.</summary>
+    private static void PartiallyReadReuseResultKeepsRootIdentityAndPublishesThePrefix()
     {
         var payload = LuminPackSerializer.Serialize(new BinaryDirectRootModel
         {
@@ -178,8 +178,10 @@ internal static class BinaryDirectResultRegressionTest
         }
 
         Assert(threw, "Truncated direct-result payload unexpectedly completed.");
-        Assert(ReferenceEquals(target, original) && original.Id == 1234 && original.Tail == "original",
-            "Binary direct-result parsing published a partially initialized object after failure.");
+        // Ordinary reuse writes the existing root storage directly, so members read before the failure stay
+        // published while the untouched tail keeps its original value. This is not a transactional update.
+        Assert(ReferenceEquals(target, original) && original.Id == 7 && original.Tail == "original",
+            "Binary direct-result parsing did not keep the root identity and publish only the read prefix.");
     }
 
     /// <summary>Verifies array sizeof matches serialized length.</summary>

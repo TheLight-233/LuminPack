@@ -31,6 +31,21 @@ try
         SerializerSpecialModeBoundaryRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-named-versions"])
+    {
+        SerializerNamedVersionRegression.Run(references);
+        return 0;
+    }
+    if (args is ["--verify-dictionary-slots"])
+    {
+        SerializerDictionarySlotRegression.Run(references);
+        return 0;
+    }
+    if (args is ["--verify-portable-structs"])
+    {
+        SerializerPortableStructRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-custom"])
     {
         SerializerCustomFormatterRegression.Run(references);
@@ -101,6 +116,9 @@ try
     SerializerCapacityTierRegression.Run(references);
     SerializerCompiledOptionRegression.Run(references);
     SerializerSpecialModeBoundaryRegression.Run(references);
+    SerializerNamedVersionRegression.Run(references);
+    SerializerDictionarySlotRegression.Run(references);
+    SerializerPortableStructRegression.Run(references);
     MetadataReference[]? compatibilityReferences = args.Length == 2
         ? Directory.GetFiles(args[0], "*.dll").Select(path => MetadataReference.CreateFromFile(path)).Append(MetadataReference.CreateFromFile(args[1])).ToArray()
         : null;
