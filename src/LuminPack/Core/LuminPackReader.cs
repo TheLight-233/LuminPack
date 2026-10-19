@@ -148,6 +148,12 @@ namespace LuminPack.Core
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + count));
         }
 
+        /// <summary>Validates a generated fixed-width collection's complete dynamic payload in every build.</summary>
+        /// <param name="index">The absolute beginning of the collection header or payload.</param>
+        /// <param name="byteLength">The checked number of bytes required by the collection boundary.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void EnsureCollectionPayload(int index, int byteLength) => ValidateCollectionPayload(index, byteLength);
+
         /// <summary>Validates a raw collection copy before accessing its complete payload in every build.</summary>
         /// <param name="index">The first payload byte after the collection header.</param>
         /// <param name="byteLength">The checked number of payload bytes to copy.</param>

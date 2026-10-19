@@ -37,6 +37,8 @@ namespace LuminPack.Option
         internal static readonly LuminPackReaderOptionalState NullOption = new LuminPackReaderOptionalState(true);
 
         private readonly LuminCircleReferenceMap<uint, object> refToObject;
+        private LuminCircleReferenceMap<object, uint>? reusedObjectToRef;
+        private bool reuseIndexInitialized;
 
         /// <summary>Initializes a new instance of <c>LuminPackReaderOptionalState</c>.</summary>
         public LuminPackReaderOptionalState()
@@ -65,6 +67,8 @@ namespace LuminPack.Option
         public void ResetOperationState()
         {
             refToObject.Clear();
+            reusedObjectToRef?.Clear();
+            reuseIndexInitialized = false;
         }
 
         /// <summary>Obtains the object reference for the supplied input.</summary>
@@ -89,6 +93,22 @@ namespace LuminPack.Option
             {
                 LuminPackExceptionHelper.ThrowMessage("Object is already added, id:" + id);
             }
+            if (reuseIndexInitialized) reusedObjectToRef!.TryAdd(value, id);
+        }
+
+        /// <summary>Checks whether an existing instance already represents another record in this read scope.</summary>
+        /// <param name="value">The candidate instance for a new reference identifier.</param>
+        /// <returns>Whether the instance has already been registered by identity.</returns>
+        public bool IsObjectReferenceRegistered(object value)
+        {
+            if (refToObject.Count == 0) return false;
+            if (!reuseIndexInitialized)
+            {
+                reusedObjectToRef ??= new LuminCircleReferenceMap<object, uint>(ReferenceEqualityComparer.Instance);
+                foreach (var entry in refToObject) reusedObjectToRef.TryAdd(entry.Value, entry.Key);
+                reuseIndexInitialized = true;
+            }
+            return reusedObjectToRef!.TryGetValue(value, out _);
         }
 
         /// <summary>Releases the resources or pooled state owned by this instance.</summary>

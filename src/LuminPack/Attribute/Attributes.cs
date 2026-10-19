@@ -1,6 +1,16 @@
 namespace LuminPack.Attribute;
 
 /// <summary>
+/// Uses declaration-ordered, padding-free binary storage for an ordinary unmanaged struct when its layout
+/// cannot be proven padding-free on both 32-bit and 64-bit targets. Nested storage is expanded
+/// recursively. Structs proven padding-free retain their existing raw representation.
+/// </summary>
+[AttributeUsage(AttributeTargets.Struct, AllowMultiple = false, Inherited = false)]
+public sealed class LuminPackSupport32bitAttribute : System.Attribute
+{
+}
+
+/// <summary>
 /// User guarantee that a type's complete serialized length never exceeds <see cref="MaxBytes"/>.
 /// <para>
 /// The generator relies on this guarantee to remove every container-layer capacity check emitted from the
@@ -74,6 +84,20 @@ public sealed class LuminPackOrderAttribute : System.Attribute
     {
         Order = order;
     }
+}
+
+/// <summary>Retains a former binary member name in a version-tolerant contract.</summary>
+/// <remarks>Keep names in chronological order. The first old name remains the written identity;
+/// all old names and the current member name are accepted when reading.</remarks>
+[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = true, Inherited = false)]
+public sealed class LuminPackOldNameAttribute : System.Attribute
+{
+    /// <summary>Gets the former serialized member name.</summary>
+    public string Name { get; }
+
+    /// <summary>Records a former serialized member name.</summary>
+    /// <param name="name">The exact, case-sensitive former name.</param>
+    public LuminPackOldNameAttribute(string name) => Name = name;
 }
 
 /// <summary>Provides lumin pack ignore attribute functionality.</summary>
