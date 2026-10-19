@@ -33,7 +33,7 @@ public static class StringEmitter
     {
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
-        sb.AppendLine("            value = reader.ReadStringAndAdvance(ref index);");
+        sb.AppendLine("            value = reader.ReadStringAndAdvance(ref index, value);");
     }
 
     /// <summary>Appends statements that calculate the binary payload size.</summary>

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using LuminPack.Code;
+using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.SourceGenerator
@@ -52,6 +53,17 @@ namespace LuminPack.SourceGenerator
             }
 
             field.FieldType = type.IsReferenceType ? LuminDataType.Reference : LuminDataType.Value;
+
+            var element = type is IArrayTypeSymbol portableArray ? portableArray.ElementType :
+                type is INamedTypeSymbol { MetadataName: "List`1" } portableList && portableList.ContainingNamespace.ToDisplayString() == "System.Collections.Generic"
+                    ? portableList.TypeArguments[0] : null;
+            if (PortableStructPlan.TryCreate(type) != null || PortableStructPlan.TryCreate(element) != null ||
+                PortableStructPlan.RequiresClosedDispatch(type) || PortableStructPlan.RequiresClosedDispatch(element))
+            {
+                // Use one canonical portable operation at root and member boundaries.
+                field.Type = LuminFiledType.Other;
+                return;
+            }
 
             // Custom formatters own their framing. Explicit external roots use the shared operation
             // plan so their complete Local storage metadata is also used when nested here.

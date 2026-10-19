@@ -15,6 +15,7 @@ public static partial class ListEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: true, write: true)) return;
         var elementType = GetFirstGeneric(fieldData.TypeName);
         bool elementClassificationKnown = EmitterTypeTraits.TryGetIsUnmanaged(
             EmitterTypeTraits.GetFirstTypeArgument(fieldData), out bool elementIsUnmanaged);
@@ -84,6 +85,7 @@ public static partial class ListEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCodeWithCompress(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: true, write: true)) return;
         var elementType = GetFirstGeneric(fieldData.TypeName);
         bool elementClassificationKnown = EmitterTypeTraits.TryGetIsUnmanaged(
             EmitterTypeTraits.GetFirstTypeArgument(fieldData), out bool elementIsUnmanaged);

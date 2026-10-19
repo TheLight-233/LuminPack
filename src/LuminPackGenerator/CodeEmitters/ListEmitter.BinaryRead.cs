@@ -43,6 +43,7 @@ public static partial class ListEmitter
     private static void GenerateDeserializeCodeCore(
         LuminLocalFieldData fieldData, StringBuilder sb, bool freshValue, bool useArrayDataIntrinsic = false)
     {
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: true, write: false, freshList: freshValue)) return;
         var elementType = GetFirstGeneric(fieldData.TypeName);
         bool elementClassificationKnown = EmitterTypeTraits.TryGetIsUnmanaged(
             EmitterTypeTraits.GetFirstTypeArgument(fieldData), out bool elementIsUnmanaged);
@@ -69,10 +70,6 @@ public static partial class ListEmitter
             sb.AppendLine("            if (value is null)");
             sb.AppendLine("            {");
             sb.AppendLine($"                value = new global::System.Collections.Generic.List<{elementType}>(length);");
-            sb.AppendLine("            }");
-            sb.AppendLine("            else if (value.Count == length)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                value.Clear();");
             sb.AppendLine("            }");
             sb.AppendLine();
             sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value), length);");
@@ -162,7 +159,8 @@ public static partial class ListEmitter
             sb.AppendLine("            ref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(span);");
             sb.AppendLine("            for (nint i = 0; i < span.Length; i++)");
             sb.AppendLine("            {");
-            sb.AppendLine("                reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
+            EmitterTypeTraits.AppendReusableElementRead(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData),
+                "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)", "                ");
             sb.AppendLine("            }");
         }
     }
@@ -172,6 +170,7 @@ public static partial class ListEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCodeWithCompress(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: true, write: false)) return;
         var elementType = GetFirstGeneric(fieldData.TypeName);
         bool elementClassificationKnown = EmitterTypeTraits.TryGetIsUnmanaged(
             EmitterTypeTraits.GetFirstTypeArgument(fieldData), out bool elementIsUnmanaged);
@@ -192,10 +191,6 @@ public static partial class ListEmitter
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
         sb.AppendLine($"                value = new global::System.Collections.Generic.List<{elementType}>(length);");
-        sb.AppendLine("            }");
-        sb.AppendLine("            else if (value.Count == length)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                value.Clear();");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(global::System.Runtime.CompilerServices.Unsafe.AsRef(in value), length);");
@@ -249,9 +244,7 @@ public static partial class ListEmitter
         sb.AppendLine();
 
         // Reference elements: propagate WithCompress only when leaf element is a KnownValueType.
-        string elementCallDeserialize = KnownValueTypes.Contains(elementType) || IsLeafTypeKnownValueType(elementType)
-            ? "reader.ReadValueWithCompress(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);"
-            : "reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);";
+        bool compressedElement = KnownValueTypes.Contains(elementType) || IsLeafTypeKnownValueType(elementType);
         sb.AppendLine("            if (span.IsEmpty)");
         sb.AppendLine("            {");
         sb.AppendLine("                return;");
@@ -260,7 +253,8 @@ public static partial class ListEmitter
         sb.AppendLine("            ref var first = ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(span);");
         sb.AppendLine("            for (nint i = 0; i < span.Length; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine($"                {elementCallDeserialize}");
+        EmitterTypeTraits.AppendReusableElementRead(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData),
+            "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)", "                ", compressedElement);
         sb.AppendLine("            }");
     }
 }

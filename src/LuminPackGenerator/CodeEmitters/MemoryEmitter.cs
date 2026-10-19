@@ -13,6 +13,7 @@ public static class MemoryEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: false, write: true, GetBaseType(fieldData.TypeName))) return;
         string baseType = GetBaseType(fieldData.TypeName);
         string length = baseType == "global::System.ArraySegment" ? "value.Count" :
             baseType == "global::System.Buffers.ReadOnlySequence" ? "checked((int)value.Length)" : "value.Length";
@@ -76,6 +77,7 @@ public static class MemoryEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), list: false, write: false, GetBaseType(fieldData.TypeName))) return;
         string baseType = GetBaseType(fieldData.TypeName);
         string elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");

@@ -9,6 +9,34 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 /// <summary>Provides emitter type traits functionality.</summary>
 internal static class EmitterTypeTraits
 {
+    /// <summary>Identifies ordinary reference-object framing whose root null rule must not retain a nested value.</summary>
+    /// <param name="type">The canonical formatter type.</param>
+    /// <returns>Whether this is the ordinary object formatter, without Custom, Union or built-in framing.</returns>
+    internal static bool UsesOrdinaryObjectHeader(ITypeSymbol type)
+        => type is INamedTypeSymbol { IsReferenceType: true, TypeKind: TypeKind.Class } named &&
+           TypeMetaChecker.TryCheckPackableAttribute(named) &&
+           TypeMetaChecker.CheckGeneratorType(named) == GeneratorType.Object &&
+           !TypeMetaChecker.TryCheckUnionAttribute(named) &&
+           !LuminPackExtensionGenerator.IsCustomGeneratorType(named) &&
+           CodeEmitterRegistry.GetEmitter(FormatterTypeName.Get(named)).Read == null;
+
+    /// <summary>Reads a reusable collection value while keeping null elements distinct from the root merge rule.</summary>
+    /// <param name="sb">The generated statements.</param>
+    /// <param name="type">The canonical element type.</param>
+    /// <param name="target">The existing writable element storage.</param>
+    /// <param name="indent">Statement indentation.</param>
+    /// <param name="compressed">Whether the original call uses the compressed operation.</param>
+    internal static void AppendReusableElementRead(System.Text.StringBuilder sb, ITypeSymbol type, string target, string indent, bool compressed = false)
+    {
+        if (UsesOrdinaryObjectHeader(type))
+        {
+            sb.AppendLine(indent + "if (reader.PeekIsNullObject(ref reader.GetCurrentSpanOffset())) " + target + " = default!;");
+        }
+        else if (type is ITypeParameterSymbol { IsValueType: false })
+            sb.AppendLine(indent + "if (global::LuminPack.LuminPackSerializer.FormatterDispatch.__LuminPackShouldResetMember<" + type.ToDisplayString() + ">(ref reader)) " + target + " = default!;");
+        sb.AppendLine(indent + "reader." + (compressed ? "ReadValueWithCompress" : "ReadValue") + "(ref " + target + "!);");
+    }
+
     /// <summary>
     /// Resolves whether raw serialization can preserve the formatter contract.
     /// Open types retain per-value dispatch because an unmanaged constraint does not exclude Custom.
@@ -55,6 +83,7 @@ internal static class EmitterTypeTraits
         if (type?.IsUnmanagedType != true) return false;
         var storage = UnmanagedContractScope.Resolve(type);
         return !ContainsUndeterminedTypeParameter(storage) &&
+            PortableStructPlan.TryCreate(storage) == null &&
             !ContainsCustomFormatter(storage, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default));
     }
 
@@ -137,6 +166,7 @@ internal static class EmitterTypeTraits
     {
         maxBytes = 0;
         if (type is null) return false;
+
         foreach (AttributeData attribute in type.GetAttributes())
         {
             if (attribute.AttributeClass?.ToDisplayString() != BoundedAttributeName) continue;
@@ -162,6 +192,13 @@ internal static class EmitterTypeTraits
     {
         boundExpression = null;
         if (type is null) return false;
+
+        var portable = PortableStructPlan.TryCreate(type);
+        if (portable != null)
+        {
+            boundExpression = portable.WireSize.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return true;
+        }
 
         if (TryGetBoundedMaxBytes(type, out int boundedMaxBytes))
         {

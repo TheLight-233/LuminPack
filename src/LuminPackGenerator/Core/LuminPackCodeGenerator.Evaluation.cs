@@ -3,6 +3,7 @@ using System.Linq;
 using System.Text;
 using LuminPack.SourceGenerator;
 using LuminPack.SourceGenerator.CodeEmitters;
+using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.Code.Core;
@@ -445,6 +446,17 @@ public static partial class LuminPackCodeGenerator
     /// <param name="stringBuilder">The builder receiving generated source code.</param>
     public static void GenerateCalculateOffsetCode(LuminDataInfo data, StringBuilder stringBuilder)
     {
+        if (PortableStructPlan.RequiresClosedDispatch(data.TypeSymbol))
+        {
+            stringBuilder.AppendLine("            global::LuminPack.LuminPackSerializer.FormatterDispatch.Sizeof<" + FormatterTypeName.Get(data.TypeSymbol) + ">(ref evaluator, ref value);");
+            return;
+        }
+        var portable = PortableStructPlan.TryCreate(data.TypeSymbol);
+        if (portable != null)
+        {
+            stringBuilder.AppendLine("            evaluator += " + portable.WireSize + ";");
+            return;
+        }
         string typeName = data.classFullName;
         if (!typeName.Contains(".") && data.classNameSpace != "<global namespace>")
         {

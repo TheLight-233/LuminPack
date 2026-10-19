@@ -25,6 +25,12 @@ public static class CollectionEvaluatorEmitter
         ITypeSymbol elementSymbol = fieldData.TypeSymbol is IArrayTypeSymbol array
             ? array.ElementType
             : null;
+        var portable = PortableStructPlan.TryCreate(elementSymbol);
+        if (portable != null)
+        {
+            sb.AppendLine("            evaluator += checked(4 + value.Length * " + portable.WireSize + ");");
+            return;
+        }
         if (EmitterTypeTraits.TryGetIsUnmanaged(elementSymbol, out bool isUnmanaged))
         {
             if (isUnmanaged)
@@ -78,6 +84,13 @@ public static class CollectionEvaluatorEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
+        var portable = PortableStructPlan.TryCreate(EmitterTypeTraits.GetFirstTypeArgument(fieldData));
+        if (portable != null && fieldData.TypeSymbol is INamedTypeSymbol { MetadataName: "List`1" } list &&
+            list.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
+        {
+            sb.AppendLine("            evaluator += checked(4 + value.Count * " + portable.WireSize + ");");
+            return;
+        }
         sb.AppendLine("            evaluator += sizeof(int);");
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");

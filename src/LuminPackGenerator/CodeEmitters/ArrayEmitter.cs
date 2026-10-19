@@ -15,6 +15,7 @@ public static class ArrayEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: true)) return;
         string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
         bool? elementIsUnmanaged = GetClosedElementIsUnmanaged(fieldData);
         bool useUnmanagedPath = elementIsUnmanaged ?? KnownValueTypes.Contains(baseTypeName);
@@ -80,6 +81,7 @@ public static class ArrayEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: false)) return;
         string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
         bool? elementIsUnmanaged = GetClosedElementIsUnmanaged(fieldData);
         bool useUnmanagedPath = elementIsUnmanaged ?? KnownValueTypes.Contains(baseTypeName);
@@ -143,7 +145,8 @@ public static class ArrayEmitter
         sb.AppendLine(@"            ref var first = ref LuminPackMarshal.GetNotNullArrayReference(value!);");
         sb.AppendLine(@"            for (nint i = 0; i < length; i++)");
         sb.AppendLine(@"            {");
-        sb.AppendLine(@"                reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
+        EmitterTypeTraits.AppendReusableElementRead(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData),
+            "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)", "                ");
         sb.AppendLine(@"            }");
     }
 
@@ -152,6 +155,7 @@ public static class ArrayEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateFreshDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: false)) return;
         string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
         sb.AppendLine();
@@ -274,6 +278,7 @@ public static class ArrayEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCodeWithCompress(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: true)) return;
         string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
         bool? elementIsUnmanaged = GetClosedElementIsUnmanaged(fieldData);
         bool useUnmanagedPath = elementIsUnmanaged ?? KnownValueTypes.Contains(baseTypeName);
@@ -349,6 +354,7 @@ public static class ArrayEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateDeserializeCodeWithCompress(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: false)) return;
         string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
         bool? elementIsUnmanaged = GetClosedElementIsUnmanaged(fieldData);
         bool useUnmanagedPath = elementIsUnmanaged ?? KnownValueTypes.Contains(baseTypeName);
@@ -412,13 +418,12 @@ public static class ArrayEmitter
         sb.AppendLine($@"                value = LuminPackMarshal.AllocateUninitializedArray<{baseTypeName}>(length);");
         sb.AppendLine(@"            }");
         sb.AppendLine();
-        string elementCallDeserialize = KnownValueTypes.Contains(baseTypeName) || IsLeafTypeKnownValueType(baseTypeName)
-            ? "reader.ReadValueWithCompress(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);"
-            : "reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);";
+        bool compressedElement = KnownValueTypes.Contains(baseTypeName) || IsLeafTypeKnownValueType(baseTypeName);
         sb.AppendLine(@"            ref var first = ref LuminPackMarshal.GetNotNullArrayReference(value!);");
         sb.AppendLine(@"            for (nint i = 0; i < length; i++)");
         sb.AppendLine(@"            {");
-        sb.AppendLine($"                {elementCallDeserialize}");
+        EmitterTypeTraits.AppendReusableElementRead(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData),
+            "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)", "                ", compressedElement);
         sb.AppendLine(@"            }");
     }
 

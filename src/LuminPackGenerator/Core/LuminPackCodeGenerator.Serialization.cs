@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Text;
 using LuminPack.SourceGenerator;
+using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.Code.Core;
@@ -585,6 +586,8 @@ public static partial class LuminPackCodeGenerator
                         AppendWriterCursorAdvance(sb, indentation, "writer.WriteUnmanaged(ref " + offset + ", " + fieldPath + ")", stateOffset);
                         break;
                     }
+                    // Each inline owner needs a lexical scope for repeated member-pattern names.
+                    sb.AppendLine(indentation + "{");
                     sb.AppendLine(indentation + "// Serialize" + field.ClassName);
                     string valueExpression7 = fieldPath;
                     if (field.Type == LuminFiledType.Class && field.ClassFields.Count > 1)
@@ -703,6 +706,7 @@ public static partial class LuminPackCodeGenerator
                             GenerateSerializeCode(sb, nestedField7, valueExpression7 + "." + nestedField7.Identifier, span, offset, indent, depth + 1, isMultClass: true, stringRecordLength, stateOffset);
                         }
                     }
+                    sb.AppendLine(indentation + "}");
                     break;
                 }
             case LuminFiledType.Enum:
@@ -750,6 +754,17 @@ public static partial class LuminPackCodeGenerator
     /// <param name="polymorphism">The polymorphism used by this operation.</param>
     public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb, bool extension = false, bool polymorphism = false)
     {
+        if (PortableStructPlan.RequiresClosedDispatch(data.TypeSymbol))
+        {
+            sb.AppendLine("            global::LuminPack.LuminPackSerializer.FormatterDispatch.Serialize<" + FormatterTypeName.Get(data.TypeSymbol) + ">(ref writer, in value);");
+            return;
+        }
+        var portable = PortableStructPlan.TryCreate(data.TypeSymbol);
+        if (portable != null)
+        {
+            PortableStructEmitter.AppendValue(sb, portable, "value", FormatterTypeName.Get(data.TypeSymbol), write: true);
+            return;
+        }
         string concreteTypeName = data.classFullName;
         if (!concreteTypeName.Contains(".") && data.classNameSpace != "<global namespace>")
         {

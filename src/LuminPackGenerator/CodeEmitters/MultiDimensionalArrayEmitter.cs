@@ -27,13 +27,17 @@ public static class MultiDimensionalArrayEmitter
     {
         int rank = GetRank(fieldData.TypeName);
         string elementType = GetElementType(fieldData.TypeName);
+        var portable = PortableStructPlan.TryCreate(EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol));
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("            {");
+        if (portable != null) sb.AppendLine("                writer.EnsureAdditionalCapacity(1);");
         sb.AppendLine("                writer.WriteNullObjectHeader(ref index);");
         sb.AppendLine("                writer.Advance(1);");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
+        if (portable != null)
+            sb.AppendLine("            writer.EnsureAdditionalCapacity(checked(" + (5 + rank * 4) + " + value.Length * " + portable.WireSize + "));");
         sb.AppendLine("            writer.WriteObjectHeader(ref index, 0);");
         sb.AppendLine("            writer.Advance(1);");
         for (int i = 0; i < rank; i++)
@@ -43,6 +47,12 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Length);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine("            ref var first = ref global::System.Runtime.CompilerServices.Unsafe.As<byte, " + elementType + ">(ref global::LuminPack.Code.LuminPackMarshal.DangerousGetArrayDataReference<" + elementType + ">(value));");
+        if (portable != null)
+        {
+            PortableStructEmitter.AppendPayload(sb, portable, elementType, "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, __portableItem)", "value.Length", write: true);
+            sb.AppendLine("            writer.CheckBuffer();");
+            return;
+        }
         sb.AppendLine("            for (nint i = 0; i < value.Length; i++)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.CheckBuffer();");
@@ -59,7 +69,9 @@ public static class MultiDimensionalArrayEmitter
     {
         int rank = GetRank(fieldData.TypeName);
         string elementType = GetElementType(fieldData.TypeName);
+        var portable = PortableStructPlan.TryCreate(EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol));
         sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
+        if (portable != null) sb.AppendLine("            reader.EnsureCollectionPayload(index, 1);");
         sb.AppendLine("            if (!reader.TryReadObjectHead(ref index))");
         sb.AppendLine("            {");
         sb.AppendLine("                value = null;");
@@ -67,6 +79,7 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            reader.Advance(1);");
+        if (portable != null) sb.AppendLine("            reader.EnsureCollectionPayload(index, " + (4 + rank * 4) + ");");
         sb.AppendLine("            reader.ReadUnmanaged(ref index, " + JoinOutDimensions(rank) + ");");
         sb.AppendLine("            reader.Advance(" + (rank * 4) + ");");
         sb.AppendLine("            if (!reader.TryReadCollectionHead(ref index, out var length))");
@@ -92,8 +105,14 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("                global::LuminPack.Code.LuminPackExceptionHelper.ThrowMultiDimensionalArrayLengthMismatch();");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
+        if (portable != null) sb.AppendLine("            reader.EnsureCollectionPayload(index, checked(length * " + portable.WireSize + "));");
         sb.AppendLine("            value = new " + elementType + "[" + JoinDimensions(rank) + "];");
         sb.AppendLine("            ref var first = ref global::System.Runtime.CompilerServices.Unsafe.As<byte, " + elementType + ">(ref global::LuminPack.Code.LuminPackMarshal.DangerousGetArrayDataReference<" + elementType + ">(value));");
+        if (portable != null)
+        {
+            PortableStructEmitter.AppendPayload(sb, portable, elementType, "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, __portableItem)", "length", write: false);
+            return;
+        }
         sb.AppendLine("            for (nint i = 0; i < length; i++)");
         sb.AppendLine("            {");
         sb.AppendLine("                ref " + elementType + " item = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i);");

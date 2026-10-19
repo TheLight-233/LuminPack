@@ -167,15 +167,17 @@ internal static class LuminPackSerializerDocumentation
         }
 
         bool rawCopy = global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.CanUseUnmanagedSerialization(named) && data.isValueType && data.generatorType == GeneratorType.Object;
+        var portable = global::LuminPack.SourceGenerator.CodeEmitters.PortableStructPlan.TryCreate(named);
         contract.Add(new XElement("para", rawCopy ?
             "Binary payload is copied from the complete unmanaged storage, including CLR padding. Its size is Unsafe.SizeOf<T>(); offsets depend on the target runtime and any explicit FieldOffset attributes. The table describes storage members, not a packed wire layout." :
-            data.generatorType == GeneratorType.VersionTolerant ? "Binary members follow LuminPackOrder and include version-tolerant field framing. Field offsets depend on the preceding payloads." :
+            portable != null ? "Binary payload contains declaration-ordered storage fields without CLR padding or an object header. Nested structs are recursively expanded; long fields always occupy eight bytes. JSON retains the filtered named member contract." :
+            data.generatorType == GeneratorType.VersionTolerant ? "Binary members use stable UTF-8 names and a version-tolerant payload-length table. LuminPackOldName retains former identities; explicit order is optional. Field offsets depend on the preceding payloads." :
             data.generatorType == GeneratorType.CircleReference ? "Binary members follow LuminPackOrder and include object reference tracking. Reference headers and preceding payloads determine field offsets." :
             "Binary payload begins with an object header and follows the member order below. Variable-length members prevent a single fixed byte offset table."));
 
         var table = new XElement("list", new XAttribute("type", "table"),
-            new XElement("listheader", new XElement("term", rawCopy ? "Storage member" : "Serialized member"), new XElement("description", "Type and layout details")));
-        if (rawCopy)
+            new XElement("listheader", new XElement("term", rawCopy || portable != null ? "Storage member" : "Serialized member"), new XElement("description", "Type and layout details")));
+        if (rawCopy || portable != null)
         {
             foreach (var field in named.GetMembers().OfType<IFieldSymbol>().Where(field => !field.IsStatic))
             {
@@ -197,7 +199,7 @@ internal static class LuminPackSerializerDocumentation
             }
         }
         contract.Add(table);
-        if (rawCopy)
+        if (rawCopy || portable != null)
         {
             contract.Add(new XElement("para", "JSON serializes the filtered named members below; it does not copy CLR storage or padding."));
             contract.Add(new XElement("list", new XAttribute("type", "table"),

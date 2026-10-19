@@ -161,6 +161,8 @@ public sealed class LuminMapSourceGenerator : IIncrementalGenerator
                     foreach (var type in CompilationTypeAnalysisCache.GetOrCreate(compilation).FormatterTypes.Concat(
                         CompilationTypeAnalysisCache.GetOrCreate(compilation).DeclaredTypes.Select(declaration => (ITypeSymbol)declaration.Symbol)).Distinct<ITypeSymbol>(SymbolEqualityComparer.Default))
                     {
+                        if (type is INamedTypeSymbol portable && !CodeEmitters.PortableStructPlan.IsSupported(portable))
+                            spc.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedPortableStorage, type.Locations.FirstOrDefault(), type.ToDisplayString()));
                         foreach (var diagnostic in CompiledOptions.Validate(type)) spc.ReportDiagnostic(diagnostic);
                         var profile = CompiledOptions.Resolve(type, compilation);
                         if (!profile.IsDefault) optionProfiles[profile.Identity] = profile;
