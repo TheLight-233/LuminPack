@@ -5,28 +5,32 @@
 <text x="20" y="66" font-size="14" font-weight="600" fill="#1F2328">Serialize</text>
 <text x="20" y="95.7" font-size="13" font-weight="700" fill="#1F2328">LuminPack</text>
 <rect x="148" y="78" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="148" y="78" width="5.3" height="26" rx="5" fill="#8B5CF6"/>
-<text x="372" y="95.7" font-size="12" font-weight="700" fill="#1F2328">41.9 ns</text>
+<rect x="148" y="78" width="6.5" height="26" rx="5" fill="#8B5CF6"/>
+<text x="372" y="95.7" font-size="12" font-weight="700" fill="#1F2328">98.3 ns</text>
 <text x="20" y="133.7" font-size="13" font-weight="400" fill="#1F2328">MemoryPack</text>
 <rect x="148" y="116" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="148" y="116" width="46.2" height="26" rx="5" fill="#3B82F6"/>
-<text x="372" y="133.7" font-size="12" font-weight="400" fill="#1F2328">364.6 ns  (8.70x)</text>
+<rect x="148" y="116" width="40.5" height="26" rx="5" fill="#3B82F6"/>
+<text x="372" y="133.7" font-size="12" font-weight="400" fill="#1F2328">610.2 ns  (6.21x)</text>
 <text x="20" y="171.7" font-size="13" font-weight="400" fill="#1F2328">MessagePack</text>
 <rect x="148" y="154" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="148" y="154" width="216.0" height="26" rx="5" fill="#F59E0B"/>
-<text x="372" y="171.7" font-size="12" font-weight="400" fill="#1F2328">1.70 μs  (40.66x)</text>
+<rect x="148" y="154" width="207.1" height="26" rx="5" fill="#F59E0B"/>
+<path d="M350.3 167H364.0M350.3 162V172M364.0 162V172" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="372" y="171.7" font-size="12" font-weight="400" fill="#1F2328">3.12 μs  (31.77x)</text>
 <text x="490" y="66" font-size="14" font-weight="600" fill="#1F2328">Deserialize</text>
 <text x="490" y="95.7" font-size="13" font-weight="700" fill="#1F2328">LuminPack</text>
 <rect x="618" y="78" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="618" y="78" width="23.8" height="26" rx="5" fill="#8B5CF6"/>
-<text x="842" y="95.7" font-size="12" font-weight="700" fill="#1F2328">434.3 ns</text>
+<rect x="618" y="78" width="13.2" height="26" rx="5" fill="#8B5CF6"/>
+<path d="M630.6 91H632.9M630.6 86V96M632.9 86V96" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="842" y="95.7" font-size="12" font-weight="700" fill="#1F2328">400.6 ns</text>
 <text x="490" y="133.7" font-size="13" font-weight="400" fill="#1F2328">MemoryPack</text>
 <rect x="618" y="116" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="618" y="116" width="32.9" height="26" rx="5" fill="#3B82F6"/>
-<text x="842" y="133.7" font-size="12" font-weight="400" fill="#1F2328">600.0 ns  (1.38x)</text>
+<rect x="618" y="116" width="25.0" height="26" rx="5" fill="#3B82F6"/>
+<path d="M642.0 129H645.0M642.0 124V134M645.0 124V134" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="842" y="133.7" font-size="12" font-weight="400" fill="#1F2328">759.0 ns  (1.89x)</text>
 <text x="490" y="171.7" font-size="13" font-weight="400" fill="#1F2328">MessagePack</text>
 <rect x="618" y="154" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="618" y="154" width="216.0" height="26" rx="5" fill="#F59E0B"/>
-<text x="842" y="171.7" font-size="12" font-weight="400" fill="#1F2328">3.94 μs  (9.07x)</text>
-<text x="20" y="222" font-size="11" fill="#59636E">Ratios are relative to LuminPack in the same panel. BenchmarkDotNet, same machine and run.</text>
+<rect x="618" y="154" width="211.7" height="26" rx="5" fill="#F59E0B"/>
+<path d="M826.4 167H834.0M826.4 162V172M834.0 162V172" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="842" y="171.7" font-size="12" font-weight="400" fill="#1F2328">6.42 μs  (16.02x)</text>
+<text x="20" y="222" font-size="11" fill="#59636E">GitHub Actions ubuntu-latest · AMD EPYC 7763 · .NET 10.0.14 · BenchmarkDotNet 0.15.6. Whiskers show min–max; ratios are relative to LuminPack in the same panel.</text>
 </svg>

@@ -5,36 +5,42 @@
 <text x="20" y="66" font-size="14" font-weight="600" fill="#E6EDF3">Serialize</text>
 <text x="20" y="95.7" font-size="13" font-weight="700" fill="#E6EDF3">LuminPack</text>
 <rect x="148" y="78" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="148" y="78" width="33.9" height="26" rx="5" fill="#8B5CF6"/>
-<text x="372" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">25.68 μs</text>
+<rect x="148" y="78" width="27.5" height="26" rx="5" fill="#8B5CF6"/>
+<text x="372" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">36.21 μs</text>
 <text x="20" y="133.7" font-size="13" font-weight="400" fill="#E6EDF3">System.Text.Json</text>
 <rect x="148" y="116" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="148" y="116" width="84.5" height="26" rx="5" fill="#10B981"/>
-<text x="372" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">64.00 μs  (2.49x)</text>
+<rect x="148" y="116" width="86.2" height="26" rx="5" fill="#10B981"/>
+<path d="M231.8 129H237.9M231.8 124V134M237.9 124V134" stroke="#E6EDF3" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="372" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">113.52 μs  (3.14x)</text>
 <text x="20" y="171.7" font-size="13" font-weight="400" fill="#E6EDF3">Newtonsoft.Json</text>
 <rect x="148" y="154" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="148" y="154" width="216.0" height="26" rx="5" fill="#EF4444"/>
-<text x="372" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">163.51 μs  (6.37x)</text>
+<rect x="148" y="154" width="209.9" height="26" rx="5" fill="#EF4444"/>
+<path d="M352.8 167H364.0M352.8 162V172M364.0 162V172" stroke="#E6EDF3" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="372" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">276.39 μs  (7.63x)</text>
 <text x="20" y="209.7" font-size="13" font-weight="400" fill="#E6EDF3">RE:Dox</text>
 <rect x="148" y="192" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="148" y="192" width="75.3" height="26" rx="5" fill="#64748B"/>
-<text x="372" y="209.7" font-size="12" font-weight="400" fill="#E6EDF3">56.97 μs  (2.22x)</text>
+<rect x="148" y="192" width="74.1" height="26" rx="5" fill="#64748B"/>
+<path d="M220.6 205H224.6M220.6 200V210M224.6 200V210" stroke="#E6EDF3" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="372" y="209.7" font-size="12" font-weight="400" fill="#E6EDF3">97.60 μs  (2.70x)</text>
 <text x="490" y="66" font-size="14" font-weight="600" fill="#E6EDF3">Deserialize</text>
 <text x="490" y="95.7" font-size="13" font-weight="700" fill="#E6EDF3">LuminPack</text>
 <rect x="618" y="78" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="618" y="78" width="35.4" height="26" rx="5" fill="#8B5CF6"/>
-<text x="842" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">57.96 μs</text>
+<rect x="618" y="78" width="28.3" height="26" rx="5" fill="#8B5CF6"/>
+<text x="842" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">74.02 μs</text>
 <text x="490" y="133.7" font-size="13" font-weight="400" fill="#E6EDF3">System.Text.Json</text>
 <rect x="618" y="116" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="618" y="116" width="66.8" height="26" rx="5" fill="#10B981"/>
-<text x="842" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">109.34 μs  (1.89x)</text>
+<rect x="618" y="116" width="71.5" height="26" rx="5" fill="#10B981"/>
+<path d="M687.7 129H690.8M687.7 124V134M690.8 124V134" stroke="#E6EDF3" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="842" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">187.28 μs  (2.53x)</text>
 <text x="490" y="171.7" font-size="13" font-weight="400" fill="#E6EDF3">Newtonsoft.Json</text>
 <rect x="618" y="154" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="618" y="154" width="153.7" height="26" rx="5" fill="#EF4444"/>
-<text x="842" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">251.61 μs  (4.34x)</text>
+<rect x="618" y="154" width="155.6" height="26" rx="5" fill="#EF4444"/>
+<path d="M770.3 167H778.2M770.3 162V172M778.2 162V172" stroke="#E6EDF3" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="842" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">407.24 μs  (5.50x)</text>
 <text x="490" y="209.7" font-size="13" font-weight="400" fill="#E6EDF3">RE:Dox</text>
 <rect x="618" y="192" width="216" height="26" rx="5" fill="#21262D"/>
-<rect x="618" y="192" width="216.0" height="26" rx="5" fill="#64748B"/>
-<text x="842" y="209.7" font-size="12" font-weight="400" fill="#E6EDF3">353.63 μs  (6.10x)</text>
-<text x="20" y="260" font-size="11" fill="#9198A1">Ratios are relative to LuminPack in the same panel. BenchmarkDotNet, same machine and run.</text>
+<rect x="618" y="192" width="203.3" height="26" rx="5" fill="#64748B"/>
+<path d="M813.0 205H834.0M813.0 200V210M834.0 200V210" stroke="#E6EDF3" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="842" y="209.7" font-size="12" font-weight="400" fill="#E6EDF3">532.22 μs  (7.19x)</text>
+<text x="20" y="260" font-size="11" fill="#9198A1">GitHub Actions ubuntu-latest · AMD EPYC 7763 · .NET 10.0.14 · BenchmarkDotNet 0.15.6. Whiskers show min–max; ratios are relative to LuminPack in the same panel.</text>
 </svg>

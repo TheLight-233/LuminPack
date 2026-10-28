@@ -5,28 +5,33 @@
 <text x="20" y="66" font-size="14" font-weight="600" fill="#1F2328">Serialize</text>
 <text x="20" y="95.7" font-size="13" font-weight="700" fill="#1F2328">LuminPack</text>
 <rect x="148" y="78" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="148" y="78" width="29.6" height="26" rx="5" fill="#8B5CF6"/>
-<text x="372" y="95.7" font-size="12" font-weight="700" fill="#1F2328">2.03 μs</text>
+<rect x="148" y="78" width="22.2" height="26" rx="5" fill="#8B5CF6"/>
+<text x="372" y="95.7" font-size="12" font-weight="700" fill="#1F2328">2.58 μs</text>
 <text x="20" y="133.7" font-size="13" font-weight="400" fill="#1F2328">MemoryPack</text>
 <rect x="148" y="116" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="148" y="116" width="92.5" height="26" rx="5" fill="#3B82F6"/>
-<text x="372" y="133.7" font-size="12" font-weight="400" fill="#1F2328">6.33 μs  (3.12x)</text>
+<rect x="148" y="116" width="95.7" height="26" rx="5" fill="#3B82F6"/>
+<path d="M242.3 129H245.1M242.3 124V134M245.1 124V134" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="372" y="133.7" font-size="12" font-weight="400" fill="#1F2328">11.11 μs  (4.31x)</text>
 <text x="20" y="171.7" font-size="13" font-weight="400" fill="#1F2328">MessagePack</text>
 <rect x="148" y="154" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="148" y="154" width="216.0" height="26" rx="5" fill="#F59E0B"/>
-<text x="372" y="171.7" font-size="12" font-weight="400" fill="#1F2328">14.79 μs  (7.29x)</text>
+<rect x="148" y="154" width="212.4" height="26" rx="5" fill="#F59E0B"/>
+<path d="M355.2 167H364.0M355.2 162V172M364.0 162V172" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="372" y="171.7" font-size="12" font-weight="400" fill="#1F2328">24.66 μs  (9.56x)</text>
 <text x="490" y="66" font-size="14" font-weight="600" fill="#1F2328">Deserialize</text>
 <text x="490" y="95.7" font-size="13" font-weight="700" fill="#1F2328">LuminPack</text>
 <rect x="618" y="78" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="618" y="78" width="64.5" height="26" rx="5" fill="#8B5CF6"/>
-<text x="842" y="95.7" font-size="12" font-weight="700" fill="#1F2328">8.38 μs</text>
+<rect x="618" y="78" width="48.4" height="26" rx="5" fill="#8B5CF6"/>
+<path d="M665.5 91H668.8M665.5 86V96M668.8 86V96" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="842" y="95.7" font-size="12" font-weight="700" fill="#1F2328">10.24 μs</text>
 <text x="490" y="133.7" font-size="13" font-weight="400" fill="#1F2328">MemoryPack</text>
 <rect x="618" y="116" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="618" y="116" width="94.5" height="26" rx="5" fill="#3B82F6"/>
-<text x="842" y="133.7" font-size="12" font-weight="400" fill="#1F2328">12.27 μs  (1.47x)</text>
+<rect x="618" y="116" width="84.1" height="26" rx="5" fill="#3B82F6"/>
+<path d="M700.8 129H705.3M700.8 124V134M705.3 124V134" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="842" y="133.7" font-size="12" font-weight="400" fill="#1F2328">17.78 μs  (1.74x)</text>
 <text x="490" y="171.7" font-size="13" font-weight="400" fill="#1F2328">MessagePack</text>
 <rect x="618" y="154" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="618" y="154" width="216.0" height="26" rx="5" fill="#F59E0B"/>
-<text x="842" y="171.7" font-size="12" font-weight="400" fill="#1F2328">28.05 μs  (3.35x)</text>
-<text x="20" y="222" font-size="11" fill="#59636E">Ratios are relative to LuminPack in the same panel. BenchmarkDotNet, same machine and run.</text>
+<rect x="618" y="154" width="208.7" height="26" rx="5" fill="#F59E0B"/>
+<path d="M821.8 167H834.0M821.8 162V172M834.0 162V172" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="842" y="171.7" font-size="12" font-weight="400" fill="#1F2328">44.14 μs  (4.31x)</text>
+<text x="20" y="222" font-size="11" fill="#59636E">GitHub Actions ubuntu-latest · AMD EPYC 7763 · .NET 10.0.14 · BenchmarkDotNet 0.15.6. Whiskers show min–max; ratios are relative to LuminPack in the same panel.</text>
 </svg>
