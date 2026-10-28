@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
     inputs:
       run_benchmarks:
-        description: Run optional timing benchmarks on the CI runner
+        description: Run the four timing benchmarks on x64, Intel x64 and ARM64 hosts
         type: boolean
         default: false
 
@@ -137,14 +137,29 @@ jobs:
             .tmp/hook-test-results
           if-no-files-found: error
 
-  # Bounded BenchmarkDotNet run. Benchmark timing is machine-dependent, so this
-  # job runs once on a single platform rather than in the multi-platform matrix.
-  # Explicitly select all four maintained benchmark classes.
+  # Compare libraries within each native host; absolute times across operating
+  # systems and CPU families are not directly comparable.
   benchmark:
-    name: Benchmark
+    name: Benchmark (${{ matrix.host }})
     if: github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
-    runs-on: ubuntu-latest
-    timeout-minutes: 90
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - host: linux-x64
+            runner: ubuntu-latest
+            arch: x64
+            vendor: any
+          - host: intel-x64
+            runner: macos-15-intel
+            arch: x64
+            vendor: GenuineIntel
+          - host: linux-arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
+            vendor: any
     steps:
       - uses: actions/checkout@v4
 
@@ -163,15 +178,26 @@ jobs:
           dotnet-version: 11.0.x
           dotnet-quality: preview
 
-      # BenchmarkDotNet prompts interactively without --filter, so the selection
-      # must be explicit.
+      - name: Build benchmarks
+        run: dotnet build benchmarks/LuminPack.Benchmark/LuminPack.Benchmark.csproj -c Release -f net10.0 -p:PublishAot=false -p:GeneratePackageOnBuild=false -p:UseSharedCompilation=false
+
+      - name: Verify native benchmark host and record its runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp/benchmark-artifacts
+          dotnet run --project benchmarks/LuminPack.Benchmark/LuminPack.Benchmark.csproj -c Release -f net10.0 --no-build -- --verify-host '${{ matrix.arch }}' '${{ matrix.vendor }}' | tee .tmp/benchmark-artifacts/host.txt
+          dotnet --info > .tmp/benchmark-artifacts/dotnet-info.txt
+
+      # Keep the selection explicit and restricted to the four maintained classes.
       - name: Run benchmarks
-        run: dotnet run --project benchmarks/LuminPack.Benchmark/LuminPack.Benchmark.csproj -c Release -f net10.0 -p:PublishAot=false -p:GeneratePackageOnBuild=false -p:UseSharedCompilation=false -- --filter 'LuminPackBenchmark.SimpleBenchmark.*' 'LuminPackBenchmark.SerializeBenchmark.*' 'LuminPackBenchmark.JsonBenchmark.*' 'LuminPackBenchmark.PolymorphismBenchmark.*' --artifacts "$GITHUB_WORKSPACE/.tmp/benchmark-artifacts" --buildTimeout 300
+        shell: bash
+        run: dotnet run --project benchmarks/LuminPack.Benchmark/LuminPack.Benchmark.csproj -c Release -f net10.0 --no-build -- --filter 'LuminPackBenchmark.SimpleBenchmark.*' 'LuminPackBenchmark.SerializeBenchmark.*' 'LuminPackBenchmark.JsonBenchmark.*' 'LuminPackBenchmark.PolymorphismBenchmark.*' --artifacts "$GITHUB_WORKSPACE/.tmp/benchmark-artifacts" --buildTimeout 600
 
       - name: Upload benchmark artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: benchmark-artifacts
+          name: benchmark-artifacts-${{ matrix.host }}
           path: .tmp/benchmark-artifacts
           if-no-files-found: warn

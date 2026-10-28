@@ -2,6 +2,7 @@
 using System.Buffers;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
+using BenchmarkDotNet.Diagnosers;
 using BenchmarkDotNet.Jobs;
 using LuminPack;
 using LuminPack.Core;
@@ -79,7 +80,7 @@ public sealed partial class PolymorphismClass : PolymorphismClassBase, Ifoo
     /// <returns>The result of the operation.</returns>
     public static PolymorphismClass Create()
     {
-        Random random = new Random();
+        Random random = new Random(12345);
         return new PolymorphismClass
         {
             Id = random.Next(),
@@ -180,8 +181,9 @@ public abstract partial class IFoo
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooA : IFoo
+public sealed partial class FooA : IFoo
 {
+
     /// <summary>Stores the card.</summary>
     [Key(1)]
     public Transform Card;
@@ -203,8 +205,11 @@ public partial class FooA : IFoo
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooB : FooA
+public sealed partial class FooB : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+
     /// <summary>Stores the card b.</summary>
     [Key(2)]
     public Transform CardB;
@@ -227,8 +232,13 @@ public partial class FooB : FooA
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooC : FooB
+public sealed partial class FooC : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+
     /// <summary>Stores the card c.</summary>
     [Key(3)]
     public Transform CardC;
@@ -251,8 +261,15 @@ public partial class FooC : FooB
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooD : FooC
+public sealed partial class FooD : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+
     /// <summary>Stores the card d.</summary>
     [Key(4)]
     public Transform CardD;
@@ -277,8 +294,17 @@ public partial class FooD : FooC
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooE : FooD
+public sealed partial class FooE : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooE Create()
@@ -299,8 +325,17 @@ public partial class FooE : FooD
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooF : FooE
+public sealed partial class FooF : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooF Create()
@@ -321,8 +356,17 @@ public partial class FooF : FooE
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooH : FooF
+public sealed partial class FooH : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooH Create()
@@ -343,8 +387,17 @@ public partial class FooH : FooF
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooG : FooH
+public sealed partial class FooG : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooG Create()
@@ -365,8 +418,17 @@ public partial class FooG : FooH
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooI : FooH
+public sealed partial class FooI : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooI Create()
@@ -387,8 +449,17 @@ public partial class FooI : FooH
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooJ : FooH
+public sealed partial class FooJ : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooJ Create()
@@ -409,8 +480,17 @@ public partial class FooJ : FooH
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooK : FooH
+public sealed partial class FooK : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooK Create()
@@ -431,8 +511,17 @@ public partial class FooK : FooH
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooL : FooH
+public sealed partial class FooL : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooL Create()
@@ -453,8 +542,17 @@ public partial class FooL : FooH
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooM : FooH
+public sealed partial class FooM : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooM Create()
@@ -475,8 +573,17 @@ public partial class FooM : FooH
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooN : FooH
+public sealed partial class FooN : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooN Create()
@@ -497,8 +604,17 @@ public partial class FooN : FooH
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooO : FooH
+public sealed partial class FooO : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooO Create()
@@ -519,8 +635,17 @@ public partial class FooO : FooH
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooP : FooH
+public sealed partial class FooP : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooP Create()
@@ -541,8 +666,17 @@ public partial class FooP : FooH
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooQ : FooH
+public sealed partial class FooQ : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooQ Create()
@@ -563,8 +697,17 @@ public partial class FooQ : FooH
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooR : FooH
+public sealed partial class FooR : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooR Create()
@@ -585,8 +728,17 @@ public partial class FooR : FooH
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooS : FooH
+public sealed partial class FooS : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooS Create()
@@ -607,8 +759,17 @@ public partial class FooS : FooH
 [MemoryPackable]
 [LuminPackable]
 [MessagePackObject]
-public partial class FooZ : FooH
+public sealed partial class FooZ : IFoo
 {
+    /// <summary>Stores the Card value.</summary>
+    [Key(1)] public Transform Card;
+    /// <summary>Stores the CardB value.</summary>
+    [Key(2)] public Transform CardB;
+    /// <summary>Stores the CardC value.</summary>
+    [Key(3)] public Transform CardC;
+    /// <summary>Stores the CardD value.</summary>
+    [Key(4)] public Transform CardD;
+
     /// <summary>Creates a sample instance for the benchmark.</summary>
     /// <returns>The result of the operation.</returns>
     public static FooZ Create()
@@ -640,7 +801,7 @@ public interface Ifoo
 [MemoryDiagnoser]
 [GcServer]
 [MarkdownExporterAttribute.GitHub]
-[DisassemblyDiagnoser(maxDepth: 8, printSource: true, printInstructionAddresses: true)]
+[Config(typeof(PolymorphismDisassemblyConfig))]
 public class PolymorphismBenchmark
 {
     private PolymorphismClassBase myClass = PolymorphismClass.Create();
@@ -758,5 +919,17 @@ public class PolymorphismBenchmark
     public void NinoDeserialize()
     {
         var res = NinoDeserializer.Deserialize<PolymorphismClassBase>(buffer4);
+    }
+}
+
+/// <summary>Enables native disassembly on the hosts supported by the installed BenchmarkDotNet version.</summary>
+public sealed class PolymorphismDisassemblyConfig : ManualConfig
+{
+    /// <summary>Keeps timing and allocation benchmarks available on macOS without an unsupported diagnoser.</summary>
+    public PolymorphismDisassemblyConfig()
+    {
+        if (OperatingSystem.IsWindows() || OperatingSystem.IsLinux())
+            AddDiagnoser(new DisassemblyDiagnoser(new DisassemblyDiagnoserConfig(
+                maxDepth: 8, printSource: true, printInstructionAddresses: true)));
     }
 }
