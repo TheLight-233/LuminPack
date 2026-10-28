@@ -797,9 +797,9 @@ public interface Ifoo
 [HideColumns("StdDev", "RatioSD", "Error")]
 [MinColumn, MaxColumn]
 [GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
-[SimpleJob(RuntimeMoniker.Net10_0, launchCount: 1, warmupCount: 5, iterationCount: 10)]
+[SimpleJob(RuntimeMoniker.Net10_0, launchCount: 3, warmupCount: 6, iterationCount: 15)]
 [MemoryDiagnoser]
-[GcServer]
+[GcServer(true)]
 [MarkdownExporterAttribute.GitHub]
 [Config(typeof(PolymorphismDisassemblyConfig))]
 public class PolymorphismBenchmark

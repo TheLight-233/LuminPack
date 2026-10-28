@@ -262,7 +262,7 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 | 系统 | Ubuntu 24.04.5 LTS |
 | 运行时 | .NET 10.0.14 · X64 RyuJIT（x86-64-v3 / AVX2） |
 | 工具 | BenchmarkDotNet 0.15.6 · .NET SDK 11.0.100-rc.3 |
-| 参数 | 3 次启动 × 15 次迭代，Server GC（多态：1 次启动 × 10 次迭代，Workstation GC） |
+| 参数 | 图表数据：3 次启动 × 15 次迭代，Server GC（多态：1 次启动 × 10 次迭代，Workstation GC）。当前四类基准均为 3 次启动 × 15 次迭代、6 次预热，使用 Server GC。 |
 
 ### 🎮 游戏存档
 
