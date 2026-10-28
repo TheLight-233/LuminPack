@@ -253,15 +253,15 @@ public partial struct Packet            // identical bytes on 32-bit and 64-bit
 
 ## 📊 Benchmarks
 
-Measured with [BenchmarkDotNet](https://benchmarkdotnet.org) — **lower is better**. Every chart compares libraries on the same machine, data and run; the multiplier shows how much longer each library takes than LuminPack.
+Measured with [BenchmarkDotNet](https://benchmarkdotnet.org) on the repository's CI runner — **lower is better**. Every chart compares libraries on the same machine, data and run; the multiplier shows how long each library takes relative to LuminPack, and the whiskers show the min–max spread.
 
 | 🖥️ Test machine | |
 | --- | --- |
-| CPU | 13th Gen Intel Core i7-13650HX · 14 cores / 20 threads |
-| Memory | 40 GB |
-| OS | Windows 11 (10.0.26200) |
-| Runtime | .NET 10.0.9 · X64 RyuJIT (x86-64-v3 / AVX2) |
-| Tooling | BenchmarkDotNet 0.15.6 · .NET SDK 11.0.100-preview.7 |
+| Runner | GitHub Actions `ubuntu-latest` (`Benchmark` job of the [CI workflow](.github/workflows/ci.yml)) |
+| CPU | AMD EPYC 7763 2.45 GHz · 2 cores / 4 threads |
+| OS | Ubuntu 24.04.5 LTS |
+| Runtime | .NET 10.0.14 · X64 RyuJIT (x86-64-v3 / AVX2) |
+| Tooling | BenchmarkDotNet 0.15.6 · .NET SDK 11.0.100-rc.3 |
 | Settings | 3 launches × 15 iterations, Server GC (polymorphism: 1 launch × 10 iterations, workstation GC) |
 
 ### 🎮 Game save
@@ -300,10 +300,10 @@ The same game save as JSON text, against the most popular .NET JSON libraries.
   <img alt="JSON benchmark" src="docs/assets/benchmarks/JsonBenchmark-light.svg" width="100%">
 </picture>
 
-Want to see it on your own hardware? Every number above can be reproduced:
+Want to see it on your own hardware? Run the same four benchmark classes locally, or dispatch the CI workflow with `run_benchmarks` enabled to get fresh results in the per-host `benchmark-artifacts-*` uploads:
 
 ```shell
-dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter *SerializeBenchmark*
+dotnet run --project benchmarks/LuminPack.Benchmark -c Release -f net10.0 -- --filter "LuminPackBenchmark.SimpleBenchmark.*" "LuminPackBenchmark.SerializeBenchmark.*" "LuminPackBenchmark.JsonBenchmark.*" "LuminPackBenchmark.PolymorphismBenchmark.*"
 ```
 
 ## 📚 Documentation

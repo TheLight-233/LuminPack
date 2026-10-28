@@ -1,8 +1,34 @@
-# LuminPack.Drawing
+<div align="center">
 
-Optional explicit binary value codecs for Drawing. Color can be Empty, known/system, named or explicit ARGB. Persisting only ARGB loses that public identity. The baseline generated DTO lacks a Color formatter.
+# 🎨 LuminPack.Drawing
 
-Supported data value: `Color`. Plain drawing geometry does not acquire a duplicate codec in this module.
+**Identity-preserving codec for System.Drawing.Color**
+
+![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![net8.0](https://img.shields.io/badge/target-net8.0-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![System.Drawing](https://img.shields.io/badge/System.Drawing-0078D4?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
+
+**English** · [简体中文](README.cn.md)
+
+Part of [LuminPack](../../README.md) · [all platform modules](../LuminPack.Platforms/README.md)
+
+[Supported types](#-supported-types) · [Quick start](#-quick-start) · [Guarantees](#-guarantees) · [Building](#-building)
+
+</div>
+
+---
+
+A `Color` can be Empty, a known/system color, a named color or explicit ARGB — persisting only ARGB loses that public identity. The baseline generated DTO has no `Color` formatter of its own.
+
+## 📦 Supported types
+
+| Category | Types |
+| --- | --- |
+| Color | `Color` — Empty, known/system, named and explicit ARGB |
+
+Plain drawing geometry is already handled by Core and does not get a duplicate codec here.
+
+## 🚀 Quick start
+
+### Call a codec directly
 
 ```csharp
 using LuminPack.Drawing;
@@ -13,7 +39,11 @@ byte[] bytes = LuminDrawing.ColorCodec.Serialize(value);
 var restored = LuminDrawing.ColorCodec.Deserialize(bytes);
 ```
 
-For a field or collection element in an ordinary generated DTO, select the existing Custom mechanism explicitly:
+Direct codec calls need no registration.
+
+### Use it inside a generated type
+
+For a field or collection element of an ordinary generated DTO, opt in explicitly with the existing Custom mechanism:
 
 ```csharp
 using LuminPack.Attribute;
@@ -26,21 +56,37 @@ public partial class Snapshot
 }
 ```
 
-The wrapper has implicit conversions to/from its platform value. It adds no type identifier or object frame. Call `LuminDrawing.Register()` before using generated entries. Direct codec calls require no registration. Raw unmanaged APIs and ordinary unwrapped generated fields retain Core's original behavior; registration does not rewrite their contracts. JSON callbacks for these wrappers explicitly reject unsupported usage. Do not silently mix this public-component schema with a preexisting raw/native-layout record.
+- `LuminPackValue<T>` converts implicitly to and from the platform value, and adds no type identifier or object frame.
+- Call `LuminDrawing.Register()` before generated entries use it.
+- JSON callbacks for these wrappers reject the call explicitly — the platform modules are binary-only.
 
-The tested Core baseline already routes ordinary unwrapped System.Drawing.Color fields through its opaque BCL formatter fallback. After `Register()`, that path works directly; a generated DTO fixture verifies it. The explicit wrapper remains useful when selecting a declaration-owned module schema consistently.
+### Unwrapped fields
 
-Color records retain Empty, known/system identifiers, unknown names and explicit ARGB. They use a kind byte with the matching logical payload.
+The tested Core baseline already routes ordinary unwrapped `System.Drawing.Color` fields through its opaque BCL formatter fallback. After `Register()` that path works directly, and a generated DTO fixture verifies it. The explicit wrapper is still useful when you want the declaration to own this module's schema consistently.
 
-All fixed readers validate their complete range and construct a candidate before publishing either destination or cursor. Complete-record convenience readers additionally reject trailing bytes. Scalar encoding follows Core's representation and byte order. These are value records; they do not promise external object identity, reference cycles, native resource persistence, UI controls, dispatchers, bindings or renderer state. Framework constructors retain their own domain constraints.
+### Wire record
 
-The focused color partial owns this identity representation. No drawing engine, GDI resource, Font, Image or Bitmap handle is persisted.
+Color records keep Empty, known/system identifiers, unknown names and explicit ARGB, using a kind byte followed by the matching logical payload. The focused color partial owns this representation. No drawing engine, GDI resource, `Font`, `Image` or `Bitmap` handle is persisted.
 
-Build Core separately, then build this optional project with an existing **net8.0** Core assembly:
+## ✅ Guarantees
+
+- **Validated reads** — every fixed reader checks its complete range and builds a candidate before publishing the destination or the cursor. Complete-record convenience readers also reject trailing bytes.
+- **Core scalar encoding** — scalar representation and byte order follow Core.
+- **Core paths unchanged** — raw unmanaged APIs and ordinary unwrapped generated fields keep Core's original behavior; registration never rewrites their contracts.
+- **Value records only** — no external object identity, reference cycles, native resources, UI controls, dispatchers, bindings or renderer state. Framework constructors keep their own domain constraints.
+
+> [!WARNING]
+> These public-component records are a schema of their own. Do not silently mix them with an existing raw/native-layout record of the same type.
+
+## 🔨 Building
+
+Build Core first, then build this optional project against an existing **net8.0** Core assembly:
 
 ```powershell
 dotnet build src/LuminPack.Drawing/LuminPack.Drawing.csproj -c Release `
   -p:LuminPackCorePath="C:/Artifacts/LuminPack.Core.dll"
 ```
 
-Core references neither this module nor the shared platform adapter. This project uses a read-only assembly reference and never builds Core or its generator. These source projects are not published NuGet packages. See [the shared adapter](../LuminPack.Platforms/README.md) for focused verification and supported boundaries.
+The project uses a read-only assembly reference and never builds Core or its generator. Core references neither this module nor the shared adapter, and these source projects are not published as NuGet packages.
+
+See the [shared platform adapter](../LuminPack.Platforms/README.md) for focused verification and supported boundaries.

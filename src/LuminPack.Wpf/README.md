@@ -1,8 +1,35 @@
-# LuminPack.Wpf
+<div align="center">
 
-Optional explicit binary value codecs for Wpf. Representative WPF constructors are not supported by the baseline generator. Public records also preserve Empty geometry and linear scRGB color instead of private WPF storage.
+# 🪟 LuminPack.Wpf
 
-Supported data values: `Point`, `Vector`, `Thickness`, `CornerRadius`, `Size`, `Rect`, `Int32Rect`, `GridLength`, `Matrix`, `Point3D`, `Vector3D`, `Quaternion`, `Size3D`, `Rect3D`, `Matrix3D`, `Color`.
+**Binary codecs for WPF geometry, 3D types and colors**
+
+![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![net8.0](https://img.shields.io/badge/target-net8.0--windows-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![WPF](https://img.shields.io/badge/WPF-0078D4?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
+
+**English** · [简体中文](README.cn.md)
+
+Part of [LuminPack](../../README.md) · [all platform modules](../LuminPack.Platforms/README.md)
+
+[Supported types](#-supported-types) · [Quick start](#-quick-start) · [Guarantees](#-guarantees) · [Building](#-building)
+
+</div>
+
+---
+
+Representative WPF constructors are not supported by the baseline generator. These public records also keep Empty geometry and linear scRGB color, instead of WPF's private storage.
+
+## 📦 Supported types
+
+| Category | Types |
+| --- | --- |
+| 2D geometry | `Point` · `Vector` · `Size` · `Rect` · `Int32Rect` · `Thickness` · `CornerRadius` |
+| Layout | `GridLength` |
+| 3D | `Point3D` · `Vector3D` · `Quaternion` · `Size3D` · `Rect3D` · `Matrix3D` |
+| Transforms & color | `Matrix` · `Color` |
+
+## 🚀 Quick start
+
+### Call a codec directly
 
 ```csharp
 using LuminPack.Wpf;
@@ -13,7 +40,11 @@ byte[] bytes = LuminWpf.PointCodec.Serialize(value);
 var restored = LuminWpf.PointCodec.Deserialize(bytes);
 ```
 
-For a field or collection element in an ordinary generated DTO, select the existing Custom mechanism explicitly:
+Direct codec calls need no registration.
+
+### Use it inside a generated type
+
+For a field or collection element of an ordinary generated DTO, opt in explicitly with the existing Custom mechanism:
 
 ```csharp
 using LuminPack.Attribute;
@@ -26,19 +57,37 @@ public partial class Snapshot
 }
 ```
 
-The wrapper has implicit conversions to/from its platform value. It adds no type identifier or object frame. Call `LuminWpf.Register()` before using generated entries. Direct codec calls require no registration. Raw unmanaged APIs and ordinary unwrapped generated fields retain Core's original behavior; registration does not rewrite their contracts. JSON callbacks for these wrappers explicitly reject unsupported usage. Do not silently mix this public-component schema with a preexisting raw/native-layout record.
+- `LuminPackValue<T>` converts implicitly to and from the platform value, and adds no type identifier or object frame.
+- Call `LuminWpf.Register()` before generated entries use it.
+- JSON callbacks for these wrappers reject the call explicitly — the platform modules are binary-only.
 
-Empty geometry uses a marker plus the complete fixed scalar payload. Color uses ScA/ScR/ScG/ScB; profile-backed ColorContext values are rejected rather than silently losing their external profile.
+### Empty geometry and color
 
-All fixed readers validate their complete range and construct a candidate before publishing either destination or cursor. Complete-record convenience readers additionally reject trailing bytes. Scalar encoding follows Core's representation and byte order. These are value records; they do not promise external object identity, reference cycles, native resource persistence, UI controls, dispatchers, bindings or renderer state. Framework constructors retain their own domain constraints.
+Empty geometry is written as a marker plus the complete fixed scalar payload. `Color` uses `ScA`/`ScR`/`ScG`/`ScB`; profile-backed `ColorContext` values are rejected rather than silently losing their external profile.
 
-`Codecs.json` owns the reviewed component order. Regenerate deterministic scalar source with `python src/LuminPack.Platforms/CodeGen~/generate_codecs.py`, or check it with `--verify`. The generator does not inspect or modify Core. Module-specific records remain in focused partial files.
+## ✅ Guarantees
 
-Build Core separately, then build this optional project with an existing **net8.0** Core assembly:
+- **Validated reads** — every fixed reader checks its complete range and builds a candidate before publishing the destination or the cursor. Complete-record convenience readers also reject trailing bytes.
+- **Core scalar encoding** — scalar representation and byte order follow Core.
+- **Core paths unchanged** — raw unmanaged APIs and ordinary unwrapped generated fields keep Core's original behavior; registration never rewrites their contracts.
+- **Value records only** — no external object identity, reference cycles, native resources, UI controls, dispatchers, bindings or renderer state. Framework constructors keep their own domain constraints.
+
+> [!WARNING]
+> These public-component records are a schema of their own. Do not silently mix them with an existing raw/native-layout record of the same type.
+
+## 🏭 Code generation
+
+`Codecs.json` owns the reviewed component order. Regenerate the deterministic scalar source with `python src/LuminPack.Platforms/CodeGen~/generate_codecs.py`, or check it with `--verify`. The generator neither inspects nor modifies Core; module-specific records stay in focused partial files.
+
+## 🔨 Building
+
+Build Core first, then build this optional project against an existing **net8.0** Core assembly:
 
 ```powershell
 dotnet build src/LuminPack.Wpf/LuminPack.Wpf.csproj -c Release `
   -p:LuminPackCorePath="C:/Artifacts/LuminPack.Core.dll"
 ```
 
-Core references neither this module nor the shared platform adapter. This project uses a read-only assembly reference and never builds Core or its generator. These source projects are not published NuGet packages. See [the shared adapter](../LuminPack.Platforms/README.md) for focused verification and supported boundaries.
+The project uses a read-only assembly reference and never builds Core or its generator. Core references neither this module nor the shared adapter, and these source projects are not published as NuGet packages.
+
+See the [shared platform adapter](../LuminPack.Platforms/README.md) for focused verification and supported boundaries.

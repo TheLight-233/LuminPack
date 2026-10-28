@@ -253,15 +253,15 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 
 ## 📊 基准测试
 
-使用 [BenchmarkDotNet](https://benchmarkdotnet.org) 测量——**越低越好**。每张图都在同一台机器、同一份数据、同一次运行中对比各个库；倍数表示该库耗时是 LuminPack 的多少倍。
+在仓库的 CI 机器上使用 [BenchmarkDotNet](https://benchmarkdotnet.org) 测量——**越低越好**。每张图都在同一台机器、同一份数据、同一次运行中对比各个库；倍数表示该库耗时是 LuminPack 的多少倍，误差线表示最小值到最大值的范围。
 
 | 🖥️ 测试环境 | |
 | --- | --- |
-| CPU | 13th Gen Intel Core i7-13650HX · 14 核 / 20 线程 |
-| 内存 | 40 GB |
-| 系统 | Windows 11（10.0.26200） |
-| 运行时 | .NET 10.0.9 · X64 RyuJIT（x86-64-v3 / AVX2） |
-| 工具 | BenchmarkDotNet 0.15.6 · .NET SDK 11.0.100-preview.7 |
+| 运行环境 | GitHub Actions `ubuntu-latest`（[CI 工作流](.github/workflows/ci.yml)的 `Benchmark` 任务） |
+| CPU | AMD EPYC 7763 2.45 GHz · 2 核 / 4 线程 |
+| 系统 | Ubuntu 24.04.5 LTS |
+| 运行时 | .NET 10.0.14 · X64 RyuJIT（x86-64-v3 / AVX2） |
+| 工具 | BenchmarkDotNet 0.15.6 · .NET SDK 11.0.100-rc.3 |
 | 参数 | 3 次启动 × 15 次迭代，Server GC（多态：1 次启动 × 10 次迭代，Workstation GC） |
 
 ### 🎮 游戏存档
@@ -300,10 +300,10 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
   <img alt="JSON 基准" src="docs/assets/benchmarks/JsonBenchmark-light.svg" width="100%">
 </picture>
 
-想在自己的硬件上验证？上面的每个数字都可以复现：
+想在自己的硬件上验证？可以在本地运行同样的四个基准类，也可以手动触发 CI 工作流并启用 `run_benchmarks`，从按主机分别保存的 `benchmark-artifacts-*` 中获取新结果：
 
 ```shell
-dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter *SerializeBenchmark*
+dotnet run --project benchmarks/LuminPack.Benchmark -c Release -f net10.0 -- --filter "LuminPackBenchmark.SimpleBenchmark.*" "LuminPackBenchmark.SerializeBenchmark.*" "LuminPackBenchmark.JsonBenchmark.*" "LuminPackBenchmark.PolymorphismBenchmark.*"
 ```
 
 ## 📚 文档
@@ -328,15 +328,15 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter *Seri
 
 | 包 | 新增支持 |
 | --- | --- |
-| 🎮 [LuminPack.Unity](src/LuminPack.Unity/README.md) | 向量、颜色、包围盒、矩阵、曲线、渐变 |
-| 🔥 [LuminPack.Burst](src/LuminPack.Burst/README.md) | Unity 上的 Burst 加速内核 |
-| 🌐 [LuminPack.AspNetCore](src/LuminPack.AspNetCore/README.md) | MVC 与 Minimal API 二进制请求体、HTTP 值类型 |
-| 🖼️ [LuminPack.Avalonia](src/LuminPack.Avalonia/README.md) | 几何、颜色、矩阵 |
-| 🎨 [LuminPack.Drawing](src/LuminPack.Drawing/README.md) | `System.Drawing.Color` |
-| 📱 [LuminPack.Maui](src/LuminPack.Maui/README.md) | MAUI Graphics 几何与颜色 |
-| 🕹️ [LuminPack.MonoGame](src/LuminPack.MonoGame/README.md) | 向量、矩阵、包围体 |
-| 🖌️ [LuminPack.SkiaSharp](src/LuminPack.SkiaSharp/README.md) | 几何、颜色、矩阵 |
-| 🪟 [LuminPack.Wpf](src/LuminPack.Wpf/README.md) | 几何、3D 类型、颜色 |
+| 🎮 [LuminPack.Unity](src/LuminPack.Unity/README.cn.md) | 向量、颜色、包围盒、矩阵、曲线、渐变 |
+| 🔥 [LuminPack.Burst](src/LuminPack.Burst/README.cn.md) | Unity 上的 Burst 加速内核 |
+| 🌐 [LuminPack.AspNetCore](src/LuminPack.AspNetCore/README.cn.md) | MVC 与 Minimal API 二进制请求体、HTTP 值类型 |
+| 🖼️ [LuminPack.Avalonia](src/LuminPack.Avalonia/README.cn.md) | 几何、颜色、矩阵 |
+| 🎨 [LuminPack.Drawing](src/LuminPack.Drawing/README.cn.md) | `System.Drawing.Color` |
+| 📱 [LuminPack.Maui](src/LuminPack.Maui/README.cn.md) | MAUI Graphics 几何与颜色 |
+| 🕹️ [LuminPack.MonoGame](src/LuminPack.MonoGame/README.cn.md) | 向量、矩阵、包围体 |
+| 🖌️ [LuminPack.SkiaSharp](src/LuminPack.SkiaSharp/README.cn.md) | 几何、颜色、矩阵 |
+| 🪟 [LuminPack.Wpf](src/LuminPack.Wpf/README.cn.md) | 几何、3D 类型、颜色 |
 
 ## 🤖 AI Skill
 
