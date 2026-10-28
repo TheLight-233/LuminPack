@@ -2,7 +2,7 @@ name: Runtime compatibility
 
 on:
   push:
-    branches: [main]
+    branches: [main, refactor]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -242,7 +242,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: x86-results
-          path: .tmp/x86-results
+          path: |
+            .tmp/x86-results
+            .tmp/hook-x86-results
           if-no-files-found: error
 
   vendor-hardware:

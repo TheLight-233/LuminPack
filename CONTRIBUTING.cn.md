@@ -52,7 +52,9 @@ dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlat
 - `ci.yml`：仓库检查、构建、生成代码与生成器契约、增量验证、运行时测试、Hook 测试区、数据格式夹具，以及从新打包的 NuGet 包安装的测试。
 - `runtime-compatibility.yml`：在 Windows、Linux、macOS（x64 和 ARM64）上运行裁剪版和 NativeAOT 程序，标量/SSSE3/AVX2 回退以及 x86。按 CPU 厂商、ARM32 和 AVX-512 的运行需要手动触发，并需要带对应标签的自托管 runner。
 - Unity 工作流构建并运行 Mono 和 IL2CPP Player，需要配置 Unity 许可证密钥。
-- 基准测试只能通过手动的 `run_benchmarks` 输入触发，不作为正确性门禁。
+- `test-areas.yml` 在 Windows、Linux 和 macOS 上以 Debug、Release 运行 Safety 测试区；三个系统均执行 AspNetCore、Avalonia、Maui、MonoGame、SkiaSharp 适配契约，Windows 额外执行 Drawing 和 Wpf。适配模块使用已有 Core 二进制，因此先构建 Core。
+- 推送到 `main`、`refactor` 或创建拉取请求均会触发托管检查。Unity 执行仍需要已配置的许可证或原生运行器；`.github/scripts` 下的辅助脚本随工作流纳入版本控制。
+- 基准测试只能通过手动的 `run_benchmarks` 输入触发，明确限定为现有四类：`SimpleBenchmark`、`SerializeBenchmark`、`JsonBenchmark`、`PolymorphismBenchmark`，不作为正确性门禁。
 
 ## 基准测试
 

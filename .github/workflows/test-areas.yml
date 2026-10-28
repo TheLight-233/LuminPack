@@ -1,0 +1,78 @@
+name: Safety and platform contracts
+
+on:
+  push:
+    branches: [main, refactor]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  safety:
+    name: Safety (${{ matrix.os }}, ${{ matrix.configuration }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        configuration: [Debug, Release]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Execute bounds and malformed-input contracts
+        run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c ${{ matrix.configuration }} -f net10.0 -p:LuminPackTestArea=Safety --logger trx --results-directory .tmp/safety-results
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: safety-${{ matrix.os }}-${{ matrix.configuration }}
+          path: .tmp/safety-results
+          if-no-files-found: error
+
+  platforms:
+    name: Adapter contracts (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Build Core and its generator before adapter execution
+        run: dotnet build src/LuminPack.Core/LuminPack.Core.csproj -c Release
+      - name: Execute platform codec and registration contracts
+        shell: pwsh
+        run: |
+          $platforms = @('AspNetCore', 'Avalonia', 'Maui', 'MonoGame', 'SkiaSharp')
+          if ($IsWindows) { $platforms += @('Drawing', 'Wpf') }
+          New-Item -ItemType Directory -Force .tmp/platform-results | Out-Null
+          foreach ($platform in $platforms) {
+            dotnet run --project tests/LuminPack.Tests.Platforms/LuminPack.Tests.Platforms.csproj -c Release "-p:LuminPackPlatform=$platform" 2>&1 | Tee-Object ".tmp/platform-results/$platform.log"
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: platforms-${{ matrix.os }}
+          path: .tmp/platform-results
+          if-no-files-found: error

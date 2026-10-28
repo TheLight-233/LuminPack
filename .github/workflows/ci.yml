@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [main]
+    branches: [main, refactor]
   pull_request:
   workflow_dispatch:
     inputs:
@@ -83,6 +83,11 @@ jobs:
         run: dotnet --version
 
       - name: Build solution (Release)
+        # Adapter projects consume an existing Core binary rather than a project reference.
+        # Build that dependency explicitly before the solution's parallel build starts.
+        run: dotnet build src/LuminPack.Core/LuminPack.Core.csproj -c Release
+
+      - name: Build complete solution (Release)
         run: dotnet build LuminPack.sln -c Release
 
       - name: Generated code contracts
@@ -127,13 +132,14 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.os }}
-          path: .tmp/test-results
+          path: |
+            .tmp/test-results
+            .tmp/hook-test-results
           if-no-files-found: error
 
   # Bounded BenchmarkDotNet run. Benchmark timing is machine-dependent, so this
   # job runs once on a single platform rather than in the multi-platform matrix.
-  # The filter keeps SimpleBenchmark, SerializeBenchmark and JsonBenchmark;
-  # PolymorphismBenchmark stays out of routine CI.
+  # Explicitly select all four maintained benchmark classes.
   benchmark:
     name: Benchmark
     if: github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
@@ -160,7 +166,7 @@ jobs:
       # BenchmarkDotNet prompts interactively without --filter, so the selection
       # must be explicit.
       - name: Run benchmarks
-        run: dotnet run --project benchmarks/LuminPack.Benchmark/LuminPack.Benchmark.csproj -c Release -f net10.0 -p:PublishAot=false -p:GeneratePackageOnBuild=false -p:UseSharedCompilation=false -- --filter 'LuminPackBenchmark.SimpleBenchmark.*' 'LuminPackBenchmark.SerializeBenchmark.*' 'LuminPackBenchmark.JsonBenchmark.*' --artifacts "$GITHUB_WORKSPACE/.tmp/benchmark-artifacts" --buildTimeout 300
+        run: dotnet run --project benchmarks/LuminPack.Benchmark/LuminPack.Benchmark.csproj -c Release -f net10.0 -p:PublishAot=false -p:GeneratePackageOnBuild=false -p:UseSharedCompilation=false -- --filter 'LuminPackBenchmark.SimpleBenchmark.*' 'LuminPackBenchmark.SerializeBenchmark.*' 'LuminPackBenchmark.JsonBenchmark.*' 'LuminPackBenchmark.PolymorphismBenchmark.*' --artifacts "$GITHUB_WORKSPACE/.tmp/benchmark-artifacts" --buildTimeout 300
 
       - name: Upload benchmark artifacts
         if: always()

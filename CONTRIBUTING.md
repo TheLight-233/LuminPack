@@ -50,9 +50,11 @@ dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlat
 ## Continuous integration
 
 - `ci.yml` runs repository checks, the build, the codegen and generator contracts, incremental verification, the runtime suite, the hook area, wire fixtures and an installation test from freshly packed NuGet packages.
+- `test-areas.yml` runs the Safety area in Debug and Release on Windows, Linux and macOS. It executes AspNetCore, Avalonia, Maui, MonoGame and SkiaSharp adapter contracts on all three systems, plus Drawing and Wpf on Windows. Core is built before adapters because they consume its existing binary.
+- Pushes to `main` and `refactor`, and pull requests, trigger the hosted checks. Unity execution still requires its configured license or native runners; the checked-in `.github/scripts` helpers are part of those workflows.
 - `runtime-compatibility.yml` runs trimmed and NativeAOT programs on Windows, Linux and macOS (x64 and ARM64), scalar/SSSE3/AVX2 fallbacks and x86. Vendor, ARM32 and AVX-512 runs are manual and need labeled self-hosted runners.
 - The Unity workflow builds and runs Mono and IL2CPP players; it needs Unity license secrets.
-- Benchmarks run only through the manual `run_benchmarks` input; they are not a correctness gate.
+- Benchmarks run only through the manual `run_benchmarks` input and explicitly select the four maintained classes: `SimpleBenchmark`, `SerializeBenchmark`, `JsonBenchmark` and `PolymorphismBenchmark`. They are not a correctness gate.
 
 ## Benchmarks
 

@@ -8,7 +8,7 @@ on:
         type: boolean
         default: false
   push:
-    branches: [main]
+    branches: [main, refactor]
   pull_request:
 
 permissions:
