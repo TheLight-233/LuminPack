@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    LuminPackTestArea selects what this project compiles (see Directory.Build.props):
+      All    - every runtime test against the modern Core assets (default).
+      Safety - the Reader/Writer bounds and malformed-input suites only.
+      Simd   - the vector kernels and transcoders only, for hardware CI runners.
+      Hooks  - the netstandard2.1 Core asset with scalar native hook probes, without the generator.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <!-- NativeAOT validation lives in LuminPack.Tests.Aot; ordinary test builds retain the managed test host. -->
+    <PublishAot Condition="'$(PublishAot)' == ''">false</PublishAot>
+    <!-- Culture-sensitive comparer tests need ICU cultures; NativeAOT keeps invariant globalization in LuminPack.Tests.Aot. -->
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <TargetFrameworks>net9.0;net10.0;net11.0</TargetFrameworks>
+    <TargetFrameworks Condition="'$(LuminPackTestArea)' == 'Hooks'">net9.0;net10.0</TargetFrameworks>
+    <LuminPackGenerationMode>Minimal</LuminPackGenerationMode>
+    <GenerateProgramFile Condition="'$(LuminPackTestArea)' == 'All'">false</GenerateProgramFile>
+    <GenerateProgramFile Condition="'$(LuminPackTestArea)' != 'All'">true</GenerateProgramFile>
+    <LangVersion>preview</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup Condition="'$(LuminPackTestArea)' != 'Hooks'">
+    <ProjectReference Include="..\..\src\LuminPack.Generator\LuminPack.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" />
+    <CompilerVisibleProperty Include="LuminPackGenerationMode" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackTestArea)' == 'Hooks'">
+    <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" SetTargetFramework="TargetFramework=netstandard2.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.11.1" />
+    <PackageReference Include="xunit" Version="2.9.2" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.8.2" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackTestArea)' == 'All'">
+    <Compile Remove="NativeHooks/**" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackTestArea)' != 'All'">
+    <Compile Remove="**/*.cs" />
+    <Compile Include="RuntimeStateCollection.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackTestArea)' == 'Safety' Or '$(LuminPackTestArea)' == 'Simd'">
+    <Compile Include="CompiledProfileTestSupport.cs;CompiledProfileTestKernels.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackTestArea)' == 'Safety'">
+    <Compile Include="TestSuites.cs;AuditSafetyRegressionTest.cs;ReaderBoundaryValidationTest.cs;ReaderFixedBoundsPolicyTest.cs;ReaderPreaccessBoundsTest.cs;RawScalarSpanSafetyTest.cs;TruncatedFixedHeaderTest.cs;CompressionSafetyPerfTest.cs;PrimitivesSerializationTest.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackTestArea)' == 'Simd'">
+    <Compile Include="MarshalCopyBlockTest.cs;KernelPolicyTest.cs;LuminLayoutConverterTest.cs;LuminStorageTagTest.cs;PortableTransferTest.cs;ShortAsciiTranscoderTest.cs;Utf8StringKernelTest.cs;Utf8BmpTranscoderTest.cs;Utf8TwoByteReuseTest.cs;Latin1VectorTranscoderTest.cs;Latin1KernelFallbackTest.cs;ChaCha20Poly1305Test.cs;CompactStringRecordTest.cs;StringRunWriteTest.cs;JsonReaderDifferentialTest.cs;JsonNumberSyntaxTest.cs;JsonFusedStringScannerTest.cs;JsonStreamingWriterTest.cs;IBufferWriterInteropTest.cs" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackTestArea)' == 'Hooks'">
+    <Compile Include="NativeHooks/*.cs" />
+  </ItemGroup>
+  <Target Name="ValidateTestArea" BeforeTargets="PrepareForBuild">
+    <Error Condition="'$(LuminPackTestArea)' != 'All' And '$(LuminPackTestArea)' != 'Safety' And '$(LuminPackTestArea)' != 'Simd' And '$(LuminPackTestArea)' != 'Hooks'" Text="LuminPackTestArea must be All, Safety, Simd or Hooks." />
+  </Target>
+</Project>

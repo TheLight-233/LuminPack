@@ -1,0 +1,7 @@
+self-hosted-runner:
+  labels:
+    - avx512
+    - intel
+    - amd
+    - arm32
+    - unity

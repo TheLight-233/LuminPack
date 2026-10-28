@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <LuminPackPlatform Condition="'$(LuminPackPlatform)' == ''">Drawing</LuminPackPlatform>
+    <BaseIntermediateOutputPath>obj/$(LuminPackPlatform)/</BaseIntermediateOutputPath>
+    <BaseOutputPath>bin/$(LuminPackPlatform)/</BaseOutputPath>
+    <!-- Exclude every selection's outputs so stale DLLs cannot become assembly-resolution candidates. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,322 @@
+name: Runtime compatibility
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      run_vendor_hardware:
+        description: Execute configured Intel and AMD Linux x64 runners
+        type: boolean
+        default: false
+      run_arm32:
+        description: Execute a configured native Linux ARM32 runner
+        type: boolean
+        default: false
+      run_avx512:
+        description: Use a configured self-hosted Linux x64 runner with the avx512 label
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+
+jobs:
+  avx512:
+    name: AVX-512 hardware execution
+    if: github.event_name == 'workflow_dispatch' && inputs.run_avx512
+    runs-on: [self-hosted, linux, x64, avx512]
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Require AVX-512BW and exercise the real encoder
+        env:
+          LUMINPACK_REQUIRE_AVX512: '1'
+        run: dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release
+      - name: Run boundary and differential tests on AVX-512 hardware
+        env:
+          LUMINPACK_REQUIRE_AVX512: '1'
+          DOTNET_PreferredVectorBitWidth: '512'
+        run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 -p:PublishAot=false --filter 'FullyQualifiedName~Latin1VectorTranscoderTest|FullyQualifiedName~Utf8BmpTranscoderTest|FullyQualifiedName~StringSerializerFallback|FullyQualifiedName~StringSerializerOptionsTest|FullyQualifiedName~ShortAsciiTranscoderTest|FullyQualifiedName~AuditSafetyRegressionTest|FullyQualifiedName~LuminLayoutConverterTest|FullyQualifiedName~LuminStorageTagTest|FullyQualifiedName~PortableTransferTest|FullyQualifiedName~MarshalCopyBlockTest'
+
+  instruction-sets:
+    name: String and storage paths (${{ matrix.name }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: x64 AVX2 fallback
+            runner: ubuntu-latest
+            require_avx2: '1'
+            arch: x64
+            avx512: '0'
+            avx2: '1'
+            simd: '1'
+          - name: x64 SSSE3 fallback
+            runner: ubuntu-latest
+            require_ssse3: '1'
+            arch: x64
+            avx512: '0'
+            avx2: '0'
+            simd: '1'
+          - name: x64 scalar fallback
+            arch: x64
+            runner: ubuntu-latest
+            avx512: '0'
+            avx2: '0'
+            simd: '0'
+          - name: ARM64
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            avx512: '1'
+            avx2: '1'
+            simd: '1'
+          - name: ARM64 scalar fallback
+            arch: arm64
+            runner: ubuntu-24.04-arm
+            avx512: '0'
+            avx2: '0'
+            simd: '0'
+          - name: Windows ARM64
+            arch: arm64
+            runner: windows-11-arm
+            avx512: '1'
+            avx2: '1'
+            simd: '1'
+          - name: macOS ARM64
+            arch: arm64
+            runner: macos-15
+            avx512: '1'
+            avx2: '1'
+            simd: '1'
+          - name: macOS Intel x64
+            arch: x64
+            runner: macos-15-intel
+            avx512: '0'
+            avx2: '1'
+            simd: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Run runtime regressions
+        env:
+          DOTNET_EnableAVX512F: ${{ matrix.avx512 }}
+          DOTNET_EnableAVX512BW: ${{ matrix.avx512 }}
+          DOTNET_EnableAVX2: ${{ matrix.avx2 }}
+          DOTNET_EnableHWIntrinsic: ${{ matrix.simd }}
+          LUMINPACK_REQUIRE_ARCH: ${{ matrix.arch }}
+          LUMINPACK_REQUIRE_AVX2: ${{ matrix.require_avx2 }}
+          LUMINPACK_REQUIRE_SSSE3: ${{ matrix.require_ssse3 }}
+        run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 -p:PublishAot=false --logger trx --results-directory .tmp/runtime-results
+      - name: Upload runtime results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-${{ strategy.job-index }}
+          path: .tmp/runtime-results
+          if-no-files-found: error
+
+  native-aot:
+    name: Trim and NativeAOT (${{ matrix.rid }}, ${{ matrix.api }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [linux-x64, linux-arm64, win-x64, win-arm64, osx-x64, osx-arm64]
+        api: [Minimal, Full]
+        include:
+          - platform: linux-x64
+            runner: ubuntu-latest
+            rid: linux-x64
+          - platform: linux-arm64
+            runner: ubuntu-24.04-arm
+            rid: linux-arm64
+          - platform: win-x64
+            runner: windows-2022
+            rid: win-x64
+          - platform: win-arm64
+            runner: windows-11-arm
+            rid: win-arm64
+          - platform: osx-x64
+            runner: macos-15-intel
+            rid: osx-x64
+          - platform: osx-arm64
+            runner: macos-15
+            rid: osx-arm64
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Install native toolchain
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y clang zlib1g-dev
+      - name: Execute netstandard Core hook contracts on the native host
+        if: matrix.api == 'Minimal'
+        run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 -p:LuminPackTestArea=Hooks --logger trx --results-directory .tmp/hook-results
+      - name: Publish trimmed and native programs
+        shell: pwsh
+        run: |
+          dotnet publish tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release -r ${{ matrix.rid }} --self-contained -p:LuminPackPublish=trim -p:LuminPackGenerationMode=${{ matrix.api }} -p:DynamicCodeSupport=false -p:LuminPackTypeCapabilityChecks=true -o .tmp/aot/trim
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet publish tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release -r ${{ matrix.rid }} --self-contained -p:LuminPackPublish=aot -p:LuminPackGenerationMode=${{ matrix.api }} -o .tmp/aot/native
+      - name: Verify name-based Type resolution in untrimmed JIT
+        run: dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release -p:LuminPackPublish=none -p:PublishAot=false -p:PublishTrimmed=false -p:DynamicCodeSupport=true -p:LuminPackGenerationMode=${{ matrix.api }}
+      - name: Execute both programs and compare payload hashes
+        shell: pwsh
+        run: |
+          $env:LUMINPACK_REQUIRE_ARCH = ('${{ matrix.rid }}' -split '-')[1]
+          $executable = if ($IsWindows) { 'LuminPack.Tests.Aot.exe' } else { 'LuminPack.Tests.Aot' }
+          & (Join-Path '.tmp/aot/trim' $executable) | Tee-Object .tmp/aot/trim.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          & (Join-Path '.tmp/aot/native' $executable) | Tee-Object .tmp/aot/native.txt
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $trim = @(Get-Content .tmp/aot/trim.txt | Where-Object { $_ -match '^payload sha256: [0-9A-F]{64}$' })
+          $native = @(Get-Content .tmp/aot/native.txt | Where-Object { $_ -match '^payload sha256: [0-9A-F]{64}$' })
+          if ($trim.Count -ne 1 -or $native.Count -ne 1 -or $trim[0] -ne $native[0]) { throw 'Trimmed and NativeAOT payloads disagree.' }
+      - name: Upload native results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: aot-${{ matrix.rid }}-${{ matrix.api }}
+          path: .tmp/aot/*.txt
+          if-no-files-found: warn
+
+  x86:
+    name: Windows x86 execution
+    env:
+      LUMINPACK_REQUIRE_ARCH: x86
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 9.0.x
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Execute the suite in a self-contained x86 test host
+        run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net9.0 -r win-x86 -p:SelfContained=true -p:PublishAot=false --logger trx --results-directory .tmp/x86-results
+      - name: Execute netstandard Core hook contracts in an x86 process
+        run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net9.0 -r win-x86 -p:LuminPackTestArea=Hooks -p:SelfContained=true --logger trx --results-directory .tmp/hook-x86-results
+      - name: Execute complete shared facades in an x86 process
+        shell: pwsh
+        run: |
+          dotnet publish tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release -r win-x86 --self-contained -p:LuminPackGenerationMode=Full -o .tmp/x86-smoke
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $env:LUMINPACK_REQUIRE_ARCH = 'x86'
+          .tmp/x86-smoke/LuminPack.Tests.Aot.exe
+      - name: Upload x86 results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: x86-results
+          path: .tmp/x86-results
+          if-no-files-found: error
+
+  vendor-hardware:
+    name: Verified CPU vendor (${{ matrix.vendor }})
+    if: github.event_name == 'workflow_dispatch' && inputs.run_vendor_hardware
+    runs-on: ${{ fromJSON(matrix.labels) }}
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - vendor: GenuineIntel
+            labels: '["self-hosted", "linux", "x64", "intel"]'
+          - vendor: AuthenticAMD
+            labels: '["self-hosted", "linux", "x64", "amd"]'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Verify actual vendor and execute generated roots
+        env:
+          LUMINPACK_REQUIRE_VENDOR: ${{ matrix.vendor }}
+          LUMINPACK_REQUIRE_ARCH: x64
+        run: dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release
+      - name: Execute vendor runtime regressions
+        run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 -p:PublishAot=false --logger trx --results-directory .tmp/vendor-results
+      - name: Publish and execute native instruction set
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet publish tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release -r linux-x64 -p:LuminPackPublish=aot -p:IlcInstructionSet=native -o .tmp/vendor-native
+          LUMINPACK_REQUIRE_VENDOR='${{ matrix.vendor }}' LUMINPACK_REQUIRE_ARCH=x64 .tmp/vendor-native/LuminPack.Tests.Aot
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: vendor-${{ matrix.vendor }}
+          path: .tmp/vendor-results
+          if-no-files-found: error
+
+  arm32-build:
+    name: Build native ARM32 runtime fixture
+    if: github.event_name == 'workflow_dispatch' && inputs.run_arm32
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Publish ARM32 self-contained fixture
+        run: dotnet publish tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release -r linux-arm --self-contained -p:LuminPackGenerationMode=Full -p:PublishAot=false -o .tmp/arm32
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arm32-fixture
+          path: .tmp/arm32
+
+  arm32:
+    name: Native Linux ARM32 execution
+    needs: arm32-build
+    runs-on: [self-hosted, linux, ARM, arm32]
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: arm32-fixture
+          path: .tmp/arm32
+      - name: Execute on real ARM32 hardware without requiring an ARM32 SDK
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod +x .tmp/arm32/LuminPack.Tests.Aot
+          LUMINPACK_REQUIRE_ARCH=arm .tmp/arm32/LuminPack.Tests.Aot

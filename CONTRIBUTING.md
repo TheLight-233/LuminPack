@@ -1,70 +1,79 @@
 # Contributing to LuminPack
 
-## Building and checking changes
+[中文](CONTRIBUTING.cn.md)
 
-The solution includes .NET 11 targets and SDK-based documentation checks. Use an SDK capable of building those targets. `global.json` allows the installed preview SDK and rolls forward from a valid .NET 10 SDK feature band. Package consumers can still use the supported runtime target frameworks independently.
+Read the [mechanism contract](docs/mechanism-contract.md) and the [architecture](docs/architecture.md) before changing runtime or generator code.
 
-Run the checks from the repository root:
+## Building
+
+The solution includes `net11.0` targets, so use a .NET 11 preview SDK. `global.json` rolls forward from .NET 10 and allows prerelease SDKs.
 
 ```text
 dotnet build LuminPack.sln -c Release
-dotnet run --project tools/LuminPack.RepositoryChecks/LuminPack.RepositoryChecks.csproj -c Release -- .
-dotnet run --project tests/LuminPackDocumentationTest/LuminPackDocumentationTest.csproj -c Release
-dotnet run --project tests/LuminPackGeneratorConcurrencyTest/LuminPackGeneratorConcurrencyTest.csproj -c Release
-
-dotnet run --project tests/LuminPackGeneratorConcurrencyTest/LuminPackGeneratorConcurrencyTest.csproj -c Release -- --verify-incremental
-dotnet test tests/LuminPackUnitTest/LuminPackUnitTest.csproj -c Release
 ```
 
-The documentation test uses the installed SDK's Roslyn assemblies so it can compile generated code using current language features. The existing concurrency, emitter-shape, and incremental invalidation regressions exercise the generator's older Roslyn dependency separately. The incremental check compares retained and fresh drivers, checks affected model/analysis-transform counts and Roslyn tracked-step reasons, and verifies cached diagnostic callbacks and exact trees with duplicate or empty paths. It also requires cached aggregate construction for unrelated Full/Minimal edits and invalidation when a method body introduces a new formatter type. Identical output alone does not prove that analysis was skipped.
+## Checks
 
-The legacy xUnit suites use `RuntimeStateCollection` because their pool regressions drain shared process-wide caches and assert exact contents. Keep those suites isolated from concurrent borrowers in other test collections. The collection changes test scheduling only; do not relax pool assertions or modify production pooling to accommodate a competing test.
+Run what covers your change rather than every suite. The full runtime suite is large; prefer one framework and a focused `--filter`.
+
+```text
+# Source standards: XML docs, English prose, exception routing, raw copy routing
+dotnet run --project tools/LuminPack.RepositoryChecks/LuminPack.RepositoryChecks.csproj -c Release -- .
+
+# Generated-code contracts (SDK Roslyn); add --verify-<area> to run one area
+dotnet run --project tests/LuminPack.Tests.Codegen/LuminPack.Tests.Codegen.csproj -c Release
+
+# Generator pipeline on Roslyn 4.3, then incremental invalidation
+dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release
+dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-incremental
+
+# Runtime tests, one framework, focused
+dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 --filter "FullyQualifiedName~ReaderFixedBoundsPolicyTest"
+
+# Test areas with their own, smaller source sets
+dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 -p:LuminPackTestArea=Safety
+dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 -p:LuminPackTestArea=Simd
+dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 -p:LuminPackTestArea=Hooks
+
+# Wire compatibility against the checked-in fixtures
+dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release -- --wire verify tests/LuminPack.Tests.Aot/Fixtures
+
+# Platform adapters (AspNetCore, Avalonia, Drawing, Maui, MonoGame, SkiaSharp, Wpf)
+dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlatform=Drawing
+```
+
+- Reader bounds changes: run `ReaderFixedBoundsPolicyTest` and `ReaderPreaccessBoundsTest` in Debug and Release, and `--verify-codegen-performance` in the codegen contracts.
+- Compatibility refactors: write fixtures with the original build (`--wire write .tmp/wire-baseline`), then verify them with the new build. Keep temporary output under `.tmp`.
+- Test areas and platform selections build into separate `obj/<area>` and `bin/<area>` folders.
+- Add new cases to the existing suites and matrices instead of creating a project or class per optimization.
+
+## Continuous integration
+
+- `ci.yml` runs repository checks, the build, the codegen and generator contracts, incremental verification, the runtime suite, the hook area, wire fixtures and an installation test from freshly packed NuGet packages.
+- `runtime-compatibility.yml` runs trimmed and NativeAOT programs on Windows, Linux and macOS (x64 and ARM64), scalar/SSSE3/AVX2 fallbacks and x86. Vendor, ARM32 and AVX-512 runs are manual and need labeled self-hosted runners.
+- The Unity workflow builds and runs Mono and IL2CPP players; it needs Unity license secrets.
+- Benchmarks run only through the manual `run_benchmarks` input; they are not a correctness gate.
+
+## Benchmarks
+
+```text
+dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter *SimpleBenchmark*
+```
+
+Judge results by LuminPack's time divided by the reference library's, from the same run on the same machine; see section 5 of the contract.
 
 ## Source conventions
 
-README is reserved for project introduction, installation and usage. Release notes, version-change summaries, upgrade/migration notices and development/performance experiment reports are kept out of version control, never in README; `docs` holds only maintained reference material. Installation examples may reference the current package version. This is a mandatory repository documentation boundary.
+- Follow `.editorconfig`: four spaces, UTF-8.
+- English for code, comments, XML documentation, diagnostics, tests and maintenance documents. README files and `*.cn.md` editions are the exception. Write multilingual test strings with Unicode escapes.
+- Every method, constructor, operator and conversion has XML documentation with a summary, parameters, type parameters and return value. Put comments before attributes.
+- Keep emitters in separate files; split large generators into partial files by responsibility, keeping type and member names.
+- Throw through `LuminPackExceptionHelper` and keep exception types, argument names and cleanup. Use `Rethrow` to keep an original exception's identity.
+- Changing names, member order, enum values, null markers, string modes, framing or storage views can break persisted data. Public members without call sites here can still be used by consumers or generated code.
+- Keep third-party notices (`docs/xjb-LICENSE.txt`, `docs/xjb-NOTICE.md`) when editing the ported formatters.
 
-- Follow `.editorconfig`: four spaces for C#, UTF-8 text, and consistent line endings. `.gitattributes` retains binary/archive and generated-artifact classification.
-- Use English for implementation comments, XML documentation, diagnostics, examples, and maintenance documents. README files are the language exception. Represent multilingual test fixtures with Unicode escapes while preserving their actual values.
-- Document every explicitly declared method, constructor, operator, and conversion with XML comments. Include meaningful summaries, parameter descriptions, generic type parameters, and return values. Use ordinary comments for local functions and lambdas, whose documentation is not emitted as member XML by the compiler.
-- Place XML comments before attributes. Keep one summary per declaration, and avoid repeating type summaries on every part of a partial class.
-- Use `<paramref>`, `<typeparamref>`, `<see>`, and `<seealso>` where they help readers navigate the API. Escape angle brackets in prose and examples.
-- Keep unrelated emitters and mapping models in separate files. Use partial files to organize large generators by a clear responsibility while preserving their public type and member names.
-- Use descriptive local names. Preserve public names, including established spellings, unless an explicitly reviewed compatibility change authorizes a rename.
+## Documentation
 
-Both library projects emit XML documentation files. Missing public documentation, invalid XML, mismatched parameter names, unresolved references, and misplaced documentation are compiler errors for those projects. Repository checks extend method coverage to private methods, tests, benchmarks, and conditional branches.
-
-## Exceptions
-
-Runtime exceptions belong in `LuminPack.Code.LuminPackExceptionHelper`. The generator has its own internal `LuminPack.SourceGenerator.LuminPackExceptionHelper`, keeping the analyzer independent of the runtime assembly. Generated runtime code must call the public runtime helper.
-
-Preserve exception types, argument names, and cleanup behavior when moving a throw. Use `Rethrow` after cleanup when an existing exception must escape with its original identity and throwing stack. Do not replace it with a newly constructed wrapper or `throw exception`.
-
-Tests may deliberately throw caller exceptions or assertion failures. Those fixtures establish behavior at library boundaries and are distinct from production exception policy.
-
-## Serialization and layout compatibility
-
-The [LuminPack mechanism contract](docs/serialization-mechanism-contract.md) is mandatory for all production and generator changes. It covers every runtime and generation subsystem, with the historical baseline and regression anchors. Passing round trips or reducing generated output does not authorize substituting an established mechanism.
-
-Changes to names, member order, enum values, null markers, string modes, framing, and unsafe storage views can affect persisted data. Public members that have no call sites in this repository can still be used by package consumers or generated code.
-
-Remove private code only after checking references, generated references, callbacks, reflection use, and conditional compilation. Layout mirror fields, padding members, and storage placeholders can be necessary even when no ordinary field access references them.
-
-For a compatibility refactor, capture wire fixtures with the original build, verify them with the updated build, and compare newly written fixture bytes:
-
-```text
-dotnet run --project tests/LuminPackWireCompatibility/LuminPackWireCompatibility.csproj -c Release -- write .tmp/wire-baseline
-dotnet run --project tests/LuminPackWireCompatibility/LuminPackWireCompatibility.csproj -c Release -- verify .tmp/wire-baseline
-```
-
-The wire harness references the Release runtime and generator outputs; build them before running it. Keep temporary fixtures and comparison reports under `.tmp` rather than committing machine-specific artifacts.
-
-Treat `Unmanaged` source files and their `.tt` templates as a pair. Keep comments and generated APIs consistent. Preserve third-party notices and licenses when editing the hash and floating-point formatting ports.
-
-## Reviewing generated overload documentation
-
-Concrete serializer overloads must identify the exact type and actual filtered member contract. Obtain those details from the same metadata analysis used for formatter generation, including explicit ordering and private-member inclusion.
-
-Keep CLR storage layout distinct from binary member order and JSON property contracts. Unmanaged copies include storage padding; variable-length members and reference headers do not have a universal compile-time offset. Custom formatters own their representation. Generic fallbacks must describe formatter dispatch rather than claim a concrete layout.
-
-When changing documentation generation, run the documentation regression. It compiles representative models and checks type links, member order, Include/Ignore behavior, explicit offsets, unmanaged storage versus JSON fields, generation modes, asynchronous overloads, and encoded-byte return units.
+- README is the project cover: introduction, installation, usage and links. No release notes, version histories, migration notices or experiment reports in README or `docs`.
+- Every README, AGENTS, CONTRIBUTING and `docs` page has an English `name.md` and a Chinese `name.cn.md`. Update both.
+- Update `skills/luminpack` when public usage changes.

@@ -1,74 +1,79 @@
 # LuminPack attribute catalog
 
-Attributes are declared in `LuminPack.Attribute`.
+All attributes are in `LuminPack.Attribute`; option enums are in `LuminPack.Option`.
 
-## Type and assembly attributes
+## Types and assemblies
 
 | Attribute | Target | Behavior |
 | --- | --- | --- |
-| `LuminPackable(GeneratorType)` | Class, struct, interface | Enables `Object`, `VersionTolerant`, `CircleReference`, `NonGenerator`, or `Custom` generation. |
-| `LuminPackUnion` | Interface or abstract class | Discovers annotated derived types. The `(ushort tag, Type type)` form declares a member explicitly. Tags below 250 use the short representation. |
-| `LuminPackWideTag` | Class or interface | Enables the wide union-tag representation. |
-| `LuminPackGeneratorOptions` | Assembly | Configures `Full`, `Medium`, `Light`, or `Minimal` generation and `Auto` or `Disabled` registration. |
+| `[LuminPackable]` | class, struct, record, interface | Generate a formatter. `GeneratorType`: `Object` (default, positional), `VersionTolerant` (by name), `CircleReference` (reference tracking), `Custom` (your static methods), `NonGenerator`. |
+| `[assembly: LuminPackable(typeof(T))]` | assembly | Generate a type from a referenced assembly; repeatable; open generics (`typeof(G<>)`) cover the closed types used; works for Union roots. |
+| `[LuminPackUnion(tag, typeof(Case))]` | interface, abstract class | Declare a Union case explicitly (tags 0..65535; below 250 is one byte). Cases marked `[LuminPackable]` are also collected automatically. |
+| `[LuminPackWideTag]` | Union root | Use the wide tag form for all cases. |
+| `[LuminPackSingleImplementation]` | Union root | Promise exactly one implementation everywhere, allowing direct calls. Only when no other assembly can add a case. |
+| `[LuminPackBounded(maxBytes)]` | class, struct | Promise a maximum complete binary size; removes inner capacity checks. A wrong bound can overrun the buffer. |
+| `[LuminPackOption(...)]` | assembly, type, field, property | Compile-time options; see below. |
+| `[assembly: LuminPackGeneratorOptions(mode, register)]` | assembly | `LuminPackGenerationMode.Full/Medium/Light/Minimal`; `LuminPackRegisterMode.Auto/Disabled`. |
 
-## Member attributes
+## Members
 
 | Attribute | Behavior |
 | --- | --- |
-| `LuminPackOrder(uint)` | Specifies member order. Required for every serialized member in version-tolerant and circular-reference contracts. |
-| `LuminPackIgnore` | Excludes a member from ordinary member serialization. Unmanaged whole-storage copying follows its separate storage contract. |
-| `LuminPackInclude` | Includes non-public storage through generated accessors and Local mirrors, including nested access on .NET Standard and modern .NET. |
-| `LuminPackableObject` | Dispatches through the member type's own formatter instead of inlining its members. |
-| `LuminPackDelegate(instanceName, methodName)` | Delegates a member operation to a named instance method. |
-| `LuminPackStaticDelegate(type, methodName)` | Delegates a member operation to a static method. |
-| `LuminPackSingletonDelegate(type, singletonFieldName, methodName)` | Uses the method on a singleton field. Overloads omitting the field name use `Instance`. |
-| `LuminPackFixedLength(uint)` | Declares a fixed collection length for supported shapes. |
-| `LuminPackCompress` | Applies LZ compression to supported unmanaged arrays or spans. Managed elements are rejected by LuminPack034. |
+| `[LuminPackOrder(n)]` | Write order. Required on every member of `CircleReference` types; optional elsewhere. Never changes CLR layout. |
+| `[LuminPackIgnore]` | Exclude a public member. |
+| `[LuminPackInclude]` | Include a private/protected field or property (works through nested levels via generated layout mirrors). |
+| `[LuminPackOldName("Name")]` | `VersionTolerant` only: keep old names readable; list several in chronological order. |
+| `[LuminPackableObject]` | Call the member type's own formatter instead of inlining it (needed for `Custom` members). |
+| `[LuminPackFixedLength(n)]` | Fixed collection length for supported shapes. |
+| `[LuminPackCompress]` | LZ-compress a supported unmanaged array/span member. Managed elements are rejected (LuminPack034). |
+| `[LuminPackDelegate(instanceName, methodName)]` | Route the member through a method on an instance member. |
+| `[LuminPackStaticDelegate(typeof(T), methodName)]` | Route the member through a static method. |
+| `[LuminPackSingletonDelegate(typeof(T), singletonField, methodName)]` | Route through a method of a singleton; the two-argument form uses `Instance`. |
 
-## Callbacks and construction
+Delegate targets use the formatter signature of the member type, for example `static void WriteSpecial(ref LuminPackWriter writer, in SpecialData value)`.
 
-| Attribute | Target | Behavior |
-| --- | --- | --- |
-| `LuminPackOnSerializing` | Method | Runs before serialization. |
-| `LuminPackOnSerialized` | Method | Runs after serialization. |
-| `LuminPackOnDeserializing` | Method | Runs before deserialization. |
-| `LuminPackOnDeserialized` | Method | Runs after deserialization. |
-| `LuminPackPoolRent` | Static method | Supplies deserialization instances. The application owns the pool and returns instances. |
-| `LuminPackConstructor` | Constructor | Selects the constructor used by the generated construction path. |
-
-```csharp
-// The application implements the pool and return lifecycle.
-[LuminPackPoolRent]
-public static SimpleClass Rent() => SimpleClassPool.Shared.Rent();
-```
-
-## Mapping attributes
+## Construction and callbacks
 
 | Attribute | Target | Behavior |
 | --- | --- | --- |
-| `LuminMapTo(typeof(TDestination))` | Source class or struct | Generates creating, in-place, and optional collection mappings. Repeat for multiple destinations. `MethodSuffix` overrides naming; `GenerateCollectionMethods` controls collection overloads. |
-| `LuminMapper` | Static partial class | Implements declared static partial mapping methods with application-selected names and signatures. |
-| `LuminMapIgnore` | Destination member | Skips assignment. |
-| `LuminMapFromMember("SourceName")` | Destination member | Reads a differently named source member. |
-| `LuminMapUsing(type, methodName)` | Destination member | Calls a static conversion from the source member type to the destination member type. |
-| `LuminMapCondition(type, methodName)` | Destination member | Calls `static bool Method(in TSource source)` before assignment. |
-| `LuminMapConstant(value)` | Destination member | Embeds a supported compile-time string, boolean, numeric, or null value. |
+| `[LuminPackConstructor]` | constructor | Constructor used for fresh reads; parameter names must match serialized members. |
+| `[LuminPackPoolRent]` | static method | Supplies fresh instances instead of `new`. The application returns them to its pool. |
+| `[LuminPackOnSerializing]`, `[LuminPackOnSerialized]` | instance or static method | Before / after writing. |
+| `[LuminPackOnDeserializing]`, `[LuminPackOnDeserialized]` | instance or static method | Before / after reading. |
 
-## Combining attributes
+## `[LuminPackOption]` properties
 
-Include private members at each nesting level with `LuminPackInclude`. A generated mirror preserves the original inheritance and storage layout. Use `LuminPackableObject` when independent formatter dispatch is required.
+| Property | Default | Scope notes |
+| --- | --- | --- |
+| `StringEncoding` | `LuminPackStringEncoding.UTF16` | Per member in binary; JSON uses the root type's. |
+| `StringRecording` | `LuminPackStringRecording.Length` | `Token` merges `null` into `""`. |
+| `MaxJsonDepth` | 1024 | Whole JSON document. |
+| `ValidateJsonSyntax` | false | Whole JSON document. |
+| `StandardFormat` | `"G"` | Constant for Custom/formatted kernels. |
+| `StructLayout` | `LuminPackStructLayout.Tagged` | Assembly or struct. `Packed`: no padding, same bytes on 32/64-bit. `Native`: full native storage, identical layouts required. |
+| `UntrustedData` + `Max*` limits | off | Root type or assembly; bounded protocol for hostile input. |
 
-Version-tolerant and circular-reference types combine the corresponding `LuminPackable` mode with explicit member orders.
-
-Delegate members must use signatures matching their actual member type:
+## Examples
 
 ```csharp
-[LuminPackStaticDelegate(typeof(MySerializer), nameof(MySerializer.WriteSpecial))]
-public SpecialData Data;
+[LuminPackable(GeneratorType.VersionTolerant)]
+public partial class Player
+{
+    public int Id;
+    [LuminPackOldName("Name")] public string? DisplayName;
+}
 
-[LuminPackSingletonDelegate(typeof(MySerializer), nameof(MySerializer.Instance), nameof(MySerializer.WriteSpecial))]
-public SpecialData OtherData;
+[LuminPackable(GeneratorType.CircleReference)]
+public partial class Node
+{
+    [LuminPackOrder(0)] public Node? Parent;
+    [LuminPackOrder(1)] public List<Node>? Children;
+}
 
-// Implement the required formatter signature, for example:
-// static void WriteSpecial(ref LuminPackWriter writer, in SpecialData value)
+[LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]
+public partial struct Packet { public byte Kind; public long Sequence; }
+
+[LuminPackable]
+public abstract partial class Shape { }
+[LuminPackable] public sealed partial class Circle : Shape { public float Radius; }
 ```

@@ -1,937 +1,361 @@
-# **LuminPack**
+<div align="center">
 
-## 📑 目录
+# ✨ LuminPack
 
-- [📖 简介](#intro)
-- [📦 Installation 安装](#installation)
-- [🔮 后续更新计划](#roadmap)
-- [🚀 Quick Start 快速开始](#quickstart)
-- [📋 LuminPack基础类型](#basetypes)
-- [🔧 内置支持的类型](#builtin-types)
-- [🎯 定义 `[LuminPackable]` 数据](#define-data)
-- [🔍 `[LuminPackableObject]`](#luminpackableobject)
-- [⚙️ 生成模式（源码生成器）](#generation-modes)
-- [🔄 反序列化缓存池](#deserialize-pool)
-- [🎭 多态序列化](#polymorphism)
-- [🌐 跨程序集多态 / Register 手动注册](#cross-assembly)
-- [✍️ GeneratorType.Custom 手写格式化器](#custom-formatter)
-- [📝 版本容忍](#version-tolerant)
-- [🔗 循环引用](#circular-reference)
-- [💾 WriteBuffer池](#writebuffer)
-- [🎮 Unity](#unity)
-- [📜 JSON 格式规范](#json-spec)
-- [📐 二进制格式规范](#binary-spec)
-- [🤖 AI Skill](#ai-skill)
+**Blazing-fast binary & JSON serialization for .NET and Unity**
 
-<a id="intro"></a>
-## 📖 简介
+*Zero reflection · Zero-allocation reads · Ready for IL2CPP and NativeAOT*
 
-LuminPack 是一款面向 Unity 存档、网络传输等场景的高性能序列化库，同时支持二进制与 JSON 序列化。项目通过增量源代码生成器为具体类型生成专用解析代码，并针对 Unity、AOT 以及 .NET Standard 2.1 等使用环境进行适配。
+[![NuGet](https://img.shields.io/nuget/v/LuminPack.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/LuminPack)
+[![Downloads](https://img.shields.io/nuget/dt/LuminPack.svg?style=flat-square&logo=nuget&label=Downloads)](https://www.nuget.org/packages/LuminPack)
+[![License](https://img.shields.io/github/license/TheLight-233/LuminPack?style=flat-square&label=License)](LICENSE)
+[![Stars](https://img.shields.io/github/stars/TheLight-233/LuminPack?style=flat-square&logo=github&label=Stars)](https://github.com/TheLight-233/LuminPack/stargazers)
 
-LuminPack 在早期设计和实现过程中学习、借鉴了 MemoryPack 的优秀思路与实践，README 的组织方式也受到了其启发。随着功能持续迭代，LuminPack 已根据自身目标和使用场景进行独立设计与演进。
+![.NET](https://img.shields.io/badge/.NET-8%20%7C%209%20%7C%2010%20%7C%2011-512BD4?style=flat-square&logo=dotnet&logoColor=white)
+![.NET Standard](https://img.shields.io/badge/.NET%20Standard-2.1-512BD4?style=flat-square&logo=dotnet&logoColor=white)
+![Unity](https://img.shields.io/badge/Unity-Mono%20%7C%20IL2CPP-000000?style=flat-square&logo=unity&logoColor=white)
+![NativeAOT](https://img.shields.io/badge/NativeAOT-ready-2EA043?style=flat-square)
 
-### ✨ 主要特性
+**English** · [简体中文](README.cn.md)
 
-*   **几乎零运行时开销**：无反射、无运行时委托 / 字典缓存、无对象图查找——热路径全部是生成代码对具体方法的直接调用，JIT 可直接内联，序列化过程不产生虚调用与托管分配。
-*   **ALC 安全**：运行时不存在进程级 `Type` / 委托静态缓存；泛型派发与多态派发以 MethodTable 地址为键、值仅为 `int` 标识，可回收 `AssemblyLoadContext` 中的插件程序集可以正常卸载，无静态 provider 泄漏问题。
-*   **基于增量源代码生成器**：为每个 `[LuminPackable]` 类型在编译期生成专用解析代码；支持按需剪枝的生成模式（`Full` / `Medium` / `Light` / `Minimal`），在生成代码量与编译时长之间取舍。
-*   **支持现代 I/O API**：`ReadOnlySpan<byte>`、`ReadOnlySequence<byte>`，并可直接序列化进任意 `IBufferWriter<byte>`（如 `System.IO.Pipelines.PipeWriter`）。
-*   **同时支持二进制与 JSON**：两套独立协议，按场景选择。
-*   **基于非托管内存的 WriterBuffer**：原生缓冲 + 线程静态 / 集中池，扩容与复用几乎零分配。
-*   **多态序列化**：接口 / 抽象类 union 自动收集派生类型，支持跨程序集注册；原生支持 .NET 11 / C# 15 的 `union` 类型（含泛型 union 与值类型 case）。
-*   **版本容忍**：快速（Object）与完全（VersionTolerant）两种模式。
-*   **循环引用序列化**：引用跟踪，支持对象环。
-*   **反序列化缓存池**：可复用实例，进一步降低 GC。
-*   **AOT 友好**：无反射、无动态代码生成，适配 .NET AOT、Unity Mono 与 IL2CPP，覆盖 `netstandard2.1` 至 `net11.0`。
+[Quick Start](#-quick-start) ·
+[Features](#-features) ·
+[Documentation](#-documentation) ·
+[Benchmarks](#-benchmarks) ·
+[Platform Packages](#-platform-packages)
 
-<a id="installation"></a>
-## 📦 Installation 安装
+</div>
 
-### .NET 项目
+---
 
-LuminPack 支持 `netstandard2.1`、`net8.0`、`net9.0`、`net10.0` 和 `net11.0`。只需安装 `LuminPack`，NuGet 会自动安装匹配版本的 `LuminPackGenerator` 依赖：
+**LuminPack** is a high-performance serializer for C#. Mark a type with `[LuminPackable]` and a source generator writes a dedicated binary and JSON serializer for it at compile time — no reflection, no runtime code generation, no hidden allocations. It was built for game saves, network packets and real-time systems where every microsecond and every byte counts, and it runs everywhere .NET does: from .NET 11 servers down to Unity IL2CPP on consoles and phones.
+
+```csharp
+[LuminPackable]
+public partial class Player
+{
+    public int Id;
+    public string Name = "";
+    public List<int> Scores = new();
+}
+
+byte[] bytes = LuminPackSerializer.Serialize(player);       // 🚀 binary
+LuminPackSerializer.Deserialize(bytes, ref player);          // ♻️ refills the same object, zero allocation
+string json = LuminPackSerializer.SerializeJson(player);     // 📜 JSON from the same model
+```
+
+## 🌟 Features
+
+<table>
+<tr>
+<td width="50%" valign="top">
+
+### ⚡ Built for speed
+Every type gets hand-tuned-quality serialization code generated at compile time. Plain structs are copied straight from memory, strings take vectorized fast paths, and the hot path never touches reflection or dictionaries.
+
+</td>
+<td width="50%" valign="top">
+
+### ♻️ Zero-allocation reads
+Deserialize into the objects you already have. Lists, arrays, dictionaries, nested objects and unchanged strings are reused, so a warmed-up read can allocate nothing at all.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 📦 Binary and JSON, one model
+Two complete formats from a single annotation: a compact binary format for storage and the wire, and standard JSON (UTF-8 or UTF-16) for configs, tools and web APIs.
+
+</td>
+<td valign="top">
+
+### 📝 Version tolerance
+Add, remove, reorder and rename fields without breaking old saves. Old and new versions of your app read each other's data.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 🎭 Polymorphism done right
+Interfaces and abstract classes just work: subclasses are discovered automatically, generic cases and types from other assemblies are supported, and C# 15 `union` types are recognized on .NET 11.
+
+</td>
+<td valign="top">
+
+### 🔗 Real object graphs
+Shared references and cycles, private fields, constructors, callbacks and your own instance pools — LuminPack handles the models you actually write.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 🎮 Unity and AOT first
+Runs on Unity Mono and IL2CPP, NativeAOT and full trimming. Optional packages add Unity value types and a Burst-accelerated backend.
+
+</td>
+<td valign="top">
+
+### 🔧 Configured at compile time
+Choose string encodings, JSON limits, portable 32/64-bit struct layouts or a hardened mode for untrusted input. Whatever you don't turn on costs nothing.
+
+</td>
+</tr>
+<tr>
+<td valign="top">
+
+### 🪶 Small builds
+Generation modes trim the generated code down to the types you really serialize, keeping large projects fast to compile.
+
+</td>
+<td valign="top">
+
+### 🌐 Modern I/O
+`Span<T>`, `ReadOnlySequence<byte>`, `IBufferWriter<byte>`, pipes and async streams are all first-class.
+
+</td>
+</tr>
+</table>
+
+## 📦 Installation
 
 ```shell
 dotnet add package LuminPack
 ```
 
-也可以在 IDE 的 NuGet 包管理器中搜索 `LuminPack`，或直接在项目文件中添加：
-
 ```xml
-<ItemGroup>
-  <PackageReference Include="LuminPack" Version="1.2.0" />
-</ItemGroup>
+<PackageReference Include="LuminPack" Version="2.0.0" />
 ```
 
-`LuminPack` 和 `LuminPackGenerator` 是两个独立发布的 NuGet 包。`LuminPack` 通过公开依赖自动引入匹配版本的源代码生成器，生成器不会被打包进 `LuminPack` 本身。
+[`LuminPack`](https://www.nuget.org/packages/LuminPack) brings the matching source generator with it. Targets `netstandard2.1` and `net8.0` – `net11.0`.
 
-### Unity 项目
+> 🎮 **Unity?** Set the API compatibility level to .NET Standard 2.1 and follow the [Unity guide](docs/unity.md).
 
-Unity 项目需启用 **.NET Standard 2.1** API 兼容级别。可以通过 NuGetForUnity 等 NuGet 工作流安装 `LuminPack`；如果手动导入，请确保：
-
-1. 将 `netstandard2.1` 版本的 `LuminPack.dll` 及其依赖放入 Unity 项目的 `Assets/Plugins` 目录。
-2. 将 `LuminPackGenerator.dll` 放入 `Assets/RoslynAnalyzers` 目录，并在 Unity Inspector 中为它添加 `RoslynAnalyzer` 标签。
-3. 完成导入后，用 `[LuminPackable]` 声明一个类型并确认项目能正常编译，以验证源代码生成器已被 Unity 识别。
-
-LuminPack 支持 Unity Mono 和 IL2CPP。建议在发布前至少执行一次目标平台的 IL2CPP Player 运行测试，不要仅以编译成功作为验证结果。
-
-### 从源码引用
-
-也可以将仓库中的两个项目加入解决方案，并按以下方式引用：
-
-```xml
-<ItemGroup>
-  <ProjectReference Include="path/to/LuminPack/src/LuminPack/LuminPack.csproj" />
-  <ProjectReference Include="path/to/LuminPack/src/LuminPackGenerator/LuminPackGenerator.csproj"
-                    OutputItemType="Analyzer"
-                    ReferenceOutputAssembly="false" />
-</ItemGroup>
-```
-
-<a id="roadmap"></a>
-## 🔮 后续更新计划
-
-1.  内置加密模块
-
-<a id="quickstart"></a>
-## 🚀 Quick Start 快速开始
-
-定义要序列化的结构体或类，并用 `[LuminPackable]` 属性对其进行注释。
+## 🚀 Quick Start
 
 ```csharp
 using LuminPack;
+using LuminPack.Attribute;
 
 [LuminPackable]
-public class Person
+public partial class Person
 {
     public int Age { get; set; }
-    public string Name { get; set; }
+    public string Name { get; set; } = "";
 }
+
+var person = new Person { Age = 18, Name = "Light" };
+
+// Binary
+byte[] bytes = LuminPackSerializer.Serialize(person);
+Person copy = LuminPackSerializer.Deserialize<Person>(bytes);
+
+// JSON
+string json = LuminPackSerializer.SerializeJson(person);
+Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
 ```
 
-序列化代码将由c#源代码生成器功能生成。
+That's it — `LuminPackSerializer` is generated into your project with overloads for every type you serialize. See [Getting Started](docs/getting-started.md) for buffers, streams and `IBufferWriter<byte>`.
 
-调用 `LuminPackSerializer.Serialize<T>/Deserialize<T>` 序列化/反序列化二进制对象实例。
+## 🧭 A Quick Tour
 
-调用 `LuminPackSerializer.SerializeJson<T>/DeserializeJson<T>` 序列化/反序列化Json对象实例。
-
-```csharp
-var item = new Person { Age = 18, Name = "Light" };
-
-var buffer = LuminPackSerializer.Serialize(item);
-var bufferJson = LuminPackSerializer.SerializeJson(item);
-var result = LuminPackSerializer.Deserialize<Person>(buffer);
-var resultJson = LuminPackSerializer.DeserializeJson<Person>(bufferJson);
-```
-
-### 复用与追加缓冲区
-
-接收 `LuminBufferWriter` 的二进制和 JSON 写入重载从当前游标追加，保留此前内容及引用跟踪状态。调用方独占缓冲区，并负责在开始独立会话前重置：
-
-```csharp
-using var output = new LuminPack.Utility.LuminBufferWriter(true);
-LuminPackSerializer.Serialize(item, output);
-int firstEnd = output.CurrentIndex;
-LuminPackSerializer.Serialize(item, output);
-// output.GetSpan() contains both records, in order.
-
-output.ResetForReuse(); // Clear payload and reference tables; retain native capacity.
-LuminPackSerializer.Serialize(item, output);
-```
-
-`ResetForReuse()` 清空内容和读写引用表并保留容量；`Reset()` 也清空引用表，并释放非空缓冲区的原生存储。`ResetCore()` 及复制／压缩的 `AndReset` 方法只清空内容，不清空引用表。写入抛出异常后，已写内容和引用状态仍保留；再次开始独立写入前调用 `ResetForReuse()`。租借缓冲区归还池时会完整清理。
-
-如果只重新开始写入会话，需要保留读取状态，可以依次调用 `output.ResetCore()` 和 `output.WriterState.ResetOperationState()`；这会清空内容和写引用表，读取引用表保持不变。
-
-多次追加的循环引用对象共享引用表，需要用同一个 `LuminPackReader` 和读取状态依次读取；独立读取各条记录时，应在写入每条记录前完整重置引用状态。JSON 追加不会自动插入分隔符，调用方应记录文档边界。返回数组／字符串的便捷重载自行管理缓冲区和状态。
-
-<a id="basetypes"></a>
-## 📋 LuminPack基础类型
-
-默认情况下，LuminPack基础类型将实现最高性能
-
-```
-Int, UInt, Byte, Short, UShort, Long, ULong, 
-Float, Double, Char, String, Decimal, Bool, 
-Enum, Struct, Class, List, Array
-```
-
-<a id="builtin-types"></a>
-## 🔧 内置支持的类型
-
-默认情况下，这些类型可以被序列化（绝大多数也支持 JSON 与尺寸计算）：
-
-*   原生非托管标量（别名与全限定名均支持）：
-    `sbyte`, `byte`, `short`, `ushort`, `int`, `uint`, `long`, `ulong`,
-    `nint`/`IntPtr`, `nuint`/`UIntPtr`
-*   浮点/字符/布尔：`float`, `double`, `decimal`, `bool`, `char`
-*   Guid / 时间 / 日期：`Guid`, `DateTime`, `DateTimeOffset`, `TimeSpan`,
-    `DateOnly`(.NET 8+), `TimeOnly`(.NET 8+), `TimeZoneInfo`
-*   System.Numerics：`BigInteger`, `Complex`, `Plane`, `Quaternion`,
-    `Matrix3x2`, `Matrix4x4`, `Vector2`, `Vector3`, `Vector4`
-*   .NET 8+ 标量：`Half`, `Int128`, `UInt128`, `System.Text.Rune`
-*   字符串/引用系统类型：`string`, `Uri`, `Version`, `StringBuilder`, `Type`,
-    `BitArray`, `CultureInfo`
-*   泛型包装：`Nullable<>`, `Lazy<>`, `KeyValuePair<,>`, `Tuple<,...>`(1–7),
-    `ValueTuple<,...>`(1–7)
-*   内存/跨度：`Memory<>`, `ReadOnlyMemory<>`, `ArraySegment<>`,
-    `ReadOnlySequence<>`
-*   可变集合：`List<>`, `LinkedList<>`, `Queue<>`, `Stack<>`, `HashSet<>`,
-    `SortedSet<>`, `SortedList<,>`, `Dictionary<,>`, `SortedDictionary<,>`,
-    `ReadOnlyDictionary<,>`, `PriorityQueue<,>`
-*   并发集合：`ConcurrentBag<>`, `ConcurrentQueue<>`, `ConcurrentStack<>`,
-    `ConcurrentDictionary<,>`, `BlockingCollection<>`
-*   只读/可观察集合：`Collection<>`, `ReadOnlyCollection<>`,
-    `ObservableCollection<>`, `ReadOnlyObservableCollection<>`
-*   Immutable 系列：`ImmutableArray<>`, `ImmutableList<>`, `ImmutableQueue<>`,
-    `ImmutableStack<>`, `ImmutableDictionary<,>`, `ImmutableHashSet<>`,
-    `ImmutableSortedDictionary<,>`, `ImmutableSortedSet<>`,
-    `ReadOnlyCollectionBuilder<>`
-*   Frozen (.NET 8+)：`FrozenDictionary<,>`, `FrozenSet<>`
-*   集合接口：`IEnumerable<>`, `ICollection<>`, `IReadOnlyCollection<>`,
-    `IList<>`, `IReadOnlyList<>`, `ISet<>`, `IReadOnlySet<>`,
-    `IDictionary<,>`, `IReadOnlyDictionary<,>`, `ILookup<,>`, `IGrouping<,>`
-*   Immutable 接口：`IImmutableList<>`, `IImmutableQueue<>`, `IImmutableStack<>`,
-    `IImmutableDictionary<,>`, `IImmutableSet<>`
-*   数组：`T[]`, `T[,]`, `T[,,]`, `T[,,,]`(任意维度)，以及原生标量数组的
-    压缩(`WithCompress`)与快速内存操作路径
-*   枚举：用户自定义 `enum` 直接按底层值序列化
-
-<a id="define-data"></a>
-## 🎯 定义 `[LuminPackable]` 数据
-
-`[LuminPackable]` 可以注释到任何 `class` ,  `abstract class`  ,  `struct`  ,  `record` ,  `record struct` 和 `interface` 。如果类型 `struct` 或 `record struct` 不包含引用类型（c#非托管类型），则不使用任何直接从内存序列化/反序列化的规则，LuminPack会直接复制内存。
-
-默认情况下， `[LuminPackable]` 序列化公共实例属性或字段。可以使用 `[LuminPackIgnore]` 删除序列化目标， `[LuminPackInclude]` 将私有成员提升为序列化目标。
+<details>
+<summary><b>🎭 Polymorphism</b></summary>
 
 ```csharp
 [LuminPackable]
-public class MyClass
-{
-    [LuminPackInclude]
-    private MyClass2 myClass;
-}
+public abstract partial class Shape { }
 
-[LuminPackable]
-public class MyClass2
-{
-    [LuminPackInclude]
-    private int num1;
-    [LuminPackIgnore]
-    public long num2;
-    public short num3;
-    public double num4;
-    public float num5;
-    public string[] strings;
-}
+[LuminPackable] public sealed partial class Circle : Shape { public float Radius; }
+[LuminPackable] public sealed partial class Square : Shape { public float Side; }
+
+Shape shape = new Circle { Radius = 2 };
+byte[] bytes = LuminPackSerializer.Serialize(shape);
+Shape back = LuminPackSerializer.Deserialize<Shape>(bytes);   // Circle
 ```
 
-默认 `Object` 模式不序列化成员名，而是按照成员顺序序列化字段。如果类型是继承的，则按照父级→子级处理成员。读取此模式的数据时应保持成员顺序。需要按字段身份进行模式演变时，请参阅版本容忍部分。
-
-默认的序列化顺序按照声明顺序排列，可以使用 `[LuminPackOrder()]` 调整写入顺序；该属性不会改变 CLR 存储布局。
-
-注：循环引用模式要求每个字段和属性标注 `[LuminPackOrder()]`；`VersionTolerant` 模式无需维护编号。
-
-```csharp
-// serialize Prop0 -> Prop1
-[LuminPackable]
-public class MyClass
-{
-    [LuminPackOrder(1)]
-    public int Prop1 { get; set; }
-    [LuminPackOrder(0)]
-    public int Prop0 { get; set; }
-}
-```
-
-LuminPack不依赖构造函数反序列化，因此您可以随意定义构造函数。
-
-LuminPack默认支持 **`0 ~ 249`** 个成员字段
-
-<a id="luminpackableobject"></a>
-### 序列化大小担保
-
-当类型的完整二进制序列化长度有明确上限时，可以使用 `[LuminPackBounded(maxBytes)]`。集合可按元素数量一次预留容量，担保类型内部的容器写入复用这份预留。
-
-```csharp
-[LuminPackable, LuminPackBounded(128)]
-public sealed class SmallRecord
-{
-    public int Id;
-    public string Label = "";
-    public int[] Values = Array.Empty<int>();
-}
-```
-
-例如上面的类型，在 `Label.Length <= 10` 且 `Values.Length <= 16` 时，包含记录头及所有嵌套数据的长度可担保不超过 128 字节。使用者负责保证所有实例在所用编码选项下满足上限；错误担保可能导致越界写。没有可靠上限的类型应保留默认容量检查。游标始终按实际写入长度前进，担保不会改变数据格式。
-
-## 🔍 `[LuminPackableObject]`
-
-\[LuminPackableObject]可以作用于任何字段以及属性，这将告诉LuminPackCodeGenerator不要直接解析该字段并写入Myclass的解析器，而是通过注册在LuminPack的Myclass2的解析器去解析。通常情况下，这会损失大概30%的性能，因此如果您遇到源代码生成器生成错误代码等情况，可以尝试用\[LuminPackableObject]标记字段或属性。
-
-**以LuminPackable的示例代码为例**。对于嵌套类型的私有成员，注释\[LuminPackInclude]在 **`netstandard2.1`、`net8.0` 及以上**的所有平台都会 **正常工作**，并且 **嵌套层数不受限制**。
-
-对于MyClass的 **"private MyClass2 myClass;"** 字段，使用\[LuminPackInclude]不仅会解析MyClass2的所有 **public** 字段，也会解析其标记了\[LuminPackInclude]的 **private** 字段。再往下的层级同样如此：MyClass2 的私有 MyClass3、MyClass3 的私有字段……都可以逐层解析，无需额外标记。
-
-```csharp
-[LuminPackable]
-public class MyClass
-{
-    [LuminPackInclude] //MyClass2 中标记了 [LuminPackInclude] 的私有字段会一并解析
-    private MyClass2 myClass;
-}
-```
-
-实现方式：生成器会为所有需要访问私有/受保护成员的类型生成 **Local 布局镜像**，按镜像身份分片输出到 `LuminPack.LocalLayouts.<hash>.g.cs`（每个镜像一个文件；未变动的分片不会重新生成）。镜像严格复刻原类型的继承链与 `LayoutKind`（包括 `Explicit` 及其 `FieldOffset`），生成代码通过重新解释引用来读写这些槽位。每一层都是一次独立的重新解释，不会像嵌套访问器那样在深层级上失效。镜像按需生成，只有真正需要访问私有/受保护成员或需要 `Unsafe.As` 转换的类型才会生成。
-
-### 序列化回调
-
-在实例方法或静态方法标记\[LuminPackOnSerialized]，\[LuminPackOnSerializing]，\[LuminPackOnDeserialized]，\[LuminPackOnDeserializing]等特性
-
-```csharp
-[LuminPackOnSerializing]
-public static void OnSerializing()
-{
-    Console.WriteLine("OnSerializing");
-}
-    
-[LuminPackOnSerialized]
-public void OnSerialized()
-{
-    Console.WriteLine("OnSerialized");
-}
-    
-[LuminPackOnDeserialized]
-public void OnDeserialized()
-{
-    Console.WriteLine("OnDeserialized");
-}
-    
-[LuminPackOnDeserializing]
-public static void OnDeserializing()
-{
-    Console.WriteLine("OnDeserializing");
-}
-```
-
-<a id="generation-modes"></a>
-## ⚙️ 生成模式（源码生成器）
-
-默认情况下，LuminPack 的源码生成器会为项目中**观察到的每一个类型**生成格式化扩展方法（`Full` 模式）。
-对于大型项目，这会产生大量从未真正序列化的类型的扩展方法，拖慢编译。你可以通过生成模式开关，
-让生成器**只生成真正会被序列化的类型**的扩展方法，从而减少生成代码、加快编译。
-
-### 四种模式（从最省心到最激进）
-
-| 模式 | 扩展层：packable 扩展 / 格式化器 | facade 层：`LuminPackSerializer` 具体重载 |
-| --- | --- | --- |
-| `Full`（默认） | 为项目中观察到的每一个类型生成扩展方法（最省心，但生成的代码最多） | 为每个保留类型发出**全部 14 种**具体重载 |
-| `Medium` | 只生成可达类型，但**额外保留 `public` 非 `[LuminPackable]` 类型**（公共类型属于保守的 API 表面，可能被跨程序集或反射序列化） | 同 `Full`：每个保留类型发出全部 14 种 |
-| `Light` | 只生成从 `LuminPackSerializer.*` 调用点（含泛型包装方法的具体实例化）和**所有** `[LuminPackable]` 成员图可达的类型；`internal`/`private` 类型被严格剪枝 | **按调用点裁剪**：只为实际被调用到的重载形态生成；无调用点的类型不发具体重载 |
-| `Minimal` | 最激进。**只从 `LuminPackSerializer.*` 调用点出发**，只有真正被调用的类型才会被生成；即使标了 `[LuminPackable]` 但从未被序列化的类型也会被剪掉 | 与 `Light` 相同（按调用点裁剪） |
-
-各档位的差异在于"根"的范围：
-
-*   `Full`：根 = 项目中所有类型。
-*   `Medium` / `Light`：根 = 所有 `[LuminPackable]` 类型 + 所有序列化调用点；`Medium` 再多保留 `public` 类型。
-*   `Minimal`：根 = 只有 `LuminPackSerializer.*` 调用点。
-
-> `Light` 与 `Minimal` 的差别**只在扩展层**：`Light` 保留每一个 `[LuminPackable]` 的扩展与格式化器（供泛型回退使用），`Minimal` 才按可达性裁剪。两档的 facade 具体重载层都按调用点裁剪，未生成的具体重载由共享的泛型回退承接。
-
-### 开启方式（两种任选其一）
-
-**方式一：MSBuild 属性（推荐）**，在 `.csproj` 的 `<PropertyGroup>` 中声明，并在项目中让生成器能读取该属性：
-
-```xml
-<PropertyGroup>
-  <LuminPackGenerationMode>Light</LuminPackGenerationMode>
-  <!-- 或 <LuminPackGenerationMode>Medium</LuminPackGenerationMode> -->
-  <!-- 或 <LuminPackGenerationMode>Minimal</LuminPackGenerationMode> -->
-</PropertyGroup>
-
-<ItemGroup>
-  <CompilerVisibleProperty Include="LuminPackGenerationMode" />
-</ItemGroup>
-```
-
-> 说明：`CompilerVisibleProperty` 是 Roslyn 生成器读取 MSBuild 属性的标准机制，必须同时添加，
-> `build_property.LuminPackGenerationMode` 才会暴露给生成器。
-
-**方式二：程序集特性**，在任意 `.cs` 文件中：
-
-```csharp
-using LuminPack.Attribute;
-
-[assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Light)]
-```
-
-两种方式都开启时，取更激进的一档生效。
-
-### 剪枝档位的可达性规则
-
-*   **调用点**：所有 `LuminPackSerializer.*` 调用（`Serialize` / `Deserialize` / `SerializeJson` / `DeserializeJson` 等）传入的类型。
-*   **泛型包装方法**：例如 `void Save<T>(T x) => Serialize(x);`，生成器会从 `Save<MyStruct>()` 等具体调用点
-    解析 `T`，并生成 `MyStruct` 的扩展方法。
-*   **类型实参图**：对种子类型递归展开其类型实参、数组元素、包含类型。
-*   **多态成员**：可达的 union（接口/抽象类）会连带展开其派生类型，保证多态派发完整。
-
-### 注意事项
-
-*   `Light` / `Minimal` 模式下，**无法静态证明可达的序列化**（如通过反射、`typeof` 驱动、跨程序集直接序列化非 `[LuminPackable]`
-    类型）会像"未注册 formatter"一样在运行期抛出异常。这是刻意的取舍：剪枝只保留可证明会被序列化的类型。
-    若你的场景依赖这类用法，请使用 `Full` 或 `Medium`。
-*   `Minimal` 会剪掉**声明了但从未被序列化**的 `[LuminPackable]` 类型，请确认你的序列化都发生在当前程序集的静态调用点上，
-    否则请回退到 `Light`。
-*   剪枝只影响**生成代码量**，不影响**运行期性能**——可达类型的格式化方法完全相同。
-
-<a id="deserialize-pool"></a>
-## 🔄 反序列化缓存池
-
-LuminPack支持反序列化从缓存池取代new创建实例，减少GC开销。
-
-LuminPack并不实现缓存池逻辑，需要用户自行实现，同时用户也应该注意Return实例，LuminPack并不追踪对象去Return
-
-要启用缓存池，需要在静态方法上标记 **\[LuminPackPoolRent]** 特性
-
-```csharp
-[LuminPackPoolRent]
-public static SimpleClass Rent()
-{
-    return this.Pool.Rent();
-}
-```
-
-<a id="polymorphism"></a>
-## 🎭 多态序列化
-
-LuminPack支持序列化接口和抽象类对象，实现多态序列化。
-
-LuminPack支持自动收集继承类，对于标记了\[LuminPackable]特性的abstract，interface，LuminPack会自动收集子类
-
-LuminPack 同时支持手动注册Union。只有接口和抽象类可以使用 `[LuminPackUnion]` 属性，每个派生类型需要配置唯一的 Union Tag。
-
-```csharp
-// Annotate [LuminPackable] and inheritance types with [LuminPackUnion]
-// Union also supports interface class
-[LuminPackable]
-[LuminPackUnion(0, typeof(Child1))] //Child1和Child2会被自动收集，也可以像示例一样手动注册
-[LuminPackUnion(1, typeof(Child2))]
-public abstract class IUnionSample
-{
-}
-
-[LuminPackable]
-public class Child1 : IUnionSample
-{
-    public int num;
-}
-
-[LuminPackable]
-public class Child2 : IUnionSample
-{
-    public string str;
-}
-
-IUnionSample data = new Child1() { num = 114514};
-
-// Serialize
-var buffer = LuminPackSerializer.Serialize(data);
-
-// Deserialize
-var result = LuminPackSerializer.Deserialize<IUnionSample>(buffer);
-
-switch (result)
-{
-    case Child1 x:
-        Console.WriteLine(x.num);
-        break;
-    case Child2 x:
-        Console.WriteLine(x.str);
-        break;
-    default:
-        break;
-}
-```
-
-对于`LuminPackUnion`的Tag，支持 `0`  \~  `65535`， 对与`250`以下的性能更佳。因此推荐使用`250`以下的值作为Tag
-
-<a id="cross-assembly"></a>
-## 🌐 跨程序集多态 / Register 手动注册
-
-> **⚠️ 使用 Register 需要开启 Unsafe**：Register 注册 API 以**函数指针（`delegate*`）** 方式传入静态方法，调用处需要 `unsafe` 上下文。
-> 因此使用 Register 的项目必须在 `.csproj` 中开启 `AllowUnsafeBlocks`：
->
-> ```xml
-> <PropertyGroup>
->   <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-> </PropertyGroup>
-> ```
->
-> 开启后源生成器才会生成 `Register` 方法。如果你开启了 unsafe 但**不希望生成 Register 相关代码**，
-> 可以通过 `[LuminPackGeneratorOptions]` 的 `register` 参数显式关闭：
->
-> ```csharp
-> using LuminPack.Attribute;
->
-> [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Full, LuminPackRegisterMode.Disabled)]
-> ```
->
-> `LuminPackRegisterMode.Auto`（默认）：跟随 unsafe 设置，开启 unsafe 才生成；`Disabled`：即使开启 unsafe 也不生成 Register 相关代码。
-
-### 跨程序集类型直接生成
-
-当类型定义在引用程序集里时，当前项目的源生成器无法从该程序集的源码发现它。可以在当前项目的程序集上重复添加 `[LuminPackable(typeof(...))]`，把这些类型显式加入分析：
-
-```csharp
-using LuminPack.Attribute;
-
-[assembly: LuminPackable(typeof(MyLibrary.MyModel))]
-[assembly: LuminPackable(typeof(MyLibrary.GenericModel<>))]
-[assembly: LuminPackable(typeof(MyLibrary.TripleModel<,,>))]
-```
-
-非泛型类型直接传入 `typeof(MyModel)`；开放泛型用 `typeof(GenericModel<>)`、`typeof(TripleModel<,,>)` 标记整个泛型定义。生成器会为项目中实际使用的闭合类型（例如 `GenericModel<int>`）生成具体的 `LuminPackSerializer` 重载，因此这些静态调用不需要再手动注册。可以为多个类型添加多个程序集特性。
-
-普通跨程序集类和泛型类型使用同一套分析规则。生成器读取完整字段元数据，以原有的 **Local 副本 + Unsafe.As** 机制访问私有字段和自动属性的 backing field；隐藏的未序列化字段仍保留为布局占位。`[LuminPackInclude]`、`[LuminPackIgnore]` 和私有 setter 沿用既有语义，计算属性不参与序列化。类型本身以及反序列化使用的构造函数仍需可访问。具体重载和显式泛型调用都支持被标记的类型，`LuminPackSerializer.Register<T>` 仍保留给运行期动态类型和需要显式提供 formatter 的场景。
-
-这些标记完整遵守当前裁剪模式：Full 保留完整具体 API，Light 将被声明类型作为额外根，Minimal 只为实际调用保留具体重载。开放泛型只为实际观察到的闭合类型生成代码。
-
-外部 Union 根也可这样声明；当前项目的 partial 子类会直接 override 原根的生成虚方法，无需手动注册。普通 Union 仍走虚方法，泛型 Union 保留虚方法和所需的缓存槽位 switch。为允许跨程序集调用和 override，生成的虚方法现在为 `public`，并以 `EditorBrowsable(Never)` 隐藏提示；引用的 Union 若仍由旧生成器生成 internal 槽位，需要重新构建。引用程序集内已经编译的 case 保留其原有方法体和泛型兜底边界。
-
-维护和重构必须遵守 [完整机制约束](docs/serialization-mechanism-contract.md)，涵盖版本容忍、循环引用、值类型、布局、集合、回调、池化、JSON、压缩等全部模块。
-
-LuminPack 有两处运行时手动注册机制，均以 **函数指针（`delegate*`）** 方式传入静态方法。注册表以 **MethodTable 地址（`nint`）** 为键、
-存储方法指针，不持有强 `Type` 引用，保持 ALC 安全。注册后生成类型的**热路径不受任何影响**，
-只有未生成代码的类型（或未列入 union 的类型）才会走注册表。
-
-### 1️⃣ `LuminPackSerializer.Register<T>` —— 泛型派发兜底
-
-用于源码生成器**没有生成对应代码**的类型（例如未标记 `[LuminPackable]`、或处于剪枝模式且从未出现在任何序列化调用点上的类型）。
-泛型派发 `WriteValue<T>/ReadValue<T>` 的 default 分支按 MethodTable 查询该注册表并直接调用注册的方法指针（类型化签名，零装箱）。
-
-用户需要手写与下面签名一致的静态方法（参数为**具体类型**，而不是 `object`）：
-
-```csharp
-private static void WriteLegacy(ref LuminPackWriter writer, in LegacyModel value)
-{
-    writer.WriteValue(value.Id);
-    writer.WriteValue(value.Name);
-}
-
-private static void ReadLegacy(ref LuminPackReader reader, ref LegacyModel value)
-{
-    value = new LegacyModel();
-    reader.ReadValue(ref value.Id);
-    reader.ReadValue(ref value.Name);
-}
-
-// 二进制只注册写/读即可；JSON 与大小计算为可选重载
-unsafe
-{
-    LuminPackSerializer.Register<LegacyModel>(
-        &WriteLegacy, &ReadLegacy,
-        &WriteJsonLegacy, &ReadJsonLegacy);   // 可选：&WriteJsonLegacy / &ReadJsonLegacy / &CalcSizeLegacy
-}
-```
-
-可用重载：
-
-| 重载 | 参数 |
-| --- | --- |
-| `Register<T>(writeValue, readValue)` | 二进制写 / 读 |
-| `Register<T>(writeValue, readValue, writeValueJson, readValueJson)` | 二进制 + JSON |
-| `Register<T>(writeValue, readValue, writeValueJson, readValueJson, calculateOffset)` | 二进制 + JSON + 大小计算 |
-
-JSON 写/读方法签名分别为 `(ref LuminPackJsonWriter writer, in T value)` 与 `(ref LuminPackJsonReader reader, ref T value)`，
-大小计算方法签名为 `(ref LuminPackEvaluator evaluator, in T value)`。重复注册同一类型会抛出 `ArgumentException`。
-
-### 2️⃣ 多态基类 `.Register<TMember>` —— 跨程序集多态注册
-
-如果程序集 A 定义了 `[LuminPackable]` 的接口 / abstract 类（union 基类），程序集 B 的类继承了它，由于源生成器只能分析本程序集，
-A 的生成器**看不到 B 的子类**，不会为它生成 union 槽实现——基类生成的 `__LuminPackUnionSerialize_xxx` 等槽方法内部会直接 Throw。
-此时需要用户手动注册：源生成器会为基类生成一个静态字段 `LuminCircleReferenceMap`（MethodTable → 方法指针）以及 `Register<TMember>` 方法。
-
-用户手写的方法签名以**基类类型**为参数，内部把基类引用转为具体子类后写字段：
-
-```csharp
-// 基类：global::MyLib.IFoo（程序集 A）；子类：global::MyApp.FooA（程序集 B，[LuminPackable]）
-
-private static void WriteFooA(ref LuminPackWriter writer, ref global::MyLib.IFoo value)
-{
-    writer.WriteUnionHeader(0);                                  // tag 由你指定，须与 Register 的 tag 一致
-    writer.WritePolymorphismValue(LuminPackMarshal.As<global::MyLib.IFoo, global::MyApp.FooA>(ref value));
-}
-
-private static void ReadFooA(ref LuminPackReader reader, ref global::MyLib.IFoo value)
-{
-    global::MyApp.FooA tempValue = default!;
-    reader.ReadPolymorphismValue(ref tempValue);
-    value = LuminPackMarshal.As<global::MyApp.FooA, global::MyLib.IFoo>(ref tempValue!);
-}
-
-private static void WriteJsonFooA(ref LuminPackJsonWriter writer, ref global::MyLib.IFoo value)
-{
-    writer.WriteObjectStart();
-    if (default(LuminPack.Option.LuminPackDefaultOptions).StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
-        writer.WritePropertyName(LuminPackConstUtf8.TypeU8);
-    else
-        writer.WritePropertyName(LuminPackConstUtf8.TypeU16);
-    writer.WriteInt(0);
-    if (default(LuminPack.Option.LuminPackDefaultOptions).StringEncoding == LuminPack.Option.LuminPackStringEncoding.UTF8)
-        writer.WritePropertyName(LuminPackConstUtf8.ValueU8);
-    else
-        writer.WritePropertyName(LuminPackConstUtf8.ValueU16);
-    writer.WriteValue(LuminPackMarshal.As<global::MyLib.IFoo, global::MyApp.FooA>(ref value)!);
-    writer.WriteObjectEnd();
-}
-
-private static void ReadJsonFooA(ref LuminPackJsonReader reader, ref global::MyLib.IFoo value)
-{
-    global::MyApp.FooA tempValue = default!;
-    reader.ReadValue(ref tempValue);
-    value = LuminPackMarshal.As<global::MyApp.FooA, global::MyLib.IFoo>(ref tempValue!);
-}
-
-// 最后调用基类的 Register（TMember 为具体子类，tag 与写入的 union header 一致）
-unsafe
-{
-    global::MyLib.IFoo.Register<global::MyApp.FooA>(0,
-        &WriteFooA, &ReadFooA, &WriteJsonFooA, &ReadJsonFooA);
-}
-```
-
-说明：
-
-* `tag` 是写入线格式的 union 标签（`WriteUnionHeader(tag)`），反序列化时按 tag 查询注册表；tag 不能与基类生成器已生成的成员 tag 冲突。
-* 二进制写 / 读、JSON 写 / 读四个方法指针均为必填；`Sizeof` 对该类注册成员仍会抛出（与生成成员的槽行为一致）。
-* 注册表定义在基类 partial 上（基类自身程序集生成），`Register` 调用与序列化发生在同一进程内即可，跨程序集使用。
-* 同样适用于"基类声明在序列化程序集、子类未被生成器列入 union"的场景（如未标记 `[LuminPackable]` 的子类）。
-
-## 编译期序列化选项
-
-`LuminPackOption` 可以声明在程序集、类型、字段和属性上。只覆盖特性中显式设置的属性，其余选项继承外层作用域。二进制格式允许不同字段使用不同字符串编码和记录方式；读写双方必须使用一致的声明。
-
-```csharp
-using LuminPack.Attribute;
-using LuminPack.Option;
-
-[assembly: LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF16)]
-
-[LuminPackable]
-public sealed class Message
-{
-    public string Title { get; set; } = "";
-
-    [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8,
-        StringRecording = LuminPackStringRecording.Token)]
-    public string Label { get; set; } = "";
-}
-```
-
-可设置 `StringEncoding`、`StringRecording`、`MaxJsonDepth`、`ValidateJsonSyntax` 和 `StandardFormat`。`StandardFormat` 是提供给显式格式化与 Custom 核心方法的常量，不会自动改变内置数值、日期格式器的规范表示。
-
-JSON 的编码、深度限制与严格语法校验应用于整个文档，由根类型决定；字段特性不会在一个文档内混用两种编码。未声明时，默认 UTF-8、长度记录、最大 JSON 深度 1024，使用可信输入读取路径。
-
-显式选择其他配置时，可以使用无状态值类型配置参数。便捷入口、流式入口、异步入口和接收 Writer／Reader 的入口均传递同一个编译期配置，例如：
-
-```csharp
-byte[] bytes = LuminPackSerializer.Serialize<Message, LuminPackUtf16LengthOptions>(message);
-Message copy = LuminPackSerializer.Deserialize<Message, LuminPackUtf16LengthOptions>(bytes);
-```
-
-内置配置包括 `LuminPackDefaultOptions`、`LuminPackUtf8TokenOptions`、`LuminPackUtf16LengthOptions`、`LuminPackUtf16TokenOptions`。显式标记的二进制字段仍遵循它自己的声明。缓冲区只负责数据和引用跟踪，不保存可变配置对象。
-
-手写格式器可以直接调用 `writer.WriteString<TOptions>(...)`、`reader.ReadStringAndAdvance<TOptions>(...)` 等核心方法，并用 `LuminPackSerializer.Register<T, TOptions>(...)` 注册对应配置的已闭合方法指针。未按配置单独注册时，二进制格式器保留自己定义的表示。普通 JSON 注册采用 UTF-8；UTF-16 文档须提供对应配置的 JSON 注册，避免混用编码。
-
-<a id="custom-formatter"></a>
-## ✍️ GeneratorType.Custom —— 用户手写格式化器
-
-`[LuminPackable(GeneratorType.Custom)]` 告诉源生成器**不生成任何扩展方法**，序列化/反序列化完全由你手写的静态方法实现。源生成器会校验这些方法，并在编译期自动通过 `LuminPackSerializer.Register<T>()`（模块初始化器）注册——无需手动调用 Register。
-
-```csharp
-[LuminPackable(GeneratorType.Custom)]
-public sealed class MyVector
-{
-    public float X, Y, Z;
-
-    // 必需：二进制写/读
-    public static void Serialize(ref LuminPackWriter writer, in MyVector value)
-    {
-        writer.WriteValue(value.X);
-        writer.WriteValue(value.Y);
-        writer.WriteValue(value.Z);
-    }
-
-    public static void Deserialize(ref LuminPackReader reader, ref MyVector value)
-    {
-        value = new MyVector();
-        reader.ReadValue(ref value.X);
-        reader.ReadValue(ref value.Y);
-        reader.ReadValue(ref value.Z);
-    }
-}
-
-// 正常使用泛型入口，运行时走注册的手写方法（零装箱）
-var buffer = LuminPackSerializer.Serialize(new MyVector());
-```
-
-方法集必须精确匹配 Register 的三种重载之一（遵守"不需要5种全都写"原则）：
-
-| 组合 | 必需方法 |
-| --- | --- |
-| 仅二进制 | `Serialize` + `Deserialize` |
-| 二进制 + JSON | 再加 `SerializeJson` + `DeserializeJson`（JSON 必须成对） |
-| 二进制 + JSON + 尺寸 | 再加 `CalculateOffset`（第三种重载要求 JSON 方法齐全） |
-
-校验诊断（`LuminPack100`–`LuminPack108`）会报告：缺少必需方法、方法非 `static`、签名不匹配、JSON 方法只写了一半、`CalculateOffset` 但 JSON 不全、泛型类型不支持（运行时按封闭类型注册）、union 根不支持，以及项目未开启 `AllowUnsafeBlocks` 时注册被跳过的警告（Register 使用函数指针，需要 unsafe 上下文）。方法必须是 `public` 或 `internal`，以便生成的注册代码能取其地址。
-
-Custom 类型作为其他 `[LuminPackable]` 类型的字段时，请给该字段标记 `[LuminPackableObject]`，使其通过注册表派发到手写方法而不是内联展开。
-
-<a id="version-tolerant"></a>
-## 📝 版本容忍
-
-在默认情况下 LuminPack的代码生成模式（ `GenerateType.Object` ）， 仅支持有限的模式演化。
-
-*   如果数据类型是非托管数据，例如Struct（不包含引用类型）。不能更改数据
-*   可以添加成员，不能删除成员。
-*   不能更改成员名称
-*   不能更改成员顺序
-*   不能更改成员类型
-
-```csharp
-[LuminPackable]
-public class MyClass
-{
-    public int Prop1 { get; set; }
-    public long Prop2 { get; set; }
-}
-
-// Add is OK.
-[LuminPackable]
-public class MyClass
-{
-    public int Prop1 { get; set; }
-    public long Prop2 { get; set; }
-    public int? AddedProp { get; set; }
-}
-
-// Remove is NG.
-[LuminPackable]
-public class MyClass
-{
-    // public int Prop1 { get; set; }
-    public long Prop2 { get; set; }
-}
-
-// Change order is NG.
-[LuminPackable]
-public class MyClass
-{
-    public long Prop2 { get; set; }
-    public int Prop1 { get; set; }
-}
-```
-
-`GeneratorType.VersionTolerant` 使用稳定的字段名匹配，支持添加、删除和调整字段顺序。重命名字段时，用 `[LuminPackOldName]` 保留旧名。
+➡️ [Polymorphism guide](docs/polymorphism.md)
+</details>
+
+<details>
+<summary><b>📝 Version tolerance</b></summary>
 
 ```csharp
 [LuminPackable(GeneratorType.VersionTolerant)]
-public class PlayerV1
+public partial class SaveData
 {
-    public int Id { get; set; }
-    public string? Name { get; set; }
-    public long Removed { get; set; }
-}
+    public int Level;
 
-[LuminPackable(GeneratorType.VersionTolerant)]
-public class PlayerV2
-{
-    public List<int>? Scores { get; set; }
+    [LuminPackOldName("Name")]          // renamed from Name, old saves still load
+    public string DisplayName = "";
 
-    [LuminPackOldName("Name")]
-    public string? DisplayName { get; set; }
-
-    public int Id { get; set; }
+    public List<int> Unlocks = new();   // added later
 }
 ```
 
-这两个模型可以双向读取各自写出的数据。未知字段按长度跳过，缺失字段设置为 `default`，包括复用已有实例时。二进制写入保留最早的旧名；连续重命名时，按时间顺序保留全部 `[LuminPackOldName]`。JSON 读取也接受旧名，写入使用当前名称。
+➡️ [Version tolerance guide](docs/versioning.md)
+</details>
 
-需要独立演进的嵌套模型也应使用 `VersionTolerant`。字段类型与二进制选项应保持兼容，不支持自动类型转换。`ref` 读取支持已有对象及字段实例复用。完整用法和格式说明参见 [版本容忍参考](docs/version-tolerant-serialization.md)。
-
-<a id="circular-reference"></a>
-## 🔗 循环引用
+<details>
+<summary><b>♻️ Zero-allocation reuse and pooling</b></summary>
 
 ```csharp
-// to enable circular-reference, use GeneratorType.CircleReference
+var state = new WorldState();
+while (running)
+    LuminPackSerializer.Deserialize(ReceivePacket(), ref state);   // same objects every frame
+
+[LuminPackable]
+public partial class Bullet
+{
+    public float X, Y;
+
+    [LuminPackPoolRent]
+    public static Bullet Rent() => BulletPool.Rent();               // new instances come from your pool
+}
+```
+
+➡️ [Reuse guide](docs/reuse.md)
+</details>
+
+<details>
+<summary><b>🔗 Shared references and cycles</b></summary>
+
+```csharp
 [LuminPackable(GeneratorType.CircleReference)]
-public class Node
+public partial class Node
 {
-    [LuminPackOrder(0)]
-    public Node? Parent { get; set; }
-    [LuminPackOrder(1)]
-    public Node[]? Children { get; set; }
+    [LuminPackOrder(0)] public Node? Parent;
+    [LuminPackOrder(1)] public List<Node>? Children;
 }
 ```
 
-`GeneratorType.CircleReference` 使用显式编号和长度表；增删字段时应保留已有编号。
+➡️ [Reference tracking](docs/versioning.md#reference-tracking)
+</details>
 
-对象引用跟踪只对标记为 `GeneratorType.CircleReference` 的对象进行。如果要跟踪任何其他对象，请对其进行包装。
+<details>
+<summary><b>🔧 Options and portable structs</b></summary>
 
-<a id="writebuffer"></a>
-## 💾 WriteBuffer池
+```csharp
+[assembly: LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8)]
 
-LuminPack的序列化池通过Marshal申请非托管内存，这极大提高了Buffer扩容的性能。
+[LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]
+public partial struct Packet            // identical bytes on 32-bit and 64-bit
+{
+    public byte Kind;
+    public long Sequence;
+}
+```
 
-因此，请确保所有WriteBuffer调用Dispose方法，以释放非托管内存。
+➡️ [Options guide](docs/options.md)
+</details>
 
-<a id="unity"></a>
-## 🎮 Unity
+## 📊 Benchmarks
 
-LuminPack 针对 Unity 和 .NET Standard 2.1 进行了专门适配与优化，并支持增量源代码生成。
+Measured with [BenchmarkDotNet](https://benchmarkdotnet.org) — **lower is better**. Every chart compares libraries on the same machine, data and run; the multiplier shows how much longer each library takes than LuminPack.
 
-*   针对常用集合和非托管泛型提供 Unity 专用实现。
-*   支持 Mono 与 IL2CPP 运行环境。
-
-<a id="json-spec"></a>
-## 📜 JSON 格式规范
-
-LuminPack 按照以下规则生成 JSON 文本。默认使用 UTF-8 处理字符串，也可通过根类型上的 `[LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF16)]` 选择 UTF-16。序列化和反序列化必须使用一致的字符编码选项。
-
-### 基础值
-
-| C# 值 | JSON 形式 |
+| 🖥️ Test machine | |
 | --- | --- |
-| `null` | `null` |
-| 整数、浮点数、`decimal` | JSON number |
-| `bool` | `true` / `false` |
-| `string`、`char` | JSON string，并按 JSON 规则转义 |
-| `Guid`、`DateTime`、`DateTimeOffset`、`TimeSpan` 等 | JSON string |
+| CPU | 13th Gen Intel Core i7-13650HX · 14 cores / 20 threads |
+| Memory | 40 GB |
+| OS | Windows 11 (10.0.26200) |
+| Runtime | .NET 10.0.9 · X64 RyuJIT (x86-64-v3 / AVX2) |
+| Tooling | BenchmarkDotNet 0.15.6 · .NET SDK 11.0.100-preview.7 |
+| Settings | 3 launches × 15 iterations, Server GC (polymorphism: 1 launch × 10 iterations, workstation GC) |
 
-JSON number 只能保证表示有限浮点值；`NaN`、`PositiveInfinity` 和 `NegativeInfinity` 不属于标准 JSON 数字，不应用于需要跨库交换的 JSON 数据。LuminPack 在序列化这些值时抛出异常，反序列化时超出目标类型表示范围的数字（如 `1e999`）同样被拒绝。反序列化默认限制 JSON 嵌套深度（`LuminPackOptionAttribute.MaxJsonDepth`，默认 1024）。
+### 🎮 Game save
 
-### 对象
+A realistic save file with nested objects, lists, dictionaries and strings.
 
-标记了 `[LuminPackable]` 的类和结构体序列化为 JSON object，属性名与生成器选中的 C# 成员名一致。例如：
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks/SerializeBenchmark-dark.svg">
+  <img alt="Game save benchmark" src="docs/assets/benchmarks/SerializeBenchmark-light.svg" width="100%">
+</picture>
 
-```json
-{
-  "Age": 18,
-  "Name": "Light"
-}
+### 🧱 Simple class
+
+A small class with numbers, an array, a list and a dictionary — the classic micro-benchmark shape.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks/SimpleBenchmark-dark.svg">
+  <img alt="Simple class benchmark" src="docs/assets/benchmarks/SimpleBenchmark-light.svg" width="100%">
+</picture>
+
+### 🎭 Polymorphism
+
+Interfaces and abstract classes with several concrete cases.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks/PolymorphismBenchmark-dark.svg">
+  <img alt="Polymorphism benchmark" src="docs/assets/benchmarks/PolymorphismBenchmark-light.svg" width="100%">
+</picture>
+
+### 📜 JSON
+
+The same game save as JSON text, against the most popular .NET JSON libraries.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks/JsonBenchmark-dark.svg">
+  <img alt="JSON benchmark" src="docs/assets/benchmarks/JsonBenchmark-light.svg" width="100%">
+</picture>
+
+Want to see it on your own hardware? Every number above can be reproduced:
+
+```shell
+dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter *SerializeBenchmark*
 ```
 
-反序列化时，未知属性会被跳过；JSON 中缺失的成员保持其默认值。属性顺序不用于匹配，但名称和值类型应与目标模型一致。
+## 📚 Documentation
 
-### 集合、字典与元组
+| | Guide | You'll learn |
+| :---: | --- | --- |
+| 🚀 | [Getting Started](docs/getting-started.md) | Installation, the first type, every entry point, buffers and streams |
+| 🎯 | [Defining Types](docs/defining-types.md) | Members, ordering, constructors, callbacks, size guarantees, supported types |
+| 🎭 | [Polymorphism](docs/polymorphism.md) | Unions, generic cases, types from other assemblies, manual registration |
+| 📝 | [Version Tolerance & References](docs/versioning.md) | Evolving schemas, renamed members, shared objects and cycles |
+| ♻️ | [Reuse & Zero Allocation](docs/reuse.md) | Reading into existing objects, instance pools, output buffers |
+| 🔧 | [Compile-time Options](docs/options.md) | String encodings, option profiles, JSON limits, 32/64-bit struct layouts |
+| 🪶 | [Generation Modes](docs/generation-modes.md) | `Full`, `Medium`, `Light`, `Minimal` |
+| ✍️ | [Custom Formatters](docs/custom-formatters.md) | Hand-written formats, `Register<T>`, low-level reader and writer |
+| 🎮 | [Unity, IL2CPP & NativeAOT](docs/unity.md) | Unity setup, Burst, trimming |
+| 📐 | [Wire Formats](docs/formats.md) | The binary layout and the JSON representation |
+| 🛡️ | [Security](docs/security.md) | Portability, untrusted input, encryption |
 
-*   一维数组和顺序集合写为 JSON array：`[1, 2, 3]`。
-*   多维数组写为嵌套 JSON array：`[[1, 2], [3, 4]]`；反序列化时各维必须是规则的矩形结构。
-*   `KeyValuePair<TKey, TValue>` 和其他键值对写为两个元素的 JSON array：`[key, value]`。
-*   字典写为键值对数组：`[[key1, value1], [key2, value2]]`。这种表示允许键使用任意 LuminPack 支持的类型，不限于字符串。
-*   `Tuple`、`ValueTuple` 等固定长度组合值写为按成员顺序排列的 JSON array。
+## 🧩 Platform Packages
 
-### Union 多态
+Optional add-ons with ready-made support for engine and UI types. The core library depends on none of them.
 
-Union 值使用包含 `$type` 和 `$value` 的对象表示。`$type` 是 `[LuminPackUnion]` 配置的 Tag，`$value` 是实际派生对象：
+| Package | Adds support for |
+| --- | --- |
+| 🎮 [LuminPack.Unity](src/LuminPack.Unity/README.md) | Vectors, colors, bounds, matrices, curves, gradients |
+| 🔥 [LuminPack.Burst](src/LuminPack.Burst/README.md) | Burst-accelerated kernels for Unity |
+| 🌐 [LuminPack.AspNetCore](src/LuminPack.AspNetCore/README.md) | MVC and Minimal API binary bodies, HTTP value types |
+| 🖼️ [LuminPack.Avalonia](src/LuminPack.Avalonia/README.md) | Geometry, colors, matrices |
+| 🎨 [LuminPack.Drawing](src/LuminPack.Drawing/README.md) | `System.Drawing.Color` |
+| 📱 [LuminPack.Maui](src/LuminPack.Maui/README.md) | MAUI Graphics geometry and colors |
+| 🕹️ [LuminPack.MonoGame](src/LuminPack.MonoGame/README.md) | Vectors, matrices, bounding volumes |
+| 🖌️ [LuminPack.SkiaSharp](src/LuminPack.SkiaSharp/README.md) | Geometry, colors, matrices |
+| 🪟 [LuminPack.Wpf](src/LuminPack.Wpf/README.md) | Geometry, 3D types, colors |
 
-```json
-{
-  "$type": 0,
-  "$value": {
-    "num": 114514
-  }
-}
-```
+## 🤖 AI Skill
 
-Union 的 `null` 值直接写为 `null`。客户端与服务端交换 JSON 时，必须保持 Union Tag 和对应类型的映射一致。
+Using an AI coding assistant? [`skills/luminpack`](skills/luminpack/SKILL.md) teaches it to write correct LuminPack code — attributes, APIs, Unions, version tolerance, custom formatters and the common pitfalls. Drop the folder into your assistant's skill directory (for example `.claude/skills/`) and you're set.
 
-### 循环引用
+## 🤝 Contributing
 
-`GenerateType.CircularReference` 模式使用 `$id` 记录首次出现的对象，后续重复引用使用 `$ref` 指向该 ID。这两个名称是 LuminPack 保留的元数据属性，不应用作普通成员名。
+Issues and pull requests are welcome! Please read the [contributing guide](CONTRIBUTING.md) first; the [architecture overview](docs/architecture.md) and the [design rules](docs/mechanism-contract.md) explain how the library fits together.
 
-> JSON 格式与二进制格式是两套独立协议，不能将 `Serialize` 的二进制结果传给 `DeserializeJson`，反之亦然。
+## 💖 Acknowledgements
 
-<a id="binary-spec"></a>
-## 📐 二进制格式规范
+LuminPack learned a great deal from the design of [MemoryPack](https://github.com/Cysharp/MemoryPack) in its early days and has since grown in its own direction. Floating-point JSON formatting is ported from [xjb](docs/xjb-NOTICE.md).
 
-端序必须 `Little Endian` 。
+## 📄 License
 
-### 非托管结构
+LuminPack is released under the [MIT License](LICENSE). Third-party notices: [xjb license](docs/xjb-LICENSE.txt) (Apache 2.0) · [xjb notice](docs/xjb-NOTICE.md).
 
-非托管结构是不包含引用类型的c#结构，类似于c#非托管类型的约束。序列化结构布局，包括填充。
+<div align="center">
 
-### Object 对象
+**If LuminPack helps you, a ⭐ on GitHub means a lot!**
 
-`(byte memberCount, [values...])`
-
-对象头文件中的成员计数为1字节无符号字节。成员数允许 `0` 到 `249` ,  `255` 表示对象 `null` 。值存储成员数的内存包值。
-
-### Version Tolerant Object 版本容忍对象
-
-`(251, 1, byte profile, byte memberCount, [UTF-8 name/type metadata...], [varint payload lengths...], [payloads...])`
-
-`255` 表示 `null`。元数据先整体写入，随后是按同一顺序排列的长度表和字段内容。名称与类型信息采用完整字节比较，字段顺序不决定其身份。详细编码规则见 [二进制格式参考](docs/version-tolerant-serialization.md#binary-framing)。
-
-### Circular Reference Object 循环引用对象
-
-`(byte memberCount, [varint byte-length-of-values...], varint referenceId, [values...])`\
-`(250, varint referenceId)`
-
-循环引用对象保留槽位长度表。如果 memberCount 为 250，则后续变长整数为已有对象的 referenceId；新对象在长度表之后写入 referenceId。
-
-### String 字符串
-
-`(int utf16-length, utf16-value)`\
-`(int utf8-byte-count, int utf16-length, utf8-bytes)`
-
-字符串有两种形式，UTF16和UTF8。Length 模式下第一个4字节有符号整数 `-1` 表示 `null`， `0` 表示空字符串 `""`。UTF16与collection相同（序列化为 `ReadOnlySpan<char>` ， UTF16 -value的字节数为UTF16 -length \* 2）。UTF8 模式下第一个整数为 utf8 字节数，第二个整数为 utf16 字符数（`-1` 表示未知，读取时按慢路径解码）。Utf8-bytes存储 utf8-byte-count 的字节数。
-
-Token 模式没有 null 标记，`null` 与空字符串统一编码为空 token，反序列化结果均为 `string.Empty`。
-
-### Union 多态
-
-`(byte tag, value)`\
-`(250, ushort tag, value)`
-
-第一个无符号字节是用于区分值类型或标志的标记， `0` 到 `249` 表示标记， `250` 表示下一个无符号短标记， `255` 表示 `null` 。
-
-### Collection 集合
-
-`(int length, [values...])`
-
-集合头的数据计数为4字节有符号整数， `-1` 表示 `null` 。头字节存储数据长度。
-
-### Tuple 元组
-
-`(values...)`
-
-元组是固定大小的非空值集合。 `KeyValuePair<TKey, TValue>` 和 `ValueTuple<T,...>` 被序列化为Tuple。
-
-<a id="ai-skill"></a>
-## 🤖 AI Skill（供 AI 助手使用）
-
-仓库附带一个面向 AI 助手 / Agent 的 Skill：`skills/luminpack/`。它是一份 LuminPack **使用说明书**，目的是让 AI 写出正确使用 LuminPack 的代码，覆盖：
-
-- `[LuminPackable]` 标记与全部序列化特性的用法
-- `LuminPackSerializer` 二进制 / JSON / 压缩 / Register 注册 API
-- 源码生成器的生成模式配置（Full / Medium / Light / Minimal）
-- 多态 union、版本容忍、循环引用、`GeneratorType.Custom` 自定义格式化器、`LuminMapper` 映射
-- 常见陷阱与性能提示
-
-Skill 内含可直接照抄的完整示例代码（Custom formatter、`Register<T>`、跨程序集多态 `Register<TMember>`、反序列化缓存池、委托成员等），并附属性目录与 API 参考。
-
-### 安装 / 使用
-
-- **支持仓库 `skills/` 目录自动发现的环境**：克隆仓库后即可直接使用，无需额外操作。
-- **Agent Skills 兼容环境**：将 `skills/luminpack/` 目录复制到项目的 Skill 目录（如 `.claude/skills/`、`.trae/skills/` 等）。
-- **手动参考**：直接阅读 `skills/luminpack/SKILL.md` 及 `skills/luminpack/references/` 下的属性目录与 API 参考。
-
-## 📄 License 许可证
-
-This library is licensed under the MIT License.
-
-第三方组件的许可证与声明文件归档在 `docs/` 目录：
-
-- [docs/xjb-LICENSE.txt](docs/xjb-LICENSE.txt)：xjb 上游许可证全文（Apache License 2.0）
-- [docs/xjb-NOTICE.md](docs/xjb-NOTICE.md)：xjb 第三方声明，包含上游来源、锁定提交及移植内容说明
+</div>

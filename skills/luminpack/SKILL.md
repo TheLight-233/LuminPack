@@ -1,81 +1,80 @@
 ---
 name: luminpack
-description: Use LuminPack binary and JSON serialization correctly. Covers packable models, attributes, generated serializer overloads, generation tiers, unions, version tolerance, custom formatters, mapping, compression, and reusable buffers.
+description: Write correct code that uses the LuminPack binary and JSON serializer for .NET and Unity. Covers [LuminPackable] models and attributes, the generated LuminPackSerializer API, ref reuse, Unions, version tolerance, reference tracking, compile-time options and profiles, struct layouts, generation modes, Custom formatters and registration.
 ---
 
-# LuminPack usage
+# Using LuminPack
 
-LuminPack targets Unity save data and network payloads, supporting .NET Standard 2.1 and .NET 8 through .NET 11. Source generators produce concrete formatter calls for supported types, including AOT environments.
+LuminPack generates a dedicated binary and JSON formatter for every type at compile time (incremental source generator, no reflection). It targets `netstandard2.1` (Unity Mono/IL2CPP) and .NET 8 to .NET 11, and works under NativeAOT.
 
-This skill documents library usage. It does not prescribe a development workflow or modify repository maintenance instructions.
+This skill is about using the library. It does not describe how to maintain the LuminPack repository.
 
 ## Quick start
-
-Annotate a supported class, struct, record, or interface with `[LuminPackable]`, then use the generated `LuminPackSerializer` facade:
 
 ```csharp
 using LuminPack;
 using LuminPack.Attribute;
 
 [LuminPackable]
-public class Person
+public partial class Person
 {
     public int Age { get; set; }
     public string Name { get; set; } = "";
 }
 
-// Inside an application method:
-// byte[] data = LuminPackSerializer.Serialize(person);
-// Person result = LuminPackSerializer.Deserialize<Person>(data);
-// string json = LuminPackSerializer.SerializeJson(person);
-// Person jsonResult = LuminPackSerializer.DeserializeJson<Person>(json);
+byte[] bytes = LuminPackSerializer.Serialize(person);
+Person copy = null!;
+LuminPackSerializer.Deserialize(bytes, ref copy);          // reuses copy if it is not null
+Person other = LuminPackSerializer.Deserialize<Person>(bytes);
+
+string json = LuminPackSerializer.SerializeJson(person);
+Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
+int size = LuminPackSerializer.Sizeof(person);
 ```
 
-For repeated writes, reuse a `LuminBufferWriter`. It owns native memory and must be disposed. Buffer overloads use the writer's configured options and operation state.
+`LuminPackSerializer` is generated into the consuming assembly (namespace `LuminPack`). Install with `dotnet add package LuminPack`; the generator package comes with it.
 
-## Serialization contracts
+## Rules that matter
 
-- Ordinary object members follow their declared or explicit order, including inherited members. Readers and writers must agree on that contract.
-- Object member counts range from 0 through 249. The null object marker is 255; a null collection length is -1.
-- Binary payloads use little-endian encoding. Unmanaged struct fast paths copy the runtime storage representation, including padding.
-- Binary and JSON are separate formats. Use matching serialization and deserialization APIs.
-- `VersionTolerant` and `CircleReference` require `[LuminPackOrder]` on every serialized member.
-- Preserve existing member order, types, and protocol configuration when evolving ordinary object contracts. Use an appropriate version-tolerant contract when compatibility requirements demand it.
-- Generated overload XML documentation identifies the concrete type, member contract, generation mode, buffer semantics, and CLR layout. Memory layout is distinct from wire offsets for variable-length members.
+- Declare models `partial`. Union roots, their cases and every containing type **must** be `partial` (LuminPack035).
+- The default `Object` mode is positional: members in declaration order (or `[LuminPackOrder]`), parents first, 0 to 249 members. Both ends need the same members in the same order. Removing, reordering or retyping members breaks old data; use `VersionTolerant` for evolving schemas.
+- `VersionTolerant` matches members by name; `[LuminPackOrder]` is optional there. `[LuminPackOldName("Old")]` keeps renamed members readable.
+- `CircleReference` (reference tracking) requires `[LuminPackOrder]` on **every** serialized member.
+- Binary and JSON are separate protocols; never mix their outputs.
+- Default strings are UTF-16 with length prefixes. Reader and writer must use the same options (attribute declarations or explicit profile).
+- Binary is little-endian. Raw unmanaged structs are copied with padding unless `StructLayout` says otherwise.
+- There is **no runtime options object**. Options are `[LuminPackOption(...)]` declarations or a profile type argument such as `Serialize<LuminPackUtf8LengthOptions>(value)`.
+- `LuminBufferWriter` owns native memory: dispose it (or return it to its pool). Writes into it append; reset with `ResetForReuse()` between independent records.
+- `Register` APIs take function pointers: the project needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` and an `unsafe` block.
+- Reuse is not transactional: a failed read can leave members already updated.
 
-## Attributes and APIs
+## Where to look
 
-See [the attribute catalog](references/attributes.md) and [the API reference](references/api.md) for signatures and examples.
+- [API reference](references/api.md): every entry point, profiles, buffers, registration, Custom formatters, low-level API, helpers.
+- [Attribute catalog](references/attributes.md): every attribute and option with examples.
 
-Common attributes include `LuminPackable`, `LuminPackOrder`, `LuminPackIgnore`, `LuminPackInclude`, `LuminPackableObject`, `LuminPackUnion`, `LuminPackWideTag`, `LuminPackCompress`, `LuminPackFixedLength`, serialization callbacks, and `LuminPackPoolRent`.
+## Common tasks
 
-## Generation tiers
+| Task | Use |
+| --- | --- |
+| Allocation-free repeated reads | `Deserialize(bytes, ref existing)` |
+| Polymorphism | `[LuminPackable]` interface/abstract root; cases collected automatically or `[LuminPackUnion(tag, typeof(Case))]` |
+| Type from another assembly | `[assembly: LuminPackable(typeof(Lib.Model))]` (also open generics, also Union roots) |
+| Schema evolution | `[LuminPackable(GeneratorType.VersionTolerant)]` |
+| Shared objects or cycles | `[LuminPackable(GeneratorType.CircleReference)]` + `[LuminPackOrder]` on every member |
+| Same bytes on 32-bit and 64-bit | `[LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]` on the struct or assembly |
+| UTF-8 strings | `[LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8)]` or the `LuminPackUtf8LengthOptions` profile |
+| Hostile input | `[LuminPackOption(UntrustedData = true, MaxInputBytes = ..., ...)]` on the root type or assembly |
+| Hand-written format | `[LuminPackable(GeneratorType.Custom)]` with static `Serialize`/`Deserialize` |
+| Smaller generated code | `<LuminPackGenerationMode>Light</LuminPackGenerationMode>` + `<CompilerVisibleProperty Include="LuminPackGenerationMode" />` |
+| Pool instances | `[LuminPackPoolRent] static T Rent()` |
 
-`Full` emits the broadest formatter set. `Medium`, `Light`, and `Minimal` reduce generated code according to reachability and optional-feature rules.
+## Pitfalls
 
-```xml
-<PropertyGroup>
-  <LuminPackGenerationMode>Light</LuminPackGenerationMode>
-</PropertyGroup>
-<ItemGroup>
-  <CompilerVisibleProperty Include="LuminPackGenerationMode" />
-</ItemGroup>
-```
-
-Alternatively use `[assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Light)]`. Aggressive pruning can omit types reached only through reflection or external assemblies; select a tier that preserves those use cases.
-
-## Custom formatters and registration
-
-`GeneratorType.Custom` validates and registers handwritten static methods instead of emitting the type's formatter extensions. Keep binary methods paired, JSON methods paired, and supply size evaluation only with the required preceding tiers. See the API reference.
-
-Manual `Register<T>` and union member registration use function pointers and require an unsafe context and `AllowUnsafeBlocks`. Registered tags must not collide with generated union members.
-
-## Performance and correctness
-
-- Reuse buffers in repeated operations and avoid boxing values on hot paths.
-- A `LuminPackPoolRent` method supplies deserialization instances. The application owns the pool and its return lifecycle.
-- `LuminPackInclude` supports nested private members through generated Local mirrors on .NET Standard and modern .NET. Mirrors must preserve inheritance and layout attributes.
-- Annotate a custom-formatted nested member with `LuminPackableObject` when it must dispatch through its own formatter.
-- Match UTF-8/UTF-16 and length/token recording options at both ends.
-- JSON floating-point values must be finite. Invalid or out-of-range numeric input is rejected according to the reader's validation rules.
-- Dispose owned buffers and preserve exclusive ownership during each reusable-buffer operation.
+- Don't pass `null!` targets expecting reuse; reuse needs an existing instance.
+- Don't rely on reflection- or `typeof`-driven serialization under `Light`/`Minimal`; those modes only keep statically reachable types.
+- Don't use `$type`, `$value`, `$id`, `$ref` as JSON member names.
+- `NaN`/infinity cannot be written to JSON.
+- Under NativeAOT, reading a non-null `System.Type` throws `PlatformNotSupportedException`.
+- A `Custom` type used as a member of another model needs `[LuminPackableObject]` on that member.
+- `[LuminPackBounded(n)]` is a promise; a wrong bound can write past the buffer.

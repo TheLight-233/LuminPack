@@ -1,0 +1,135 @@
+{
+  "module": "Maui",
+  "types": [
+    {
+      "type": "Microsoft.Maui.Graphics.Point",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "X"
+        },
+        {
+          "kind": "double",
+          "member": "Y"
+        }
+      ],
+      "factory": "new global::Microsoft.Maui.Graphics.Point({0}, {1})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Maui.Graphics.Point(1.25, 2.25)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Maui.Graphics.PointF",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "X"
+        },
+        {
+          "kind": "float",
+          "member": "Y"
+        }
+      ],
+      "factory": "new global::Microsoft.Maui.Graphics.PointF({0}, {1})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Maui.Graphics.PointF(1.25f, 2.25f)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Maui.Graphics.Size",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "Width"
+        },
+        {
+          "kind": "double",
+          "member": "Height"
+        }
+      ],
+      "factory": "new global::Microsoft.Maui.Graphics.Size({0}, {1})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Maui.Graphics.Size(1.25, 2.25)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Maui.Graphics.SizeF",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "Width"
+        },
+        {
+          "kind": "float",
+          "member": "Height"
+        }
+      ],
+      "factory": "new global::Microsoft.Maui.Graphics.SizeF({0}, {1})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Maui.Graphics.SizeF(1.25f, 2.25f)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Maui.Graphics.Rect",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "X"
+        },
+        {
+          "kind": "double",
+          "member": "Y"
+        },
+        {
+          "kind": "double",
+          "member": "Width"
+        },
+        {
+          "kind": "double",
+          "member": "Height"
+        }
+      ],
+      "factory": "new global::Microsoft.Maui.Graphics.Rect({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Maui.Graphics.Rect(1.25, 2.25, 3.25, 4.25)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Maui.Graphics.RectF",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "X"
+        },
+        {
+          "kind": "float",
+          "member": "Y"
+        },
+        {
+          "kind": "float",
+          "member": "Width"
+        },
+        {
+          "kind": "float",
+          "member": "Height"
+        }
+      ],
+      "factory": "new global::Microsoft.Maui.Graphics.RectF({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Maui.Graphics.RectF(1.25f, 2.25f, 3.25f, 4.25f)"
+      ],
+      "empty": null
+    }
+  ]
+}

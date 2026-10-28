@@ -1,0 +1,77 @@
+using System.Text;
+using LuminPack.Code;
+
+namespace LuminPack.SourceGenerator.CodeEmitters;
+
+/// <summary>Provides uri emitter functionality.</summary>
+public static class UriEmitter
+{
+    /// <summary>Appends binary writing statements for uri values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    public static void GenerateSerializeCode(LuminLocalFieldData data, StringBuilder sb)
+    {
+        sb.AppendLine("            if (value == null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNullObjectHeader();");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            writer.WriteObjectHeader(0);");
+        sb.AppendLine("            ");
+        sb.AppendLine("            writer.WriteStringRecord(value.OriginalString);");
+        sb.AppendLine("            ");
+    }
+
+    /// <summary>Appends binary reading statements for uri values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    public static void GenerateDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
+    {
+        sb.AppendLine("            ref var index = ref reader.GetCurrentSpanOffset();");
+        sb.AppendLine("            ");
+        sb.AppendLine("            if (!reader.TryReadObjectHead())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            ");
+        sb.AppendLine("            var source = reader.ReadStringAndAdvance(ref index);");
+        sb.AppendLine("            ");
+        sb.AppendLine("            if (source is null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine("            }");
+        sb.AppendLine("            else");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = new global::System.Uri(source, global::System.UriKind.RelativeOrAbsolute);");
+        sb.AppendLine("            }");
+    }
+
+    /// <summary>Appends JSON writing statements for uri values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    public static void GenerateJsonSerializeCode(LuminLocalFieldData data, StringBuilder sb)
+    {
+        sb.AppendLine("            if (value == null)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                writer.WriteNull();");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            writer.WriteString(value.OriginalString);");
+    }
+
+    /// <summary>Appends JSON reading statements for uri values.</summary>
+    /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    public static void GenerateJsonDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
+    {
+        sb.AppendLine("            if (reader.IsNull())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                value = null;");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
+        sb.AppendLine();
+        sb.AppendLine("            value = new global::System.Uri(reader.ReadString(), global::System.UriKind.RelativeOrAbsolute);");
+    }
+}

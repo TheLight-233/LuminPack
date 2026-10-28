@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>13</LangVersion>
+    <TargetFrameworks>netstandard2.1;net8.0;net9.0;net10.0;net11.0</TargetFrameworks>
+    <RootNamespace>LuminPack</RootNamespace>
+    <NoWarn>$(NoWarn);CA2255</NoWarn>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS0419;CS1570;CS1572;CS1573;CS1574;CS1584;CS1587;CS1591;CS1658</WarningsAsErrors>
+    <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
+    <PackageId>LuminPack</PackageId>
+    <AssemblyName>LuminPack.Core</AssemblyName>
+    <Authors>TheLight233</Authors>
+    <Description>Ultra-performance binary and json serializer with source generator support</Description>
+    <PackageTags>serialization;binary;json;high-performance;luminpack;sourcegenerator</PackageTags>
+    <PackageProjectUrl>https://github.com/TheLight-233/LuminPack</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/TheLight-233/LuminPack.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Release' ">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)' == 'Debug' ">
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <!--
+            Keep the generator as a separately published package dependency while
+            preventing it from running against the LuminPack runtime itself.
+            Omitting OutputItemType=Analyzer means the compiler never executes it;
+            NuGet pack still converts the project reference to a package dependency.
+            Private=false also keeps the generator DLL out of runtime output.
+        -->
+    <ProjectReference Include="..\LuminPack.Generator\LuminPack.Generator.csproj" Private="false" />
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'netstandard2.1'">
+    <PackageReference Include="System.Collections.Immutable" Version="9.0.8" />
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
+  <ItemGroup>
+  </ItemGroup>
+</Project>

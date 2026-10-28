@@ -1,0 +1,437 @@
+{
+  "module": "Wpf",
+  "types": [
+    {
+      "type": "System.Windows.Point",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "X"
+        },
+        {
+          "kind": "double",
+          "member": "Y"
+        }
+      ],
+      "factory": "new global::System.Windows.Point({0}, {1})",
+      "samples": [
+        "default",
+        "new global::System.Windows.Point(1.25, 2.25)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "System.Windows.Vector",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "X"
+        },
+        {
+          "kind": "double",
+          "member": "Y"
+        }
+      ],
+      "factory": "new global::System.Windows.Vector({0}, {1})",
+      "samples": [
+        "default",
+        "new global::System.Windows.Vector(1.25, 2.25)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "System.Windows.Thickness",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "Left"
+        },
+        {
+          "kind": "double",
+          "member": "Top"
+        },
+        {
+          "kind": "double",
+          "member": "Right"
+        },
+        {
+          "kind": "double",
+          "member": "Bottom"
+        }
+      ],
+      "factory": "new global::System.Windows.Thickness({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::System.Windows.Thickness(1.25, 2.25, 3.25, 4.25)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "System.Windows.CornerRadius",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "TopLeft"
+        },
+        {
+          "kind": "double",
+          "member": "TopRight"
+        },
+        {
+          "kind": "double",
+          "member": "BottomRight"
+        },
+        {
+          "kind": "double",
+          "member": "BottomLeft"
+        }
+      ],
+      "factory": "new global::System.Windows.CornerRadius({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::System.Windows.CornerRadius(1.25, 2.25, 3.25, 4.25)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "System.Windows.Size",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "Width"
+        },
+        {
+          "kind": "double",
+          "member": "Height"
+        }
+      ],
+      "factory": "new global::System.Windows.Size({0}, {1})",
+      "samples": [
+        "default",
+        "new global::System.Windows.Size(1.25,2.5)",
+        "global::System.Windows.Size.Empty"
+      ],
+      "empty": "global::System.Windows.Size.Empty"
+    },
+    {
+      "type": "System.Windows.Rect",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "X"
+        },
+        {
+          "kind": "double",
+          "member": "Y"
+        },
+        {
+          "kind": "double",
+          "member": "Width"
+        },
+        {
+          "kind": "double",
+          "member": "Height"
+        }
+      ],
+      "factory": "new global::System.Windows.Rect({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::System.Windows.Rect(1.25,2.5,3.75,4.125)",
+        "global::System.Windows.Rect.Empty"
+      ],
+      "empty": "global::System.Windows.Rect.Empty"
+    },
+    {
+      "type": "System.Windows.Int32Rect",
+      "fields": [
+        {
+          "kind": "int",
+          "member": "X"
+        },
+        {
+          "kind": "int",
+          "member": "Y"
+        },
+        {
+          "kind": "int",
+          "member": "Width"
+        },
+        {
+          "kind": "int",
+          "member": "Height"
+        }
+      ],
+      "factory": "new global::System.Windows.Int32Rect({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::System.Windows.Int32Rect(1,2,3,4)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "System.Windows.GridLength",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "Value"
+        },
+        {
+          "kind": "int",
+          "member": "(int)value.GridUnitType"
+        }
+      ],
+      "factory": "new global::System.Windows.GridLength({0},(global::System.Windows.GridUnitType){1})",
+      "samples": [
+        "default",
+        "global::System.Windows.GridLength.Auto",
+        "new global::System.Windows.GridLength(2.5,global::System.Windows.GridUnitType.Star)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "System.Windows.Media.Matrix",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "M11"
+        },
+        {
+          "kind": "double",
+          "member": "M12"
+        },
+        {
+          "kind": "double",
+          "member": "M21"
+        },
+        {
+          "kind": "double",
+          "member": "M22"
+        },
+        {
+          "kind": "double",
+          "member": "OffsetX"
+        },
+        {
+          "kind": "double",
+          "member": "OffsetY"
+        }
+      ],
+      "factory": "new global::System.Windows.Media.Matrix({0}, {1}, {2}, {3}, {4}, {5})",
+      "samples": [
+        "default",
+        "global::System.Windows.Media.Matrix.Identity",
+        "new global::System.Windows.Media.Matrix(1,2,3,4,5,6)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "System.Windows.Media.Media3D.Point3D",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "X"
+        },
+        {
+          "kind": "double",
+          "member": "Y"
+        },
+        {
+          "kind": "double",
+          "member": "Z"
+        }
+      ],
+      "factory": "new global::System.Windows.Media.Media3D.Point3D({0}, {1}, {2})",
+      "samples": [
+        "default",
+        "new global::System.Windows.Media.Media3D.Point3D(1.25, 2.25, 3.25)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "System.Windows.Media.Media3D.Vector3D",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "X"
+        },
+        {
+          "kind": "double",
+          "member": "Y"
+        },
+        {
+          "kind": "double",
+          "member": "Z"
+        }
+      ],
+      "factory": "new global::System.Windows.Media.Media3D.Vector3D({0}, {1}, {2})",
+      "samples": [
+        "default",
+        "new global::System.Windows.Media.Media3D.Vector3D(1.25, 2.25, 3.25)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "System.Windows.Media.Media3D.Quaternion",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "X"
+        },
+        {
+          "kind": "double",
+          "member": "Y"
+        },
+        {
+          "kind": "double",
+          "member": "Z"
+        },
+        {
+          "kind": "double",
+          "member": "W"
+        }
+      ],
+      "factory": "new global::System.Windows.Media.Media3D.Quaternion({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::System.Windows.Media.Media3D.Quaternion(1.25, 2.25, 3.25, 4.25)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "System.Windows.Media.Media3D.Size3D",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "X"
+        },
+        {
+          "kind": "double",
+          "member": "Y"
+        },
+        {
+          "kind": "double",
+          "member": "Z"
+        }
+      ],
+      "factory": "new global::System.Windows.Media.Media3D.Size3D({0}, {1}, {2})",
+      "samples": [
+        "default",
+        "new global::System.Windows.Media.Media3D.Size3D(1,2,3)",
+        "global::System.Windows.Media.Media3D.Size3D.Empty"
+      ],
+      "empty": "global::System.Windows.Media.Media3D.Size3D.Empty"
+    },
+    {
+      "type": "System.Windows.Media.Media3D.Rect3D",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "X"
+        },
+        {
+          "kind": "double",
+          "member": "Y"
+        },
+        {
+          "kind": "double",
+          "member": "Z"
+        },
+        {
+          "kind": "double",
+          "member": "SizeX"
+        },
+        {
+          "kind": "double",
+          "member": "SizeY"
+        },
+        {
+          "kind": "double",
+          "member": "SizeZ"
+        }
+      ],
+      "factory": "new global::System.Windows.Media.Media3D.Rect3D({0}, {1}, {2}, {3}, {4}, {5})",
+      "samples": [
+        "default",
+        "new global::System.Windows.Media.Media3D.Rect3D(1,2,3,4,5,6)",
+        "global::System.Windows.Media.Media3D.Rect3D.Empty"
+      ],
+      "empty": "global::System.Windows.Media.Media3D.Rect3D.Empty"
+    },
+    {
+      "type": "System.Windows.Media.Media3D.Matrix3D",
+      "fields": [
+        {
+          "kind": "double",
+          "member": "M11"
+        },
+        {
+          "kind": "double",
+          "member": "M12"
+        },
+        {
+          "kind": "double",
+          "member": "M13"
+        },
+        {
+          "kind": "double",
+          "member": "M14"
+        },
+        {
+          "kind": "double",
+          "member": "M21"
+        },
+        {
+          "kind": "double",
+          "member": "M22"
+        },
+        {
+          "kind": "double",
+          "member": "M23"
+        },
+        {
+          "kind": "double",
+          "member": "M24"
+        },
+        {
+          "kind": "double",
+          "member": "M31"
+        },
+        {
+          "kind": "double",
+          "member": "M32"
+        },
+        {
+          "kind": "double",
+          "member": "M33"
+        },
+        {
+          "kind": "double",
+          "member": "M34"
+        },
+        {
+          "kind": "double",
+          "member": "OffsetX"
+        },
+        {
+          "kind": "double",
+          "member": "OffsetY"
+        },
+        {
+          "kind": "double",
+          "member": "OffsetZ"
+        },
+        {
+          "kind": "double",
+          "member": "M44"
+        }
+      ],
+      "factory": "new global::System.Windows.Media.Media3D.Matrix3D({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, {13}, {14}, {15})",
+      "samples": [
+        "default",
+        "global::System.Windows.Media.Media3D.Matrix3D.Identity",
+        "new global::System.Windows.Media.Media3D.Matrix3D(1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16)"
+      ],
+      "empty": null
+    }
+  ]
+}

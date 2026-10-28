@@ -1,0 +1,5 @@
+{
+  "name": "LuminPack.Unity.Build",
+  "references": ["LuminPack.Unity.Smoke"],
+  "includePlatforms": ["Editor"]
+}

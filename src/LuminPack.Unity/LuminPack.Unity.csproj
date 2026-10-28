@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>netstandard2.1</TargetFramework>
+    <LangVersion>9</LangVersion>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <Nullable>enable</Nullable>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <PackageId>LuminPack.Unity</PackageId>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+    <LuminPackCorePath Condition="'$(LuminPackCorePath)' == ''">$(MSBuildThisFileDirectory)../LuminPack.Core/bin/$(Configuration)/netstandard2.1/LuminPack.Core.dll</LuminPackCorePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Runtime/**/*.cs" />
+    <!-- References are deliberately read-only: building this project never builds Core or its generator. -->
+    <Reference Include="LuminPack.Core"><HintPath>$(LuminPackCorePath)</HintPath><Private>false</Private></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(UnityManagedPath)/UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+  </ItemGroup>
+  <Target Name="ValidateExternalReferences" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(LuminPackCorePath)')" Text="Set LuminPackCorePath to an already built netstandard2.1 LuminPack.Core.dll. This project does not build Core." />
+    <Error Condition="!Exists('$(UnityManagedPath)/UnityEngine.CoreModule.dll')" Text="Set UnityManagedPath to the Editor/Data/Managed/UnityEngine directory of your Unity installation." />
+  </Target>
+</Project>

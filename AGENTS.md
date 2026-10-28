@@ -1,17 +1,27 @@
-# Repository constraints
+# Agent instructions
 
-Read [the mechanism contract](docs/serialization-mechanism-contract.md) and [CONTRIBUTING](CONTRIBUTING.md) before changing production or generator code. They apply to the entire repository, including generated code, runtime helpers, mapping, and conditional targets.
+[中文](AGENTS.cn.md)
 
-Preserve every established mechanism, not only wire compatibility: Local + As storage views, virtual Union dispatch, generic Union virtual plus cached-slot dispatch, version-tolerant length tables, reference tracking, value/unmanaged paths, constructor/pool/reuse behavior, callbacks, specialized formatters, state ownership, and all remaining mechanisms in the contract. Do not substitute another design without explicit user authorization. Record approved differences and distinguish correctness fixes from compatibility refactors.
+LuminPack is a source-generated binary and JSON serializer for .NET and Unity. Read these before changing code:
 
-Faster alternative mechanisms may be proposed. First prepare an isolated, reviewable experiment with before/after reference ratios, allocations, generated IL/native evidence, and its semantic/API/compatibility tradeoffs. A mechanism may be replaced only after the user explicitly approves that concrete proposal. Preserve the existing production mechanism while evaluating an unapproved alternative; a performance target alone is not approval to change it.
+- [Mechanism contract](docs/mechanism-contract.md): the hard constraints. It is binding for runtime code, the generator, generated code, optional modules and conditional targets.
+- [Architecture](docs/architecture.md): where things live and how they fit together.
+- [Contributing](CONTRIBUTING.md): build, checks and conventions.
 
-Preserve the fixed-length bounds-check policy: primitives, unmanaged values, structs, and fixed field batches have no per-value bounds checks in Release. Keep dynamic capacity/input checks at arrays, collections, and string boundaries, including their bulk payloads. Existing DEBUG assertions remain permitted. Do not add blanket checks as part of refactoring or performance work.
+## Hard rules
 
-Preserve architecture-specific fixed unmanaged access: 32-bit paths must use `Unsafe.CopyBlockUnaligned` and the existing packed storage views; typed `Unsafe.WriteUnaligned` / `Unsafe.ReadUnaligned` must not execute there because they can crash IL2CPP. On 64-bit, both typed unsafe access and block copies are allowed. Retain the adjacent-field bulk-copy optimization with actual field-address proofs, volatile exclusion, and a field-wise fallback. Variable-length collection bulk copies retain their separate established paths.
+1. **Keep every established mechanism.** Local + As storage views, virtual Union dispatch and its cached generic slots, version-tolerant name tables, reference tracking, raw unmanaged paths and `StructLayout`, constructor/pool/reuse behavior, callbacks, specialized formatters, registration through method pointers, compiled options and state ownership. A faster design needs an isolated experiment in `experiments/` with same-run reference ratios, allocations and IL/native evidence, and the owner's explicit approval of that concrete proposal. A performance goal is not approval.
+2. **Reader checks stay on in Release.** `EnsureReadable` and its callers (`Advance`, fixed storage batches, Union framing) run in Debug and Release. Generated cursor arithmetic keeps its check before moving the cursor. Collection, string and bulk-payload checks stay. Fixed Writer stores and address-only raw kernels keep their separate unchecked contracts.
+3. **32-bit fixed access.** Only individual unmanaged values of at most four bytes may use typed unaligned access on 32-bit; larger values and field batches use `LuminPackMarshal.CopyBlockUnaligned` and packed views (IL2CPP). Adjacent-field bulk copies need real field-address proofs, exclude volatile fields and keep a field-wise fallback. Only `LuminPackMarshal.CopyBlockUnaligned` calls `Unsafe.CopyBlockUnaligned`.
+4. **SIMD.** Review scalar, 128/256/512-bit and ARM64 paths; guard by exact ISA features; keep bounded tails and a portable fallback; never touch memory outside a validated range. Unavailable hardware needs CI execution.
+5. **Performance evidence** is LuminPack's time divided by the reference library's, same machine, fixture, runtime, options and run, with repeated samples, dispersion and allocations. One isolated figure proves nothing; the machine is noisy.
+6. **Language.** English for code, comments, XML, diagnostics, tests and maintenance documents. README files and `*.cn.md` editions are the exception.
+7. **Documents.** README is the cover page; feature documentation lives in `docs`. Each document has an English `name.md` and a Chinese `name.cn.md`; update both. No release notes, version histories or experiment reports in README or `docs`.
+8. **Don't remove** storage placeholders or externally usable/generated members based only on call-site searches.
+9. **Don't commit** unless asked.
 
-Performance decisions must account for local machine variability. Prioritize LuminPack's elapsed-time ratios against other libraries measured on the same machine, fixture, runtime, options, and run; retain absolute times as supporting evidence. Report before/after ratios against the same references, repeated samples and dispersion, and allocations. Do not infer a win from an isolated nanosecond result or assume all workloads fluctuate identically.
+## Working practice
 
-Use English for code, comments, XML, diagnostics, tests, and maintenance documents; README is the exception. Do not remove storage placeholders or externally usable/generated members based only on ordinary call-site searches. Run the relevant structural, historical, runtime, and incremental checks specified by the contract.
-
-README is project introduction, installation and usage documentation. Do not put release notes, version-change summaries, upgrade/migration notices or development/performance experiment reports in README. Those records are kept out of version control, not under docs. Installation examples may reference the current package version without describing version changes.
+- Prefer focused tests (one framework, a `--filter`, a test area or one `--verify-<area>` selector) over the full suites, which are slow.
+- Report results honestly: what ran, what failed, what was not verified.
+- When public usage changes, update the docs (both editions) and `skills/luminpack`.

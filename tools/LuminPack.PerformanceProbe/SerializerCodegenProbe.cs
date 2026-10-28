@@ -7,7 +7,7 @@ internal static class SerializerCodegenProbe
     /// <param name="directory">The complete benchmark image with the capacity-tier fixture.</param>
     internal static void RunCapacityTiers(string directory)
     {
-        string file = File.Exists(Path.Combine(directory, "LuminPackCapacityBenchmark.dll")) ? "LuminPackCapacityBenchmark.dll" : "LuminPackBenchmark.dll";
+        string file = File.Exists(Path.Combine(directory, "LuminPack.Benchmark.Capacity.dll")) ? "LuminPack.Benchmark.Capacity.dll" : "LuminPack.Benchmark.dll";
         var type = BenchmarkImage.Load(directory, file).GetType("LuminPackBenchmark.CapacityTierBenchmark", true)!;
         object fixture = Activator.CreateInstance(type)!;
         try { type.GetMethod("SetUp")!.Invoke(fixture, null); }

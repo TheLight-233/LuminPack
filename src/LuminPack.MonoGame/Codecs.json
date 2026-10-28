@@ -1,0 +1,373 @@
+{
+  "module": "MonoGame",
+  "types": [
+    {
+      "type": "Microsoft.Xna.Framework.Vector2",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "X"
+        },
+        {
+          "kind": "float",
+          "member": "Y"
+        }
+      ],
+      "factory": "new global::Microsoft.Xna.Framework.Vector2({0}, {1})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Xna.Framework.Vector2(1, 2)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Xna.Framework.Vector3",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "X"
+        },
+        {
+          "kind": "float",
+          "member": "Y"
+        },
+        {
+          "kind": "float",
+          "member": "Z"
+        }
+      ],
+      "factory": "new global::Microsoft.Xna.Framework.Vector3({0}, {1}, {2})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Xna.Framework.Vector3(1, 2, 3)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Xna.Framework.Vector4",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "X"
+        },
+        {
+          "kind": "float",
+          "member": "Y"
+        },
+        {
+          "kind": "float",
+          "member": "Z"
+        },
+        {
+          "kind": "float",
+          "member": "W"
+        }
+      ],
+      "factory": "new global::Microsoft.Xna.Framework.Vector4({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Xna.Framework.Vector4(1, 2, 3, 4)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Xna.Framework.Quaternion",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "X"
+        },
+        {
+          "kind": "float",
+          "member": "Y"
+        },
+        {
+          "kind": "float",
+          "member": "Z"
+        },
+        {
+          "kind": "float",
+          "member": "W"
+        }
+      ],
+      "factory": "new global::Microsoft.Xna.Framework.Quaternion({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Xna.Framework.Quaternion(1, 2, 3, 4)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Xna.Framework.Point",
+      "fields": [
+        {
+          "kind": "int",
+          "member": "X"
+        },
+        {
+          "kind": "int",
+          "member": "Y"
+        }
+      ],
+      "factory": "new global::Microsoft.Xna.Framework.Point({0}, {1})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Xna.Framework.Point(1, 2)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Xna.Framework.Rectangle",
+      "fields": [
+        {
+          "kind": "int",
+          "member": "X"
+        },
+        {
+          "kind": "int",
+          "member": "Y"
+        },
+        {
+          "kind": "int",
+          "member": "Width"
+        },
+        {
+          "kind": "int",
+          "member": "Height"
+        }
+      ],
+      "factory": "new global::Microsoft.Xna.Framework.Rectangle({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Xna.Framework.Rectangle(1, 2, 3, 4)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Xna.Framework.Matrix",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "M11"
+        },
+        {
+          "kind": "float",
+          "member": "M12"
+        },
+        {
+          "kind": "float",
+          "member": "M13"
+        },
+        {
+          "kind": "float",
+          "member": "M14"
+        },
+        {
+          "kind": "float",
+          "member": "M21"
+        },
+        {
+          "kind": "float",
+          "member": "M22"
+        },
+        {
+          "kind": "float",
+          "member": "M23"
+        },
+        {
+          "kind": "float",
+          "member": "M24"
+        },
+        {
+          "kind": "float",
+          "member": "M31"
+        },
+        {
+          "kind": "float",
+          "member": "M32"
+        },
+        {
+          "kind": "float",
+          "member": "M33"
+        },
+        {
+          "kind": "float",
+          "member": "M34"
+        },
+        {
+          "kind": "float",
+          "member": "M41"
+        },
+        {
+          "kind": "float",
+          "member": "M42"
+        },
+        {
+          "kind": "float",
+          "member": "M43"
+        },
+        {
+          "kind": "float",
+          "member": "M44"
+        }
+      ],
+      "factory": "new global::Microsoft.Xna.Framework.Matrix({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}, {9}, {10}, {11}, {12}, {13}, {14}, {15})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Xna.Framework.Matrix(1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Xna.Framework.Color",
+      "fields": [
+        {
+          "kind": "byte",
+          "member": "R"
+        },
+        {
+          "kind": "byte",
+          "member": "G"
+        },
+        {
+          "kind": "byte",
+          "member": "B"
+        },
+        {
+          "kind": "byte",
+          "member": "A"
+        }
+      ],
+      "factory": "new global::Microsoft.Xna.Framework.Color({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Xna.Framework.Color((byte)1,(byte)2,(byte)3,(byte)127)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Xna.Framework.BoundingBox",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "Min.X"
+        },
+        {
+          "kind": "float",
+          "member": "Min.Y"
+        },
+        {
+          "kind": "float",
+          "member": "Min.Z"
+        },
+        {
+          "kind": "float",
+          "member": "Max.X"
+        },
+        {
+          "kind": "float",
+          "member": "Max.Y"
+        },
+        {
+          "kind": "float",
+          "member": "Max.Z"
+        }
+      ],
+      "factory": "new global::Microsoft.Xna.Framework.BoundingBox(new global::Microsoft.Xna.Framework.Vector3({0},{1},{2}),new global::Microsoft.Xna.Framework.Vector3({3},{4},{5}))",
+      "samples": [
+        "default",
+        "new global::Microsoft.Xna.Framework.BoundingBox(new global::Microsoft.Xna.Framework.Vector3(1,2,3),new global::Microsoft.Xna.Framework.Vector3(4,5,6))"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Xna.Framework.BoundingSphere",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "Center.X"
+        },
+        {
+          "kind": "float",
+          "member": "Center.Y"
+        },
+        {
+          "kind": "float",
+          "member": "Center.Z"
+        },
+        {
+          "kind": "float",
+          "member": "Radius"
+        }
+      ],
+      "factory": "new global::Microsoft.Xna.Framework.BoundingSphere(new global::Microsoft.Xna.Framework.Vector3({0},{1},{2}),{3})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Xna.Framework.BoundingSphere(new global::Microsoft.Xna.Framework.Vector3(1,2,3),4)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Xna.Framework.Ray",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "Position.X"
+        },
+        {
+          "kind": "float",
+          "member": "Position.Y"
+        },
+        {
+          "kind": "float",
+          "member": "Position.Z"
+        },
+        {
+          "kind": "float",
+          "member": "Direction.X"
+        },
+        {
+          "kind": "float",
+          "member": "Direction.Y"
+        },
+        {
+          "kind": "float",
+          "member": "Direction.Z"
+        }
+      ],
+      "factory": "new global::Microsoft.Xna.Framework.Ray(new global::Microsoft.Xna.Framework.Vector3({0},{1},{2}),new global::Microsoft.Xna.Framework.Vector3({3},{4},{5}))",
+      "samples": [
+        "default",
+        "new global::Microsoft.Xna.Framework.Ray(new global::Microsoft.Xna.Framework.Vector3(1,2,3),new global::Microsoft.Xna.Framework.Vector3(4,5,6))"
+      ],
+      "empty": null
+    },
+    {
+      "type": "Microsoft.Xna.Framework.Plane",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "Normal.X"
+        },
+        {
+          "kind": "float",
+          "member": "Normal.Y"
+        },
+        {
+          "kind": "float",
+          "member": "Normal.Z"
+        },
+        {
+          "kind": "float",
+          "member": "D"
+        }
+      ],
+      "factory": "new global::Microsoft.Xna.Framework.Plane({0},{1},{2},{3})",
+      "samples": [
+        "default",
+        "new global::Microsoft.Xna.Framework.Plane(1,2,3,4)"
+      ],
+      "empty": null
+    }
+  ]
+}

@@ -1,0 +1,10 @@
+{
+  "name": "LuminPack.Burst",
+  "rootNamespace": "LuminPack.Burst",
+  "references": ["Unity.Burst"],
+  "allowUnsafeCode": true,
+  "autoReferenced": true,
+  "noEngineReferences": false,
+  "defineConstraints": ["LUMINPACK_BURST"],
+  "versionDefines": [{ "name": "com.unity.burst", "expression": "[1.8.0,2.0.0)", "define": "LUMINPACK_BURST" }]
+}

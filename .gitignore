@@ -29,6 +29,14 @@ coverage/
 
 # Scratch / probe output
 .tmp/
+tests/Unity/Library/
+tests/Unity/Temp/
+tests/Unity/Logs/
+tests/Unity/UserSettings/
+tests/Unity/build/
+tests/Unity/Assets/Plugins/*.dll
+!tests/Unity/Packages/
+!tests/Unity/Packages/manifest.json
 
 # Local research experiments (kept on disk, not versioned)
 experiments/

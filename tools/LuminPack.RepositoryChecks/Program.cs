@@ -34,7 +34,13 @@ internal static class RepositoryStandards
             {
                 string relative = Path.GetRelativePath(root, file);
                 string source = File.ReadAllText(file);
-                if (!Path.GetFileName(file).Equals("README.md", StringComparison.OrdinalIgnoreCase))
+                if (relative.StartsWith("src" + Path.DirectorySeparatorChar, StringComparison.Ordinal) &&
+                    !Path.GetFileName(file).StartsWith("LuminPackMarshal.Copy", StringComparison.Ordinal) &&
+                    Regex.IsMatch(source, @"\bUnsafe\.CopyBlockUnaligned\s*\("))
+                    failures.Add($"{relative}: Route raw copies through LuminPackMarshal.CopyBlockUnaligned.");
+                // README files and the Chinese editions of documents (*.cn.md) are the only places for non-English prose.
+                if (!Path.GetFileName(file).Equals("README.md", StringComparison.OrdinalIgnoreCase) &&
+                    !Path.GetFileName(file).EndsWith(".cn.md", StringComparison.OrdinalIgnoreCase))
                 {
                     foreach (Match match in Regex.Matches(source, @"[\u3400-\u4dbf\u4e00-\u9fff]"))
                     {

@@ -1,0 +1,9 @@
+{
+  "name": "LuminPack.Burst.Tests",
+  "references": ["LuminPack.Burst", "Unity.Burst"],
+  "allowUnsafeCode": true,
+  "optionalUnityReferences": ["TestAssemblies"],
+  "includePlatforms": ["Editor"],
+  "defineConstraints": ["LUMINPACK_BURST"],
+  "versionDefines": [{ "name": "com.unity.burst", "expression": "[1.8.0,2.0.0)", "define": "LUMINPACK_BURST" }]
+}

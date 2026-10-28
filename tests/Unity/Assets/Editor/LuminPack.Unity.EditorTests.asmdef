@@ -1,0 +1,7 @@
+{
+  "name": "LuminPack.Unity.EditorTests",
+  "references": ["LuminPack.Unity.Smoke"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "allowUnsafeCode": true
+}

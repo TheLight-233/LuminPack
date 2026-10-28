@@ -1,0 +1,9 @@
+<Project>
+  <PropertyGroup>
+    <LuminPackTestArea Condition="'$(LuminPackTestArea)' == ''">All</LuminPackTestArea>
+    <BaseIntermediateOutputPath Condition="'$(LuminPackTestArea)' != 'All'">obj/$(LuminPackTestArea)/</BaseIntermediateOutputPath>
+    <BaseOutputPath Condition="'$(LuminPackTestArea)' != 'All'">bin/$(LuminPackTestArea)/</BaseOutputPath>
+    <!-- Other selections' outputs must not enter default items or assembly-resolution candidates. -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);bin/**;obj/**</DefaultItemExcludes>
+  </PropertyGroup>
+</Project>

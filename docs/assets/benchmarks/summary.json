@@ -1,0 +1,185 @@
+{
+  "environment": null,
+  "suites": {
+    "SimpleBenchmark": {
+      "Serialize": [
+        {
+          "library": "LuminPack",
+          "mean": "41.9 ns",
+          "ratio": 1.0,
+          "allocated": "-"
+        },
+        {
+          "library": "MemoryPack",
+          "mean": "364.6 ns",
+          "ratio": 8.7,
+          "allocated": "-"
+        },
+        {
+          "library": "MessagePack",
+          "mean": "1.70 μs",
+          "ratio": 40.66,
+          "allocated": "-"
+        }
+      ],
+      "Deserialize": [
+        {
+          "library": "LuminPack",
+          "mean": "434.3 ns",
+          "ratio": 1.0,
+          "allocated": "2.98 KB"
+        },
+        {
+          "library": "MemoryPack",
+          "mean": "600.0 ns",
+          "ratio": 1.38,
+          "allocated": "2.98 KB"
+        },
+        {
+          "library": "MessagePack",
+          "mean": "3.94 μs",
+          "ratio": 9.07,
+          "allocated": "2.98 KB"
+        }
+      ]
+    },
+    "SerializeBenchmark": {
+      "Serialize": [
+        {
+          "library": "LuminPack",
+          "mean": "2.03 μs",
+          "ratio": 1.0,
+          "allocated": "-"
+        },
+        {
+          "library": "MemoryPack",
+          "mean": "6.33 μs",
+          "ratio": 3.12,
+          "allocated": "-"
+        },
+        {
+          "library": "MessagePack",
+          "mean": "14.79 μs",
+          "ratio": 7.29,
+          "allocated": "-"
+        }
+      ],
+      "Deserialize": [
+        {
+          "library": "LuminPack",
+          "mean": "8.38 μs",
+          "ratio": 1.0,
+          "allocated": "39.07 KB"
+        },
+        {
+          "library": "MemoryPack",
+          "mean": "12.27 μs",
+          "ratio": 1.47,
+          "allocated": "39.07 KB"
+        },
+        {
+          "library": "MessagePack",
+          "mean": "28.05 μs",
+          "ratio": 3.35,
+          "allocated": "39.07 KB"
+        }
+      ]
+    },
+    "PolymorphismBenchmark": {
+      "Serialize": [
+        {
+          "library": "LuminPack",
+          "mean": "3.39 μs",
+          "ratio": 1.0,
+          "allocated": "-"
+        },
+        {
+          "library": "MemoryPack",
+          "mean": "14.90 μs",
+          "ratio": 4.39,
+          "allocated": "-"
+        },
+        {
+          "library": "MessagePack",
+          "mean": "71.80 μs",
+          "ratio": 21.17,
+          "allocated": "-"
+        }
+      ],
+      "Deserialize": [
+        {
+          "library": "LuminPack",
+          "mean": "7.91 μs",
+          "ratio": 1.0,
+          "allocated": "77.82 KB"
+        },
+        {
+          "library": "MemoryPack",
+          "mean": "17.80 μs",
+          "ratio": 2.25,
+          "allocated": "77.82 KB"
+        },
+        {
+          "library": "MessagePack",
+          "mean": "111.77 μs",
+          "ratio": 14.13,
+          "allocated": "81.89 KB"
+        }
+      ]
+    },
+    "JsonBenchmark": {
+      "Serialize": [
+        {
+          "library": "LuminPack",
+          "mean": "25.68 μs",
+          "ratio": 1.0,
+          "allocated": "-"
+        },
+        {
+          "library": "System.Text.Json",
+          "mean": "64.00 μs",
+          "ratio": 2.49,
+          "allocated": "95.05 KB"
+        },
+        {
+          "library": "Newtonsoft.Json",
+          "mean": "163.51 μs",
+          "ratio": 6.37,
+          "allocated": "299.11 KB"
+        },
+        {
+          "library": "RE:Dox",
+          "mean": "56.97 μs",
+          "ratio": 2.22,
+          "allocated": "77.38 KB"
+        }
+      ],
+      "Deserialize": [
+        {
+          "library": "LuminPack",
+          "mean": "57.96 μs",
+          "ratio": 1.0,
+          "allocated": "60.98 KB"
+        },
+        {
+          "library": "System.Text.Json",
+          "mean": "109.34 μs",
+          "ratio": 1.89,
+          "allocated": "64.32 KB"
+        },
+        {
+          "library": "Newtonsoft.Json",
+          "mean": "251.61 μs",
+          "ratio": 4.34,
+          "allocated": "142.34 KB"
+        },
+        {
+          "library": "RE:Dox",
+          "mean": "353.63 μs",
+          "ratio": 6.1,
+          "allocated": "155.65 KB"
+        }
+      ]
+    }
+  }
+}

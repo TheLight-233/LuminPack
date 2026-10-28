@@ -14,7 +14,7 @@ internal static class LibraryRatioProbe
         string[] names = ["LuminPackSerialize", "CheckedSerialize", "MemoryPackSerialize"];
         var fixtures = directories.Select(directory =>
         {
-            string file = File.Exists(Path.Combine(directory, "LuminPackCapacityBenchmark.dll")) ? "LuminPackCapacityBenchmark.dll" : "LuminPackBenchmark.dll";
+            string file = File.Exists(Path.Combine(directory, "LuminPack.Benchmark.Capacity.dll")) ? "LuminPack.Benchmark.Capacity.dll" : "LuminPack.Benchmark.dll";
             var type = BenchmarkImage.Load(directory, file).GetType("LuminPackBenchmark.CapacityTierBenchmark", true)!;
             object fixture = Activator.CreateInstance(type)!;
             type.GetMethod("SetUp")!.Invoke(fixture, null);

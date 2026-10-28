@@ -1,0 +1,24 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <EnableDefaultNoneItems>false</EnableDefaultNoneItems>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <WarningsAsErrors>$(WarningsAsErrors);CS1591;CS1570;CS1572;CS1573;CS1574;CS1587</WarningsAsErrors>
+    <IsPackable>false</IsPackable>
+    <LuminPackCorePath Condition="'$(LuminPackCorePath)' == ''">$(MSBuildThisFileDirectory)../LuminPack.Core/bin/$(Configuration)/net8.0/LuminPack.Core.dll</LuminPackCorePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Runtime/**/*.cs" />
+    <Reference Include="LuminPack.Core"><HintPath>$(LuminPackCorePath)</HintPath></Reference>
+    <PackageReference Include="SkiaSharp" Version="3.119.1" />
+    <ProjectReference Include="../LuminPack.Platforms/LuminPack.Platforms.csproj" />
+  </ItemGroup>
+  <Target Name="ValidateCoreReference" BeforeTargets="ResolveAssemblyReferences">
+    <Error Condition="!Exists('$(LuminPackCorePath)')" Text="Build Core separately or supply LuminPackCorePath with an existing net8.0 LuminPack.Core.dll. This project never builds Core." />
+  </Target>
+</Project>

@@ -1,0 +1,1451 @@
+﻿using System.Collections.Concurrent;
+using LuminPack.SourceGenerator;
+using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+const int CompilationCount = 32;
+const int ValidTypesPerCompilation = 16;
+
+var references = ((string)AppContext.GetData("TRUSTED_PLATFORM_ASSEMBLIES")!)
+    .Split(Path.PathSeparator)
+    .Select(static path => MetadataReference.CreateFromFile(path))
+    .ToArray();
+
+if (args.Contains("--verify-readonly-collection-builder", StringComparer.Ordinal))
+{
+    VerifyReadOnlyCollectionBuilder(references);
+    Console.WriteLine("Passed ReadOnlyCollectionBuilder built-in emitter recognition.");
+    return;
+}
+
+if (args.Contains("--verify-scoped-emission", StringComparer.Ordinal))
+{
+    VerifyScopedEmission(references);
+    Console.WriteLine("Passed scoped emission verification for C# 10/non-NET8 and Preview/NET8.");
+    return;
+}
+
+if (args.Contains("--verify-incremental", StringComparer.Ordinal))
+{
+    CompilerResolverRegression.Run();
+    IncrementalGenerationChecks.Run(references);
+    Console.WriteLine("Passed incremental generation and dependency invalidation checks.");
+    return;
+}
+
+// <summary>Verifies verify read only collection builder.</summary>
+// <param name="references">The references used by this operation.</param>
+static void VerifyReadOnlyCollectionBuilder(MetadataReference[] references)
+{
+    const string source = """
+        using System;
+
+        namespace LuminPack.Attribute
+        {
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
+            public sealed class LuminPackableAttribute : Attribute
+            {
+            }
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial class RcbHolder
+        {
+            public global::System.Runtime.CompilerServices.ReadOnlyCollectionBuilder<int> Values = new();
+        }
+        """;
+
+    var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+    var compilation = CSharpCompilation.Create(
+        "ReadOnlyCollectionBuilder",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        parseOptions: parseOptions);
+    var run = driver.RunGenerators(compilation).GetRunResult();
+
+    Diagnostic[] errors = run.Diagnostics
+        .Where(static d => d.Severity == DiagnosticSeverity.Error)
+        .ToArray();
+    if (errors.Length != 0)
+    {
+        throw new InvalidOperationException(
+            "LuminPack reported errors for ReadOnlyCollectionBuilder: " +
+            string.Join("; ", errors.Select(static d => d.GetMessage())));
+    }
+
+    bool recognized = run.Results
+        .SelectMany(static r => r.GeneratedSources)
+        .Any(static g => g.SourceText.ToString().Contains("ReadOnlyCollectionBuilder", StringComparison.Ordinal));
+    if (!recognized)
+    {
+        throw new InvalidOperationException("Generator did not emit ReadOnlyCollectionBuilder handling.");
+    }
+}
+
+if (args.Contains("--verify-formatter-scope", StringComparer.Ordinal))
+{
+    VerifyFormatterScope(references);
+    Console.WriteLine("Passed formatter scope verification for Unity-style references and known closed types.");
+    return;
+}
+
+if (args.Contains("--verify-generic-union-dispatch", StringComparer.Ordinal))
+{
+    VerifyGenericUnionDispatch(references);
+    Console.WriteLine("Passed constant-time closed-generic union dispatch verification.");
+    return;
+}
+
+if (args.Contains("--verify-sealed-union-dispatch", StringComparer.Ordinal))
+{
+    VerifySealedUnionDispatch(references);
+    Console.WriteLine("Passed sealed leaf-union-dispatch verification.");
+    return;
+}
+
+if (args.Contains("--verify-union-auto-discovery", StringComparer.Ordinal))
+{
+    VerifyUnionAutoDiscovery(references);
+    Console.WriteLine("Passed union auto-discovery verification for explicit tags and used closed generic members.");
+    return;
+}
+
+if (args.Contains("--verify-direct-static-dispatch", StringComparer.Ordinal))
+{
+    VerifyDirectStaticDispatch(references);
+    Console.WriteLine("Passed Roslyn concrete-overload binding and generic fallback verification.");
+    return;
+}
+
+if (args.Contains("--verify-array-compile-time-classification", StringComparer.Ordinal))
+{
+    ArrayEmitterCompileTimeClassificationRegression.Run(references);
+    Console.WriteLine("Passed compile-time array element classification verification.");
+    return;
+}
+
+if (args.Contains("--verify-collection-compile-time-classification", StringComparer.Ordinal))
+{
+    CollectionEmitterCompileTimeClassificationRegression.Run(references);
+    Console.WriteLine("Passed compile-time collection element classification verification.");
+    return;
+}
+
+if (args.Contains("--verify-compile-time-unmanaged-specialization", StringComparer.Ordinal))
+{
+    CompileTimeUnmanagedSpecializationRegression.Run(references);
+    Console.WriteLine("Passed closed and constrained-generic unmanaged specialization verification.");
+    return;
+}
+
+if (args.Contains("--verify-interface-read-formatter-shape", StringComparer.Ordinal))
+{
+    InterfaceReadEmitterShapeRegression.Run();
+    Console.WriteLine("Passed interface ReadValue formatter shape verification.");
+    return;
+}
+
+if (args.Contains("--verify-binary-write-inlining-policy", StringComparer.Ordinal))
+{
+    BinaryWriteInliningPolicyRegression.Run(references);
+    Console.WriteLine("Passed binary WriteValue formatter inlining policy verification.");
+    return;
+}
+
+if (args.Contains("--verify-multidimensional-read-formatter-shape", StringComparer.Ordinal))
+{
+    MultiDimensionalArrayReadShapeRegression.Run();
+    Console.WriteLine("Passed multidimensional-array ReadValue formatter shape verification.");
+    return;
+}
+
+if (args.Contains("--verify-unity-nullable-merge-compatibility", StringComparer.Ordinal))
+{
+    UnityNullableMergeCompatibilityRegression.Run(references);
+    Console.WriteLine("Passed Unity/C# 10 nullable unmanaged-merge compatibility verification.");
+    return;
+}
+
+if (args.Contains("--verify-light-mode", StringComparer.Ordinal))
+{
+    VerifyLightMode(references);
+    Console.WriteLine("Passed light-mode reachability, interprocedural propagation, and variant gating verification.");
+    return;
+}
+
+if (args.Contains("--verify-medium-mode", StringComparer.Ordinal))
+{
+    VerifyMediumMode(references);
+    Console.WriteLine("Passed medium-mode accessibility tiering verification.");
+    return;
+}
+
+if (args.Contains("--verify-minimal-mode", StringComparer.Ordinal))
+{
+    VerifyMinimalMode(references);
+    Console.WriteLine("Passed minimal-mode call-site-only pruning verification.");
+    return;
+}
+
+var failures = new ConcurrentQueue<string>();
+Parallel.For(0, CompilationCount, compilationIndex =>
+{
+    var source = BuildSource(compilationIndex);
+    var parseOptions = CSharpParseOptions.Default
+        .WithLanguageVersion(LanguageVersion.CSharp10)
+        .WithPreprocessorSymbols(compilationIndex % 2 == 0
+            ? new[] { "NET8_0_OR_GREATER" }
+            : Array.Empty<string>());
+    var tree = CSharpSyntaxTree.ParseText(source, parseOptions);
+    var compilation = CSharpCompilation.Create(
+        $"GeneratorConcurrency_{compilationIndex}",
+        new[] { tree },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        parseOptions: parseOptions);
+    driver = driver.RunGenerators(compilation);
+    var runResult = driver.GetRunResult();
+    var result = runResult.Results.Single();
+
+    if (result.Exception is not null)
+    {
+        failures.Enqueue($"Compilation {compilationIndex} generator exception: {result.Exception}");
+        return;
+    }
+
+    var ownInvalidName = $"Invalid_{compilationIndex}";
+    var errorDiagnostics = result.Diagnostics
+        .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+        .ToArray();
+    if (errorDiagnostics.Length != 1 ||
+        !errorDiagnostics[0].GetMessage().Contains(ownInvalidName, StringComparison.Ordinal))
+    {
+        failures.Enqueue(
+            $"Compilation {compilationIndex} diagnostics leaked or were lost: " +
+            string.Join(" | ", errorDiagnostics.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    var generatedHints = result.GeneratedSources
+        .Select(static generated => generated.HintName)
+        .ToHashSet(StringComparer.Ordinal);
+    for (var typeIndex = 0; typeIndex < ValidTypesPerCompilation; typeIndex++)
+    {
+        var expectedHint = $"Case_{compilationIndex}.Model_{typeIndex}.Extension.g.cs";
+        if (!generatedHints.Contains(expectedHint))
+        {
+            failures.Enqueue($"Compilation {compilationIndex} is missing {expectedHint}.");
+        }
+    }
+
+    if (generatedHints.Any(hint =>
+            hint.Contains("Case_", StringComparison.Ordinal) &&
+            !hint.Contains($"Case_{compilationIndex}.", StringComparison.Ordinal)))
+    {
+        failures.Enqueue($"Compilation {compilationIndex} received generated source from another compilation.");
+    }
+});
+
+if (!failures.IsEmpty)
+{
+    throw new InvalidOperationException(string.Join(Environment.NewLine, failures));
+}
+
+VerifyUnionPartialDiagnostic(references);
+VerifyScopedEmission(references);
+
+Console.WriteLine(
+    $"Passed {CompilationCount} parallel compilations and " +
+    $"{CompilationCount * ValidTypesPerCompilation} valid generated types.");
+
+// <summary>Verifies verify union partial diagnostic.</summary>
+// <param name="references">The references used by this operation.</param>
+static void VerifyUnionPartialDiagnostic(MetadataReference[] references)
+{
+    const string source = """
+        using System;
+
+        namespace LuminPack.Attribute
+        {
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
+            public sealed class LuminPackableAttribute : Attribute
+            {
+            }
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public interface INonPartialUnion
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public sealed class NonPartialUnionMember : INonPartialUnion
+        {
+        }
+        """;
+
+    var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+    var compilation = CSharpCompilation.Create(
+        "UnionPartialDiagnostic",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        parseOptions: parseOptions);
+    var diagnostics = driver.RunGenerators(compilation)
+        .GetRunResult()
+        .Results.Single()
+        .Diagnostics
+        .Where(static diagnostic => diagnostic.Id == "LuminPack035")
+        .ToArray();
+
+    if (diagnostics.Length != 2 ||
+        !diagnostics.Any(diagnostic => diagnostic.GetMessage().Contains("INonPartialUnion", StringComparison.Ordinal)) ||
+        !diagnostics.Any(diagnostic => diagnostic.GetMessage().Contains("NonPartialUnionMember", StringComparison.Ordinal)))
+    {
+        throw new InvalidOperationException(
+            "Expected LuminPack035 for both a non-partial Union root and its non-partial local member.");
+    }
+}
+
+// <summary>Verifies verify scoped emission.</summary>
+// <param name="references">The references used by this operation.</param>
+static void VerifyScopedEmission(MetadataReference[] references)
+{
+    const string source = """
+        using System;
+
+        namespace LuminPack.Attribute
+        {
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
+            public sealed class LuminPackableAttribute : Attribute
+            {
+            }
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial struct ScopedEmissionModel
+        {
+            public int Value;
+        }
+        """;
+
+    AssertScopedEmission(
+        source,
+        references,
+        CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10),
+        shouldEmitScoped: false,
+        "C# 10 / non-NET8");
+
+    AssertScopedEmission(
+        source,
+        references,
+        CSharpParseOptions.Default
+            // Microsoft.CodeAnalysis.CSharp 4.3.0 exposes the C# 11 syntax
+            // level through Preview rather than a CSharp11 enum value.
+            .WithLanguageVersion(LanguageVersion.Preview)
+            .WithPreprocessorSymbols("NET8_0_OR_GREATER"),
+        shouldEmitScoped: true,
+        "C# 11 / NET8");
+}
+
+// <summary>Verifies verify union auto discovery.</summary>
+// <param name="references">The references used by this operation.</param>
+static void VerifyUnionAutoDiscovery(MetadataReference[] references)
+{
+    const string source = """
+        using System;
+
+        namespace LuminPack.Attribute
+        {
+            [System.AttributeUsage(System.AttributeTargets.Class | System.AttributeTargets.Struct | System.AttributeTargets.Interface)]
+            public sealed class LuminPackableAttribute : System.Attribute
+            {
+            }
+
+            [System.AttributeUsage(System.AttributeTargets.Class | System.AttributeTargets.Interface, AllowMultiple = true)]
+            public sealed class LuminPackUnionAttribute : System.Attribute
+            {
+                public LuminPackUnionAttribute(ushort tag, Type type)
+                {
+                }
+            }
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        [LuminPack.Attribute.LuminPackUnion(42, typeof(ExplicitMessage))]
+        public partial interface IMessage
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public sealed partial class ExplicitMessage : IMessage
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public sealed partial class AutoMessage : IMessage
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial interface IGenericMessage<T>
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public sealed partial class GenericMessage<T> : IGenericMessage<T>
+        {
+            public T Value = default!;
+        }
+
+        public static class ProjectUsage
+        {
+            public static readonly Type ClosedMember = typeof(GenericMessage<int>);
+        }
+        """;
+
+    var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+    var compilation = CSharpCompilation.Create(
+        "UnionAutoDiscovery",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    var compilationErrors = compilation.GetDiagnostics()
+        .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+        .ToArray();
+    if (compilationErrors.Length != 0)
+    {
+        throw new InvalidOperationException(
+            "Union auto-discovery input did not compile: " +
+            string.Join(" | ", compilationErrors.Select(static diagnostic => diagnostic.ToString())));
+    }
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        parseOptions: parseOptions);
+    var result = driver.RunGenerators(compilation).GetRunResult().Results.Single();
+    var errors = result.Diagnostics
+        .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+        .ToArray();
+    if (errors.Length != 0)
+    {
+        throw new InvalidOperationException(
+            "Union auto-discovery produced diagnostics: " +
+            string.Join(" | ", errors.Select(static diagnostic => diagnostic.ToString())));
+    }
+
+    string messageSource = result.GeneratedSources
+        .Where(static generated => generated.HintName.Contains("IMessage.Extension", StringComparison.Ordinal))
+        .Select(static generated => generated.SourceText.ToString())
+        .Single();
+    if (!messageSource.Contains("case 42:", StringComparison.Ordinal) ||
+        !messageSource.Contains("global::ExplicitMessage member", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("The explicit [LuminPackUnion] tag was not preserved.");
+    }
+    if (!messageSource.Contains("case 0:", StringComparison.Ordinal) ||
+        !messageSource.Contains("global::AutoMessage member", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("A local [LuminPackable] derived type was not auto-registered.");
+    }
+
+    string genericRootSource = result.GeneratedSources
+        .Where(static generated => generated.HintName.Contains("IGenericMessage", StringComparison.Ordinal))
+        .Select(static generated => generated.SourceText.ToString())
+        .First(static generated => generated.Contains("ReadPolymorphismValue", StringComparison.Ordinal));
+    if (!genericRootSource.Contains("global::GenericMessage<int> member", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "The closed GenericMessage<int> observed by the semantic syntax walk was not auto-registered.");
+    }
+}
+
+// <summary>Verifies verify generic union dispatch.</summary>
+// <param name="references">The references used by this operation.</param>
+static void VerifyGenericUnionDispatch(MetadataReference[] references)
+{
+    const string source = """
+        using System;
+
+        namespace LuminPack.Attribute
+        {
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
+            public sealed class LuminPackableAttribute : Attribute
+            {
+            }
+
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = true)]
+            public sealed class LuminPackUnionAttribute : Attribute
+            {
+                public LuminPackUnionAttribute(ushort tag, Type type)
+                {
+                }
+            }
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        [LuminPack.Attribute.LuminPackUnion(3, typeof(ClosedGenericMember<double>))]
+        [LuminPack.Attribute.LuminPackUnion(4, typeof(ClosedGenericMember<int>))]
+        public abstract partial class GenericUnionRoot<T>
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public sealed partial class ClosedGenericMember<TMember> : GenericUnionRoot<TMember>
+        {
+            public TMember Value = default!;
+        }
+        """;
+
+    var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+    var compilation = CSharpCompilation.Create(
+        "GenericUnionDispatch",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        parseOptions: parseOptions);
+    var result = driver.RunGenerators(compilation).GetRunResult().Results.Single();
+    if (result.Exception is not null)
+    {
+        throw new InvalidOperationException("Generic union generator failed.", result.Exception);
+    }
+
+    var generated = result.GeneratedSources
+        .FirstOrDefault(static item => item.HintName.EndsWith(".UnionDispatch.g.cs", StringComparison.Ordinal))
+        .SourceText?
+        .ToString();
+    if (string.IsNullOrEmpty(generated))
+    {
+        throw new InvalidOperationException("The generic union dispatch source was not generated.");
+    }
+
+    if (generated.Contains("if (typeof(T)", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("The generic union hot path still contains a linear typeof(T) chain.");
+    }
+    if (!generated.Contains("LuminUnionMap<int>", StringComparison.Ordinal) ||
+        !generated.Contains("switch (__LuminPackUnionDispatchSlot_", StringComparison.Ordinal) ||
+        !generated.Contains("LuminPack.Code.LuminPackMarshal.GetMethodTable", StringComparison.Ordinal) ||
+        !generated.Contains("LuminPack.Code.LuminPackMarshal.As<", StringComparison.Ordinal) ||
+        !generated.Contains("typeof(global::ClosedGenericMember<TMember>)", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "The generic union dispatch did not emit its MethodTable cache and exact closed-type static call path.");
+    }
+}
+
+// <summary>Verifies verify sealed union dispatch.</summary>
+// <param name="references">The references used by this operation.</param>
+static void VerifySealedUnionDispatch(MetadataReference[] references)
+{
+    const string source = """
+        using System;
+
+        namespace LuminPack.Attribute
+        {
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
+            public sealed class LuminPackableAttribute : Attribute
+            {
+            }
+
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = true)]
+            public sealed class LuminPackUnionAttribute : Attribute
+            {
+                public LuminPackUnionAttribute(ushort tag, Type type)
+                {
+                }
+            }
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public abstract partial class ClassUnionRoot
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial class LeafMember : ClassUnionRoot
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial class ParentMember : ClassUnionRoot
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial class ChildMember : ParentMember
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial interface InterfaceUnionRoot
+        {
+        }
+
+        [LuminPack.Attribute.LuminPackable]
+        public partial class InterfaceLeafMember : InterfaceUnionRoot
+        {
+        }
+        """;
+
+    var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+    var compilation = CSharpCompilation.Create(
+        "SealedUnionDispatch",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        parseOptions: parseOptions);
+    var result = driver.RunGenerators(compilation).GetRunResult().Results.Single();
+    if (result.Exception is not null)
+    {
+        throw new InvalidOperationException("Sealed union generator failed.", result.Exception);
+    }
+
+    var dispatch = string.Join(
+        Environment.NewLine,
+        result.GeneratedSources
+            .Where(static item => item.HintName.EndsWith(".UnionDispatch.g.cs", StringComparison.Ordinal))
+            .Select(static item => item.SourceText?.ToString() ?? string.Empty));
+    if (!dispatch.Contains("internal sealed override void __LuminPackUnionSerialize_", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("A leaf class-union member did not emit a sealed dispatch override.");
+    }
+    if (!dispatch.Contains("internal override void __LuminPackUnionSerialize_", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("A class-union member with a LuminPackable subclass was incorrectly sealed.");
+    }
+}
+
+// <summary>Verifies verify direct static dispatch.</summary>
+// <param name="platformReferences">The platform references used by this operation.</param>
+static void VerifyDirectStaticDispatch(MetadataReference[] platformReferences)
+{
+    var parseOptions = CSharpParseOptions.Default
+        .WithLanguageVersion(LanguageVersion.Preview)
+        .WithPreprocessorSymbols("NET8_0_OR_GREATER");
+    var runtimeReference = MetadataReference.CreateFromFile(
+        typeof(global::LuminPack.Core.LuminPackWriter).Assembly.Location);
+    var references = platformReferences.Append(runtimeReference).ToArray();
+
+    const string directSource = """
+        using System.Collections.Generic;
+        using System.Collections.Immutable;
+        using LuminPack.Attribute;
+
+        [LuminPackable]
+        public partial class DirectStaticModel
+        {
+            public string[] Names = default!;
+            public List<string> Labels = default!;
+            public Dictionary<string, List<int>> Index = default!;
+            public Dictionary<int, long> Counters = default!;
+            public IReadOnlyCollection<string> ReadOnlyLabels { get; set; } = default!;
+            public ImmutableArray<string> ImmutableLabels;
+            public KeyValuePair<int, string> Pair;
+        }
+        """;
+
+    var directInput = CSharpCompilation.Create(
+        "DirectStaticDispatch",
+        new[] { CSharpSyntaxTree.ParseText(directSource, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    var (directOutput, directGenerated) = RunFormatterGenerators(directInput, parseOptions);
+    AssertNoCompilationErrors(directOutput, "direct-static closed formatter graph", ignoreRoslyn43RefReadonlyMismatch: true);
+
+    string normalizedDirectGenerated = directGenerated.Replace("\r\n", "\n");
+    if (!normalizedDirectGenerated.Contains(
+            "if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8)\n" +
+            "            {\n" +
+            "                var dictionaryView = LuminPackMarshal.GetDictionaryView(value);\n" +
+            "                if (dictionaryView._count == count)",
+            StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "The unmanaged Dictionary binary fast path reads layout-sensitive state without a 64-bit guard.");
+    }
+    if (!normalizedDirectGenerated.Contains(
+            "if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() != 8)\n" +
+            "            {\n" +
+            "                var fallback = new global::System.Collections.Generic.Dictionary<int, long>(length);",
+            StringComparison.Ordinal) ||
+        normalizedDirectGenerated.IndexOf(
+            "if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() != 8)", StringComparison.Ordinal) >
+        normalizedDirectGenerated.IndexOf(
+            "var dictionaryView = LuminPackMarshal.GetDictionaryView(result);", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "The Dictionary reader touches its runtime-layout view before the 32-bit public-API fallback.");
+    }
+    if (!normalizedDirectGenerated.Contains(
+            "if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8)\n" +
+            "                {\n" +
+            "                    nuint dictIndex = 0;\n" +
+            "                    var dictView = LuminPackMarshal.GetDictionaryView(value);",
+            StringComparison.Ordinal) ||
+        !normalizedDirectGenerated.Contains(
+            "else\n" +
+            "                {\n" +
+            "                    foreach (var entry in value)",
+            StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "The Dictionary JSON formatter is missing its guarded dense path or public-enumerator 32-bit fallback.");
+    }
+
+    const string generatedContainer = "LuminPack.Generated.LuminPackExtensions_DirectStaticDispatch";
+    int directWrites = 0;
+    int directReads = 0;
+    int directCalculates = 0;
+    int directObjectFieldCalculates = 0;
+    var runtimeFallbacks = new List<string>();
+    foreach (SyntaxTree tree in directOutput.SyntaxTrees.Skip(directInput.SyntaxTrees.Count()))
+    {
+        SemanticModel model = directOutput.GetSemanticModel(tree);
+        foreach (InvocationExpressionSyntax invocation in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method)
+                continue;
+
+            string containingType = method.ContainingType?.ToDisplayString() ?? string.Empty;
+            if (containingType == "LuminPack.Core.LuminPackLocalExtension" &&
+                method.Name is "WriteValue" or "ReadValue")
+            {
+                runtimeFallbacks.Add(invocation.ToString());
+            }
+
+            if (containingType != generatedContainer || method.IsGenericMethod)
+                continue;
+
+            if (method.Name == "WriteValue") directWrites++;
+            else if (method.Name == "ReadValue") directReads++;
+            else if (method.Name == "CalculateOffset")
+            {
+                directCalculates++;
+                if (invocation.ArgumentList.Arguments.Any(static argument =>
+                        argument.Expression.ToString().Contains("__luminPackOffsetValue", StringComparison.Ordinal)))
+                {
+                    directObjectFieldCalculates++;
+                }
+            }
+        }
+    }
+
+    if (runtimeFallbacks.Count != 0)
+    {
+        throw new InvalidOperationException(
+            "Closed local formatter calls bound to LuminPackLocalExtension<T>: " +
+            string.Join(" | ", runtimeFallbacks.Take(8)));
+    }
+    if (directWrites < 12 || directReads < 12 || directCalculates < 8 || directObjectFieldCalculates < 4)
+    {
+        throw new InvalidOperationException(
+            $"Insufficient concrete generated bindings: Write={directWrites}, Read={directReads}, " +
+            $"Calculate={directCalculates}, ObjectFieldCalculate={directObjectFieldCalculates}.");
+    }
+
+    const string externalSource = """
+        using LuminPack.Attribute;
+
+        namespace ExternalContracts
+        {
+            [LuminPackable]
+            public partial class ExternalContract
+            {
+                public int Value;
+            }
+        }
+        """;
+    var externalCompilation = CSharpCompilation.Create(
+        "ExternalContracts",
+        new[] { CSharpSyntaxTree.ParseText(externalSource, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    using var externalImage = new MemoryStream();
+    var externalEmit = externalCompilation.Emit(externalImage);
+    if (!externalEmit.Success)
+    {
+        throw new InvalidOperationException(
+            "External contract metadata compilation failed: " +
+            string.Join(" | ", externalEmit.Diagnostics.Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));
+    }
+
+    var externalReference = MetadataReference.CreateFromImage(externalImage.ToArray());
+    const string consumerSource = """
+        using System.Collections.Generic;
+        using ExternalContracts;
+        using LuminPack.Attribute;
+
+        [LuminPackable]
+        public partial class ExternalConsumer
+        {
+            public List<ExternalContract> Items = default!;
+        }
+        """;
+    var consumerInput = CSharpCompilation.Create(
+        "ExternalConsumer",
+        new[] { CSharpSyntaxTree.ParseText(consumerSource, parseOptions) },
+        references.Append(externalReference),
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    var (consumerOutput, _) = RunFormatterGenerators(consumerInput, parseOptions);
+    AssertNoCompilationErrors(consumerOutput, "external packable collection fallback", ignoreRoslyn43RefReadonlyMismatch: true);
+
+    int fallbackWrites = 0;
+    int fallbackReads = 0;
+    int fallbackCalculates = 0;
+    const string fallbackContainer = "LuminPack.Generated.LuminPackExtensions_ExternalConsumer";
+    foreach (SyntaxTree tree in consumerOutput.SyntaxTrees.Skip(consumerInput.SyntaxTrees.Count()))
+    {
+        SemanticModel model = consumerOutput.GetSemanticModel(tree);
+        foreach (InvocationExpressionSyntax invocation in tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>())
+        {
+            if (model.GetSymbolInfo(invocation).Symbol is not IMethodSymbol method ||
+                method.ContainingType?.ToDisplayString() != fallbackContainer ||
+                !method.IsGenericMethod ||
+                method.TypeArguments.Length != 1 ||
+                method.TypeArguments[0].ToDisplayString().TrimEnd('?') != "ExternalContracts.ExternalContract")
+            {
+                continue;
+            }
+
+            if (method.Name == "WriteValue") fallbackWrites++;
+            else if (method.Name == "ReadValue") fallbackReads++;
+            else if (method.Name == "CalculateOffset") fallbackCalculates++;
+        }
+    }
+
+    if (fallbackWrites == 0 || fallbackReads == 0 || fallbackCalculates == 0)
+    {
+        throw new InvalidOperationException(
+            $"Referenced [LuminPackable] fallback bindings missing: Write={fallbackWrites}, " +
+            $"Read={fallbackReads}, Calculate={fallbackCalculates}.");
+    }
+}
+
+// <summary>Verifies verify light mode.</summary>
+// <param name="platformReferences">The platform references used by this operation.</param>
+static void VerifyLightMode(MetadataReference[] platformReferences)
+{
+    var parseOptions = CSharpParseOptions.Default
+        .WithLanguageVersion(LanguageVersion.Preview)
+        .WithPreprocessorSymbols("NET8_0_OR_GREATER");
+    var runtimeReference = MetadataReference.CreateFromFile(
+        typeof(global::LuminPack.Core.LuminPackWriter).Assembly.Location);
+
+    // The serializer entry point (LuminPackSerializer) is source-generated, so it does not exist
+    // in the runtime assembly. Provide a minimal stub in a separate referenced assembly so the
+    // consumer's input compilation can resolve the call sites that prune-mode reachability scans.
+    const string runtimeStubSource = """
+        namespace LuminPack
+        {
+            public static class LuminPackSerializer
+            {
+                public static byte[] Serialize<T>(T value) => System.Array.Empty<byte>();
+                public static T Deserialize<T>(byte[] bytes) => default!;
+            }
+        }
+        """;
+    var runtimeStub = CSharpCompilation.Create(
+        "LuminPackRuntimeStub",
+        new[] { CSharpSyntaxTree.ParseText(runtimeStubSource, parseOptions) },
+        platformReferences.Append(runtimeReference),
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    var references = platformReferences.Append(runtimeReference)
+        .Append(runtimeStub.ToMetadataReference())
+        .ToArray();
+
+    const string source = """
+        using System.Collections.Generic;
+        using LuminPack;
+        using LuminPack.Attribute;
+
+        [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Light)]
+
+        [LuminPackable]
+        public partial class UsedPackable
+        {
+            public List<int> Numbers = default!;
+        }
+
+        [LuminPackable]
+        public partial class UnusedPackable
+        {
+            public string Name = default!;
+        }
+
+        // Not [LuminPackable] and never passed to a serializer call site: must not emit
+        // a concrete formatter in prune mode, and must not appear in the generic dispatch.
+        public sealed class NeverMentionedPayload
+        {
+            public int Value;
+        }
+
+        public static class Wrappers
+        {
+            // Interprocedural generic wrapper: the payload type T is resolved from the concrete
+            // call sites of Save<...>/Restore<...>.  Dictionary<string,List<int>> is a valid
+            // no-owner formatter candidate reached ONLY through this wrapper.
+            public static void Save<T>(T value)
+            {
+                _ = LuminPackSerializer.Serialize(value);
+            }
+
+            public static T Restore<T>(byte[] bytes)
+            {
+                return LuminPackSerializer.Deserialize<T>(bytes);
+            }
+        }
+
+        public static class Usage
+        {
+            public static byte[] Run()
+            {
+                Wrappers.Save(new Dictionary<string, List<int>>());
+                var restored = Wrappers.Restore<Dictionary<string, List<int>>>(System.Array.Empty<byte>());
+                _ = restored;
+                return LuminPackSerializer.Serialize(new UsedPackable());
+            }
+        }
+        """;
+
+    var input = CSharpCompilation.Create(
+        "LightModeVerify",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    var (output, generated) = RunPruneModeGenerators(input, parseOptions);
+    AssertNoCompilationErrors(output, "Light mode closed graph", ignoreRoslyn43RefReadonlyMismatch: true);
+
+    // Dictionary<string,List<int>> is a valid no-owner formatter candidate reached only through the
+    // interprocedural generic wrapper Save<...>/Restore<...>.
+    if (!generated.Contains("global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<int>>", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Light mode did not propagate the concrete instantiation through the generic wrapper method.");
+    }
+
+    // NeverMentionedPayload is neither owned nor passed to any serializer call site.
+    if (generated.Contains("NeverMentionedPayload", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Light mode emitted a formatter for a type that is not reachable from any serializer call site.");
+    }
+
+    // The compact-id registration must contain the emitted set (owned + reachable no-owner).
+    const string dispatchType = "global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<int>>";
+    if (!generated.Contains("typeof(T) == typeof(" + dispatchType + ")", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "The light-mode generic dispatch case for the wrapper-reached type was not registered.");
+    }
+    if (generated.Contains("typeof(global::NeverMentionedPayload)", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "The light-mode generic dispatch registered a formatter that was not generated.");
+    }
+
+    // Owned types (UsedPackable) and their graphs always emit.  UnusedPackable is owned too, so it
+    // emits as a per-type root even though no call site reaches it.
+    if (!generated.Contains("global::UsedPackable", StringComparison.Ordinal) ||
+        !generated.Contains("global::UnusedPackable", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Light mode dropped an owned [LuminPackable] type that must always emit.");
+    }
+
+    // Optional variants are gated: the wrapper-reached collection is a no-owner type and its
+    // reachable graph contains no compress / fresh-read reference, so its formatter must not carry
+    // those variants.
+    if (generated.Contains("WriteValueWithCompress(ref this LuminPackWriter writer, scoped in global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<int>>", StringComparison.Ordinal) ||
+        generated.Contains("ReadFreshValue(ref this LuminPackReader reader, scoped ref global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<int>>", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Light mode emitted an unreferenced optional formatter variant for a reachable no-owner type.");
+    }
+}
+
+// <summary>Verifies verify medium mode.</summary>
+// <param name="platformReferences">The platform references used by this operation.</param>
+static void VerifyMediumMode(MetadataReference[] platformReferences)
+{
+    var parseOptions = CSharpParseOptions.Default
+        .WithLanguageVersion(LanguageVersion.Preview)
+        .WithPreprocessorSymbols("NET8_0_OR_GREATER");
+    var runtimeReference = MetadataReference.CreateFromFile(
+        typeof(global::LuminPack.Core.LuminPackWriter).Assembly.Location);
+
+    const string runtimeStubSource = """
+        namespace LuminPack
+        {
+            public static class LuminPackSerializer
+            {
+                public static byte[] Serialize<T>(T value) => System.Array.Empty<byte>();
+                public static T Deserialize<T>(byte[] bytes) => default!;
+            }
+        }
+        """;
+    var runtimeStub = CSharpCompilation.Create(
+        "LuminPackRuntimeStub",
+        new[] { CSharpSyntaxTree.ParseText(runtimeStubSource, parseOptions) },
+        platformReferences.Append(runtimeReference),
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    var references = platformReferences.Append(runtimeReference)
+        .Append(runtimeStub.ToMetadataReference())
+        .ToArray();
+
+    const string source = """
+        using LuminPack;
+        using LuminPack.Attribute;
+
+        [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Medium)]
+
+        // Public enum: a valid formatter candidate kept by the middle tier even though no call site
+        // reaches it (public types are conservative API surfaces).
+        public enum PublicCandidate
+        {
+            A = 0,
+            B = 1,
+        }
+
+        // Internal enum: a valid formatter candidate that is strictly pruned (not reachable).
+        internal enum InternalCandidate
+        {
+            A = 0,
+            B = 1,
+        }
+
+        public static class Usage
+        {
+            public static byte[] Run()
+            {
+                _ = typeof(PublicCandidate);
+                _ = typeof(InternalCandidate);
+                return LuminPackSerializer.Serialize(42);
+            }
+        }
+        """;
+
+    var input = CSharpCompilation.Create(
+        "MediumVerify",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    var (output, generated) = RunPruneModeGenerators(input, parseOptions);
+    AssertNoCompilationErrors(output, "medium mode closed graph", ignoreRoslyn43RefReadonlyMismatch: true);
+
+    if (!generated.Contains("global::PublicCandidate", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Medium mode did not keep the public non-packable type.");
+    }
+    if (generated.Contains("InternalCandidate", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "medium mode did not prune an internal non-reachable type.");
+    }
+}
+
+// <summary>Verifies verify minimal mode.</summary>
+// <param name="platformReferences">The platform references used by this operation.</param>
+static void VerifyMinimalMode(MetadataReference[] platformReferences)
+{
+    var parseOptions = CSharpParseOptions.Default
+        .WithLanguageVersion(LanguageVersion.Preview)
+        .WithPreprocessorSymbols("NET8_0_OR_GREATER");
+    var runtimeReference = MetadataReference.CreateFromFile(
+        typeof(global::LuminPack.Core.LuminPackWriter).Assembly.Location);
+
+    const string runtimeStubSource = """
+        namespace LuminPack
+        {
+            public static class LuminPackSerializer
+            {
+                public static byte[] Serialize<T>(T value) => System.Array.Empty<byte>();
+                public static T Deserialize<T>(byte[] bytes) => default!;
+            }
+        }
+        """;
+    var runtimeStub = CSharpCompilation.Create(
+        "LuminPackRuntimeStub",
+        new[] { CSharpSyntaxTree.ParseText(runtimeStubSource, parseOptions) },
+        platformReferences.Append(runtimeReference),
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    var references = platformReferences.Append(runtimeReference)
+        .Append(runtimeStub.ToMetadataReference())
+        .ToArray();
+
+    const string source = """
+        using LuminPack;
+        using LuminPack.Attribute;
+
+        [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Minimal)]
+
+        [LuminPackable]
+        public partial class UsedPackable
+        {
+            public int Value;
+        }
+
+        // Declared [LuminPackable] but never serialized: minimal tier must prune it entirely,
+        // unlike Reachable which always keeps every packable.
+        [LuminPackable]
+        public partial class UnusedPackable
+        {
+            public int Value;
+        }
+
+        [LuminPackable]
+        public abstract partial class UnionRoot
+        {
+        }
+
+        [LuminPackable]
+        public sealed partial class UnionChild : UnionRoot
+        {
+            public int V;
+        }
+
+        public static class Usage
+        {
+            public static byte[] Run()
+            {
+                _ = LuminPackSerializer.Serialize(new UsedPackable());
+                // UnionChild is reached only through the union dispatch of the reachable UnionRoot.
+                return LuminPackSerializer.Serialize<UnionRoot>(new UnionChild());
+            }
+        }
+        """;
+
+    var input = CSharpCompilation.Create(
+        "MinimalVerify",
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    var (output, generated) = RunPruneModeGenerators(input, parseOptions);
+    AssertNoCompilationErrors(output, "minimal mode closed graph", ignoreRoslyn43RefReadonlyMismatch: true);
+
+    if (!generated.Contains("global::UsedPackable", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Minimal mode did not emit a [LuminPackable] type that is passed to a serializer call site.");
+    }
+    if (generated.Contains("UnusedPackable", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Minimal mode emitted a [LuminPackable] type that is never serialized.");
+    }
+    if (!generated.Contains("global::UnionChild", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException(
+            "Minimal mode did not keep a union member reached through a reachable union root.");
+    }
+}
+
+// <summary>Verifies run prune mode generators.</summary>
+// <param name="input">The input data to process.</param>
+// <param name="parseOptions">The parse options used by this operation.</param>
+// <returns>The result of the operation.</returns>
+static (Compilation Output, string Generated) RunPruneModeGenerators(
+    CSharpCompilation input,
+    CSharpParseOptions parseOptions)
+{
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new Microsoft.CodeAnalysis.ISourceGenerator[]
+        {
+            new LuminPackSourceGenerator().AsSourceGenerator(),
+            new LuminPackAggregateGenerator().AsSourceGenerator(),
+        },
+        parseOptions: parseOptions);
+    driver = driver.RunGeneratorsAndUpdateCompilation(input, out Compilation output, out _);
+    var runResult = driver.GetRunResult();
+    foreach (GeneratorRunResult result in runResult.Results)
+    {
+        if (result.Exception is not null)
+            throw new InvalidOperationException("Prune-mode generator failed.", result.Exception);
+    }
+
+    string generated = string.Join(
+        Environment.NewLine,
+        runResult.Results.SelectMany(static result => result.GeneratedSources)
+            .Select(static source => source.SourceText.ToString()));
+    return (output, generated);
+}
+
+// <summary>Verifies run formatter generators.</summary>
+// <param name="input">The input data to process.</param>
+// <param name="parseOptions">The parse options used by this operation.</param>
+// <returns>The result of the operation.</returns>
+static (Compilation Output, string Generated) RunFormatterGenerators(
+    CSharpCompilation input,
+    CSharpParseOptions parseOptions)
+{
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        parseOptions: parseOptions);
+    driver = driver.RunGeneratorsAndUpdateCompilation(input, out Compilation output, out _);
+    var runResult = driver.GetRunResult();
+    foreach (GeneratorRunResult result in runResult.Results)
+    {
+        if (result.Exception is not null)
+            throw new InvalidOperationException("Formatter generator failed.", result.Exception);
+    }
+
+    string generated = string.Join(
+        Environment.NewLine,
+        runResult.Results.SelectMany(static result => result.GeneratedSources)
+            .Select(static source => source.SourceText.ToString()));
+    return (output, generated);
+}
+
+// <summary>Verifies assert no compilation errors.</summary>
+// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
+// <param name="scenario">The scenario used by this operation.</param>
+// <param name="ignoreRoslyn43RefReadonlyMismatch">The ignore roslyn43 ref readonly mismatch used by this operation.</param>
+static void AssertNoCompilationErrors(
+    Compilation compilation,
+    string scenario,
+    bool ignoreRoslyn43RefReadonlyMismatch = false)
+{
+    Diagnostic[] errors = compilation.GetDiagnostics()
+        .Where(static diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)
+        .Where(diagnostic => !ignoreRoslyn43RefReadonlyMismatch || !IsRoslyn43RefReadonlyMismatch(diagnostic))
+        .ToArray();
+    if (errors.Length != 0)
+    {
+        var rendered = errors.Take(16).Select(static error =>
+        {
+            var span = error.Location.GetLineSpan();
+            string sourceLine = error.Location.SourceTree is { } tree
+                ? tree.GetText().Lines[span.StartLinePosition.Line].ToString().Trim()
+                : string.Empty;
+            return error + (sourceLine.Length == 0 ? string.Empty : " [source: " + sourceLine + "]");
+        });
+        throw new InvalidOperationException(
+            scenario + " produced compilation errors: " + string.Join(" | ", rendered));
+    }
+}
+
+// <summary>Determines whether the supplied value has the roslyn43 ref readonly mismatch classification.</summary>
+// <param name="diagnostic">The diagnostic used by this operation.</param>
+// <returns>Whether the requested condition or operation succeeded.</returns>
+static bool IsRoslyn43RefReadonlyMismatch(Diagnostic diagnostic)
+{
+    if (diagnostic.Id != "CS1620" || diagnostic.Location.SourceTree is not { } tree)
+        return false;
+
+    var span = diagnostic.Location.GetLineSpan();
+    return tree.GetText().Lines[span.StartLinePosition.Line].ToString()
+        .Contains("Unsafe.AsRef(in value)", StringComparison.Ordinal);
+}
+
+// <summary>Verifies verify formatter scope.</summary>
+// <param name="references">The references used by this operation.</param>
+static void VerifyFormatterScope(MetadataReference[] references)
+{
+    const string runtimeSource = """
+        using System;
+
+        namespace LuminPack
+        {
+            public static class LuminPackSerializer
+            {
+                public static void Touch<T>() { }
+            }
+        }
+
+        namespace LuminPack.Attribute
+        {
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
+            public sealed class LuminPackableAttribute : Attribute
+            {
+            }
+        }
+        """;
+    var parseOptions = CSharpParseOptions.Default.WithLanguageVersion(LanguageVersion.CSharp10);
+    var runtime = CSharpCompilation.Create(
+        "LuminPack",
+        new[] { CSharpSyntaxTree.ParseText(runtimeSource, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+    var targetReferences = references.Append(runtime.ToMetadataReference()).ToArray();
+
+    const string unrelatedUnityAssembly = """
+        using System.Collections.Generic;
+
+        public sealed class InputControl { }
+        public sealed class InputSystemState
+        {
+            public List<int> KnownClosedType = new();
+            public List<InputControl> UnknownClosedType = new();
+        }
+        """;
+    var unrelatedSources = RunMapGenerator(unrelatedUnityAssembly, "Unity.InputSystem", targetReferences, parseOptions);
+    if (unrelatedSources.Length != 0)
+    {
+        throw new InvalidOperationException(
+            "An assembly that only receives Unity's automatic LuminPack reference must not emit support code.");
+    }
+
+    const string luminPackConsumer = """
+        using System;
+        using System.Collections.Generic;
+        using LuminPack;
+
+        public sealed class InputControl { }
+        public static class Consumer
+        {
+            public static void Touch()
+            {
+                LuminPackSerializer.Touch<int>();
+                _ = typeof(Dictionary<string, List<int>>);
+                _ = typeof(List<InputControl>);
+                _ = typeof(nuint);
+                _ = typeof(UIntPtr);
+            }
+        }
+        """;
+    var consumerSources = RunMapGenerator(luminPackConsumer, "Assembly-CSharp", targetReferences, parseOptions);
+    var generated = string.Join(Environment.NewLine, consumerSources);
+    if (!generated.Contains("Dictionary<", StringComparison.Ordinal) ||
+        !generated.Contains("List<int>", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("Registered closed generic formatter support was not emitted.");
+    }
+    if (!generated.Split('\n').Any(static line =>
+            line.Contains("CalculateOffset(ref this global::LuminPack.Core.LuminPackEvaluator evaluator", StringComparison.Ordinal) &&
+            line.Contains("Dictionary<", StringComparison.Ordinal)))
+    {
+        throw new InvalidOperationException("Closed dictionary formatter did not emit its size evaluator.");
+    }
+    if (generated.Contains("InputControl", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("An unknown closed generic argument leaked into formatter support.");
+    }
+    if (generated.Contains(" in nuint value", StringComparison.Ordinal) ||
+        generated.Contains(" ref nuint value", StringComparison.Ordinal))
+    {
+        throw new InvalidOperationException("nuint and UIntPtr were not canonicalized to one generated signature.");
+    }
+}
+
+// <summary>Verifies run map generator.</summary>
+// <param name="source">The input data to process.</param>
+// <param name="assemblyName">The assembly name used by this operation.</param>
+// <param name="references">The references used by this operation.</param>
+// <param name="parseOptions">The parse options used by this operation.</param>
+// <returns>The result of the operation.</returns>
+static string[] RunMapGenerator(
+    string source,
+    string assemblyName,
+    MetadataReference[] references,
+    CSharpParseOptions parseOptions)
+{
+    var compilation = CSharpCompilation.Create(
+        assemblyName,
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new[] { new LuminPackAggregateGenerator().AsSourceGenerator() },
+        parseOptions: parseOptions);
+    return driver.RunGenerators(compilation)
+        .GetRunResult()
+        .Results.Single()
+        .GeneratedSources
+        .Select(static generated => generated.SourceText.ToString())
+        .ToArray();
+}
+
+// <summary>Verifies assert scoped emission.</summary>
+// <param name="source">The input data to process.</param>
+// <param name="references">The references used by this operation.</param>
+// <param name="parseOptions">The parse options used by this operation.</param>
+// <param name="shouldEmitScoped">The should emit scoped used by this operation.</param>
+// <param name="scenario">The scenario used by this operation.</param>
+static void AssertScopedEmission(
+    string source,
+    MetadataReference[] references,
+    CSharpParseOptions parseOptions,
+    bool shouldEmitScoped,
+    string scenario)
+{
+    var compilation = CSharpCompilation.Create(
+        "ScopedEmission_" + scenario,
+        new[] { CSharpSyntaxTree.ParseText(source, parseOptions) },
+        references,
+        new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+    GeneratorDriver driver = CSharpGeneratorDriver.Create(
+        new[] { new LuminPackSourceGenerator().AsSourceGenerator() },
+        parseOptions: parseOptions);
+    var generatedSource = string.Join(
+        Environment.NewLine,
+        driver.RunGenerators(compilation)
+            .GetRunResult()
+            .Results.Single()
+            .GeneratedSources
+            .Select(static generated => generated.SourceText.ToString()));
+    var emitsScoped = generatedSource.Contains("scoped ", StringComparison.Ordinal);
+
+    if (emitsScoped != shouldEmitScoped)
+    {
+        throw new InvalidOperationException(
+            $"{scenario} scoped emission mismatch. Expected {shouldEmitScoped}, got {emitsScoped}.");
+    }
+
+    bool emitsLiteralPrefix = generatedSource.Contains(
+        "ReadOnlySpan<byte> _jsonPrefixUtf8_", StringComparison.Ordinal);
+    if (emitsLiteralPrefix != shouldEmitScoped ||
+        (!shouldEmitScoped && !generatedSource.Contains("readonly byte[] _jsonPrefixUtf8_", StringComparison.Ordinal)))
+    {
+        throw new InvalidOperationException($"{scenario} JSON prefix storage does not match its language/target branch.");
+    }
+}
+
+// <summary>Verifies build source.</summary>
+// <param name="compilationIndex">The compilation index used by this operation.</param>
+// <returns>The result of the operation.</returns>
+static string BuildSource(int compilationIndex)
+{
+    var types = string.Join(
+        Environment.NewLine,
+        Enumerable.Range(0, ValidTypesPerCompilation).Select(typeIndex => $$"""
+            [LuminPack.Attribute.LuminPackable]
+            public partial class Model_{{typeIndex}}
+            {
+                public int Value_{{typeIndex}};
+            }
+            """));
+
+    return $$"""
+        using System;
+
+        namespace LuminPack.Attribute
+        {
+            [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct | AttributeTargets.Interface)]
+            public sealed class LuminPackableAttribute : Attribute
+            {
+            }
+        }
+
+        namespace Case_{{compilationIndex}}
+        {
+            {{types}}
+
+            [LuminPack.Attribute.LuminPackable]
+            public static partial class Invalid_{{compilationIndex}}
+            {
+            }
+        }
+        """;
+}

@@ -1,160 +1,164 @@
 # LuminPack API reference
 
-## Generated serializer facade
+## Generated serializer
 
-The source generator emits `LuminPack.LuminPackSerializer` for each consuming compilation. Concrete overloads bind to concrete formatters; generic convenience overloads use generated or registered dispatch.
-
-XML documentation on each concrete overload identifies its type, generation mode, serialized members, order, CLR layout attributes, and buffer semantics. Type and member links use C# XML documentation references. Unmanaged storage layout, ordinary binary member order, and JSON named members are documented separately.
-
-Representative signatures below use `T` to stand for the concrete type:
+The generator emits `LuminPack.LuminPackSerializer` into each consuming assembly. For a type `T` it has concrete overloads, plus generic ones (`<T>`) and profile ones (`<TOptions>` / `<T, TOptions>`) for every shape below. `TOptions` is a stateless profile struct (see Options).
 
 ```csharp
-// Binary serialization and deserialization.
-byte[] Serialize(in T value, LuminPackSerializerOption? option = null);
-void Serialize(in T value, LuminBufferWriter writerBuffer);
-int Deserialize(ReadOnlySpan<byte> buffer, ref T value, LuminPackSerializerOption? options = null);
-int Deserialize(ReadOnlySequence<byte> buffer, ref T value, LuminPackSerializerOption? options = default);
-int Deserialize(LuminBufferWriter bufferWriter, ref T value);
-T Deserialize<T>(ReadOnlySpan<byte> buffer, LuminPackSerializerOption? options = null);
+// Binary
+byte[] Serialize(in T value);
+void   Serialize(in T value, LuminBufferWriter writerBuffer);       // appends at the cursor
+void   Serialize(in T value, IBufferWriter<byte> bufferWriter);
+int    Deserialize(ReadOnlySpan<byte> buffer, ref T value);        // returns bytes consumed
+int    Deserialize(ReadOnlySequence<byte> buffer, ref T value);
+int    Deserialize(LuminBufferWriter bufferWriter, ref T value);
+T      Deserialize<T>(ReadOnlySpan<byte> buffer);                  // also ReadOnlySequence, LuminBufferWriter
 
-// JSON serialization and deserialization.
-string SerializeJson(T value, LuminPackSerializerOption? option = null);
-void SerializeJson(T value, LuminBufferWriter writerBuffer);
-int DeserializeJson(string buffer, ref T value, LuminPackSerializerOption? options = null);
-int DeserializeJson(ReadOnlySpan<byte> buffer, ref T value, LuminPackSerializerOption? options = null);
-int DeserializeJson(ReadOnlySpan<char> buffer, ref T value, LuminPackSerializerOption? options = null);
-int DeserializeJson(LuminBufferWriter bufferWriter, ref T value);
+// JSON
+string SerializeJson(T value);
+void   SerializeJson(T value, LuminBufferWriter writerBuffer);
+void   SerializeJson(T value, IBufferWriter<byte> bufferWriter);
+int    DeserializeJson(string buffer, ref T value);                // also ReadOnlySpan<char>, ReadOnlySpan<byte>, LuminBufferWriter
+T      DeserializeJson<T>(string buffer);
+
+// Streams (the caller owns and closes the stream; reads buffer the whole input)
+ValueTask    SerializeAsync(Stream stream, T value, CancellationToken cancellationToken = default);
+ValueTask<T> DeserializeAsync(Stream stream, T value, CancellationToken cancellationToken = default);
+ValueTask<T> DeserializeAsync<T>(Stream stream, CancellationToken cancellationToken = default);
+
+// Exact binary size
+int Sizeof(T value);
+
+// Profile forms, for example:
+byte[] Serialize<LuminPackUtf8LengthOptions>(in T value);
+int    Deserialize<LuminPackUtf8LengthOptions>(ReadOnlySpan<byte> buffer, ref T value);
 ```
 
-The facade also exposes asynchronous stream operations, `IBufferWriter<byte>` output, and binary size evaluation through `Sizeof`. A deserialization overload returning an integer reports consumed bytes in the selected representation, including transcoding performed by character-input overloads.
+Concrete overloads call the type's generated code directly. Generic overloads use explicit/Custom registrations first, then a per-type entry created on first use. Under `Light`/`Minimal` only the overload shapes actually called are generated; others fall back to the generic forms.
 
-## Options and reusable buffers
+## Options
 
-`LuminPackSerializerOption` is declared in `LuminPack.Option`. Presets include `Default`, `Utf8`, `Utf16`, `Token`, `Length`, and `Utf16WithLength`. String encoding and recording settings must agree at both ends. `MaxJsonDepth` defaults to 1024; non-positive values disable that depth limit.
+```csharp
+using LuminPack.Attribute;
+using LuminPack.Option;
 
-`LuminBufferWriter` owns native memory. Dispose buffers owned by the application, or return rented buffers to their pool. Overloads accepting a reusable buffer use its own configuration and operation state. Preserve exclusive ownership throughout each operation.
+[assembly: LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8)]   // assembly default
 
-## Manual registration
+[LuminPackable]
+[LuminPackOption(MaxJsonDepth = 64, ValidateJsonSyntax = true)]              // type scope
+public partial class Message
+{
+    [LuminPackOption(StringRecording = LuminPackStringRecording.Token)]      // member scope (binary)
+    public string Label = "";
+}
+```
 
-`Register<T>` accepts static function pointers and requires an unsafe context with `AllowUnsafeBlocks`. Supported tiers are:
+| Property | Default | Notes |
+| --- | --- | --- |
+| `StringEncoding` | `UTF16` | Per member in binary; per document (root type) in JSON. |
+| `StringRecording` | `Length` | `Token`: terminated, `null` reads back as `""`. |
+| `MaxJsonDepth` | 1024 | ≤ 0 disables. |
+| `ValidateJsonSyntax` | false | Enable for external JSON. |
+| `StandardFormat` | `"G"` | Constant for Custom/formatted kernels. |
+| `StructLayout` | `Tagged` | Assembly or struct only: `Tagged`, `Packed`, `Native`. |
+| `UntrustedData` | false | Bounded protocol; limits `MaxInputBytes`, `MaxDecompressedBytes`, `MaxAllocationBytes`, `MaxCollectionLength`, `MaxStringLength`, `MaxObjectCount`, `MaxDepth` (1..64), `MaxReadWork`. Both ends must enable it. Unions, reference tracking, version tolerance, Custom and some other shapes are rejected under it. |
 
-| Arguments | Supported operations |
+Only explicitly set properties override the enclosing scope. Built-in profiles: `LuminPackDefaultOptions` (UTF-16 length), `LuminPackUtf8LengthOptions`, `LuminPackUtf8TokenOptions`, `LuminPackUtf16LengthOptions`, `LuminPackUtf16TokenOptions`. A custom profile is a `struct` implementing `ILuminPackOptions`.
+
+`StringSerializer.Serialize<TOptions>(ReadOnlySpan<char>, Span<byte>, out int charsRead, out int bytesWritten, bool replaceInvalidSequences = true, bool isFinalBlock = true)` and the matching `Deserialize<TOptions>` transcode text without headers and return `OperationStatus`.
+
+## Buffers
+
+```csharp
+using var output = new LuminBufferWriter(true);     // LuminPack.Utility; native memory, must be disposed
+LuminPackSerializer.Serialize(a, output);
+LuminPackSerializer.Serialize(b, output);           // appended after a, shares reference state
+ReadOnlySpan<byte> written = output.GetSpan();
+output.ResetForReuse();                             // clear content + reference tables, keep capacity
+```
+
+- `Reset()`: also releases non-empty native storage. `ResetCore()`: content only, keeps reference tables.
+- After a failed write, reset before the next independent write.
+- Appended JSON documents have no separator.
+
+## Registration
+
+Requires `AllowUnsafeBlocks`. Generated only when unsafe code is enabled; disable with `[assembly: LuminPackGeneratorOptions(mode, LuminPackRegisterMode.Disabled)]`.
+
+```csharp
+static void Write(ref LuminPackWriter writer, in Legacy value) { writer.WriteValue(value.Id); }
+static void Read(ref LuminPackReader reader, ref Legacy value) { value = new Legacy(); reader.ReadValue(ref value.Id); }
+
+unsafe { LuminPackSerializer.Register<Legacy>(&Write, &Read); }
+```
+
+| Overload | Methods |
 | --- | --- |
-| `writeValue, readValue` | Binary writing and reading. |
-| The binary pair plus `writeValueJson, readValueJson` | Binary and JSON. |
-| Both pairs plus `calculateOffset` | Binary, JSON, and binary size evaluation. |
+| `Register<T>(write, read)` | binary |
+| `Register<T>(write, read, writeJson, readJson)` | + JSON |
+| `Register<T>(write, read, writeJson, readJson, calculateOffset)` | + size |
+| `Register<T, TOptions>(...)` | same, for one closed profile |
 
-Binary callbacks have signatures `(ref LuminPackWriter, in T)` and `(ref LuminPackReader, ref T)`. JSON callbacks use the corresponding JSON reader and writer. Size evaluation uses `(ref LuminPackEvaluator, in T)`.
+Signatures: `(ref LuminPackWriter, in T)`, `(ref LuminPackReader, ref T)`, `(ref LuminPackJsonWriter, in T)`, `(ref LuminPackJsonReader, ref T)`, `(ref LuminPackEvaluator, in T)`. Duplicate registration throws `ArgumentException`. Registries store method pointers keyed by method table, so they don't keep plugin assemblies alive; keep registered code loaded while it can run.
 
-```csharp
-private static void WriteLegacy(ref LuminPackWriter writer, in LegacyModel value)
-{
-    writer.WriteValue(value.Id);
-    writer.WriteValue(value.Name);
-}
+### Union cases the generator cannot see
 
-private static void ReadLegacy(ref LuminPackReader reader, ref LegacyModel value)
-{
-    value = new LegacyModel();
-    reader.ReadValue(ref value.Id);
-    reader.ReadValue(ref value.Name);
-}
-
-// Invoke once in an unsafe initialization context:
-// LuminPackSerializer.Register<LegacyModel>(&WriteLegacy, &ReadLegacy);
-```
-
-Duplicate registration raises `ArgumentException`. Registration keys use MethodTable addresses without retaining a strong `Type` reference.
-
-### Cross-assembly union registration
-
-A generated union root exposes `Register<TMember>(tag, &Write, &Read, &WriteJson, &ReadJson)`. All four pointers are required. Their union-root callback signatures differ from ordinary `Register<T>` callbacks: the value is passed by reference using the root type. Tags must agree with the written union header and must not collide with existing members.
-
-For a root `MyLib.IFoo` and a member `MyApp.FooA`:
+The root's generated `Register<TCase>(ushort tag, write, read, writeJson, readJson)` takes methods written against the **root** type:
 
 ```csharp
-private static void WriteFooA(ref LuminPackWriter writer, ref MyLib.IFoo value)
+static void Write(ref LuminPackWriter writer, ref Lib.IShape value)
 {
-    writer.WriteUnionHeader(0);
-    writer.WritePolymorphismValue(LuminPackMarshal.As<MyLib.IFoo, MyApp.FooA>(ref value));
+    writer.WriteUnionHeader(10);                                  // same tag as Register
+    writer.WritePolymorphismValue(LuminPackMarshal.As<Lib.IShape, Hexagon>(ref value));
 }
-
-private static void ReadFooA(ref LuminPackReader reader, ref MyLib.IFoo value)
+static void Read(ref LuminPackReader reader, ref Lib.IShape value)
 {
-    MyApp.FooA item = default!;
+    Hexagon item = default!;
     reader.ReadPolymorphismValue(ref item);
-    value = LuminPackMarshal.As<MyApp.FooA, MyLib.IFoo>(ref item!);
+    value = LuminPackMarshal.As<Hexagon, Lib.IShape>(ref item!);
 }
+// WriteJson writes {"$type":10,"$value":...}; ReadJson reads the value.
 
-private static void WriteJsonFooA(ref LuminPackJsonWriter writer, ref MyLib.IFoo value)
-{
-    writer.WriteObjectStart();
-    writer.WritePropertyName("$type");
-    writer.WriteInt(0);
-    writer.WritePropertyName("$value");
-    writer.WriteValue(LuminPackMarshal.As<MyLib.IFoo, MyApp.FooA>(ref value)!);
-    writer.WriteObjectEnd();
-}
-
-private static void ReadJsonFooA(ref LuminPackJsonReader reader, ref MyLib.IFoo value)
-{
-    MyApp.FooA item = default!;
-    reader.ReadValue(ref item);
-    value = LuminPackMarshal.As<MyApp.FooA, MyLib.IFoo>(ref item!);
-}
-
-// MyLib.IFoo.Register<MyApp.FooA>(0, &WriteFooA, &ReadFooA, &WriteJsonFooA, &ReadJsonFooA);
+unsafe { Lib.IShape.Register<Hexagon>(10, &Write, &Read, &WriteJson, &ReadJson); }
 ```
 
-The union registration table belongs to the root partial type. Register in the same process before serialization. Size evaluation remains unsupported for a member registered through this four-pointer union API.
+All four methods are required; tags must not collide with generated cases (`WriteWideUnionHeader` for wide tags); `Sizeof` throws for registered cases. Prefer `[assembly: LuminPackable(typeof(Lib.IShape))]` with local `partial` cases, which needs no registration.
 
 ## Custom formatters
 
-`[LuminPackable(GeneratorType.Custom)]` validates and automatically registers handwritten static methods. These methods must be public or internal and match one supported registration tier:
-
 ```csharp
-public static void Serialize(ref LuminPackWriter writer, in MyVector value);
-public static void Deserialize(ref LuminPackReader reader, ref MyVector value);
-
-// Optional paired JSON methods.
-public static void SerializeJson(ref LuminPackJsonWriter writer, in MyVector value);
-public static void DeserializeJson(ref LuminPackJsonReader reader, ref MyVector value);
-
-// Optional after the required binary and JSON tiers.
-public static void CalculateOffset(ref LuminPackEvaluator evaluator, in MyVector value);
+[LuminPackable(GeneratorType.Custom)]
+public sealed class MyVector
+{
+    public float X, Y, Z;
+    public static void Serialize(ref LuminPackWriter writer, in MyVector value)
+    { writer.WriteValue(value.X); writer.WriteValue(value.Y); writer.WriteValue(value.Z); }
+    public static void Deserialize(ref LuminPackReader reader, ref MyVector value)
+    { value ??= new MyVector(); reader.ReadValue(ref value.X); reader.ReadValue(ref value.Y); reader.ReadValue(ref value.Z); }
+    // Optional pair: SerializeJson(ref LuminPackJsonWriter, in T) + DeserializeJson(ref LuminPackJsonReader, ref T)
+    // Optional, requires JSON: CalculateOffset(ref LuminPackEvaluator, in T)
+}
 ```
 
-The generator reports invalid signatures through LuminPack100-LuminPack108. Generic custom types register their closed instances. Custom generation is not supported on union roots. Registration is skipped with a diagnostic when unsafe code or registration generation is disabled.
+The generator validates the methods (LuminPack100–108) and registers them automatically. Methods must be `static` and `public`/`internal`. Default JSON registration is UTF-16; UTF-8 documents need a closed-profile registration. Mark members of a Custom type with `[LuminPackableObject]`.
 
-For a binary-only formatter, write and read the same members in the same order. For JSON, use JSON object boundaries and property names, and implement the matching reader token handling. Custom size evaluation must reflect exactly the binary payload produced by the writer.
+## Low-level API (`LuminPack.Core`)
 
-## Low-level readers, writers, and marshal helpers
+- `LuminPackWriter`: `WriteValue(...)`, `Write<TOptions>(string)`, unmanaged values/spans, null markers, object and Union headers.
+- `LuminPackReader`: `ReadValue(ref ...)`, `Read<TOptions>(ref string)`, spans, headers, `EnsureReadable(count)`.
+- `LuminPackJsonWriter` / `LuminPackJsonReader`: tokens, property names, values.
+- `LuminPackMarshal` (`LuminPack.Code`): `As<TFrom,TTo>`, collection storage access, `CopyBlockUnaligned`.
 
-Use `LuminPack.Core` readers and writers within custom formatters and registration callbacks. Generated `WriteValue`, `ReadValue`, and `CalculateOffset` extensions are available through `LuminPack.Generated`.
+Readers and writers advance a cursor (`ref byte`, or `byte*` on netstandard2.1). On netstandard2.1, memory you wrap in a reader/writer yourself must stay pinned.
 
-- `LuminPackWriter` provides unmanaged value, array, span, string, null-marker, and union-header primitives. Explicit `ref int index` overloads support writing headers at reserved positions.
-- `LuminPackReader` provides matching value, array, span, string, and header operations. `Dangerous` variants require the caller to establish their buffer and layout preconditions.
-- `LuminPackMarshal`, in `LuminPack.Code`, provides references, reinterpretation, collection views, list/stack/queue storage access, MethodTable lookup, uninitialized allocation, and unaligned copying. Preserve documented layout and lifetime assumptions.
+## Helpers
 
-## Compression
+- `LuminCompressor` (`LuminPack.Utility`): `Compress(ReadOnlySpan<byte>)`, `Decompress(ReadOnlySpan<byte>)`, span and `LuminBufferWriter` overloads; LuminPack LZ frames.
+- `LuminChaCha20Poly1305` (`LuminPack.Cryptography`): RFC 8439 AEAD (32-byte key, 12-byte nonce, 16-byte tag), sync and async; decryption verifies the tag first and reports failure with a `bool`.
 
-```csharp
-int Compress(LuminBufferWriter source, LuminBufferWriter destination);
-byte[] Compress(ReadOnlySpan<byte> source);
-int Compress(ReadOnlySpan<byte> source, Span<byte> destination);
-int Decompress(ReadOnlySpan<byte> source, Span<byte> destination);
-int Decompress(LuminBufferWriter source, LuminBufferWriter destination);
-byte[] Decompress(ReadOnlySpan<byte> source);
-```
+## Formats
 
-Compression uses the LuminPack LZ frame format. Select matching compression and decompression operations.
-
-## Cryptography
-
-`LuminChaCha20Poly1305`, in `LuminPack.Cryptography`, provides synchronous and asynchronous authenticated encryption. The RFC 8439 path uses a 32-byte key, 12-byte nonce, and 16-byte authentication tag; the API also exposes its existing 16-byte key option. Ciphertext and plaintext lengths must match, and the tag destination must have sufficient capacity. Authentication failure is reported by the boolean decryption result.
-
-## Format overview
-
-Binary object contracts use member counts and ordered payloads; version-tolerant contracts add length framing, and circular-reference contracts add reference identifiers. Unmanaged storage copies include padding. Strings follow the selected UTF encoding and length/token recording mode. Collections carry a length, with -1 representing null. Union tags select the member formatter; tags requiring the wide representation use the dedicated wide-tag encoding.
-
-JSON uses named object properties, arrays for ordered collections and tuples, nested arrays for multidimensional arrays, and key/value pair arrays for dictionaries. Union payloads use `$type` and `$value`; circular references use `$id` and `$ref`. Avoid those reserved names in ordinary application members.
+- Binary object: `(byte memberCount 0..249, values...)`, `255` = null. Collection: `(int count, values...)`, `-1` = null. Union: `(byte tag, value)` or `(250, ushort tag, value)`, `255` = null.
+- Version-tolerant: `(251, 1, profile, count, metadata..., lengths..., payloads...)`. Reference tracking: slot lengths + reference id; `250` refers back.
+- UTF-16 strings: `(int header, payload)`; `-1` null, `0` empty, odd header = compact Latin-1. UTF-8: `(int byteCount, int utf16Length, bytes)`.
+- JSON: objects by member name; arrays for sequences and tuples; dictionaries as `[[k, v], ...]`; Unions `{"$type":tag,"$value":{...}}`; references `$id` / `$ref`; multidimensional arrays `{"Lengths":[..],"LowerBounds":[..],"Values":[..]}`.

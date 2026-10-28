@@ -11,7 +11,7 @@
 #   2. python tools/xjb-tables/extract_tables.py [source-directory]
 #
 # It verifies both h-shift formulas against the upstream tables, prints FNV-1a hashes (asserted by
-# tests/LuminPackUnitTest/JsonXjbFormatterTest.cs) and rewrites src/LuminPack/Core/Json/Xjb/XjbTables.g.cs.
+# tests/LuminPack.Tests/JsonXjbFormatterTest.cs) and rewrites src/LuminPack.Core/Core/Json/Xjb/XjbTables.g.cs.
 import io
 import os
 import re

@@ -1,0 +1,236 @@
+{
+  "module": "SkiaSharp",
+  "types": [
+    {
+      "type": "SkiaSharp.SKPoint",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "X"
+        },
+        {
+          "kind": "float",
+          "member": "Y"
+        }
+      ],
+      "factory": "new global::SkiaSharp.SKPoint({0}, {1})",
+      "samples": [
+        "default",
+        "new global::SkiaSharp.SKPoint(1, 2)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "SkiaSharp.SKPointI",
+      "fields": [
+        {
+          "kind": "int",
+          "member": "X"
+        },
+        {
+          "kind": "int",
+          "member": "Y"
+        }
+      ],
+      "factory": "new global::SkiaSharp.SKPointI({0}, {1})",
+      "samples": [
+        "default",
+        "new global::SkiaSharp.SKPointI(1, 2)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "SkiaSharp.SKSize",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "Width"
+        },
+        {
+          "kind": "float",
+          "member": "Height"
+        }
+      ],
+      "factory": "new global::SkiaSharp.SKSize({0}, {1})",
+      "samples": [
+        "default",
+        "new global::SkiaSharp.SKSize(1, 2)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "SkiaSharp.SKSizeI",
+      "fields": [
+        {
+          "kind": "int",
+          "member": "Width"
+        },
+        {
+          "kind": "int",
+          "member": "Height"
+        }
+      ],
+      "factory": "new global::SkiaSharp.SKSizeI({0}, {1})",
+      "samples": [
+        "default",
+        "new global::SkiaSharp.SKSizeI(1, 2)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "SkiaSharp.SKRect",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "Left"
+        },
+        {
+          "kind": "float",
+          "member": "Top"
+        },
+        {
+          "kind": "float",
+          "member": "Right"
+        },
+        {
+          "kind": "float",
+          "member": "Bottom"
+        }
+      ],
+      "factory": "new global::SkiaSharp.SKRect({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::SkiaSharp.SKRect(1, 2, 3, 4)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "SkiaSharp.SKRectI",
+      "fields": [
+        {
+          "kind": "int",
+          "member": "Left"
+        },
+        {
+          "kind": "int",
+          "member": "Top"
+        },
+        {
+          "kind": "int",
+          "member": "Right"
+        },
+        {
+          "kind": "int",
+          "member": "Bottom"
+        }
+      ],
+      "factory": "new global::SkiaSharp.SKRectI({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::SkiaSharp.SKRectI(1, 2, 3, 4)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "SkiaSharp.SKMatrix",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "ScaleX"
+        },
+        {
+          "kind": "float",
+          "member": "SkewX"
+        },
+        {
+          "kind": "float",
+          "member": "TransX"
+        },
+        {
+          "kind": "float",
+          "member": "SkewY"
+        },
+        {
+          "kind": "float",
+          "member": "ScaleY"
+        },
+        {
+          "kind": "float",
+          "member": "TransY"
+        },
+        {
+          "kind": "float",
+          "member": "Persp0"
+        },
+        {
+          "kind": "float",
+          "member": "Persp1"
+        },
+        {
+          "kind": "float",
+          "member": "Persp2"
+        }
+      ],
+      "factory": "new global::SkiaSharp.SKMatrix({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8})",
+      "samples": [
+        "default",
+        "new global::SkiaSharp.SKMatrix(1, 2, 3, 4, 5, 6, 7, 8, 9)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "SkiaSharp.SKColor",
+      "fields": [
+        {
+          "kind": "byte",
+          "member": "Red"
+        },
+        {
+          "kind": "byte",
+          "member": "Green"
+        },
+        {
+          "kind": "byte",
+          "member": "Blue"
+        },
+        {
+          "kind": "byte",
+          "member": "Alpha"
+        }
+      ],
+      "factory": "new global::SkiaSharp.SKColor({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::SkiaSharp.SKColor((byte)1, (byte)2, (byte)3, (byte)4)"
+      ],
+      "empty": null
+    },
+    {
+      "type": "SkiaSharp.SKColorF",
+      "fields": [
+        {
+          "kind": "float",
+          "member": "Red"
+        },
+        {
+          "kind": "float",
+          "member": "Green"
+        },
+        {
+          "kind": "float",
+          "member": "Blue"
+        },
+        {
+          "kind": "float",
+          "member": "Alpha"
+        }
+      ],
+      "factory": "new global::SkiaSharp.SKColorF({0}, {1}, {2}, {3})",
+      "samples": [
+        "default",
+        "new global::SkiaSharp.SKColorF(1, 2, 3, 4)"
+      ],
+      "empty": null
+    }
+  ]
+}

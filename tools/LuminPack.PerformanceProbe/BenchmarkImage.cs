@@ -8,7 +8,7 @@ internal static class BenchmarkImage
     /// <param name="directory">A complete benchmark output directory.</param>
     /// <param name="assemblyFile">The benchmark assembly file within that directory.</param>
     /// <returns>The isolated benchmark assembly.</returns>
-    internal static Assembly Load(string directory, string assemblyFile = "LuminPackBenchmark.dll")
+    internal static Assembly Load(string directory, string assemblyFile = "LuminPack.Benchmark.dll")
     {
         directory = Path.GetFullPath(directory);
         var context = new AssemblyLoadContext(directory);

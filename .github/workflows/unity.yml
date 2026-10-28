@@ -1,0 +1,136 @@
+name: Unity Mono and IL2CPP
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_native_desktop:
+        description: Execute configured licensed Windows and macOS Unity runners
+        type: boolean
+        default: false
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unity:
+    # License-backed jobs are explicitly enabled by the repository owner.
+    # Forks must never execute code using the owner's Unity credentials.
+    if: >-
+      ((github.event_name == 'workflow_dispatch' && !inputs.run_native_desktop) || vars.LUMINPACK_UNITY_CI == 'true') &&
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+      UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Check Unity license configuration
+        shell: bash
+        run: |
+          if [ -z "$UNITY_LICENSE" ] && { [ -z "$UNITY_EMAIL" ] || [ -z "$UNITY_PASSWORD" ] || [ -z "$UNITY_SERIAL" ]; }; then
+            echo "Configure UNITY_LICENSE or the UNITY_EMAIL/UNITY_PASSWORD/UNITY_SERIAL secrets before enabling Unity CI."
+            exit 1
+          fi
+      - name: Build and stage the actual Unity assemblies
+        shell: bash
+        run: |
+          dotnet build src/LuminPack.Core/LuminPack.Core.csproj -c Release -f netstandard2.1 -p:CopyLocalLockFileAssemblies=true -p:GeneratePackageOnBuild=false
+          cp src/LuminPack.Core/bin/Release/netstandard2.1/LuminPack.Core.dll tests/Unity/Assets/Plugins/
+          cp src/LuminPack.Core/bin/Release/netstandard2.1/System.Collections.Immutable.dll tests/Unity/Assets/Plugins/
+          cp src/LuminPack.Core/bin/Release/netstandard2.1/System.Runtime.CompilerServices.Unsafe.dll tests/Unity/Assets/Plugins/
+          cp src/LuminPack.Generator/bin/Release/netstandard2.0/LuminPack.Generator.dll tests/Unity/Assets/Plugins/
+      - name: Run Unity Mono editor tests
+        uses: game-ci/unity-test-runner@v4
+        with:
+          projectPath: tests/Unity
+          unityVersion: 2022.3.51f1
+          testMode: editmode
+          artifactsPath: .tmp/unity-tests
+      - name: Build the IL2CPP Player
+        uses: game-ci/unity-builder@v4
+        with:
+          projectPath: tests/Unity
+          unityVersion: 2022.3.51f1
+          targetPlatform: StandaloneLinux64
+          buildMethod: LuminPackSmokeBuild.Build
+          allowDirtyBuild: true
+      - name: Execute the IL2CPP Player
+        shell: bash
+        run: |
+          set -euo pipefail
+          player=$(find tests/Unity/build build -type f -name LuminPackSmoke 2>/dev/null | head -n 1 || true)
+          test -n "$player"
+          chmod +x "$player"
+          timeout 120 "$player" -batchmode -nographics -logFile /dev/stdout | tee .tmp/unity-player.log
+          grep -q LUMINPACK_UNITY_SMOKE_PASSED .tmp/unity-player.log
+      - name: Upload Unity logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-mono-il2cpp
+          path: |
+            .tmp/unity-tests
+            .tmp/unity-player.log
+            tests/Unity/Logs
+          if-no-files-found: warn
+
+  native-desktop:
+    name: Unity ${{ matrix.target }} ${{ matrix.arch }} ${{ matrix.backend }}
+    if: github.event_name == 'workflow_dispatch' && inputs.run_native_desktop
+    runs-on: ${{ fromJSON(matrix.labels) }}
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        backend: [Mono2x, IL2CPP]
+        platform: [windows-x86, windows-x64, macos-x64, macos-arm64]
+        include:
+          - platform: windows-x86
+            target: StandaloneWindows
+            arch: x86
+            labels: '["self-hosted", "Windows", "X64", "unity"]'
+          - platform: windows-x64
+            target: StandaloneWindows64
+            arch: x64
+            labels: '["self-hosted", "Windows", "X64", "unity"]'
+          - platform: macos-x64
+            target: StandaloneOSX
+            arch: x64
+            labels: '["self-hosted", "macOS", "X64", "unity"]'
+          - platform: macos-arm64
+            target: StandaloneOSX
+            arch: arm64
+            labels: '["self-hosted", "macOS", "ARM64", "unity"]'
+    env:
+      LUMINPACK_UNITY_TARGET: ${{ matrix.target }}
+      LUMINPACK_UNITY_ARCH: ${{ matrix.arch }}
+      LUMINPACK_UNITY_BACKEND: ${{ matrix.backend }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Build and execute the actual native desktop Player
+        shell: pwsh
+        run: .github/scripts/invoke-unity.ps1
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: unity-${{ matrix.platform }}-${{ matrix.backend }}
+          path: .tmp/unity-native/*.log
+          if-no-files-found: error

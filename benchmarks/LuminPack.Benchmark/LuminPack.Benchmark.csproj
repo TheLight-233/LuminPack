@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LangVersion>13</LangVersion>
+    <TargetFramework>net10.0</TargetFramework>
+    <LuminPackGenerationMode>Light</LuminPackGenerationMode>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\LuminPack.Generator\LuminPack.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <ProjectReference Include="..\..\src\LuminPack.Core\LuminPack.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <CompilerVisibleProperty Include="LuminPackGenerationMode" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="BenchmarkDotNet" Version="0.15.6" />
+    <PackageReference Include="CAPCOM.REDox" Version="1.0.0" />
+    <PackageReference Include="MemoryPack" Version="1.21.4" />
+    <PackageReference Include="MessagePack" Version="3.1.12" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+    <PackageReference Include="Nino" Version="4.0.0-rc.7" />
+  </ItemGroup>
+</Project>

@@ -5,6 +5,11 @@ on:
     branches: [main]
   pull_request:
   workflow_dispatch:
+    inputs:
+      run_benchmarks:
+        description: Run optional timing benchmarks on the CI runner
+        type: boolean
+        default: false
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -28,7 +33,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # LuminPack.RepositoryChecks and the documentation test target net11.0.
+      - name: Validate workflow definitions
+        uses: docker://rhysd/actionlint:1.7.12
+
+      # LuminPack.RepositoryChecks and the generated-code contract tests target net11.0.
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
@@ -36,6 +44,9 @@ jobs:
 
       - name: Run repository checks
         run: dotnet run --project tools/LuminPack.RepositoryChecks/LuminPack.RepositoryChecks.csproj -c Release -- .
+
+      - name: Audit dependency advisories
+        run: dotnet restore LuminPack.sln -p:NuGetAuditMode=all -warnaserror:NU1900,NU1901,NU1902,NU1903,NU1904
 
   # Full build and behavioral verification across operating systems.
   build-and-test:
@@ -74,30 +85,58 @@ jobs:
       - name: Build solution (Release)
         run: dotnet build LuminPack.sln -c Release
 
-      - name: Documentation regression
-        run: dotnet run --project tests/LuminPackDocumentationTest/LuminPackDocumentationTest.csproj -c Release
+      - name: Generated code contracts
+        run: dotnet run --project tests/LuminPack.Tests.Codegen/LuminPack.Tests.Codegen.csproj -c Release
 
       - name: Generator and emitter-shape regressions
-        run: dotnet run --project tests/LuminPackGeneratorConcurrencyTest/LuminPackGeneratorConcurrencyTest.csproj -c Release
+        run: dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release
 
       - name: Incremental generation verification
-        run: dotnet run --project tests/LuminPackGeneratorConcurrencyTest/LuminPackGeneratorConcurrencyTest.csproj -c Release -- --verify-incremental
+        run: dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-incremental
 
       - name: Unit tests
-        run: dotnet test tests/LuminPackUnitTest/LuminPackUnitTest.csproj -c Release
+        run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release --no-build --logger trx --results-directory .tmp/test-results
 
-      # Captures wire fixtures with the current build and verifies them back.
+      - name: Core netstandard native hook contracts
+        run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 -p:LuminPackTestArea=Hooks --logger trx --results-directory .tmp/hook-test-results
+
+      # Read the retained fixtures and compare newly written bytes against them.
       - name: Wire compatibility artifact check
         run: |
-          dotnet run --project tests/LuminPackWireCompatibility/LuminPackWireCompatibility.csproj -c Release -- write .tmp/wire-baseline
-          dotnet run --project tests/LuminPackWireCompatibility/LuminPackWireCompatibility.csproj -c Release -- verify .tmp/wire-baseline
+          dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release --no-build -- --wire verify tests/LuminPack.Tests.Aot/Fixtures
+
+      - name: Pack and verify installation from NuGet packages
+        shell: pwsh
+        run: |
+          $feed = Join-Path $env:GITHUB_WORKSPACE '.tmp/package-feed'
+          $cache = Join-Path $env:GITHUB_WORKSPACE '.tmp/package-cache'
+          dotnet pack src/LuminPack.Generator/LuminPack.Generator.csproj -c Release --no-build --no-restore -p:Version=0.0.0-ci -o $feed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet pack src/LuminPack.Core/LuminPack.Core.csproj -c Release --no-build --no-restore -p:Version=0.0.0-ci -o $feed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $configPath = Join-Path $feed 'NuGet.Config'
+          $config = [xml]'<configuration><packageSources><clear /><add key="local" value="" /><add key="nuget" value="https://api.nuget.org/v3/index.json" /></packageSources><packageSourceMapping><packageSource key="local"><package pattern="LuminPack*" /></packageSource><packageSource key="nuget"><package pattern="*" /></packageSource></packageSourceMapping></configuration>'
+          $config.configuration.packageSources.add[0].SetAttribute('value', $feed)
+          $config.Save($configPath)
+          dotnet restore tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -p:LuminPackPackageVersion=0.0.0-ci --configfile $configPath --packages $cache
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release --no-restore -p:LuminPackPackageVersion=0.0.0-ci
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-${{ matrix.os }}
+          path: .tmp/test-results
+          if-no-files-found: error
 
   # Bounded BenchmarkDotNet run. Benchmark timing is machine-dependent, so this
   # job runs once on a single platform rather than in the multi-platform matrix.
-  # The filter keeps only SimpleBenchmark, SerializeBenchmark and JsonBenchmark;
-  # the remaining long-running classes stay out of routine CI.
+  # The filter keeps SimpleBenchmark, SerializeBenchmark and JsonBenchmark;
+  # PolymorphismBenchmark stays out of routine CI.
   benchmark:
     name: Benchmark
+    if: github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -119,10 +158,9 @@ jobs:
           dotnet-quality: preview
 
       # BenchmarkDotNet prompts interactively without --filter, so the selection
-      # must be explicit. The filters are anchored prefixes to avoid pulling in
-      # unrelated classes such as StringDeserializeBenchmark.
+      # must be explicit.
       - name: Run benchmarks
-        run: dotnet run --project benchmarks/LuminPackBenchmark/LuminPackBenchmark.csproj -c Release -f net10.0 -p:PublishAot=false -p:GeneratePackageOnBuild=false -p:UseSharedCompilation=false -- --filter 'LuminPackBenchmark.SimpleBenchmark.*' 'LuminPackBenchmark.SerializeBenchmark.*' 'LuminPackBenchmark.JsonBenchmark.*' --artifacts "$GITHUB_WORKSPACE/.tmp/benchmark-artifacts" --buildTimeout 300
+        run: dotnet run --project benchmarks/LuminPack.Benchmark/LuminPack.Benchmark.csproj -c Release -f net10.0 -p:PublishAot=false -p:GeneratePackageOnBuild=false -p:UseSharedCompilation=false -- --filter 'LuminPackBenchmark.SimpleBenchmark.*' 'LuminPackBenchmark.SerializeBenchmark.*' 'LuminPackBenchmark.JsonBenchmark.*' --artifacts "$GITHUB_WORKSPACE/.tmp/benchmark-artifacts" --buildTimeout 300
 
       - name: Upload benchmark artifacts
         if: always()
@@ -130,63 +168,4 @@ jobs:
         with:
           name: benchmark-artifacts
           path: .tmp/benchmark-artifacts
-          if-no-files-found: warn
-
-  # 32-bit execution coverage. GitHub-hosted Windows runners are 64-bit only, so
-  # this job targets a self-hosted Windows runner carrying the custom `x86`
-  # label. The repository's established x86 procedure is the net9 win-x86 RID:
-  # net9 is the newest modern runtime target that ships a 32-bit Windows runtime.
-  x86-windows:
-    name: Build and test (net9 win-x86, self-hosted)
-    # Manual dispatch only: routine pushes and pull requests must not queue work
-    # on the single self-hosted machine.
-    if: github.event_name == 'workflow_dispatch'
-    runs-on: [self-hosted, windows, x86]
-    timeout-minutes: 90
-    steps:
-      - uses: actions/checkout@v4
-
-      # The solution carries net11.0 targets; the x86 run needs the net9 SDK and
-      # the net10 SDK for the remaining test targets.
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: |
-            9.0.x
-            10.0.x
-
-      - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 11.0.x
-          dotnet-quality: preview
-
-      # The win-x86 run is framework-dependent, so the runner itself must have
-      # the 32-bit .NET 9 runtime installed. Fail early with an actionable
-      # message instead of letting the test invocation silently skip.
-      - name: Verify the 32-bit .NET 9 runtime prerequisite
-        shell: pwsh
-        run: |
-          $root = Join-Path ${env:ProgramFiles(x86)} 'dotnet\shared\Microsoft.NETCore.App'
-          $runtime = Get-ChildItem $root -Directory -ErrorAction SilentlyContinue |
-            Where-Object Name -like '9.*' | Select-Object -First 1
-          if (-not $runtime) {
-            throw "No 32-bit .NET 9 runtime found under '$root'. Install the win-x86 .NET 9 runtime on this runner before the x86 job can execute."
-          }
-          Write-Host "32-bit runtime: $($runtime.FullName)"
-
-      - name: Build solution (Release)
-        run: dotnet build LuminPack.sln -c Release
-
-      # Both the framework and RID selectors are required: `-f net9.0` keeps the
-      # restore scoped to the x86-capable target, and `-r win-x86` restores the
-      # win-x86 assets and runs the suite in a 32-bit process. Without the RID
-      # (or with --no-restore) the tests are skipped rather than executed.
-      - name: Unit tests (net9.0, win-x86)
-        run: dotnet test tests/LuminPackUnitTest/LuminPackUnitTest.csproj -c Release -f net9.0 -r win-x86 --results-directory .tmp/x86-results --logger "trx;LogFileName=x86-net9.trx"
-
-      - name: Upload x86 test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: x86-test-results
-          path: .tmp/x86-results
           if-no-files-found: warn

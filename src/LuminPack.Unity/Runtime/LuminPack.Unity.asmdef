@@ -1,0 +1,8 @@
+{
+  "name": "LuminPack.Unity",
+  "rootNamespace": "LuminPack.Unity",
+  "references": [],
+  "allowUnsafeCode": true,
+  "autoReferenced": true,
+  "noEngineReferences": false
+}

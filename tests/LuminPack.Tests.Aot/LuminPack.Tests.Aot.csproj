@@ -1,0 +1,36 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <IsPackable>false</IsPackable>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>13</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <LuminPackGenerationMode Condition="'$(LuminPackGenerationMode)' == ''">Minimal</LuminPackGenerationMode>
+    <PublishTrimmed Condition="'$(LuminPackPublish)' == 'trim' Or '$(LuminPackPublish)' == 'aot'">true</PublishTrimmed>
+    <PublishAot Condition="'$(LuminPackPublish)' == 'aot'">true</PublishAot>
+    <DefineConstants Condition="'$(PublishAot)' == 'true'">$(DefineConstants);LUMINPACK_NATIVE_AOT</DefineConstants>
+    <!-- Arbitrary Type names require metadata that trimmed JIT builds cannot guarantee.
+         Exercise the new capability checks in untrimmed JIT and NativeAOT builds.
+         Full generation still includes Type and retains its strict trim diagnostic. -->
+    <LuminPackTypeCapabilityChecks Condition="'$(LuminPackTypeCapabilityChecks)' == '' And ('$(LuminPackPublish)' == 'aot' Or '$(PublishTrimmed)' != 'true')">true</LuminPackTypeCapabilityChecks>
+    <DefineConstants Condition="'$(LuminPackTypeCapabilityChecks)' == 'true'">$(DefineConstants);LUMINPACK_TYPE_CAPABILITY_CHECKS</DefineConstants>
+    <TrimMode>full</TrimMode>
+    <TrimmerSingleWarn>false</TrimmerSingleWarn>
+    <ILLinkTreatWarningsAsErrors>true</ILLinkTreatWarningsAsErrors>
+    <IlcTreatWarningsAsErrors>true</IlcTreatWarningsAsErrors>
+    <InvariantGlobalization>true</InvariantGlobalization>
+  </PropertyGroup>
+  <ItemGroup>
+    <CompilerVisibleProperty Include="LuminPackGenerationMode" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackPackageVersion)' == ''">
+    <ProjectReference Include="../../src/LuminPack.Core/LuminPack.Core.csproj" />
+    <ProjectReference Include="../../src/LuminPack.Generator/LuminPack.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+  </ItemGroup>
+  <!-- Installation check: -p:LuminPackPackageVersion=<version> builds the same program against the packed NuGet packages. -->
+  <ItemGroup Condition="'$(LuminPackPackageVersion)' != ''">
+    <PackageReference Include="LuminPack" Version="$(LuminPackPackageVersion)" />
+  </ItemGroup>
+</Project>

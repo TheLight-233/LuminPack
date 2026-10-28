@@ -1,0 +1,342 @@
+using Microsoft.CodeAnalysis;
+
+namespace LuminPack.SourceGenerator;
+
+/// <summary>Provides diagnostic descriptors functionality.</summary>
+internal static class DiagnosticDescriptors
+{
+    private const string Category = "LuminPack.SourceGeneration";
+    private const string UnionCategory = "LuminPack.SourceGeneration.Union";
+
+    /// <summary>Rejects reference metadata that cannot prove an imported automatic property's storage contract.</summary>
+    public static readonly DiagnosticDescriptor IncompleteReferencedPropertyStorage = Error(
+        "LuminPack112", "Imported automatic-property storage is missing",
+        "Property '{1}' on imported type '{0}' has compiler-generated accessors but its backing storage is absent from the reference assembly. Reference the complete implementation metadata (for a project dependency, set ProduceReferenceAssembly=false in that dependency); LuminPack cannot safely infer storage or declaration order.");
+
+    /// <summary>Rejects storage without a fixed architecture-independent field representation.</summary>
+    public static readonly DiagnosticDescriptor UnsupportedPortableStorage = Error(
+        "LuminPack111", "Unsupported portable struct storage",
+        "Type '{0}' uses LuminPackOption(StructLayout = global::LuminPack.Attribute.LuminPackStructLayout.Packed) but contains unsupported storage. Use an ordinary unmanaged struct without native pointers, fixed buffers, inline arrays, runtime-sized vectors, or nested Custom contracts.");
+
+    /// <summary>Rejects declaration constants that cannot describe a supported representation.</summary>
+    public static readonly DiagnosticDescriptor InvalidCompiledOption = Error(
+        "LuminPack110", "Invalid compiled serialization option", "Invalid LuminPackOption property '{0}': {1}");
+
+    /// <summary>Rejects unusable complete-record capacity guarantees.</summary>
+    public static readonly DiagnosticDescriptor InvalidBoundedSize = Error(
+        "LuminPack109", "Invalid serialized size guarantee",
+        "Type '{0}' declares an invalid LuminPackBounded maximum; MaxBytes must be a positive Int32 complete-record byte bound.");
+
+    // Packable type and member validation.
+    /// <summary>Stores the static class.</summary>
+    public static readonly DiagnosticDescriptor StaticClass = Error(
+        "LuminPack001",
+        "Static type is not serializable",
+        "Type '{0}' is static and cannot be annotated with [LuminPackable].");
+
+    /// <summary>Stores the field must be lumin packable.</summary>
+    public static readonly DiagnosticDescriptor FieldMustBeLuminPackable = Error(
+        "LuminPack002",
+        "Nested type is not serializable",
+        "Type '{0}' must be annotated with [LuminPackable] before it can be serialized as a nested object.");
+
+    /// <summary>Stores the contains duplicate name field.</summary>
+    public static readonly DiagnosticDescriptor ContainsDuplicateNameField = Error(
+        "LuminPack003",
+        "Duplicate serialized member name",
+        "Member '{0}' duplicates a serialized member name declared by a base type.");
+
+    /// <summary>Stores the on method has parameter.</summary>
+    public static readonly DiagnosticDescriptor OnMethodHasParameter = Error(
+        "LuminPack004",
+        "Serialization callback has parameters",
+        "Serialization callback '{1}' on '{0}' must not declare parameters.");
+
+    /// <summary>Stores the on method is private.</summary>
+    public static readonly DiagnosticDescriptor OnMethodIsPrivate = Error(
+        "LuminPack005",
+        "Serialization callback is inaccessible",
+        "Serialization callback '{1}' on '{0}' must be public or internal.");
+
+    /// <summary>Stores the on method in unmanaged type.</summary>
+    public static readonly DiagnosticDescriptor OnMethodInUnmanagedType = Error(
+        "LuminPack006",
+        "Serialization callback on unmanaged struct",
+        "Unmanaged struct '{0}' cannot declare serialization callback '{1}'.");
+
+    /// <summary>Stores the override member cant add annotation.</summary>
+    public static readonly DiagnosticDescriptor OverrideMemberCantAddAnnotation = Error(
+        "LuminPack007",
+        "Attribute is invalid on an override",
+        "Overridden member '{1}' on '{0}' cannot use [{2}].");
+
+    // Union validation and discovery.
+    /// <summary>Stores the sealed type cant be union.</summary>
+    public static readonly DiagnosticDescriptor SealedTypeCantBeUnion = UnionError(
+        "LuminPack008",
+        "Sealed type cannot be a union root",
+        "Union root '{0}' is sealed. Union roots must be abstract classes or interfaces.");
+
+    /// <summary>Stores the concrete type cant be union.</summary>
+    public static readonly DiagnosticDescriptor ConcreteTypeCantBeUnion = UnionError(
+        "LuminPack009",
+        "Concrete type cannot be a union root",
+        "Union root '{0}' must be an abstract class or an interface.");
+
+    /// <summary>Stores the union tag duplicate.</summary>
+    public static readonly DiagnosticDescriptor UnionTagDuplicate = UnionError(
+        "LuminPack010",
+        "Duplicate union tag",
+        "Union root '{1}' declares tag '{0}' more than once.");
+
+    /// <summary>Stores the union member type not implement base type.</summary>
+    public static readonly DiagnosticDescriptor UnionMemberTypeNotImplementBaseType = UnionError(
+        "LuminPack011",
+        "Union member does not implement the root interface",
+        "Union member '{0}' does not implement union interface '{1}'.");
+
+    /// <summary>Stores the union member type not derived base type.</summary>
+    public static readonly DiagnosticDescriptor UnionMemberTypeNotDerivedBaseType = UnionError(
+        "LuminPack012",
+        "Union member does not derive from the root type",
+        "Union member '{0}' does not derive from union root '{1}'.");
+
+    /// <summary>Stores the union member not allow struct.</summary>
+    public static readonly DiagnosticDescriptor UnionMemberNotAllowStruct = UnionError(
+        "LuminPack013",
+        "Struct cannot be a union root",
+        "Union root '{0}' is a struct. Union roots must be abstract classes or interfaces.");
+
+    /// <summary>Stores the union member must be lumin packable.</summary>
+    public static readonly DiagnosticDescriptor UnionMemberMustBeLuminPackable = UnionError(
+        "LuminPack014",
+        "Union member is not serializable",
+        "Union member '{0}' must be annotated with [LuminPackable].");
+
+    /// <summary>Stores the union member generic count exceed.</summary>
+    public static readonly DiagnosticDescriptor UnionMemberGenericCountExceed = UnionError(
+        "LuminPack015",
+        "Union member has too many generic parameters",
+        "Union member '{0}' has {2} generic parameters; the union root supports at most {1}.");
+
+    /// <summary>Stores the union member auto discovered.</summary>
+    public static readonly DiagnosticDescriptor UnionMemberAutoDiscovered = UnionInfo(
+        "LuminPack016",
+        "Union member was auto-discovered",
+        "Type '{0}' was automatically registered as a union member of '{1}' with tag {2}.");
+
+    /// <summary>Stores the too many union members.</summary>
+    public static readonly DiagnosticDescriptor TooManyUnionMembers = UnionError(
+        "LuminPack017",
+        "Too many union members",
+        "Union type '{0}' has {1} derived types, exceeding the 256-member limit.");
+
+    // Serialized shape validation.
+    /// <summary>Stores the members count over250.</summary>
+    public static readonly DiagnosticDescriptor MembersCountOver250 = Error(
+        "LuminPack018",
+        "Too many serialized members",
+        "Type '{0}' has {1} serialized members; the binary object format supports at most 249.");
+
+    /// <summary>Stores the type is ref struct.</summary>
+    public static readonly DiagnosticDescriptor TypeIsRefStruct = Error(
+        "LuminPack019",
+        "ref struct is not serializable",
+        "Type '{0}' is a ref struct and cannot be serialized.");
+
+    /// <summary>Stores the member is ref struct.</summary>
+    public static readonly DiagnosticDescriptor MemberIsRefStruct = Error(
+        "LuminPack020",
+        "ref struct member is not serializable",
+        "Member '{1}' on '{0}' has ref struct type '{2}', which cannot be serialized.");
+
+    /// <summary>Stores the net standard class or struct member field cant include.</summary>
+    public static readonly DiagnosticDescriptor NetStandardClassOrStructMemberFieldCantInclude = Warning(
+        "LuminPack021",
+        "[LuminPackInclude] requires a runtime accessor",
+        "Member '{1}' on '{0}' uses [LuminPackInclude], which is unavailable for this target framework.");
+
+    /// <summary>Stores the circular reference and version tolerant required order.</summary>
+    public static readonly DiagnosticDescriptor CircularReferenceAndVersionTolerantRequiredOrder = Error(
+        "LuminPack022",
+        "[LuminPackOrder] is required",
+        "Member '{0}' must be marked with [LuminPackOrder] in circular-reference types.");
+
+    /// <summary>Reports an invalid or ambiguous version-tolerant member identity.</summary>
+    public static readonly DiagnosticDescriptor InvalidVersionMemberName = Error(
+        "LuminPack062", "Invalid version-tolerant member name", "Type '{0}': {1}");
+
+    /// <summary>Stores the circular reference and version tolerant duplicate order.</summary>
+    public static readonly DiagnosticDescriptor CircularReferenceAndVersionTolerantDuplicateOrder = Error(
+        "LuminPack023",
+        "Duplicate [LuminPackOrder] value",
+        "Order value '{0}' is assigned to multiple members: {1}.");
+
+    /// <summary>Stores the inherit type can not include parent private member.</summary>
+    public static readonly DiagnosticDescriptor InheritTypeCanNotIncludeParentPrivateMember = Error(
+        "LuminPack024",
+        "Inherited private member cannot be included",
+        "Type '{0}' cannot include private member '{1}' declared by a base type.");
+
+    // Construction and accessibility validation.
+    /// <summary>Stores the multiple constructors require attribute.</summary>
+    public static readonly DiagnosticDescriptor MultipleConstructorsRequireAttribute = Error(
+        "LuminPack025",
+        "Constructor selection is ambiguous",
+        "Type '{0}' has multiple constructors; mark one with [LuminPackConstructor].");
+
+    /// <summary>Stores the constructor parameter name mismatch.</summary>
+    public static readonly DiagnosticDescriptor ConstructorParameterNameMismatch = Error(
+        "LuminPack026",
+        "Constructor parameter has no matching member",
+        "Constructor parameter '{0}' on '{1}' does not match a serializable member (case-insensitive).");
+
+    /// <summary>Stores the no public constructor.</summary>
+    public static readonly DiagnosticDescriptor NoPublicConstructor = Error(
+        "LuminPack027",
+        "No public constructor",
+        "Type '{0}' has no public constructor.");
+
+    /// <summary>Stores the nested class must be public or internal.</summary>
+    public static readonly DiagnosticDescriptor NestedClassMustBePublicOrInternal = Error(
+        "LuminPack028",
+        "Nested type is inaccessible to generated code",
+        "Nested [LuminPackable] type '{0}' must be public or internal.");
+
+    /// <summary>Stores the nested class accessibility error.</summary>
+    public static readonly DiagnosticDescriptor NestedClassAccessibilityError = Error(
+        "LuminPack029",
+        "Unsupported nested-type accessibility",
+        "Nested type '{0}' has accessibility '{1}'. Only public and internal are supported.");
+
+    /// <summary>Stores the multiple rent pool methods.</summary>
+    public static readonly DiagnosticDescriptor MultipleRentPoolMethods = Error(
+        "LuminPack030",
+        "Multiple pool-rent methods",
+        "Type '{0}' has multiple methods marked with [LuminPackPoolRent]. Only one is allowed.");
+
+    /// <summary>Stores the rent pool method has parameters.</summary>
+    public static readonly DiagnosticDescriptor RentPoolMethodHasParameters = Error(
+        "LuminPack031",
+        "Pool-rent method has parameters",
+        "Pool-rent method '{0}' on '{1}' must not declare parameters.");
+
+    /// <summary>Stores the rent pool method return type mismatch.</summary>
+    public static readonly DiagnosticDescriptor RentPoolMethodReturnTypeMismatch = Error(
+        "LuminPack032",
+        "Pool-rent method returns the wrong type",
+        "Pool-rent method '{0}' on '{1}' must return '{2}'.");
+
+    /// <summary>Stores the rent pool method must be static.</summary>
+    public static readonly DiagnosticDescriptor RentPoolMethodMustBeStatic = Error(
+        "LuminPack033",
+        "Pool-rent method is not static",
+        "Pool-rent method '{0}' on '{1}' must be static.");
+
+    /// <summary>Stores the managed array data compress.</summary>
+    public static readonly DiagnosticDescriptor ManagedArrayDataCompress = Error(
+        "LuminPack034",
+        "Managed arrays cannot use [LuminPackCompress]",
+        "Member '{1}' on '{0}' is an array of managed type '{2}' and cannot use [LuminPackCompress].");
+
+    /// <summary>Stores the union participant must be partial.</summary>
+    public static readonly DiagnosticDescriptor UnionParticipantMustBePartial = UnionError(
+        "LuminPack035",
+        "Union participant must be partial",
+        "Union participant '{0}' and every containing type must be partial so virtual union dispatch can be generated for '{1}'.");
+
+    // Generator failures retain a reserved high number so adding a validation diagnostic does
+    // not change the meaning of an unexpected source-generation failure.
+    /// <summary>Stores the generator failure.</summary>
+    public static readonly DiagnosticDescriptor GeneratorFailure = Error(
+        "LuminPack099",
+        "Source generation failed",
+        "LuminPack source generation failed: {0}");
+
+    // Custom formatter validation ([LuminPackable(GeneratorType.Custom)]).
+    /// <summary>Stores the custom missing method.</summary>
+    public static readonly DiagnosticDescriptor CustomMissingMethod = Error(
+        "LuminPack100",
+        "Custom formatter method missing",
+        "Custom type '{0}' must declare static method '{1}' with signature '{2}'.");
+
+    /// <summary>Stores the custom method must be static.</summary>
+    public static readonly DiagnosticDescriptor CustomMethodMustBeStatic = Error(
+        "LuminPack101",
+        "Custom formatter method must be static",
+        "Custom formatter method '{1}' on '{0}' must be static.");
+
+    /// <summary>Stores the custom method signature mismatch.</summary>
+    public static readonly DiagnosticDescriptor CustomMethodSignatureMismatch = Error(
+        "LuminPack102",
+        "Custom formatter method signature mismatch",
+        "Custom formatter method '{1}' on '{0}' must have signature '{2}'.");
+
+    /// <summary>Stores the custom method must be accessible.</summary>
+    public static readonly DiagnosticDescriptor CustomMethodMustBeAccessible = Error(
+        "LuminPack103",
+        "Custom formatter method must be accessible",
+        "Custom formatter method '{1}' on '{0}' must be public or internal so generated registration code can take its address.");
+
+    /// <summary>Stores the custom json methods incomplete.</summary>
+    public static readonly DiagnosticDescriptor CustomJsonMethodsIncomplete = Error(
+        "LuminPack104",
+        "Custom JSON formatter methods incomplete",
+        "Custom type '{0}' declares '{1}' but not '{2}'; JSON registration requires both SerializeJson and DeserializeJson.");
+
+    /// <summary>Stores the custom calculate offset requires json.</summary>
+    public static readonly DiagnosticDescriptor CustomCalculateOffsetRequiresJson = Error(
+        "LuminPack105",
+        "Custom CalculateOffset requires JSON methods",
+        "Custom type '{0}' declares CalculateOffset, but the matching Register overload also requires SerializeJson and DeserializeJson.");
+
+    /// <summary>Stores the custom type must not be generic.</summary>
+    public static readonly DiagnosticDescriptor CustomTypeMustNotBeGeneric = Error(
+        "LuminPack106",
+        "Custom formatter type cannot be generic",
+        "Custom formatter type '{0}' cannot be generic; runtime registration happens per closed type.");
+
+    /// <summary>Stores the custom union not supported.</summary>
+    public static readonly DiagnosticDescriptor CustomUnionNotSupported = Error(
+        "LuminPack107",
+        "Custom formatter type cannot be a union root",
+        "Custom formatter type '{0}' cannot be abstract or a union root; union dispatch requires generated formatters.");
+
+    /// <summary>Stores the custom registration skipped no unsafe.</summary>
+    public static readonly DiagnosticDescriptor CustomRegistrationSkippedNoUnsafe = Warning(
+        "LuminPack108",
+        "Custom registration skipped without unsafe",
+        "Custom type '{0}' will not be registered automatically because the project does not enable AllowUnsafeBlocks (Register uses function pointers); enable unsafe or call LuminPackSerializer.Register manually.");
+
+    /// <summary>Performs the error step for the current operation.</summary>
+    /// <param name="id">The id used by this operation.</param>
+    /// <param name="title">The title used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
+    /// <returns>The result of the operation.</returns>
+    private static DiagnosticDescriptor Error(string id, string title, string message) =>
+        new(id, title, message, Category, DiagnosticSeverity.Error, isEnabledByDefault: true);
+
+    /// <summary>Performs the warning step for the current operation.</summary>
+    /// <param name="id">The id used by this operation.</param>
+    /// <param name="title">The title used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
+    /// <returns>The result of the operation.</returns>
+    private static DiagnosticDescriptor Warning(string id, string title, string message) =>
+        new(id, title, message, Category, DiagnosticSeverity.Warning, isEnabledByDefault: true);
+
+    /// <summary>Performs the union error step for the current operation.</summary>
+    /// <param name="id">The id used by this operation.</param>
+    /// <param name="title">The title used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
+    /// <returns>The result of the operation.</returns>
+    private static DiagnosticDescriptor UnionError(string id, string title, string message) =>
+        new(id, title, message, UnionCategory, DiagnosticSeverity.Error, isEnabledByDefault: true);
+
+    /// <summary>Performs the union info step for the current operation.</summary>
+    /// <param name="id">The id used by this operation.</param>
+    /// <param name="title">The title used by this operation.</param>
+    /// <param name="message">The message describing the failure.</param>
+    /// <returns>The result of the operation.</returns>
+    private static DiagnosticDescriptor UnionInfo(string id, string title, string message) =>
+        new(id, title, message, UnionCategory, DiagnosticSeverity.Info, isEnabledByDefault: true);
+}

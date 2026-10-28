@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <LuminPackPath Condition="'$(LuminPackPath)' == ''">$(MSBuildThisFileDirectory)..\..\..\src\LuminPack.Core\bin\Release\net11.0\LuminPack.Core.dll</LuminPackPath>
+    <DefineConstants Condition="'$(ProfileApi)' != 'false'">$(DefineConstants);PROFILE_API</DefineConstants>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="LuminPack.Core" HintPath="$(LuminPackPath)" />
+  </ItemGroup>
+</Project>

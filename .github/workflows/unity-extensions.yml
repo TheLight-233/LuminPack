@@ -1,0 +1,41 @@
+name: Unity extensions
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    name: Native extension contracts (${{ matrix.platform }})
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: windows-x64
+            runner: [self-hosted, unity, Windows, X64]
+          - platform: macos-arm64
+            runner: [self-hosted, unity, macOS, ARM64]
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Build the netstandard Core dependency
+        run: dotnet build src/LuminPack.Core/LuminPack.Core.csproj -c Release -f netstandard2.1 -p:CopyLocalLockFileAssemblies=true -p:GeneratePackageOnBuild=false
+      - name: Project the authoritative Core algorithms
+        run: dotnet run --project src/LuminPack.Burst/CodeGen~/LuminPack.Burst.CodeGen.csproj -c Release -- .
+      - name: Execute actual native object and Burst pointer contracts
+        shell: pwsh
+        run: .github/scripts/invoke-unity-extensions.ps1
+      - name: Upload native execution log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-extensions-${{ matrix.platform }}
+          path: .tmp/unity-extensions-results
+          if-no-files-found: warn

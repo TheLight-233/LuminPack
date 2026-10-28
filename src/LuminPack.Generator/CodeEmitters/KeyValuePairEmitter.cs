@@ -1,0 +1,79 @@
+using System.Text;
+using LuminPack.Code;
+
+namespace LuminPack.SourceGenerator.CodeEmitters;
+
+using static CodeEmitterRegistry;
+
+/// <summary>Provides key value pair emitter functionality.</summary>
+public static class KeyValuePairEmitter
+{
+    /// <summary>Appends binary writing statements for key value pair values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        sb.AppendLine("            writer.WriteValue(value.Key);");
+        sb.AppendLine("            writer.WriteValue(value.Value);");
+    }
+
+    /// <summary>Appends binary reading statements for key value pair values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        string keyType = GetFirstGeneric(fieldData.TypeName);
+        string valueType = GetSecondGeneric(fieldData.TypeName);
+        var pair = fieldData.TypeSymbol as Microsoft.CodeAnalysis.INamedTypeSymbol;
+        bool reusable = pair != null && EmitterTypeTraits.IsDirectRecord(pair);
+        string keySeed = reusable && pair.TypeArguments[0].SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String ? "value.Key" : "default!";
+        string valueSeed = reusable && pair.TypeArguments[1].SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String ? "value.Value" : "default!";
+        sb.AppendLine("            " + keyType + " key = " + keySeed + ";");
+        sb.AppendLine("            " + valueType + " itemValue = " + valueSeed + ";");
+        sb.AppendLine("            reader.ReadValue(ref key);");
+        sb.AppendLine("            reader.ReadValue(ref itemValue);");
+        sb.AppendLine("            value = new global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">(key, itemValue);");
+    }
+
+    /// <summary>Appends statements that calculate the binary payload size.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    public static void GenerateCalculateOffsetCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        string keyType = GetFirstGeneric(fieldData.TypeName);
+        string valueType = GetSecondGeneric(fieldData.TypeName);
+        sb.AppendLine("            " + keyType + " key = value.Key;");
+        sb.AppendLine("            evaluator.CalculateOffset(ref key);");
+        sb.AppendLine("            " + valueType + " itemValue = value.Value;");
+        sb.AppendLine("            evaluator.CalculateOffset(ref itemValue);");
+    }
+
+    /// <summary>Appends JSON writing statements for key value pair values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        sb.AppendLine("            writer.WriteArrayStart();");
+        sb.AppendLine("            var key = value.Key;");
+        sb.AppendLine("            writer.WriteValue(in key);");
+        sb.AppendLine("            var itemValue = value.Value;");
+        sb.AppendLine("            writer.WriteValue(in itemValue);");
+        sb.AppendLine("            writer.WriteArrayEnd();");
+    }
+
+    /// <summary>Appends JSON reading statements for key value pair values.</summary>
+    /// <param name="fieldData">The metadata describing the field being processed.</param>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
+    {
+        string keyType = GetFirstGeneric(fieldData.TypeName);
+        string valueType = GetSecondGeneric(fieldData.TypeName);
+        sb.AppendLine("            reader.TryConsumeArrayStart();");
+        sb.AppendLine("            " + keyType + " key = default!;");
+        sb.AppendLine("            " + valueType + " itemValue = default!;");
+        sb.AppendLine("            reader.ReadValue(ref key);");
+        sb.AppendLine("            reader.ReadValue(ref itemValue);");
+        sb.AppendLine("            reader.ConsumeArrayEnd();");
+        sb.AppendLine("            value = new global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">(key, itemValue);");
+    }
+}

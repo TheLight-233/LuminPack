@@ -1,0 +1,20 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <LuminPackCorePath Condition="'$(LuminPackCorePath)' == ''">$(MSBuildThisFileDirectory)../../LuminPack.Core/bin/Release/netstandard2.1/LuminPack.Core.dll</LuminPackCorePath>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Program.cs" />
+    <Compile Include="KernelContract.cs" />
+    <Compile Include="Shared/*.cs" />
+    <ProjectReference Include="../LuminPack.Burst.csproj" />
+    <Reference Include="LuminPack.Core"><HintPath>$(LuminPackCorePath)</HintPath></Reference>
+    <Reference Include="Unity.Burst"><HintPath>$(UnityBurstAssemblyPath)</HintPath></Reference>
+    <Reference Include="UnityEngine.CoreModule"><HintPath>$(UnityManagedPath)/UnityEngine.CoreModule.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

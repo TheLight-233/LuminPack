@@ -1,0 +1,40 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="950" height="276" viewBox="0 0 950 276" font-family="-apple-system,BlinkMacSystemFont,Segoe UI,Helvetica,Arial,sans-serif">
+<rect x="0.5" y="0.5" width="949" height="275" rx="10" fill="#0D1117" stroke="#30363D"/>
+<text x="20" y="34" font-size="18" font-weight="600" fill="#E6EDF3">JSON (game save)</text>
+<text x="930" y="34" font-size="12" text-anchor="end" fill="#9198A1">mean time per operation · lower is better</text>
+<text x="20" y="66" font-size="14" font-weight="600" fill="#E6EDF3">Serialize</text>
+<text x="20" y="95.7" font-size="13" font-weight="700" fill="#E6EDF3">LuminPack</text>
+<rect x="148" y="78" width="216" height="26" rx="5" fill="#21262D"/>
+<rect x="148" y="78" width="33.9" height="26" rx="5" fill="#8B5CF6"/>
+<text x="372" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">25.68 μs</text>
+<text x="20" y="133.7" font-size="13" font-weight="400" fill="#E6EDF3">System.Text.Json</text>
+<rect x="148" y="116" width="216" height="26" rx="5" fill="#21262D"/>
+<rect x="148" y="116" width="84.5" height="26" rx="5" fill="#10B981"/>
+<text x="372" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">64.00 μs  (2.49x)</text>
+<text x="20" y="171.7" font-size="13" font-weight="400" fill="#E6EDF3">Newtonsoft.Json</text>
+<rect x="148" y="154" width="216" height="26" rx="5" fill="#21262D"/>
+<rect x="148" y="154" width="216.0" height="26" rx="5" fill="#EF4444"/>
+<text x="372" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">163.51 μs  (6.37x)</text>
+<text x="20" y="209.7" font-size="13" font-weight="400" fill="#E6EDF3">RE:Dox</text>
+<rect x="148" y="192" width="216" height="26" rx="5" fill="#21262D"/>
+<rect x="148" y="192" width="75.3" height="26" rx="5" fill="#64748B"/>
+<text x="372" y="209.7" font-size="12" font-weight="400" fill="#E6EDF3">56.97 μs  (2.22x)</text>
+<text x="490" y="66" font-size="14" font-weight="600" fill="#E6EDF3">Deserialize</text>
+<text x="490" y="95.7" font-size="13" font-weight="700" fill="#E6EDF3">LuminPack</text>
+<rect x="618" y="78" width="216" height="26" rx="5" fill="#21262D"/>
+<rect x="618" y="78" width="35.4" height="26" rx="5" fill="#8B5CF6"/>
+<text x="842" y="95.7" font-size="12" font-weight="700" fill="#E6EDF3">57.96 μs</text>
+<text x="490" y="133.7" font-size="13" font-weight="400" fill="#E6EDF3">System.Text.Json</text>
+<rect x="618" y="116" width="216" height="26" rx="5" fill="#21262D"/>
+<rect x="618" y="116" width="66.8" height="26" rx="5" fill="#10B981"/>
+<text x="842" y="133.7" font-size="12" font-weight="400" fill="#E6EDF3">109.34 μs  (1.89x)</text>
+<text x="490" y="171.7" font-size="13" font-weight="400" fill="#E6EDF3">Newtonsoft.Json</text>
+<rect x="618" y="154" width="216" height="26" rx="5" fill="#21262D"/>
+<rect x="618" y="154" width="153.7" height="26" rx="5" fill="#EF4444"/>
+<text x="842" y="171.7" font-size="12" font-weight="400" fill="#E6EDF3">251.61 μs  (4.34x)</text>
+<text x="490" y="209.7" font-size="13" font-weight="400" fill="#E6EDF3">RE:Dox</text>
+<rect x="618" y="192" width="216" height="26" rx="5" fill="#21262D"/>
+<rect x="618" y="192" width="216.0" height="26" rx="5" fill="#64748B"/>
+<text x="842" y="209.7" font-size="12" font-weight="400" fill="#E6EDF3">353.63 μs  (6.10x)</text>
+<text x="20" y="260" font-size="11" fill="#9198A1">Ratios are relative to LuminPack in the same panel. BenchmarkDotNet, same machine and run.</text>
+</svg>

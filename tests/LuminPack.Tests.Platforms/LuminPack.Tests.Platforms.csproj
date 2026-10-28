@@ -1,0 +1,32 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <TargetFramework Condition="'$(LuminPackPlatform)' == 'Wpf'">net10.0-windows</TargetFramework>
+    <OutputType>Exe</OutputType>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <LuminPackGenerationMode>Minimal</LuminPackGenerationMode>
+    <LuminPackCorePath Condition="'$(LuminPackCorePath)' == ''">$(MSBuildThisFileDirectory)../../src/LuminPack.Core/bin/Release/net8.0/LuminPack.Core.dll</LuminPackCorePath>
+    <LuminPackGeneratorPath Condition="'$(LuminPackGeneratorPath)' == ''">$(MSBuildThisFileDirectory)../../src/LuminPack.Generator/bin/Release/netstandard2.0/LuminPack.Generator.dll</LuminPackGeneratorPath>
+  </PropertyGroup>
+  <ItemGroup>
+    <SupportedPlatform Include="AspNetCore;Avalonia;Drawing;Maui;MonoGame;SkiaSharp;Wpf" />
+    <ProjectReference Include="../../src/LuminPack.$(LuminPackPlatform)/LuminPack.$(LuminPackPlatform).csproj" />
+    <Reference Include="LuminPack.Core"><HintPath>$(LuminPackCorePath)</HintPath></Reference>
+    <Compile Include="../../src/LuminPack.$(LuminPackPlatform)/Tests~/*.cs" />
+    <Compile Include="../../src/LuminPack.Platforms/Tests~/CodecContract.cs" />
+    <Analyzer Include="$(LuminPackGeneratorPath)" />
+    <CompilerVisibleProperty Include="LuminPackGenerationMode" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(LuminPackPlatform)' == 'AspNetCore'">
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" Version="10.0.0" />
+    <Compile Include="../../src/LuminPack.Platforms/Tests~/RegistrationContract.cs" />
+  </ItemGroup>
+  <Target Name="ValidateTestPlatform" BeforeTargets="PrepareForBuild">
+    <Error Condition="!@(SupportedPlatform->AnyHaveMetadataValue('Identity', '$(LuminPackPlatform)'))" Text="Choose LuminPackPlatform from AspNetCore, Avalonia, Drawing, Maui, MonoGame, SkiaSharp or Wpf." />
+    <Error Condition="!Exists('$(LuminPackGeneratorPath)')" Text="Build the Generator or supply LuminPackGeneratorPath before executing generated platform contracts." />
+  </Target>
+</Project>
