@@ -52,7 +52,7 @@
     <Compile Include="MarshalCopyBlockTest.cs;KernelPolicyTest.cs;LuminLayoutConverterTest.cs;LuminStorageTagTest.cs;PortableTransferTest.cs;ShortAsciiTranscoderTest.cs;Utf8StringKernelTest.cs;Utf8BmpTranscoderTest.cs;Utf8TwoByteReuseTest.cs;Latin1VectorTranscoderTest.cs;Latin1KernelFallbackTest.cs;ChaCha20Poly1305Test.cs;CompactStringRecordTest.cs;StringRunWriteTest.cs;JsonReaderDifferentialTest.cs;JsonNumberSyntaxTest.cs;JsonFusedStringScannerTest.cs;JsonStreamingWriterTest.cs;IBufferWriterInteropTest.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' == 'Hooks'">
-    <Compile Include="NativeHooks/*.cs" />
+    <Compile Include="NativeHooks/*.cs;Latin1KernelFallbackTest.cs" />
   </ItemGroup>
   <Target Name="ValidateTestArea" BeforeTargets="PrepareForBuild">
     <Error Condition="'$(LuminPackTestArea)' != 'All' And '$(LuminPackTestArea)' != 'Safety' And '$(LuminPackTestArea)' != 'Simd' And '$(LuminPackTestArea)' != 'Hooks'" Text="LuminPackTestArea must be All, Safety, Simd or Hooks." />

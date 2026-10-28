@@ -1452,7 +1452,7 @@ internal static unsafe uint ReadUnaligned(ref byte b) => Unsafe.ReadUnaligned<ui
 [MethodImpl(MethodImplOptions.AggressiveInlining)]
 internal static unsafe void WriteUnaligned(ref byte b, uint value) => Unsafe.WriteUnaligned(ref b, value);
 }
-// Core source SHA256: Utility/Layout/LuminLayout.cs FEFD373442EF979F4EDB46728CE708B47150A1A3E3D8156351D0649C10602AA5
+// Core source SHA256: Utility/Layout/LuminLayout.cs 1A600257CE0388EF459CC5E1094401CBE0B45583D501D6C758D5B4506EAFEF9F
 internal unsafe struct CoreLayout
 {
 private int _sourceStride;
@@ -1568,7 +1568,7 @@ internal int Blocks(ref byte input, ref byte output, int count)
     return done;
 }
 }
-// Core source SHA256: Utility/Layout/LuminLayoutPlan.cs 708BE351B9F1C715AB1A4D20022C428DC9EA072C5B5DE479AFB776BF6D5AB661
+// Core source SHA256: Utility/Layout/LuminLayoutPlan.cs 06CC690C69942F9F402C77851A003025EF3BADDE8CBC34FFC69C450F63D0E9AF
 /// <summary>Contains a complete immutable shuffle plan shared by Core and optional native backends.</summary>
 /// <remarks>This process-local descriptor is not serialized. Native callbacks receive it only while its owner is pinned.</remarks>
 [StructLayout(LayoutKind.Sequential)]
@@ -1725,7 +1725,7 @@ public readonly struct CoreLayoutPlan
         unpackPlan = new CoreLayoutPlan(wire, size, mode, perBlock, reserve, wireVectors, nativeVectors, unpack);
     }
 }
-// Core source SHA256: Utility/Layout/Simd/LuminByteShuffle.cs 0EC8ED15D7CC9B1B590CFEADBFD59F744018088129B9607AE5F603410762DCCC
+// Core source SHA256: Utility/Layout/Simd/LuminByteShuffle.cs DCBE3A6A0D8DBAE2E4798AC230A63C615F47FDFA0A165C940A28935DC9167B9F
 internal static unsafe class CoreByteShuffle
 {
 /// <summary>Moves leading full groups and leaves narrower blocks to the caller.</summary>
@@ -1790,7 +1790,7 @@ internal static unsafe void Copy256(ref byte input, ref byte output, ref nint bl
     }
 }
 }
-// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 6A3EEA84A6E43C22687F1A1DB5D670937A2A0D05DA5D31812A7087DCD0C15CB6
+// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 408D2ACDB957786FEE6CC99D0A1294528E579A4A9DD6A3788F1798CD066C59BE
 internal static unsafe class CoreLatin1Records
 {
 /// <summary>Returns whether every code unit of a string fits one Latin-1 byte.</summary>
@@ -1811,7 +1811,21 @@ internal static unsafe bool IsLatin1(ReadOnlySpan<char> value)
             return ((KernelMemory.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref chars)) | KernelMemory.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)(length - 4))))) & 0xFF00FF00FF00FF00UL) == 0;
     }
 
-    for (int i = 0; i < length; i++)
+    int i = 0;
+    if (Unsafe.SizeOf<IntPtr>() == 8 && length >= 4 && !Vector128.IsHardwareAccelerated)
+    {
+        // Each SWAR word contains four complete UTF-16 code units.
+        do
+        {
+            ulong word = KernelMemory.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)i)));
+            if ((word & 0xFF00FF00FF00FF00UL) != 0)
+                return false;
+            i += 4;
+        }
+        while (i <= length - 4);
+    }
+
+    for (; i < length; i++)
     {
         if (Unsafe.Add(ref chars, (nint)(uint)i) > 0xFF)
             return false;
@@ -1890,7 +1904,21 @@ internal static unsafe bool TryNarrowLatin1(ref char source, ref byte destinatio
         }
     }
 
-    for (int i = 0; i < length; i++)
+    int i = 0;
+    if (Unsafe.SizeOf<IntPtr>() == 8 && length >= 4 && !Vector128.IsHardwareAccelerated)
+    {
+        do
+        {
+            ulong word = KernelMemory.ReadUnaligned<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref source, (nint)(uint)i)));
+            if ((word & 0xFF00FF00FF00FF00UL) != 0)
+                return false;
+            KernelMemory.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(uint)i), PackLatin1(word));
+            i += 4;
+        }
+        while (i <= length - 4);
+    }
+
+    for (; i < length; i++)
     {
         char c = Unsafe.Add(ref source, (nint)(uint)i);
         if (c > 0xFF)
@@ -2020,7 +2048,19 @@ internal static unsafe void WidenLatin1(ref byte source, ref ushort destination,
         return;
     }
 
-    for (int i = 0; i < length; i++)
+    int i = 0;
+    if (Unsafe.SizeOf<IntPtr>() == 8 && length >= 4 && !Vector128.IsHardwareAccelerated)
+    {
+        do
+        {
+            ulong word = WidenLatin1(KernelMemory.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)i)));
+            KernelMemory.WriteUnaligned(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref destination, (nint)(uint)i)), word);
+            i += 4;
+        }
+        while (i <= length - 4);
+    }
+
+    for (; i < length; i++)
         Unsafe.Add(ref destination, (nint)(uint)i) = Unsafe.Add(ref source, (nint)(uint)i);
 }
 /// <summary>Widens four Latin-1 bytes to four characters.</summary>
@@ -2091,7 +2131,20 @@ internal static unsafe bool MatchesLatin1(ref byte source, ReadOnlySpan<char> te
         return ((WidenLatin1(KernelMemory.ReadUnaligned<uint>(ref source)) ^ KernelMemory.ReadUnaligned<ulong>(ref code)) | (WidenLatin1(KernelMemory.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)(length - 4)))) ^ KernelMemory.ReadUnaligned<ulong>(ref Unsafe.Add(ref code, (nint)(uint)((length - 4) * sizeof(char)))))) == 0;
     }
 
-    for (int i = 0; i < length; i++)
+    int i = 0;
+    if (Unsafe.SizeOf<IntPtr>() == 8 && length >= 4 && !Vector128.IsHardwareAccelerated)
+    {
+        do
+        {
+            ulong word = WidenLatin1(KernelMemory.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)i)));
+            if (word != KernelMemory.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)i))))
+                return false;
+            i += 4;
+        }
+        while (i <= length - 4);
+    }
+
+    for (; i < length; i++)
     {
         if (Unsafe.Add(ref chars, (nint)(uint)i) != Unsafe.Add(ref source, (nint)(uint)i))
             return false;

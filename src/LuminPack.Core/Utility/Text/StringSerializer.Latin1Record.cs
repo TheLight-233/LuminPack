@@ -1,4 +1,4 @@
-﻿using System.Runtime.CompilerServices;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LuminPack.Core;
 using LuminPack.Internal;
@@ -55,7 +55,24 @@ public static unsafe partial class StringSerializer
                     LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)(length - 4))))) & 0xFF00FF00FF00FF00UL) == 0;
         }
 #endif
-        for (int i = 0; i < length; i++)
+        int i = 0;
+        if (Unsafe.SizeOf<IntPtr>() == 8 && length >= 4
+#if NET8_0_OR_GREATER
+            && !Vector128.IsHardwareAccelerated
+#endif
+            )
+        {
+            // Each SWAR word contains four complete UTF-16 code units.
+            do
+            {
+                ulong word = LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)i)));
+                if ((word & 0xFF00FF00FF00FF00UL) != 0)
+                    return false;
+                i += 4;
+            } while (i <= length - 4);
+        }
+
+        for (; i < length; i++)
         {
             if (Unsafe.Add(ref chars, (nint)(uint)i) > 0xFF)
                 return false;
@@ -293,7 +310,24 @@ public static unsafe partial class StringSerializer
             }
         }
 #endif
-        for (int i = 0; i < length; i++)
+        int i = 0;
+        if (Unsafe.SizeOf<IntPtr>() == 8 && length >= 4
+#if NET8_0_OR_GREATER
+            && !Vector128.IsHardwareAccelerated
+#endif
+            )
+        {
+            do
+            {
+                ulong word = LuminPackReader.Read<ulong>(ref Unsafe.As<char, byte>(ref Unsafe.Add(ref source, (nint)(uint)i)));
+                if ((word & 0xFF00FF00FF00FF00UL) != 0)
+                    return false;
+                LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)i), PackLatin1(word));
+                i += 4;
+            } while (i <= length - 4);
+        }
+
+        for (; i < length; i++)
         {
             char c = Unsafe.Add(ref source, (nint)(uint)i);
             if (c > 0xFF)
@@ -304,7 +338,6 @@ public static unsafe partial class StringSerializer
         return true;
     }
 
-#if NET8_0_OR_GREATER
     /// <summary>Packs the low bytes of four characters.</summary>
     /// <param name="chars">Four characters whose high bytes are zero.</param>
     /// <returns>The four low bytes in order.</returns>
@@ -316,6 +349,7 @@ public static unsafe partial class StringSerializer
         return (uint)(chars | (chars >> 16));
     }
 
+#if NET8_0_OR_GREATER
     /// <summary>Narrows 17 to 64 characters with a leading and an overlapping trailing block and no loop.</summary>
     /// <param name="source">The first character.</param>
     /// <param name="destination">Room for <paramref name="length"/> bytes.</param>
@@ -619,15 +653,13 @@ public static unsafe partial class StringSerializer
 #if NETSTANDARD2_1
             if (LuminPackBurst.TryWidenLatin1(ref payload, ref *destination, length)) return result;
 #endif
-            for (int i = 0; i < length; i++)
-                destination[i] = (char)Unsafe.Add(ref payload, (nint)(uint)i);
+            WidenLatin1(ref payload, ref Unsafe.As<char, ushort>(ref *destination), length);
         }
 
         return result;
 #endif
     }
 
-#if NET8_0_OR_GREATER
     /// <summary>Widens a Latin-1 payload into an unpublished string.</summary>
     /// <param name="source">The first payload byte.</param>
     /// <param name="destination">The first character of the string.</param>
@@ -635,6 +667,7 @@ public static unsafe partial class StringSerializer
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static void WidenLatin1(ref byte source, ref ushort destination, int length)
     {
+#if NET8_0_OR_GREATER
         if (Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8 && length >= 8)
         {
             if (length > 16)
@@ -660,8 +693,24 @@ public static unsafe partial class StringSerializer
             LuminPackWriter.Write(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref destination, (nint)(uint)(length - 4))), tail);
             return;
         }
+#endif
 
-        for (int i = 0; i < length; i++)
+        int i = 0;
+        if (Unsafe.SizeOf<IntPtr>() == 8 && length >= 4
+#if NET8_0_OR_GREATER
+            && !Vector128.IsHardwareAccelerated
+#endif
+            )
+        {
+            do
+            {
+                ulong word = WidenLatin1(LuminPackReader.Read<uint>(ref Unsafe.Add(ref source, (nint)(uint)i)));
+                LuminPackWriter.Write(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref destination, (nint)(uint)i)), word);
+                i += 4;
+            } while (i <= length - 4);
+        }
+
+        for (; i < length; i++)
             Unsafe.Add(ref destination, (nint)(uint)i) = Unsafe.Add(ref source, (nint)(uint)i);
     }
 
@@ -676,6 +725,7 @@ public static unsafe partial class StringSerializer
         return (value | (value << 8)) & 0x00FF00FF00FF00FFUL;
     }
 
+#if NET8_0_OR_GREATER
     /// <summary>Widens more than sixteen Latin-1 bytes.</summary>
     /// <param name="source">The first payload byte.</param>
     /// <param name="destination">The first character of the string.</param>
@@ -743,7 +793,23 @@ public static unsafe partial class StringSerializer
                 LuminPackReader.Read<ulong>(ref Unsafe.Add(ref code, (nint)(uint)((length - 4) * sizeof(char)))))) == 0;
         }
 #endif
-        for (int i = 0; i < length; i++)
+        int i = 0;
+        if (Unsafe.SizeOf<IntPtr>() == 8 && length >= 4
+#if NET8_0_OR_GREATER
+            && !Vector128.IsHardwareAccelerated
+#endif
+            )
+        {
+            do
+            {
+                ulong word = WidenLatin1(LuminPackReader.Read<uint>(ref Unsafe.Add(ref source, (nint)(uint)i)));
+                if (word != LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)i))))
+                    return false;
+                i += 4;
+            } while (i <= length - 4);
+        }
+
+        for (; i < length; i++)
         {
             if (Unsafe.Add(ref chars, (nint)(uint)i) != Unsafe.Add(ref source, (nint)(uint)i))
                 return false;
