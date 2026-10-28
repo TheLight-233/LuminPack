@@ -117,9 +117,7 @@ public class JsonBenchmark
     [BenchmarkCategory("Serialize")]
     public void LuminPackSerializeToJson()
     {
-        _bufferWriter.ResetCore();
-        _bufferWriter.WriterState.ResetOperationState();
-        LuminPackSerializer.SerializeJson<CharacterSaveData, LuminPackDefaultOptions>(_data, _bufferWriter);
+        LuminPackSerializer.SerializeJson<CharacterSaveData, LuminPackDefaultOptions>(_data);
     }
 
     /// <summary>Measures system text json serialize for the configured benchmark input.</summary>
