@@ -14,14 +14,18 @@ public sealed class FormatterRegistryInitializationTest
     [Fact]
     public void ConcurrentInitializationAndPublicationRemainConsistent()
     {
-        var start = new ProcessStartInfo(Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet")
+        // The SDK host can be x64 even when VSTest runs a self-contained x86 assembly.
+        // Use this assembly's apphost so the worker retains the tested architecture.
+        string assemblyPath = typeof(FormatterRegistryInitializationTest).Assembly.Location;
+        string appHost = Path.ChangeExtension(assemblyPath, OperatingSystem.IsWindows() ? ".exe" : null);
+        Assert.True(File.Exists(appHost), "The isolated registry worker apphost is missing: " + appHost);
+        var start = new ProcessStartInfo(appHost)
         {
             UseShellExecute = false,
             CreateNoWindow = true,
             RedirectStandardOutput = true,
             RedirectStandardError = true
         };
-        start.ArgumentList.Add(typeof(FormatterRegistryInitializationTest).Assembly.Location);
         start.ArgumentList.Add("--registry-initialization-worker");
         using var worker = Process.Start(start)!;
         var output = worker.StandardOutput.ReadToEndAsync();
