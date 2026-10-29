@@ -44,15 +44,36 @@ internal sealed class LazyForwardingTargets
         return Cache.GetValue(source, text => Parse(text, payload));
     }
 
+    /// <summary>Captures forwarding facts from the final projection before its syntax tree is discarded.</summary>
+    /// <param name="source">The exact completed contribution retained by the output cache.</param>
+    /// <param name="payload">The contribution's single canonical payload.</param>
+    /// <param name="root">The final syntax with unchanged executable declarations.</param>
+    internal static void Capture(string source, string payload, SyntaxNode root)
+    {
+        if (source.IndexOf(RootContainerProjection.ContainerPrefix, StringComparison.Ordinal) < 0 ||
+            source.IndexOf("#if", StringComparison.Ordinal) >= 0 || source.IndexOf("#elif", StringComparison.Ordinal) >= 0) return;
+        Cache.GetValue(source, _ => ReadRoot(root, payload));
+    }
+
     /// <summary>Finds single-call forwarders to nested roots of the payload.</summary>
     /// <param name="source">The projected contribution.</param>
     /// <param name="payload">The canonical formatter name of the payload.</param>
     /// <returns>The recognized targets.</returns>
     private static LazyForwardingTargets Parse(string source, string payload)
     {
+        System.Threading.Interlocked.Increment(ref SourceGenerator.IncrementalGenerationMetrics.LazyForwardingParses);
+        var root = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.None)).GetRoot();
+        return ReadRoot(root, payload);
+    }
+
+    /// <summary>Projects only forwarding declarations to strings without retaining their syntax or compiler inputs.</summary>
+    /// <param name="root">The completed contribution's active syntax.</param>
+    /// <param name="payload">The canonical payload selected for its lazy entry.</param>
+    /// <returns>The same direct-call facts used by the text-parsing fallback.</returns>
+    private static LazyForwardingTargets ReadRoot(SyntaxNode root, string payload)
+    {
         var targets = new Dictionary<string, Target>(StringComparer.Ordinal);
         string key = RootContainerProjection.PayloadKey(payload);
-        var root = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.None)).GetRoot();
         var serializers = root.DescendantNodes(node => node is not MethodDeclarationSyntax).OfType<ClassDeclarationSyntax>()
             .Where(type => type.Identifier.ValueText == "LuminPackSerializer");
         foreach (var method in serializers.SelectMany(type => type.Members).OfType<MethodDeclarationSyntax>())

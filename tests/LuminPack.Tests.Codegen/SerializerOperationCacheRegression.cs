@@ -17,6 +17,10 @@ internal static class SerializerOperationCacheRegression
     internal static void Run(MetadataReference[] references, MetadataReference[]? compatibilityReferences = null)
     {
         VerifySemanticModels(references);
+        VerifyCurrentPlans(references);
+        VerifyCompiledProfiles(references);
+        VerifyForwardingCapture();
+        VerifyCancellation(references);
         var before = Create(references, "OperationDependencies", "Value");
         var driver = NewDriver().RunGeneratorsAndUpdateCompilation(before, out var output, out _);
         CheckErrors(output, driver);
@@ -66,7 +70,202 @@ internal static class SerializerOperationCacheRegression
         }
         Require(!lifetime.Compilation.IsAlive, "A completed operation-plan cache retained its original compilation.");
         GC.KeepAlive(lifetime.Cache);
-        Console.WriteLine("Passed closed-collection child invalidation, eight parallel facade compilations, independent outputs, and operation cache compilation lifetime.");
+        Console.WriteLine("Passed shared plans, immutable option overlays, captured forwarding, cancellation/resume, closed-collection invalidation, eight parallel facade compilations, independent outputs, and compilation/syntax lifetime.");
+    }
+
+    /// <summary>Requires cancelled fragment generation to stop before work and leave its reusable cache valid.</summary>
+    /// <param name="references">Runtime metadata for the fragment fixture.</param>
+    private static void VerifyCancellation(MetadataReference[] references)
+    {
+        var input = Create(references, "CancelledFragments", "Value");
+        var assembly = typeof(LuminPackSourceGenerator).Assembly;
+        var metadata = new MetaInfo(Parse, Parse.LanguageVersion, true, true, true);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+        foreach (var item in new[]
+        {
+            (Generator: "LuminPack.Code.Core.LuminPackExtensionGenerator", Method: "GenerateInvocationFiles", Cache: "LuminPack.SourceGenerator.InvocationSupportCache"),
+            (Generator: "LuminPack.Code.Core.LuminPackSerializerGenerator", Method: "GenerateSerializerFiles", Cache: "LuminPack.SourceGenerator.SerializerFacadeCache")
+        })
+        {
+            var method = assembly.GetType(item.Generator, throwOnError: true)!.GetMethod(item.Method, BindingFlags.Static | BindingFlags.NonPublic)!;
+            var cacheType = assembly.GetType(item.Cache, throwOnError: true)!;
+            var cache = Activator.CreateInstance(cacheType, nonPublic: true)!;
+            bool cancelled = false;
+            try { method.Invoke(null, [input, metadata, null, cache, cancellation.Token]); }
+            catch (TargetInvocationException exception) when (exception.InnerException is OperationCanceledException) { cancelled = true; }
+            Require(cancelled, item.Method + " ignored a cancelled generation request.");
+            string actual = FragmentFiles(method.Invoke(null, [input, metadata, null, cache, CancellationToken.None])!);
+            string expected = FragmentFiles(method.Invoke(null, [input, metadata, null, Activator.CreateInstance(cacheType, nonPublic: true)!, CancellationToken.None])!);
+            Require(actual == expected && actual.Length != 0, item.Method + " retained invalid partial output after cancellation.");
+        }
+    }
+
+    /// <summary>Reads frozen file values returned by an internal fragment producer.</summary>
+    /// <param name="files">The returned immutable sequence of generated files.</param>
+    /// <returns>Stable filenames and exact text for cancellation/resume parity.</returns>
+    private static string FragmentFiles(object files) => string.Join("\n", ((System.Collections.IEnumerable)files).Cast<object>().Select(file =>
+        file.GetType().GetField("Name", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(file) + "\n" +
+        file.GetType().GetField("Text", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(file)).Order(StringComparer.Ordinal));
+
+    /// <summary>Requires independent pipeline caches to share exact plans without merging settings or streaming modes.</summary>
+    /// <param name="references">Runtime metadata for the current-compilation fixture.</param>
+    private static void VerifyCurrentPlans(MetadataReference[] references)
+    {
+        var input = Create(references, "CurrentPlanSharing", "Value");
+        var assembly = typeof(LuminPackSourceGenerator).Assembly;
+        var type = assembly.GetType("LuminPack.SourceGenerator.BinaryOperationPlanCache", throwOnError: true)!;
+        var get = type.GetMethod("Get", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        var metadata = new MetaInfo(Parse, Parse.LanguageVersion, true, true, true);
+        var payload = input.GetTypeByMetadataName("Independent")!;
+        var plans = new object[8];
+        var metric = assembly.GetType("LuminPack.SourceGenerator.IncrementalGenerationMetrics", throwOnError: true)!
+            .GetField("BinaryOperationPlanBuilds", BindingFlags.Static | BindingFlags.NonPublic)!;
+        long before = (long)metric.GetValue(null)!;
+        Parallel.For(0, plans.Length, index => plans[index] = get.Invoke(Activator.CreateInstance(type, nonPublic: true),
+            [payload, input, metadata, false])!);
+        Require(plans.All(plan => ReferenceEquals(plan, plans[0])) && (long)metric.GetValue(null)! - before == 1,
+            "Independent pipeline caches rebuilt the same current-compilation operation plan.");
+        var cache = Activator.CreateInstance(type, nonPublic: true)!;
+        Require(!ReferenceEquals(plans[0], get.Invoke(cache, [payload, input, metadata, true])), "Streaming and trusted plans were merged.");
+        metadata.IsForUnity = true;
+        Require(!ReferenceEquals(plans[0], get.Invoke(cache, [payload, input, metadata, false])), "Unity and modern plan settings were merged.");
+        metadata.IsForUnity = false;
+        Require(ReferenceEquals(plans[0], get.Invoke(cache, [payload, input, metadata, false])), "A copied settings guard changed after caller mutation.");
+        var unused = CreateUnusedPlan(references);
+        for (int attempt = 0; attempt < 8 && unused.Plan.IsAlive; attempt++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+        }
+        Require(!unused.Plan.IsAlive, "The compilation-local sharing registry retained a plan after its pipeline cache was released.");
+        GC.KeepAlive(unused.Input);
+    }
+
+    /// <summary>Releases the pipeline cache while retaining the compilation that owns its sharing registry.</summary>
+    /// <param name="references">Runtime metadata for the plan-lifetime fixture.</param>
+    /// <returns>The live compilation and a weak handle to its no-longer-needed frozen plan.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static (Compilation Input, WeakReference Plan) CreateUnusedPlan(MetadataReference[] references)
+    {
+        var input = Create(references, "UnusedCurrentPlan", "Value");
+        var type = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.BinaryOperationPlanCache", throwOnError: true)!;
+        var cache = Activator.CreateInstance(type, nonPublic: true)!;
+        var plan = type.GetMethod("Get", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(cache,
+            [input.GetTypeByMetadataName("Independent")!, input, new MetaInfo(Parse, Parse.LanguageVersion, true, true, true), false])!;
+        return (input, new WeakReference(plan));
+    }
+
+    /// <summary>Checks allocation-free unchanged overlays, inherited defaults and imported-scope isolation.</summary>
+    /// <param name="references">Runtime metadata for the option-scope fixture.</param>
+    private static void VerifyCompiledProfiles(MetadataReference[] references)
+    {
+        const string source = """
+            using LuminPack.Attribute;
+            using LuminPack.Option;
+            [assembly: LuminPackOption(StringRecording = LuminPackStringRecording.VarInt, UntrustedData = true, MaxStringLength = 15)]
+            [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8)]
+            public class Owner
+            {
+                [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF16)] public string Value;
+            }
+            [LuminPackOption(MaxStringLength = 23)] public class LimitOnly { }
+            """;
+        var input = CSharpCompilation.Create("ResolvedProfiles", [CSharpSyntaxTree.ParseText(source, Parse)], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var type = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.CompiledOptions", throwOnError: true)!;
+        var resolve = type.GetMethod("Resolve", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var owner = input.GetTypeByMetadataName("Owner")!;
+        var member = owner.GetMembers("Value").Single();
+        var original = resolve.Invoke(null, [owner, input, true])!;
+        var apply = type.GetMethod("Apply", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Require(ReferenceEquals(original, apply.Invoke(original, [Array.Empty<AttributeData>()])), "An empty option overlay allocated a replacement profile.");
+        var inputPolicy = type.GetField("Input", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(original)!;
+        var applyPolicy = inputPolicy.GetType().GetMethod("Apply", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Require(ReferenceEquals(inputPolicy, applyPolicy.Invoke(inputPolicy, [owner.GetAttributes()])), "A string-only declaration cloned its input policy.");
+        var limited = apply.Invoke(original, [input.GetTypeByMetadataName("LimitOnly")!.GetAttributes()])!;
+        var limitedPolicy = type.GetField("Input", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(limited)!;
+        Require(!ReferenceEquals(inputPolicy, limitedPolicy) &&
+            (int)inputPolicy.GetType().GetField("String", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(inputPolicy)! == 15 &&
+            (int)limitedPolicy.GetType().GetField("String", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(limitedPolicy)! == 23,
+            "An input-policy override mutated the inherited policy instead of copying it.");
+        var field = resolve.Invoke(null, [member, input, true])!;
+        Require((int)type.GetField("Encoding", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(original)! == 0 &&
+            (int)type.GetField("Encoding", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(field)! == 1 &&
+            (int)type.GetField("Recording", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(field)! == 2,
+            "Resolved options lost assembly inheritance or an explicit default-valued member override.");
+        var edited = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(source.Replace(
+            "StringEncoding.UTF8", "StringEncoding.UTF16", StringComparison.Ordinal), Parse));
+        var changed = resolve.Invoke(null, [edited.GetTypeByMetadataName("Owner")!, edited, true])!;
+        Require(!ReferenceEquals(original, changed) && (int)type.GetField("Encoding", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(changed)! == 1,
+            "Resolved profiles crossed a compilation boundary.");
+
+        var library = CSharpCompilation.Create("ImportedProfileLibrary", [CSharpSyntaxTree.ParseText("public class Imported { public int Value; }", Parse)],
+            references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var consumer = CSharpCompilation.Create("ImportedProfileConsumer", [CSharpSyntaxTree.ParseText(
+            "[assembly: LuminPack.Attribute.LuminPackable(typeof(Imported))] [assembly: LuminPack.Attribute.LuminPackOption(StringEncoding = LuminPack.Option.LuminPackStringEncoding.UTF8)]", Parse)],
+            references.Append(library.ToMetadataReference()), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var imported = consumer.GetTypeByMetadataName("Imported")!;
+        var local = resolve.Invoke(null, [imported, consumer, true])!;
+        var declared = resolve.Invoke(null, [imported, consumer, false])!;
+        Require((int)type.GetField("Encoding", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(local)! == 0 &&
+            (int)type.GetField("Encoding", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(declared)! == 1,
+            "Imported and declaring assembly profiles shared one cache entry.");
+    }
+
+    /// <summary>Compares syntax-captured lazy targets with the original parsing fallback and keeps conditional fallback.</summary>
+    private static void VerifyForwardingCapture()
+    {
+        const string source = """
+            namespace LuminPack {
+            public static partial class LuminPackSerializer {
+                internal static void Serialize(ref Writer writer, in Payload value) { __LuminRoots_123.RootWrite(ref writer, in value); }
+                internal static void Serialize<TProfile>(ref Writer writer, in Payload value) { __LuminRoots_123.RootWrite<TProfile>(ref writer, in value); }
+            } }
+            """;
+        var assembly = typeof(LuminPackSourceGenerator).Assembly;
+        var type = assembly.GetType("LuminPack.Code.Core.LazyForwardingTargets", throwOnError: true)!;
+        var parse = type.GetMethod("Read", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var capture = type.GetMethod("Capture", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var metric = assembly.GetType("LuminPack.SourceGenerator.IncrementalGenerationMetrics", throwOnError: true)!
+            .GetField("LazyForwardingParses", BindingFlags.Static | BindingFlags.NonPublic)!;
+        string capturedText = new(source.ToCharArray());
+        var expected = parse.Invoke(null, [source, "Payload"])!;
+        long before = (long)metric.GetValue(null)!;
+        capture.Invoke(null, [capturedText, "Payload", CSharpSyntaxTree.ParseText(capturedText, Parse).GetRoot()]);
+        var actual = parse.Invoke(null, [capturedText, "Payload"])!;
+        var key = type.GetProperty("Key", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        Require((string)key.GetValue(actual)! == (string)key.GetValue(expected)! && (long)metric.GetValue(null)! == before,
+            "Capturing final syntax changed lazy targets or reparsed the complete contribution.");
+        string conditional = "#if SELECTED\n" + source + "\n#endif";
+        before = (long)metric.GetValue(null)!;
+        capture.Invoke(null, [conditional, "Payload", CSharpSyntaxTree.ParseText(conditional, Parse.WithPreprocessorSymbols("SELECTED")).GetRoot()]);
+        var fallback = parse.Invoke(null, [conditional, "Payload"])!;
+        Require((string)key.GetValue(fallback)! == string.Empty && (long)metric.GetValue(null)! == before + 1,
+            "Conditional forwarding changed the original text-parsing branch selection.");
+        var lifetime = CreateCapturedTargets(source);
+        for (int attempt = 0; attempt < 8 && lifetime.Root.IsAlive; attempt++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+        }
+        Require(!lifetime.Root.IsAlive, "Captured lazy forwarding targets retained the completed syntax tree.");
+        GC.KeepAlive(lifetime.Source);
+    }
+
+    /// <summary>Discards the captured root while retaining the exact string that keys its forwarding facts.</summary>
+    /// <param name="source">The contribution whose forwarding declarations are inspected.</param>
+    /// <returns>The live source key and a weak handle to the syntax root.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static (string Source, WeakReference Root) CreateCapturedTargets(string source)
+    {
+        string text = new(source.ToCharArray());
+        var root = CSharpSyntaxTree.ParseText(text, Parse).GetRoot();
+        var type = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.Code.Core.LazyForwardingTargets", throwOnError: true)!;
+        type.GetMethod("Capture", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [text, "Payload", root]);
+        return (text, new WeakReference(root));
     }
 
     /// <summary>Shares binding within one compilation without reusing models after source edits.</summary>

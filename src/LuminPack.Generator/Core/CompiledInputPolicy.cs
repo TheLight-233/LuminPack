@@ -22,12 +22,16 @@ internal sealed class CompiledInputPolicy
 
     /// <summary>Overlays only explicit input policy constants, retaining inherited limits.</summary>
     /// <param name="attributes">The current declaration attributes.</param>
-    /// <returns>An immutable-by-convention copy of the policy.</returns>
+    /// <returns>The existing policy when unchanged, otherwise an immutable-by-convention copy.</returns>
     internal CompiledInputPolicy Apply(System.Collections.Generic.IEnumerable<AttributeData> attributes)
     {
-        var next = (CompiledInputPolicy)MemberwiseClone();
+        var next = this;
         foreach (var attribute in attributes.Where(a => a.AttributeClass?.ToDisplayString() == CompiledOptions.AttributeName))
         foreach (var argument in attribute.NamedArguments)
+        {
+            if (argument.Key is not ("UntrustedData" or "MaxInputBytes" or "MaxDecompressedBytes" or "MaxAllocationBytes" or
+                "MaxCollectionLength" or "MaxStringLength" or "MaxObjectCount" or "MaxDepth" or "MaxReadWork")) continue;
+            if (ReferenceEquals(next, this)) next = (CompiledInputPolicy)MemberwiseClone();
             switch (argument.Key)
             {
                 case "UntrustedData": next.Enabled = (bool)argument.Value.Value; break;
@@ -40,6 +44,7 @@ internal sealed class CompiledInputPolicy
                 case "MaxDepth": next.Depth = (int)argument.Value.Value; break;
                 case "MaxReadWork": next.Work = (long)argument.Value.Value; break;
             }
+        }
         return next;
     }
 }

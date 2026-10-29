@@ -50,8 +50,9 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
             .Select((pair, _) => aggregateCache.PrepareInput(pair.Left.Left, pair.Left.Right, pair.Right))
             .WithTrackingName("LuminPack.Incremental.AggregateInput");
         var aggregateResults = aggregateInputs
-            .Select((pair, _) =>
+            .Select((pair, cancellationToken) =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 if (pair.Completed != null) return pair.Completed;
                 System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.AggregateBuilds);
                 var spc = new AggregateResultBuilder();
@@ -75,6 +76,7 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
                     var registrationDiagnostics = new System.Collections.Generic.List<FrozenDiagnostic>();
                     foreach (var declared in CompilationTypeAnalysisCache.GetOrCreate(compilation).DeclaredTypes)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         var type = declared.Symbol;
                         if (!LuminPackExtensionGenerator.IsCustomGeneratorType(type) ||
                             !SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, compilation.Assembly)) continue;
@@ -116,6 +118,7 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
                     foreach (var type in CompilationTypeAnalysisCache.GetOrCreate(compilation).FormatterTypes.Concat(
                         CompilationTypeAnalysisCache.GetOrCreate(compilation).DeclaredTypes.Select(declaration => (ITypeSymbol)declaration.Symbol)).Distinct<ITypeSymbol>(SymbolEqualityComparer.Default))
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         if (type is INamedTypeSymbol portable && !CodeEmitters.PortableStructPlan.IsSupported(portable))
                             spc.ReportDiagnostic(Diagnostic.Create(DiagnosticDescriptors.UnsupportedPortableStorage, type.Locations.FirstOrDefault(), type.ToDisplayString()));
                         foreach (var diagnostic in CompiledOptions.Validate(type)) spc.ReportDiagnostic(diagnostic);
@@ -133,13 +136,13 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
                     if (optionDeclarations.Length != 0)
                         spc.AddSource("LuminPackOptions.g.cs", GeneratedSourceDocumentation.Complete(string.Join(Environment.NewLine, optionDeclarations), meta.ParseOptions));
 
-                    foreach (var formatter in LuminPackExtensionGenerator.GenerateInvocationFiles(compilation, meta, reachability, invocationSupport))
+                    foreach (var formatter in LuminPackExtensionGenerator.GenerateInvocationFiles(compilation, meta, reachability, invocationSupport, cancellationToken))
                         spc.AddSource(formatter.Name, formatter.Text);
 
-                    foreach (var serializer in LuminPackSerializerGenerator.GenerateSerializerFiles(compilation, meta, reachability, serializerFragments))
+                    foreach (var serializer in LuminPackSerializerGenerator.GenerateSerializerFiles(compilation, meta, reachability, serializerFragments, cancellationToken))
                         spc.AddSource(serializer.Name, serializer.Text);
                 }
-                catch (Exception ex)
+                catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)
                 {
                     spc.ReportDiagnostic(Diagnostic.Create(
                         DiagnosticDescriptors.GeneratorFailure,

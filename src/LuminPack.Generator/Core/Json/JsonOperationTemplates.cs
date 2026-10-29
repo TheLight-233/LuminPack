@@ -23,7 +23,7 @@ internal static class JsonOperationTemplates
     /// <returns>Direct JSON operations that reference the shared per-type helper members.</returns>
     internal static string Prepare(string source, MetaInfo metadata, bool retainHelper)
     {
-        var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions).GetRoot();
+        var root = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None)).GetRoot();
         var container = root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<ClassDeclarationSyntax>()
             .FirstOrDefault(type => type.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
         if (container == null) return source;

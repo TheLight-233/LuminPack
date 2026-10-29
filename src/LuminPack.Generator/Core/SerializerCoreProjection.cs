@@ -191,7 +191,10 @@ internal static class SerializerCoreProjection
         rewritten = RootContainerProjection.Apply(rewritten);
         var normalized = (CompilationUnitSyntax)rewritten.NormalizeWhitespace("    ", Environment.NewLine);
         normalized = normalized.WithLeadingTrivia(SyntaxFactory.ParseLeadingTrivia("#nullable enable annotations\n#pragma warning disable CS0162, CS0168, CS0219, CS0436, CS0649, CS1591" + Environment.NewLine).AddRange(normalized.GetLeadingTrivia()));
-        return LuminPackSerializerDocumentation.Enhance(normalized, closedRoot != null ? new[] { closedRoot } : contexts.Keys.Select(name => types[name]).ToArray(), compilation, metadata);
+        string result = LuminPackSerializerDocumentation.Enhance(normalized, closedRoot != null ? new[] { closedRoot } : contexts.Keys.Select(name => types[name]).ToArray(), compilation, metadata);
+        if (closedRoot != null || contexts.Count == 1)
+            LazyForwardingTargets.Capture(result, closedRoot != null ? FormatterTypeName.Get(closedRoot) : contexts.Keys.Single(), normalized);
+        return result;
     }
 
     /// <summary>Normalizes the known state spellings produced by the operation emitters.</summary>
@@ -394,7 +397,8 @@ internal static class SerializerCoreProjection
                 return WithoutUnionInputReference((InvocationExpressionSyntax)base.VisitInvocationExpression(node));
             if (node.Expression is not MemberAccessExpressionSyntax access || !BinaryOperationPlan.IsOperation(access.Name.Identifier.ValueText))
                 return base.VisitInvocationExpression(node);
-            if (_model.GetSymbolInfo(node).Symbol is IMethodSymbol { IsExtensionMethod: true } existing &&
+            var boundMethod = _model.GetSymbolInfo(node).Symbol as IMethodSymbol;
+            if (boundMethod is { IsExtensionMethod: true } existing &&
                 existing.DeclaringSyntaxReferences.Any(reference => reference.SyntaxTree != _model.SyntaxTree) &&
                 !node.Ancestors().OfType<ClassDeclarationSyntax>().Any(type => type.Identifier.ValueText == "FormatterDispatch"))
                 return base.VisitInvocationExpression(node);
@@ -427,12 +431,12 @@ internal static class SerializerCoreProjection
                 SyntaxFactory.Argument((ExpressionSyntax)Visit(access.Expression)).WithRefKindKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword))));
             string name = MethodName(access.Name.Identifier.ValueText, state.Contains("Json"));
             SimpleNameSyntax target = access.Name is GenericNameSyntax generic ? generic.WithIdentifier(SyntaxFactory.Identifier(name)) : SyntaxFactory.IdentifierName(name);
-            if (access.Name is not GenericNameSyntax && _model.GetSymbolInfo(node).Symbol is IMethodSymbol { IsGenericMethod: true } inferred)
+            if (access.Name is not GenericNameSyntax && boundMethod is { IsGenericMethod: true } inferred)
                 target = SyntaxFactory.GenericName(SyntaxFactory.Identifier(name), SyntaxFactory.TypeArgumentList(
                     SyntaxFactory.SeparatedList(inferred.TypeArguments.Select(type => SyntaxFactory.ParseTypeName(FormatterTypeName.Get(type))))));
             if (target is not GenericNameSyntax && node.ArgumentList.Arguments.Count > (reduced ? 0 : 1))
             {
-                var payload = _model.GetTypeInfo(node.ArgumentList.Arguments[reduced ? 0 : 1].Expression).Type;
+                var payload = scalarType;
                 string frozenPayload = node.GetAnnotations(BinaryEntryInlining.PayloadAnnotation).Select(annotation => annotation.Data).SingleOrDefault();
                 var known = name == "Sizeof" ? _knownSizeTypes : state.Contains("Json") ? _knownJsonTypes : _knownTypes;
                 if (frozenPayload != null && !known.Contains(frozenPayload))
@@ -444,7 +448,7 @@ internal static class SerializerCoreProjection
                         SyntaxFactory.SingletonSeparatedList(SyntaxFactory.ParseTypeName(FormatterTypeName.Get(payload)))));
             }
             if (name is "SerializeUnion" or "DeserializeUnion" or "DeserializeFresh" &&
-                _model.GetTypeInfo(node.ArgumentList.Arguments[reduced ? 0 : 1].Expression).Type is INamedTypeSymbol openPayload &&
+                scalarType is INamedTypeSymbol openPayload &&
                 LuminPackExtensionGenerator.ContainsTypeParameter(openPayload))
             {
                 var owners = new Stack<INamedTypeSymbol>();
@@ -456,7 +460,7 @@ internal static class SerializerCoreProjection
                 SyntaxFactory.ParseExpression("global::LuminPack.LuminPackSerializer"), target)).WithArgumentList(arguments);
             if (!state.Contains("Json") && node.ArgumentList.Arguments.Count > (reduced ? 0 : 1))
             {
-                var payloadType = _model.GetTypeInfo(node.ArgumentList.Arguments[reduced ? 0 : 1].Expression).Type;
+                var payloadType = scalarType;
                 if (global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.RequiresExplicitStateContract(payloadType))
                     rewritten = rewritten.WithAdditionalAnnotations(new SyntaxAnnotation("LuminPack.StorageContract"));
             }

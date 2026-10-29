@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -51,11 +52,12 @@ public static partial class LuminPackSerializerGenerator
     /// <param name="metadata">Current language and generation settings.</param>
     /// <param name="reachability">The formatter and call-selected API roots.</param>
     /// <param name="cache">The generator-instance fragment and file cache.</param>
+    /// <param name="cancellationToken">Stops obsolete generation between complete facade contributions.</param>
     /// <returns>Common serializer support followed by stable per-type files.</returns>
     internal static ImmutableArray<FrozenGeneratedSource> GenerateSerializerFiles(Compilation compilation, MetaInfo metadata,
-        ReachabilityAnalysis reachability, SerializerFacadeCache cache)
+        ReachabilityAnalysis reachability, SerializerFacadeCache cache, CancellationToken cancellationToken = default)
     {
-        var parts = BuildSerializerParts(compilation, metadata, reachability, cache);
+        var parts = BuildSerializerParts(compilation, metadata, reachability, cache, cancellationToken);
         const string declaration = "    public static class LuminPackSerializer";
         const string partialDeclaration = "    public static partial class LuminPackSerializer";
         string footer = "    }" + Environment.NewLine + "}" + Environment.NewLine;
@@ -73,9 +75,12 @@ public static partial class LuminPackSerializerGenerator
     /// <param name="metaInfo">Current generation settings.</param>
     /// <param name="reachability">The current formatter and facade root filter.</param>
     /// <param name="fragments">The generator-instance concrete contribution cache.</param>
+    /// <param name="cancellationToken">Stops obsolete generation before another concrete fragment is rendered.</param>
     /// <returns>The unchanged legacy source components and canonical concrete identities.</returns>
-    private static SerializerParts BuildSerializerParts(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis reachability, SerializerFacadeCache fragments)
+    private static SerializerParts BuildSerializerParts(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis reachability, SerializerFacadeCache fragments,
+        CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         // The serializer entry class is always emitted so user code can reference
         // LuminPackSerializer.Serialize<T> / Deserialize<T> (and the IDE offers completion) even when
         // pruning yields no concrete formatter candidates.  The generic fallbacks below route through
@@ -128,6 +133,7 @@ public static partial class LuminPackSerializerGenerator
         bool stationaryInput = RequiresStationaryInput(compilation, metaInfo);
         foreach (ITypeSymbol type in orderedTypes)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             string typeName = FormatterTypeName.Get(type);
             var apis = apiUsage?.GetApis(type) ?? SerializerApiKind.All;
             if (apis == SerializerApiKind.None) continue;
@@ -153,6 +159,7 @@ public static partial class LuminPackSerializerGenerator
             AppendCompressDecompress(tail);
             return DocumentFragment(tail.ToString(), Array.Empty<ITypeSymbol>(), compilation, metaInfo) + "    }" + Environment.NewLine + "}" + Environment.NewLine;
         });
+        cancellationToken.ThrowIfCancellationRequested();
         string sharedSupport = fragments.Sharing.Apply(blocks, completeApiTypes, metaInfo);
         if (sharedSupport.Length != 0)
         {

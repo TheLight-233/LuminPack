@@ -24,8 +24,9 @@ public sealed partial class LuminPackSourceGenerator
         var cache = new TypeEmissionCache();
         var operations = new BinaryOperationPlanCache();
         var inputs = types.Combine(context.CompilationProvider).Combine(metadata).Combine(mode)
-            .Select((input, _) =>
+            .Select((input, cancellationToken) =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var symbol = input.Left.Left.Left;
                 var compilation = input.Left.Left.Right;
                 var meta = input.Left.Right;
@@ -33,8 +34,9 @@ public sealed partial class LuminPackSourceGenerator
                 return cache.PrepareInput(symbol, compilation, meta, tier);
             })
             .WithTrackingName("LuminPack.Incremental.TypeInput");
-        var emissions = inputs.Select((input, _) =>
+        var emissions = inputs.Select((input, cancellationToken) =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 Interlocked.Increment(ref IncrementalGenerationMetrics.PackableAnalysisTransforms);
                 return input.Evaluate((symbol, compilation, meta, tier) => AnalyzeAndRender(symbol, compilation, meta, tier, operations));
             })

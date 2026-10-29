@@ -149,8 +149,11 @@ internal sealed class CompiledOptions
         int encoding = Encoding, recording = Recording, depth = Depth;
         char format = Format; byte precision = Precision; bool strict = Strict;
         bool declared = IsDeclared;
-        foreach (var attribute in attributes.Where(attribute => attribute.AttributeClass?.ToDisplayString() == AttributeName))
+        bool applied = false;
+        foreach (var attribute in attributes)
         {
+            if (attribute.AttributeClass?.ToDisplayString() != AttributeName) continue;
+            applied = true;
             // Storage and Union contracts do not select a serialization profile.
             if (attribute.NamedArguments.Length == 0 || attribute.NamedArguments.Any(argument => argument.Key is not ("StructLayout" or "WideTag" or "SingleImplementation")))
                 declared = true;
@@ -171,7 +174,11 @@ internal sealed class CompiledOptions
                         break;
                 }
         }
-        return new CompiledOptions(encoding, recording, format, precision, depth, strict, declared, Input.Apply(attributes));
+        if (!applied) return this;
+        var input = Input.Apply(attributes);
+        return encoding == Encoding && recording == Recording && format == Format && precision == Precision &&
+            depth == Depth && strict == Strict && declared == IsDeclared && ReferenceEquals(input, Input)
+            ? this : new CompiledOptions(encoding, recording, format, precision, depth, strict, declared, input);
     }
 
     /// <summary>Renders only individual nondefault constants, shared across all composed profile combinations.</summary>

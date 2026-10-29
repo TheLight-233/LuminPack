@@ -15,6 +15,7 @@ namespace LuminPack.SourceGenerator;
 /// <summary>Caches typed operation templates independently of concrete serializer overload selection.</summary>
 internal sealed class BinaryOperationPlanCache
 {
+    private static readonly ConditionalWeakTable<Compilation, CurrentPlans> Current = new();
     private readonly TypeEmissionCache _values = new TypeEmissionCache();
     private readonly TypeEmissionCache _streamingValues = new TypeEmissionCache();
 
@@ -26,7 +27,86 @@ internal sealed class BinaryOperationPlanCache
     /// <returns>Typed call slots, local identities, and layout declarations without retained semantic objects.</returns>
     internal BinaryOperationPlan Get(ITypeSymbol type, Compilation compilation, MetaInfo metadata, bool streaming = false)
         => (streaming ? _streamingValues : _values).GetOrBuildValue(type, compilation, metadata, LuminPackGenerationTier.Full,
-            () => BinaryOperationPlan.Build(type, compilation, metadata, streaming));
+            () => Current.GetValue(compilation, static _ => new CurrentPlans()).Get(type, compilation, metadata, streaming));
+
+    /// <summary>Shares frozen plans between the type and aggregate pipelines of one compilation.</summary>
+    private sealed class CurrentPlans
+    {
+        private readonly List<Configuration> _configurations = new();
+        private readonly object _gate = new();
+
+        /// <summary>Publishes one plan factory per exact type, parse settings and streaming decision.</summary>
+        /// <param name="type">The current operation payload.</param>
+        /// <param name="compilation">The compilation owning this short-lived context.</param>
+        /// <param name="metadata">All settings that affect the frozen plan.</param>
+        /// <param name="streaming">Whether enclosing input policy requires streaming guards.</param>
+        /// <returns>A shared symbol-free plan after its semantic factory completes.</returns>
+        internal BinaryOperationPlan Get(ITypeSymbol type, Compilation compilation, MetaInfo metadata, bool streaming)
+        {
+            PlanSlot slot;
+            Lazy<BinaryOperationPlan> pending;
+            lock (_gate)
+            {
+                var configuration = _configurations.FirstOrDefault(value => value.Streaming == streaming &&
+                    MetaInfoValueComparer.Instance.Equals(value.Metadata, metadata));
+                if (configuration == null) _configurations.Add(configuration = new Configuration(metadata, streaming));
+                if (!configuration.Plans.TryGetValue(type, out slot))
+                    configuration.Plans.Add(type, slot = new PlanSlot());
+                if (slot.Completed != null && slot.Completed.TryGetTarget(out var completed)) return completed;
+                if (slot.Pending == null)
+                {
+                    var settings = configuration.Metadata;
+                    slot.Pending = new Lazy<BinaryOperationPlan>(() => BinaryOperationPlan.Build(type, compilation, settings, streaming),
+                        LazyThreadSafetyMode.ExecutionAndPublication);
+                }
+                pending = slot.Pending;
+            }
+            // Semantic construction can enter other compilation-local caches. Keep their
+            // work outside the dictionary publication lock.
+            BinaryOperationPlan plan;
+            try { plan = pending.Value; }
+            finally
+            {
+                if (!pending.IsValueCreated)
+                    lock (_gate)
+                        if (ReferenceEquals(slot.Pending, pending)) slot.Pending = null;
+            }
+            lock (_gate)
+            {
+                if (ReferenceEquals(slot.Pending, pending))
+                {
+                    slot.Completed = new WeakReference<BinaryOperationPlan>(plan);
+                    slot.Pending = null;
+                }
+            }
+            return plan;
+        }
+    }
+
+    /// <summary>Coordinates active construction without owning a completed plan after pipeline caches release it.</summary>
+    private sealed class PlanSlot
+    {
+        internal Lazy<BinaryOperationPlan> Pending;
+        internal WeakReference<BinaryOperationPlan> Completed;
+    }
+
+    /// <summary>Partitions current semantic identities by the complete immutable generation settings.</summary>
+    private sealed class Configuration
+    {
+        internal readonly MetaInfo Metadata;
+        internal readonly bool Streaming;
+        internal readonly Dictionary<ITypeSymbol, PlanSlot> Plans = new(SymbolEqualityComparer.Default);
+
+        /// <summary>Copies settings so later caller changes cannot relabel a published plan.</summary>
+        /// <param name="metadata">The settings captured by this plan family.</param>
+        /// <param name="streaming">The original input-policy selection.</param>
+        internal Configuration(MetaInfo metadata, bool streaming)
+        {
+            Metadata = new MetaInfo(metadata.ParseOptions, metadata.CSharpVersion, metadata.IsNet8,
+                metadata.IsNet9_OR_GREATER, metadata.AllowUnsafe, metadata.RegisterMode) { IsForUnity = metadata.IsForUnity };
+            Streaming = streaming;
+        }
+    }
 }
 
 /// <summary>Describes one closed type's operations before they are expanded into concrete entry points.</summary>
@@ -70,13 +150,15 @@ internal sealed class BinaryOperationPlan
             return new BinaryOperationPlan(name, empty, ImmutableArray<MemberDeclarationSyntax>.Empty);
 
         string source = LuminPackExtensionGenerator.GenerateOperationTemplates(type, compilation, metadata);
-        var tree = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions);
-        tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(tree.GetRoot())))), metadata.ParseOptions);
+        // Plans bind executable syntax. Caller-facing XML is completed after the final projection.
+        var templateOptions = metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None);
+        var tree = CSharpSyntaxTree.ParseText(source, templateOptions);
+        tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(tree.GetRoot())))), templateOptions);
         if (streaming || CompiledOptions.Resolve(type, compilation).Input.Enabled)
         {
             source = SafeOperationProjection.Rewrite(tree.GetRoot().NormalizeWhitespace().ToFullString(), type, compilation, metadata, streaming);
-            tree = CSharpSyntaxTree.ParseText(source, metadata.ParseOptions);
-            tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(tree.GetRoot()), metadata.ParseOptions);
+            tree = CSharpSyntaxTree.ParseText(source, templateOptions);
+            tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(tree.GetRoot()), templateOptions);
         }
         var binding = compilation.AddSyntaxTrees(tree);
         var model = binding.GetSemanticModel(tree);

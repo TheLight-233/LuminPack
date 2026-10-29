@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using LuminPack.SourceGenerator;
 using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
@@ -17,10 +18,12 @@ public static partial class LuminPackExtensionGenerator
     /// <param name="metadata">Current generation settings.</param>
     /// <param name="reachability">The formatter roots, or null for Full.</param>
     /// <param name="cache">Generator-instance type and dispatch contribution caches.</param>
+    /// <param name="cancellationToken">Stops obsolete generation between complete formatter contributions.</param>
     /// <returns>Independently comparable partial extension files.</returns>
     internal static ImmutableArray<FrozenGeneratedSource> GenerateInvocationFiles(Compilation compilation, MetaInfo metadata,
-        ReachabilityAnalysis reachability, InvocationSupportCache cache)
+        ReachabilityAnalysis reachability, InvocationSupportCache cache, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         var analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
         var ordered = GetOrderedFormatterTypes(compilation, reachability);
         var candidates = ordered.Where(type => !analysis.IsPackable(type));
@@ -42,6 +45,7 @@ public static partial class LuminPackExtensionGenerator
         var unionDefinitions = new HashSet<string>(StringComparer.Ordinal);
         foreach (var type in types)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             string name = FormatterTypeName.Get(type);
             var fragment = cache.Fragments.GetOrBuild(type, compilation, metadata, LuminPackGenerationTier.Full, () =>
             {
@@ -96,6 +100,7 @@ public static partial class LuminPackExtensionGenerator
             }
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
         foreach (var part in DispatchFiles(compilation, metadata, cache)) files.Add(part);
         // The entries' direct root calls are part of the lazy file's identity.
         string lazyKey = string.Join("|", ordered.Select(type => FormatterTypeName.Get(type) +
