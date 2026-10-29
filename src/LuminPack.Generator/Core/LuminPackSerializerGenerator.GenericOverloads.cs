@@ -17,7 +17,7 @@ public static partial class LuminPackSerializerGenerator
                 /// <remarks>Appends without resetting contents or reference state. Call ResetForReuse for an independent session or after failure.</remarks>
                 __ACCESS__ static void Serialize<T>(in T value, LuminBufferWriter writerBuffer)
                 {
-                    var writer = new LuminPackWriter(writerBuffer, writerBuffer.WriterState);
+                    var writer = new LuminPackWriter(writerBuffer);
                     writer.WriteValue(in value);
                     writerBuffer.CompleteWrite(writer.CurrentIndex);
                 }
@@ -29,7 +29,7 @@ public static partial class LuminPackSerializerGenerator
                 /// <remarks>Appends without resetting contents or reference state. Call ResetForReuse for an independent session or after failure.</remarks>
                 __ACCESS__ static void SerializeJson<T>(T value, LuminBufferWriter writerBuffer)
                 {
-                    var writer = new LuminPackJsonWriter(writerBuffer, writerBuffer.WriterState);
+                    var writer = new LuminPackJsonWriter(writerBuffer);
                     writer.WriteValue(in value);
                     writerBuffer.CompleteWrite(writer.CurrentIndex);
                 }

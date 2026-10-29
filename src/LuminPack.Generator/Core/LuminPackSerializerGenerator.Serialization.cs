@@ -123,7 +123,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine();
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                var " + (directWrite || timeZoneSnapshot ? "fallbackWriter" : "writer") + " = new LuminPackWriter(writerBuffer, writerBuffer.WriterState);");
+        sb.AppendLine("                var " + (directWrite || timeZoneSnapshot ? "fallbackWriter" : "writer") + " = new LuminPackWriter(writerBuffer);");
         sb.AppendLine();
         if (directWrite || timeZoneSnapshot)
             sb.AppendLine("                global::LuminPack.LuminPackSerializer.Serialize(ref fallbackWriter, in " +
@@ -162,7 +162,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
         sb.AppendLine("        " + _currentAccess + " static void Serialize(in " + typeName + " value, LuminBufferWriter writerBuffer)");
         sb.AppendLine("        {");
-        sb.AppendLine("            var writer = new LuminPackWriter(writerBuffer, writerBuffer.WriterState);");
+        sb.AppendLine("            var writer = new LuminPackWriter(writerBuffer);");
         AppendBinaryOperation(sb, read: false);
         sb.AppendLine("            writerBuffer.CompleteWrite(writer.CurrentIndex);");
         sb.AppendLine("        }");
@@ -229,7 +229,7 @@ public static partial class LuminPackSerializerGenerator
             sb.AppendLine("                SerializeCore(writerBuffer, writerBuffer.WriterState, in value);");
         else
         {
-            sb.AppendLine("                var writer = new LuminPackWriter(writerBuffer, writerBuffer.WriterState);");
+            sb.AppendLine("                var writer = new LuminPackWriter(writerBuffer);");
             AppendBinaryOperation(sb, read: false);
             sb.AppendLine("                writerBuffer.CompleteWrite(writer.CurrentIndex);");
         }

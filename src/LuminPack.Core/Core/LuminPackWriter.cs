@@ -68,7 +68,6 @@ namespace LuminPack.Core
             Options = option;
             Buffer = default;
             Position = 0;
-            RefreshRecordLimit();
         }
 
         /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
@@ -80,36 +79,35 @@ namespace LuminPack.Core
             Options = option;
             Buffer = bufferReference;
             Position = 0;
-            RefreshRecordLimit();
         }
 
-        /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
+        /// <summary>Initializes a new instance of <c>LuminPackWriter</c> with the buffer's own reference context.</summary>
         /// <param name = "bufferWriter">The writer receiving the output data.</param>
-        /// <param name = "option">An explicit shared reference context, or null to use the buffer owner's context.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public LuminPackWriter(LuminBufferWriter? bufferWriter, LuminPackWriterOptionalState? option = null)
+        public LuminPackWriter(LuminBufferWriter bufferWriter)
         {
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
-            Options = option ?? bufferWriter.WriterState;
-            Buffer = bufferWriter.BeginCursorWrite(out int position);
-            BufferCheckLimit = (uint)bufferWriter.BufferCheckLimit + 1;
-            Position = position;
-            Owner = bufferWriter;
-            RefreshRecordLimit();
-        }
-
-        /// <summary>Initializes a new instance of <c>LuminPackWriter</c>.</summary>
-        /// <param name = "bufferWriter">The writer receiving the output data.</param>
-        [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal LuminPackWriter(LuminBufferWriter bufferWriter)
-        {
             Options = bufferWriter.WriterState;
             Buffer = bufferWriter.BeginCursorWrite(out int position);
             BufferCheckLimit = (uint)bufferWriter.BufferCheckLimit + 1;
             Position = position;
             Owner = bufferWriter;
-            RefreshRecordLimit();
+        }
+
+        /// <summary>Initializes a new instance of <c>LuminPackWriter</c> with an explicit shared reference context.</summary>
+        /// <param name = "bufferWriter">The writer receiving the output data.</param>
+        /// <param name = "option">The reference context shared with the caller instead of the buffer's own context.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public LuminPackWriter(LuminBufferWriter bufferWriter, LuminPackWriterOptionalState option)
+        {
+            if (bufferWriter == null)
+                LuminPackExceptionHelper.ThrowBufferWriterNull();
+            Options = option;
+            Buffer = bufferWriter.BeginCursorWrite(out int position);
+            BufferCheckLimit = (uint)bufferWriter.BufferCheckLimit + 1;
+            Position = position;
+            Owner = bufferWriter;
         }
 
         #endregion

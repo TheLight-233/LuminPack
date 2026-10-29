@@ -62,7 +62,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
         sb.AppendLine("        " + _currentAccess + " static void SerializeJson(" + typeName + " value, LuminBufferWriter writerBuffer)");
         sb.AppendLine("        {");
-        sb.AppendLine("            var writer = new LuminPackJsonWriter(writerBuffer, writerBuffer.WriterState);");
+        sb.AppendLine("            var writer = new LuminPackJsonWriter(writerBuffer);");
         AppendJsonOperation(sb, read: false);
         sb.AppendLine("            writerBuffer.CompleteWrite(writer.CurrentIndex);");
         sb.AppendLine("        }");

@@ -123,11 +123,13 @@ namespace LuminPack.Core
             IsFirstElement = true;
         }
 
-        /// <summary>Initializes a new instance of <c>LuminPackJsonWriter</c>.</summary>
+        /// <summary>Initializes a new instance of <c>LuminPackJsonWriter</c> with the buffer's own reference context.</summary>
         /// <param name = "bufferWriter">The writer receiving the output data.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal LuminPackJsonWriter(LuminBufferWriter bufferWriter)
+        public LuminPackJsonWriter(LuminBufferWriter bufferWriter)
         {
+            if (bufferWriter == null)
+                LuminPackExceptionHelper.ThrowBufferWriterNull();
             Options = bufferWriter.WriterState;
             Buffer = bufferWriter.BeginCursorWrite(out int position);
             Position = position;

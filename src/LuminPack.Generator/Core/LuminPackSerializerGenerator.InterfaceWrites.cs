@@ -36,7 +36,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            var writerBuffer = LuminBufferWriterPool.Rent();");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
-        sb.AppendLine("                var writer = new LuminPackWriter(writerBuffer, writerBuffer.WriterState);");
+        sb.AppendLine("                var writer = new LuminPackWriter(writerBuffer);");
         AppendBinaryOperation(sb, read: false);
         sb.AppendLine("                var buffer = AllocateUninitializedArray<byte>(writer.CurrentIndex);");
         sb.AppendLine("                writer.GetSpan().CopyTo(buffer.AsSpan());");
