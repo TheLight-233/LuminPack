@@ -94,16 +94,16 @@ internal static class SerializerUnionCursorRegression
                 "The fixed path omitted its virtual root or exact case override.");
             var fixedSlots = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Fixed" } &&
                 method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal)).ToArray();
-            Require(fixedSlots.Length == 4 && fixedSlots.All(method => method.Body!.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal) &&
+            Require(fixedSlots.Length == 6 && fixedSlots.All(method => method.Body!.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal) &&
                 method.Body.ToString().Contains("writer.CurrentIndex", StringComparison.Ordinal)),
                 "The original virtual slots must publish the shared fixed tag and payload body for each binary profile.");
             var largeSlots = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "BigCase" } &&
                 method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal)).ToArray();
-            Require(largeSlots.Length == 4 && largeSlots.All(method => method.Body!.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal)),
+            Require(largeSlots.Length == 6 && largeSlots.All(method => method.Body!.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal)),
                 "The large fixed-case fixture did not exercise the original-slot projection.");
             var variableSlots = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Text" or "Callback" or "Guarded" } &&
                 method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal)).ToArray();
-            Require(variableSlots.Length == 12 && variableSlots.All(method => method.Body!.ToString().Contains("WriteUnionHeader", StringComparison.Ordinal) &&
+            Require(variableSlots.Length == 18 && variableSlots.All(method => method.Body!.ToString().Contains("WriteUnionHeader", StringComparison.Ordinal) &&
                 !method.Body.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal)),
                 "Variable, callback and external-input-policy cases must retain the original virtual operation path.");
             Require(!cursorSlots.Any(method => method.Parent is ClassDeclarationSyntax parent && parent.Identifier.ValueText is
