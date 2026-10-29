@@ -196,6 +196,7 @@ jobs:
 
       # Capture separately from timing so JIT logging cannot affect the benchmark results.
       - name: Capture polymorphism JIT assembly
+        if: matrix.host != 'intel-x64'
         shell: bash
         run: |
           set -euo pipefail
