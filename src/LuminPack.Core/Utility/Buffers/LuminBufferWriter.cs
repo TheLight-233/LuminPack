@@ -740,10 +740,11 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
             // Pin before the offset is measured, so pointer cursors and the alignment stay valid until the array is returned.
             GCHandle pin;
             try { pin = GCHandle.Alloc(next, GCHandleType.Pinned); }
-            catch
+            catch (Exception exception)
             {
                 ArrayPool<byte>.Shared.Return(next);
-                throw;
+                LuminPack.Code.LuminPackExceptionHelper.Rethrow(exception);
+                return;
             }
 #endif
             ref byte start = ref GetNotNullArrayReference(next);
