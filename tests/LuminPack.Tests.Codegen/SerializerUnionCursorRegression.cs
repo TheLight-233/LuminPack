@@ -83,8 +83,9 @@ internal static class SerializerUnionCursorRegression
                 .SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
             var shared = methods.Single(method => method.Identifier.ValueText == "SerializeUnionAt" &&
                 method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::Fixed");
-            Require(shared.ReturnType.ToString() == "int" && shared.GetLeadingTrivia().ToFullString().Contains("absolute next byte index", StringComparison.Ordinal),
-                "The shared body lost its absolute-cursor XML contract.");
+            Require(shared.ReturnType.ToString() == "int" &&
+                !shared.GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)),
+                "The internal shared cursor body must return an absolute index without caller-facing XML.");
             Require(!methods.Any(method => method.Identifier.ValueText == "SerializeUnionAt" &&
                 method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') is "global::Private" or "global::Callback" or "global::Specialized" or "global::Property"),
                 "A private, callback, property or versioned payload entered the raw cursor body.");
@@ -159,7 +160,7 @@ internal static class SerializerUnionCursorRegression
         var safe = Driver().RunGeneratorsAndUpdateCompilation(Compilation(references, "Minimal", false), out var safeOutput, out _);
         Require(!safe.GetRunResult().Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), "Unsafe-disabled cursor generation failed.");
         Execute(safeOutput);
-        Console.WriteLine("Passed fixed Union cursor XML, large fixed growth, public/private/property/callback/versioned guards, exact-case call-site chains, wide/generic fallback, four pruning modes, unsafe-disabled output and retained/fresh volatility, widening and profile edits.");
+        Console.WriteLine("Passed fixed Union cursor signatures, internal XML policy, large fixed growth, public/private/property/callback/versioned guards, exact-case call-site chains, wide/generic fallback, four pruning modes, unsafe-disabled output and retained/fresh volatility, widening and profile edits.");
     }
 
     /// <summary>Checks the dictionary call site tests exactly the fixed cases in tag order before falling back to the cursor slot.</summary>
