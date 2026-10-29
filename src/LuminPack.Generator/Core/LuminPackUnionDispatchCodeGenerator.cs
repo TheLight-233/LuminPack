@@ -46,11 +46,13 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
                 continue;
 
             var canSeal = root.TypeKind == TypeKind.Class && !HasDerivedUnionMember(data, definition);
+            var fixedCursor = members.Count == 1 && cursorPlan?.Contains(members[0].Type) == true;
+            var fuseFixedWrite = fixedCursor && !CompiledOptions.Resolve(members[0].Type, compilation).Input.Enabled;
 
             AppendPartialType(sb, definition, (builder, indent) =>
                 AppendMemberMethods(builder, indent, data, root, matchedRoot, members, suffix, extensionType, canSeal,
                     members.Count == 1 && cursorPlan != null && !definition.IsGenericType,
-                    members.Count == 1 && cursorPlan?.Contains(members[0].Type) == true));
+                    fixedCursor, fuseFixedWrite));
         }
 
         return sb.ToString();
@@ -200,6 +202,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
     /// <param name="canSeal">The can seal used by this operation.</param>
     /// <param name="cursor">Whether this non-generic case participates in the root's returning protocol.</param>
     /// <param name="fixedCursor">Whether its complete fixed payload can leave the cursor unpublished.</param>
+    /// <param name="fuseFixedWrite">Whether the original slot can use its shared fixed payload body.</param>
     private static void AppendMemberMethods(
         StringBuilder sb,
         int indent,
@@ -211,7 +214,8 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         string extensionType,
         bool canSeal,
         bool cursor,
-        bool fixedCursor)
+        bool fixedCursor,
+        bool fuseFixedWrite)
     {
         var padding = new string(' ', indent * 4);
         var bodyPadding = new string(' ', (indent + 1) * 4);
@@ -231,7 +235,10 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         AppendHiddenAttribute(sb, padding);
         sb.AppendLine($"{padding}{prefix}__LuminPackUnionSerialize_{suffix}(ref global::LuminPack.Core.LuminPackWriter writer)");
         sb.AppendLine($"{padding}{{");
-        AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.Binary, extensionType);
+        if (fuseFixedWrite)
+            sb.AppendLine($"{bodyPadding}writer.CurrentIndex = global::LuminPack.LuminPackSerializer.SerializeUnionAt(ref writer, this, writer.CurrentIndex, (byte){members[0].Id});");
+        else
+            AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.Binary, extensionType);
         sb.AppendLine($"{padding}}}");
         sb.AppendLine();
 

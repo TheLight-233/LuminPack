@@ -18,12 +18,12 @@ internal static class FixedUnionCursorProjection
         var advancing = new AdvancingBody(method.ParameterList.Parameters[0].Identifier.ValueText);
         bool advancingBody = method.Body.DescendantNodes().OfType<MemberAccessExpressionSyntax>()
             .Where(access => access.Expression.ToString() == advancing.Writer)
-            .All(access => access.Name.Identifier.ValueText is "Cursor" or "Write" or "Advance");
+            .All(access => access.Name.Identifier.ValueText is "Cursor" or "Write" or "Advance" or "EnsureAdditionalCapacity");
         advancingBody &= method.Body.DescendantNodes().OfType<IdentifierNameSyntax>()
             .Where(identifier => identifier.Identifier.ValueText == advancing.Writer &&
                 !(identifier.Parent is MemberAccessExpressionSyntax member && member.Name == identifier))
             .All(identifier => identifier.Parent is MemberAccessExpressionSyntax member && member.Expression == identifier &&
-                member.Name.Identifier.ValueText is "Cursor" or "Write" or "Advance");
+                member.Name.Identifier.ValueText is "Cursor" or "Write" or "Advance" or "EnsureAdditionalCapacity");
         var cursors = method.Body.DescendantNodes().OfType<VariableDeclaratorSyntax>().Where(variable =>
             variable.Identifier.GetAnnotations(BinaryEntryInlining.OperationLocalAnnotation).Any() &&
             IsWriterCall(variable.Initializer?.Value, "GetCurrentSpanIndex")).ToArray();
@@ -103,15 +103,18 @@ internal static class FixedUnionCursorProjection
                 ? SyntaxFactory.ParseExpression(Writer + ".GetSpanReference(__fixedUnionIndex)").WithTriviaFrom(node)
                 : base.VisitMemberAccessExpression(node);
 
-        /// <summary>Owns advancement locally for complete scalar and proven fixed-batch writes.</summary>
+        /// <summary>Owns fixed advancement locally and publishes it before a complete capacity reservation.</summary>
         /// <param name="node">The original complete Writer statement.</param>
-        /// <returns>The same fixed storage operation without mutating the shared state.</returns>
+        /// <returns>The same fixed storage operation, publishing only at a retained capacity boundary.</returns>
         public override SyntaxNode VisitExpressionStatement(ExpressionStatementSyntax node)
         {
             if (node.Expression is not InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax access } call ||
                 access.Expression.ToString() != Writer) return base.VisitExpressionStatement(node);
             string name = access.Name.Identifier.ValueText;
             var arguments = call.ArgumentList.Arguments;
+            if (name == "EnsureAdditionalCapacity" && arguments.Count == 1)
+                return SyntaxFactory.ParseStatement("{ " + Writer + ".Position = __fixedUnionIndex; " + Writer + ".EnsureAdditionalCapacity(" +
+                    Visit(arguments[0].Expression) + "); }").WithTriviaFrom(node);
             if (name == "Advance" && arguments.Count == 1)
                 return SyntaxFactory.ParseStatement("__fixedUnionIndex += " + Visit(arguments[0].Expression) + ";").WithTriviaFrom(node);
             if (name != "Write") return base.VisitExpressionStatement(node);

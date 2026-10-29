@@ -149,6 +149,15 @@ public static partial class DictionaryEmitter
         {
             sb.AppendLine("            if (count != 0)");
             sb.AppendLine("            {");
+            if (localUnionCursor)
+            {
+                // Cursor fallbacks invoke the root's declared slot, so other wire profiles must use the original compiled dispatch.
+                sb.AppendLine($"                if (writer.Option.StringEncoding != (global::LuminPack.Option.LuminPackStringEncoding){fieldData.UnionCursorEncoding} || writer.Option.StringRecording != (global::LuminPack.Option.LuminPackStringRecording){fieldData.UnionCursorRecording})");
+                sb.AppendLine("                {");
+                sb.AppendLine("                    WriteSparseDictionary(ref writer, value);");
+                sb.AppendLine("                    return;");
+                sb.AppendLine("                }");
+            }
             // DictionaryView models the modern 64-bit runtime layout. Keep the
             // public enumerator fallback entirely outside the view path on x86.
             sb.AppendLine("                if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() != 8)");

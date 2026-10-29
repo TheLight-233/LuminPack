@@ -57,7 +57,7 @@ internal sealed class FixedUnionCursorPlan
     internal static bool CanUsePayload(ITypeSymbol type, Compilation compilation, MetaInfo metadata)
     {
         if (type is not INamedTypeSymbol { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } named ||
-            !IsLocal(named, compilation)) return false;
+            !IsLocal(named, compilation) || CompiledOptions.Resolve(named, compilation).Input.Enabled) return false;
         bool hasRoot = false;
         for (var parent = named.BaseType; parent != null && parent.SpecialType != SpecialType.System_Object; parent = parent.BaseType)
         {

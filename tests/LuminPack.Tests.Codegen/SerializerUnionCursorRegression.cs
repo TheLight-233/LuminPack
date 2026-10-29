@@ -10,12 +10,14 @@ internal static class SerializerUnionCursorRegression
     private const string Source = """
         using System;
         using System.Collections.Generic;
+        using System.Runtime.InteropServices;
         using LuminPack;
         using LuminPack.Attribute;
+        using LuminPack.Utility;
         [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
         [LuminPackable, LuminPackUnion(1, typeof(Fixed)), LuminPackUnion(2, typeof(Text)),
          LuminPackUnion(3, typeof(Private)), LuminPackUnion(4, typeof(Callback)),
-         LuminPackUnion(5, typeof(Specialized)), LuminPackUnion(6, typeof(Property))]
+         LuminPackUnion(5, typeof(Specialized)), LuminPackUnion(6, typeof(Property)), LuminPackUnion(7, typeof(Guarded))]
         public abstract partial class Root { }
         [LuminPackable] public sealed partial class Text : Root { public string Value; }
         [LuminPackable] public sealed partial class Private : Root { [LuminPackInclude] private int Number = 7; }
@@ -25,6 +27,7 @@ internal static class SerializerUnionCursorRegression
             [LuminPackOnSerializing] public static void Before() { }
         }
         [LuminPackable] public sealed partial class Property : Root { public int Number { get; set; } }
+        [LuminPackable, LuminPackOption(UntrustedData = true)] public sealed partial class Guarded : Root { public int Number; }
         [LuminPackable(GeneratorType.VersionTolerant)] public partial struct Versioned { [LuminPackOrder(1)] public int Number; }
         [LuminPackable] public sealed partial class Specialized : Root { public Versioned Value; }
         [LuminPackable, LuminPackWideTag, LuminPackUnion(60000, typeof(WideCase))] public abstract partial class Wide { }
@@ -33,18 +36,36 @@ internal static class SerializerUnionCursorRegression
         [LuminPackable] public sealed partial class GenericCase<T> : GenericRoot<T> { public T Value; }
         [LuminPackable, LuminPackUnion(1, typeof(UnusedCase))] public abstract partial class UnusedRoot { }
         [LuminPackable] public sealed partial class UnusedCase : UnusedRoot { public int Number; }
+        [LuminPackable, LuminPackUnion(1, typeof(BigCase))] public abstract partial class BigRoot { }
+        [LuminPackable] public sealed partial class BigCase : BigRoot { public BigPayload Value; public int Tail; }
+        [LuminPackable, StructLayout(LayoutKind.Sequential, Size = 20000)] public struct BigPayload { public int Marker; }
         [LuminPackable] public sealed class Graph { public Dictionary<int, Root> Values; }
         public static class Entry
         {
             public static void Check()
             {
-                var graph = new Graph { Values = new Dictionary<int, Root> { [1] = new Fixed { Number = 11 }, [2] = new Text { Value = "text" } } };
+                var graph = new Graph { Values = new Dictionary<int, Root> { [1] = new Fixed { Number = 11 }, [2] = new Text { Value = "text" }, [3] = new Guarded { Number = 29 } } };
                 byte[] bytes = LuminPackSerializer.Serialize(graph);
                 var copy = LuminPackSerializer.Deserialize<Graph>(bytes);
-                if (((Fixed)copy.Values[1]).Number != 11 || ((Text)copy.Values[2]).Value != "text" ||
+                if (((Fixed)copy.Values[1]).Number != 11 || ((Text)copy.Values[2]).Value != "text" || ((Guarded)copy.Values[3]).Number != 29 ||
                     !LuminPackSerializer.Serialize(copy).AsSpan().SequenceEqual(bytes)) throw new Exception("Mixed Union wire or field data changed.");
                 _ = LuminPackSerializer.Serialize(new Dictionary<int, Wide> { [1] = new WideCase { Number = 19 } });
                 _ = LuminPackSerializer.Serialize(new Dictionary<int, GenericRoot<int>> { [1] = new GenericCase<int> { Value = 23 } });
+                var large = new List<BigRoot>
+                {
+                    new BigCase { Value = new BigPayload { Marker = 31 }, Tail = 32 },
+                    new BigCase { Value = new BigPayload { Marker = 41 }, Tail = 42 }
+                };
+                using var largeDestination = new LuminBufferWriter(true);
+                int initialCapacity = largeDestination.TotalLength;
+                LuminPackSerializer.Serialize(in large, largeDestination);
+                byte[] largeBytes = largeDestination.GetSpan().ToArray();
+                var largeCopy = LuminPackSerializer.Deserialize<List<BigRoot>>(largeBytes);
+                if (largeDestination.TotalLength <= initialCapacity || largeBytes.Length != 40014 ||
+                    ((BigCase)largeCopy[0]).Value.Marker != 31 || ((BigCase)largeCopy[0]).Tail != 32 ||
+                    ((BigCase)largeCopy[1]).Value.Marker != 41 || ((BigCase)largeCopy[1]).Tail != 42 ||
+                    !LuminPackSerializer.Serialize(largeCopy).AsSpan().SequenceEqual(largeBytes))
+                    throw new Exception("Large fixed Union payload or buffer growth changed.");
             }
         }
         """;
@@ -53,7 +74,7 @@ internal static class SerializerUnionCursorRegression
     /// <param name="references">Current platform and runtime references.</param>
     internal static void Run(MetadataReference[] references)
     {
-        foreach (string mode in new[] { "Full", "Light", "Minimal" })
+        foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var before = Compilation(references, mode, true);
             var driver = Driver().RunGeneratorsAndUpdateCompilation(before, out var output, out var diagnostics);
@@ -71,11 +92,25 @@ internal static class SerializerUnionCursorRegression
             Require(cursorSlots.Any(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Root" } && method.Modifiers.Any(SyntaxKind.VirtualKeyword)) &&
                 cursorSlots.Any(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Fixed" } && method.Modifiers.Any(SyntaxKind.OverrideKeyword)),
                 "The fixed path omitted its virtual root or exact case override.");
+            var fixedSlots = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Fixed" } &&
+                method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal)).ToArray();
+            Require(fixedSlots.Length == 4 && fixedSlots.All(method => method.Body!.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal) &&
+                method.Body.ToString().Contains("writer.CurrentIndex", StringComparison.Ordinal)),
+                "The original virtual slots must publish the shared fixed tag and payload body for each binary profile.");
+            var largeSlots = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "BigCase" } &&
+                method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal)).ToArray();
+            Require(largeSlots.Length == 4 && largeSlots.All(method => method.Body!.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal)),
+                "The large fixed-case fixture did not exercise the original-slot projection.");
+            var variableSlots = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Text" or "Callback" or "Guarded" } &&
+                method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal)).ToArray();
+            Require(variableSlots.Length == 12 && variableSlots.All(method => method.Body!.ToString().Contains("WriteUnionHeader", StringComparison.Ordinal) &&
+                !method.Body.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal)),
+                "Variable, callback and external-input-policy cases must retain the original virtual operation path.");
             Require(!cursorSlots.Any(method => method.Parent is ClassDeclarationSyntax parent && parent.Identifier.ValueText is
                 "Wide" or "WideCase" or "GenericRoot" or "GenericCase"),
                 "A wide/generic root acquired a cursor slot.");
             foreach (var forwarding in cursorSlots.Where(method => method.Parent is ClassDeclarationSyntax parent &&
-                parent.Identifier.ValueText is "Private" or "Callback" or "Specialized" or "Property" or "Text"))
+                parent.Identifier.ValueText is "Private" or "Callback" or "Specialized" or "Property" or "Text" or "Guarded"))
                 Require(forwarding.Body!.Statements.Count == 3 && forwarding.Body.Statements[0].ToString().Contains("writer.CurrentIndex = initialIndex", StringComparison.Ordinal) &&
                     forwarding.Body.Statements[1].ToString().Contains("__LuminPackUnionSerialize_", StringComparison.Ordinal) &&
                     forwarding.Body.Statements[2].ToString().Contains("writer.Position", StringComparison.Ordinal),
@@ -111,11 +146,20 @@ internal static class SerializerUnionCursorRegression
             Require(Files(retainedWide).SequenceEqual(Files(Driver().RunGenerators(widened))), "A newly fixed case retained a stale exact-case chain.");
             VerifyCaseChain(Generated(retainedWide), new[] { ("global::Fixed", 1), ("global::Private", 3) });
             Execute(widenedOutput);
+
+            // The dictionary guard depends on the root's declared string profile across retained compilations.
+            var changedProfile = before.ReplaceSyntaxTree(root, CSharpSyntaxTree.ParseText(root.ToString().Replace(
+                "public abstract partial class Root { }",
+                "[LuminPackOption(StringEncoding = LuminPack.Option.LuminPackStringEncoding.UTF8, StringRecording = LuminPack.Option.LuminPackStringRecording.Token)] public abstract partial class Root { }"),
+                new CSharpParseOptions(LanguageVersion.CSharp13), "Root.cs"));
+            var retainedProfile = driver.RunGeneratorsAndUpdateCompilation(changedProfile, out var profileOutput, out diagnostics);
+            Require(Files(retainedProfile).SequenceEqual(Files(Driver().RunGenerators(changedProfile))), "A changed Union root profile retained stale dictionary guard output.");
+            Execute(profileOutput);
         }
         var safe = Driver().RunGeneratorsAndUpdateCompilation(Compilation(references, "Minimal", false), out var safeOutput, out _);
         Require(!safe.GetRunResult().Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), "Unsafe-disabled cursor generation failed.");
         Execute(safeOutput);
-        Console.WriteLine("Passed fixed Union cursor XML, public/private/property/callback/versioned guards, exact-case call-site chains, wide/generic fallback, pruning modes, unsafe-disabled output and retained/fresh volatility and widening edits.");
+        Console.WriteLine("Passed fixed Union cursor XML, large fixed growth, public/private/property/callback/versioned guards, exact-case call-site chains, wide/generic fallback, four pruning modes, unsafe-disabled output and retained/fresh volatility, widening and profile edits.");
     }
 
     /// <summary>Checks the dictionary call site tests exactly the fixed cases in tag order before falling back to the cursor slot.</summary>

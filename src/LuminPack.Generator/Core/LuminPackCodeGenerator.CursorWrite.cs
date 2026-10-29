@@ -26,6 +26,15 @@ public static partial class LuminPackCodeGenerator
         var fields = data.fields;
         if (!fields.Any(field => ReservedKind(field) > 1))
         {
+            if (polymorphism && fields.Count != 0 && fields.All(field => !field.IsCompress && IsMergeableField(field)))
+            {
+                // The ordinary element check leaves at least 4 KiB: one eighth of the runtime's
+                // 32 KiB initial buffer. Account for the three-byte maximum Union header before
+                // deciding whether the fixed payload needs a complete reservation. Small constant
+                // widths fold this branch away.
+                string width = string.Join(" + ", fields.Select(GetUnmanagedFieldSize));
+                builder.AppendLine(indent + "if (checked(3 + " + width + ") > 4096) writer.EnsureAdditionalCapacity(checked(" + width + "));");
+            }
             if (!polymorphism) builder.AppendLine(indent + "writer.Write((byte)" + fields.Count + ");");
             for (int index = 0; index < fields.Count; index++)
                 index = AppendOriginalMembers(builder, fields, index, fields.Count - 1, Storage);

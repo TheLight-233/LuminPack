@@ -85,6 +85,12 @@ public static partial class LuminPackExtensionGenerator
                 EmitterTypeTraits.CanReadStableStringKeys(dictionary.TypeArguments[0], dictionary.TypeArguments[1], compilation);
             field.UnionCursorSuffix = cursorPlan?.Suffix;
             field.UnionCursorCases = cursorPlan?.Ordered;
+            if (cursorPlan != null)
+            {
+                var declared = CompiledOptions.Resolve(dictionary.TypeArguments[1], compilation, importedScope: false).UnionProfile(false);
+                field.UnionCursorEncoding = declared.Encoding;
+                field.UnionCursorRecording = declared.Recording;
+            }
             field.CanReuseDictionarySlots = dictionary.TypeArguments[0].SpecialType == SpecialType.System_Int32 &&
                 DictionarySlotReusePlan.CanReadExistingValue(dictionary.TypeArguments[1], compilation, metadata);
             field.CanReuseDictionaryScalarSlots = dictionary.TypeArguments[0].SpecialType == SpecialType.System_Int32 && !field.CanReuseDictionarySlots &&

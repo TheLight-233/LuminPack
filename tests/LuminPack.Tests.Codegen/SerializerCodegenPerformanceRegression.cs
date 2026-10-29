@@ -324,10 +324,16 @@ internal static partial class SerializerCodegenPerformanceRegression
         Require(managedNullable.Body!.ToString().Contains("LuminBufferWriterPool.Rent", StringComparison.Ordinal),
             "A state-dependent Nullable acquired a raw scalar convenience entry.");
         Require(!new[] { payload, fixedWriter }.SelectMany(method => method.DescendantNodes().OfType<InvocationExpressionSyntax>()).Any(call =>
-            call.Expression.ToString().Contains("EnsureAdditionalCapacity", StringComparison.Ordinal) ||
             call.Expression.ToString().Contains("EnsureReadable", StringComparison.Ordinal) ||
             call.Expression.ToString().Contains("CheckBuffer", StringComparison.Ordinal)),
             "A fixed field group acquired a per-value buffer bounds check.");
+        foreach (var reservation in fixedWriter.DescendantNodes().OfType<InvocationExpressionSyntax>()
+            .Where(call => call.Expression.ToString().Contains("EnsureAdditionalCapacity", StringComparison.Ordinal)))
+            Require(reservation.Ancestors().OfType<IfStatementSyntax>().Any(gate =>
+                gate.Condition is BinaryExpressionSyntax condition && condition.IsKind(SyntaxKind.GreaterThanExpression) &&
+                condition.Right.ToString() == "4096" && condition.Left.ToString().Contains("Unsafe.SizeOf", StringComparison.Ordinal) &&
+                gate.Statement is BlockSyntax block && block.Statements[0].ToString().StartsWith("writer.Position =", StringComparison.Ordinal)),
+                "A fixed Union capacity reservation lost its size guard or cursor publication.");
         foreach (string name in new[] { "RootWrite", "RootRead" })
             Require(!Root(name, "VolatileGroup").DescendantNodes().OfType<VariableDeclaratorSyntax>().Any(variable =>
                     variable.Identifier.ValueText == "fixedStorage" && variable.Initializer!.ToString().Contains(".Head", StringComparison.Ordinal)),
@@ -352,8 +358,9 @@ internal static partial class SerializerCodegenPerformanceRegression
         var dispatch = methods.Single(method => method.TypeParameterList == null && !method.Identifier.ValueText.Contains("_Options_", StringComparison.Ordinal) &&
             method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal) &&
             method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "FixedChild" });
-        Require(dispatch.Modifiers.Any(SyntaxKind.OverrideKeyword) && dispatch.Body!.ToString().Contains("WriteUnionHeader(11)", StringComparison.Ordinal) &&
-            dispatch.Body.ToString().Contains("LuminPackSerializer.SerializeUnion", StringComparison.Ordinal), "The Union virtual/tag/payload mechanism changed.");
+        Require(dispatch.Modifiers.Any(SyntaxKind.OverrideKeyword) && dispatch.Body!.ToString().Contains("writer.CurrentIndex =", StringComparison.Ordinal) &&
+            dispatch.Body.ToString().Contains("LuminPackSerializer.SerializeUnionAt(ref writer, this, writer.CurrentIndex, (byte)11)", StringComparison.Ordinal),
+            "The original fixed Union virtual slot lost its tag, shared payload or final cursor publication.");
         VerifyPairPreaccess(methods);
         using var image = new MemoryStream();
         var emit = output.Emit(image);

@@ -19,6 +19,10 @@ public sealed class LuminLocalFieldData
     internal bool CanAppendSortedListOrdered;
     /// <summary>Stores the canonical local Union cursor slot selected for a dictionary operation, if any.</summary>
     internal string UnionCursorSuffix;
+    /// <summary>Stores the string encoding of the Union root's declared binary slot.</summary>
+    internal int UnionCursorEncoding;
+    /// <summary>Stores the string recording of the Union root's declared binary slot.</summary>
+    internal int UnionCursorRecording;
     /// <summary>Stores the fixed Union cursor cases and their narrow tags in tag order, tested before the cursor slot.</summary>
     internal System.Collections.Generic.List<(int Id, string Type)> UnionCursorCases;
     /// <summary>Stores the canonical proof that an int-keyed dictionary can refill existing leaf values in place.</summary>
