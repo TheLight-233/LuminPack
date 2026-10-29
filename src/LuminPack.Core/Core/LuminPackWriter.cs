@@ -311,8 +311,8 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
                 Cursor = ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), position);
 #else
-                fixed (byte* start = &MemoryMarshal.GetReference(Buffer))
-                    Cursor = start + position;
+                // The owner keeps its storage pinned until the array is returned.
+                Cursor = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(Buffer)) + position;
 #endif
                 CheckLimit = (uint)owner.BufferCheckLimit + 1;
             }

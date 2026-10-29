@@ -168,7 +168,8 @@ public static class LuminBufferWriterPool
 /// <para><see cref="WriterState"/> remains configured for the entire Rent-to-Return lifetime. Returning the writer restores
 /// both operation states. Serialization options are statically compiled.</para>
 /// <para>Storage is one <see cref="ArrayPool{T}.Shared"/> array whose usable range starts at the first 64-byte boundary
-/// observed when it is rented. Its logical capacity follows the 32 KiB initial size, 1.5x growth and 87.5 percent threshold;
+/// observed when it is rented. On netstandard2.1 a pinning handle, taken only when an array is rented, keeps it stationary
+/// for pointer cursors until the array is returned. Its logical capacity follows the 32 KiB initial size, 1.5x growth and 87.5 percent threshold;
 /// rented arrays come in power-of-two buckets, so a growth that still fits the array extends the range in place without
 /// copying. Every exposed byte was cleared or written by this owner. As an <see cref="IBufferWriter{T}"/>, the writer
 /// appends after <see cref="CurrentIndex"/>.</para>
@@ -202,6 +203,12 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
 
     /// <summary>The address of a live external write index, or zero once a length is published.</summary>
     private nint _liveIndex;
+
+#if !NET8_0_OR_GREATER
+    /// <summary>Keeps the rented array stationary for netstandard2.1 pointer cursors, from rent until return.</summary>
+    /// <remarks>Allocated only when storage is rented or relocated, never on a write or a cursor bind.</remarks>
+    private GCHandle _pin;
+#endif
 
     internal bool _disposed;
 
@@ -668,7 +675,18 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
         ResetForPool();
         ReleaseStorage();
         _disposed = true;
+#if !NET8_0_OR_GREATER
+        GC.SuppressFinalize(this);
+#endif
     }
+
+#if !NET8_0_OR_GREATER
+    /// <summary>Frees the pinning handle of a writer that was never disposed or returned.</summary>
+    ~LuminBufferWriter()
+    {
+        ReleaseStorage();
+    }
+#endif
 
     /// <summary>Returns the storage while keeping the writer usable; the next write acquires the initial capacity.</summary>
     [MethodImpl(MethodImplOptions.NoInlining)]
@@ -679,6 +697,9 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
         _offset = 0;
         _capacity = 0;
         _threshold = 0;
+#if !NET8_0_OR_GREATER
+        if (_pin.IsAllocated) _pin.Free();
+#endif
         if (buffer.Length != 0) ArrayPool<byte>.Shared.Return(buffer);
     }
 
@@ -703,7 +724,7 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
     /// <summary>Grows the logical capacity, preserving every existing byte and clearing the added range.</summary>
     /// <param name="capacity">The new logical capacity.</param>
     /// <remarks>Growth inside the current array keeps its storage; otherwise the bytes move to a larger rented array and the
-    /// previous array is returned only after the copy. Renting is the only step that can fail.</remarks>
+    /// previous array is unpinned and returned only after the copy. Renting and pinning are the only steps that can fail.</remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void Grow(int capacity)
     {
@@ -715,12 +736,26 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
         {
             // The slack lets the usable range start on a cache-line boundary; only the largest arrays forgo it.
             var next = ArrayPool<byte>.Shared.Rent(capacity <= MaxArrayLength - (Alignment - 1) ? capacity + (Alignment - 1) : capacity);
+#if !NET8_0_OR_GREATER
+            // Pin before the offset is measured, so pointer cursors and the alignment stay valid until the array is returned.
+            GCHandle pin;
+            try { pin = GCHandle.Alloc(next, GCHandleType.Pinned); }
+            catch
+            {
+                ArrayPool<byte>.Shared.Return(next);
+                throw;
+            }
+#endif
             ref byte start = ref GetNotNullArrayReference(next);
             int offset = (int)(-AddressOf(ref start) & (Alignment - 1));
             if (next.Length - offset < capacity) offset = 0;
             if (current != 0) CopyBlockUnaligned(ref Unsafe.Add(ref start, (nint)(uint)offset), ref Data, (uint)current);
             _buffer = next;
             _offset = offset;
+#if !NET8_0_OR_GREATER
+            if (_pin.IsAllocated) _pin.Free();
+            _pin = pin;
+#endif
             if (buffer.Length != 0) ArrayPool<byte>.Shared.Return(buffer);
         }
 
