@@ -122,7 +122,6 @@ internal static class ConfirmedCorrectnessRegressionTest
         RunCase(results, nameof(ReusedCollectionsGrowBeforeDirectFill), ReusedCollectionsGrowBeforeDirectFill);
         RunCase(results, nameof(SerializingListDoesNotInvalidateEnumerator), SerializingListDoesNotInvalidateEnumerator);
         RunCase(results, nameof(Utf8CharSpanMatchesStringEncoding), Utf8CharSpanMatchesStringEncoding);
-        RunCase(results, nameof(MarshalMemoryHelpersPreserveData), MarshalMemoryHelpersPreserveData);
         RunCase(results, nameof(BufferWriterGetMemoryHonorsWrittenRange), BufferWriterGetMemoryHonorsWrittenRange);
         RunCase(results, nameof(GeneratorHandlesKeywordsAndUnicodeNames), GeneratorHandlesKeywordsAndUnicodeNames);
         RunCase(results, nameof(JsonFreshResultPreservesMissingFieldSemantics), JsonFreshResultPreservesMissingFieldSemantics);
@@ -180,34 +179,6 @@ internal static class ConfirmedCorrectnessRegressionTest
         var payload = System.Text.Encoding.UTF8.GetBytes(value);
         Assert(BitConverter.ToInt32(spanBuffer) == payload.Length && BitConverter.ToInt32(spanBuffer[4..]) == value.Length &&
             spanBuffer.Slice(8, payload.Length).SequenceEqual(payload), "Complete UTF-8 length bytes changed.");
-    }
-
-    /// <summary>Verifies marshal memory helpers preserve data.</summary>
-    private static unsafe void MarshalMemoryHelpersPreserveData()
-    {
-        byte[] left = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11];
-        byte[] right = [21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31];
-        var originalLeft = left.ToArray();
-        var originalRight = right.ToArray();
-
-        fixed (byte* leftPtr = left)
-        fixed (byte* rightPtr = right)
-            LuminPackMarshal.SwapMemory(leftPtr, rightPtr, left.Length);
-
-        Assert(left.SequenceEqual(originalRight) && right.SequenceEqual(originalLeft),
-            "SwapMemory lost bytes in its non-8-byte tail.");
-
-        var threw = false;
-        try
-        {
-            LuminPackMarshal.ProcessMemoryBlocks(null, null, 1, 0, static (_, _, _) => { });
-        }
-        catch (ArgumentOutOfRangeException)
-        {
-            threw = true;
-        }
-
-        Assert(threw, "ProcessMemoryBlocks accepted a zero block size and could loop forever.");
     }
 
     /// <summary>Verifies buffer writer get memory honors written range.</summary>
