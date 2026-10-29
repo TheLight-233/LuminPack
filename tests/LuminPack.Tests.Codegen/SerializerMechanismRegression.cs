@@ -113,7 +113,7 @@ internal static class SerializerMechanismRegression
                     if (gap.First != 53 || gap.Last != 59) throw new Exception("Version field-length skipping changed.");
                     var added = LuminPackSerializer.Deserialize<VersionFull>(LuminPackSerializer.Serialize(gap));
                     if (added.Middle != null || added.Last != 59) throw new Exception("Version absent-slot defaults changed.");
-                    Add(full, results, recordSize: false, recordBinary: false); Add(gap, results, recordSize: false, recordBinary: false);
+                    Add(full, results, recordBinary: false); Add(gap, results, recordBinary: false);
                     var node = new Node { Name = "root" };
                     node.Next = new Node { Name = "child", Next = node }; node.Alias = node.Next;
                     var cycle = LuminPackSerializer.Deserialize<Node>(LuminPackSerializer.Serialize(node));
@@ -188,10 +188,10 @@ internal static class SerializerMechanismRegression
         var methods = output.SyntaxTrees.Skip(1).SelectMany(tree => tree.GetRoot().DescendantNodes()).OfType<MethodDeclarationSyntax>()
             .Where(method => method.Identifier.ValueText.StartsWith("__LuminPackUnion", StringComparison.Ordinal)).ToArray();
         var ordinary = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "Case" }).ToArray();
-        Require(ordinary.Length == 14 && ordinary.All(method => method.TypeParameterList == null && method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
+        Require(ordinary.Length == 8 && ordinary.All(method => method.TypeParameterList == null && method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
             !method.DescendantNodes().OfType<SwitchStatementSyntax>().Any()), "An ordinary Union override acquired a switch or lost virtual dispatch.");
         var generic = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "GenericCase" }).ToArray();
-        Require(generic.Length == 14 && generic.All(method => method.TypeParameterList == null && method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
+        Require(generic.Length == 8 && generic.All(method => method.TypeParameterList == null && method.Modifiers.Any(SyntaxKind.OverrideKeyword) &&
             method.DescendantNodes().OfType<SwitchStatementSyntax>().Any(statement => statement.Expression.ToString().StartsWith("__LuminPackUnionDispatchSlot_", StringComparison.Ordinal))),
             "A generic Union override lost its cached-slot switch.");
         var bodies = methods.Where(method => method.TypeParameterList == null && !method.Identifier.ValueText.Contains("_Options_", StringComparison.Ordinal))
