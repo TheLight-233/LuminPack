@@ -175,6 +175,7 @@ public static partial class LuminPackInputPolicy
             if (value is null || !text.SequenceEqual(value.AsSpan()))
                 value = new string(text);
         }
+        reader.CompleteValue();
     }
 
     /// <summary>Retains the original ordered-name matcher with strict grammar and duplicate accounting.</summary>

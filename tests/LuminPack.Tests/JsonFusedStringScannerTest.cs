@@ -11,6 +11,29 @@ namespace LuminPackUnitTest;
 /// <summary>Provides json fused string scanner test functionality.</summary>
 public class JsonFusedStringScannerTest
 {
+    /// <summary>Reads reused, null and explicitly selected strings among other JSON values.</summary>
+    [Fact]
+    public void StringReferenceReadsAdvanceAndConsumeTokens()
+    {
+        byte[] data = Encoding.Unicode.GetBytes("[\"same\",null,\"next\",5]");
+        ReadOnlySpan<byte> input = data;
+        var reader = new LuminPackJsonReader(ref input, new LuminPackReaderOptionalState());
+        reader.TryConsumeArrayStart();
+        string value = new string(new[] { 's', 'a', 'm', 'e' });
+        string original = value;
+        reader.Read(ref value);
+        Assert.Same(original, value);
+        reader.Read(ref value);
+        Assert.Null(value);
+        Assert.True(reader.Read());
+        reader.Read(ref value);
+        Assert.Equal("next", value);
+        int number = 0;
+        reader.Read(ref number);
+        Assert.Equal(5, number);
+        reader.ConsumeArrayEnd();
+        reader.EnsureEndOfDocument();
+    }
     /// <summary>Preserves overlapping forward decoding when callers supply input as the public scratch buffer.</summary>
     [Fact]
     public void LiteralRunCopiesPreserveAliasedScratchStorage()

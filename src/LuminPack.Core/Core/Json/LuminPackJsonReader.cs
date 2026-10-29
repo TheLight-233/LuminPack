@@ -2868,9 +2868,12 @@ namespace LuminPack.Core
         public void Read<TOptions>(ref string value)
             where TOptions : struct, ILuminPackOptions
         {
+            if (CurrentTokenType is not (JsonTokenType.String or JsonTokenType.Number or JsonTokenType.True or JsonTokenType.False or JsonTokenType.Null or JsonTokenType.PropertyName) && !Read<TOptions>())
+                LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value.");
             if (CurrentTokenType == JsonTokenType.Null)
             {
                 value = null!;
+                CompleteValue();
                 return;
             }
             if (CurrentTokenType != JsonTokenType.String)
@@ -2887,6 +2890,7 @@ namespace LuminPack.Core
                 if (value is null || !text.SequenceEqual(value.AsSpan()))
                     value = new string(text);
             }
+            CompleteValue();
         }
         /// <summary>Raises the exception for malformed json.</summary>
         /// <param name = "message">The message describing the failure.</param>
