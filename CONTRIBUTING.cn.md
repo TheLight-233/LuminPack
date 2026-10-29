@@ -91,3 +91,4 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter *Simp
 - 独立改动分别提交。正文可说明原因和相关验证。破坏性变更在范围后加 `!`，并通过 `BREAKING CHANGE:` 页脚说明。
 - 示例：`perf(core): reduce fixed record cursor writes`、`fix(generator): reserve large union payloads`、`ci(benchmarks): capture polymorphism JIT assembly on all hosts`。
 - 完成一个功能或修复并进行相应验证后，默认按本规范提交本任务的改动，无需逐次询问提交权限。排除无关或未完成的改动。提交后询问是否推送；所有者已授权该次推送时直接执行。打标签和重写已发布历史仍需明确授权。重写获准的远端分支时，使用明确指定预期版本的 `--force-with-lease`，防止覆盖并发改动。
+- 代表所有者创建的每个提交，author 与 committer 均使用 `TheLight-233 <2802799687@qq.com>`，不得添加 `Co-Authored-By` 或任何 AI 署名 trailer。环境会注入 `GIT_COMMITTER_NAME=trae-solo-agent` 和 `GIT_COMMITTER_EMAIL=solo-agent@trae.ai`；每次 `git commit` 都要在同一 shell 内覆盖这两个变量，并用 `git log -1 --format='%an <%ae> | %cn <%ce>'` 校验署名。
