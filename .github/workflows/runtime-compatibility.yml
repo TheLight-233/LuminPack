@@ -6,6 +6,10 @@ on:
   pull_request:
   workflow_dispatch:
     inputs:
+      avx512_only:
+        description: Run only AVX-512 hardware checks
+        type: boolean
+        default: false
       run_vendor_hardware:
         description: Execute configured Intel and AMD Linux x64 runners
         type: boolean
@@ -32,32 +36,89 @@ env:
 
 jobs:
   avx512:
-    name: AVX-512 hardware execution
+    name: AVX-512 hardware candidate (${{ matrix.candidate }})
     if: >-
       (github.event_name != 'workflow_dispatch' || inputs.run_avx512) &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ${{ vars.LUMINPACK_AVX512_RUNNER || 'ubuntu-latest' }}
     timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        candidate: [1, 2, 3, 4]
     steps:
+      - name: Detect AVX-512F and AVX-512BW
+        id: hardware
+        shell: bash
+        run: |
+          if grep -qw avx512f /proc/cpuinfo && grep -qw avx512bw /proc/cpuinfo; then
+            echo 'supported=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'supported=false' >> "$GITHUB_OUTPUT"
+            echo 'This runner does not expose AVX-512F/BW.'
+          fi
       - uses: actions/checkout@v4
+        if: steps.hardware.outputs.supported == 'true'
       - uses: actions/setup-dotnet@v4
+        if: steps.hardware.outputs.supported == 'true'
         with:
           dotnet-version: 10.0.x
       - uses: actions/setup-dotnet@v4
+        if: steps.hardware.outputs.supported == 'true'
         with:
           dotnet-version: 11.0.x
           dotnet-quality: preview
       - name: Require AVX-512BW and exercise the real encoder
+        if: steps.hardware.outputs.supported == 'true'
         env:
           LUMINPACK_REQUIRE_AVX512: '1'
         run: dotnet run --project tests/LuminPack.Tests.Aot/LuminPack.Tests.Aot.csproj -c Release
       - name: Run boundary and differential tests on AVX-512 hardware
+        if: steps.hardware.outputs.supported == 'true'
         env:
           LUMINPACK_REQUIRE_AVX512: '1'
           DOTNET_PreferredVectorBitWidth: '512'
         run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 -p:PublishAot=false --filter 'FullyQualifiedName~Latin1VectorTranscoderTest|FullyQualifiedName~Utf8BmpTranscoderTest|FullyQualifiedName~StringSerializerFallback|FullyQualifiedName~StringSerializerOptionsTest|FullyQualifiedName~ShortAsciiTranscoderTest|FullyQualifiedName~AuditSafetyRegressionTest|FullyQualifiedName~LuminLayoutConverterTest|FullyQualifiedName~LuminStorageTagTest|FullyQualifiedName~PortableTransferTest|FullyQualifiedName~MarshalCopyBlockTest'
 
+
+      - name: Record successful hardware execution
+        if: steps.hardware.outputs.supported == 'true'
+        run: |
+          mkdir -p avx512-result
+          echo passed > avx512-result/passed
+      - uses: actions/upload-artifact@v4
+        if: steps.hardware.outputs.supported == 'true'
+        with:
+          name: avx512-passed-${{ matrix.candidate }}
+          path: avx512-result/passed
+          if-no-files-found: error
+          retention-days: 1
+
+  avx512-result:
+    name: AVX-512 hardware execution
+    needs: avx512
+    if: always() && needs.avx512.result != 'skipped'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: avx512-passed-*
+          path: avx512-results
+      - name: Require a successful hardware execution
+        env:
+          CANDIDATE_RESULT: ${{ needs.avx512.result }}
+        run: |
+          if [ "$CANDIDATE_RESULT" != success ]; then
+            echo 'An AVX-512 candidate failed or was cancelled.' >&2
+            exit 1
+          fi
+          if ! find avx512-results -name passed -type f -print -quit 2>/dev/null | grep -q .; then
+            echo 'No runner exposed AVX-512F/BW; hardware tests did not run.' >&2
+            exit 1
+          fi
+
   instruction-sets:
+    if: github.event_name != 'workflow_dispatch' || !inputs.avx512_only
     name: String and storage paths (${{ matrix.name }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
@@ -143,6 +204,7 @@ jobs:
           if-no-files-found: error
 
   native-aot:
+    if: github.event_name != 'workflow_dispatch' || !inputs.avx512_only
     name: Trim and NativeAOT (${{ matrix.rid }}, ${{ matrix.api }})
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 45
@@ -214,6 +276,7 @@ jobs:
           if-no-files-found: warn
 
   x86:
+    if: github.event_name != 'workflow_dispatch' || !inputs.avx512_only
     name: Windows x86 execution
     env:
       LUMINPACK_REQUIRE_ARCH: x86
@@ -251,7 +314,7 @@ jobs:
 
   vendor-hardware:
     name: Verified CPU vendor (${{ matrix.vendor }})
-    if: github.event_name == 'workflow_dispatch' && inputs.run_vendor_hardware
+    if: github.event_name == 'workflow_dispatch' && inputs.run_vendor_hardware && !inputs.avx512_only
     runs-on: ${{ fromJSON(matrix.labels) }}
     timeout-minutes: 60
     strategy:
@@ -293,7 +356,7 @@ jobs:
 
   arm32-build:
     name: Build native ARM32 runtime fixture
-    if: github.event_name == 'workflow_dispatch' && inputs.run_arm32
+    if: github.event_name == 'workflow_dispatch' && inputs.run_arm32 && !inputs.avx512_only
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
