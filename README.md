@@ -257,12 +257,12 @@ Measured with [BenchmarkDotNet](https://benchmarkdotnet.org) on the repository's
 
 | 🖥️ Test machine | |
 | --- | --- |
-| Runner | GitHub Actions `ubuntu-latest` (`Benchmark` job of the [CI workflow](.github/workflows/ci.yml)) |
-| CPU | AMD EPYC 7763 2.45 GHz · 2 cores / 4 threads |
+| Runner | GitHub Actions `ubuntu-latest` (`Benchmark (linux-x64)` job of the [CI workflow](.github/workflows/ci.yml)) |
+| CPU | AMD EPYC 7763 2.67 GHz · 2 cores / 4 threads |
 | OS | Ubuntu 24.04.5 LTS |
 | Runtime | .NET 10.0.14 · X64 RyuJIT (x86-64-v3 / AVX2) |
 | Tooling | BenchmarkDotNet 0.15.6 · .NET SDK 11.0.100-rc.3 |
-| Settings | Chart data: 3 launches × 15 iterations, Server GC (polymorphism: 1 launch × 10 iterations, workstation GC). Current benchmarks: 3 launches × 15 iterations, 6 warmups, Server GC for all four classes. |
+| Settings | 3 launches × 15 iterations, 6 warmups, Server GC for all four benchmark classes |
 
 ### 🎮 Game save
 

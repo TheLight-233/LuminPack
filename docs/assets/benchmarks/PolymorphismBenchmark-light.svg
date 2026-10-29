@@ -4,32 +4,33 @@
 <text x="930" y="34" font-size="12" text-anchor="end" fill="#59636E">mean time per operation · lower is better</text>
 <text x="20" y="66" font-size="14" font-weight="600" fill="#1F2328">Serialize</text>
 <text x="20" y="95.7" font-size="13" font-weight="700" fill="#1F2328">LuminPack</text>
-<rect x="148" y="78" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="148" y="78" width="10.9" height="26" rx="5" fill="#8B5CF6"/>
-<text x="372" y="95.7" font-size="12" font-weight="700" fill="#1F2328">6.58 μs</text>
+<rect x="148" y="78" width="200" height="26" rx="5" fill="#EAEEF2"/>
+<rect x="148" y="78" width="9.9" height="26" rx="5" fill="#8B5CF6"/>
+<text x="356" y="95.7" font-size="12" font-weight="700" fill="#1F2328">6.59 μs</text>
 <text x="20" y="133.7" font-size="13" font-weight="400" fill="#1F2328">MemoryPack</text>
-<rect x="148" y="116" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="148" y="116" width="64.5" height="26" rx="5" fill="#3B82F6"/>
-<path d="M210.8 129H216.9M210.8 124V134M216.9 124V134" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
-<text x="372" y="133.7" font-size="12" font-weight="400" fill="#1F2328">38.79 μs  (5.90x)</text>
+<rect x="148" y="116" width="200" height="26" rx="5" fill="#EAEEF2"/>
+<rect x="148" y="116" width="61.9" height="26" rx="5" fill="#3B82F6"/>
+<path d="M205.9 129H213.6M205.9 124V134M213.6 124V134" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="356" y="133.7" font-size="12" font-weight="400" fill="#1F2328">41.19 μs  (6.25x)</text>
 <text x="20" y="171.7" font-size="13" font-weight="400" fill="#1F2328">MessagePack</text>
-<rect x="148" y="154" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="148" y="154" width="213.3" height="26" rx="5" fill="#F59E0B"/>
-<path d="M358.6 167H364.0M358.6 162V172M364.0 162V172" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
-<text x="372" y="171.7" font-size="12" font-weight="400" fill="#1F2328">128.32 μs  (19.51x)</text>
+<rect x="148" y="154" width="200" height="26" rx="5" fill="#EAEEF2"/>
+<rect x="148" y="154" width="190.2" height="26" rx="5" fill="#F59E0B"/>
+<path d="M330.6 167H348.0M330.6 162V172M348.0 162V172" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="356" y="171.7" font-size="12" font-weight="400" fill="#1F2328">126.54 μs  (19.20x)</text>
 <text x="490" y="66" font-size="14" font-weight="600" fill="#1F2328">Deserialize</text>
 <text x="490" y="95.7" font-size="13" font-weight="700" fill="#1F2328">LuminPack</text>
-<rect x="618" y="78" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="618" y="78" width="18.0" height="26" rx="5" fill="#8B5CF6"/>
-<text x="842" y="95.7" font-size="12" font-weight="700" fill="#1F2328">20.65 μs</text>
+<rect x="618" y="78" width="200" height="26" rx="5" fill="#EAEEF2"/>
+<rect x="618" y="78" width="18.4" height="26" rx="5" fill="#8B5CF6"/>
+<text x="826" y="95.7" font-size="12" font-weight="700" fill="#1F2328">21.49 μs</text>
 <text x="490" y="133.7" font-size="13" font-weight="400" fill="#1F2328">MemoryPack</text>
-<rect x="618" y="116" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="618" y="116" width="25.5" height="26" rx="5" fill="#3B82F6"/>
-<text x="842" y="133.7" font-size="12" font-weight="400" fill="#1F2328">29.19 μs  (1.41x)</text>
+<rect x="618" y="116" width="200" height="26" rx="5" fill="#EAEEF2"/>
+<rect x="618" y="116" width="26.7" height="26" rx="5" fill="#3B82F6"/>
+<path d="M642.9 129H646.5M642.9 124V134M646.5 124V134" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="826" y="133.7" font-size="12" font-weight="400" fill="#1F2328">31.16 μs  (1.45x)</text>
 <text x="490" y="171.7" font-size="13" font-weight="400" fill="#1F2328">MessagePack</text>
-<rect x="618" y="154" width="216" height="26" rx="5" fill="#EAEEF2"/>
-<rect x="618" y="154" width="214.1" height="26" rx="5" fill="#F59E0B"/>
-<path d="M830.9 167H834.0M830.9 162V172M834.0 162V172" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
-<text x="842" y="171.7" font-size="12" font-weight="400" fill="#1F2328">245.18 μs  (11.87x)</text>
+<rect x="618" y="154" width="200" height="26" rx="5" fill="#EAEEF2"/>
+<rect x="618" y="154" width="194.8" height="26" rx="5" fill="#F59E0B"/>
+<path d="M807.7 167H818.0M807.7 162V172M818.0 162V172" stroke="#1F2328" stroke-opacity="0.55" stroke-width="1.2" fill="none"/>
+<text x="826" y="171.7" font-size="12" font-weight="400" fill="#1F2328">226.95 μs  (10.56x)</text>
 <text x="20" y="222" font-size="11" fill="#59636E">GitHub Actions ubuntu-latest · AMD EPYC 7763 · .NET 10.0.14 · BenchmarkDotNet 0.15.6. Whiskers show min–max; ratios are relative to LuminPack in the same panel.</text>
 </svg>
