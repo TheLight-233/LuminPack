@@ -19,6 +19,7 @@ LuminPack 是面向 .NET 和 Unity、基于源代码生成的二进制与 JSON �
 7. **文档。** README 是封面页；功能文档放在 `docs`。每篇文档都有英文 `name.md` 和中文 `name.cn.md`，两个版本一起更新。README 和 `docs` 中不放发布说明、版本历史或实验报告。
 8. **不要**仅凭调用点搜索就删除存储占位或外部可用、生成代码使用的成员。
 9. 除非被要求，**不要提交**。
+10. **提交标题。** 使用 `type(scope): description`，类型和范围用小写，描述用简洁的英文祈使句。新功能用 `feat`，修复用 `fix`，性能优化用 `perf`，结构调整用 `refactor`，测试用 `test`，文档用 `docs`，工作流用 `ci`，构建工具用 `build`，维护用 `chore`。范围选择受影响的组件，例如 `core`、`generator` 或 `benchmarks`；性能前缀是 `perf`，不能写成 `pref`。独立改动分别提交。详见[贡献指南](CONTRIBUTING.cn.md#提交规范)。
 
 ## 工作方式
 

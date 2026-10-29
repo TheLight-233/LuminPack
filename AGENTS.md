@@ -19,6 +19,7 @@ LuminPack is a source-generated binary and JSON serializer for .NET and Unity. R
 7. **Documents.** README is the cover page; feature documentation lives in `docs`. Each document has an English `name.md` and a Chinese `name.cn.md`; update both. No release notes, version histories or experiment reports in README or `docs`.
 8. **Don't remove** storage placeholders or externally usable/generated members based only on call-site searches.
 9. **Don't commit** unless asked.
+10. **Commit titles.** Use `type(scope): description`, with a lowercase type and scope and a concise English imperative description. Use `feat` for features, `fix` for bug fixes, `perf` for performance, `refactor` for restructuring, `test` for tests, `docs` for documentation, `ci` for workflows, `build` for build tooling and `chore` for maintenance. Choose the affected component as the scope, for example `core`, `generator` or `benchmarks`; performance uses `perf`, never `pref`. Keep independent changes in separate commits. See [Contributing](CONTRIBUTING.md#commit-conventions).
 
 ## Working practice
 

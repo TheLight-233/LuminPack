@@ -82,3 +82,12 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter *Simp
 - README 是项目封面：介绍、安装、使用和链接。README 和 `docs` 中不放发布说明、版本历史、迁移通知或实验报告。
 - 每个 README、AGENTS、CONTRIBUTING 以及 `docs` 页面都有英文 `name.md` 和中文 `name.cn.md`，两者一起更新。
 - 公共用法改变时更新 `skills/luminpack`。
+
+## 提交规范
+
+- 每条提交标题使用 `type(scope): description`。类型和组件范围用小写，描述用简洁的英文祈使句，末尾不加句号。
+- 类型：`feat`（新功能）、`fix`（修复）、`perf`（性能优化）、`refactor`（结构调整）、`test`（测试）、`docs`（文档）、`ci`（工作流）、`build`（构建工具）、`chore`（维护）。性能前缀是 `perf`，不能写成 `pref`。
+- 范围选择受影响的组件，例如 `core`、`generator`、`benchmarks`、`unity`、`burst` 或 `repo`。基准夹具改动按目的分类：`fix(benchmarks)` 修正夹具，`ci(benchmarks)` 修改其 CI 执行或采集方式。
+- 独立改动分别提交。正文可说明原因和相关验证。破坏性变更在范围后加 `!`，并通过 `BREAKING CHANGE:` 页脚说明。
+- 示例：`perf(core): reduce fixed record cursor writes`、`fix(generator): reserve large union payloads`、`ci(benchmarks): capture polymorphism JIT assembly on all hosts`。
+- 只有所有者要求时才能提交、推送、打标签或重写已发布历史。重写获准的远端分支时，使用明确指定预期版本的 `--force-with-lease`，防止覆盖并发改动。

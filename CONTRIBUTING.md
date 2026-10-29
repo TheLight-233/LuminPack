@@ -82,3 +82,12 @@ Judge results by LuminPack's time divided by the reference library's, from the s
 - README is the project cover: introduction, installation, usage and links. No release notes, version histories, migration notices or experiment reports in README or `docs`.
 - Every README, AGENTS, CONTRIBUTING and `docs` page has an English `name.md` and a Chinese `name.cn.md`. Update both.
 - Update `skills/luminpack` when public usage changes.
+
+## Commit conventions
+
+- Every commit title follows `type(scope): description`. Use lowercase types and component scopes, and a concise English imperative description without a trailing period.
+- Types: `feat` (feature), `fix` (bug fix), `perf` (performance optimization), `refactor` (restructuring), `test` (tests), `docs` (documentation), `ci` (workflows), `build` (build tooling), and `chore` (maintenance). The performance prefix is `perf`, never `pref`.
+- Choose the affected component as the scope, such as `core`, `generator`, `benchmarks`, `unity`, `burst`, or `repo`. Classify benchmark fixture changes by their purpose: `fix(benchmarks)` corrects a fixture, while `ci(benchmarks)` changes its CI execution or capture.
+- Keep independent changes in separate commits. A body may explain the reason and relevant validation. Mark breaking changes with `!` after the scope and explain them in a `BREAKING CHANGE:` footer.
+- Examples: `perf(core): reduce fixed record cursor writes`, `fix(generator): reserve large union payloads`, and `ci(benchmarks): capture polymorphism JIT assembly on all hosts`.
+- Commit, push, tag, or rewrite published history only when requested by the owner. When rewriting an authorized remote branch, use an explicit expected revision with `--force-with-lease` so concurrent changes are not overwritten.
