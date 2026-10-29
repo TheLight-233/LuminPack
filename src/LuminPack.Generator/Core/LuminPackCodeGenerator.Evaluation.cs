@@ -175,7 +175,7 @@ public static partial class LuminPackCodeGenerator
                         {
                             sb.AppendLine(indentation + "if (" + fieldPath + " == null) continue;");
                         }
-                        sb.AppendLine((field.FixLength == int.MaxValue) ? (indentation + "for (int i" + depthSuffix + " = 0; i" + depthSuffix + " < " + fieldPath + ".Count; i" + depthSuffix + "++)") : $"{indentation}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.FixLength}; i{depthSuffix}++)");
+                        sb.AppendLine(indentation + "for (int i" + depthSuffix + " = 0; i" + depthSuffix + " < " + fieldPath + ".Count; i" + depthSuffix + "++)");
                         sb.AppendLine(indentation + "{");
                         LuminDataField field3 = new LuminDataField
                         {
@@ -320,7 +320,7 @@ public static partial class LuminPackCodeGenerator
                         {
                             sb.AppendLine(indentation + "if (" + fieldPath + " == null) continue;");
                         }
-                        sb.AppendLine((field.FixLength == int.MaxValue) ? (indentation + "for (int i" + depthSuffix + " = 0; i" + depthSuffix + " < " + fieldPath + ".Length; i" + depthSuffix + "++)") : $"{indentation}for (int i{depthSuffix} = 0; i{depthSuffix} < {field.FixLength}; i{depthSuffix}++)");
+                        sb.AppendLine(indentation + "for (int i" + depthSuffix + " = 0; i" + depthSuffix + " < " + fieldPath + ".Length; i" + depthSuffix + "++)");
                         sb.AppendLine(indentation + "{");
                         LuminDataField field2 = new LuminDataField
                         {

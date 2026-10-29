@@ -32,10 +32,28 @@ public partial class Message
 | `MaxJsonDepth` | `1024` | JSON nesting limit; zero or less disables it. |
 | `ValidateJsonSyntax` | `false` | Strict JSON grammar checking. Turn it on for JSON from outside sources. |
 | `StandardFormat` | `"G"` | A constant handed to explicit formatted and `Custom` kernels. It does not change built-in number or date formats. |
+| `WideTag` | `false` | Wide Union reader support on this class or interface; does not inherit enclosing options. |
+| `SingleImplementation` | `false` | This class or interface promises one implementation everywhere; retains existing Union framing and virtual dispatch. |
 | `StructLayout` | `Tagged` | Storage of unmanaged structs; see below. Only valid on assemblies and structs. |
 | `UntrustedData` and limits | off | Bounded protocol for hostile input; see [Security](security.md). |
 
 Binary data may mix encodings member by member, but the writer and reader must use the same declarations. JSON encoding, depth and syntax checking always apply to a complete document.
+
+## Union contract switches
+
+Group type-level Union declarations in one attribute:
+
+```csharp
+[LuminPackable, LuminPackOption(WideTag = true, SingleImplementation = true)]
+public abstract partial class MessageBase { }
+
+[LuminPackable]
+public sealed partial class MessageBody : MessageBase { public int Id; }
+```
+
+These switches apply only to the annotated class or interface. They are invalid on assemblies, structs, fields and properties, do not inherit from containing or base types, and cannot be selected through `ILuminPackOptions`. Declaring only these switches does not pin string settings, so explicit operation profiles still flow normally. A tag of 250 or more still requires wide framing automatically.
+
+`[LuminPackWideTag]` and `[LuminPackSingleImplementation]` remain compatible spellings; prefer the grouped options. A legacy marker remains enabled even when the corresponding option is explicitly false. `SingleImplementation` is a caller guarantee, not a request to remove Union framing or virtual dispatch; use it only when no other assembly can add an implementation. The current generator retains those mechanisms.
 
 ## Explicit profiles
 

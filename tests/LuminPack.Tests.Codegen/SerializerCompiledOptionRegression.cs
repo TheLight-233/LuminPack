@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 /// <summary>Checks compiled profiles on constrained generic definitions and consumer partial helpers.</summary>
-internal static class SerializerCompiledOptionRegression
+internal static partial class SerializerCompiledOptionRegression
 {
     /// <summary>Compiles and executes the production facade for closed unmanaged generic contracts.</summary>
     /// <param name="references">The platform and runtime references.</param>
@@ -35,6 +35,7 @@ internal static class SerializerCompiledOptionRegression
             """;
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]);
         Execute("CompiledOptionGeneric", source, parse, references);
+        VerifyUnionOptions(parse, references);
         VerifyRegisteredAssemblyDefaults(parse, references);
         VerifyDeclarationConstants(parse, references);
         Console.WriteLine("Passed constrained generic compiled profiles, partial-helper API selection, registered assembly defaults and option diagnostics.");

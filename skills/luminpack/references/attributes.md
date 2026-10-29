@@ -9,8 +9,8 @@ All attributes are in `LuminPack.Attribute`; option enums are in `LuminPack.Opti
 | `[LuminPackable]` | class, struct, record, interface | Generate a formatter. `GeneratorType`: `Object` (default, positional), `VersionTolerant` (by name), `CircleReference` (reference tracking), `Custom` (your static methods), `NonGenerator`. |
 | `[assembly: LuminPackable(typeof(T))]` | assembly | Generate a type from a referenced assembly; repeatable; open generics (`typeof(G<>)`) cover the closed types used; works for Union roots. |
 | `[LuminPackUnion(tag, typeof(Case))]` | interface, abstract class | Declare a Union case explicitly (tags 0..65535; below 250 is one byte). Cases marked `[LuminPackable]` are also collected automatically. |
-| `[LuminPackWideTag]` | Union root | Use the wide tag form for all cases. |
-| `[LuminPackSingleImplementation]` | Union root | Promise exactly one implementation everywhere, allowing direct calls. Only when no other assembly can add a case. |
+| `[LuminPackOption(WideTag = true)]` | class/interface Union root | Accept wide tags; small tags retain their one-byte encoding. Declaration only. `[LuminPackWideTag]` remains compatible. |
+| `[LuminPackOption(SingleImplementation = true)]` | class/interface Union root | Promise one implementation everywhere; retains Union framing and virtual dispatch. `[LuminPackSingleImplementation]` remains compatible. |
 | `[LuminPackBounded(maxBytes)]` | class, struct | Promise a maximum complete binary size; removes inner capacity checks. A wrong bound can overrun the buffer. |
 | `[LuminPackOption(...)]` | assembly, type, field, property | Compile-time options; see below. |
 | `[assembly: LuminPackGeneratorOptions(mode, register)]` | assembly | `LuminPackGenerationMode.Full/Medium/Light/Minimal`; `LuminPackRegisterMode.Auto/Disabled`. |
@@ -24,7 +24,6 @@ All attributes are in `LuminPack.Attribute`; option enums are in `LuminPack.Opti
 | `[LuminPackInclude]` | Include a private/protected field or property (works through nested levels via generated layout mirrors). |
 | `[LuminPackOldName("Name")]` | `VersionTolerant` only: keep old names readable; list several in chronological order. |
 | `[LuminPackableObject]` | Call the member type's own formatter instead of inlining it (needed for `Custom` members). |
-| `[LuminPackFixedLength(n)]` | Fixed collection length for supported shapes. |
 | `[LuminPackCompress]` | LZ-compress a supported unmanaged array/span member. Managed elements are rejected (LuminPack034). |
 | `[LuminPackDelegate(instanceName, methodName)]` | Route the member through a method on an instance member. |
 | `[LuminPackStaticDelegate(typeof(T), methodName)]` | Route the member through a static method. |
@@ -50,8 +49,12 @@ Delegate targets use the formatter signature of the member type, for example `st
 | `MaxJsonDepth` | 1024 | Whole JSON document. |
 | `ValidateJsonSyntax` | false | Whole JSON document. |
 | `StandardFormat` | `"G"` | Constant for Custom/formatted kernels. |
+| `WideTag` | false | Class/interface declaration only; accepts wide Union tags. Small tags still occupy one byte. |
+| `SingleImplementation` | false | Class/interface declaration only; caller guarantees one implementation everywhere. Retains Union framing and virtual dispatch. |
 | `StructLayout` | `LuminPackStructLayout.Tagged` | Assembly or struct. `Packed`: no padding, same bytes on 32/64-bit. `Native`: full native storage, identical layouts required. |
 | `UntrustedData` + `Max*` limits | off | Root type or assembly; bounded protocol for hostile input. |
+
+These Union switches do not inherit from assemblies, containing types or base types, cannot be selected through operation profiles, and do not pin string profiles. A legacy standalone marker takes precedence over an explicit false option. Only assert `SingleImplementation` when no other assembly can add an implementation.
 
 ## Examples
 

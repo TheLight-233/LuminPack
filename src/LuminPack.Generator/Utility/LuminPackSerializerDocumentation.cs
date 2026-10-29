@@ -194,7 +194,7 @@ internal static class LuminPackSerializerDocumentation
                 ISymbol member = FindMember(named, field.Name);
                 var description = new XElement("description", TypeLink(field.TypeSymbol), "; binary order: ", index + 1,
                     "; ", field.IsPrivate ? "included non-public storage" : field.isProperty ? "property" : "field",
-                    field.IsCompress ? "; compressed" : "", field.FixLength != int.MaxValue ? "; fixed collection length: " + field.FixLength : "", ".");
+                    field.IsCompress ? "; compressed" : "", ".");
                 table.Add(new XElement("item", new XElement("term", member == null ? new XElement("c", field.Name) : SymbolLink(member)), description));
             }
         }

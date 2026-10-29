@@ -42,7 +42,6 @@ By default, public instance fields and public auto-properties (including those w
 | `[LuminPackInclude]` | Includes a private or protected field or property. |
 | `[LuminPackOrder(n)]` | Sets the write order. It never changes the CLR layout. |
 | `[LuminPackableObject]` | Calls the member type's own complete formatter instead of inlining its members. Use it for `Custom` and other specialized members. |
-| `[LuminPackFixedLength(n)]` | Declares a fixed collection length for supported shapes. |
 | `[LuminPackCompress]` | Compresses a supported unmanaged array or span member with LuminPack LZ. |
 | `[LuminPackDelegate]`, `[LuminPackStaticDelegate]`, `[LuminPackSingletonDelegate]` | Routes one member through your own method on an instance, a static type, or a singleton. |
 

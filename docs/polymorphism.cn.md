@@ -28,7 +28,7 @@ LuminPackSerializer.Deserialize(bytes, ref copy);   // copy 是 Circle
 - 支持泛型 case：开放泛型 case（`typeof(Case<>)`）覆盖实际用到的闭合类型，闭合 case（`typeof(Case<int>)`）优先于它。
 - 在 .NET 11 上，标了 `[LuminPackable]` 的 C# `union` 声明会被识别为 Union 根，使用相同的数据格式。
 
-选出正确的 case 只需要一次虚调用——不做类型判断，也不查表。`[LuminPackSingleImplementation]` 告诉生成器该根在任何地方都只有一个实现，可以直接调用它；只有确定其他程序集不会再加 case 时才能使用。
+选出正确的 case 只需要一次虚调用——不做类型判断，也不查表。用 `[LuminPackOption(WideTag = true)]` 选择宽标签。`[LuminPackOption(SingleImplementation = true)]` 声明该根在所有程序集中只有一个实现；只有确定其他程序集不会再加 case 时才能使用。它保留既有 Union 帧和虚方法派发。独立的 `[LuminPackWideTag]` 和 `[LuminPackSingleImplementation]` 特性保留兼容，参见[选项](options.cn.md#union-类型契约开关)。
 
 ## 引用程序集中的类型
 

@@ -332,6 +332,8 @@ internal static class EmitterTypeTraits
                     "System.Runtime.CompilerServices.UnionAttribute" or "LuminPack.Attribute.LuminPackCompressAttribute" or
                     "LuminPack.Attribute.LuminPackWideTagAttribute" or "LuminPack.Attribute.LuminPackSingleImplementationAttribute")
                     return false;
+            if (TypeMetaChecker.HasUnionOption(current, "WideTag") || TypeMetaChecker.HasUnionOption(current, "SingleImplementation"))
+                return false;
             if (current != named && current.GetAttributes().Any(attribute =>
                     attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE &&
                     attribute.ConstructorArguments.Length == 1 &&

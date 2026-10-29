@@ -80,8 +80,7 @@ namespace LuminPack.Code
         //Attribute
         /// <summary>Stores the order.</summary>
         public uint Order = int.MaxValue;
-        /// <summary>Stores the fix length.</summary>
-        public uint FixLength = int.MaxValue;
+
         /// <summary>Stores the is private.</summary>
         public bool IsPrivate;
         /// <summary>Whether the original field requires volatile access semantics.</summary>

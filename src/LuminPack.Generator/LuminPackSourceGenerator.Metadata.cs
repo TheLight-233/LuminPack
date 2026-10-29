@@ -547,7 +547,6 @@ namespace LuminPack.SourceGenerator
                                 Accessibility.ProtectedAndInternal or
                                 Accessibility.Protected,
                             Order = int.MaxValue,
-                            FixLength = int.MaxValue,
                             isProperty = true,
                             belongClassName = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                         };
@@ -555,8 +554,6 @@ namespace LuminPack.SourceGenerator
                         TypeMetaChecker.FindAndSetOrderAttribute(ref field, member);
                         if (field.Order == (uint)int.MaxValue)
                             field.Order = (uint)(rawMember.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()?.SpanStart ?? int.MaxValue);
-
-                        TypeMetaChecker.FindAndSetFixedLengthAttribute(ref field, member);
 
                         if (TypeMetaChecker.TryCheckPackableObjectAttribute(member))
                         {
@@ -631,15 +628,12 @@ namespace LuminPack.SourceGenerator
                                 Accessibility.ProtectedAndInternal or
                                 Accessibility.Protected,
                             Order = int.MaxValue,
-                            FixLength = int.MaxValue,
                             belongClassName = symbol.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
                         };
 
                         TypeMetaChecker.FindAndSetOrderAttribute(ref field, fieldMember);
                         if (field.Order == (uint)int.MaxValue)
                             field.Order = (uint)(rawMember.DeclaringSyntaxReferences.FirstOrDefault()?.GetSyntax()?.SpanStart ?? int.MaxValue);
-
-                        TypeMetaChecker.FindAndSetFixedLengthAttribute(ref field, fieldMember);
 
                         if (TypeMetaChecker.TryCheckPackableObjectAttribute(fieldMember))
                         {

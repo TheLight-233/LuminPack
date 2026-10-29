@@ -28,7 +28,7 @@ LuminPackSerializer.Deserialize(bytes, ref copy);   // copy is Circle
 - Generic cases are supported: an open case (`typeof(Case<>)`) covers the closed types actually used, and a closed case (`typeof(Case<int>)`) has priority over it.
 - On .NET 11, a C# `union` declaration marked `[LuminPackable]` is recognized as a Union root and uses the same wire format.
 
-Picking the right case costs a single virtual call — no type checks, no lookups. `[LuminPackSingleImplementation]` tells the generator that a root has exactly one implementation everywhere, so it can call it directly; only use it when no other assembly can add a case.
+Picking the right case costs a single virtual call — no type checks, no lookups. Use `[LuminPackOption(WideTag = true)]` to select wide tags. `[LuminPackOption(SingleImplementation = true)]` declares that a root has exactly one implementation everywhere; only use it when no other assembly can add a case. It retains the existing Union frame and virtual dispatch. The separate `[LuminPackWideTag]` and `[LuminPackSingleImplementation]` attributes remain compatible; see [Options](options.md#union-contract-switches).
 
 ## Types from referenced assemblies
 

@@ -28,12 +28,11 @@ public sealed class LuminPackBoundedAttribute : System.Attribute
 /// <summary>
 /// User guarantee that a polymorphic base has exactly one implementation in every assembly that can
 /// observe it. <para>
-/// When the guarantee holds (and the single case is sealed, or the base is not visible outside the
-/// assembly) the generated code may call that implementation directly instead of performing virtual
-/// or interface dispatch. The default "only one subclass exists in the current assembly" is NOT
-/// sufficient: another assembly could still add a subclass, which would silently drop the polymorphic
-/// frame and produce wrong wire data. Only apply this attribute when the base cannot be extended
-/// elsewhere.
+/// The declaration retains the existing Union framing and virtual dispatch contract.
+/// Prefer <c>LuminPackOption(SingleImplementation = true)</c> to group contract switches.
+/// The default "only one subclass exists in the current assembly" is NOT
+/// sufficient: another assembly could still add a subclass. Only apply this guarantee when the base
+/// cannot be extended elsewhere.
 /// </para>
 /// </summary>
 [AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface, AllowMultiple = false, Inherited = false)]
@@ -176,21 +175,6 @@ public sealed class LuminPackSingletonDelegateAttribute : System.Attribute
     {
         TypeName = typeName;
         MethodName = methodName;
-    }
-}
-
-/// <summary>Provides lumin pack fixed length attribute functionality.</summary>
-[AttributeUsage(AttributeTargets.Field | AttributeTargets.Property, AllowMultiple = false, Inherited = false)]
-public sealed class LuminPackFixedLengthAttribute : System.Attribute
-{
-    /// <summary>Gets or sets the fixed length.</summary>
-    public uint FixedLength { get; set; }
-
-    /// <summary>Initializes a new instance of <c>LuminPackFixedLengthAttribute</c>.</summary>
-    /// <param name="fixedLength">The fixed length used by this operation.</param>
-    public LuminPackFixedLengthAttribute(uint fixedLength)
-    {
-        FixedLength = fixedLength;
     }
 }
 
@@ -349,11 +333,20 @@ public enum LuminPackRegisterMode : byte
 /// Unspecified properties inherit the enclosing declaration's options. Assembly options override the library defaults;
 /// type and member declarations override the corresponding enclosing scope. Binary string settings can vary by member.
 /// JSON encoding, depth and syntax policy describe a complete document and are selected at its root.
+/// WideTag and SingleImplementation are declaration-only class/interface contracts and do not inherit enclosing options.
 /// </remarks>
 [AttributeUsage(AttributeTargets.Assembly | AttributeTargets.Class | AttributeTargets.Struct |
     AttributeTargets.Interface | AttributeTargets.Field | AttributeTargets.Property, Inherited = false)]
 public sealed class LuminPackOptionAttribute : System.Attribute
 {
+    /// <summary>Gets or sets whether this class or interface accepts the wide Union tag form.</summary>
+    /// <remarks>Applies only to this declaration, not enclosing scopes or explicit operation profiles. The legacy wide-tag attribute also enables it.</remarks>
+    public bool WideTag { get; set; }
+
+    /// <summary>Gets or sets the declaration's guarantee that the polymorphic root has one implementation everywhere.</summary>
+    /// <remarks>Applies only to this class or interface. Retains the existing Union framing and virtual dispatch contract.</remarks>
+    public bool SingleImplementation { get; set; }
+
     /// <summary>Gets or sets the binary string encoding, or the JSON document encoding at its root.</summary>
     public LuminPackStringEncoding StringEncoding { get; set; } = LuminPackStringEncoding.UTF16;
 

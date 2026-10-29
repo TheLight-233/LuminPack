@@ -122,6 +122,8 @@ internal sealed class CompiledOptions
                     error = "the value must be a declared LuminPackStructLayout member.";
                 if (argument.Key == "StructLayout" && symbol is not (IAssemblySymbol or INamedTypeSymbol { TypeKind: TypeKind.Struct }))
                     error = "StructLayout applies only to assembly and struct declarations.";
+                if (argument.Key is "WideTag" or "SingleImplementation" && symbol is not INamedTypeSymbol { TypeKind: TypeKind.Class or TypeKind.Interface })
+                    error = "Union contract switches apply only to class and interface declarations.";
                 bool inputLimit = argument.Key is "MaxInputBytes" or "MaxDecompressedBytes" or "MaxAllocationBytes" or
                     "MaxCollectionLength" or "MaxStringLength" or "MaxObjectCount" or "MaxReadWork" or "MaxDepth";
                 if (inputLimit && Convert.ToInt64(argument.Value.Value, CultureInfo.InvariantCulture) < 0)
@@ -146,8 +148,8 @@ internal sealed class CompiledOptions
         bool declared = IsDeclared;
         foreach (var attribute in attributes.Where(attribute => attribute.AttributeClass?.ToDisplayString() == AttributeName))
         {
-            // StructLayout selects a storage layout, not a serialization profile.
-            if (attribute.NamedArguments.Length == 0 || attribute.NamedArguments.Any(argument => argument.Key != "StructLayout"))
+            // Storage and Union contracts do not select a serialization profile.
+            if (attribute.NamedArguments.Length == 0 || attribute.NamedArguments.Any(argument => argument.Key is not ("StructLayout" or "WideTag" or "SingleImplementation")))
                 declared = true;
             foreach (var argument in attribute.NamedArguments)
                 switch (argument.Key)

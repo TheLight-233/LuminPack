@@ -17,7 +17,6 @@ public static class TypeMetaChecker
     private const string LUMIN_PACK_IGNORE = "LuminPackIgnoreAttribute";
     private const string LUMIN_PACK_INCLUDE = "LuminPackIncludeAttribute";
     private const string LUMIN_PACK_ORDER = "LuminPackOrderAttribute";
-    private const string LUMIN_PACK_FIX_LENGTH = "LuminPackFixedLengthAttribute";
     private const string LUMIN_PACK_OBJECT = "LuminPackableObjectAttribute";
     private const string LUMIN_PACK_UNION = "LuminPackUnionAttribute";
     private const string LUMIN_PACK_WIDE_TAG = "LuminPackWideTagAttribute";
@@ -550,28 +549,6 @@ public static class TypeMetaChecker
         return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_ABLE);
     }
 
-    /// <summary>Attempts to check fixed length attribute and reports whether it succeeded.</summary>
-    /// <param name="property">The property used by this operation.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCheckFixedLengthAttribute(IPropertySymbol property)
-    {
-        var attributeData = property.GetAttributes();
-
-        return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_FIX_LENGTH);
-    }
-
-    /// <summary>Attempts to check fixed length attribute and reports whether it succeeded.</summary>
-    /// <param name="property">The property used by this operation.</param>
-    /// <returns>Whether the requested condition or operation succeeded.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static bool TryCheckFixedLengthAttribute(IFieldSymbol property)
-    {
-        var attributeData = property.GetAttributes();
-
-        return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_FIX_LENGTH);
-    }
-
     /// <summary>Attempts to check union attribute and reports whether it succeeded.</summary>
     /// <param name="symbol">The type or symbol to analyze.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
@@ -583,6 +560,14 @@ public static class TypeMetaChecker
         return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_UNION);
     }
 
+    /// <summary>Reads a Union contract switch from the exact declaration without inheriting enclosing options.</summary>
+    /// <param name="symbol">The class or interface declaring the contract.</param>
+    /// <param name="name">The Boolean option property.</param>
+    /// <returns>Whether the declaration explicitly enables the switch.</returns>
+    internal static bool HasUnionOption(INamedTypeSymbol symbol, string name)
+        => symbol.GetAttributes().Any(attribute => attribute.AttributeClass?.ToDisplayString() == CompiledOptions.AttributeName &&
+            attribute.NamedArguments.Any(argument => argument.Key == name && argument.Value.Value is true));
+
     /// <summary>Attempts to check wide tag attribute and reports whether it succeeded.</summary>
     /// <param name="symbol">The type or symbol to analyze.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
@@ -591,57 +576,8 @@ public static class TypeMetaChecker
     {
         var attributeData = symbol.GetAttributes();
 
-        return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_WIDE_TAG);
+        return attributeData.Any(x => x.AttributeClass!.Name is LUMIN_PACK_WIDE_TAG) || HasUnionOption(symbol, "WideTag");
     }
-
-    /// <summary>Finds the and set fixed length attribute in the supplied metadata.</summary>
-    /// <param name="data">The metadata describing the serializable type.</param>
-    /// <param name="property">The property used by this operation.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void FindAndSetFixedLengthAttribute(ref LuminDataField data, IPropertySymbol property)
-    {
-        var attributeData = property.GetAttributes();
-
-        var fixedLengthAttribute =
-            attributeData.FirstOrDefault(x => x.AttributeClass?.Name == LUMIN_PACK_FIX_LENGTH);
-
-        if (fixedLengthAttribute != null)
-        {
-            if (fixedLengthAttribute.ConstructorArguments.Length > 0)
-            {
-                var lengthValue = fixedLengthAttribute.ConstructorArguments[0].Value;
-                if (lengthValue is uint value)
-                {
-                    data.FixLength = value;
-                }
-            }
-        }
-    }
-
-    /// <summary>Finds the and set fixed length attribute in the supplied metadata.</summary>
-    /// <param name="data">The metadata describing the serializable type.</param>
-    /// <param name="property">The property used by this operation.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static void FindAndSetFixedLengthAttribute(ref LuminDataField data, IFieldSymbol property)
-    {
-        var attributeData = property.GetAttributes();
-
-        var fixedLengthAttribute =
-            attributeData.FirstOrDefault(x => x.AttributeClass?.Name == LUMIN_PACK_FIX_LENGTH);
-
-        if (fixedLengthAttribute != null)
-        {
-            if (fixedLengthAttribute.ConstructorArguments.Length > 0)
-            {
-                var lengthValue = fixedLengthAttribute.ConstructorArguments[0].Value;
-                if (lengthValue is uint value)
-                {
-                    data.FixLength = value;
-                }
-            }
-        }
-    }
-
 
     /// <summary>Attempts to check constructor has public and reports whether it succeeded.</summary>
     /// <param name="symbol">The type or symbol to analyze.</param>

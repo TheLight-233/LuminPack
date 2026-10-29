@@ -43,6 +43,7 @@ int size = LuminPackSerializer.Sizeof(person);
 - Binary and JSON are separate protocols; never mix their outputs.
 - Default strings are UTF-16 with length prefixes. Reader and writer must use the same options (attribute declarations or explicit profile).
 - Binary is little-endian. Raw unmanaged structs are copied with padding unless `StructLayout` says otherwise.
+- Group Union switches with `[LuminPackOption(WideTag = true, SingleImplementation = true)]` on the root class/interface only. These settings do not inherit or pin string profiles; legacy standalone markers remain compatible. `SingleImplementation` preserves Union framing and virtual dispatch. Collections always use their actual lengths.
 - There is **no runtime options object**. Options are `[LuminPackOption(...)]` declarations or a profile type argument such as `Serialize<LuminPackUtf8LengthOptions>(value)`.
 - `LuminBufferWriter` owns native memory: dispose it (or return it to its pool). Writes into it append; reset with `ResetForReuse()` between independent records.
 - `Register` APIs take function pointers: the project needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` and an `unsafe` block.

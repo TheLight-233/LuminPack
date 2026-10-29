@@ -32,10 +32,28 @@ public partial class Message
 | `MaxJsonDepth` | `1024` | JSON 嵌套深度上限；小于等于 0 表示不限制。 |
 | `ValidateJsonSyntax` | `false` | 严格 JSON 语法校验。处理外部来源的 JSON 时请开启。 |
 | `StandardFormat` | `"G"` | 传给显式格式化与 `Custom` 核心方法的常量，不会改变内置数值、日期格式。 |
+| `WideTag` | `false` | 当前类或接口接受宽 Union 标签；不继承外层选项。 |
+| `SingleImplementation` | `false` | 当前类或接口保证所有程序集中只有一个实现；保留既有 Union 帧和虚方法派发。 |
 | `StructLayout` | `Tagged` | 非托管结构体的存储方式，见下文。只能用于程序集和结构体。 |
 | `UntrustedData` 及各项限额 | 关闭 | 面向不可信输入的受限协议，见[安全](security.cn.md)。 |
 
 二进制数据可以按成员混用不同编码，但写入方和读取方必须使用相同的声明。JSON 的编码、深度和语法校验总是作用于整份文档。
+
+## Union 类型契约开关
+
+将 Union 的类型级声明集中到一个特性：
+
+```csharp
+[LuminPackable, LuminPackOption(WideTag = true, SingleImplementation = true)]
+public abstract partial class MessageBase { }
+
+[LuminPackable]
+public sealed partial class MessageBody : MessageBase { public int Id; }
+```
+
+这两个开关只作用于被标注的类或接口。不能用于程序集、结构体、字段或属性，不从包含类型或基类型继承，也不能通过 `ILuminPackOptions` 选择。只声明这些开关不会固定字符串选项，显式操作配置仍正常传递。标签达到 250 时仍会自动使用宽标签帧。
+
+`[LuminPackWideTag]` 和 `[LuminPackSingleImplementation]` 保留兼容，推荐集中使用 Option。旧标记存在时，即使对应 Option 显式为 false，也仍然启用旧标记。`SingleImplementation` 是调用者保证，不是移除 Union 帧或虚方法派发的指令；只有确定其他程序集不会增加实现时才能使用。当前生成器保留这些机制。
 
 ## 显式配置
 

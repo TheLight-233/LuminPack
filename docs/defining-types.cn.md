@@ -42,7 +42,6 @@ Union 的根类型、它的所有 case 以及外层包含类型都必须声明�
 | `[LuminPackInclude]` | 纳入 private 或 protected 的字段、属性。 |
 | `[LuminPackOrder(n)]` | 指定写入顺序，不改变 CLR 内存布局。 |
 | `[LuminPackableObject]` | 调用成员类型自己的完整格式化器，而不是把它的成员内联展开。用于 `Custom` 等专用类型的成员。 |
-| `[LuminPackFixedLength(n)]` | 为支持的形状声明固定集合长度。 |
 | `[LuminPackCompress]` | 用 LuminPack LZ 压缩支持的非托管数组或 span 成员。 |
 | `[LuminPackDelegate]`、`[LuminPackStaticDelegate]`、`[LuminPackSingletonDelegate]` | 把单个成员交给你自己的方法处理，方法可以在实例、静态类型或单例上。 |
 
