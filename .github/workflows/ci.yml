@@ -194,6 +194,54 @@ jobs:
         shell: bash
         run: dotnet run --project benchmarks/LuminPack.Benchmark/LuminPack.Benchmark.csproj -c Release -f net10.0 --no-build -- --filter 'LuminPackBenchmark.SimpleBenchmark.*' 'LuminPackBenchmark.SerializeBenchmark.*' 'LuminPackBenchmark.JsonBenchmark.*' 'LuminPackBenchmark.PolymorphismBenchmark.*' --artifacts "$GITHUB_WORKSPACE/.tmp/benchmark-artifacts" --buildTimeout 600
 
+      # Capture separately from timing so JIT logging cannot affect the benchmark results.
+      - name: Capture polymorphism JIT assembly
+        shell: bash
+        run: |
+          set -euo pipefail
+          export DOTNET_gcServer=1 DOTNET_TieredCompilation=1 DOTNET_TieredPGO=1
+          artifacts="$GITHUB_WORKSPACE/.tmp/benchmark-artifacts"
+          benchmark="$GITHUB_WORKSPACE/benchmarks/LuminPack.Benchmark/bin/Release/net10.0/LuminPack.Benchmark.dll"
+          for operation in lumin-write lumin-read nino-write nino-read; do
+            case "$operation" in
+              lumin-write)
+                export DOTNET_JitDisasm='*LuminPackSerialize* *RootWrite* *__LuminPackUnionSerialize*'
+                required='LuminPackBenchmark[.]FooA:__LuminPackUnionSerialize.*\(Tier1'
+                ;;
+              lumin-read)
+                export DOTNET_JitDisasm='*LuminPackDeserialize* *RootRead* *TryPeekUnionHeader*'
+                required=''
+                ;;
+              nino-write)
+                export DOTNET_JitDisasm='*NinoSerialize* *__WriteSubtype* *WriteEach* *WriteRawBody*'
+                required='LuminPackBenchmark_IFooFormatter:__WriteSubtype.*\(Tier1'
+                ;;
+              nino-read)
+                export DOTNET_JitDisasm='*NinoDeserialize* *__ReadSubtype* *__ReadExact* *ReadEach* *ReadBody*'
+                required='LuminPackBenchmark_IFooFormatter:__ReadExact.*\(Tier1'
+                ;;
+            esac
+            assembly="$artifacts/jit-$operation.asm"
+            metadata="$artifacts/jit-$operation.log"
+            if ! dotnet "$benchmark" --polymorphism-native-probe "$operation" >"$assembly" 2>"$metadata"; then
+              cat "$metadata"
+              exit 1
+            fi
+            cat "$metadata"
+            if [[ "$operation" == lumin-read ]]; then
+              list_root=$(sed -n 's/^Generated root: .*\(__LuminRoots_[0-9a-f]*\):RootRead; parameter: System.Collections.Generic.List.*/\1/p' "$metadata")
+              if [[ -z "$list_root" ]]; then
+                echo 'The generated polymorphic list reader was not identified.' >&2
+                exit 1
+              fi
+              required="${list_root}:RootRead.*\\(Tier1"
+            fi
+            if ! grep -Eq "$required" "$assembly"; then
+              echo "The optimized $operation target was not captured in $assembly." >&2
+              exit 1
+            fi
+          done
+
       - name: Upload benchmark artifacts
         if: always()
         uses: actions/upload-artifact@v4

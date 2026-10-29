@@ -56,7 +56,7 @@ dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlat
 - The Unity workflow builds and runs Mono and IL2CPP players; it needs Unity license secrets.
 - Benchmarks run only through the manual `run_benchmarks` input and explicitly select the four maintained classes: `SimpleBenchmark`, `SerializeBenchmark`, `JsonBenchmark` and `PolymorphismBenchmark`. They are not a correctness gate.
 - The benchmark matrix uses Linux x64, macOS Intel x64 and Linux ARM64 hosts. It checks the actual process/OS architecture and Intel CPUID vendor before timing, and uploads separate results and host metadata for each host. Compare library ratios within a host; the operating systems and CPUs differ across hosts.
-- Polymorphism disassembly runs on Windows/Linux; the installed BenchmarkDotNet version does not support CoreCLR disassembly on macOS. All four timing and allocation fixtures still run there. Benchmark validation and execution failures fail the job.
+- BenchmarkDotNet polymorphism disassembly runs on Windows/Linux; the installed version does not support CoreCLR disassembly on macOS. Separate, untimed JIT probes capture optimized LuminPack and Nino polymorphism read/write assembly and generated-root metadata on each benchmark host, including macOS. All four timing and allocation fixtures still run there. Benchmark validation, execution or required probe failures fail the job.
 - CI concurrency is scoped by event so a push does not cancel a manually started benchmark run. Registry worker tests launch their adjacent apphost to preserve the test process architecture, including self-contained x86.
 
 ## Benchmarks

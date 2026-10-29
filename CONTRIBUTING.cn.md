@@ -56,7 +56,7 @@ dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlat
 - 推送到 `main`、`refactor` 或创建拉取请求均会触发托管检查。Unity 执行仍需要已配置的许可证或原生运行器；`.github/scripts` 下的辅助脚本随工作流纳入版本控制。
 - 基准测试只能通过手动的 `run_benchmarks` 输入触发，明确限定为现有四类：`SimpleBenchmark`、`SerializeBenchmark`、`JsonBenchmark`、`PolymorphismBenchmark`，不作为正确性门禁。
 - 基准测试矩阵使用 Linux x64、macOS Intel x64 和 Linux ARM64 原生主机。计时前校验实际进程与操作系统架构，以及 Intel 主机的 CPUID 厂商；各主机分别上传结果和环境信息。应在同一主机内比较各库的比值，跨主机的操作系统和 CPU 均有差异。
-- 多态反汇编在 Windows/Linux 上运行；当前 BenchmarkDotNet 版本不支持 macOS 上的 CoreCLR 反汇编，但该平台仍运行全部四类耗时和分配测试。基准验证或执行失败会使任务失败。
+- BenchmarkDotNet 的多态反汇编在 Windows/Linux 上运行；当前版本不支持 macOS 上的 CoreCLR 反汇编。独立的非计时 JIT 探针会在每个基准主机（包括 macOS）采集 LuminPack 和 Nino 多态读写的优化后汇编及生成方法信息。macOS 仍运行全部四类耗时和分配测试。基准验证、执行或必需探针失败会使任务失败。
 - CI 按事件区分并发组，推送不会取消手动启动的基准测试。注册表子进程测试启动测试程序集旁的 apphost，以保持与测试进程一致的架构，包括自包含 x86。
 
 ## 基准测试
