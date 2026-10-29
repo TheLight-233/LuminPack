@@ -12,6 +12,100 @@ namespace LuminPackUnitTest;
 /// <summary>Checks the compact Latin-1 form of UTF-16 length string records and the raw form it falls back to.</summary>
 public sealed class CompactStringRecordTest
 {
+    /// <summary>Checks opt-in variable headers, exact-sized writes, payload guards and immutable reuse.</summary>
+    [Fact]
+    public void VarIntRecordsPreservePayloadsAndReuse()
+    {
+        VerifyVarIntRecords<LuminPackUtf16VarIntOptions>();
+        VerifyVarIntRecords<LuminPackUtf8VarIntOptions>();
+        Assert.Equal(new byte[] { 0 }, WriteVarInt<LuminPackUtf16VarIntOptions>(null));
+        Assert.Equal(new byte[] { 1 }, WriteVarInt<LuminPackUtf16VarIntOptions>(""));
+        Assert.Equal(new byte[] { 4, 97 }, WriteVarInt<LuminPackUtf16VarIntOptions>("a"));
+        Assert.Equal(new byte[] { 3, 0x2D, 0x4E }, WriteVarInt<LuminPackUtf16VarIntOptions>("\u4E2D"));
+        Assert.Equal(new byte[] { 0, 0 }, WriteVarInt<LuminPackUtf8VarIntOptions>(null));
+        Assert.Equal(new byte[] { 1, 1 }, WriteVarInt<LuminPackUtf8VarIntOptions>(""));
+        Assert.Equal(new byte[] { 2, 2, 97 }, WriteVarInt<LuminPackUtf8VarIntOptions>("a"));
+        Assert.Equal(new byte[] { 3, 0, 0, 0, 97 }, LuminPackSerializer.Serialize("a"));
+    }
+
+    /// <summary>Checks noncanonical, truncated, overflowing and inconsistent variable headers before publication.</summary>
+    [Fact]
+    public void VarIntRecordsRejectInvalidHeadersBeforePublication()
+    {
+        foreach (byte[] bytes in new byte[][] { [], [128], [128, 0], [255, 255, 255, 255, 15], [128, 128, 128, 128, 128], [4] })
+        {
+            Assert.ThrowsAny<Exception>(() => ReadVarInt<LuminPackUtf16VarIntOptions>(bytes));
+        }
+        foreach (byte[] bytes in new byte[][] { [0], [0, 1], [1, 0], [2, 1, 97], [2, 3, 97], [2, 2, 255], [2, 2] })
+            Assert.ThrowsAny<Exception>(() => ReadVarInt<LuminPackUtf8VarIntOptions>(bytes));
+        foreach (byte[] bytes in new byte[][] { [128], [128, 0], [4] })
+        {
+            ReadOnlySpan<byte> input = bytes;
+            var reader = new LuminPackReader(ref input);
+            string? current = "previous";
+            bool failed = false;
+            try { reader.Read<LuminPackUtf16VarIntOptions>(ref current); }
+            catch (Exception) { failed = true; }
+            Assert.True(failed);
+            Assert.Equal(0, reader.Position);
+            Assert.Equal("previous", current);
+        }
+    }
+
+    /// <summary>Compares exact sizes and guarded writes across scalar, vector and header boundaries.</summary>
+    /// <typeparam name="TOptions">The variable-length encoding profile.</typeparam>
+    private static void VerifyVarIntRecords<TOptions>() where TOptions : struct, ILuminPackOptions
+    {
+        var texts = new List<string?> { null, "", "a", "\0", "\u00E9", "\u4E2D", "\uD83D\uDE00" };
+        foreach (int length in new[] { 2, 3, 7, 8, 15, 16, 31, 32, 42, 43, 62, 63, 64, 126, 127, 128, 8191, 8192, 16383, 16384 })
+        {
+            texts.Add(new string('a', length));
+            texts.Add(new string('\u4E2D', length));
+        }
+        foreach (string? text in texts)
+        {
+            byte[] bytes = WriteVarInt<TOptions>(text);
+            Assert.Equal(text, ReadVarInt<TOptions>(bytes));
+            ReadOnlySpan<byte> input = bytes;
+            var reader = new LuminPackReader(ref input);
+            Assert.Same(text, reader.Read<TOptions>(text));
+            Assert.Equal(bytes.Length, reader.Position);
+            foreach (int cut in new[] { 0, 1, bytes.Length / 2, bytes.Length - 1 }.Distinct().Where(c => c >= 0 && c < bytes.Length))
+                Assert.ThrowsAny<Exception>(() => ReadVarInt<TOptions>(bytes.AsSpan(0, cut).ToArray()));
+        }
+    }
+
+    /// <summary>Writes into the exact evaluated size and checks bytes on both sides of the destination.</summary>
+    /// <typeparam name="TOptions">The variable-length encoding profile.</typeparam>
+    /// <param name="text">The nullable string.</param>
+    /// <returns>The encoded record.</returns>
+    private static byte[] WriteVarInt<TOptions>(string? text) where TOptions : struct, ILuminPackOptions
+    {
+        int size = 0;
+        var evaluator = new LuminPackEvaluator(ref size);
+        size = evaluator.GetStringLength<TOptions>(ref text);
+        byte[] guarded = Enumerable.Repeat((byte)0xCD, size + 16).ToArray();
+        Span<byte> output = guarded.AsSpan(8, size);
+        var writer = new LuminPackWriter(ref output);
+        writer.Write<TOptions>(text);
+        Assert.Equal(size, writer.Position);
+        Assert.All(guarded.Take(8).Concat(guarded.Skip(8 + size)), b => Assert.Equal((byte)0xCD, b));
+        return output.ToArray();
+    }
+
+    /// <summary>Reads one complete variable-length string record.</summary>
+    /// <typeparam name="TOptions">The variable-length encoding profile.</typeparam>
+    /// <param name="bytes">The record bytes.</param>
+    /// <returns>The decoded nullable string.</returns>
+    private static string? ReadVarInt<TOptions>(byte[] bytes) where TOptions : struct, ILuminPackOptions
+    {
+        ReadOnlySpan<byte> input = bytes;
+        var reader = new LuminPackReader(ref input);
+        string? value = reader.Read<TOptions>((string?)null);
+        Assert.Equal(bytes.Length, reader.Position);
+        return value;
+    }
+
     /// <summary>Returns Latin-1 and non-Latin-1 texts across every short-length kernel and longer vector paths.</summary>
     /// <returns>Texts of lengths 1 to 70, 255, 256, 1000 and 100,000.</returns>
     private static IEnumerable<string> Texts()

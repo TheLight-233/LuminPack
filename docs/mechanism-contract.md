@@ -35,7 +35,7 @@ The history of individual approvals lives in Git. When this document, the code a
 - **Version tolerance** uses named members with UTF-8 metadata, a length table and byte-wise metadata comparison; `LuminPackOldName` keeps the oldest name on write.
 - **Reference tracking** (`CircleReference`) keeps its slot length tables and reference ids.
 - **Unmanaged structs** keep the `StructLayout` contract: `Tagged` (default), `Packed`, `Native`.
-- **Strings** default to UTF-16 length records, with the compact Latin-1 form; UTF-8 and token profiles stay available. Length records keep distinct null and empty headers; token records share the empty terminator.
+- **Strings** default to fixed-width UTF-16 length records, with the compact Latin-1 form; UTF-8 and token profiles stay available. Opt-in `VarInt` recording encodes each existing length header plus one as canonical unsigned base-128, preserving payload encodings and distinct null and empty records. UTF-8 keeps both length fields. Fixed-width defaults and their wire bytes remain unchanged; both endpoints select the same profile. Token records share the empty terminator.
 - **JSON** keeps its envelopes (`$type`/`$value`, `$id`/`$ref`, `Lazy`, multidimensional arrays) and rejects non-finite numbers.
 - **Byte order** is little-endian. No mode performs endian conversion.
 - Changing any wire byte needs explicit approval and updated wire fixtures.

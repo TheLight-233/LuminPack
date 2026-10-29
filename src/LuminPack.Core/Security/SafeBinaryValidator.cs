@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using System.Text;
 using LuminPack.Core;
 using LuminPack.Option;
+using LuminPack.Utility;
 
 namespace LuminPack.Security;
 
@@ -213,13 +214,28 @@ internal static unsafe class SafeBinaryValidator
             ReadOnlySpan<byte> text;
             int characters;
             bool latin1 = false;
-            if ((mode & 1) != 0)
+            bool utf8 = mode is 0 or 1 or 4;
+            bool variable = mode >= 4;
+            if ((mode & 1) != 0 || variable)
             {
-                int header = BinaryPrimitives.ReadInt32LittleEndian(Take(4));
-                int recorded = mode == 1 ? BinaryPrimitives.ReadInt32LittleEndian(Take(4)) : 0;
+                int header, recorded = 0;
+                if (variable)
+                {
+                    int prefix = 0;
+                    var remaining = _input.Slice(Position);
+                    header = LuminPackReader.ReadVarIntHeader(remaining, ref prefix);
+                    if (utf8) recorded = LuminPackReader.ReadVarIntHeader(remaining, ref prefix);
+                    Take(prefix);
+                    if (header == -1 && utf8 && recorded != -1) LuminPackInputPolicy.Invalid("A null string has inconsistent length headers.");
+                }
+                else
+                {
+                    header = BinaryPrimitives.ReadInt32LittleEndian(Take(4));
+                    recorded = mode == 1 ? BinaryPrimitives.ReadInt32LittleEndian(Take(4)) : 0;
+                }
                 if (header == -1) return new SafeInputKey(LuminPackSafeKind.String, 0, 0, null);
                 if (header < 0 || recorded < 0) LuminPackInputPolicy.Invalid("A string length is negative.");
-                if (mode == 3)
+                if (!utf8)
                 {
                     latin1 = (header & 1) != 0;
                     characters = header >> 1;
@@ -252,7 +268,7 @@ internal static unsafe class SafeBinaryValidator
             }
             if (characters > _budget.Limits.MaxStringLength) SafeReadBudget.Fail("string length");
             _budget.Work(text.Length);
-            if (mode >= 2 && !latin1) ValidateUtf16(text);
+            if (!utf8 && !latin1) ValidateUtf16(text);
             if (characters != 0) { _budget.Object(); _budget.Allocate(characters * 4L + 128); }
             if (!key) return default;
             var span = _input.Slice(start, Position - start);
@@ -262,6 +278,8 @@ internal static unsafe class SafeBinaryValidator
                 0 => reader.Read<LuminPackUtf8TokenOptions>((string?)null),
                 1 => reader.Read<LuminPackUtf8LengthOptions>((string?)null),
                 2 => reader.Read<LuminPackUtf16TokenOptions>((string?)null),
+                4 => reader.Read<LuminPackUtf8VarIntOptions>((string?)null),
+                5 => reader.Read<LuminPackUtf16VarIntOptions>((string?)null),
                 _ => reader.Read<LuminPackUtf16LengthOptions>((string?)null)
             };
             return new SafeInputKey(LuminPackSafeKind.String, 0, 0, value);

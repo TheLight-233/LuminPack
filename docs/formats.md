@@ -37,6 +37,8 @@ Length mode, UTF-16: `(int header, payload)`. `-1` is `null`, `0` is `""`. A pos
 
 Length mode, UTF-8: `(int utf8ByteCount, int utf16Length, utf8Bytes)`. `utf16Length` may be `-1` when unknown.
 
+Opt-in `VarInt` mode replaces each length field with canonical unsigned base-128 of `header + 1` (one to five bytes), preserving the payload. Zero is null; one is an empty length. UTF-16 keeps its Latin-1 discriminator before this mapping; UTF-8 writes both counts, using two zero headers for null and two one headers for empty. UTF-8 variable records require an exact nonnegative character count for a non-null string. Both endpoints must select `VarInt`; fixed length remains the default and collection counts stay fixed. Named version records use distinct profile tags 4 (UTF-8 VarInt) and 5 (UTF-16 VarInt), preserving the four existing tags.
+
 Token mode writes a terminated string with no `null` marker; `null` and `""` both read back as `""`.
 
 ### Union

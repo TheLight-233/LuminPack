@@ -19,6 +19,8 @@ namespace LuminPack.Option
         Length,
         /// <summary>Terminate the string payload with an encoding-specific token.</summary>
         Token,
+        /// <summary>Store unsigned base-128 length headers with distinct null and empty records.</summary>
+        VarInt,
     }
 
     /// <summary>Provides reference equality comparer functionality.</summary>

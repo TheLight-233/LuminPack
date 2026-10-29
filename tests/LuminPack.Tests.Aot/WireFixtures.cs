@@ -26,6 +26,8 @@ internal static class WireFixtures
         Put(directory, "int-array", Enumerable.Range(-32, 97).Select(x => x * 17).ToArray());
         Put(directory, "string-list", new List<string> { "alpha", "\u4E2D\u6587", "\uD83D\uDE00", string.Empty });
         Put(directory, "string-null-empty", new List<string> { null!, string.Empty, "x" });
+        PutVarIntList<LuminPackUtf16VarIntOptions>(directory, "string-varint-utf16");
+        PutVarIntList<LuminPackUtf8VarIntOptions>(directory, "string-varint-utf8");
         Put(directory, "short-ascii", Enumerable.Range(4, 13).Select(n => new string('x', n)).ToArray(), Utf8Length);
         Put(directory, "medium-ascii", Enumerable.Range(17, 16).Select(n => new string('x', n)).ToArray(), Utf8Length);
         Put(directory, "short-unicode", new[] { "\u4E2D\u6587", "\u73A9\u5BB6_00001_\uD83D\uDE00", "A\0B\u007fC", "\u00E9clair" }, Utf8Length);
@@ -51,6 +53,8 @@ internal static class WireFixtures
         Check(strings.Count == 4 && strings[0] == "alpha" && strings[1] == "\u4E2D\u6587" && strings[2] == "\uD83D\uDE00" && strings[3] == "", "string-list");
         var nullEmpty = Get<List<string>>(directory, "string-null-empty");
         Check(nullEmpty.Count == 3 && nullEmpty[0] == null && nullEmpty[1] == "" && nullEmpty[2] == "x", "string-null-empty");
+        Check(LuminPackSerializer.Deserialize<List<string?>, LuminPackUtf16VarIntOptions>(File.ReadAllBytes(Path.Combine(directory, "string-varint-utf16.bin"))).SequenceEqual(VarIntStrings()), "string-varint-utf16");
+        Check(LuminPackSerializer.Deserialize<List<string?>, LuminPackUtf8VarIntOptions>(File.ReadAllBytes(Path.Combine(directory, "string-varint-utf8.bin"))).SequenceEqual(VarIntStrings()), "string-varint-utf8");
         Check(Get<string[]>(directory, "short-ascii", Utf8Length)
             .SequenceEqual(Enumerable.Range(4, 13).Select(n => new string('x', n))), "short-ascii");
         Check(Get<string[]>(directory, "medium-ascii", Utf8Length)
@@ -83,6 +87,17 @@ internal static class WireFixtures
         }
         finally { Directory.Delete(temporary, true); }
     }
+
+    /// <summary>Provides null, empty, Latin-1, Unicode and multi-byte header fixture records.</summary>
+    /// <returns>The independently retained variable-header list fixture.</returns>
+    private static List<string?> VarIntStrings() => new() { null, "", "a", "\u00E9", "\u4E2D", "\uD83D\uDE00", new string('a', 64) };
+
+    /// <summary>Writes the opt-in list fixture without changing any established fixed-profile fixture.</summary>
+    /// <typeparam name="TOptions">The selected variable-header encoding.</typeparam>
+    /// <param name="directory">The fixture destination.</param>
+    /// <param name="name">The fixture name.</param>
+    private static void PutVarIntList<TOptions>(string directory, string name) where TOptions : struct, ILuminPackOptions
+        => File.WriteAllBytes(Path.Combine(directory, name + ".bin"), LuminPackSerializer.Serialize<List<string?>, TOptions>(VarIntStrings()));
     /// <summary>Creates queue from the supplied input.</summary>
     /// <returns>The result of the operation.</returns>
     private static Queue<int> CreateQueue()

@@ -350,7 +350,7 @@ public sealed class LuminPackOptionAttribute : System.Attribute
     /// <summary>Gets or sets the binary string encoding, or the JSON document encoding at its root.</summary>
     public LuminPackStringEncoding StringEncoding { get; set; } = LuminPackStringEncoding.UTF16;
 
-    /// <summary>Gets or sets whether binary strings have length prefixes or encoding-specific terminators.</summary>
+    /// <summary>Gets or sets whether binary strings use fixed lengths, variable lengths or encoding-specific terminators.</summary>
     public LuminPackStringRecording StringRecording { get; set; } = LuminPackStringRecording.Length;
 
     /// <summary>Gets or sets the profile's standard-format constant, available to explicit formatted and Custom kernels.</summary>

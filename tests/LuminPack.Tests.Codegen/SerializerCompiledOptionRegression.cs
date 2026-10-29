@@ -38,7 +38,105 @@ internal static partial class SerializerCompiledOptionRegression
         VerifyUnionOptions(parse, references);
         VerifyRegisteredAssemblyDefaults(parse, references);
         VerifyDeclarationConstants(parse, references);
+        VerifyVarIntProfiles(parse, references);
+        VerifyVarIntIncremental(parse, references);
         Console.WriteLine("Passed constrained generic compiled profiles, partial-helper API selection, registered assembly defaults and option diagnostics.");
+    }
+
+    /// <summary>Checks generated variable-length string scopes, lists, Union slots, named versions and bounded reads.</summary>
+    /// <param name="parse">The consuming language and framework symbols.</param>
+    /// <param name="references">The platform and runtime references.</param>
+    private static void VerifyVarIntProfiles(CSharpParseOptions parse, MetadataReference[] references)
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Linq;
+            using LuminPack;
+            using LuminPack.Attribute;
+            using LuminPack.Core;
+            using LuminPack.Option;
+            [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
+            [assembly: LuminPackOption(StringRecording = LuminPackStringRecording.VarInt)]
+            [LuminPackable] public class Model
+            {
+                public List<string> Names = new();
+                [LuminPackOption(StringRecording = LuminPackStringRecording.Length)] public string Legacy = "a";
+                [LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8)] public string Utf8 = "\u4E2D";
+            }
+            [LuminPackable, LuminPackUnion(1, typeof(Case))] public abstract partial class Root { public string Name; }
+            [LuminPackable] public partial class Case : Root { public List<string> Names = new(); }
+            [LuminPackable(GeneratorType.VersionTolerant)] public class Named { public List<string> Names = new(); }
+            [LuminPackable(GeneratorType.CircleReference)] public class Circle { [LuminPackOrder(0)] public string Text; [LuminPackOrder(1)] public Circle Next; }
+            [LuminPackable, LuminPackOption(UntrustedData = true, MaxStringLength = 32)] public class Bounded { public List<string> Names = new(); public Dictionary<string,string> Map = new(); }
+            [LuminPackable, LuminPackOption(UntrustedData = true, MaxStringLength = 32, StringEncoding = LuminPackStringEncoding.UTF8)] public class BoundedUtf8 { public List<string> Names = new(); public Dictionary<string,string> Map = new(); }
+            public static class Entry
+            {
+                public static void Check()
+                {
+                    var list = Enumerable.Repeat("a",16).ToList();
+                    byte[] bytes = LuminPackSerializer.Serialize(list);
+                    if(bytes.Length!=36 || LuminPackSerializer.Sizeof(list)!=36)throw new Exception("Variable list size.");
+                    List<string> copy=null; LuminPackSerializer.Deserialize(bytes,ref copy);
+                    if(!copy.SequenceEqual(list))throw new Exception("Variable list read.");
+                    string original=copy[0]; LuminPackSerializer.Deserialize(bytes,ref copy);
+                    if(!ReferenceEquals(original,copy[0]))throw new Exception("List string reuse.");
+                    bytes=LuminPackSerializer.Serialize<LuminPackUtf8VarIntOptions>(list);
+                    if(bytes.Length!=52 || LuminPackSerializer.Sizeof<List<string>,LuminPackUtf8VarIntOptions>(list)!=52)throw new Exception("UTF-8 variable list size.");
+                    if(!LuminPackSerializer.Deserialize<List<string>,LuminPackUtf8VarIntOptions>(bytes).SequenceEqual(list))throw new Exception("UTF-8 variable list read.");
+                    bytes=LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(list);
+                    if(bytes.Length!=84)throw new Exception("Fixed profile changed.");
+                    var model=new Model{Names=list};bytes=LuminPackSerializer.Serialize(model);
+                    if(LuminPackSerializer.Sizeof(model)!=bytes.Length || LuminPackSerializer.Deserialize<Model>(bytes).Utf8!=model.Utf8)throw new Exception("Member profile.");
+                    Root root=new Case{Name="root",Names=list};bytes=LuminPackSerializer.Serialize(root);
+                    if(((Case)LuminPackSerializer.Deserialize<Root>(bytes)).Names.Count!=16 || LuminPackSerializer.Sizeof(root)!=bytes.Length)throw new Exception("Union profile.");
+                    bytes=LuminPackSerializer.Serialize<LuminPackUtf8VarIntOptions>(root);
+                    if(((Case)LuminPackSerializer.Deserialize<Root,LuminPackUtf8VarIntOptions>(bytes)).Name!="root")throw new Exception("UTF-8 Union profile.");
+                    var named=new Named{Names=list};bytes=LuminPackSerializer.Serialize(named);
+                    if(bytes[2]!=5 || LuminPackSerializer.Sizeof(named)!=bytes.Length || LuminPackSerializer.Deserialize<Named>(bytes).Names.Count!=16)throw new Exception("Named profile.");
+                    bytes=LuminPackSerializer.Serialize<LuminPackUtf8VarIntOptions>(named);
+                    if(bytes[2]!=4 || LuminPackSerializer.Deserialize<Named,LuminPackUtf8VarIntOptions>(bytes).Names.Count!=16)throw new Exception("Named UTF-8 profile.");
+                    var circle=new Circle{Text="circle"};circle.Next=circle;bytes=LuminPackSerializer.Serialize(circle);var restored=LuminPackSerializer.Deserialize<Circle>(bytes);
+                    if(!ReferenceEquals(restored,restored.Next)||restored.Text!="circle")throw new Exception("Reference profile.");
+                    var bounded=new Bounded{Names=list,Map=new Dictionary<string,string>{{"a","b"}}};bytes=LuminPackSerializer.Serialize(bounded);
+                    if(LuminPackSerializer.Deserialize<Bounded>(bytes).Map["a"]!="b")throw new Exception("Bounded profile.");
+                    var boundedUtf8=new BoundedUtf8{Names=new List<string>{null,"","\u4E2D","\uD83D\uDE00"},Map=new Dictionary<string,string>{{"\u4E2D","\u00E9"}}};bytes=LuminPackSerializer.Serialize(boundedUtf8);
+                    if(LuminPackSerializer.Deserialize<BoundedUtf8>(bytes).Map["\u4E2D"]!="\u00E9")throw new Exception("Bounded UTF-8 profile.");
+                    boundedUtf8.Names.Add(new string('a',33));bytes=LuminPackSerializer.Serialize(boundedUtf8);bool rejected=false;try{LuminPackSerializer.Deserialize<BoundedUtf8>(bytes);}catch(Exception){rejected=true;}if(!rejected)throw new Exception("Variable string budget bypassed.");
+                    string json=LuminPackSerializer.SerializeJson(model);
+                    if(LuminPackSerializer.DeserializeJson<Model>(json).Names.Count!=16)throw new Exception("JSON profile.");
+                }
+            }
+            """;
+        foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
+            Execute("CompiledVarInt" + mode, source.Replace("MODE", mode), parse, references);
+    }
+
+    /// <summary>Checks that editing string recording invalidates retained output exactly like a fresh driver.</summary>
+    /// <param name="parse">The consuming language and framework symbols.</param>
+    /// <param name="references">The platform and runtime references.</param>
+    private static void VerifyVarIntIncremental(CSharpParseOptions parse, MetadataReference[] references)
+    {
+        const string source = """
+            using LuminPack; using LuminPack.Attribute; using LuminPack.Option;
+            [assembly: LuminPackOption(StringRecording = LuminPackStringRecording.Length)]
+            [LuminPackable] public class Item { public System.Collections.Generic.List<string> Names = new(); }
+            public static class Entry { public static byte[] Write() => LuminPackSerializer.Serialize(new Item()); }
+            """;
+        var tree = CSharpSyntaxTree.ParseText(source, parse);
+        var input = CSharpCompilation.Create("VarIntIncremental", [tree], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+        GeneratorDriver retained = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
+        retained = retained.RunGenerators(input);
+        foreach (string recording in new[] { "VarInt", "Length" })
+        {
+            var edited = input.ReplaceSyntaxTree(tree, CSharpSyntaxTree.ParseText(source.Replace("Recording.Length", "Recording." + recording), parse));
+            retained = retained.RunGenerators(edited);
+            GeneratorDriver fresh = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse).RunGenerators(edited);
+            string[] actual = retained.GetRunResult().Results.SelectMany(r => r.GeneratedSources).Select(s => s.HintName + "\n" + s.SourceText).Order().ToArray();
+            string[] expected = fresh.GetRunResult().Results.SelectMany(r => r.GeneratedSources).Select(s => s.HintName + "\n" + s.SourceText).Order().ToArray();
+            if (!actual.SequenceEqual(expected)) throw new InvalidOperationException("Retained variable-length profile output differs from fresh generation.");
+        }
     }
 
     /// <summary>Checks assembly-only component declarations and diagnostics for unsupported constants.</summary>

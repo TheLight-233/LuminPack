@@ -295,24 +295,29 @@ public static partial class LuminPackInputPolicy
         }
         else
         {
-            reader.EnsureReadable(start, header);
-            var first = reader.Buffer.Slice(start, header);
-            int length = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(first);
-            if (length == -1)
+            if (default(TOptions).StringRecording == LuminPackStringRecording.VarInt)
+                LuminPackReader.ReadVarIntRecordHeader<TOptions>(reader.Buffer.Slice(start), out header, out bytes, out characters, out latin1);
+            else
+            {
+                reader.EnsureReadable(start, header);
+                var first = reader.Buffer.Slice(start, header);
+                int length = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(first);
+                if (length < -1) Invalid("A string length is negative.");
+                if (utf8)
+                {
+                    bytes = length;
+                    characters = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(first.Slice(4));
+                    if (length != -1 && characters < 0) Invalid("A string character count is negative.");
+                }
+                else { latin1 = (length & 1) != 0; characters = length >> 1; bytes = latin1 ? characters : length; }
+            }
+            if (bytes == -1)
             {
                 reader.Advance(header);
                 if (context.Value?.Nodes[0].Kind == LuminPackSafeKind.Object)
                     context.FieldIndex = ValidateFixedPrefix(ref reader, context.Value, context.FieldIndex + 1, context.Depth);
                 return null;
             }
-            if (length < 0) Invalid("A string length is negative.");
-            if (utf8)
-            {
-                bytes = length;
-                characters = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(first.Slice(4));
-                if (characters < 0) Invalid("A string character count is negative.");
-            }
-            else { latin1 = (length & 1) != 0; characters = length >> 1; bytes = latin1 ? characters : length; }
         }
         reader.EnsureReadable(start + header, checked(bytes + (token ? utf8 ? 1 : 2 : 0)));
         var payload = reader.Buffer.Slice(start + header, bytes);

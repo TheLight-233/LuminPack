@@ -251,7 +251,11 @@ public unsafe ref partial struct LuminPackEvaluator : IDisposable
     public int GetStringLength<TOptions>(scoped ref string? value)
         where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
     {
-        return ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8), (default(TOptions).StringRecording == global::LuminPack.Option.LuminPackStringRecording.Token)) switch
+        bool utf8 = default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8;
+        var recording = default(TOptions).StringRecording;
+        if (recording == global::LuminPack.Option.LuminPackStringRecording.VarInt)
+            return global::LuminPack.Core.LuminPackWriter.VarIntRecordLength<TOptions>(value);
+        return (utf8, recording == global::LuminPack.Option.LuminPackStringRecording.Token) switch
         {
             (true, true) => checked(CalculateStringUtf8(ref value) + 1),
             (true, false) => checked(CalculateStringUtf8(ref value) + sizeof(int) * 2),
@@ -266,7 +270,10 @@ public unsafe ref partial struct LuminPackEvaluator : IDisposable
     public int StringRecordLength<TOptions>()
         where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
     {
-        return (default(TOptions).StringRecording == global::LuminPack.Option.LuminPackStringRecording.Token) ? ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : sizeof(ushort)) : ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? sizeof(int) * 2 : sizeof(int));
+        var recording = default(TOptions).StringRecording;
+        if (recording == global::LuminPack.Option.LuminPackStringRecording.VarInt)
+            return default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 ? 10 : 5;
+        return (recording == global::LuminPack.Option.LuminPackStringRecording.Token) ? ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : sizeof(ushort)) : ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? sizeof(int) * 2 : sizeof(int));
     }
 
     // Calculates the byte payload size for a byte value.

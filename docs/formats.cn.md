@@ -37,6 +37,8 @@
 
 长度模式，UTF-8：`(int utf8ByteCount, int utf16Length, utf8Bytes)`。未知时 `utf16Length` 可以为 `-1`。
 
+可选的 `VarInt` 模式将每个长度字段替换为 `header + 1` 的规范无符号 base-128 编码（1–5 字节），负载不变。零表示 null，一表示空长度。UTF-16 在该映射前保留 Latin-1 标记；UTF-8 写两个长度字段，null 使用两个零头，空字符串使用两个一头。非 null 的 UTF-8 可变长度记录要求精确的非负字符数。读写双方必须选择 `VarInt`；默认仍为固定长度，集合元素数保持固定宽度。具名版本记录使用独立的配置标签 4（UTF-8 VarInt）和 5（UTF-16 VarInt），保留已有四个标签。
+
 Token 模式写以终止符结束的字符串，没有 `null` 标记；`null` 和 `""` 读回来都是 `""`。
 
 ### Union

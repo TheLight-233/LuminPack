@@ -28,7 +28,7 @@ public partial class Message
 | 属性 | 默认值 | 含义 |
 | --- | --- | --- |
 | `StringEncoding` | `UTF16` | 二进制字符串编码，可按成员设置。对 JSON 而言是整份文档的编码，由根类型决定。 |
-| `StringRecording` | `Length` | 带长度前缀的字符串，或 `Token`（以终止符结束；`null` 和 `""` 读回来都是 `""`）。 |
+| `StringRecording` | `Length` | 固定宽度长度头、可选的 `VarInt` 长度头，或 `Token`（以终止符结束；`null` 和 `""` 读回来都是 `""`）。 |
 | `MaxJsonDepth` | `1024` | JSON 嵌套深度上限；小于等于 0 表示不限制。 |
 | `ValidateJsonSyntax` | `false` | 严格 JSON 语法校验。处理外部来源的 JSON 时请开启。 |
 | `StandardFormat` | `"G"` | 传给显式格式化与 `Custom` 核心方法的常量，不会改变内置数值、日期格式。 |
@@ -66,7 +66,28 @@ Message copy = null!;
 LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(bytes, ref copy);
 ```
 
-内置配置：`LuminPackDefaultOptions`（UTF-16、长度记录）、`LuminPackUtf8LengthOptions`、`LuminPackUtf8TokenOptions`、`LuminPackUtf16LengthOptions`、`LuminPackUtf16TokenOptions`。也可以自己定义一个实现 `ILuminPackOptions` 的 `struct`。
+内置配置：`LuminPackDefaultOptions`（UTF-16、固定长度记录）、`LuminPackUtf8LengthOptions`、`LuminPackUtf8TokenOptions`、`LuminPackUtf16LengthOptions`、`LuminPackUtf16TokenOptions`、`LuminPackUtf8VarIntOptions`、`LuminPackUtf16VarIntOptions`。也可以自己定义一个实现 `ILuminPackOptions` 的 `struct`。
+
+## 紧凑长度头
+
+小字符串集合更重视字节数而不是最高编码速度时，可以选择 `VarInt`：
+
+```csharp
+[LuminPackable]
+public partial class Labels
+{
+    [LuminPackOption(StringRecording = LuminPackStringRecording.VarInt)]
+    public List<string> Names { get; set; } = new();
+}
+
+// 或为整次操作选择表示方式：
+byte[] bytes = LuminPackSerializer.Serialize<List<string>, LuminPackUtf16VarIntOptions>(names);
+List<string> copy = LuminPackSerializer.Deserialize<List<string>, LuminPackUtf16VarIntOptions>(bytes);
+```
+
+默认仍为 `Length`：UTF-16 使用 4 字节头，UTF-8 使用 8 字节头。`VarInt` 将每个原有有符号长度头加一，再以规范的无符号 base-128 编码存储，占 1–5 字节。null 映射为零，空字符串映射为一。UTF-16 保留原始 UTF-16 或紧凑 Latin-1 负载及原有最低位标记；UTF-8 保留字节数和字符数两个字段，分别编码，null 和空字符串也保留两个字段。例如，UTF-16 的 `"a"` 为 `04 61`，UTF-8 的 `"a"` 为 `02 02 61`。
+
+包含 16 个单字符 ASCII 字符串的 `List<string>`，使用 UTF-16 `Length` 时共 84 字节，使用 UTF-16 `VarInt` 时共 36 字节，均包含不变的 4 字节集合元素数。可变长度头增加了分支和长度计算，可能降低吞吐量。读写双方必须选择相同表示，不能混用或自动识别。JSON 和集合元素数的头部不受影响。`StringRecordLength<TOptions>()` 对 `VarInt` 返回保守的头部上界（5 或 10 字节）；精确记录大小请使用 `Sizeof` 或 `GetStringLength<TOptions>`。
 
 ## 字符串转码
 

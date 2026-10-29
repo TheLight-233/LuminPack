@@ -79,6 +79,36 @@ public readonly struct LuminPackUtf16TokenOptions : ILuminPackOptions
     public bool ValidateJsonSyntax => false;
 }
 
+/// <summary>Provides opt-in base-128 UTF-8 length headers with distinct null and empty records.</summary>
+public readonly struct LuminPackUtf8VarIntOptions : ILuminPackOptions
+{
+    /// <inheritdoc/>
+    public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF8;
+    /// <inheritdoc/>
+    public LuminPackStringRecording StringRecording => LuminPackStringRecording.VarInt;
+    /// <inheritdoc/>
+    public StandardFormat StandardFormat => new('G');
+    /// <inheritdoc/>
+    public int MaxJsonDepth => 1024;
+    /// <inheritdoc/>
+    public bool ValidateJsonSyntax => false;
+}
+
+/// <summary>Provides opt-in base-128 UTF-16 length headers while retaining compact Latin-1 payloads.</summary>
+public readonly struct LuminPackUtf16VarIntOptions : ILuminPackOptions
+{
+    /// <inheritdoc/>
+    public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF16;
+    /// <inheritdoc/>
+    public LuminPackStringRecording StringRecording => LuminPackStringRecording.VarInt;
+    /// <inheritdoc/>
+    public StandardFormat StandardFormat => new('G');
+    /// <inheritdoc/>
+    public int MaxJsonDepth => 1024;
+    /// <inheritdoc/>
+    public bool ValidateJsonSyntax => false;
+}
+
 /// <summary>Supplies a stateless standard-format constant.</summary>
 public interface ILuminPackFormatOptions
 {

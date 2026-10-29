@@ -759,7 +759,7 @@ namespace LuminPack.Core
 
         #region String
 
-        /// <summary>Returns the size of the string header used by the current recording mode.</summary>
+        /// <summary>Returns the fixed framing width or the variable-length header upper bound of the current mode.</summary>
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int StringRecordLength()
@@ -890,7 +890,10 @@ namespace LuminPack.Core
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
             // UTF-16 token mode uses a two-byte 0x0000 terminator because individual zero bytes are common within code units.
-            return (default(TOptions).StringRecording == global::LuminPack.Option.LuminPackStringRecording.Token) ? ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2) : (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 8 : 4;
+            var recording = default(TOptions).StringRecording;
+            if (recording == LuminPackStringRecording.VarInt)
+                return default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 ? 10 : 5;
+            return (recording == LuminPackStringRecording.Token) ? ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 1 : 2) : (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8) ? 8 : 4;
         }
 
         /// <summary>
@@ -1026,7 +1029,18 @@ namespace LuminPack.Core
                 return;
             }
 
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16 && default(TOptions).StringRecording == LuminPackStringRecording.Length)
+            bool utf16Length = false;
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16)
+            {
+                var recording = default(TOptions).StringRecording;
+                if (recording == LuminPackStringRecording.VarInt)
+                {
+                    WriteVarIntString<TOptions>(value, false);
+                    return;
+                }
+                utf16Length = recording == LuminPackStringRecording.Length;
+            }
+            if (utf16Length)
             {
                 // Room for the raw UTF-16 form; Latin-1 text then takes one byte per character. A string holds at
                 // most 0x3FFFFFDF characters, so the payload and its header always fit in int.
@@ -1052,7 +1066,8 @@ namespace LuminPack.Core
                 return;
             }
 
-            int length = WriteEncodedString<TOptions>(value) + StringRecordLength<TOptions>();
+            int length = WriteEncodedString<TOptions>(value, out bool completeRecord);
+            if (!completeRecord) length += StringRecordLength<TOptions>();
             if (value is null)
                 Advance(length);
             else
@@ -1293,7 +1308,10 @@ namespace LuminPack.Core
         {
             int length = value is null ? 0 : value.Length;
             bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
-            if (default(TOptions).StringRecording == LuminPackStringRecording.Token)
+            var recording = default(TOptions).StringRecording;
+            if (recording == LuminPackStringRecording.VarInt)
+                return utf8 ? checked(length * 3 + 10) : checked(length * sizeof(char) + 5);
+            if (recording == LuminPackStringRecording.Token)
                 return utf8 ? checked(length * 3 + 1) : length * sizeof(char) + sizeof(char);
             return utf8 ? checked(length * 3 + sizeof(int) * 2) : length * sizeof(char) + sizeof(int);
         }
@@ -1777,7 +1795,13 @@ namespace LuminPack.Core
             where TOptions : struct, ILuminPackOptions
         {
             bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
-            bool token = default(TOptions).StringRecording == LuminPackStringRecording.Token;
+            var recording = default(TOptions).StringRecording;
+            if (recording == LuminPackStringRecording.VarInt)
+            {
+                WriteVarIntString<TOptions>(value, true);
+                return;
+            }
+            bool token = recording == LuminPackStringRecording.Token;
             int header = token ? 0 : utf8 ? 8 : 4;
             int bytes = 0;
             int utf16Header = 0;
@@ -1825,14 +1849,138 @@ namespace LuminPack.Core
         /// <summary>Selects the non-default encoding kernel using a stateless profile.</summary>
         /// <typeparam name = "TOptions">The compile-time encoding and framing profile.</typeparam>
         /// <param name = "value">The string payload.</param>
-        /// <returns>The encoded payload width excluding its framing.</returns>
+        /// <param name="completeRecord">Whether the returned width includes variable-length framing.</param>
+        /// <returns>The encoded payload width, including framing only when the complete-record flag is set.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private int WriteEncodedString<TOptions>(string? value)
+        private int WriteEncodedString<TOptions>(string? value, out bool completeRecord)
             where TOptions : struct, ILuminPackOptions
         {
+            completeRecord = false;
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
-                return default(TOptions).StringRecording == LuminPackStringRecording.Length ? WriteUtf8WithLength(Position, value) : WriteUtf8WithToken<TOptions>(Position, value);
+            {
+                var recording = default(TOptions).StringRecording;
+                if (recording == LuminPackStringRecording.VarInt)
+                {
+                    completeRecord = true;
+                    return WriteVarIntStringBytes<TOptions>(value, false);
+                }
+                return recording == LuminPackStringRecording.Length ? WriteUtf8WithLength(Position, value) : WriteUtf8WithToken<TOptions>(Position, value);
+            }
             return WriteUtf16WithToken<TOptions>(Position, value);
+        }
+
+        /// <summary>Writes an opt-in variable-length string record while retaining capacity ownership.</summary>
+        /// <typeparam name="TOptions">The stateless string profile.</typeparam>
+        /// <param name="value">The nullable string.</param>
+        /// <param name="capacityReserved">Whether the enclosing record has reserved the raw upper bound.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteVarIntString<TOptions>(string? value, bool capacityReserved) where TOptions : struct, ILuminPackOptions
+            => AdvanceProven(WriteVarIntStringBytes<TOptions>(value, capacityReserved));
+
+        /// <summary>Writes an exact variable-length record without advancing the owning cursor.</summary>
+        /// <typeparam name="TOptions">The stateless string profile.</typeparam>
+        /// <param name="value">The nullable string.</param>
+        /// <param name="capacityReserved">Whether the enclosing record has reserved the raw upper bound.</param>
+        /// <returns>The complete written width.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private int WriteVarIntStringBytes<TOptions>(string? value, bool capacityReserved) where TOptions : struct, ILuminPackOptions
+        {
+            int length = VarIntRecordLength<TOptions>(value, out int payload);
+            if (!capacityReserved && !FitsRecord(length)) EnsureAdditionalCapacity(length);
+            WriteVarIntRecord<TOptions>(Buffer.Slice(Position, length), value, payload);
+            return length;
+        }
+
+        /// <summary>Returns the binary profile tag without changing the four established tags.</summary>
+        /// <typeparam name="TOptions">The stateless string profile.</typeparam>
+        /// <returns>The distinct binary profile tag.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static byte BinaryProfile<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            var encoding = default(TOptions).StringEncoding;
+            var recording = default(TOptions).StringRecording;
+            return (byte)(recording == LuminPackStringRecording.VarInt ? 4 + (int)encoding : ((int)encoding << 1) | (int)recording);
+        }
+
+
+        /// <summary>Returns the unsigned base-128 width of a header plus one.</summary>
+        /// <param name="header">The length header, or minus one for null.</param>
+        /// <returns>One through five bytes.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static int VarIntHeaderLength(int header)
+        {
+            uint value = unchecked((uint)header + 1);
+            return value < 128 ? 1 : value < 16384 ? 2 : value < 2097152 ? 3 : value < 268435456 ? 4 : 5;
+        }
+
+
+        /// <summary>Writes a header into its caller-proven complete range.</summary>
+        /// <param name="destination">Room for the complete header.</param>
+        /// <param name="header">The length header, or minus one for null.</param>
+        /// <returns>The written byte count.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static int WriteVarIntHeader(Span<byte> destination, int header)
+        {
+            uint value = unchecked((uint)header + 1);
+            int offset = 0;
+            while (value >= 128) { destination[offset++] = (byte)(value | 128); value >>= 7; }
+            destination[offset++] = (byte)value;
+            return offset;
+        }
+
+
+        /// <summary>Calculates exact opt-in framing and payload sizes without changing the text representation.</summary>
+        /// <typeparam name="TOptions">The stateless encoding profile.</typeparam>
+        /// <param name="value">The nullable string.</param>
+        /// <returns>The complete record byte count.</returns>
+        internal static int VarIntRecordLength<TOptions>(string? value) where TOptions : struct, ILuminPackOptions
+            => VarIntRecordLength<TOptions>(value, out _);
+
+
+        /// <summary>Calculates framing once and retains the payload width for the following write.</summary>
+        /// <typeparam name="TOptions">The stateless encoding profile.</typeparam>
+        /// <param name="value">The nullable string.</param>
+        /// <param name="payload">Receives the payload byte count.</param>
+        /// <returns>The complete record byte count.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static int VarIntRecordLength<TOptions>(string? value, out int payload) where TOptions : struct, ILuminPackOptions
+        {
+            bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+            payload = 0;
+            if (string.IsNullOrEmpty(value)) return utf8 ? 2 : 1;
+            payload = utf8 ? LuminPackMarshal.CalculateStringByteCount(value) : StringSerializer.Utf16RecordPayloadLength(value);
+            int header = utf8 ? payload : payload == value.Length ? StringSerializer.Latin1Header(value.Length) : payload;
+            return checked(payload + VarIntHeaderLength(header) + (utf8 ? VarIntHeaderLength(value.Length) : 0));
+        }
+
+
+        /// <summary>Writes an exact-sized opt-in record through the established bounded text kernels.</summary>
+        /// <typeparam name="TOptions">The stateless encoding profile.</typeparam>
+        /// <param name="destination">The complete exact-sized output range.</param>
+        /// <param name="value">The nullable string.</param>
+        /// <param name="payload">The exact payload width established by the size pass.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static void WriteVarIntRecord<TOptions>(Span<byte> destination, string? value, int payload) where TOptions : struct, ILuminPackOptions
+        {
+            bool utf8 = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8;
+            if (string.IsNullOrEmpty(value))
+            {
+                int header = value is null ? -1 : 0;
+                int offset = WriteVarIntHeader(destination, header);
+                if (utf8) WriteVarIntHeader(destination.Slice(offset), header);
+                return;
+            }
+            bool latin1 = !utf8 && payload == value.Length;
+            int prefix = WriteVarIntHeader(destination, latin1 ? StringSerializer.Latin1Header(value.Length) : payload);
+            if (utf8) prefix += WriteVarIntHeader(destination.Slice(prefix), value.Length);
+            ref byte target = ref MemoryMarshal.GetReference(destination.Slice(prefix));
+            if (utf8)
+            {
+                var status = StringSerializer.Serialize<LuminPackUtf8LengthOptions>(value, destination.Slice(prefix), out _, out int written, replaceInvalidSequences: false);
+                if (status != OperationStatus.Done || written != payload) LuminPackExceptionHelper.ThrowFailedEncoding(status);
+            }
+            else if (latin1) StringSerializer.TryNarrowLatin1(ref MemoryMarshal.GetReference(value.AsSpan()), ref target, value.Length);
+            else StringSerializer.SerializeUtf16(ref target, ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), (uint)payload);
         }
 
         #endregion
@@ -2193,7 +2341,7 @@ namespace LuminPack.Core
         public void WriteVersionHeader<TOptions>(byte count)
             where TOptions : struct, ILuminPackOptions
         {
-            byte profile = (byte)(((int)default(TOptions).StringEncoding << 1) | (int)default(TOptions).StringRecording);
+            byte profile = BinaryProfile<TOptions>();
             EnsureAdditionalCapacity(4);
             ref byte __fixed23Reference = ref Current;
             int __fixed23Length = 0;

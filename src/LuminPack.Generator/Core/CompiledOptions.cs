@@ -20,11 +20,11 @@ internal sealed class CompiledOptions
     internal readonly bool IsDeclared;
     internal readonly CompiledInputPolicy Input;
     internal string ScopeTypeName => IsDeclared ? "global::LuminPack.Option.LuminPackFixedOptions<" + TypeName + ">" : TypeName;
-    internal int Mode => (Encoding == 1 ? 2 : 0) | (Recording == 0 ? 1 : 0);
-    internal int HeaderLength => Recording == 1 ? Encoding == 0 ? 1 : 2 : Encoding == 0 ? 8 : 4;
+    internal int Mode => Recording == 2 ? 4 + Encoding : (Encoding == 1 ? 2 : 0) | (Recording == 0 ? 1 : 0);
+    internal int HeaderLength => Recording == 2 ? Encoding == 0 ? 10 : 5 : Recording == 1 ? Encoding == 0 ? 1 : 2 : Encoding == 0 ? 8 : 4;
     internal string Identity => "E" + Encoding + "R" + Recording + "F" + ((int)Format).ToString(CultureInfo.InvariantCulture) +
         "P" + Precision + "D" + (Depth < 0 ? "N" + -(long)Depth : Depth.ToString(CultureInfo.InvariantCulture)) + "V" + (Strict ? "1" : "0") + Input.Identity;
-    private string StringsType => "global::LuminPack.Option." + (Mode == 1 ? "LuminPackUtf8LengthOptions" :
+    private string StringsType => "global::LuminPack.Option." + (Recording == 2 ? Encoding == 0 ? "LuminPackUtf8VarIntOptions" : "LuminPackUtf16VarIntOptions" : Mode == 1 ? "LuminPackUtf8LengthOptions" :
         Mode == 0 ? "LuminPackUtf8TokenOptions" : Mode == 2 ? "LuminPackUtf16TokenOptions" : "LuminPackUtf16LengthOptions");
     private string FormatIdentity => "__LuminPackFormat_" + ((int)Format).ToString(CultureInfo.InvariantCulture) + "_" + Precision;
     private string DepthIdentity => "__LuminPackDepth_" + (Depth < 0 ? "N" + -(long)Depth : Depth.ToString(CultureInfo.InvariantCulture));
@@ -44,6 +44,9 @@ internal sealed class CompiledOptions
         for (int encoding = 0; encoding != 2; encoding++)
             for (int recording = 0; recording != (json ? 1 : 2); recording++)
                 yield return new CompiledOptions(encoding, recording, 'G', byte.MaxValue, 1024, false);
+        if (!json)
+            for (int encoding = 0; encoding != 2; encoding++)
+                yield return new CompiledOptions(encoding, 2, 'G', byte.MaxValue, 1024, false);
     }
 
     /// <summary>Discards read-only validation and formatting constants from a Union write-slot identity.</summary>
@@ -54,7 +57,7 @@ internal sealed class CompiledOptions
 
     /// <summary>Captures one immutable option combination.</summary>
     /// <param name="encoding">Zero for UTF-8 or one for UTF-16.</param>
-    /// <param name="recording">Zero for lengths or one for tokens.</param>
+    /// <param name="recording">Zero for fixed lengths, one for tokens or two for variable lengths.</param>
     /// <param name="format">The standard-format symbol.</param>
     /// <param name="precision">The standard-format precision or 255 for the default.</param>
     /// <param name="depth">The complete JSON document depth bound.</param>
@@ -109,7 +112,7 @@ internal sealed class CompiledOptions
                 if (argument.Key is "StringEncoding" or "StringRecording")
                 {
                     int value = Convert.ToInt32(argument.Value.Value, CultureInfo.InvariantCulture);
-                    if (value is not (0 or 1)) error = "the value must be one of the declared encoding or recording enum members.";
+                    if (value < 0 || value > (argument.Key == "StringRecording" ? 2 : 1)) error = "the value must be one of the declared encoding or recording enum members.";
                 }
                 if (argument.Key == "StandardFormat")
                 {

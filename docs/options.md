@@ -28,7 +28,7 @@ public partial class Message
 | Property | Default | Meaning |
 | --- | --- | --- |
 | `StringEncoding` | `UTF16` | Binary string encoding, per member. For JSON, the encoding of the whole document, chosen by its root type. |
-| `StringRecording` | `Length` | Length-prefixed strings, or `Token` (terminated; `null` and `""` both read back as `""`). |
+| `StringRecording` | `Length` | Fixed-width length headers, opt-in `VarInt` headers, or `Token` (terminated; `null` and `""` both read back as `""`). |
 | `MaxJsonDepth` | `1024` | JSON nesting limit; zero or less disables it. |
 | `ValidateJsonSyntax` | `false` | Strict JSON grammar checking. Turn it on for JSON from outside sources. |
 | `StandardFormat` | `"G"` | A constant handed to explicit formatted and `Custom` kernels. It does not change built-in number or date formats. |
@@ -66,7 +66,28 @@ Message copy = null!;
 LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(bytes, ref copy);
 ```
 
-Built-in profiles: `LuminPackDefaultOptions` (UTF-16, length), `LuminPackUtf8LengthOptions`, `LuminPackUtf8TokenOptions`, `LuminPackUtf16LengthOptions`, `LuminPackUtf16TokenOptions`. You can define your own as a `struct` implementing `ILuminPackOptions`.
+Built-in profiles: `LuminPackDefaultOptions` (UTF-16, fixed length), `LuminPackUtf8LengthOptions`, `LuminPackUtf8TokenOptions`, `LuminPackUtf16LengthOptions`, `LuminPackUtf16TokenOptions`, `LuminPackUtf8VarIntOptions`, `LuminPackUtf16VarIntOptions`. You can define your own as a `struct` implementing `ILuminPackOptions`.
+
+## Compact length headers
+
+Select `VarInt` for collections of small strings when reducing bytes matters more than peak encoding speed:
+
+```csharp
+[LuminPackable]
+public partial class Labels
+{
+    [LuminPackOption(StringRecording = LuminPackStringRecording.VarInt)]
+    public List<string> Names { get; set; } = new();
+}
+
+// Or select the representation for the complete operation:
+byte[] bytes = LuminPackSerializer.Serialize<List<string>, LuminPackUtf16VarIntOptions>(names);
+List<string> copy = LuminPackSerializer.Deserialize<List<string>, LuminPackUtf16VarIntOptions>(bytes);
+```
+
+The default remains `Length`: four header bytes for UTF-16 and eight for UTF-8. `VarInt` encodes each existing signed length header plus one as canonical unsigned base-128 (one to five bytes). Null maps to zero and empty maps to one. UTF-16 retains the raw UTF-16 or compact Latin-1 payload and its existing low-bit discriminator; UTF-8 retains both its byte and character counts, each encoded separately, including for null and empty strings. For example, UTF-16 `"a"` is `04 61`; UTF-8 `"a"` is `02 02 61`.
+
+A `List<string>` of sixteen one-character ASCII strings takes 84 bytes with UTF-16 `Length` and 36 with UTF-16 `VarInt`, including its unchanged four-byte collection count. Variable headers add branches and length calculations, so they can reduce throughput. Both ends must select the same representation; these formats are not interchangeable or auto-detected. JSON and collection count headers are unaffected. `StringRecordLength<TOptions>()` returns a conservative header bound for `VarInt` (five or ten bytes); use `Sizeof` or `GetStringLength<TOptions>` for an exact record size.
 
 ## String transcoding
 

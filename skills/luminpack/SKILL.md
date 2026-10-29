@@ -72,6 +72,8 @@ int size = LuminPackSerializer.Sizeof(person);
 
 ## Pitfalls
 
+- For collections of small strings, opt in with `[LuminPackOption(StringRecording = LuminPackStringRecording.VarInt)]` on the member/type/assembly, or use `LuminPackUtf16VarIntOptions` / `LuminPackUtf8VarIntOptions` as the operation profile. Both endpoints must match. This saves header bytes at a possible throughput cost; fixed `Length` remains the default. UTF-16 retains compact Latin-1, UTF-8 retains both length counts, and null stays distinct from empty. Collection count headers and JSON do not change. See [options](../../docs/options.md).
+
 - Don't pass `null!` targets expecting reuse; reuse needs an existing instance.
 - Don't rely on reflection- or `typeof`-driven serialization under `Light`/`Minimal`; those modes only keep statically reachable types.
 - Don't use `$type`, `$value`, `$id`, `$ref` as JSON member names.
