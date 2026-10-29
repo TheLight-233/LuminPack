@@ -35,8 +35,10 @@ internal static class LuminPackSerializerDocumentation
     internal static string Enhance(CompilationUnitSyntax root, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata)
     {
         var completed = (CompilationUnitSyntax)GeneratedSourceDocumentation.CompleteRoot(root);
-        var tree = CSharpSyntaxTree.Create(completed, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.Parse));
-        return Enhance(tree.GetRoot(), tree.GetRoot().ToFullString(), types, compilation, metadata);
+        string source = completed.ToFullString();
+        if (!completed.DescendantNodes(node => node is not BaseMethodDeclarationSyntax)
+            .OfType<BaseMethodDeclarationSyntax>().Any(GeneratedSourceDocumentation.IsUserApi)) return source;
+        return Enhance(completed, source, types, compilation, metadata);
     }
 
     /// <summary>Applies contract documentation at method trivia boundaries.</summary>
@@ -54,7 +56,7 @@ internal static class LuminPackSerializerDocumentation
 
         foreach (var method in root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<MethodDeclarationSyntax>())
         {
-            if (!method.Modifiers.Any(SyntaxKind.PublicKeyword) && !method.Modifiers.Any(SyntaxKind.InternalKeyword)) continue;
+            if (!GeneratedSourceDocumentation.IsUserApi(method)) continue;
             string name = method.Identifier.ValueText;
             if (!(name.StartsWith("Serialize", StringComparison.Ordinal) || name.StartsWith("Deserialize", StringComparison.Ordinal) || name == "Sizeof")) continue;
 
@@ -114,7 +116,7 @@ internal static class LuminPackSerializerDocumentation
 
             AddOverloadUsage(remarks, method);
             string indentation = GeneratedSourceDocumentation.GetIndentation(method, source, out _);
-            string content = string.Join(Environment.NewLine + indentation + "/// ", documentation.Nodes().Select(node => node.ToString()).SelectMany(text => text.Replace("\r\n", "\n").Split('\n')));
+            string content = string.Join(Environment.NewLine + indentation + "/// ", documentation.Nodes().Select(node => node.ToString(SaveOptions.DisableFormatting)).SelectMany(text => text.Replace("\r\n", "\n").Split('\n')));
             methods.Add(method, GeneratedSourceDocumentation.WithDocumentation(method, "/// " + content + Environment.NewLine, indentation));
         }
         return root.ReplaceNodes(methods.Keys, (method, _) => methods[method]).ToFullString();

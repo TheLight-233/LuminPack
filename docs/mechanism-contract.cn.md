@@ -108,7 +108,7 @@
 - README、AGENTS、CONTRIBUTING 以及 `docs` 下的每篇文档都有英文版（`name.md`）和中文版（`name.cn.md`）；两个版本一起修改。
 - README 只放介绍、安装和使用。发布说明、版本历史、迁移通知和实验报告既不放 README 也不放 `docs`，这些记录不纳入版本控制。
 - 不要仅凭调用点搜索就删除外部可用或生成代码使用的成员。
-- 每个方法都要有 XML 文档（由 `tools/LuminPack.RepositoryChecks` 检查）。
+- 维护的源码中每个方法都要有 XML 文档（由 `tools/LuminPack.RepositoryChecks` 检查）。生成的 XML 仅用于可直接调用的 `LuminPackSerializer` API 和门面类型。执行根方法、内部状态转发方法、布局辅助方法、派发槽及私有辅助代码不生成 XML，但保留其声明和实现。生成文件对这些有意省略文档的实现细节屏蔽 CS1591。
 
 ## 7. 验证
 

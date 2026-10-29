@@ -131,7 +131,7 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
                     var optionDeclarations = optionProfiles.Values.SelectMany(profile => profile.Declarations()).GroupBy(pair => pair.Key, StringComparer.Ordinal)
                         .OrderBy(group => group.Key, StringComparer.Ordinal).Select(group => group.First().Value).ToArray();
                     if (optionDeclarations.Length != 0)
-                        spc.AddSource("LuminPackOptions.g.cs", string.Join(Environment.NewLine, optionDeclarations));
+                        spc.AddSource("LuminPackOptions.g.cs", GeneratedSourceDocumentation.Complete(string.Join(Environment.NewLine, optionDeclarations), meta.ParseOptions));
 
                     foreach (var formatter in LuminPackExtensionGenerator.GenerateInvocationFiles(compilation, meta, reachability, invocationSupport))
                         spc.AddSource(formatter.Name, formatter.Text);

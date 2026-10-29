@@ -9,17 +9,20 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator;
 
-/// <summary>Supplies documentation for generated methods without rewriting their executable tokens.</summary>
+/// <summary>Documents caller-facing serializer APIs without retaining XML on generated implementation details.</summary>
 internal static class GeneratedSourceDocumentation
 {
-    /// <summary>Completes generated XML comments while retaining existing member descriptions.</summary>
+    /// <summary>Completes serializer API comments and removes internal implementation documentation.</summary>
     /// <param name="source">The complete source file to document.</param>
     /// <param name="options">The consuming compilation's language and conditional compilation options.</param>
-    /// <returns>The source with documentation inserted before undocumented method declarations.</returns>
+    /// <returns>The unchanged executable source with documentation limited to serializer APIs.</returns>
     internal static string Complete(string source, CSharpParseOptions options)
     {
-        var root = CSharpSyntaxTree.ParseText(source, options.WithDocumentationMode(DocumentationMode.Parse)).GetRoot();
-        return CompleteRoot(root).ToFullString();
+        var root = CSharpSyntaxTree.ParseText(source, options.WithDocumentationMode(DocumentationMode.None)).GetRoot();
+        if (root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<ClassDeclarationSyntax>()
+            .Any(type => type.Identifier.ValueText == "LuminPackSerializer" && type.Parent is BaseNamespaceDeclarationSyntax))
+            root = CSharpSyntaxTree.ParseText(source, options.WithDocumentationMode(DocumentationMode.Parse)).GetRoot();
+        return "#pragma warning disable CS1591" + Environment.NewLine + CompleteRoot(root).ToFullString();
     }
 
     /// <summary>Completes method documentation directly on an already parsed generated tree.</summary>
@@ -27,9 +30,14 @@ internal static class GeneratedSourceDocumentation
     /// <returns>The same executable syntax with missing XML trivia inserted.</returns>
     internal static SyntaxNode CompleteRoot(SyntaxNode root)
     {
+        var removed = root.DescendantTrivia().Where(trivia => IsDocumentation(trivia) && !KeepDocumentation(trivia)).ToArray();
+        if (removed.Length != 0) root = root.ReplaceTrivia(removed, static (_, _) => default);
+        var apis = root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax)
+            .OfType<BaseMethodDeclarationSyntax>().Where(IsUserApi).ToArray();
+        if (apis.Length == 0) return root;
         string source = root.ToFullString();
         var methods = new Dictionary<BaseMethodDeclarationSyntax, BaseMethodDeclarationSyntax>();
-        foreach (var method in root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<BaseMethodDeclarationSyntax>())
+        foreach (var method in apis)
         {
             var existing = method.GetLeadingTrivia().Where(IsDocumentation).ToArray();
             var elements = existing.Select(trivia => trivia.GetStructure()).OfType<DocumentationCommentTriviaSyntax>()
@@ -99,11 +107,43 @@ internal static class GeneratedSourceDocumentation
         return new DocumentationInserter(methods).Visit(root);
     }
 
+    /// <summary>Recognizes APIs called directly on the generated serializer facade.</summary>
+    /// <param name="method">A generated declaration before documentation is emitted.</param>
+    /// <returns>Whether caller-facing documentation belongs on the declaration.</returns>
+    internal static bool IsUserApi(BaseMethodDeclarationSyntax method)
+    {
+        if (method is not MethodDeclarationSyntax declaration ||
+            method.Parent is not ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer", Parent: BaseNamespaceDeclarationSyntax }) return false;
+        if (method.Modifiers.Any(SyntaxKind.PublicKeyword)) return true;
+        if (!method.Modifiers.Any(SyntaxKind.InternalKeyword)) return false;
+        // Non-public payloads still expose convenience overloads to their consuming assembly.
+        // Internal state forwarders and Union case entries are implementation details.
+        string name = declaration.Identifier.ValueText;
+        return (name is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "Sizeof" or "SerializeAsync" or "DeserializeAsync") &&
+            declaration.ParameterList.Parameters.FirstOrDefault()?.Identifier.ValueText is not ("writer" or "reader" or "evaluator" or "state");
+    }
+
+    /// <summary>Retains only leading API comments and the serializer's caller-facing type description.</summary>
+    /// <param name="trivia">An XML comment in the completed generated contribution.</param>
+    /// <returns>Whether the comment describes an API or its facade type.</returns>
+    private static bool KeepDocumentation(SyntaxTrivia trivia)
+    {
+        for (var node = trivia.Token.Parent; node != null; node = node.Parent)
+        {
+            if (node is LocalFunctionStatementSyntax) return false;
+            if (node is BaseMethodDeclarationSyntax method) return trivia.Span.End <= method.SpanStart && IsUserApi(method);
+            if (node is MemberDeclarationSyntax member)
+                return member is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer", Parent: BaseNamespaceDeclarationSyntax };
+        }
+        return false;
+    }
+
     /// <summary>Recognizes structured XML comments without treating ordinary comments as documentation.</summary>
     /// <param name="trivia">The leading trivia attached to a generated declaration.</param>
     /// <returns>Whether the trivia contains an XML documentation comment.</returns>
     private static bool IsDocumentation(SyntaxTrivia trivia) => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia) ||
-        trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia);
+        trivia.IsKind(SyntaxKind.MultiLineDocumentationCommentTrivia) ||
+        trivia.IsKind(SyntaxKind.SingleLineCommentTrivia) && trivia.ToString().StartsWith("///", StringComparison.Ordinal);
 
     /// <summary>Uses the declaration line rather than a detached attribute's trivia to recover indentation.</summary>
     /// <param name="method">The generated declaration.</param>

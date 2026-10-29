@@ -71,7 +71,7 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter *Simp
 
 - 遵循 `.editorconfig`：4 空格缩进，UTF-8。
 - 代码、注释、XML 文档、诊断、测试和维护文档使用英文。README 和 `*.cn.md` 中文版是例外。测试中的多语言字符串用 Unicode 转义书写。
-- 每个方法、构造函数、运算符和转换都要有 XML 文档，包括摘要、参数、类型参数和返回值。注释写在特性之前。
+- 维护的源码中每个方法、构造函数、运算符和转换都要有 XML 文档，包括摘要、参数、类型参数和返回值。注释写在特性之前。生成代码仅为可直接调用的 `LuminPackSerializer` API 和门面类型生成文档；内部根方法、转发方法及辅助声明省略 XML，并屏蔽 CS1591。
 - emitter 分文件存放；大型生成器按职责拆分为 partial 文件，保持类型和成员名称不变。
 - 通过 `LuminPackExceptionHelper` 抛出异常，保留异常类型、参数名和清理逻辑。需要保留原始异常身份时使用 `Rethrow`。
 - 修改名称、成员顺序、枚举值、null 标记、字符串模式、帧格式或存储视图都可能破坏已持久化的数据。本仓库中没有调用点的公共成员仍可能被使用者或生成代码使用。

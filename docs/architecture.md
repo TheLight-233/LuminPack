@@ -91,7 +91,7 @@ Type discovery filters declarations without attributes before semantic binding a
 
 ### Documentation of generated code
 
-`GeneratedSourceDocumentation` and `LuminPackSerializerDocumentation` add XML documentation to generated members, derived from the same model analysis: type, member order and filters, CLR layout versus wire layout, buffer semantics and return units.
+`GeneratedSourceDocumentation` and `LuminPackSerializerDocumentation` add compact XML documentation only to directly callable `LuminPackSerializer` APIs and the facade type. API comments describe the same analyzed type, member order and filters, CLR versus wire layout, buffer semantics and return units. Internal state forwarders, execution roots, Union slots, layout helpers and private facade adapters omit XML; their executable code is unchanged. CS1591 is suppressed in generated files so enabling documentation warnings does not require XML on these implementation details.
 
 ## Tests
 

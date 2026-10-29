@@ -205,6 +205,16 @@ try
         SerializerCompiledOptionRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-documentation"])
+    {
+        SerializerDocumentationRegression.Run(references);
+        return 0;
+    }
+    if (args is ["--verify-operation-cache"])
+    {
+        SerializerOperationCacheRegression.Run(references);
+        return 0;
+    }
     SerializerImportedLayoutRegression.Run(references);
     SerializerDocumentationRegression.Run(references);
     SerializerRootApiRegression.Run(references);

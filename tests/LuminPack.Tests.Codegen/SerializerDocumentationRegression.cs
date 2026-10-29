@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using System.Reflection;
 using System.Xml.Linq;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
@@ -12,10 +13,48 @@ internal static class SerializerDocumentationRegression
     /// <param name="references">The platform and LuminPack references used by the regression compilation.</param>
     internal static void Run(MetadataReference[] references)
     {
+        VerifyExecutableTokens();
         foreach (var mode in new[] { DocumentationMode.None, DocumentationMode.Parse, DocumentationMode.Diagnose })
         {
             VerifyDocumentationMode(references, mode);
         }
+    }
+
+    /// <summary>Requires documentation filtering to preserve directives, literals, method bodies and attributes.</summary>
+    private static void VerifyExecutableTokens()
+    {
+        const string source = """"
+            #nullable enable
+            namespace LuminPack
+            {
+                public static class LuminPackSerializer
+                {
+                    /// <summary>Retained API documentation.</summary>
+                    public static string Serialize(string value)
+                    {
+                        /// <summary>Internal local documentation.</summary>
+                        static string Local() => @"first
+            /// literal payload
+            last";
+                        return value + Local();
+                    }
+                    /// <summary>Internal implementation documentation.</summary>
+                    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+                    private static int Root() => 17;
+                }
+            }
+            """";
+        var options = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Parse);
+        var type = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.GeneratedSourceDocumentation", throwOnError: true)!;
+        string projected = (string)type.GetMethod("Complete", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, [source, options])!;
+        var before = CSharpSyntaxTree.ParseText(source, options).GetRoot();
+        var after = CSharpSyntaxTree.ParseText(projected, options).GetRoot();
+        Require(before.DescendantTokens().Select(token => (token.RawKind, token.Text)).SequenceEqual(
+            after.DescendantTokens().Select(token => (token.RawKind, token.Text))), "Documentation filtering changed executable tokens.");
+        Require(projected.Contains("/// literal payload", StringComparison.Ordinal) &&
+            !projected.Contains("Internal local documentation", StringComparison.Ordinal) &&
+            !projected.Contains("Internal implementation documentation", StringComparison.Ordinal),
+            "Documentation filtering must distinguish XML trivia from literal payload text.");
     }
 
     /// <summary>Checks that overload comments are complete independently of the consuming compilation's documentation mode.</summary>
@@ -25,6 +64,7 @@ internal static class SerializerDocumentationRegression
     {
         const string source = """
             #nullable enable
+            #pragma warning disable CS1591
             using System;
             using System.Collections.Generic;
             using System.Runtime.InteropServices;
@@ -61,23 +101,52 @@ internal static class SerializerDocumentationRegression
             {
                 [LuminPackOrder(0)] public int ReferenceValue;
             }
+
+            [LuminPackable, LuminPackUnion(0, typeof(DocumentationCase))]
+            public abstract partial class DocumentationUnion { }
+
+            [LuminPackable]
+            public partial class DocumentationCase : DocumentationUnion { public int Value; }
+
+            [LuminPackable]
+            internal class DocumentationInternal { public int Value; }
             """;
 
         var options = new CSharpParseOptions(LanguageVersion.Preview, documentationMode,
             preprocessorSymbols: ["NET5_0_OR_GREATER", "NET6_0_OR_GREATER", "NET7_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
         var compilation = CSharpCompilation.Create("SerializerDocumentationRegression", [CSharpSyntaxTree.ParseText(source, options)], references,
-            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true,
+                specificDiagnosticOptions: new Dictionary<string, ReportDiagnostic> { ["CS1591"] = ReportDiagnostic.Error }));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: options);
         driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
         var errors = output.GetDiagnostics().Concat(diagnostics).Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error || diagnostic.Id is "CS0419" or "CS1570" or "CS1572" or "CS1573" or "CS1574" or "CS1584" or "CS1587" or "CS1658").ToArray();
         Require(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(error => error.ToString())));
+        using var assembly = new MemoryStream();
+        using var xml = new MemoryStream();
+        var emitted = output.Emit(assembly, xmlDocumentationStream: xml);
+        Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));
+        if (documentationMode != DocumentationMode.None)
+        {
+            xml.Position = 0;
+            var entries = XDocument.Load(xml).Descendants("member").Select(member => (string)member.Attribute("name")!).ToArray();
+            Require(entries.Length != 0 && entries.All(name => name == "T:LuminPack.LuminPackSerializer" ||
+                name.StartsWith("M:LuminPack.LuminPackSerializer.", StringComparison.Ordinal) &&
+                !name.Contains("__Lumin", StringComparison.Ordinal)),
+                "Emitted XML must contain only the serializer facade and its caller-facing methods.");
+        }
         var generated = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
         foreach (var file in generated)
         {
             var documentedSyntax = CSharpSyntaxTree.ParseText(file.SourceText, options.WithDocumentationMode(DocumentationMode.Parse)).GetRoot();
             foreach (var method in documentedSyntax.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
             {
+                if (!IsUserApi(method))
+                {
+                    Require(!method.GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)),
+                        "Internal roots, forwarders, and support methods must not retain XML documentation: " + method.GetFirstToken());
+                    continue;
+                }
                 Require(method.GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)), "Missing generated method documentation: " + method);
                 var documentation = ReadDocumentation(method);
                 Require(documentation.Elements("summary").Count() == 1 && !string.IsNullOrWhiteSpace(documentation.Element("summary")!.Value),
@@ -113,7 +182,7 @@ internal static class SerializerDocumentationRegression
         var serializerFiles = generated.Where(file => file.HintName.StartsWith("LuminPackSerializer.", StringComparison.Ordinal)).ToArray();
         string serializer = string.Join(Environment.NewLine, serializerFiles.Select(file => file.SourceText.ToString()));
         var methods = serializerFiles.SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, options.WithDocumentationMode(DocumentationMode.Parse))
-            .GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
+            .GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).Where(IsUserApi).ToArray();
         var modelOverloads = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer" } && method.TypeParameterList == null &&
             (method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "global::DocumentationModel") ||
              method.ReturnType.ToString().Contains("global::DocumentationModel", StringComparison.Ordinal))).ToArray();
@@ -163,6 +232,15 @@ internal static class SerializerDocumentationRegression
 
         File.WriteAllText(Path.Combine(Path.GetTempPath(), "LuminPack.SerializerDocumentationRegression.g.cs"), serializer);
     }
+
+    /// <summary>Identifies directly callable serializer APIs independently of the generator's documentation filter.</summary>
+    /// <param name="method">A generated method whose documentation is being checked.</param>
+    /// <returns>Whether the method is a caller-facing API.</returns>
+    private static bool IsUserApi(BaseMethodDeclarationSyntax method) => method is MethodDeclarationSyntax declaration &&
+        method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer", Parent: BaseNamespaceDeclarationSyntax } &&
+        (method.Modifiers.Any(SyntaxKind.PublicKeyword) || method.Modifiers.Any(SyntaxKind.InternalKeyword) &&
+            (declaration.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson" or "Sizeof" or "SerializeAsync" or "DeserializeAsync") &&
+            declaration.ParameterList.Parameters.FirstOrDefault()?.Identifier.ValueText is not ("writer" or "reader" or "evaluator" or "state"));
 
     /// <summary>Parses the XML comment associated with a generated method.</summary>
     /// <param name="method">The generated declaration.</param>

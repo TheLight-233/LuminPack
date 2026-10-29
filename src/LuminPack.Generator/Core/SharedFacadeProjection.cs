@@ -143,19 +143,12 @@ internal sealed class SharedFacadeProjection
     private static string Identity(string prefix, string key)
         => prefix + "_" + PartitionedSourceCache.CreateHintName("id", key).Substring(3, 32);
 
-    /// <summary>Documents the private shared operation without copying a concrete type's member contract.</summary>
+    /// <summary>Formats the private shared operation without generating caller-facing XML.</summary>
     /// <param name="method">The normalized generic helper.</param>
-    /// <returns>The documented and formatted helper declaration.</returns>
+    /// <returns>The formatted helper declaration.</returns>
     private static string DocumentHelper(MethodDeclarationSyntax method)
     {
-        var text = new StringBuilder("/// <summary>Executes the shared convenience operation through its concrete stateless adapter.</summary>\n");
-        text.AppendLine("/// <typeparam name=\"" + Payload + "\">The concrete payload type.</typeparam>");
-        text.AppendLine("/// <typeparam name=\"" + Profile + "\">The compiled document profile.</typeparam>");
-        text.AppendLine("/// <typeparam name=\"" + Adapter + "\">The concrete state-operation adapter.</typeparam>");
-        foreach (var parameter in method.ParameterList.Parameters)
-            text.AppendLine("/// <param name=\"" + parameter.Identifier.ValueText + "\">" + ParameterDescription(parameter.Identifier.ValueText) + "</param>");
-        if (method.ReturnType.ToString() != "void") text.AppendLine("/// <returns>The original convenience operation's result.</returns>");
-        return text.AppendLine(method.NormalizeWhitespace().ToFullString()).ToString();
+        return method.NormalizeWhitespace().ToFullString();
     }
 
     /// <summary>Describes a parameter retained from the original facade template.</summary>
@@ -176,9 +169,7 @@ internal sealed class SharedFacadeProjection
     /// <returns>The complete private interface declaration.</returns>
     private static string BuildOperations(bool scoped)
     {
-        var text = new StringBuilder("/// <summary>Retains concrete state dispatch inside shared convenience bodies.</summary>\n")
-            .AppendLine("/// <typeparam name=\"T\">The exact concrete payload type.</typeparam>")
-            .AppendLine("private interface " + Operations + "<T>\n{");
+        var text = new StringBuilder().AppendLine("private interface " + Operations + "<T>\n{");
         AppendAdapterMethods(text, "T", null, scoped, null);
         return text.AppendLine("}").ToString();
     }
@@ -191,9 +182,7 @@ internal sealed class SharedFacadeProjection
     /// <returns>The complete private adapter declaration.</returns>
     private static string BuildAdapter(string type, string name, bool scoped, IReadOnlyDictionary<string, bool> stateCalls)
     {
-        var text = new StringBuilder("/// <summary>Forwards shared facade operations to the existing concrete state bodies.</summary>\n")
-            .AppendLine("/// <typeparam name=\"" + Profile + "\">The compiled document profile.</typeparam>")
-            .AppendLine("private readonly struct " + name + "<" + Profile + "> : " + Operations + "<" + type + ">")
+        var text = new StringBuilder().AppendLine("private readonly struct " + name + "<" + Profile + "> : " + Operations + "<" + type + ">")
             .AppendLine("where " + Profile + " : struct, global::LuminPack.Option.ILuminPackOptions\n{");
         AppendAdapterMethods(text, type, Profile, scoped, stateCalls);
         return text.AppendLine("}").ToString();
@@ -214,9 +203,6 @@ internal sealed class SharedFacadeProjection
                 (operation.StartsWith("Deserialize", StringComparison.Ordinal) ? "Reader" : "Writer");
             string modifier = operation is "Serialize" or "SerializeJson" ? "in" : "ref";
             string scope = scoped ? "scoped " : "";
-            text.AppendLine("/// <summary>Invokes the concrete " + operation + " state operation.</summary>")
-                .AppendLine("/// <param name=\"state\">The original operation state.</param>")
-                .AppendLine("/// <param name=\"value\">The payload passed with its original reference convention.</param>");
             if (profile != null) text.AppendLine("[MethodImpl(MethodImplOptions.AggressiveInlining)]");
             text.Append(profile == null ? "" : "public ").Append("void ").Append(adapter).Append('(').Append(scope)
                 .Append("ref global::LuminPack.Core.").Append(state).Append(" state, ").Append(scope).Append(modifier).Append(' ').Append(type).Append(" value)");

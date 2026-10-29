@@ -91,7 +91,7 @@
 
 ### 生成代码的文档
 
-`GeneratedSourceDocumentation` 和 `LuminPackSerializerDocumentation` 为生成的成员添加 XML 文档，内容来自同一份模型分析：类型、成员顺序与筛选、CLR 布局与线上布局、缓冲区语义和返回值单位。
+`GeneratedSourceDocumentation` 和 `LuminPackSerializerDocumentation` 只为可直接调用的 `LuminPackSerializer` API 和门面类型添加紧凑 XML 文档。API 注释来自同一份类型分析，包含类型、成员顺序与筛选、CLR 布局与线上布局、缓冲区语义和返回值单位。内部状态转发方法、执行根方法、Union 槽、布局辅助方法和私有门面适配器省略 XML，可执行代码保持不变。生成文件屏蔽 CS1591，启用文档警告时也无需为这些实现细节补 XML。
 
 <a id="tests"></a>
 ## 测试

@@ -4,6 +4,8 @@
 
 The generator emits `LuminPack.LuminPackSerializer` into each consuming assembly. For a type `T` it has concrete overloads, plus generic ones (`<T>`) and profile ones (`<TOptions>` / `<T, TOptions>`) for every shape below. `TOptions` is a stateless profile struct (see Options).
 
+Generated XML documents these directly callable facade APIs. Internal roots, state forwarders, dispatch slots and layout helpers omit XML; this does not remove their methods or change serialization behavior.
+
 ```csharp
 // Binary
 byte[] Serialize(in T value);

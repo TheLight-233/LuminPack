@@ -108,7 +108,7 @@ The history of individual approvals lives in Git. When this document, the code a
 - README, AGENTS, CONTRIBUTING and every document under `docs` exist in English (`name.md`) and Chinese (`name.cn.md`); change both editions together.
 - README is introduction, installation and usage. No release notes, version histories, migration notices or experiment reports, in README or in `docs`. Those records stay out of version control.
 - Do not remove externally usable or generated members based only on call-site searches.
-- Every method has XML documentation (checked by `tools/LuminPack.RepositoryChecks`).
+- Every maintained source method has XML documentation (checked by `tools/LuminPack.RepositoryChecks`). Generated XML is limited to directly callable `LuminPackSerializer` APIs and the facade type. Execution roots, internal state forwarders, layout helpers, dispatch slots and private support do not carry XML; their declarations and implementations remain intact. Generated files suppress CS1591 for these intentionally undocumented implementation details.
 
 ## 7. Verification
 
