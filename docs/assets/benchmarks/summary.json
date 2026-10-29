@@ -1,45 +1,64 @@
 {
-  "environment": null,
+  "environment": {
+    "BenchmarkDotNetCaption": "BenchmarkDotNet",
+    "BenchmarkDotNetVersion": "0.15.6",
+    "OsVersion": "Linux Ubuntu 24.04.5 LTS (Noble Numbat)",
+    "ProcessorName": "AMD EPYC 7763",
+    "PhysicalProcessorCount": 1,
+    "PhysicalCoreCount": 2,
+    "LogicalCoreCount": 4,
+    "RuntimeVersion": ".NET 10.0.14 (10.0.14, 10.0.1426.52326)",
+    "Architecture": "X64",
+    "HasAttachedDebugger": false,
+    "HasRyuJit": true,
+    "Configuration": "RELEASE",
+    "DotNetCliVersion": "11.0.100-rc.3.26522.148",
+    "ChronometerFrequency": {
+      "Hertz": 1000000000
+    },
+    "HardwareTimerKind": "Unknown"
+  },
+  "job": "TieredPGO",
   "suites": {
     "SimpleBenchmark": {
       "Serialize": [
         {
           "library": "LuminPack",
-          "mean": "41.9 ns",
+          "mean": "95.2 ns",
           "ratio": 1.0,
-          "allocated": "-"
+          "allocated": "0 B"
         },
         {
           "library": "MemoryPack",
-          "mean": "364.6 ns",
-          "ratio": 8.7,
-          "allocated": "-"
+          "mean": "713.8 ns",
+          "ratio": 7.5,
+          "allocated": "0 B"
         },
         {
           "library": "MessagePack",
-          "mean": "1.70 μs",
-          "ratio": 40.66,
-          "allocated": "-"
+          "mean": "3.09 μs",
+          "ratio": 32.47,
+          "allocated": "0 B"
         }
       ],
       "Deserialize": [
         {
           "library": "LuminPack",
-          "mean": "434.3 ns",
+          "mean": "411.7 ns",
           "ratio": 1.0,
           "allocated": "2.98 KB"
         },
         {
           "library": "MemoryPack",
-          "mean": "600.0 ns",
-          "ratio": 1.38,
+          "mean": "756.0 ns",
+          "ratio": 1.84,
           "allocated": "2.98 KB"
         },
         {
           "library": "MessagePack",
-          "mean": "3.94 μs",
-          "ratio": 9.07,
-          "allocated": "2.98 KB"
+          "mean": "6.54 μs",
+          "ratio": 15.88,
+          "allocated": "0 B"
         }
       ]
     },
@@ -47,40 +66,40 @@
       "Serialize": [
         {
           "library": "LuminPack",
-          "mean": "2.03 μs",
+          "mean": "2.81 μs",
           "ratio": 1.0,
-          "allocated": "-"
+          "allocated": "0 B"
         },
         {
           "library": "MemoryPack",
-          "mean": "6.33 μs",
-          "ratio": 3.12,
-          "allocated": "-"
+          "mean": "10.93 μs",
+          "ratio": 3.89,
+          "allocated": "0 B"
         },
         {
           "library": "MessagePack",
-          "mean": "14.79 μs",
-          "ratio": 7.29,
-          "allocated": "-"
+          "mean": "24.54 μs",
+          "ratio": 8.73,
+          "allocated": "0 B"
         }
       ],
       "Deserialize": [
         {
           "library": "LuminPack",
-          "mean": "8.38 μs",
+          "mean": "10.14 μs",
           "ratio": 1.0,
           "allocated": "39.07 KB"
         },
         {
           "library": "MemoryPack",
-          "mean": "12.27 μs",
-          "ratio": 1.47,
+          "mean": "17.75 μs",
+          "ratio": 1.75,
           "allocated": "39.07 KB"
         },
         {
           "library": "MessagePack",
-          "mean": "28.05 μs",
-          "ratio": 3.35,
+          "mean": "43.75 μs",
+          "ratio": 4.31,
           "allocated": "39.07 KB"
         }
       ]
@@ -89,40 +108,40 @@
       "Serialize": [
         {
           "library": "LuminPack",
-          "mean": "3.39 μs",
+          "mean": "4.86 μs",
           "ratio": 1.0,
-          "allocated": "-"
+          "allocated": "0 B"
         },
         {
           "library": "MemoryPack",
-          "mean": "14.90 μs",
-          "ratio": 4.39,
-          "allocated": "-"
+          "mean": "39.99 μs",
+          "ratio": 8.22,
+          "allocated": "0 B"
         },
         {
           "library": "MessagePack",
-          "mean": "71.80 μs",
-          "ratio": 21.17,
-          "allocated": "-"
+          "mean": "128.23 μs",
+          "ratio": 26.36,
+          "allocated": "0 B"
         }
       ],
       "Deserialize": [
         {
           "library": "LuminPack",
-          "mean": "7.91 μs",
+          "mean": "21.25 μs",
           "ratio": 1.0,
           "allocated": "77.82 KB"
         },
         {
           "library": "MemoryPack",
-          "mean": "17.80 μs",
-          "ratio": 2.25,
+          "mean": "30.38 μs",
+          "ratio": 1.43,
           "allocated": "77.82 KB"
         },
         {
           "library": "MessagePack",
-          "mean": "111.77 μs",
-          "ratio": 14.13,
+          "mean": "224.64 μs",
+          "ratio": 10.57,
           "allocated": "81.89 KB"
         }
       ]
@@ -131,53 +150,53 @@
       "Serialize": [
         {
           "library": "LuminPack",
-          "mean": "25.68 μs",
+          "mean": "48.86 μs",
           "ratio": 1.0,
-          "allocated": "-"
+          "allocated": "67.44 KB"
         },
         {
           "library": "System.Text.Json",
-          "mean": "64.00 μs",
-          "ratio": 2.49,
+          "mean": "110.45 μs",
+          "ratio": 2.26,
           "allocated": "95.05 KB"
         },
         {
           "library": "Newtonsoft.Json",
-          "mean": "163.51 μs",
-          "ratio": 6.37,
-          "allocated": "299.11 KB"
+          "mean": "265.46 μs",
+          "ratio": 5.43,
+          "allocated": "0 B"
         },
         {
           "library": "RE:Dox",
-          "mean": "56.97 μs",
-          "ratio": 2.22,
-          "allocated": "77.38 KB"
+          "mean": "98.08 μs",
+          "ratio": 2.01,
+          "allocated": "0 B"
         }
       ],
       "Deserialize": [
         {
           "library": "LuminPack",
-          "mean": "57.96 μs",
+          "mean": "72.28 μs",
           "ratio": 1.0,
-          "allocated": "60.98 KB"
+          "allocated": "52.89 KB"
         },
         {
           "library": "System.Text.Json",
-          "mean": "109.34 μs",
-          "ratio": 1.89,
+          "mean": "186.76 μs",
+          "ratio": 2.58,
           "allocated": "64.32 KB"
         },
         {
           "library": "Newtonsoft.Json",
-          "mean": "251.61 μs",
-          "ratio": 4.34,
-          "allocated": "142.34 KB"
+          "mean": "408.21 μs",
+          "ratio": 5.65,
+          "allocated": "142.60 KB"
         },
         {
           "library": "RE:Dox",
-          "mean": "353.63 μs",
-          "ratio": 6.1,
-          "allocated": "155.65 KB"
+          "mean": "561.00 μs",
+          "ratio": 7.76,
+          "allocated": "155.32 KB"
         }
       ]
     }

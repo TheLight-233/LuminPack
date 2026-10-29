@@ -258,11 +258,11 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 | 🖥️ 测试环境 | |
 | --- | --- |
 | 运行环境 | GitHub Actions `ubuntu-latest`（[CI 工作流](.github/workflows/ci.yml)的 `Benchmark (linux-x64)` 任务） |
-| CPU | AMD EPYC 7763 2.67 GHz · 2 核 / 4 线程 |
+| CPU | AMD EPYC 7763 2.61 GHz · 2 核 / 4 线程 |
 | 系统 | Ubuntu 24.04.5 LTS |
 | 运行时 | .NET 10.0.14 · X64 RyuJIT（x86-64-v3 / AVX2） |
 | 工具 | BenchmarkDotNet 0.15.6 · .NET SDK 11.0.100-rc.3 |
-| 参数 | 四类基准均为 3 次启动 × 15 次迭代、6 次预热，使用 Server GC |
+| 参数 | 四类基准均为 3 次启动 × 15 次迭代、8–30 次预热，TieredPGO 任务（启用分层编译与动态 PGO），使用 Server GC |
 
 ### 🎮 游戏存档
 
