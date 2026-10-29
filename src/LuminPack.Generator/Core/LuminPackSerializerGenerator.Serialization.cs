@@ -226,7 +226,11 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            try");
         sb.AppendLine("            {");
         if (typeName == null)
-            sb.AppendLine("                SerializeCore(writerBuffer, writerBuffer.WriterState, in value);");
+        {
+            sb.AppendLine("                var writer = new LuminPackWriter(writerBuffer);");
+            sb.AppendLine("                writer.WriteValue(in value);");
+            sb.AppendLine("                writerBuffer.CompleteWrite(writer.CurrentIndex);");
+        }
         else
         {
             sb.AppendLine("                var writer = new LuminPackWriter(writerBuffer);");

@@ -162,6 +162,7 @@ namespace LuminPack.Core
             1e9f,
             1e10f
         };
+
 #region Storage types
         /// <summary>Provides json token type functionality.</summary>
         public enum JsonTokenType : byte
@@ -240,6 +241,7 @@ namespace LuminPack.Core
         }
 
 #endregion
+
 #region Constructors
         /// <summary>Initializes a new instance of <c>LuminPackJsonReader</c>.</summary>
         /// <param name = "bufferReference">The buffer reference used by this operation.</param>

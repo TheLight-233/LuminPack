@@ -55,9 +55,17 @@ namespace LuminPack.Core
 
         /// <summary>Gets the optional growable output owner.</summary>
         public LuminBufferWriter? Owner {[MethodImpl(MethodImplOptions.AggressiveInlining)] readonly get; internal set; }
+        private LuminPackWriterOptionalState? _options;
         /// <summary>The explicit or materialized reference context, or null before an implicit scope requests state.</summary>
-        /// <remarks>Use <see cref="OptionState"/> when reference tracking requires an initialized context.</remarks>
-        public LuminPackWriterOptionalState? Options;
+        /// <remarks>An explicit context wins over the owning buffer's context. Writers constructed from a buffer
+        /// resolve the buffer's own context without storing it, so construction leaves this unset.</remarks>
+        public LuminPackWriterOptionalState? Options
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => _options ?? Owner?.WriterState;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            set => _options = value;
+        }
 
         #region Constructors
 
@@ -65,7 +73,7 @@ namespace LuminPack.Core
         /// <param name = "option">An explicit shared reference context, or null for a lazily owned independent context.</param>
         public LuminPackWriter(LuminPackWriterOptionalState? option = null)
         {
-            Options = option;
+            _options = option;
             Buffer = default;
             Position = 0;
         }
@@ -76,7 +84,7 @@ namespace LuminPack.Core
         /// <remarks>On netstandard2.1, caller-owned managed span storage must remain pinned for the complete operation lifetime.</remarks>
         public LuminPackWriter(ref Span<byte> bufferReference, LuminPackWriterOptionalState? option = null)
         {
-            Options = option;
+            _options = option;
             Buffer = bufferReference;
             Position = 0;
         }
@@ -88,7 +96,6 @@ namespace LuminPack.Core
         {
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
-            Options = bufferWriter.WriterState;
             Buffer = bufferWriter.BeginCursorWrite(out int position);
             BufferCheckLimit = (uint)bufferWriter.BufferCheckLimit + 1;
             Position = position;
@@ -103,7 +110,7 @@ namespace LuminPack.Core
         {
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
-            Options = option;
+            _options = option;
             Buffer = bufferWriter.BeginCursorWrite(out int position);
             BufferCheckLimit = (uint)bufferWriter.BufferCheckLimit + 1;
             Position = position;
@@ -148,7 +155,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly void CopyTo(ref LuminPackWriter destination)
         {
-            destination.Options = Options;
+            destination._options = _options;
 #if NET8_0_OR_GREATER
             destination.Cursor = ref Cursor;
 #else
