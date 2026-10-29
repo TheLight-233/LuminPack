@@ -2866,7 +2866,28 @@ namespace LuminPack.Core
         /// <param name = "value">The destination storage.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void Read<TOptions>(ref string value)
-            where TOptions : struct, ILuminPackOptions => value = Read<string, TOptions>();
+            where TOptions : struct, ILuminPackOptions
+        {
+            if (CurrentTokenType == JsonTokenType.Null)
+            {
+                value = null!;
+                return;
+            }
+            if (CurrentTokenType != JsonTokenType.String)
+                global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Expected string token");
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            {
+                var text = ReadStringUtf8<TOptions>();
+                if (value is null || !StringSerializer.MatchesUtf8(text, value))
+                    value = CreateUtf8String(text);
+            }
+            else
+            {
+                var text = ReadStringUtf16<TOptions>();
+                if (value is null || !text.SequenceEqual(value.AsSpan()))
+                    value = new string(text);
+            }
+        }
         /// <summary>Raises the exception for malformed json.</summary>
         /// <param name = "message">The message describing the failure.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -3038,7 +3059,12 @@ namespace LuminPack.Core
         private ReadOnlySpan<byte> UnescapeUtf8(ReadOnlySpan<byte> source)
         {
             if (Utf8StringScratch is null || Utf8StringScratch.Length < source.Length)
-                Utf8StringScratch = new byte[source.Length];
+            {
+                var state = OptionState;
+                if (state.JsonUtf8StringScratch is null || state.JsonUtf8StringScratch.Length < source.Length)
+                    state.JsonUtf8StringScratch = new byte[source.Length];
+                Utf8StringScratch = state.JsonUtf8StringScratch;
+            }
             Span<byte> destination = Utf8StringScratch;
             int sourceIndex = 0;
             int destinationIndex = 0;
@@ -3142,7 +3168,12 @@ namespace LuminPack.Core
         private ReadOnlySpan<char> UnescapeUtf16(ReadOnlySpan<char> source)
         {
             if (Utf16StringScratch is null || Utf16StringScratch.Length < source.Length)
-                Utf16StringScratch = new char[source.Length];
+            {
+                var state = OptionState;
+                if (state.JsonUtf16StringScratch is null || state.JsonUtf16StringScratch.Length < source.Length)
+                    state.JsonUtf16StringScratch = new char[source.Length];
+                Utf16StringScratch = state.JsonUtf16StringScratch;
+            }
             Span<char> destination = Utf16StringScratch;
             int sourceIndex = 0;
             int destinationIndex = 0;
@@ -3676,6 +3707,31 @@ namespace LuminPack.Core
 #endregion
 
 #region Collections
+        /// <summary>Counts validated array elements without advancing this reader or reading application values.</summary>
+        /// <returns>The number of elements in the current array.</returns>
+        public int CountArrayElements() => CountArrayElements<LuminPackDefaultOptions>();
+
+        /// <summary>Counts array elements with the selected document profile without advancing this reader.</summary>
+        /// <typeparam name="TOptions">The stateless JSON profile.</typeparam>
+        /// <returns>The number of complete elements in the current array.</returns>
+        public int CountArrayElements<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            var scan = this;
+            // Deep grammar storage is mutable; a lookahead must own its copy.
+            scan.DeepContainerKinds = DeepContainerKinds is null ? null : DeepContainerKinds.AsSpan().ToArray();
+            scan.TryConsumeArrayStart<TOptions>();
+            int count = 0;
+            while (scan.Read<TOptions>())
+            {
+                if (scan.CurrentTokenType == JsonTokenType.ArrayEnd)
+                    return count;
+                scan.Skip<TOptions>();
+                count = checked(count + 1);
+            }
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON array");
+            return 0;
+        }
+
         /// <summary>Attempts to consume array start and reports whether it succeeded.</summary>
         /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

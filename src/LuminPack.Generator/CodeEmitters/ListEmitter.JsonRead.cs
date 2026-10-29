@@ -29,6 +29,25 @@ public static partial class ListEmitter
         bool setInterface = baseType is "global::System.Collections.Generic.ISet" or
             "global::System.Collections.Generic.IReadOnlySet";
 
+        if (interfaceType)
+        {
+            sb.AppendLine("            if (reader.IsNull()) { value = null; return; }");
+            sb.AppendLine("            if (value is " + elementType + "[] existingArray && existingArray.GetType() == typeof(" + elementType + "[]) && reader.CountArrayElements() == existingArray.Length)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                for (int i = 0; i < existingArray.Length; i++)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    reader.Read();");
+            sb.AppendLine("                    reader.ReadValue(ref existingArray[i]);");
+            sb.AppendLine("                }");
+            sb.AppendLine("                reader.ConsumeArrayEnd();");
+            sb.AppendLine("                return;");
+            sb.AppendLine("            }");
+            sb.AppendLine("            var list = value as global::System.Collections.Generic.List<" + elementType + ">;");
+            AppendJsonListRead(sb, elementType, "list");
+            sb.AppendLine("            value = list;");
+            return;
+        }
+
         sb.AppendLine("            if (reader.IsNull())");
         sb.AppendLine("            {");
         sb.AppendLine("                value = null;");
@@ -126,22 +145,28 @@ public static partial class ListEmitter
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         string elementType = GetFirstGeneric(fieldData.TypeName);
+        AppendJsonListRead(sb, elementType, "value");
+    }
+
+    /// <summary>Refills exact list storage and seeds each incoming element from its existing position.</summary>
+    /// <param name="sb">The generated operation builder.</param>
+    /// <param name="elementType">The closed element spelling.</param>
+    /// <param name="target">The mutable list local.</param>
+    private static void AppendJsonListRead(StringBuilder sb, string elementType, string target)
+    {
         sb.AppendLine("            if (reader.IsNull())");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = null;");
+        sb.AppendLine("                " + target + " = null;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            reader.TryConsumeArrayStart();");
         sb.AppendLine();
-        sb.AppendLine("            if (value is null)");
+        sb.AppendLine("            if (" + target + " is null || " + target + ".GetType() != typeof(global::System.Collections.Generic.List<" + elementType + ">))");
         sb.AppendLine("            {");
-        sb.AppendLine("                value = new global::System.Collections.Generic.List<" + elementType + ">();");
+        sb.AppendLine("                " + target + " = new global::System.Collections.Generic.List<" + elementType + ">();");
         sb.AppendLine("            }");
-        sb.AppendLine("            else");
-        sb.AppendLine("            {");
-        sb.AppendLine("                value.Clear();");
-        sb.AppendLine("            }");
+        sb.AppendLine("            int count = 0;");
         sb.AppendLine();
         sb.AppendLine("            while (reader.Read())");
         sb.AppendLine("            {");
@@ -151,9 +176,12 @@ public static partial class ListEmitter
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd)");
         sb.AppendLine("                    continue;");
         sb.AppendLine();
-        sb.AppendLine("                " + elementType + " item = default!;");
+        sb.AppendLine("                " + elementType + " item = count < " + target + ".Count ? " + target + "[count] : default!;");
         sb.AppendLine("                reader.ReadValue(ref item);");
-        sb.AppendLine("                value.Add(item);");
+        sb.AppendLine("                if (count < " + target + ".Count) " + target + "[count] = item;");
+        sb.AppendLine("                else " + target + ".Add(item);");
+        sb.AppendLine("                count++;");
         sb.AppendLine("            }");
+        sb.AppendLine("            if (count < " + target + ".Count) " + target + ".RemoveRange(count, " + target + ".Count - count);");
     }
 }

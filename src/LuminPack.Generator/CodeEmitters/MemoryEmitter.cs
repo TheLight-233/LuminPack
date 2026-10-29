@@ -176,6 +176,30 @@ public static class MemoryEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            reader.TryConsumeArrayStart();");
+        if (baseType is "global::System.Memory" or "global::System.ArraySegment")
+        {
+            sb.AppendLine("            int length = reader.CountArrayElements();");
+            sb.AppendLine("            " + elementType + "[] array;");
+            sb.AppendLine("            int start = 0;");
+            if (baseType == "global::System.Memory")
+                sb.AppendLine("            bool reused = global::LuminPack.Code.LuminPackMarshal.TryGetExactArray(value, out var storage, out start, out var storageLength) && storageLength == length;");
+            else
+            {
+                sb.AppendLine("            var storage = value.Array;");
+                sb.AppendLine("            bool reused = storage is not null && storage.GetType() == typeof(" + elementType + "[]) && value.Count == length;");
+                sb.AppendLine("            if (reused) start = value.Offset;");
+            }
+            sb.AppendLine("            if (reused) array = storage!;");
+            sb.AppendLine("            else { array = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<" + elementType + ">(length); start = 0; }");
+            sb.AppendLine("            for (int i = 0; i < length; i++)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                reader.Read();");
+            sb.AppendLine("                reader.ReadValue(ref array[start + i]);");
+            sb.AppendLine("            }");
+            sb.AppendLine("            reader.ConsumeArrayEnd();");
+            sb.AppendLine("            if (!reused) value = new " + baseType + "<" + elementType + ">(array, start, length);");
+            return;
+        }
         sb.AppendLine("            var items = new global::System.Collections.Generic.List<" + elementType + ">();");
         sb.AppendLine("            while (reader.Read())");
         sb.AppendLine("            {");

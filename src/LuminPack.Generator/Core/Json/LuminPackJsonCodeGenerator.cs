@@ -563,9 +563,17 @@ public static class LuminPackJsonCodeGenerator
             sb.AppendLine("            }");
             sb.AppendLine();
         }
+        if (!data.isValueType && data.RentPoolMethod != null)
+            sb.AppendLine("            if (value is null) value = " + classGlobalName + "." + data.RentPoolMethod.Name + "();");
+        string reuseCondition = data.isValueType
+            ? string.Join(" || ", LuminPackCodeGenerator.ReusableMemberConditions(data.fields, field =>
+                CanDeserializeDirectlyIntoConstructedObject(field) ? "value." + field.Identifier :
+                "global::LuminPack.Code.LuminPackMarshal.As<" + classGlobalName + ", " + TypeMetaChecker.BuildLocalClassName(data) + ">(ref value)." + field.Identifier))
+            : "value is not null";
+        sb.AppendLine("            bool reuseExisting = " + (reuseCondition.Length == 0 ? "false" : reuseCondition) + ";");
         if (flag)
         {
-            sb.AppendLine("            var result = new " + classGlobalName + "();");
+            sb.AppendLine("            var result = reuseExisting ? value! : new " + classGlobalName + "();");
         }
         if (!flag || data.fields.Any(static field => !CanDeserializeDirectlyIntoConstructedObject(field)))
         {
@@ -581,6 +589,11 @@ public static class LuminPackJsonCodeGenerator
                 sb.AppendLine("            " + text + text2 + " " + field.Name + "Temp = default;");
             }
         }
+        if (!flag)
+            sb.AppendLine("            ref var reuseLocal = ref global::LuminPack.Code.LuminPackMarshal.As<" + classGlobalName + ", " + TypeMetaChecker.BuildLocalClassName(data) + ">(ref value" + (data.isValueType ? "" : "!") + ");");
+        if (flag)
+            foreach (var field in data.fields)
+                sb.AppendLine("            bool " + field.Name + "Seen = false;");
         sb.AppendLine();
         sb.AppendLine("            reader.TryConsumeObjectStart();");
         sb.AppendLine();
@@ -614,6 +627,14 @@ public static class LuminPackJsonCodeGenerator
             var field = data.fields[fieldIndex];
             sb.AppendLine("                    case " + fieldIndex + ":");
             sb.AppendLine("                    {");
+            if (flag)
+            {
+                sb.AppendLine("                        " + field.Name + "Seen = true;");
+                if (!CanDeserializeDirectlyIntoConstructedObject(field))
+                    sb.AppendLine("                        if (reuseExisting) " + field.Name + "Temp = global::LuminPack.Code.LuminPackMarshal.As<" + classGlobalName + ", " + TypeMetaChecker.BuildLocalClassName(data) + ">(ref result)." + field.Identifier + ";");
+            }
+            else
+                sb.AppendLine("                        if (reuseExisting) " + field.Name + "Temp = reuseLocal." + field.Identifier + ";");
             GenerateJsonDeserializeField(sb, field, flag && CanDeserializeDirectlyIntoConstructedObject(field) ? ("result." + field.Identifier) : (field.Name + "Temp"), "                        ");
             sb.AppendLine("                        break;");
             sb.AppendLine("                    }");
@@ -626,6 +647,8 @@ public static class LuminPackJsonCodeGenerator
         sb.AppendLine();
         if (flag)
         {
+            foreach (var field in data.fields.Where(static field => CanDeserializeDirectlyIntoConstructedObject(field)))
+                sb.AppendLine("            if (!" + field.Name + "Seen) result." + field.Identifier + " = default!;");
             sb.AppendLine("            value = result;");
             if (data.fields.Any(static field => !CanDeserializeDirectlyIntoConstructedObject(field)))
             {
@@ -645,7 +668,15 @@ public static class LuminPackJsonCodeGenerator
         }
         else
         {
+            sb.AppendLine("            if (!reuseExisting)");
+            sb.AppendLine("            {");
             GenerateObjectConstruction(sb, data, classGlobalName);
+            sb.AppendLine("            }");
+            sb.AppendLine("            else");
+            sb.AppendLine("            {");
+            foreach (var field in data.fields)
+                sb.AppendLine("                reuseLocal." + field.Identifier + " = " + field.Name + "Temp!;");
+            sb.AppendLine("            }");
         }
         sb.AppendLine("        }");
     }
@@ -786,7 +817,7 @@ public static class LuminPackJsonCodeGenerator
                 sb.AppendLine(indent + targetVar + " = reader.ReadChar();");
                 break;
             case LuminFiledType.String:
-                sb.AppendLine(indent + targetVar + " = reader.ReadString();");
+                sb.AppendLine(indent + "reader.Read(ref " + targetVar + ");");
                 break;
             case LuminFiledType.Bool:
                 sb.AppendLine(indent + targetVar + " = reader.GetBoolean();");
@@ -1160,12 +1191,15 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
             sb.AppendLine("            uint? objectId = null;");
             sb.AppendLine("            uint? refId = null;");
             sb.AppendLine();
-            sb.AppendLine("            " + classGlobalName + " preCreatedInstance;");
+            sb.AppendLine("            bool reuseExisting = value is not null && !reader.OptionState.IsObjectReferenceRegistered(value);");
+            sb.AppendLine("            " + classGlobalName + " preCreatedInstance = value!;");
+            sb.AppendLine("            if (!reuseExisting)");
+            sb.AppendLine("            {");
             if (data.RentPoolMethod != null)
             {
                 if (data.RentPoolMethod.ReturnsByRef)
                 {
-                    sb.AppendLine("            preCreatedInstance = ref " + classGlobalName + "." + ((ISymbol)data.RentPoolMethod).Name + "()!;");
+                    sb.AppendLine("            preCreatedInstance = " + classGlobalName + "." + ((ISymbol)data.RentPoolMethod).Name + "()!;");
                 }
                 else
                 {
@@ -1193,13 +1227,15 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
                     sb.AppendLine("            preCreatedInstance = new " + classGlobalName + "();");
                 }
             }
+            sb.AppendLine("            }");
             sb.AppendLine("            value = preCreatedInstance;");
             sb.AppendLine();
         }
         else
         {
-            sb.AppendLine("            value = default;");
+            sb.AppendLine("            bool reuseExisting = true;");
         }
+        sb.AppendLine("            ref var reuseLocal = ref global::LuminPack.Code.LuminPackMarshal.As<" + classGlobalName + ", " + TypeMetaChecker.BuildLocalClassName(data) + ">(ref value" + (data.isValueType ? "" : "!") + ");");
         foreach (LuminLocalFieldData localField in data.localFields)
         {
             string text4 = (localField.IsValue ? "" : "?");
@@ -1262,6 +1298,7 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
         {
             sb.AppendLine("                    case " + data.fields.IndexOf(field) + ":");
             sb.AppendLine("                    {");
+            sb.AppendLine("                        if (reuseExisting) " + field.Name + "Temp = reuseLocal." + field.Identifier + ";");
             GenerateJsonDeserializeFieldWithCircleReference(sb, field, field.Name + "Temp", "                        ");
             sb.AppendLine("                        break;");
             sb.AppendLine("                    }");
@@ -1394,7 +1431,7 @@ public static class LuminPackJsonCircleReferenceCodeGenerator
                 sb.AppendLine(indent + "}");
                 sb.AppendLine(indent + "else");
                 sb.AppendLine(indent + "{");
-                sb.AppendLine(indent + "    " + targetVar + " = reader.ReadString();");
+                sb.AppendLine(indent + "    reader.Read(ref " + targetVar + ");");
                 sb.AppendLine(indent + "}");
                 break;
             case LuminFiledType.Bool:

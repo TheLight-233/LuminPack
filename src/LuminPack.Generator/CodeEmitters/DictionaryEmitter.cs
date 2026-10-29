@@ -53,10 +53,14 @@ public static partial class DictionaryEmitter
         sb.AppendLine();
         if (interfaceType)
         {
+            sb.AppendLine("            var existingDictionary = value as global::System.Collections.Generic.Dictionary<" + keyType + ", " + valueType + ">;");
+            sb.AppendLine("            if (existingDictionary is not null && existingDictionary.GetType() != typeof(global::System.Collections.Generic.Dictionary<" + keyType + ", " + valueType + ">)) existingDictionary = null;");
+            AppendExistingJsonDictionary(sb, keyType, valueType, "existingDictionary", "existingDictionary.Add(key, itemValue);");
             sb.AppendLine("            var dictionary = new global::System.Collections.Generic.Dictionary<" + keyType + ", " + valueType + ">();");
         }
         else
         {
+            AppendExistingJsonDictionary(sb, keyType, valueType, "value", baseType == "global::System.Collections.Concurrent.ConcurrentDictionary" ? "value.TryAdd(key, itemValue);" : "value.Add(key, itemValue);");
             sb.AppendLine("            if (value is null)");
             sb.AppendLine("                value = new " + type + "();");
             sb.AppendLine("            else");
@@ -624,6 +628,8 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
+        sb.AppendLine("            if (value is not null && value.GetType() != typeof(global::System.Collections.Generic.Dictionary<" + keyType + ", " + valueType + ">)) value = null;");
+        AppendExistingJsonDictionary(sb, keyType, valueType, "value", "value[key] = itemValue;");
         sb.AppendLine("            if (value is null)");
         sb.AppendLine("                value = new global::System.Collections.Generic.Dictionary<" + keyType + ", " + valueType + ">();");
         sb.AppendLine("            else");
@@ -648,11 +654,14 @@ public static partial class DictionaryEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="keyType">The generated key type name.</param>
     /// <param name="valueType">The generated value type name.</param>
+    /// <param name="seedValue">An optional statement that finds the existing value after reading its key.</param>
+    /// <param name="fused">Whether the original fused scalar entry path can be used.</param>
+    /// <param name="seedKey">An optional statement supplying an existing string key for a present key token.</param>
     /// <remarks>Scalar entries first try the fused trusted UTF-8 reader, which consumes nothing when it declines.</remarks>
-    internal static void AppendJsonEntryRead(StringBuilder sb, string keyType, string valueType)
+    internal static void AppendJsonEntryRead(StringBuilder sb, string keyType, string valueType, string seedValue = null, bool fused = true, string seedKey = null)
     {
         string indent = "                ";
-        if (EmitterTypeTraits.HasJsonEntryWriter(keyType, valueType))
+        if (fused && EmitterTypeTraits.HasJsonEntryWriter(keyType, valueType))
         {
             sb.AppendLine(indent + "if (!reader.TryReadEntry(ref key, ref itemValue))");
             sb.AppendLine(indent + "{");
@@ -660,9 +669,13 @@ public static partial class DictionaryEmitter
         }
         sb.AppendLine(indent + "if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine(indent + "{");
+        if (seedKey != null) sb.AppendLine(indent + "    " + seedKey);
         sb.AppendLine(indent + "    reader.ReadValue(ref key);");
         sb.AppendLine(indent + "    if (reader.Read() && reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
+        sb.AppendLine(indent + "    {");
+        if (seedValue != null) sb.AppendLine(indent + "        " + seedValue);
         sb.AppendLine(indent + "        reader.ReadValue(ref itemValue);");
+        sb.AppendLine(indent + "    }");
         sb.AppendLine(indent + "}");
         sb.AppendLine(indent + "while (reader.Read())");
         sb.AppendLine(indent + "{");

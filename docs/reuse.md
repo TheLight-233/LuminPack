@@ -39,7 +39,22 @@ When the objects, collection storage and strings already match, repeated reads r
 - Reuse is not transactional. If a read fails, or a callback throws, members already read stay updated.
 - An ordinary `null` object record leaves a supplied root untouched. Specialized modes and collections follow their own null rules.
 - If two members of your target share one instance, both reads fill that same instance. Use `CircleReference` when the incoming identities must be reconstructed.
-- Reuse applies to binary reads. JSON reads have their own string handling.
+
+## JSON reads
+
+JSON accepts the same `ref` usage:
+
+```csharp
+var target = new Message();
+LuminPackSerializer.DeserializeJson(json, ref target);
+LuminPackSerializer.DeserializeJson(nextJson, ref target);
+```
+
+The concrete and generic overloads accept a `string`, `ReadOnlySpan<char>`, `ReadOnlySpan<byte>` or `LuminBufferWriter`. They reuse existing objects, including private storage and constructor-bound members, nested objects, list elements, exact arrays of the same length, and dictionary values matched by incoming keys. Sequence interfaces reuse exact `List<T>` or array storage; dictionary interfaces reuse an exact `Dictionary<K,V>`. Mutable array-backed `Memory<T>` and `ArraySegment<T>` retain their slices when lengths match. An existing pooled instance is filled without another rent. Union cases reuse only an exact matching case, and reference-tracked objects reconstruct incoming shared references and cycles.
+
+Unchanged strings keep their references after JSON decoding, including escaped text, in UTF-8 and UTF-16. Matching object, list, array and string graphs can be read without managed allocations after warm-up; text transcoding, changed strings, different shapes, deep grammar storage and user code may allocate. Immutable collection formatters keep their existing construction behavior.
+
+JSON `null` clears the supplied reference. Missing object members reset to `default` on an existing target. Fresh reads retain their constructor selection and existing missing-member behavior. Lists remove trailing elements, and dictionaries remove old keys after reading the incoming entries. Reuse is not transactional: nested objects and storage already visited can remain changed after a failure. Encoding, syntax validation and document-end checks still apply to the whole document.
 
 ## Instance pools
 
@@ -56,13 +71,13 @@ public partial class Bullet
 }
 ```
 
-In binary reads of ordinary (`Object` mode) types, whenever a new instance is needed — a fresh `Deserialize<T>` call, or a missing child object — LuminPack rents one and fills it in place, exactly like a read into an existing object. Anything the pooled object still holds (lists, children, strings) is reused, so a warm pool gives allocation-free fresh reads too.
+For ordinary (`Object` mode) types, both binary and JSON reads rent an instance whenever a new one is needed, then enter the same reuse path used by `ref` reads. This includes the APIs without `ref`, such as `Deserialize<T>(payload)` and `DeserializeJson<T>(json)`, as well as missing child objects. Anything the rented object still holds (lists, children, strings) is reused, so a warm pool with matching storage can give allocation-free reads without an explicit `ref` target too.
 
 LuminPack only rents. Returning instances is your application's job. Passing an already rented instance by `ref` reuses it without renting another one.
 
 ## Output buffers
 
-`LuminBufferWriter` stores its data in native memory, which makes growth cheap. Always dispose it, or return a rented one to its pool:
+`LuminBufferWriter` stores its data in a pooled managed array. Always dispose it, or return a rented one to its pool:
 
 ```csharp
 using var buffer = new LuminBufferWriter(true);

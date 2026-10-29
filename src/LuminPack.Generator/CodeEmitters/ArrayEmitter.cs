@@ -247,6 +247,16 @@ public static class ArrayEmitter
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            reader.TryConsumeArrayStart();");
+        sb.AppendLine("            if (value is not null && value.GetType() == typeof(" + elementType + "[]) && reader.CountArrayElements() == value.Length)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                for (int i = 0; i < value.Length; i++)");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    reader.Read();");
+        sb.AppendLine("                    reader.ReadValue(ref value[i]);");
+        sb.AppendLine("                }");
+        sb.AppendLine("                reader.ConsumeArrayEnd();");
+        sb.AppendLine("                return;");
+        sb.AppendLine("            }");
         sb.AppendLine("            " + elementType + "[]? buffer = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(4);");
         sb.AppendLine("            int count = 0;");
         sb.AppendLine("            int capacity = buffer.Length;");

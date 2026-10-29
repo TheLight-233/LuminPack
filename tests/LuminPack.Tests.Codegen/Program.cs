@@ -6,6 +6,11 @@ try
         .Split(Path.PathSeparator)
         .Select(path => MetadataReference.CreateFromFile(path))
         .ToArray();
+    if (args is ["--verify-json-reuse"])
+    {
+        SerializerJsonReuseRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-immutable-scalar-set-reuse"])
     {
         SerializerImmutableScalarSetReuseRegression.Run(references);
@@ -228,6 +233,7 @@ try
     SerializerSourcePresentationRegression.Run(references);
     SerializerUnionCursorRegression.Run(references);
     SerializerCapacityTierRegression.Run(references);
+    SerializerJsonReuseRegression.Run(references);
     SerializerCompiledOptionRegression.Run(references);
     SerializerSpecialModeBoundaryRegression.Run(references);
     SerializerNamedVersionRegression.Run(references);

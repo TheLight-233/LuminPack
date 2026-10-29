@@ -36,6 +36,10 @@ int    Deserialize<LuminPackUtf8LengthOptions>(ReadOnlySpan<byte> buffer, ref T 
 
 Concrete overloads call the type's generated code directly. Generic overloads use explicit/Custom registrations first, then a per-type entry created on first use. Under `Light`/`Minimal` only the overload shapes actually called are generated; others fall back to the generic forms.
 
+Binary and JSON `ref` overloads fill compatible existing storage. JSON reuses object graphs, lists, exact same-length arrays, dictionary values matched by key, mutable array slices, exact Union cases and tracked identities; unchanged decoded strings retain their references. JSON `null` clears a reference and omitted members reset to `default` on an existing object. Reuse is not transactional. Immutable collection formatters retain their existing construction behavior.
+
+For ordinary types marked with `[LuminPackPoolRent]`, even the APIs without `ref` (`Deserialize<T>` and `DeserializeJson<T>`) rent an instance and read through its existing graph using reuse. An existing non-null `ref` target is reused without renting again.
+
 ## Options
 
 ```csharp

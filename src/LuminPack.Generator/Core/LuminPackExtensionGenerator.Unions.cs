@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using LuminPack.SourceGenerator;
+using LuminPack.SourceGenerator.CodeEmitters;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.Code.Core;
@@ -184,10 +185,10 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("            {");
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd) return;");
         sb.AppendLine("                if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String) continue;");
-        sb.AppendLine("                var property = reader.ReadString();");
+        JsonPropertyNameEmitter.Append(sb, "$type", "$value");
         sb.AppendLine("                if (!reader.Read()) break;");
-        sb.AppendLine("                if (property == \"$type\") { tag = (ushort)reader.ReadInt(); continue; }");
-        sb.AppendLine("                if (property != \"$value\") { reader.Skip(); continue; }");
+        sb.AppendLine("                if (property == 1) { tag = (ushort)reader.ReadInt(); continue; }");
+        sb.AppendLine("                if (property != 2) { reader.Skip(); continue; }");
         sb.AppendLine("                switch (tag)");
         sb.AppendLine("                {");
         foreach (LuminUnionMemberInfo member in data.UnionMembers)
@@ -196,7 +197,7 @@ public static partial class LuminPackExtensionGenerator
             var compatibility = GetUnionGenericCompatibility(data, member);
             sb.AppendLine("                    case " + member.Id + ":");
             sb.AppendLine("                    {");
-            sb.AppendLine("                        " + memberType + " member = default!;");
+            sb.AppendLine("                        " + memberType + " member = (object?)value is " + memberType + " existing && value!.GetType() == typeof(" + memberType + ") ? existing : default!;");
             sb.AppendLine("                        global::LuminPack.Generated.LuminPackExtensions.ReadValue(ref reader, ref member);");
             sb.AppendLine(compatibility.RequiresCast
                 ? "                        value = (" + data.classFullName + ")(object)member;"
@@ -255,10 +256,10 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("            {");
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd) return;");
         sb.AppendLine("                if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String) continue;");
-        sb.AppendLine("                var property = reader.ReadString();");
+        JsonPropertyNameEmitter.Append(sb, "$type", "$value");
         sb.AppendLine("                if (!reader.Read()) break;");
-        sb.AppendLine("                if (property == \"$type\") { tag = (ushort)reader.ReadInt(); continue; }");
-        sb.AppendLine("                if (property != \"$value\") { reader.Skip(); continue; }");
+        sb.AppendLine("                if (property == 1) { tag = (ushort)reader.ReadInt(); continue; }");
+        sb.AppendLine("                if (property != 2) { reader.Skip(); continue; }");
         sb.AppendLine("                switch (tag)");
         sb.AppendLine("                {");
         foreach (LuminUnionMemberInfo member in data.UnionMembers)

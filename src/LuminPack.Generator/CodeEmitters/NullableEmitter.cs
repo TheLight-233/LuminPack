@@ -146,7 +146,7 @@ public static class NullableEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            " + elementType + " item = default;");
+        sb.AppendLine("            " + elementType + " item = value.GetValueOrDefault();");
         sb.AppendLine("            reader.ReadValue(ref item);");
         sb.AppendLine("            value = item;");
     }

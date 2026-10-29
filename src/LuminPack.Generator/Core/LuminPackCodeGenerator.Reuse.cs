@@ -60,7 +60,7 @@ public static partial class LuminPackCodeGenerator
     /// <param name="fields">The canonical inline members.</param>
     /// <param name="storage">The original storage accessor for each member.</param>
     /// <returns>Null tests on the actual reference slots available for reuse.</returns>
-    private static IEnumerable<string> ReusableMemberConditions(IEnumerable<LuminDataField> fields, System.Func<LuminDataField, string> storage)
+    internal static IEnumerable<string> ReusableMemberConditions(IEnumerable<LuminDataField> fields, System.Func<LuminDataField, string> storage)
     {
         foreach (var field in fields)
         {

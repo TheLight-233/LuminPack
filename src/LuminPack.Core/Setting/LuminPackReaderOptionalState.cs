@@ -40,6 +40,11 @@ namespace LuminPack.Option
         private LuminCircleReferenceMap<object, uint>? reusedObjectToRef;
         private bool reuseIndexInitialized;
 
+        /// <summary>Retains UTF-8 JSON escape decoding storage in the exclusively owned reader context.</summary>
+        internal byte[]? JsonUtf8StringScratch;
+        /// <summary>Retains UTF-16 JSON escape decoding storage in the exclusively owned reader context.</summary>
+        internal char[]? JsonUtf16StringScratch;
+
         /// <summary>Initializes a new instance of <c>LuminPackReaderOptionalState</c>.</summary>
         public LuminPackReaderOptionalState()
         {

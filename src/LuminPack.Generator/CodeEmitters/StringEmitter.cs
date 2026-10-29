@@ -62,6 +62,6 @@ public static class StringEmitter
         sb.AppendLine("            if (reader.CurrentTokenType != global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
         sb.AppendLine("                global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException(\"Expected string token\");");
         sb.AppendLine();
-        sb.AppendLine("            value = reader.ReadString();");
+        sb.AppendLine("            reader.Read(ref value);");
     }
 }

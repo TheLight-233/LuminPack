@@ -29,6 +29,7 @@ Person other = LuminPackSerializer.Deserialize<Person>(bytes);
 
 string json = LuminPackSerializer.SerializeJson(person);
 Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
+LuminPackSerializer.DeserializeJson(json, ref fromJson);  // reuses the existing JSON graph
 int size = LuminPackSerializer.Sizeof(person);
 ```
 
@@ -48,6 +49,7 @@ int size = LuminPackSerializer.Sizeof(person);
 - `LuminBufferWriter` is an `IBufferWriter<byte>` over an `ArrayPool<byte>` rental: dispose it (or return it to its writer pool). Borrowed spans expire on growth, release or pool return. Writes into it append; reset with `ResetForReuse()` between independent records.
 - `Register` APIs take function pointers: the project needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` and an `unsafe` block.
 - Reuse is not transactional: a failed read can leave members already updated.
+- JSON `ref` reads reuse objects, list elements, exact same-length arrays, dictionary values matched by key, mutable array slices, exact Union cases and tracked references. Unchanged decoded strings retain identity. JSON `null` clears the target; omitted members reset to `default` on an existing object. Immutable collections keep their construction behavior.
 
 ## Where to look
 
@@ -59,6 +61,7 @@ int size = LuminPackSerializer.Sizeof(person);
 | Task | Use |
 | --- | --- |
 | Allocation-free repeated reads | `Deserialize(bytes, ref existing)` |
+| Reuse an existing JSON graph | `DeserializeJson(json, ref existing)`; UTF-8/UTF-16, concrete/generic and text/span/buffer entries |
 | Polymorphism | `[LuminPackable]` interface/abstract root; cases collected automatically or `[LuminPackUnion(tag, typeof(Case))]` |
 | Type from another assembly | `[assembly: LuminPackable(typeof(Lib.Model))]` (also open generics, also Union roots) |
 | Schema evolution | `[LuminPackable(GeneratorType.VersionTolerant)]` |
@@ -69,6 +72,8 @@ int size = LuminPackSerializer.Sizeof(person);
 | Hand-written format | `[LuminPackable(GeneratorType.Custom)]` with static `Serialize`/`Deserialize` |
 | Smaller generated code | `<LuminPackGenerationMode>Light</LuminPackGenerationMode>` + `<CompilerVisibleProperty Include="LuminPackGenerationMode" />` |
 | Pool instances | `[LuminPackPoolRent] static T Rent()` |
+
+For ordinary objects with `[LuminPackPoolRent]`, binary and JSON reads without `ref` also rent first and then reuse the rented instance's existing graph. Supplying a non-null target by `ref` skips the rent.
 
 ## Pitfalls
 
