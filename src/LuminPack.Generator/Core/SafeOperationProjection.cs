@@ -48,8 +48,9 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
         if (node.Body == null || node.ParameterList.Parameters.Count != 2 || !BinaryOperationPlan.IsOperation(node.Identifier.ValueText)) return node;
         var parameters = node.ParameterList.Parameters;
         string state = parameters[0].Identifier.Text, stateType = parameters[0].Type.ToString();
-        bool json = stateType.Contains("Json"), read = stateType.Contains("Reader"), write = stateType.Contains("Writer"), evaluate = stateType.Contains("Evaluator");
-        if (!read && !write && !evaluate) return node;
+        bool json = stateType.Contains("Json"), read = stateType.Contains("Reader"), write = stateType.Contains("Writer");
+        // The evaluator state no longer owns option or policy state, so internal width operations keep their original body.
+        if (!read && !write) return node;
         if (!_boundary) return read ? node.WithBody(_reads.Rewrite(node, json)) : node;
         if (node.Identifier.ValueText is "ReadValueWithCompress" or "WriteValueWithCompress")
             return node.WithBody((BlockSyntax)SyntaxFactory.ParseStatement("{ " + Policy + ".RejectLegacyInputCompression(); }"));
@@ -59,9 +60,7 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
         string check = Policy + ".CheckInputProfile<" + _profile + ", " + _profile + ">();";
         string text = "{ var __safeState = " + state + ".OptionState; var __safeOperation = " + Policy + ".BeginOperation(__safeState, " + Schema + ", " + (read ? "true" : "false") + ");" +
             "if (!__safeOperation.OwnsBoundary) { __safeOriginalOperation(ref " + state + ", " + payload + "); return; }";
-        if (evaluate)
-            text += "try { " + check + Schema + ".EnsureSupported(); " + state + ".Add(" + Policy + ".HeaderSize); __safeOriginalOperation(ref " + state + ", " + payload + "); } finally { " + Policy + ".EndOperation(__safeOperation); }";
-        else if (read)
+        if (read)
         {
             text += "bool __safeDone = false; global::System.Runtime.InteropServices.GCHandle __safePin = default; int __safeConsumed = 0;";
             if (json) text += "int __safeJsonStart = " + state + ".Position - (" + Schema + ".DocumentEncoding == 0 ? 1 : 2); int __safeJsonDepth = " + state + ".Depth - 1;";
