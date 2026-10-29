@@ -15,11 +15,18 @@ public static unsafe partial class LuminDrawing
     /// <param name="writer">The Core output cursor.</param><param name="value">The color.</param>
     public static void Write(ref LuminPackWriter writer, in DrawingColor value)
     {
-        // The marker and an int payload; a name record reserves its own capacity.
+        // Each branch reserves its exact record width before the first byte, so a short destination fails unchanged.
+        if (value.IsEmpty) { writer.EnsureAdditionalCapacity(1); writer.Write((byte)0); return; }
+        if (value.IsKnownColor) { writer.EnsureAdditionalCapacity(5); writer.Write((byte)1); writer.Write((int)value.ToKnownColor()); return; }
+        if (value.IsNamedColor)
+        {
+            string? name = value.Name;
+            writer.EnsureAdditionalCapacity(checked(1 + default(LuminPackEvaluator).GetStringLength(ref name)));
+            writer.Write((byte)2);
+            writer.Write(value.Name);
+            return;
+        }
         writer.EnsureAdditionalCapacity(5);
-        if (value.IsEmpty) { writer.Write((byte)0); return; }
-        if (value.IsKnownColor) { writer.Write((byte)1); writer.Write((int)value.ToKnownColor()); return; }
-        if (value.IsNamedColor) { writer.Write((byte)2); writer.Write(value.Name); return; }
         writer.Write((byte)3);
         writer.Write(value.ToArgb());
     }
