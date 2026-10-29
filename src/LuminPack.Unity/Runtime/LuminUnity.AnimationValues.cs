@@ -51,10 +51,6 @@ namespace LuminPack.Unity
             result.outWeight = field7;
             value = result;
         }
-        /// <summary>Adds the exact 32-byte Keyframe representation.</summary>
-        /// <param name="evaluator">Size accumulator.</param><param name="value">Value.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Keyframe value) => evaluator.Add(32);
-
         /// <summary>Writes explicit GradientColorKey fields without layout padding.</summary>
         /// <param name="writer">Output cursor.</param><param name="value">The value.</param>
         public static void Write(ref LuminPackWriter writer, in GradientColorKey value)
@@ -77,10 +73,6 @@ namespace LuminPack.Unity
             result.time = field1;
             value = result;
         }
-        /// <summary>Adds the exact 20-byte GradientColorKey representation.</summary>
-        /// <param name="evaluator">Size accumulator.</param><param name="value">Value.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in GradientColorKey value) => evaluator.Add(20);
-
         /// <summary>Writes explicit GradientAlphaKey fields without layout padding.</summary>
         /// <param name="writer">Output cursor.</param><param name="value">The value.</param>
         public static void Write(ref LuminPackWriter writer, in GradientAlphaKey value)
@@ -103,10 +95,6 @@ namespace LuminPack.Unity
             result.time = field1;
             value = result;
         }
-        /// <summary>Adds the exact 8-byte GradientAlphaKey representation.</summary>
-        /// <param name="evaluator">Size accumulator.</param><param name="value">Value.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in GradientAlphaKey value) => evaluator.Add(8);
-
         /// <summary>Writes explicit RangeInt fields without layout padding.</summary>
         /// <param name="writer">Output cursor.</param><param name="value">The value.</param>
         public static void Write(ref LuminPackWriter writer, in RangeInt value)
@@ -129,10 +117,6 @@ namespace LuminPack.Unity
             result.length = field1;
             value = result;
         }
-        /// <summary>Adds the exact 8-byte RangeInt representation.</summary>
-        /// <param name="evaluator">Size accumulator.</param><param name="value">Value.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in RangeInt value) => evaluator.Add(8);
-
     }
 }
 #pragma warning restore CS0618

@@ -13,10 +13,9 @@ public static unsafe class RegistrationContract
     {
         LuminPackFormatterRegistry.Register(typeof(ExistingValue),
             (nint)(delegate*<ref LuminPackWriter, in ExistingValue, void>)&WriteExisting,
-            (nint)(delegate*<ref LuminPackReader, ref ExistingValue, void>)&Read,
-            calculateOffset: (nint)(delegate*<ref LuminPackEvaluator, in ExistingValue, void>)&Size);
-        var codec = new LuminPackCodec<ExistingValue>(WriteModule, Read, Size);
-        PlatformRegistration.Add<ExistingValue>(&WriteModule, &Read, &Size, codec);
+            (nint)(delegate*<ref LuminPackReader, ref ExistingValue, void>)&Read);
+        var codec = new LuminPackCodec<ExistingValue>(WriteModule, Read);
+        PlatformRegistration.Add<ExistingValue>(&WriteModule, &Read, codec);
         nint key = LuminPackMarshal.GetMethodTable(typeof(ExistingValue));
         CodecContract.Assert(LuminPackFormatterRegistry.TryGetValue(in key, out var entry) &&
             entry.WriteValue == (nint)(delegate*<ref LuminPackWriter, in ExistingValue, void>)&WriteExisting,
@@ -52,7 +51,4 @@ public static unsafe class RegistrationContract
         reader.Read(ref marker);
     }
 
-    /// <summary>Adds the exact sentinel record size.</summary>
-    /// <param name="evaluator">The size accumulator.</param><param name="value">The sentinel.</param>
-    private static void Size(ref LuminPackEvaluator evaluator, in ExistingValue value) => evaluator.Add(1);
 }

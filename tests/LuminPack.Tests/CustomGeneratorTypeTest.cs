@@ -177,13 +177,6 @@ namespace LuminPackUnitTest
                 }
             }
 
-            /// <summary>Calculates the serialized size contribution of offset.</summary>
-            /// <param name="evaluator">The evaluator used by this operation.</param>
-            /// <param name="value">The value consumed or produced by this operation.</param>
-            public static void CalculateOffset(ref LuminPackEvaluator evaluator, in CustomFullType value)
-            {
-                evaluator.Add(8);
-            }
         }
 
         /// <summary>Verifies custom binary round trips.</summary>

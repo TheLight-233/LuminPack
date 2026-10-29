@@ -121,20 +121,18 @@ internal static class SerializerCollectionInliningRegression
                 foreach (var call in method.DescendantNodes().OfType<InvocationExpressionSyntax>())
                 {
                     var symbol = model.GetSymbolInfo(call).Symbol as IMethodSymbol;
-                    if (symbol is { IsGenericMethod: true, Name: "CalculateOffset" } &&
-                        IsMissingEvaluator(model.GetTypeInfo(call.ArgumentList.Arguments.Last().Expression).Type)) continue;
                     Require(symbol == null || !symbol.ContainingType.Name.StartsWith("LuminPackExtensions_", StringComparison.Ordinal),
                         "An ordinary collection entry retained a generated formatter call in " + method.ParameterList + ": " + call + " -> " + symbol?.ToDisplayString());
                 }
             }
         }
-        Require(inspected == shapes.Length * 5, "The repeated collection fixture did not select every expected entry; found " + inspected + ". " + string.Join("; ", signatures));
+        Require(inspected == shapes.Length * 4, "The repeated collection fixture did not select every expected entry; found " + inspected + ". " + string.Join("; ", signatures));
         using var image = new MemoryStream();
         var emit = output.Emit(image);
         Require(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics));
         var assembly = Assembly.Load(image.ToArray());
         Require((int)assembly.GetType("Entry")!.GetMethod("Check")!.Invoke(null, null)! == shapes.Length, "Collection execution omitted an operation shape.");
-        Console.WriteLine($"Passed {shapes.Length} repeated collection/wrapper shapes, {inspected} concrete entries, independent locals, and binary/JSON/size fallback parity.");
+        Console.WriteLine($"Passed {shapes.Length} repeated collection/wrapper shapes, {inspected} concrete entries, independent locals, and binary/JSON fallback parity.");
     }
 
     /// <summary>Appends one executable typed call site and comparisons against the existing generic formatter path.</summary>
@@ -149,7 +147,6 @@ internal static class SerializerCollectionInliningRegression
         source.Append("var expected = LuminPackSerializer.Serialize<").Append(name).AppendLine(">(in value);");
         source.AppendLine("var actual = LuminPackSerializer.Serialize(in value);");
         source.Append("if (!actual.AsSpan().SequenceEqual(expected)) throw new Exception(\"Binary write: ").Append(name).AppendLine("\");");
-        source.Append("if (LuminPackSerializer.Sizeof(value) != actual.Length || LuminPackSerializer.Sizeof(value) != LuminPackSerializer.Sizeof<").Append(name).Append(">(value)) throw new Exception(\"Size: ").Append(name).AppendLine("\");");
         source.Append(name).Append(" generic = null!, direct = null!;").AppendLine();
         source.Append("LuminPackSerializer.Deserialize<").Append(name).AppendLine(">(expected.AsSpan(), ref generic);");
         source.AppendLine("LuminPackSerializer.Deserialize(expected.AsSpan(), ref direct);");
@@ -171,14 +168,6 @@ internal static class SerializerCollectionInliningRegression
     private static void AppendRestoredComparison(StringBuilder source, string name, string operation)
         => source.Append("if (!LuminPackSerializer.Serialize<").Append(name).Append(">(in generic).AsSpan().SequenceEqual(LuminPackSerializer.Serialize<")
             .Append(name).Append(">(in direct))) throw new Exception(\"").Append(operation).Append(": ").Append(name).AppendLine("\");");
-
-    /// <summary>Identifies shapes whose evaluator already uses the runtime registration fallback.</summary>
-    /// <param name="type">The bound evaluator argument type.</param>
-    /// <returns>Whether the existing emitter registry has no evaluator for this shape.</returns>
-    private static bool IsMissingEvaluator(ITypeSymbol? type)
-        => type is IArrayTypeSymbol { Rank: > 1 } || type is INamedTypeSymbol named &&
-            named.OriginalDefinition.ToDisplayString() is "System.Memory<T>" or "System.ReadOnlyMemory<T>" or
-                "System.Collections.Generic.PriorityQueue<TElement, TPriority>";
 
     /// <summary>Reports a concrete operation contract failure.</summary>
     /// <param name="condition">The invariant required by this regression.</param>

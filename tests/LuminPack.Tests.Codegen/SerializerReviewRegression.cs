@@ -129,7 +129,6 @@ internal static class SerializerReviewRegression
                 public static void Read(ref LuminPackReader reader, ref StateOnly value) => LuminPackSerializer.Deserialize(ref reader, ref value);
                 public static void JsonWrite(ref LuminPackJsonWriter writer, in StateOnly value) => LuminPackSerializer.SerializeJson(ref writer, in value);
                 public static void JsonRead(ref LuminPackJsonReader reader, ref StateOnly value) => LuminPackSerializer.DeserializeJson(ref reader, ref value);
-                public static void Size(ref LuminPackEvaluator evaluator, ref StateOnly value) => LuminPackSerializer.Sizeof(ref evaluator, ref value);
             }
             """;
         var input = CSharpCompilation.Create("StateOnlyRoots", [CSharpSyntaxTree.ParseText(source, Parse)], references,

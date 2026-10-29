@@ -28,7 +28,6 @@ public class SpecialEmitterRegressionTest
         int? expected = number;
         byte[] bytes = LuminPackSerializer.Serialize(expected);
         Assert.Equal(expected, LuminPackSerializer.Deserialize<int?>(bytes));
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(expected));
         int? absent = null;
         Assert.Null(LuminPackSerializer.Deserialize<int?>(LuminPackSerializer.Serialize(absent)));
     }
@@ -45,7 +44,6 @@ public class SpecialEmitterRegressionTest
         Assert.Null(copy.Value);
         Lazy<int>? absent = null;
         Assert.Null(LuminPackSerializer.Deserialize<Lazy<int>?>(LuminPackSerializer.Serialize(absent)));
-        Assert.Equal(LuminPackSerializer.Serialize(number).Length, LuminPackSerializer.Sizeof(number));
     }
 
     /// <summary>Checks reference tuples preserve a marker-like first component.</summary>
@@ -55,7 +53,6 @@ public class SpecialEmitterRegressionTest
         var expected = Tuple.Create(255, "tail");
         byte[] bytes = LuminPackSerializer.Serialize(expected);
         Assert.Equal(expected, LuminPackSerializer.Deserialize<Tuple<int, string>>(bytes));
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(expected));
     }
 
     /// <summary>Checks every Version constructor form consumes the entire record before a following scalar.</summary>
@@ -72,7 +69,6 @@ public class SpecialEmitterRegressionTest
             Assert.Equal(expected, actual);
             Assert.Equal(record.Length, reader.Position);
             Assert.Equal(42, reader.Read<int>());
-            Assert.Equal(record.Length, LuminPackSerializer.Sizeof(expected));
         }
     }
 
@@ -83,7 +79,6 @@ public class SpecialEmitterRegressionTest
         var expected = new Uri("https://example.com/" + new string('a', 235));
         byte[] bytes = LuminPackSerializer.Serialize(expected);
         Assert.Equal(expected, LuminPackSerializer.Deserialize<Uri>(bytes));
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(expected));
     }
 
     /// <summary>Checks empty culture names preserve the nonnull invariant culture.</summary>
@@ -94,7 +89,6 @@ public class SpecialEmitterRegressionTest
         byte[] bytes = LuminPackSerializer.Serialize(expected);
         Assert.Equal(expected.Name, LuminPackSerializer.Deserialize<CultureInfo>(bytes)?.Name);
         Assert.Equal(expected.Name, LuminPackSerializer.DeserializeJson<CultureInfo>(LuminPackSerializer.SerializeJson(expected))?.Name);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(expected));
     }
 
     /// <summary>Checks a custom time-zone record and a following scalar are consumed independently.</summary>
@@ -110,7 +104,6 @@ public class SpecialEmitterRegressionTest
         Assert.True(expected.HasSameRules(copy));
         Assert.Equal(bytes.Length, reader.Position);
         Assert.Equal(42, reader.Read<int>());
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(expected));
     }
 
     /// <summary>Checks dynamic UTF-16 input validation precedes clearing a reusable builder.</summary>
@@ -210,7 +203,6 @@ public class SpecialEmitterRegressionTest
         foreach (Type expected in new[] { typeof(int), typeof(Dictionary<string, List<int[]>>), typeof(List<>), typeof(int).MakeByRefType() })
         {
             byte[] bytes = LuminPackSerializer.Serialize(expected);
-            Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(expected));
             string json = LuminPackSerializer.SerializeJson(expected);
             if (RuntimeFeature.IsDynamicCodeSupported)
             {
@@ -246,7 +238,6 @@ public class SpecialEmitterRegressionTest
         var expected = new ReadOnlyCollectionBuilder<int> { 255, -1, 42 };
         byte[] bytes = LuminPackSerializer.Serialize(expected);
         Assert.Equal(new[] { 255, -1, 42 }, LuminPackSerializer.Deserialize<ReadOnlyCollectionBuilder<int>>(bytes));
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(expected));
         var reused = new ReadOnlyCollectionBuilder<int>(32) { 9, 8, 7, 6, 5 };
         var original = reused;
         LuminPackSerializer.Deserialize(bytes, ref reused);
@@ -327,18 +318,15 @@ public class SpecialEmitterRegressionTest
         CultureInfo culture = CultureInfo.InvariantCulture;
         byte[] bytes = LuminPackSerializer.Serialize<CultureInfo, TOptions>(culture);
         Assert.Equal(culture.Name, LuminPackSerializer.Deserialize<CultureInfo, TOptions>(bytes).Name);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof<CultureInfo, TOptions>(culture));
         Uri uri = new("https://example.com/" + new string('a', 235));
         bytes = LuminPackSerializer.Serialize<Uri, TOptions>(uri);
         Assert.Equal(uri, LuminPackSerializer.Deserialize<Uri, TOptions>(bytes));
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof<Uri, TOptions>(uri));
         Type type = typeof(Dictionary<string, int[]>);
         bytes = LuminPackSerializer.Serialize<Type, TOptions>(type);
         if (RuntimeFeature.IsDynamicCodeSupported)
             Assert.Equal(type, LuminPackSerializer.Deserialize<Type, TOptions>(bytes));
         else
             Assert.Throws<PlatformNotSupportedException>(() => LuminPackSerializer.Deserialize<Type, TOptions>(bytes));
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof<Type, TOptions>(type));
         Assert.Null(LuminPackSerializer.Deserialize<Type, TOptions>(LuminPackSerializer.Serialize<Type, TOptions>(null!)));
         Uri? absent = null;
         bytes = LuminPackSerializer.Serialize<Uri?, TOptions>(absent);

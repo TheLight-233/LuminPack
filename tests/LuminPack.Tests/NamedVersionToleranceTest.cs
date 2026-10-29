@@ -47,7 +47,6 @@ public class NamedVersionToleranceTest
         var original = target;
         LuminPackSerializer.Deserialize<FixedRecord, TOptions>(bytes, ref target);
         Assert.Same(original, target);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof<FixedRecord, TOptions>(source));
         var evolved = LuminPackSerializer.Deserialize<FixedReordered, TOptions>(bytes);
         Assert.Equal(source.Stamp, evolved.Stamp);
         Assert.Equal(source.Flag, evolved.Flag);
@@ -75,7 +74,6 @@ public class NamedVersionToleranceTest
         Assert.Equal(original.Name, restored.Name);
         Assert.Equal(original.Tail, restored.Tail);
         Assert.Null(restored.Removed);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(current));
         Assert.Equal(251, bytes[0]);
         Assert.Equal(1, bytes[1]);
     }
@@ -168,7 +166,6 @@ public class NamedVersionToleranceTest
         Assert.Same(text, target.Child.Text);
         Assert.Equal(7, child.Number);
         Assert.Equal(8, item.Number);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof<Graph, TOptions>(source));
     }
 
     /// <summary>Checks absent fields clear reused values and unknown fields consume exactly their payload.</summary>
@@ -209,7 +206,6 @@ public class NamedVersionToleranceTest
         Assert.Same(original, target);
         Assert.Equal(59, target.Number);
         Assert.Equal(61, target.ReadSecret());
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(source));
         var fresh = LuminPackSerializer.Deserialize<VolatileMembers>(bytes);
         Assert.Equal(61, fresh.ReadSecret());
     }
@@ -252,7 +248,6 @@ public class NamedVersionToleranceTest
         Assert.Equal(71, value.Number);
         Assert.Equal(2, CallbackValue.Writes);
         Assert.Equal(2, CallbackValue.Reads);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(value));
     }
 
     /// <summary>Checks generic field contracts use closed arguments and retain nested reusable storage.</summary>
@@ -266,7 +261,6 @@ public class NamedVersionToleranceTest
         LuminPackSerializer.Deserialize<Generic<Node>>(bytes, ref target);
         Assert.Same(child, target.Value);
         Assert.Equal(31, child.Number);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(source));
         Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize<Generic<string>>(bytes));
     }
 
@@ -298,7 +292,6 @@ public class NamedVersionToleranceTest
     public void EmptyAndNullRecordsRemainDistinct()
     {
         Assert.Equal(4, LuminPackSerializer.Serialize(new Empty()).Length);
-        Assert.Equal(4, LuminPackSerializer.Sizeof(new Empty()));
         Empty? target = new();
         byte[] bytes = LuminPackSerializer.Serialize<Empty>(null);
         Assert.Equal(new byte[] { 255 }, bytes);

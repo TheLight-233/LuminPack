@@ -24,7 +24,6 @@ public partial class CompiledOptionTest
         Assert.Equal(value.Children[0].Text, copy.Children[0].Text);
         Assert.Equal(value.Head.Next!.Text, copy.Head.Next!.Text);
         Assert.Equal(value.Map, copy.Map);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(value));
         Assert.Equal(bytes, LuminPackSerializer.Serialize(copy));
         string json = LuminPackSerializer.SerializeJson(value);
         var jsonCopy = LuminPackSerializer.DeserializeJson<DeclaredRecord>(json);
@@ -50,7 +49,6 @@ public partial class CompiledOptionTest
     {
         var value = new PlainRecord { Text = "\u4E2D\uD83D\uDE00", Items = ["a", "", "tail"] };
         byte[] bytes = LuminPackSerializer.Serialize<PlainRecord, TOptions>(value);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof<PlainRecord, TOptions>(value));
         Assert.Equal(value.Text, LuminPackSerializer.Deserialize<PlainRecord, TOptions>(bytes).Text);
         using var buffer = new LuminBufferWriter(true);
         LuminPackSerializer.Serialize<PlainRecord, TOptions>(value, buffer);
@@ -105,7 +103,6 @@ public partial class CompiledOptionTest
         Assert.Equal(value.List.Select(item => token ? item ?? "" : item), copy.List);
         Assert.Equal(value.Array.Select(item => token ? item ?? "" : item), copy.Array);
         Assert.Equal(value.Tail, copy.Tail);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof<CollectionTail, TOptions>(value));
     }
 
     /// <summary>Checks closed Custom pointers, fixed member scopes and complete JSON document encoding.</summary>
@@ -124,7 +121,6 @@ public partial class CompiledOptionTest
         byte[] bytes = LuminPackSerializer.Serialize(value);
         var restored = LuminPackSerializer.Deserialize<CustomHost>(bytes);
         Assert.Equal(value.Value.Text, restored.Value.Text);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(value));
     }
 
     /// <summary>Verifies an explicitly registered Custom profile through the production generic facade.</summary>
@@ -136,7 +132,6 @@ public partial class CompiledOptionTest
         var value = new OpaqueValue { Text = "custom-\u4E2D\uD83D\uDE00" };
         byte[] bytes = LuminPackSerializer.Serialize<OpaqueValue, TOptions>(value);
         Assert.Equal(value.Text, LuminPackSerializer.Deserialize<OpaqueValue, TOptions>(bytes).Text);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof<OpaqueValue, TOptions>(value));
         string json = LuminPackSerializer.SerializeJson<OpaqueValue, TOptions>(value);
         Assert.Equal(value.Text, LuminPackSerializer.DeserializeJson<OpaqueValue, TOptions>(json).Text);
     }
@@ -152,7 +147,7 @@ public partial class CompiledOptionTest
         private static unsafe bool Initialize()
         {
             LuminPackSerializer.Register<OpaqueValue, TOptions>(&OpaqueValue.WriteCompiled<TOptions>, &OpaqueValue.ReadCompiled<TOptions>,
-                &OpaqueValue.WriteJsonCompiled<TOptions>, &OpaqueValue.ReadJsonCompiled<TOptions>, &OpaqueValue.SizeCompiled<TOptions>);
+                &OpaqueValue.WriteJsonCompiled<TOptions>, &OpaqueValue.ReadJsonCompiled<TOptions>);
             return true;
         }
     }
@@ -178,10 +173,6 @@ public partial class CompiledOptionTest
         /// <param name="reader">The JSON reader.</param>
         /// <param name="value">The restored payload.</param>
         public static void DeserializeJson(ref LuminPackJsonReader reader, ref OpaqueValue value) => ReadJsonCompiled<LuminPackDefaultOptions>(ref reader, ref value);
-        /// <summary>Adds the default binary record size.</summary>
-        /// <param name="evaluator">The evaluator.</param>
-        /// <param name="value">The Custom payload.</param>
-        public static void CalculateOffset(ref LuminPackEvaluator evaluator, in OpaqueValue value) => SizeCompiled<LuminPackDefaultOptions>(ref evaluator, value);
         /// <summary>Writes one explicitly configured binary string record.</summary>
         /// <typeparam name="TOptions">The stateless profile.</typeparam>
         /// <param name="writer">The binary writer.</param>
@@ -213,15 +204,6 @@ public partial class CompiledOptionTest
             string text = "";
             LuminPackSerializer.DeserializeJson<string, TOptions>(ref reader, ref text);
             value = new() { Text = text };
-        }
-        /// <summary>Adds one explicitly configured binary string record size.</summary>
-        /// <typeparam name="TOptions">The stateless profile.</typeparam>
-        /// <param name="evaluator">The evaluator.</param>
-        /// <param name="value">The Custom payload.</param>
-        public static void SizeCompiled<TOptions>(ref LuminPackEvaluator evaluator, in OpaqueValue value) where TOptions : struct, ILuminPackOptions
-        {
-            string text = value.Text;
-            LuminPackSerializer.Sizeof<string, TOptions>(ref evaluator, ref text);
         }
     }
 

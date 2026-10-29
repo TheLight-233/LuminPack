@@ -50,7 +50,6 @@ internal static class Program
         Check(copy.Id == 42 && copy.Name == source.Name && copy.Nodes[0].Value == 7 && copy.Choice is Selected { Value: 123 }, "Ordinary or Union read failed.");
         Check(ReferenceEquals(nodes, copy.Nodes) && ReferenceEquals(child, copy.Nodes[0]) && ReferenceEquals(values, copy.Values) && ReferenceEquals(name, copy.Name), "Existing storage was replaced.");
         Check(copy.Portable[0].Value == source.Portable[0].Value && LuminPackSerializer.Serialize(source.Portable).Length == 13, "Portable list used native padding.");
-        Check(LuminPackSerializer.Sizeof(source) == payload.Length, "Size evaluation disagrees with the payload.");
         string json = LuminPackSerializer.SerializeJson(source);
         Check(LuminPackSerializer.DeserializeJson<Message>(json).Name == source.Name, "JSON read failed.");
         using (var stream = new MemoryStream())
@@ -136,7 +135,7 @@ internal static class Program
         Check(converted[^1].Tag == 100 && converted[^1].Value == packed[^1].Value, "Published foreign-layout conversion lost data.");
         AotSizeNode? node = null;
         for (int i = 0; i < 128; i++) node = new AotSizeNode { Value = i, Next = node };
-        Check(LuminPackSerializer.Sizeof<AotSizeNode>(node!) == LuminPackSerializer.Serialize(node!).Length, "Published recursive size fallback failed.");
+        Check(LuminPackSerializer.Deserialize<AotSizeNode>(LuminPackSerializer.Serialize<AotSizeNode>(node!))?.Value == 127, "Published recursive generic fallback failed.");
     }
 
     /// <summary>Verifies the requested process architecture and CPU vendor before testing serialization.</summary>
@@ -215,7 +214,6 @@ internal static class Program
     {
         var source = new AotExternal { Id = 17, Text = "bounded", Values = new[] { 1, 2, 3 } };
         byte[] bytes = LuminPackSerializer.Serialize(source);
-        Check(LuminPackSerializer.Sizeof(source) == bytes.Length, "External envelope size changed.");
         var target = new AotExternal { Id = 91 };
         var original = target;
         LuminPackSerializer.Deserialize(bytes, ref target);

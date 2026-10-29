@@ -17,7 +17,6 @@ public class LayoutTagScopeTest
         Assert.Equal(values.Length, BitConverter.ToInt32(array, 0));
         Assert.Contains(array[4], new byte[] { 1, 2 });
         Assert.Equal(4 + 1 + values.Length * (array[4] == 1 ? 16 : 12), array.Length);
-        Assert.Equal(array.Length, LuminPackSerializer.Sizeof(values));
         Assert.Equal(array, LuminPackSerializer.Serialize(values.ToList()));
         Assert.Equal(array, LuminPackSerializer.Serialize(new Memory<UnmarkedVariant>(values)));
         Assert.Equal(array, LuminPackSerializer.Serialize(new ArraySegment<UnmarkedVariant>(values)));
@@ -59,7 +58,6 @@ public class LayoutTagScopeTest
         var variant = new ImplicitVariant { A = 5, B = 99 };
         byte[] single = LuminPackSerializer.Serialize(variant);
         Assert.Equal(new[] { variant.A }.Concat(BitConverter.GetBytes(variant.B)).ToArray(), single);
-        Assert.Equal(single.Length, LuminPackSerializer.Sizeof(variant));
         Assert.Equal(variant, ConcreteReads.Read<ImplicitVariant>(single, static (b, ref v) => LuminPackSerializer.Deserialize(b, ref v)));
 
         var variants = new[] { variant, new ImplicitVariant { A = 6, B = -1 } };

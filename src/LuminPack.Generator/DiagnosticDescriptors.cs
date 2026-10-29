@@ -284,12 +284,6 @@ internal static class DiagnosticDescriptors
         "Custom JSON formatter methods incomplete",
         "Custom type '{0}' declares '{1}' but not '{2}'; JSON registration requires both SerializeJson and DeserializeJson.");
 
-    /// <summary>Stores the custom calculate offset requires json.</summary>
-    public static readonly DiagnosticDescriptor CustomCalculateOffsetRequiresJson = Error(
-        "LuminPack105",
-        "Custom CalculateOffset requires JSON methods",
-        "Custom type '{0}' declares CalculateOffset, but the matching Register overload also requires SerializeJson and DeserializeJson.");
-
     /// <summary>Stores the custom type must not be generic.</summary>
     public static readonly DiagnosticDescriptor CustomTypeMustNotBeGeneric = Error(
         "LuminPack106",

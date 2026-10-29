@@ -120,8 +120,6 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("        private static LuminPackWriterOptionalState? _threadStaticWriterOptionalState;");
         sb.AppendLine("        [ThreadStatic]");
         sb.AppendLine("        private static LuminPackReaderOptionalState? _threadStaticReaderOptionalState;");
-        sb.AppendLine("        [ThreadStatic]");
-        sb.AppendLine("        private static LuminPackEvaluatorOptionState? _threadStaticEvaluatorOptionalState;");
         sb.AppendLine();
 
         string header = sb.ToString();
@@ -329,42 +327,8 @@ public static partial class LuminPackSerializerGenerator
         if ((apis & SerializerApiKind.DeserializeJsonSpanCharRef) != 0) AppendDeserializeJsonSpanCharRef(sb, typeName);
         if ((apis & SerializerApiKind.DeserializeJsonBufferRef) != 0) AppendDeserializeJsonBufferRef(sb, typeName);
         if ((apis & SerializerApiKind.DeserializeAsyncValue) != 0) AppendDeserializeAsyncValue(sb, typeName, metaInfo);
-        if ((apis & SerializerApiKind.Sizeof) != 0) AppendSizeof(sb, typeName);
         if ((apis & SerializerApiKind.SerializeBufferWriter) != 0) AppendSerializeBufferWriter(sb, typeName);
         if ((apis & SerializerApiKind.SerializeJsonBufferWriter) != 0) AppendSerializeJsonBufferWriter(sb, typeName);
-    }
-
-    /// <summary>Builds the sizeof source from the supplied metadata.</summary>
-    /// <param name="sb">The builder receiving generated source code.</param>
-    /// <param name="typeName">The C# type name to use in generated source.</param>
-    private static void AppendSizeof(StringBuilder sb, string typeName)
-    {
-        sb.AppendLine("        /// <summary>Calculates the binary payload size for <paramref name=\"value\"/> without producing the payload.</summary>");
-        sb.AppendLine("        /// <param name=\"value\">The value whose serialized size is calculated.</param>");
-        sb.AppendLine("        /// <param name=\"option\">The configuration for this calculation, or <see langword=\"null\"/> for defaults.</param>");
-        sb.AppendLine("        /// <returns>The number of bytes required by binary serialization.</returns>");
-        sb.AppendLine("        /// <remarks>This convenience API may use thread-static evaluator state and does not modify a BufferWriter.</remarks>");
-        sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
-        sb.AppendLine("        " + _currentAccess + " static int Sizeof(" + typeName + " value, LuminPackSerializerOption? option = null)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            var state = _threadStaticEvaluatorOptionalState ??= new LuminPackEvaluatorOptionState();");
-        sb.AppendLine("            state.Init(option);");
-        sb.AppendLine("            try");
-        sb.AppendLine("            {");
-        sb.AppendLine("                var totalLength = 0;");
-        sb.AppendLine();
-        sb.AppendLine("                var evaluator = new LuminPackEvaluator(ref totalLength, state);");
-        sb.AppendLine();
-        sb.AppendLine("                global::LuminPack.LuminPackSerializer.Sizeof(ref evaluator, ref value);");
-        sb.AppendLine();
-        sb.AppendLine("                return totalLength;");
-        sb.AppendLine("            }");
-        sb.AppendLine("            finally");
-        sb.AppendLine("            {");
-        sb.AppendLine("                state.Reset();");
-        sb.AppendLine("            }");
-        sb.AppendLine("        }");
-        sb.AppendLine();
     }
 
     /// <summary>Builds the register source from the supplied metadata.</summary>
@@ -394,51 +358,6 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackJsonWriter, in T, void> writeValueJson,");
         sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackJsonReader, ref T, void> readValueJson)");
         sb.AppendLine("            => global::LuminPack.Code.LuminPackFormatterRegistry.Register(typeof(T), (nint)writeValue, (nint)readValue, (nint)writeValueJson, (nint)readValueJson);");
-        sb.AppendLine();
-        sb.AppendLine("        /// <summary>Manually registers write/read + JSON + offset method pointers for a type the source generator did not cover.</summary>");
-        sb.AppendLine("        /// <typeparam name=\"T\">The runtime type to register.</typeparam>");
-        sb.AppendLine("        /// <param name=\"writeValue\">Static binary writer, e.g. <c>&amp;MyType.Write</c>.</param>");
-        sb.AppendLine("        /// <param name=\"readValue\">Static binary reader, e.g. <c>&amp;MyType.Read</c>.</param>");
-        sb.AppendLine("        /// <param name=\"writeValueJson\">Static JSON writer, e.g. <c>&amp;MyType.WriteJson</c>.</param>");
-        sb.AppendLine("        /// <param name=\"readValueJson\">Static JSON reader, e.g. <c>&amp;MyType.ReadJson</c>.</param>");
-        sb.AppendLine("        /// <param name=\"calculateOffset\">Static size calculator, e.g. <c>&amp;MyType.CalcSize</c>.</param>");
-        sb.AppendLine("        /// <remarks>Requires an unsafe context at the call site.</remarks>");
-        sb.AppendLine("        public static unsafe void Register<T>(");
-        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackWriter, in T, void> writeValue,");
-        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackReader, ref T, void> readValue,");
-        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackJsonWriter, in T, void> writeValueJson,");
-        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackJsonReader, ref T, void> readValueJson,");
-        sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackEvaluator, in T, void> calculateOffset)");
-        sb.AppendLine("            => global::LuminPack.Code.LuminPackFormatterRegistry.Register(typeof(T), (nint)writeValue, (nint)readValue, (nint)writeValueJson, (nint)readValueJson, (nint)calculateOffset);");
-        sb.AppendLine();
-    }
-
-    /// <summary>Builds the generic sizeof source from the supplied metadata.</summary>
-    /// <param name="sb">The builder receiving generated source code.</param>
-    private static void AppendGenericSizeof(StringBuilder sb)
-    {
-        sb.AppendLine("        /// <summary>Calculates the binary payload size for a <typeparamref name=\"T\"/> without producing the payload.</summary>");
-        sb.AppendLine("        /// <typeparam name=\"T\">The value type to evaluate.</typeparam>");
-        sb.AppendLine("        /// <param name=\"value\">The value whose serialized size is calculated.</param>");
-        sb.AppendLine("        /// <param name=\"option\">The configuration for this calculation, or <see langword=\"null\"/> for defaults.</param>");
-        sb.AppendLine("        /// <returns>The number of bytes required by binary serialization.</returns>");
-        sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
-        sb.AppendLine("        " + _currentAccess + " static int Sizeof<T>(T value, LuminPackSerializerOption? option = null)");
-        sb.AppendLine("        {");
-        sb.AppendLine("            var state = _threadStaticEvaluatorOptionalState ??= new LuminPackEvaluatorOptionState();");
-        sb.AppendLine("            state.Init(option);");
-        sb.AppendLine("            try");
-        sb.AppendLine("            {");
-        sb.AppendLine("                var totalLength = 0;");
-        sb.AppendLine("                var evaluator = new LuminPackEvaluator(ref totalLength, state);");
-        sb.AppendLine("                evaluator.CalculateOffset(ref value);");
-        sb.AppendLine("                return totalLength;");
-        sb.AppendLine("            }");
-        sb.AppendLine("            finally");
-        sb.AppendLine("            {");
-        sb.AppendLine("                state.Reset();");
-        sb.AppendLine("            }");
-        sb.AppendLine("        }");
         sb.AppendLine();
     }
 }

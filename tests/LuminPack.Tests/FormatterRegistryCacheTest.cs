@@ -15,13 +15,13 @@ internal static class FormatterRegistryCacheTest
     internal static void Run()
     {
         Assert.False(LuminPackFormatterRegistry<Profile>.TryGetCachedValue<Payload>(out _));
-        LuminPackFormatterRegistry.Register(typeof(Payload), 1, 2, 3, 4, 5);
+        LuminPackFormatterRegistry.Register(typeof(Payload), 1, 2, 3, 4);
         Assert.True(LuminPackFormatterRegistry<Profile>.TryGetCachedValue<Payload>(out var entry));
         CheckEntry(entry, 0);
         Assert.True(LuminPackFormatterRegistry<Profile>.TryGetCachedJsonValue<Payload>(out entry));
         CheckEntry(entry, 0);
 
-        LuminPackFormatterRegistry<Profile>.Register(typeof(Payload), 11, 12, 13, 14, 15);
+        LuminPackFormatterRegistry<Profile>.Register(typeof(Payload), 11, 12, 13, 14);
         Assert.True(LuminPackFormatterRegistry<Profile>.TryGetCachedValue<Payload>(out entry));
         CheckEntry(entry, 10);
         Assert.True(LuminPackFormatterRegistry<EquivalentProfile>.TryGetCachedValue<Payload>(out entry));
@@ -29,7 +29,7 @@ internal static class FormatterRegistryCacheTest
         Assert.True(LuminPackFormatterRegistry<Utf8Profile>.TryGetCachedValue<Payload>(out entry));
         CheckEntry(entry, 0);
         Assert.False(LuminPackFormatterRegistry<Utf8Profile>.TryGetCachedJsonValue<Payload>(out _));
-        LuminPackFormatterRegistry<Utf8Profile>.Register(typeof(Payload), 21, 22, 23, 24, 25);
+        LuminPackFormatterRegistry<Utf8Profile>.Register(typeof(Payload), 21, 22, 23, 24);
         Assert.True(LuminPackFormatterRegistry<Utf8Profile>.TryGetCachedJsonValue<Payload>(out entry));
         CheckEntry(entry, 20);
 
@@ -58,7 +58,7 @@ internal static class FormatterRegistryCacheTest
         Assert.False(context.IsAlive, "A registered snapshot retained its collectible payload context.");
     }
 
-    /// <summary>Checks that all five addresses come from one immutable registration result.</summary>
+    /// <summary>Checks that all four addresses come from one immutable registration result.</summary>
     /// <param name="entry">The observed entry.</param>
     /// <param name="basis">The common address prefix.</param>
     private static void CheckEntry(LuminPackFormatter entry, int basis)
@@ -67,7 +67,6 @@ internal static class FormatterRegistryCacheTest
         Assert.Equal((nint)(basis + 2), entry.ReadValue);
         Assert.Equal((nint)(basis + 3), entry.WriteValueJson);
         Assert.Equal((nint)(basis + 4), entry.ReadValueJson);
-        Assert.Equal((nint)(basis + 5), entry.CalculateOffset);
     }
 
     /// <summary>Invalidates warm snapshots while multiple threads read complete binary and JSON entries.</summary>

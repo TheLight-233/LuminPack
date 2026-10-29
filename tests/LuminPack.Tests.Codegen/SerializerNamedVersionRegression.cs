@@ -43,7 +43,6 @@ internal static class SerializerNamedVersionRegression
                 public static string Read(byte[] bytes)
                 {
                     var value = LuminPackSerializer.Deserialize<Envelope<Root>>(bytes).Value;
-                    if (LuminPackSerializer.Sizeof(value) != LuminPackSerializer.Serialize(value).Length) throw new Exception("Inexact named size.");
                     return value.Id + ":" + value.Child.Number + ":" + value.Child.TEXT + ":" + value.Children[0].Number + ":" + value.Children[0].TEXT;
                 }
             }

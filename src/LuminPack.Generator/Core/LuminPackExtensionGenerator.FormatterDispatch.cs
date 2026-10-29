@@ -38,7 +38,7 @@ public static partial class LuminPackExtensionGenerator
         {
             new DispatchOperation("Serialize", "LuminPackWriter", "writer", "in", true, "WriteValue", "in", false),
             new DispatchOperation("Deserialize", "LuminPackReader", "reader", "ref", true, "ReadValue", "ref", false),
-            new DispatchOperation("Sizeof", "LuminPackEvaluator", "evaluator", "ref", true, "CalculateOffset", "in", true),
+            new DispatchOperation("Sizeof", "LuminPackEvaluator", "evaluator", "ref", true, null, "in", true),
             new DispatchOperation("SerializeJson", "LuminPackJsonWriter", "writer", "in", false, "WriteValueJson", "in", true),
             new DispatchOperation("DeserializeJson", "LuminPackJsonReader", "reader", "ref", false, "ReadValueJson", "ref", true)
         })
@@ -147,7 +147,12 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("            private static void " + operation.Name + "Registered<T, __LuminProfile>" + signature);
         sb.AppendLine("                " + ProfileConstraint);
         sb.AppendLine("            {");
-        if (!registry)
+        if (operation.Pointer == null)
+        {
+            // Exact widths serve generated direct records only; registrations carry no width method.
+            sb.AppendLine("                " + UnsupportedWidth);
+        }
+        else if (!registry)
         {
             // The cache lives in this generated module, so its delegates cannot retain an external registration owner.
             sb.AppendLine("                Safe" + operation.Name + "<T, __LuminProfile>.Invoke" + call + ";");
@@ -180,7 +185,7 @@ public static partial class LuminPackExtensionGenerator
         /// <param name="parameter">The state parameter name.</param>
         /// <param name="keyword">The payload reference keyword of the generic entry.</param>
         /// <param name="binary">Whether this is a binary operation.</param>
-        /// <param name="pointer">The registry entry member for this operation.</param>
+        /// <param name="pointer">The registry entry member for this operation, or null when registrations cannot supply it.</param>
         /// <param name="pointerKeyword">The payload reference keyword of the registered method pointer.</param>
         /// <param name="optionalPointer">Whether a registration may omit this operation.</param>
         internal DispatchOperation(string name, string state, string parameter, string keyword, bool binary, string pointer, string pointerKeyword, bool optionalPointer)
@@ -205,7 +210,7 @@ public static partial class LuminPackExtensionGenerator
         internal string Keyword { get; }
         /// <summary>Gets whether this is a binary operation.</summary>
         internal bool Binary { get; }
-        /// <summary>Gets the registry entry member for this operation.</summary>
+        /// <summary>Gets the registry entry member for this operation, or null when registrations cannot supply it.</summary>
         internal string Pointer { get; }
         /// <summary>Gets the payload reference keyword of the registered method pointer.</summary>
         internal string PointerKeyword { get; }

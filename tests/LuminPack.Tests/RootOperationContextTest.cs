@@ -138,14 +138,6 @@ public class RootOperationContextTest
         var cachedWriter = LuminPackWriterOptionalState.Lease(ref writers);
         Assert.False(cachedWriter.GetOrAddReference(marker).existsReference);
         cachedWriter.Release();
-
-        LuminPackEvaluatorOptionState? evaluators = null;
-        var outerEvaluator = LuminPackEvaluatorOptionState.Lease(ref evaluators);
-        var innerEvaluator = LuminPackEvaluatorOptionState.Lease(ref evaluators);
-        Assert.NotSame(outerEvaluator, innerEvaluator);
-        innerEvaluator.Release();
-        outerEvaluator.Release();
-        Assert.Same(innerEvaluator, LuminPackEvaluatorOptionState.Lease(ref evaluators));
     }
 
     /// <summary>Checks that a failed allocating write returns the thread writer clean and on the fast path.</summary>

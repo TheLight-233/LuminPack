@@ -9,7 +9,7 @@ namespace LuminPack.Maui;
 public static unsafe partial class LuminMaui
 {
     /// <summary>Gets the nullable graphics color codec.</summary>
-    public static LuminPackCodec<MauiColor?> ColorCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<MauiColor?> ColorCodec { get; } = new(Write, Read);
 
     /// <summary>Writes a null/non-null marker followed by public Red, Green, Blue and Alpha components.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The nullable color, which must not be mutated concurrently.</param>
@@ -38,10 +38,6 @@ public static unsafe partial class LuminMaui
         reader = pending;
     }
 
-    /// <summary>Adds one marker byte and, for a non-null color, four float components.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The nullable color.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in MauiColor? value) => evaluator.Add(value is null ? 1 : 17);
-
     /// <summary>Registers the nullable public color record.</summary>
-    static partial void RegisterAdditional() => PlatformRegistration.Add<MauiColor?>(&Write, &Read, &Size, ColorCodec);
+    static partial void RegisterAdditional() => PlatformRegistration.Add<MauiColor?>(&Write, &Read, ColorCodec);
 }

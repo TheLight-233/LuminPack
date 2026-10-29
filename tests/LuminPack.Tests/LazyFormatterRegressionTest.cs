@@ -16,7 +16,6 @@ public class LazyFormatterRegressionTest
     {
         var value = new LazyProfileNode { Text = "\u00E9\u4E2D\uD83D\uDE00", Next = new LazyProfileNode { Text = "tail" } };
         byte[] bytes = LuminPackSerializer.Serialize<LazyProfileNode>(value);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof<LazyProfileNode>(value));
         Assert.Equal(bytes, LuminPackSerializer.Serialize(value));
         var copy = LuminPackSerializer.Deserialize<LazyProfileNode>(bytes);
         Assert.Equal(value.Text, copy.Text);
@@ -46,12 +45,10 @@ public class LazyFormatterRegressionTest
         Assert.False(LuminPackFormatterRegistry.TryGetValue(in key, out _));
         LuminPackFormatterRegistry.Register(typeof(LazyOverridePayload),
             (nint)(delegate*<ref LuminPackWriter, in LazyOverridePayload, void>)&WriteOverride,
-            (nint)(delegate*<ref LuminPackReader, ref LazyOverridePayload, void>)&ReadOverride,
-            calculateOffset: (nint)(delegate*<ref LuminPackEvaluator, in LazyOverridePayload, void>)&SizeOverride);
+            (nint)(delegate*<ref LuminPackReader, ref LazyOverridePayload, void>)&ReadOverride);
         byte[] bytes = LuminPackSerializer.Serialize<LazyOverridePayload>(value);
         Assert.Equal(BitConverter.GetBytes(99), bytes);
         Assert.Equal(99, LuminPackSerializer.Deserialize<LazyOverridePayload>(bytes).Value);
-        Assert.Equal(4, LuminPackSerializer.Sizeof<LazyOverridePayload>(value));
         Assert.ThrowsAny<Exception>(() => LuminPackSerializer.SerializeJson<LazyOverridePayload>(value));
     }
 
@@ -73,10 +70,6 @@ public class LazyFormatterRegressionTest
         value = new LazyOverridePayload { Value = marker };
     }
 
-    /// <summary>Evaluates the explicit marker width.</summary>
-    /// <param name="evaluator">The current evaluator.</param>
-    /// <param name="value">The ignored original payload.</param>
-    private static void SizeOverride(ref LuminPackEvaluator evaluator, in LazyOverridePayload value) => evaluator += 4;
 }
 
 /// <summary>Uses a declaration-owned UTF-8 profile across recursive generic boundaries.</summary>

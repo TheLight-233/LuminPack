@@ -91,8 +91,8 @@ internal static class SerializerDocumentationRegression
                             "Generated method documentation must describe each type parameter exactly once: " + parameter);
                 if (method is MethodDeclarationSyntax stateMethod &&
                     (stateMethod.Identifier.ValueText.StartsWith("Serialize", StringComparison.Ordinal) ||
-                     stateMethod.Identifier.ValueText.StartsWith("Deserialize", StringComparison.Ordinal) || stateMethod.Identifier.ValueText == "Sizeof") &&
-                    stateMethod.ParameterList.Parameters.FirstOrDefault()?.Identifier.ValueText is "writer" or "reader" or "evaluator" or "state")
+                     stateMethod.Identifier.ValueText.StartsWith("Deserialize", StringComparison.Ordinal)) &&
+                    stateMethod.ParameterList.Parameters.FirstOrDefault()?.Identifier.ValueText is "writer" or "reader" or "state")
                 {
                     string usage = documentation.Element("remarks")?.Value ?? string.Empty;
                     Require(usage.Contains("state directly", StringComparison.Ordinal) && usage.Contains("buffer position", StringComparison.Ordinal) &&

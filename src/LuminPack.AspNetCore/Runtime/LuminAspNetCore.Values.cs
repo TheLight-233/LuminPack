@@ -12,13 +12,15 @@ public static unsafe partial class LuminAspNetCore
     public const int MaximumStringValues = 65_536;
 
     /// <summary>Gets the counted, null-element-preserving HTTP string collection codec.</summary>
-    public static LuminPackCodec<StringValues> StringValuesCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<StringValues> StringValuesCodec { get; } = new(Write, Read);
 
     /// <summary>Writes a count and complete Core string records, preserving null elements and ordering.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The header/query values.</param>
     public static void Write(ref LuminPackWriter writer, in StringValues value)
     {
-        writer.EnsureAdditionalCapacity(StringValuesCodec.GetSize(value));
+        if (value.Count > MaximumStringValues) LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(value), "Too many HTTP string values.");
+        // The count header; each string record reserves its own capacity.
+        writer.EnsureAdditionalCapacity(sizeof(int));
         writer.WriteCollectionHeader(value.Count);
         for (int index = 0; index < value.Count; index++) writer.Write(value[index]);
     }
@@ -28,9 +30,7 @@ public static unsafe partial class LuminAspNetCore
     public static void Read(ref LuminPackReader reader, ref StringValues value)
     {
         var pending = reader;
-        int size = 0;
-        var evaluator = new LuminPackEvaluator(ref size);
-        int minimum = evaluator.StringRecordLength();
+        int minimum = default(LuminPackWriter).StringRecordLength();
         int count = pending.ReadLength(minimum);
         if ((uint)count > MaximumStringValues) LuminPackExceptionHelper.ThrowInvalidDataException("HTTP string value count is outside the supported range.");
         string?[] values = new string?[count];
@@ -40,24 +40,10 @@ public static unsafe partial class LuminAspNetCore
         reader = pending;
     }
 
-    /// <summary>Adds the exact count and default-profile Core string record sizes.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The header/query values.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in StringValues value)
-    {
-        if (value.Count > MaximumStringValues) LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(value), "Too many HTTP string values.");
-        int bytes = sizeof(int);
-        for (int index = 0; index < value.Count; index++)
-        {
-            string? item = value[index];
-            bytes = checked(bytes + evaluator.GetStringLength(ref item));
-        }
-        evaluator.Add(bytes);
-    }
-
     /// <summary>Registers explicit framework value codecs for generic fallback and generated Custom wrappers.</summary>
     public static void Register()
     {
-        PlatformRegistration.Add<StringValues>(&Write, &Read, &Size, StringValuesCodec);
+        PlatformRegistration.Add<StringValues>(&Write, &Read, StringValuesCodec);
         RegisterTextValues();
     }
 

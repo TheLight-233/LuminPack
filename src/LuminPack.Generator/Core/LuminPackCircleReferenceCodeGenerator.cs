@@ -11,54 +11,6 @@ public static class LuminPackCircleReferenceCodeGenerator
 {
     const int MaxParametersPerCall = 15;
 
-    /// <summary>Appends statements that calculate the binary payload size.</summary>
-    /// <param name="data">The metadata describing the serializable type.</param>
-    /// <param name="sb">The builder receiving generated source code.</param>
-    /// <param name="classGlobalName">The class global name used by this operation.</param>
-    public static void GenerateCalculateOffsetCode(LuminDataInfo data, StringBuilder sb, string classGlobalName)
-    {
-        if (!data.isValueType)
-        {
-            sb.AppendLine("            if (value is null)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                evaluator += 1;");
-            sb.AppendLine("                return;");
-            sb.AppendLine("            }");
-        }
-        sb.AppendLine();
-        sb.AppendLine("            var (existsReference, id) = evaluator.OptionState.GetOrAddReference(value);");
-        sb.AppendLine("            if (existsReference)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                evaluator += 1;");
-        sb.AppendLine("                evaluator += LuminPackEvaluator.CalculateVarInt(id);");
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-        int slotCount = data.fields.Count == 0 ? 0 : (int)data.fields.Max(field => field.Order) + 1;
-        sb.AppendLine($"            int size = {1 + slotCount - data.fields.Count};");
-        sb.AppendLine("            size += LuminPackEvaluator.CalculateVarInt(id);");
-        sb.AppendLine();
-        sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value);");
-        foreach (var field in data.fields)
-        {
-            if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
-            {
-                sb.AppendLine($"            size += Unsafe.SizeOf<{field.TypeName}>() + LuminPackEvaluator.CalculateVarInt(Unsafe.SizeOf<{field.TypeName}>());");
-            }
-            else
-            {
-                sb.AppendLine($"            var {field.Name}TempLength = evaluator.Value;");
-                sb.AppendLine("            {");
-                sb.AppendLine($"                var __luminPackOffsetValue = local.@{field.Name};");
-                sb.AppendLine("                evaluator.CalculateOffset(ref __luminPackOffsetValue);");
-                sb.AppendLine("            }");
-                sb.AppendLine($"            size += LuminPackEvaluator.CalculateVarInt(evaluator.Value - {field.Name}TempLength);");
-            }
-        }
-        sb.AppendLine();
-        sb.AppendLine("            evaluator += size;");
-    }
-
     /// <summary>Appends binary serialization statements for the analyzed type.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
@@ -123,7 +75,7 @@ public static class LuminPackCircleReferenceCodeGenerator
                 var field = data.fields.FirstOrDefault(f => f.Order == order);
                 if (field is null)
                 {
-                    sb.AppendLine("            writer.WriteVarInt(0); writer.Advance(LuminPackEvaluator.CalculateVarInt(0));");
+                    sb.AppendLine("            writer.WriteVarInt(0); writer.Advance(1);");
                 }
                 else
                 {

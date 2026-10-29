@@ -28,19 +28,16 @@ internal sealed class CustomFormatterModel
     internal IMethodSymbol? SerializeJson { get; set; }
     /// <summary>Gets or sets the deserialize json.</summary>
     internal IMethodSymbol? DeserializeJson { get; set; }
-    /// <summary>Gets or sets the calculate offset.</summary>
-    internal IMethodSymbol? CalculateOffset { get; set; }
 
     /// <summary>Gets or sets the has errors.</summary>
     internal bool HasErrors { get; set; }
 
-    /// <summary>Register overload tier: 1 = binary, 2 = +JSON, 3 = +JSON+calculate. 0 = invalid.</summary>
+    /// <summary>Register overload tier: 1 = binary, 2 = +JSON. 0 = invalid.</summary>
     internal int RegisterTier
     {
         get
         {
             if (Serialize is null || Deserialize is null) return 0;
-            if (CalculateOffset is not null) return 3;
             if (SerializeJson is not null && DeserializeJson is not null) return 2;
             return 1;
         }

@@ -10,7 +10,7 @@ namespace LuminPack.Wpf;
 public static unsafe partial class LuminWpf
 {
     /// <summary>Gets the explicit Point codec.</summary>
-    public static LuminPackCodec<global::System.Windows.Point> PointCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.Point> PointCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -36,12 +36,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.Point value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit Vector codec.</summary>
-    public static LuminPackCodec<global::System.Windows.Vector> VectorCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.Vector> VectorCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -67,12 +63,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.Vector value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit Thickness codec.</summary>
-    public static LuminPackCodec<global::System.Windows.Thickness> ThicknessCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.Thickness> ThicknessCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Left, Top, Right, Bottom in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -104,12 +96,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 32-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.Thickness value) => evaluator.Add(32);
-
     /// <summary>Gets the explicit CornerRadius codec.</summary>
-    public static LuminPackCodec<global::System.Windows.CornerRadius> CornerRadiusCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.CornerRadius> CornerRadiusCodec { get; } = new(Write, Read);
 
     /// <summary>Writes TopLeft, TopRight, BottomRight, BottomLeft in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -141,12 +129,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 32-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.CornerRadius value) => evaluator.Add(32);
-
     /// <summary>Gets the explicit Size codec.</summary>
-    public static LuminPackCodec<global::System.Windows.Size> SizeCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.Size> SizeCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Width, Height in order, preceded by the empty marker.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -176,12 +160,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 17-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.Size value) => evaluator.Add(17);
-
     /// <summary>Gets the explicit Rect codec.</summary>
-    public static LuminPackCodec<global::System.Windows.Rect> RectCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.Rect> RectCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Width, Height in order, preceded by the empty marker.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -217,12 +197,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 33-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.Rect value) => evaluator.Add(33);
-
     /// <summary>Gets the explicit Int32Rect codec.</summary>
-    public static LuminPackCodec<global::System.Windows.Int32Rect> Int32RectCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.Int32Rect> Int32RectCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Width, Height in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -254,12 +230,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.Int32Rect value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit GridLength codec.</summary>
-    public static LuminPackCodec<global::System.Windows.GridLength> GridLengthCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.GridLength> GridLengthCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Value, GridUnitType in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -285,12 +257,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 12-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.GridLength value) => evaluator.Add(12);
-
     /// <summary>Gets the explicit Matrix codec.</summary>
-    public static LuminPackCodec<global::System.Windows.Media.Matrix> MatrixCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.Media.Matrix> MatrixCodec { get; } = new(Write, Read);
 
     /// <summary>Writes M11, M12, M21, M22, OffsetX, OffsetY in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -328,12 +296,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 48-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.Media.Matrix value) => evaluator.Add(48);
-
     /// <summary>Gets the explicit Point3D codec.</summary>
-    public static LuminPackCodec<global::System.Windows.Media.Media3D.Point3D> Point3DCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.Media.Media3D.Point3D> Point3DCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Z in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -362,12 +326,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 24-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.Media.Media3D.Point3D value) => evaluator.Add(24);
-
     /// <summary>Gets the explicit Vector3D codec.</summary>
-    public static LuminPackCodec<global::System.Windows.Media.Media3D.Vector3D> Vector3DCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.Media.Media3D.Vector3D> Vector3DCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Z in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -396,12 +356,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 24-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.Media.Media3D.Vector3D value) => evaluator.Add(24);
-
     /// <summary>Gets the explicit Quaternion codec.</summary>
-    public static LuminPackCodec<global::System.Windows.Media.Media3D.Quaternion> QuaternionCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.Media.Media3D.Quaternion> QuaternionCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Z, W in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -433,12 +389,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 32-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.Media.Media3D.Quaternion value) => evaluator.Add(32);
-
     /// <summary>Gets the explicit Size3D codec.</summary>
-    public static LuminPackCodec<global::System.Windows.Media.Media3D.Size3D> Size3DCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.Media.Media3D.Size3D> Size3DCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Z in order, preceded by the empty marker.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -471,12 +423,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 25-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.Media.Media3D.Size3D value) => evaluator.Add(25);
-
     /// <summary>Gets the explicit Rect3D codec.</summary>
-    public static LuminPackCodec<global::System.Windows.Media.Media3D.Rect3D> Rect3DCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.Media.Media3D.Rect3D> Rect3DCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Z, SizeX, SizeY, SizeZ in order, preceded by the empty marker.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -518,12 +466,8 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 49-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.Media.Media3D.Rect3D value) => evaluator.Add(49);
-
     /// <summary>Gets the explicit Matrix3D codec.</summary>
-    public static LuminPackCodec<global::System.Windows.Media.Media3D.Matrix3D> Matrix3DCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::System.Windows.Media.Media3D.Matrix3D> Matrix3DCodec { get; } = new(Write, Read);
 
     /// <summary>Writes M11, M12, M13, M14, M21, M22, M23, M24, M31, M32, M33, M34, OffsetX, OffsetY, OffsetZ, M44 in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -591,29 +535,25 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact 128-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::System.Windows.Media.Media3D.Matrix3D value) => evaluator.Add(128);
-
-    /// <summary>Registers these binary/size codecs for existing Core generic fallback paths, preserving explicit application entries.</summary>
+    /// <summary>Registers these binary codecs for existing Core generic fallback paths, preserving explicit application entries.</summary>
     /// <remarks>Ordinary generated nested and raw unmanaged operations retain their original contracts.</remarks>
     public static void Register()
     {
-        PlatformRegistration.Add<global::System.Windows.Point>(&Write, &Read, &Size, PointCodec);
-        PlatformRegistration.Add<global::System.Windows.Vector>(&Write, &Read, &Size, VectorCodec);
-        PlatformRegistration.Add<global::System.Windows.Thickness>(&Write, &Read, &Size, ThicknessCodec);
-        PlatformRegistration.Add<global::System.Windows.CornerRadius>(&Write, &Read, &Size, CornerRadiusCodec);
-        PlatformRegistration.Add<global::System.Windows.Size>(&Write, &Read, &Size, SizeCodec);
-        PlatformRegistration.Add<global::System.Windows.Rect>(&Write, &Read, &Size, RectCodec);
-        PlatformRegistration.Add<global::System.Windows.Int32Rect>(&Write, &Read, &Size, Int32RectCodec);
-        PlatformRegistration.Add<global::System.Windows.GridLength>(&Write, &Read, &Size, GridLengthCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Matrix>(&Write, &Read, &Size, MatrixCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Point3D>(&Write, &Read, &Size, Point3DCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Vector3D>(&Write, &Read, &Size, Vector3DCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Quaternion>(&Write, &Read, &Size, QuaternionCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Size3D>(&Write, &Read, &Size, Size3DCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Rect3D>(&Write, &Read, &Size, Rect3DCodec);
-        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Matrix3D>(&Write, &Read, &Size, Matrix3DCodec);
+        PlatformRegistration.Add<global::System.Windows.Point>(&Write, &Read, PointCodec);
+        PlatformRegistration.Add<global::System.Windows.Vector>(&Write, &Read, VectorCodec);
+        PlatformRegistration.Add<global::System.Windows.Thickness>(&Write, &Read, ThicknessCodec);
+        PlatformRegistration.Add<global::System.Windows.CornerRadius>(&Write, &Read, CornerRadiusCodec);
+        PlatformRegistration.Add<global::System.Windows.Size>(&Write, &Read, SizeCodec);
+        PlatformRegistration.Add<global::System.Windows.Rect>(&Write, &Read, RectCodec);
+        PlatformRegistration.Add<global::System.Windows.Int32Rect>(&Write, &Read, Int32RectCodec);
+        PlatformRegistration.Add<global::System.Windows.GridLength>(&Write, &Read, GridLengthCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Matrix>(&Write, &Read, MatrixCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Point3D>(&Write, &Read, Point3DCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Vector3D>(&Write, &Read, Vector3DCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Quaternion>(&Write, &Read, QuaternionCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Size3D>(&Write, &Read, Size3DCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Rect3D>(&Write, &Read, Rect3DCodec);
+        PlatformRegistration.Add<global::System.Windows.Media.Media3D.Matrix3D>(&Write, &Read, Matrix3DCodec);
         RegisterAdditional();
     }
 

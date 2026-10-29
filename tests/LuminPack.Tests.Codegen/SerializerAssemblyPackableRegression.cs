@@ -107,8 +107,6 @@ internal static class SerializerAssemblyPackableRegression
                     LuminPackSerializer.DeserializeJson(json, ref jsonRestored);
                     if (jsonRestored.Number != 41 || jsonRestored.Value != 17)
                         throw new Exception("External JSON formatter did not preserve all marked members.");
-                    if (LuminPackSerializer.Sizeof(value) != bytes.Length)
-                        throw new Exception("External formatter size did not match its binary payload.");
 
                     var textValue = new ExternalLibrary.ExternalModel<string> { Number = 19, Value = "external" };
                     byte[] textBytes = LuminPackSerializer.Serialize(textValue);
@@ -174,8 +172,6 @@ internal static class SerializerAssemblyPackableRegression
                     LuminPackSerializer.Deserialize<T>(bytes.AsSpan(), ref restored);
                     string json = LuminPackSerializer.SerializeJson<T>(value);
                     LuminPackSerializer.DeserializeJson<T>(json, ref restored);
-                    if (LuminPackSerializer.Sizeof<T>(value) != bytes.Length)
-                        throw new Exception("External generic size did not match the payload.");
                     return restored;
                 }
             }

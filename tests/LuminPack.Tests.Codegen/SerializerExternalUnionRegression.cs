@@ -72,7 +72,6 @@ internal static class SerializerExternalUnionRegression
                     string json = LuminPackSerializer.SerializeJson(local);
                     if (LuminPackSerializer.DeserializeJson<Root>(json) is not LocalCase { Value: "private auto-property" })
                         throw new Exception("External root JSON dispatch changed.");
-                    if (LuminPackSerializer.Sizeof(local) != bytes.Length) throw new Exception("External root size dispatch changed.");
                     GenericRoot<int> localInt = new LocalGeneric<int> { Value = 43 };
                     GenericRoot<string> localString = new LocalGeneric<string> { Value = "closed generic" };
                     GenericRoot<int> ownerInt = new OwnerCase<int> { Value = 47 };
@@ -83,8 +82,7 @@ internal static class SerializerExternalUnionRegression
                     IRoot boxed = new StructCase { Value = 53 };
                     byte[] structBytes = LuminPackSerializer.Serialize(boxed);
                     if (LuminPackSerializer.Deserialize<IRoot>(structBytes) is not StructCase { Value: 53 } ||
-                        LuminPackSerializer.DeserializeJson<IRoot>(LuminPackSerializer.SerializeJson(boxed)) is not StructCase { Value: 53 } ||
-                        LuminPackSerializer.Sizeof(boxed) != structBytes.Length)
+                        LuminPackSerializer.DeserializeJson<IRoot>(LuminPackSerializer.SerializeJson(boxed)) is not StructCase { Value: 53 })
                         throw new Exception("An imported interface lost its value-type case.");
                     IUnmarked unmarked = new UnmarkedCase { Value = 654 };
                     bool rejected = false;
@@ -101,7 +99,6 @@ internal static class SerializerExternalUnionRegression
                     string json = LuminPackSerializer.SerializeJson(value);
                     if (LuminPackSerializer.DeserializeJson<GenericRoot<T>>(json).GetType() != value.GetType())
                         throw new Exception("External generic Union JSON type changed.");
-                    if (LuminPackSerializer.Sizeof(value) != bytes.Length) throw new Exception("External generic Union size changed.");
                 }
             }
             """;

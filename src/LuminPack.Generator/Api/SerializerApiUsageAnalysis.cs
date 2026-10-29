@@ -241,7 +241,6 @@ internal sealed class SerializerApiUsageAnalysis
         "Deserialize" => SerializerApiKind.DeserializeSpanRef | SerializerApiKind.DeserializeBufferRef | SerializerApiKind.DeserializeSequenceRef,
         "DeserializeJson" => SerializerApiKind.DeserializeJsonStringRef | SerializerApiKind.DeserializeJsonSpanByteRef | SerializerApiKind.DeserializeJsonSpanCharRef | SerializerApiKind.DeserializeJsonBufferRef,
         "DeserializeAsync" => SerializerApiKind.DeserializeAsyncValue,
-        "Sizeof" => SerializerApiKind.Sizeof,
         _ => SerializerApiKind.None,
     };
 }

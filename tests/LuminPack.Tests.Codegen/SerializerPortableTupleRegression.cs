@@ -47,7 +47,7 @@ internal static class SerializerPortableTupleRegression
                     var value = new Packet { Tag = 7, Pair = (123456789, long.MinValue + 17) };
                     var bytes = LuminPackSerializer.Serialize(value);
                     if (bytes.Length != 13 || bytes[0] != value.Tag || BitConverter.ToInt32(bytes, 1) != value.Pair.Id ||
-                        BitConverter.ToInt64(bytes, 5) != value.Pair.Count || LuminPackSerializer.Sizeof(value) != bytes.Length)
+                        BitConverter.ToInt64(bytes, 5) != value.Pair.Count)
                         throw new InvalidOperationException("Tuple aliases changed physical storage width or order.");
                     var copy = LuminPackSerializer.Deserialize<Packet>(bytes);
                     if (copy.Tag != value.Tag || copy.Pair != value.Pair) throw new InvalidOperationException("Tuple read failed.");
@@ -61,7 +61,7 @@ internal static class SerializerPortableTupleRegression
                         throw new InvalidOperationException("A compact tuple retained layout-dependent storage.");
                     var longValue = new LongPacket { Tag = 19, Items = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15) };
                     var longBytes = LuminPackSerializer.Serialize(longValue);
-                    if (longBytes.Length != 61 || longBytes[0] != longValue.Tag || LuminPackSerializer.Sizeof(longValue) != longBytes.Length)
+                    if (longBytes.Length != 61 || longBytes[0] != longValue.Tag)
                         throw new InvalidOperationException("Flattened tuple fields duplicated Rest storage.");
                     for (int index = 0; index < 15; index++)
                         if (BitConverter.ToInt32(longBytes, 1 + index * 4) != index + 1)

@@ -93,24 +93,22 @@ public partial class ReuseFreshParityTest
     /// <returns>The elements in enumeration order.</returns>
     private static IEnumerable Ordered<T>(IEnumerable<T> items) => items.ToArray();
 
-    /// <summary>Round-trips one value through the evaluator, a fresh read, a reused read and the JSON document.</summary>
+    /// <summary>Round-trips one value through a fresh read, a reused read and the JSON document.</summary>
     /// <typeparam name="T">The collection type.</typeparam>
     /// <param name="name">The case name used in failure text.</param>
     /// <param name="source">The serialized value.</param>
     /// <param name="stale">Creates a destination holding stale content.</param>
     /// <param name="view">Projects the value to an enumerable, when it is not one itself.</param>
     /// <param name="write">The concrete binary writer of <typeparamref name="T"/>.</param>
-    /// <param name="size">The concrete size evaluator of <typeparamref name="T"/>.</param>
     /// <param name="read">The concrete binary reader of <typeparamref name="T"/>.</param>
     /// <param name="writeJson">The concrete JSON writer of <typeparamref name="T"/>.</param>
     /// <param name="readJson">The concrete JSON reader of <typeparamref name="T"/>.</param>
-    private static void Check<T>(string name, T source, Func<T> stale, Func<T, IEnumerable>? view, Func<T, byte[]> write, Func<T, int> size,
+    private static void Check<T>(string name, T source, Func<T> stale, Func<T, IEnumerable>? view, Func<T, byte[]> write,
         ReadBinary<T> read, Func<T, string> writeJson, ReadJson<T> readJson)
     {
         view ??= item => (IEnumerable)item!;
         byte[] bytes = write(source);
         string expected = Describe(view(source));
-        Assert.True(bytes.Length == size(source), name + ": the size evaluator disagrees with the written record.");
         T fresh = default!;
         read(bytes, ref fresh);
         Assert.True(expected == Describe(view(fresh)), name + ": a fresh read decoded a different value.");

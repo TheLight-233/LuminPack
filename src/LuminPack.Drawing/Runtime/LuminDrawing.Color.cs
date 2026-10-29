@@ -9,13 +9,14 @@ namespace LuminPack.Drawing;
 public static unsafe partial class LuminDrawing
 {
     /// <summary>Gets the color codec, retaining named/system colors and Empty.</summary>
-    public static LuminPackCodec<DrawingColor> ColorCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<DrawingColor> ColorCodec { get; } = new(Write, Read);
 
     /// <summary>Writes color identity followed by the matching public value record.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The color.</param>
     public static void Write(ref LuminPackWriter writer, in DrawingColor value)
     {
-        writer.EnsureAdditionalCapacity(ColorCodec.GetSize(value));
+        // The marker and an int payload; a name record reserves its own capacity.
+        writer.EnsureAdditionalCapacity(5);
         if (value.IsEmpty) { writer.Write((byte)0); return; }
         if (value.IsKnownColor) { writer.Write((byte)1); writer.Write((int)value.ToKnownColor()); return; }
         if (value.IsNamedColor) { writer.Write((byte)2); writer.Write(value.Name); return; }
@@ -56,19 +57,6 @@ public static unsafe partial class LuminDrawing
         reader = pending;
     }
 
-    /// <summary>Adds the exact color identity and public payload width.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The color.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in DrawingColor value)
-    {
-        if (value.IsEmpty) evaluator.Add(1);
-        else if (value.IsKnownColor || !value.IsNamedColor) evaluator.Add(5);
-        else
-        {
-            string? name = value.Name;
-            evaluator.Add(checked(1 + evaluator.GetStringLength(ref name)));
-        }
-    }
-
     /// <summary>Registers the variable color identity record.</summary>
-    public static void Register() => PlatformRegistration.Add<DrawingColor>(&Write, &Read, &Size, ColorCodec);
+    public static void Register() => PlatformRegistration.Add<DrawingColor>(&Write, &Read, ColorCodec);
 }

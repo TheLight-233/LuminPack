@@ -59,7 +59,7 @@ internal sealed class FacadeStateOwnershipProjection : CSharpSyntaxRewriter
     {
         if (variable.Initializer?.Value is AssignmentExpressionSyntax assignment &&
             assignment.IsKind(SyntaxKind.CoalesceAssignmentExpression) && assignment.Left is IdentifierNameSyntax cache &&
-            cache.Identifier.ValueText is "_threadStaticWriterOptionalState" or "_threadStaticReaderOptionalState" or "_threadStaticEvaluatorOptionalState")
+            cache.Identifier.ValueText is "_threadStaticWriterOptionalState" or "_threadStaticReaderOptionalState")
             return cache.Identifier.ValueText;
         return null;
     }

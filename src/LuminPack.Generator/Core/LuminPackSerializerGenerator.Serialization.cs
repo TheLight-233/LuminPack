@@ -93,10 +93,10 @@ public static partial class LuminPackSerializerGenerator
                 sb.AppendLine("            int directLength = value.HasValue ? 1 + Unsafe.SizeOf<" + nullableElementType + ">() : 1;");
             else
             {
-                sb.AppendLine("            int directLength = 0;");
-                sb.AppendLine("            var directEvaluator = new LuminPackEvaluator(ref directLength);");
+                sb.AppendLine("            var directEvaluator = new LuminPackEvaluator();");
                 sb.AppendLine("            var directValue = value;");
                 sb.AppendLine("            global::LuminPack.LuminPackSerializer.Sizeof(ref directEvaluator, ref directValue);");
+                sb.AppendLine("            int directLength = directEvaluator.Value;");
             }
             // A fixed record is a few primitives wide; a plain array lets the JIT drop the large-array branch and null check.
             sb.AppendLine(_currentFixedRecord || nullableElementType != null

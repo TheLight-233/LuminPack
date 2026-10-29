@@ -28,7 +28,6 @@ internal static class SerializerCustomFormatterRegression
                 { Entry.Writes++; writer.Write(value == null ? -999 : value.Number ^ 85); }
                 public static void Deserialize(ref LuminPackReader reader, ref CustomValue value)
                 { Entry.Reads++; int encoded = 0; reader.Read(ref encoded); value = encoded == -999 ? null! : new() { Number = encoded ^ 85 }; }
-                public static void CalculateOffset(ref LuminPackEvaluator evaluator, in CustomValue value) { Entry.Sizes++; evaluator.Add(4); }
                 public static void SerializeJson(ref LuminPackJsonWriter writer, in CustomValue value)
                 { Entry.JsonWrites++; writer.Write(value == null ? -999 : value.Number ^ 85); }
                 public static void DeserializeJson(ref LuminPackJsonReader reader, ref CustomValue value)
@@ -41,7 +40,6 @@ internal static class SerializerCustomFormatterRegression
                 { Entry.RawWrites++; byte encoded = (byte)(value.Number ^ 85); writer.Write(encoded); }
                 public static void Deserialize(ref LuminPackReader reader, ref CustomRaw value)
                 { Entry.RawReads++; byte encoded = 0; reader.Read(ref encoded); value.Number = encoded ^ 85; }
-                public static void CalculateOffset(ref LuminPackEvaluator evaluator, in CustomRaw value) => evaluator.Add(1);
                 public static void SerializeJson(ref LuminPackJsonWriter writer, in CustomRaw value) => writer.Write(value.Number ^ 85);
                 public static void DeserializeJson(ref LuminPackJsonReader reader, ref CustomRaw value) => value.Number = reader.Read<int, global::LuminPack.Option.LuminPackDefaultOptions>() ^ 85;
             }
@@ -93,7 +91,7 @@ internal static class SerializerCustomFormatterRegression
             }
             public static class Entry
             {
-                public static int Writes, Reads, Sizes, JsonWrites, JsonReads, RawWrites, RawReads;
+                public static int Writes, Reads, JsonWrites, JsonReads, RawWrites, RawReads;
                 public static int Check()
                 {
                     var value = new Host { Prefix = 11, Left = new() { Number = 12 }, Right = new() { Number = 13 },
@@ -109,7 +107,6 @@ internal static class SerializerCustomFormatterRegression
                     LuminPackSerializer.Deserialize(bytes.AsSpan(), ref restored);
                     if (Reads != Writes || RawReads != RawWrites) throw new Exception($"Custom read bypass: {Writes}/{Reads}, {RawWrites}/{RawReads}; bytes={Convert.ToHexString(bytes)}");
                     Validate(restored);
-                    if (LuminPackSerializer.Sizeof(value) != bytes.Length || Sizes != Writes) throw new Exception("Custom size mismatch.");
                     string json = LuminPackSerializer.SerializeJson(value);
                     Host jsonValue = null!;
                     LuminPackSerializer.DeserializeJson(json, ref jsonValue);
@@ -136,13 +133,12 @@ internal static class SerializerCustomFormatterRegression
                     GenericOwner<CustomRaw> genericResult = null!;
                     LuminPackSerializer.Deserialize(genericBytes.AsSpan(), ref genericResult);
                     if (genericResult.Value.Number != 31 || genericResult.Values[0].Number != 31) throw new Exception("Generic custom bypass.");
-                    if (LuminPackSerializer.Sizeof(generic) != genericBytes.Length) throw new Exception("Generic custom size mismatch.");
                     var constrained = new ConstrainedOwner<CustomRaw> { Tag = 7, Value = raw };
                     int previousWrites = RawWrites;
                     var constrainedBytes = LuminPackSerializer.Serialize(constrained);
                     if (RawWrites != previousWrites + 1) throw new Exception("An unmanaged constraint bypassed its actual Custom argument.");
                     var constrainedResult = LuminPackSerializer.Deserialize<ConstrainedOwner<CustomRaw>>(constrainedBytes);
-                    if (constrainedResult.Tag != 7 || constrainedResult.Value.Number != 31 || LuminPackSerializer.Sizeof(constrained) != constrainedBytes.Length)
+                    if (constrainedResult.Tag != 7 || constrainedResult.Value.Number != 31)
                         throw new Exception("An unmanaged-constrained Custom contract changed.");
                     var ordinary = new ConstrainedOwner<int> { Tag = 11, Value = 127 };
                     if (LuminPackSerializer.Serialize(ordinary).Length != System.Runtime.CompilerServices.Unsafe.SizeOf<ConstrainedOwner<int>>())
@@ -157,7 +153,7 @@ internal static class SerializerCustomFormatterRegression
                     var customKeyBytes = LuminPackSerializer.Serialize(customKeys);
                     if (RawWrites != previousWrites + 1) throw new Exception("A mixed dictionary bypassed its unmanaged Custom key.");
                     var customKeyResult = LuminPackSerializer.Deserialize<Dictionary<CustomRaw, string>>(customKeyBytes);
-                    if (customKeyResult[raw] != "custom-key" || LuminPackSerializer.Sizeof(customKeys) != customKeyBytes.Length)
+                    if (customKeyResult[raw] != "custom-key")
                         throw new Exception("An unmanaged Custom dictionary key changed its formatter contract.");
                     return 1;
                 }
@@ -189,16 +185,16 @@ internal static class SerializerCustomFormatterRegression
             var stateMethods = generatedSources
                 .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
                 .Where(method => method.TypeParameterList == null && method.ParameterList.Parameters.Count == 2 &&
-                    method.ParameterList.Parameters[0].Identifier.ValueText is "writer" or "reader" or "evaluator" &&
+                    method.ParameterList.Parameters[0].Identifier.ValueText is "writer" or "reader" &&
                     method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::CustomValue").ToArray();
             var compiledMethods = generatedSources.SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
                 .Where(method => method.TypeParameterList?.Parameters.Count == 1 && method.ParameterList.Parameters.Count == 2 &&
                     // Generic dispatch bridges forward a dispatch section to these operations rather than owning one.
                     !method.Identifier.ValueText.StartsWith("__", StringComparison.Ordinal) &&
-                    (method.Identifier.ValueText.StartsWith("Root", StringComparison.Ordinal) || method.ParameterList.Parameters[0].Identifier.ValueText == "evaluator") &&
-                    method.ParameterList.Parameters[0].Identifier.ValueText is "writer" or "reader" or "evaluator" &&
+                    method.Identifier.ValueText.StartsWith("Root", StringComparison.Ordinal) &&
+                    method.ParameterList.Parameters[0].Identifier.ValueText is "writer" or "reader" &&
                     method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::CustomValue").ToArray();
-            if (stateMethods.Length != 5 || compiledMethods.Length != 5 || compiledMethods.Any(method =>
+            if (stateMethods.Length != 4 || compiledMethods.Length != 4 || compiledMethods.Any(method =>
                 !method.ToString().Contains("LuminPackFormatterRegistry<", StringComparison.Ordinal) ||
                 !method.ToString().Contains(method.Identifier.ValueText.EndsWith("Json", StringComparison.Ordinal) ? ".TryGetCachedJsonValue<" : ".TryGetCachedValue<", StringComparison.Ordinal) ||
                 !method.ToString().Contains("delegate*", StringComparison.Ordinal)))

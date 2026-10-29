@@ -26,9 +26,6 @@ ValueTask    SerializeAsync(Stream stream, T value, CancellationToken cancellati
 ValueTask<T> DeserializeAsync(Stream stream, T value, CancellationToken cancellationToken = default);
 ValueTask<T> DeserializeAsync<T>(Stream stream, CancellationToken cancellationToken = default);
 
-// Exact binary size
-int Sizeof(T value);
-
 // Profile forms, for example:
 byte[] Serialize<LuminPackUtf8LengthOptions>(in T value);
 int    Deserialize<LuminPackUtf8LengthOptions>(ReadOnlySpan<byte> buffer, ref T value);
@@ -100,10 +97,9 @@ unsafe { LuminPackSerializer.Register<Legacy>(&Write, &Read); }
 | --- | --- |
 | `Register<T>(write, read)` | binary |
 | `Register<T>(write, read, writeJson, readJson)` | + JSON |
-| `Register<T>(write, read, writeJson, readJson, calculateOffset)` | + size |
 | `Register<T, TOptions>(...)` | same, for one closed profile |
 
-Signatures: `(ref LuminPackWriter, in T)`, `(ref LuminPackReader, ref T)`, `(ref LuminPackJsonWriter, in T)`, `(ref LuminPackJsonReader, ref T)`, `(ref LuminPackEvaluator, in T)`. Duplicate registration throws `ArgumentException`. Registries store method pointers keyed by method table, so they don't keep plugin assemblies alive; keep registered code loaded while it can run.
+Signatures: `(ref LuminPackWriter, in T)`, `(ref LuminPackReader, ref T)`, `(ref LuminPackJsonWriter, in T)`, `(ref LuminPackJsonReader, ref T)`. Duplicate registration throws `ArgumentException`. Registries store method pointers keyed by method table, so they don't keep plugin assemblies alive; keep registered code loaded while it can run.
 
 ### Union cases the generator cannot see
 
@@ -126,7 +122,7 @@ static void Read(ref LuminPackReader reader, ref Lib.IShape value)
 unsafe { Lib.IShape.Register<Hexagon>(10, &Write, &Read, &WriteJson, &ReadJson); }
 ```
 
-All four methods are required; tags must not collide with generated cases (`WriteWideUnionHeader` for wide tags); `Sizeof` throws for registered cases. Prefer `[assembly: LuminPackable(typeof(Lib.IShape))]` with local `partial` cases, which needs no registration.
+All four methods are required; tags must not collide with generated cases (`WriteWideUnionHeader` for wide tags). Prefer `[assembly: LuminPackable(typeof(Lib.IShape))]` with local `partial` cases, which needs no registration.
 
 ## Custom formatters
 
@@ -140,7 +136,6 @@ public sealed class MyVector
     public static void Deserialize(ref LuminPackReader reader, ref MyVector value)
     { value ??= new MyVector(); reader.ReadValue(ref value.X); reader.ReadValue(ref value.Y); reader.ReadValue(ref value.Z); }
     // Optional pair: SerializeJson(ref LuminPackJsonWriter, in T) + DeserializeJson(ref LuminPackJsonReader, ref T)
-    // Optional, requires JSON: CalculateOffset(ref LuminPackEvaluator, in T)
 }
 ```
 

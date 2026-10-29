@@ -8,7 +8,7 @@
 
 | 路径 | 内容 |
 | --- | --- |
-| `src/LuminPack.Core` | 运行时（NuGet 包 `LuminPack`，程序集 `LuminPack.Core`）：二进制和 JSON 读写器、大小计算器、缓冲区、集合、布局转换、文本内核、压缩、ChaCha20-Poly1305、安全策略。目标框架 `netstandard2.1`、`net8.0` 到 `net11.0`。 |
+| `src/LuminPack.Core` | 运行时（NuGet 包 `LuminPack`，程序集 `LuminPack.Core`）：二进制和 JSON 读写器、直接分配写入使用的精确长度计算器、缓冲区、集合、布局转换、文本内核、压缩、ChaCha20-Poly1305、安全策略。目标框架 `netstandard2.1`、`net8.0` 到 `net11.0`。 |
 | `src/LuminPack.Generator` | 增量源代码生成器和分析器（`netstandard2.0`，Roslyn 4.3）。单独发布为一个包，运行时包 `LuminPack` 依赖它。 |
 | `src/LuminPack.Unity`、`src/LuminPack.Burst` | 可选的 Unity 值类型编解码，以及原生 Hook 表的 Burst 后端。 |
 | `src/LuminPack.Platforms` 及各适配包 | 共享适配层，以及 ASP.NET Core、Avalonia、Drawing、MAUI、MonoGame、SkiaSharp、WPF 的编解码。 |
@@ -61,9 +61,9 @@
 | 组件 | 职责 |
 | --- | --- |
 | `LuminPackSourceGenerator.*` | 模型分析：元数据、字段与继承存储、构造函数、类型分类、Union 发现。 |
-| `LuminPackCodeGenerator.*` | 二进制读写、大小计算、非托管分组、局部游标写入（`CursorWrite`）。 |
+| `LuminPackCodeGenerator.*` | 二进制读写、直接记录的长度计算、非托管分组、局部游标写入（`CursorWrite`）。 |
 | `LuminPackExtensionGenerator.*` | 操作模板、JSON 辅助、派发片段。 |
-| `LuminPackSerializerGenerator.*` | 具体和泛型的 buffer、span、流、异步、JSON、压缩和大小 API。 |
+| `LuminPackSerializerGenerator.*` | 具体和泛型的 buffer、span、流、异步、JSON 和压缩 API。 |
 | `CodeEmitters/` | 每个标量或集合族一个 emitter。 |
 | `Api/` | `Light` 和 `Minimal` 使用的外观调用分析。 |
 | 各类投影（`SerializerCoreProjection`、`BinaryCursorProjection`、`CompiledOperationProjection`、`RecursionGuardProjection`、`GeneratedOperationScopes` 等） | 改写完成的操作：状态归属、带检查的游标运算、配置传递、递归保护、可读的局部变量名。 |

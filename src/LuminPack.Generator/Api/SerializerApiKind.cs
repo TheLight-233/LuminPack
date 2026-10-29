@@ -3,6 +3,7 @@ using System;
 namespace LuminPack.Code.Core;
 
 /// <summary>Identifies independently selectable concrete serializer overloads.</summary>
+/// <remarks>Each bit is the position of its overload in the generated concrete overload order.</remarks>
 [Flags]
 internal enum SerializerApiKind
 {
@@ -34,12 +35,10 @@ internal enum SerializerApiKind
     DeserializeJsonBufferRef = 1 << 11,
     /// <summary>Deserializes asynchronously with the compatibility value parameter.</summary>
     DeserializeAsyncValue = 1 << 12,
-    /// <summary>Calculates a value's binary payload size.</summary>
-    Sizeof = 1 << 13,
     /// <summary>Serializes binary data to an arbitrary byte buffer writer.</summary>
-    SerializeBufferWriter = 1 << 14,
+    SerializeBufferWriter = 1 << 13,
     /// <summary>Serializes JSON to an arbitrary byte buffer writer.</summary>
-    SerializeJsonBufferWriter = 1 << 15,
+    SerializeJsonBufferWriter = 1 << 14,
     /// <summary>Preserves the complete legacy concrete API surface.</summary>
-    All = (1 << 16) - 1,
+    All = (1 << 15) - 1,
 }

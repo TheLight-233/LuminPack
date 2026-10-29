@@ -184,6 +184,10 @@ public static partial class LuminPackExtensionGenerator
             LuminPackVersionTolerantCodeGenerator.GenerateSchema(data, sb, metaInfo);
     }
 
+    /// <summary>Rejects an exact binary width outside the generated direct-record contract.</summary>
+    internal const string UnsupportedWidth =
+        "global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotSupportedException(\"Exact binary widths are evaluated only for direct records.\");";
+
     /// <summary>Builds the root calculate offset extension source from the supplied metadata.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="data">The metadata describing the serializable type.</param>
@@ -204,32 +208,11 @@ public static partial class LuminPackExtensionGenerator
             (metaInfo.IsNet8 ? "scoped ref " : "ref ") + typeName + nullable + " value)");
         AppendGenericConstraints(sb, data);
         sb.AppendLine("        {");
-        if (data.isUnion)
-        {
-            if (data.isValueType)
-            {
-                LuminPackUnionCodeGenerator.GenerateCalculateOffsetCodeStruct(data, sb, typeName);
-            }
-            else
-            {
-                LuminPackUnionCodeGenerator.GenerateCalculateOffsetCode(data, sb, typeName);
-            }
-        }
+        // Only fixed Object records can be direct records; other layouts keep a callable but unsupported width.
+        if (!data.isUnion && data.generatorType == GeneratorType.Object)
+            LuminPackCodeGenerator.GenerateCalculateOffsetCode(data, sb);
         else
-        {
-            switch (data.generatorType)
-            {
-                case GeneratorType.Object:
-                    LuminPackCodeGenerator.GenerateCalculateOffsetCode(data, sb);
-                    break;
-                case GeneratorType.CircleReference:
-                    LuminPackCircleReferenceCodeGenerator.GenerateCalculateOffsetCode(data, sb, typeName);
-                    break;
-                case GeneratorType.VersionTolerant:
-                    LuminPackVersionTolerantCodeGenerator.GenerateCalculateOffsetCode(data, sb, typeName);
-                    break;
-            }
-        }
+            sb.AppendLine("            " + UnsupportedWidth);
         sb.AppendLine("        }");
         sb.AppendLine();
     }

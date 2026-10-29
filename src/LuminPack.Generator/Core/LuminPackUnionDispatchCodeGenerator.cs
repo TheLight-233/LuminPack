@@ -180,14 +180,6 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         }
         sb.AppendLine($"{padding}    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(((object)this).GetType(), typeof({rootType}));");
         sb.AppendLine($"{padding}}}");
-        sb.AppendLine();
-
-        AppendMethodAttribute(sb, padding);
-        AppendHiddenAttribute(sb, padding);
-        sb.AppendLine($"{padding}{modifier}void __LuminPackUnionCalculateOffset_{suffix}(ref global::LuminPack.Core.LuminPackEvaluator evaluator)");
-        sb.AppendLine($"{padding}{{");
-        sb.AppendLine($"{padding}    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(((object)this).GetType(), typeof({rootType}));");
-        sb.AppendLine($"{padding}}}");
     }
 
     /// <summary>Builds the member methods source from the supplied metadata.</summary>
@@ -249,14 +241,6 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine($"{padding}{prefix}__LuminPackUnionSerializeJson_{suffix}(ref global::LuminPack.Core.LuminPackJsonWriter writer)");
         sb.AppendLine($"{padding}{{");
         AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.Json, extensionType);
-        sb.AppendLine($"{padding}}}");
-        sb.AppendLine();
-
-        AppendMethodAttribute(sb, padding);
-        AppendHiddenAttribute(sb, padding);
-        sb.AppendLine($"{padding}{prefix}__LuminPackUnionCalculateOffset_{suffix}(ref global::LuminPack.Core.LuminPackEvaluator evaluator)");
-        sb.AppendLine($"{padding}{{");
-        AppendMemberDispatchBody(sb, bodyPadding, data, members, rootType, DispatchOperation.CalculateOffset, extensionType);
         sb.AppendLine($"{padding}}}");
     }
 
@@ -442,39 +426,6 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
                 AppendConcreteValueLocal(sb, padding, member);
                 sb.AppendLine($"{padding}{extensionType}.WriteValue(ref writer, in concreteValue);");
                 sb.AppendLine($"{padding}writer.WriteObjectEnd();");
-                break;
-
-            case DispatchOperation.CalculateOffset:
-                sb.AppendLine($"{padding}evaluator.CalculateUnionHeader({member.Id});");
-                if (IsConstructedMember(member.Type.OriginalDefinition, member))
-                {
-                    // The compact slot proves the exact closed type. Reinterpret the local
-                    // reference and bind the generated concrete overload statically; this
-                    // keeps Cache<T> delegates out of the closed-generic hot path.
-                    AppendConcreteValueLocal(sb, padding, member);
-                    sb.AppendLine($"{padding}{extensionType}.CalculateOffset(ref evaluator, ref concreteValue);");
-                    if (!member.Type.IsValueType)
-                    {
-                        sb.AppendLine($"{padding}evaluator.Subtract(1);");
-                    }
-                }
-                else if (member.Type.IsUnmanagedType)
-                {
-                    // A pure unmanaged struct has no normal object header for a union to
-                    // replace. Calculate it directly so the union header is retained.
-                    sb.AppendLine($"{padding}var concreteValue = this;");
-                    sb.AppendLine($"{padding}{extensionType}.CalculateOffset(ref evaluator, ref concreteValue);");
-                }
-                else
-                {
-                    // Open generic member: route through the generated generic
-                    // CalculateOffset<T> dispatch (typeof chain, JIT-folded for a
-                    // closed T), then undo the normal object header that the union
-                    // header replaces. No cache, no delegate.
-                    sb.AppendLine($"{padding}var concreteValue = this;");
-                    sb.AppendLine($"{padding}{extensionType}.CalculateOffset(ref evaluator, ref concreteValue);");
-                    sb.AppendLine($"{padding}evaluator.Subtract(1);");
-                }
                 break;
         }
     }
@@ -710,7 +661,5 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         Binary,
         /// <summary>Specifies json.</summary>
         Json,
-        /// <summary>Specifies calculate offset.</summary>
-        CalculateOffset,
     }
 }

@@ -24,7 +24,7 @@ def emit_module(schema):
         width = sum(WIDTHS[f['kind']] for f in item['fields']) + (1 if item['empty'] else 0)
         members = ', '.join(f['member'].replace('(int)value.', '') for f in item['fields'])
         lines += [f'    /// <summary>Gets the explicit {name} codec.</summary>',
-                  f'    public static LuminPackCodec<{full}> {name}Codec {{ get; }} = new(Write, Read, Size);', '',
+                  f'    public static LuminPackCodec<{full}> {name}Codec {{ get; }} = new(Write, Read);', '',
                   f'    /// <summary>Writes {members} in order{", preceded by the empty marker" if item["empty"] else ""}.</summary>',
                   '    /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>',
                   f'    public static void Write(ref LuminPackWriter writer, in {full} value)', '    {',
@@ -49,19 +49,16 @@ def emit_module(schema):
             lines += [f'        {field["kind"]} {variable} = default;', f'        pending.Read(ref {variable});']
         factory = item['factory'].format(*variables)
         if item['empty']: factory = f'empty == 1 ? {item["empty"]} : {factory}'
-        lines += [f'        {full} candidate = {factory};', '        value = candidate;', '        reader = pending;', '    }', '',
-                  f'    /// <summary>Adds the exact {width}-byte record size.</summary>',
-                  '    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>',
-                  f'    public static void Size(ref LuminPackEvaluator evaluator, in {full} value) => evaluator.Add({width});', '']
+        lines += [f'        {full} candidate = {factory};', '        value = candidate;', '        reader = pending;', '    }', '']
         for sample in item['samples']:
             test += [f'CodecContract.Check({owner}.{name}Codec, ({full})({sample}), "{module}.{name}");']
         if item['empty']:
             test += [f'CodecContract.RejectMarker({owner}.{name}Codec, ({full})default, "{module}.{name}");']
-    lines += ['    /// <summary>Registers these binary/size codecs for existing Core generic fallback paths, preserving explicit application entries.</summary>',
+    lines += ['    /// <summary>Registers these binary codecs for existing Core generic fallback paths, preserving explicit application entries.</summary>',
               '    /// <remarks>Ordinary generated nested and raw unmanaged operations retain their original contracts.</remarks>',
               '    public static void Register()', '    {']
     for item in schema['types']:
-        lines += [f'        PlatformRegistration.Add<global::{item["type"]}>(&Write, &Read, &Size, {item["type"].split(".")[-1]}Codec);']
+        lines += [f'        PlatformRegistration.Add<global::{item["type"]}>(&Write, &Read, {item["type"].split(".")[-1]}Codec);']
     lines += ['        RegisterAdditional();', '    }', '', '    /// <summary>Registers module-specific variable records when supplied by another partial file.</summary>',
               '    static partial void RegisterAdditional();', '}']
     test += ['PlatformAdditionalTests.Run();', f'Console.WriteLine("Passed {module} platform contracts.");']

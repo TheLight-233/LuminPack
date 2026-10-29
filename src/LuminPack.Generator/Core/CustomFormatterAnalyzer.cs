@@ -11,9 +11,8 @@ namespace LuminPack.Code.Core;
 /// types. The generator emits no extension methods for Custom types; instead these methods are
 /// automatically registered through LuminPackSerializer.Register&lt;T&gt;.
 /// <para>
-/// Register has three overloads and the method set must match one of them exactly:
-/// binary (Serialize + Deserialize), binary + JSON (also SerializeJson + DeserializeJson),
-/// or binary + JSON + size (also CalculateOffset).
+/// Register has two overloads and the method set must match one of them exactly:
+/// binary (Serialize + Deserialize) or binary + JSON (also SerializeJson + DeserializeJson).
 /// </para>
 /// </summary>
 internal static class CustomFormatterAnalyzer
@@ -22,7 +21,6 @@ internal static class CustomFormatterAnalyzer
     internal const string DeserializeName = "Deserialize";
     internal const string SerializeJsonName = "SerializeJson";
     internal const string DeserializeJsonName = "DeserializeJson";
-    internal const string CalculateOffsetName = "CalculateOffset";
 
     /// <summary>Serializes the supplied value using the selected format and options.</summary>
     /// <param name="typeName">The C# type name to use in generated source.</param>
@@ -44,11 +42,6 @@ internal static class CustomFormatterAnalyzer
     /// <returns>The result of the operation.</returns>
     internal static string DeserializeJsonSignature(string typeName) =>
         $"static void {DeserializeJsonName}(ref global::LuminPack.Core.LuminPackJsonReader reader, ref {typeName} value)";
-    /// <summary>Calculates the serialized size contribution of offset signature.</summary>
-    /// <param name="typeName">The C# type name to use in generated source.</param>
-    /// <returns>The result of the operation.</returns>
-    internal static string CalculateOffsetSignature(string typeName) =>
-        $"static void {CalculateOffsetName}(ref global::LuminPack.Core.LuminPackEvaluator evaluator, in {typeName} value)";
 
     /// <summary>
     /// Collects and validates every Custom formatter type declared in the compilation's own
@@ -96,7 +89,6 @@ internal static class CustomFormatterAnalyzer
         model.Deserialize = FindMethod(type, DeserializeName);
         model.SerializeJson = FindMethod(type, SerializeJsonName);
         model.DeserializeJson = FindMethod(type, DeserializeJsonName);
-        model.CalculateOffset = FindMethod(type, CalculateOffsetName);
 
         return model;
     }
@@ -173,18 +165,6 @@ internal static class CustomFormatterAnalyzer
         ValidateMethod(model.DeserializeJson, DeserializeJsonName, DeserializeJsonSignature(model.TypeName),
             "global::LuminPack.Core.LuminPackJsonReader", model.TypeName, RefKind.Ref,
             display, location, diagnostics, ref anyError);
-        ValidateMethod(model.CalculateOffset, CalculateOffsetName, CalculateOffsetSignature(model.TypeName),
-            "global::LuminPack.Core.LuminPackEvaluator", model.TypeName, RefKind.In,
-            display, location, diagnostics, ref anyError);
-
-        if (model.CalculateOffset is not null && !(hasSerializeJson && hasDeserializeJson))
-        {
-            // Register's third overload is binary + JSON + calculate; without the JSON pair
-            // there is no overload that accepts CalculateOffset.
-            diagnostics.Add(Diagnostic.Create(
-                DiagnosticDescriptors.CustomCalculateOffsetRequiresJson, location, display));
-            anyError = true;
-        }
 
         model.HasErrors = anyError;
         return diagnostics;

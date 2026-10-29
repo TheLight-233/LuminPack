@@ -10,7 +10,7 @@ namespace LuminPack.Avalonia;
 public static unsafe partial class LuminAvalonia
 {
     /// <summary>Gets the explicit Point codec.</summary>
-    public static LuminPackCodec<global::Avalonia.Point> PointCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.Point> PointCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -36,12 +36,8 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.Point value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit Vector codec.</summary>
-    public static LuminPackCodec<global::Avalonia.Vector> VectorCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.Vector> VectorCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -67,12 +63,8 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.Vector value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit Size codec.</summary>
-    public static LuminPackCodec<global::Avalonia.Size> SizeCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.Size> SizeCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Width, Height in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -98,12 +90,8 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.Size value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit Rect codec.</summary>
-    public static LuminPackCodec<global::Avalonia.Rect> RectCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.Rect> RectCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Width, Height in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -135,12 +123,8 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 32-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.Rect value) => evaluator.Add(32);
-
     /// <summary>Gets the explicit Thickness codec.</summary>
-    public static LuminPackCodec<global::Avalonia.Thickness> ThicknessCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.Thickness> ThicknessCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Left, Top, Right, Bottom in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -172,12 +156,8 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 32-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.Thickness value) => evaluator.Add(32);
-
     /// <summary>Gets the explicit CornerRadius codec.</summary>
-    public static LuminPackCodec<global::Avalonia.CornerRadius> CornerRadiusCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.CornerRadius> CornerRadiusCodec { get; } = new(Write, Read);
 
     /// <summary>Writes TopLeft, TopRight, BottomRight, BottomLeft in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -209,12 +189,8 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 32-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.CornerRadius value) => evaluator.Add(32);
-
     /// <summary>Gets the explicit PixelPoint codec.</summary>
-    public static LuminPackCodec<global::Avalonia.PixelPoint> PixelPointCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.PixelPoint> PixelPointCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -240,12 +216,8 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 8-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.PixelPoint value) => evaluator.Add(8);
-
     /// <summary>Gets the explicit PixelVector codec.</summary>
-    public static LuminPackCodec<global::Avalonia.PixelVector> PixelVectorCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.PixelVector> PixelVectorCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -271,12 +243,8 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 8-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.PixelVector value) => evaluator.Add(8);
-
     /// <summary>Gets the explicit PixelSize codec.</summary>
-    public static LuminPackCodec<global::Avalonia.PixelSize> PixelSizeCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.PixelSize> PixelSizeCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Width, Height in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -302,12 +270,8 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 8-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.PixelSize value) => evaluator.Add(8);
-
     /// <summary>Gets the explicit PixelRect codec.</summary>
-    public static LuminPackCodec<global::Avalonia.PixelRect> PixelRectCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.PixelRect> PixelRectCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Width, Height in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -339,12 +303,8 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.PixelRect value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit Matrix codec.</summary>
-    public static LuminPackCodec<global::Avalonia.Matrix> MatrixCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.Matrix> MatrixCodec { get; } = new(Write, Read);
 
     /// <summary>Writes M11, M12, M13, M21, M22, M23, M31, M32, M33 in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -391,12 +351,8 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 72-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.Matrix value) => evaluator.Add(72);
-
     /// <summary>Gets the explicit Color codec.</summary>
-    public static LuminPackCodec<global::Avalonia.Media.Color> ColorCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.Media.Color> ColorCodec { get; } = new(Write, Read);
 
     /// <summary>Writes A, R, G, B in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -428,12 +384,8 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 4-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.Media.Color value) => evaluator.Add(4);
-
     /// <summary>Gets the explicit RelativePoint codec.</summary>
-    public static LuminPackCodec<global::Avalonia.RelativePoint> RelativePointCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.RelativePoint> RelativePointCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Point.X, Point.Y, Unit in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -462,12 +414,8 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 20-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.RelativePoint value) => evaluator.Add(20);
-
     /// <summary>Gets the explicit RelativeRect codec.</summary>
-    public static LuminPackCodec<global::Avalonia.RelativeRect> RelativeRectCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Avalonia.RelativeRect> RelativeRectCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Rect.X, Rect.Y, Rect.Width, Rect.Height, Unit in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -502,28 +450,24 @@ public static unsafe partial class LuminAvalonia
         reader = pending;
     }
 
-    /// <summary>Adds the exact 36-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Avalonia.RelativeRect value) => evaluator.Add(36);
-
-    /// <summary>Registers these binary/size codecs for existing Core generic fallback paths, preserving explicit application entries.</summary>
+    /// <summary>Registers these binary codecs for existing Core generic fallback paths, preserving explicit application entries.</summary>
     /// <remarks>Ordinary generated nested and raw unmanaged operations retain their original contracts.</remarks>
     public static void Register()
     {
-        PlatformRegistration.Add<global::Avalonia.Point>(&Write, &Read, &Size, PointCodec);
-        PlatformRegistration.Add<global::Avalonia.Vector>(&Write, &Read, &Size, VectorCodec);
-        PlatformRegistration.Add<global::Avalonia.Size>(&Write, &Read, &Size, SizeCodec);
-        PlatformRegistration.Add<global::Avalonia.Rect>(&Write, &Read, &Size, RectCodec);
-        PlatformRegistration.Add<global::Avalonia.Thickness>(&Write, &Read, &Size, ThicknessCodec);
-        PlatformRegistration.Add<global::Avalonia.CornerRadius>(&Write, &Read, &Size, CornerRadiusCodec);
-        PlatformRegistration.Add<global::Avalonia.PixelPoint>(&Write, &Read, &Size, PixelPointCodec);
-        PlatformRegistration.Add<global::Avalonia.PixelVector>(&Write, &Read, &Size, PixelVectorCodec);
-        PlatformRegistration.Add<global::Avalonia.PixelSize>(&Write, &Read, &Size, PixelSizeCodec);
-        PlatformRegistration.Add<global::Avalonia.PixelRect>(&Write, &Read, &Size, PixelRectCodec);
-        PlatformRegistration.Add<global::Avalonia.Matrix>(&Write, &Read, &Size, MatrixCodec);
-        PlatformRegistration.Add<global::Avalonia.Media.Color>(&Write, &Read, &Size, ColorCodec);
-        PlatformRegistration.Add<global::Avalonia.RelativePoint>(&Write, &Read, &Size, RelativePointCodec);
-        PlatformRegistration.Add<global::Avalonia.RelativeRect>(&Write, &Read, &Size, RelativeRectCodec);
+        PlatformRegistration.Add<global::Avalonia.Point>(&Write, &Read, PointCodec);
+        PlatformRegistration.Add<global::Avalonia.Vector>(&Write, &Read, VectorCodec);
+        PlatformRegistration.Add<global::Avalonia.Size>(&Write, &Read, SizeCodec);
+        PlatformRegistration.Add<global::Avalonia.Rect>(&Write, &Read, RectCodec);
+        PlatformRegistration.Add<global::Avalonia.Thickness>(&Write, &Read, ThicknessCodec);
+        PlatformRegistration.Add<global::Avalonia.CornerRadius>(&Write, &Read, CornerRadiusCodec);
+        PlatformRegistration.Add<global::Avalonia.PixelPoint>(&Write, &Read, PixelPointCodec);
+        PlatformRegistration.Add<global::Avalonia.PixelVector>(&Write, &Read, PixelVectorCodec);
+        PlatformRegistration.Add<global::Avalonia.PixelSize>(&Write, &Read, PixelSizeCodec);
+        PlatformRegistration.Add<global::Avalonia.PixelRect>(&Write, &Read, PixelRectCodec);
+        PlatformRegistration.Add<global::Avalonia.Matrix>(&Write, &Read, MatrixCodec);
+        PlatformRegistration.Add<global::Avalonia.Media.Color>(&Write, &Read, ColorCodec);
+        PlatformRegistration.Add<global::Avalonia.RelativePoint>(&Write, &Read, RelativePointCodec);
+        PlatformRegistration.Add<global::Avalonia.RelativeRect>(&Write, &Read, RelativeRectCodec);
         RegisterAdditional();
     }
 

@@ -130,17 +130,6 @@ namespace LuminPack
             return consumed;
         }
 
-        /// <summary>Exercises size evaluation using the same closed profile as writing.</summary>
-        /// <typeparam name="T">The payload type.</typeparam>
-        /// <param name="value">The original value.</param>
-        /// <param name="profile">The matrix row.</param>
-        /// <returns>The generated exact byte count.</returns>
-        internal static int Sizeof<T>(in T value, TestSerializationProfile? profile)
-        {
-            var action = new ProfileSize<T> { Value = value };
-            return RunTestProfile<int, ProfileSize<T>>(ref action, profile);
-        }
-
         /// <summary>Exercises the JSON generator under a closed encoding and grammar profile.</summary>
         /// <typeparam name="T">The payload type.</typeparam>
         /// <param name="value">The original value.</param>
@@ -246,15 +235,6 @@ namespace LuminPack
             /// <inheritdoc/>
             public int Run<TOptions>() where TOptions : struct, ILuminPackOptions
 { return Deserialize<T, TOptions>(Input.AsSpan(), ref Value); }        }
-
-        /// <summary>Preserves the existing evaluator algorithm and per-operation reference map.</summary>
-        /// <typeparam name="T">The payload type.</typeparam>
-        private struct ProfileSize<T> : IProfileTestAction<int>
-        {
-            internal T Value;
-            /// <inheritdoc/>
-            public int Run<TOptions>() where TOptions : struct, ILuminPackOptions
-{ return Sizeof<T, TOptions>(Value); }        }
 
         /// <summary>Preserves the original JSON writer algorithm and actual encoded-byte units.</summary>
         /// <typeparam name="T">The payload type.</typeparam>

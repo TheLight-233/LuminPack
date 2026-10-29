@@ -37,8 +37,8 @@ internal static class BufferWriterSerializationTest
             AliasedAndResetOperationsAreRejected);
         RunCase(results, nameof(NullUnmanagedArrayRoundTrips),
             NullUnmanagedArrayRoundTrips);
-        RunCase(results, nameof(Utf16TokenSizeMatchesSerializedLength),
-            Utf16TokenSizeMatchesSerializedLength);
+        RunCase(results, nameof(Utf16TokenRoundTrips),
+            Utf16TokenRoundTrips);
     }
 
     /// <summary>Verifies external binary serialization publishes exact length.</summary>
@@ -265,8 +265,8 @@ internal static class BufferWriterSerializationTest
         Assert(result is null, "A null unmanaged array was not preserved.");
     }
 
-    /// <summary>Verifies utf16 token size matches serialized length.</summary>
-    private static void Utf16TokenSizeMatchesSerializedLength()
+    /// <summary>Verifies utf16 token strings round-trip.</summary>
+    private static void Utf16TokenRoundTrips()
     {
         var option = TestSerializationProfile.Token with
         {
@@ -276,9 +276,6 @@ internal static class BufferWriterSerializationTest
         foreach (var value in new string?[] { null, string.Empty, "A", "\u4EAE\u5EA6", "emoji😀" })
         {
             var payload = LuminPackSerializer.Serialize(value, option);
-            var size = LuminPackSerializer.Sizeof(value, option);
-            Assert(size == payload.Length,
-                $"UTF-16 token Sizeof returned {size}, but serialization wrote {payload.Length} bytes.");
             Assert(LuminPackSerializer.Deserialize<string?>(payload, option) == (value ?? string.Empty),
                 "UTF-16 token string did not round-trip according to the protocol's null/empty normalization.");
         }

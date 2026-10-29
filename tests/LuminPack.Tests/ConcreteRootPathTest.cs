@@ -68,7 +68,6 @@ public class ConcreteRootPathTest
         string? value = text;
         byte[] bytes = LuminPackSerializer.Serialize(value);
         Pooled(bytes, buffer => LuminPackSerializer.Serialize(value, buffer));
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(value));
         // Nonempty Latin-1 text uses the compact one-byte form; other text keeps raw code units.
         bool compact = !string.IsNullOrEmpty(value) && value.All(character => character <= 'ÿ');
         Assert.Equal(sizeof(int) + (value?.Length ?? 0) * (compact ? 1 : sizeof(char)), bytes.Length);
@@ -102,7 +101,6 @@ public class ConcreteRootPathTest
             Uri? value = uri;
             byte[] bytes = LuminPackSerializer.Serialize(value);
             Pooled(bytes, buffer => LuminPackSerializer.Serialize(value, buffer));
-            Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(value));
             Uri? copy = null;
             Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes.AsSpan(), ref copy));
             Assert.Equal(value?.OriginalString, copy?.OriginalString);

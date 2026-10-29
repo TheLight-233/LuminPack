@@ -10,7 +10,7 @@ namespace LuminPack.MonoGame;
 public static unsafe partial class LuminMonoGame
 {
     /// <summary>Gets the explicit Vector2 codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Xna.Framework.Vector2> Vector2Codec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Xna.Framework.Vector2> Vector2Codec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -36,12 +36,8 @@ public static unsafe partial class LuminMonoGame
         reader = pending;
     }
 
-    /// <summary>Adds the exact 8-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Xna.Framework.Vector2 value) => evaluator.Add(8);
-
     /// <summary>Gets the explicit Vector3 codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Xna.Framework.Vector3> Vector3Codec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Xna.Framework.Vector3> Vector3Codec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Z in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -70,12 +66,8 @@ public static unsafe partial class LuminMonoGame
         reader = pending;
     }
 
-    /// <summary>Adds the exact 12-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Xna.Framework.Vector3 value) => evaluator.Add(12);
-
     /// <summary>Gets the explicit Vector4 codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Xna.Framework.Vector4> Vector4Codec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Xna.Framework.Vector4> Vector4Codec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Z, W in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -107,12 +99,8 @@ public static unsafe partial class LuminMonoGame
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Xna.Framework.Vector4 value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit Quaternion codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Xna.Framework.Quaternion> QuaternionCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Xna.Framework.Quaternion> QuaternionCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Z, W in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -144,12 +132,8 @@ public static unsafe partial class LuminMonoGame
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Xna.Framework.Quaternion value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit Point codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Xna.Framework.Point> PointCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Xna.Framework.Point> PointCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -175,12 +159,8 @@ public static unsafe partial class LuminMonoGame
         reader = pending;
     }
 
-    /// <summary>Adds the exact 8-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Xna.Framework.Point value) => evaluator.Add(8);
-
     /// <summary>Gets the explicit Rectangle codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Xna.Framework.Rectangle> RectangleCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Xna.Framework.Rectangle> RectangleCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Width, Height in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -212,12 +192,8 @@ public static unsafe partial class LuminMonoGame
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Xna.Framework.Rectangle value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit Matrix codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Xna.Framework.Matrix> MatrixCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Xna.Framework.Matrix> MatrixCodec { get; } = new(Write, Read);
 
     /// <summary>Writes M11, M12, M13, M14, M21, M22, M23, M24, M31, M32, M33, M34, M41, M42, M43, M44 in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -285,12 +261,8 @@ public static unsafe partial class LuminMonoGame
         reader = pending;
     }
 
-    /// <summary>Adds the exact 64-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Xna.Framework.Matrix value) => evaluator.Add(64);
-
     /// <summary>Gets the explicit Color codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Xna.Framework.Color> ColorCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Xna.Framework.Color> ColorCodec { get; } = new(Write, Read);
 
     /// <summary>Writes R, G, B, A in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -322,12 +294,8 @@ public static unsafe partial class LuminMonoGame
         reader = pending;
     }
 
-    /// <summary>Adds the exact 4-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Xna.Framework.Color value) => evaluator.Add(4);
-
     /// <summary>Gets the explicit BoundingBox codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Xna.Framework.BoundingBox> BoundingBoxCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Xna.Framework.BoundingBox> BoundingBoxCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Min.X, Min.Y, Min.Z, Max.X, Max.Y, Max.Z in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -365,12 +333,8 @@ public static unsafe partial class LuminMonoGame
         reader = pending;
     }
 
-    /// <summary>Adds the exact 24-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Xna.Framework.BoundingBox value) => evaluator.Add(24);
-
     /// <summary>Gets the explicit BoundingSphere codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Xna.Framework.BoundingSphere> BoundingSphereCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Xna.Framework.BoundingSphere> BoundingSphereCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Center.X, Center.Y, Center.Z, Radius in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -402,12 +366,8 @@ public static unsafe partial class LuminMonoGame
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Xna.Framework.BoundingSphere value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit Ray codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Xna.Framework.Ray> RayCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Xna.Framework.Ray> RayCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Position.X, Position.Y, Position.Z, Direction.X, Direction.Y, Direction.Z in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -445,12 +405,8 @@ public static unsafe partial class LuminMonoGame
         reader = pending;
     }
 
-    /// <summary>Adds the exact 24-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Xna.Framework.Ray value) => evaluator.Add(24);
-
     /// <summary>Gets the explicit Plane codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Xna.Framework.Plane> PlaneCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Xna.Framework.Plane> PlaneCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Normal.X, Normal.Y, Normal.Z, D in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -482,26 +438,22 @@ public static unsafe partial class LuminMonoGame
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Xna.Framework.Plane value) => evaluator.Add(16);
-
-    /// <summary>Registers these binary/size codecs for existing Core generic fallback paths, preserving explicit application entries.</summary>
+    /// <summary>Registers these binary codecs for existing Core generic fallback paths, preserving explicit application entries.</summary>
     /// <remarks>Ordinary generated nested and raw unmanaged operations retain their original contracts.</remarks>
     public static void Register()
     {
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Vector2>(&Write, &Read, &Size, Vector2Codec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Vector3>(&Write, &Read, &Size, Vector3Codec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Vector4>(&Write, &Read, &Size, Vector4Codec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Quaternion>(&Write, &Read, &Size, QuaternionCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Point>(&Write, &Read, &Size, PointCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Rectangle>(&Write, &Read, &Size, RectangleCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Matrix>(&Write, &Read, &Size, MatrixCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Color>(&Write, &Read, &Size, ColorCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.BoundingBox>(&Write, &Read, &Size, BoundingBoxCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.BoundingSphere>(&Write, &Read, &Size, BoundingSphereCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Ray>(&Write, &Read, &Size, RayCodec);
-        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Plane>(&Write, &Read, &Size, PlaneCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Vector2>(&Write, &Read, Vector2Codec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Vector3>(&Write, &Read, Vector3Codec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Vector4>(&Write, &Read, Vector4Codec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Quaternion>(&Write, &Read, QuaternionCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Point>(&Write, &Read, PointCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Rectangle>(&Write, &Read, RectangleCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Matrix>(&Write, &Read, MatrixCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Color>(&Write, &Read, ColorCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.BoundingBox>(&Write, &Read, BoundingBoxCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.BoundingSphere>(&Write, &Read, BoundingSphereCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Ray>(&Write, &Read, RayCodec);
+        PlatformRegistration.Add<global::Microsoft.Xna.Framework.Plane>(&Write, &Read, PlaneCodec);
         RegisterAdditional();
     }
 

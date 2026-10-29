@@ -4,6 +4,7 @@ using System;
 using System.Linq;
 using LuminPack.Code;
 using LuminPack.Core;
+using LuminPack.Utility;
 using LuminPack.Unity;
 using UnityEngine;
 
@@ -16,7 +17,7 @@ public static unsafe class UnityObjectContract
         var curve = new AnimationCurve(new Keyframe(0, 1, -2, 3, 0.125f, 0.875f), new Keyframe(1, 4, 5, -6, 0.375f, 0.625f))
         { preWrapMode = WrapMode.Loop, postWrapMode = WrapMode.PingPong };
         var curveTarget = new AnimationCurve(new Keyframe(0, 9));
-        Check<AnimationCurve>(curve, curveTarget, &LuminUnity.Write, &LuminUnity.Read, &LuminUnity.Size);
+        Check<AnimationCurve>(curve, curveTarget, &LuminUnity.Write, &LuminUnity.Read);
         for (int sample = -8; sample <= 24; sample++)
             Require(Mathf.Abs(curve.Evaluate(sample / 16f) - curveTarget.Evaluate(sample / 16f)) < 0.00001f, "Curve evaluation changed.");
 
@@ -24,20 +25,20 @@ public static unsafe class UnityObjectContract
         gradient.SetKeys(new[] { new GradientColorKey(Color.red, 0), new GradientColorKey(Color.blue, 1) },
             new[] { new GradientAlphaKey(0.125f, 0), new GradientAlphaKey(0.875f, 1) });
         var gradientTarget = new Gradient();
-        Check<Gradient>(gradient, gradientTarget, &LuminUnity.Write, &LuminUnity.Read, &LuminUnity.Size);
+        Check<Gradient>(gradient, gradientTarget, &LuminUnity.Write, &LuminUnity.Read);
         Require(gradientTarget.mode == gradient.mode && gradientTarget.colorSpace == gradient.colorSpace, "Gradient metadata changed.");
-        Check<RectOffset>(new RectOffset(-1, 2, 3, -4), new RectOffset(10, 11, 12, 13), &LuminUnity.Write, &LuminUnity.Read, &LuminUnity.Size);
+        Check<RectOffset>(new RectOffset(-1, 2, 3, -4), new RectOffset(10, 11, 12, 13), &LuminUnity.Write, &LuminUnity.Read);
         LuminUnity.Register(); LuminUnity.Register();
-        Debug.Log("LUMINPACK_UNITY_OBJECTS_OK: curve/gradient/offset native round trips, reuse, all truncations, nulls, sizes and count validation.");
+        Debug.Log("LUMINPACK_UNITY_OBJECTS_OK: curve/gradient/offset native round trips, reuse, all truncations, nulls, exact-length writes and count validation.");
     }
 
     /// <summary>Runs an independent malformed/truncated input matrix before checking complete publication.</summary>
     /// <typeparam name="T">Native Unity owner type.</typeparam>
-    /// <param name="source">Source owner.</param><param name="destination">Reusable owner.</param><param name="write">Writer.</param><param name="read">Reader.</param><param name="size">Evaluator.</param>
+    /// <param name="source">Source owner.</param><param name="destination">Reusable owner.</param><param name="write">Writer.</param><param name="read">Reader.</param>
     private static void Check<T>(T source, T destination, delegate*<ref LuminPackWriter, in T?, void> write,
-        delegate*<ref LuminPackReader, ref T?, void> read, delegate*<ref LuminPackEvaluator, in T?, void> size) where T : class
+        delegate*<ref LuminPackReader, ref T?, void> read) where T : class
     {
-        byte[] record = Encode(source, write, size), before = Encode(destination, write, size);
+        byte[] record = Encode(source, write), before = Encode(destination, write);
         T? current = destination;
         fixed (byte* input = record)
         {
@@ -88,22 +89,27 @@ public static unsafe class UnityObjectContract
         }
     }
 
-    /// <summary>Checks exact evaluation and bounded output through a pinned netstandard cursor.</summary>
+    /// <summary>Checks a repeatable record length and bounded output through a pinned netstandard cursor.</summary>
     /// <typeparam name="T">Native owner type.</typeparam>
-    /// <param name="value">Value or null.</param><param name="write">Writer.</param><param name="size">Evaluator.</param><returns>Complete record bytes.</returns>
-    private static byte[] Encode<T>(T? value, delegate*<ref LuminPackWriter, in T?, void> write,
-        delegate*<ref LuminPackEvaluator, in T?, void> size) where T : class
+    /// <param name="value">Value or null.</param><param name="write">Writer.</param><returns>Complete record bytes.</returns>
+    private static byte[] Encode<T>(T? value, delegate*<ref LuminPackWriter, in T?, void> write) where T : class
     {
-        int length = 0;
-        var evaluator = new LuminPackEvaluator(ref length);
-        size(ref evaluator, value);
+        int length;
+        var buffer = LuminBufferWriterPool.Rent();
+        try
+        {
+            var probe = new LuminPackWriter(buffer);
+            write(ref probe, value);
+            length = probe.CurrentIndex;
+        }
+        finally { LuminBufferWriterPool.Return(buffer); }
         byte[] output = Enumerable.Repeat((byte)0xA5, length + 8).ToArray();
         fixed (byte* data = output)
         {
             Span<byte> span = new Span<byte>(data + 3, length);
             var writer = new LuminPackWriter(ref span);
             write(ref writer, value);
-            Require(writer.Position == length, "Native object evaluator disagrees with the writer.");
+            Require(writer.Position == length, "Native object record length changed between writes.");
         }
         Require(output.Take(3).Concat(output.Skip(3 + length)).All(b => b == 0xA5), "Native object output crossed its window.");
         return output.Skip(3).Take(length).ToArray();

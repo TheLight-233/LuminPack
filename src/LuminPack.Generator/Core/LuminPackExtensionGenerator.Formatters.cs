@@ -93,8 +93,7 @@ public static partial class LuminPackExtensionGenerator
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     internal static bool CanRegisterCalculateFormatter(ITypeSymbol type, Compilation compilation)
     {
-        if (IsCustomGeneratorType(type))
-            return CustomFormatterAnalyzer.Analyze((INamedTypeSymbol)type).CalculateOffset != null;
+        if (IsCustomGeneratorType(type)) return false;
         if (type.TypeKind == TypeKind.Enum ||
             type is INamedTypeSymbol { OriginalDefinition.SpecialType: SpecialType.System_Nullable_T })
         {

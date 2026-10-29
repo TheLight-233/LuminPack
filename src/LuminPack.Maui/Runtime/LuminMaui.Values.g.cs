@@ -10,7 +10,7 @@ namespace LuminPack.Maui;
 public static unsafe partial class LuminMaui
 {
     /// <summary>Gets the explicit Point codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Maui.Graphics.Point> PointCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Maui.Graphics.Point> PointCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -36,12 +36,8 @@ public static unsafe partial class LuminMaui
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Maui.Graphics.Point value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit PointF codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Maui.Graphics.PointF> PointFCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Maui.Graphics.PointF> PointFCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -67,12 +63,8 @@ public static unsafe partial class LuminMaui
         reader = pending;
     }
 
-    /// <summary>Adds the exact 8-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Maui.Graphics.PointF value) => evaluator.Add(8);
-
     /// <summary>Gets the explicit Size codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Maui.Graphics.Size> SizeCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Maui.Graphics.Size> SizeCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Width, Height in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -98,12 +90,8 @@ public static unsafe partial class LuminMaui
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Maui.Graphics.Size value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit SizeF codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Maui.Graphics.SizeF> SizeFCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Maui.Graphics.SizeF> SizeFCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Width, Height in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -129,12 +117,8 @@ public static unsafe partial class LuminMaui
         reader = pending;
     }
 
-    /// <summary>Adds the exact 8-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Maui.Graphics.SizeF value) => evaluator.Add(8);
-
     /// <summary>Gets the explicit Rect codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Maui.Graphics.Rect> RectCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Maui.Graphics.Rect> RectCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Width, Height in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -166,12 +150,8 @@ public static unsafe partial class LuminMaui
         reader = pending;
     }
 
-    /// <summary>Adds the exact 32-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Maui.Graphics.Rect value) => evaluator.Add(32);
-
     /// <summary>Gets the explicit RectF codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Maui.Graphics.RectF> RectFCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Maui.Graphics.RectF> RectFCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y, Width, Height in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -203,20 +183,16 @@ public static unsafe partial class LuminMaui
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Maui.Graphics.RectF value) => evaluator.Add(16);
-
-    /// <summary>Registers these binary/size codecs for existing Core generic fallback paths, preserving explicit application entries.</summary>
+    /// <summary>Registers these binary codecs for existing Core generic fallback paths, preserving explicit application entries.</summary>
     /// <remarks>Ordinary generated nested and raw unmanaged operations retain their original contracts.</remarks>
     public static void Register()
     {
-        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.Point>(&Write, &Read, &Size, PointCodec);
-        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.PointF>(&Write, &Read, &Size, PointFCodec);
-        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.Size>(&Write, &Read, &Size, SizeCodec);
-        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.SizeF>(&Write, &Read, &Size, SizeFCodec);
-        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.Rect>(&Write, &Read, &Size, RectCodec);
-        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.RectF>(&Write, &Read, &Size, RectFCodec);
+        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.Point>(&Write, &Read, PointCodec);
+        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.PointF>(&Write, &Read, PointFCodec);
+        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.Size>(&Write, &Read, SizeCodec);
+        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.SizeF>(&Write, &Read, SizeFCodec);
+        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.Rect>(&Write, &Read, RectCodec);
+        PlatformRegistration.Add<global::Microsoft.Maui.Graphics.RectF>(&Write, &Read, RectFCodec);
         RegisterAdditional();
     }
 

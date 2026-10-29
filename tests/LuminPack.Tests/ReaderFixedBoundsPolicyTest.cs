@@ -80,7 +80,6 @@ public class ReaderFixedBoundsPolicyTest
             byte[] record = LuminPackSerializer.Serialize(source);
             Assert.Equal(expected, record);
             Assert.Equal(expected, LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(source));
-            Assert.Equal(expected.Length, LuminPackSerializer.Sizeof(source));
             int? destination = 719;
             Assert.Equal(record.Length, LuminPackSerializer.Deserialize(record.AsSpan(), ref destination));
             Assert.Equal(source, destination);

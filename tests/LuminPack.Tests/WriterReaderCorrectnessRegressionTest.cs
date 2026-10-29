@@ -98,8 +98,6 @@ internal static class WriterReaderCorrectnessRegressionTest
         byte[] payload = LuminPackSerializer.Serialize(in value);
         Assert(payload.Length == 1 && payload[0] == LuminPackCode.NullObject,
             $"The {formatter} wrote {payload.Length} bytes for a one-byte null object header.");
-        Assert(LuminPackSerializer.Sizeof(value) == payload.Length,
-            $"The {formatter} serializer and size evaluator disagree for null.");
     }
 
     /// <summary>Verifies assert single null object header.</summary>

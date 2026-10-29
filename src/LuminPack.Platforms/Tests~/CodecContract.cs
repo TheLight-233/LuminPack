@@ -9,18 +9,17 @@ public static class CodecContract
     /// <summary>Counts verified sample values.</summary>
     public static int Samples { get; private set; }
 
-    /// <summary>Checks semantic/byte round trips, exact sizes, every shortened window, trailing data and write canaries.</summary>
+    /// <summary>Checks semantic/byte round trips, every shortened window, trailing data and write canaries.</summary>
     /// <typeparam name="T">The platform value.</typeparam>
     /// <param name="codec">The module's complete codec.</param><param name="value">The sample.</param><param name="name">The assertion context.</param>
     public static void Check<T>(LuminPackCodec<T> codec, T value, string name)
     {
         byte[] bytes = codec.Serialize(value);
-        Assert(bytes.Length == codec.GetSize(value), name + ": size mismatch.");
         T restored = codec.Deserialize(bytes);
         Assert(EqualityComparer<T>.Default.Equals(value, restored), name + ": changed public value.");
         Assert(bytes.AsSpan().SequenceEqual(codec.Serialize(restored)), name + ": changed component bits or identity.");
         nint key = LuminPackMarshal.GetMethodTable(typeof(T));
-        Assert(LuminPackFormatterRegistry.TryGetValue(in key, out var entry) && entry.WriteValue != 0 && entry.ReadValue != 0 && entry.CalculateOffset != 0,
+        Assert(LuminPackFormatterRegistry.TryGetValue(in key, out var entry) && entry.WriteValue != 0 && entry.ReadValue != 0,
             name + ": missing explicit registration.");
         nint wrappedKey = LuminPackMarshal.GetMethodTable(typeof(LuminPackValue<T>));
         Assert(LuminPackFormatterRegistry.TryGetValue(in wrappedKey, out _), name + ": missing Custom wrapper registration.");

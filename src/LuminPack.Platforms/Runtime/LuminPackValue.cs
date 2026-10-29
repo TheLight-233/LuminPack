@@ -50,8 +50,4 @@ public struct LuminPackValue<T>
     /// <summary>Rejects unsupported JSON without inspecting external implementation storage.</summary>
     /// <param name="reader">The JSON cursor.</param><param name="value">The destination.</param>
     public static void DeserializeJson(ref LuminPackJsonReader reader, ref LuminPackValue<T> value) => LuminPackExceptionHelper.ThrowNotSupportedException("Platform value JSON codecs are not configured.");
-
-    /// <summary>Adds the module's exact binary size.</summary>
-    /// <param name="evaluator">The Core accumulator.</param><param name="value">The explicit value.</param>
-    public static void CalculateOffset(ref LuminPackEvaluator evaluator, in LuminPackValue<T> value) => GetCodec().Size(ref evaluator, value.Value);
 }

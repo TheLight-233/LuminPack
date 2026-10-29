@@ -30,7 +30,6 @@ Person other = LuminPackSerializer.Deserialize<Person>(bytes);
 string json = LuminPackSerializer.SerializeJson(person);
 Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
 LuminPackSerializer.DeserializeJson(json, ref fromJson);  // reuses the existing JSON graph
-int size = LuminPackSerializer.Sizeof(person);
 ```
 
 `LuminPackSerializer` is generated into the consuming assembly (namespace `LuminPack`). Install with `dotnet add package LuminPack`; the generator package comes with it.

@@ -17,8 +17,9 @@ public static partial class LuminPackExtensionGenerator
         AppendJsonFormatterExtension(builder, field.TypeName, field,
             ((item, output) => AppendCustomOperation(output, item.TypeName, "JsonWriter", "writer", "WriteValueJson", "in", metadata),
              (item, output) => AppendCustomOperation(output, item.TypeName, "JsonReader", "reader", "ReadValueJson", "ref", metadata)), metadata);
+        // Custom types register no width method, so a direct-record width never reaches them.
         AppendCalculateFormatterExtension(builder, field.TypeName, field,
-            (item, output) => AppendCustomOperation(output, item.TypeName, "Evaluator", "evaluator", "CalculateOffset", "in", metadata), metadata);
+            (_, output) => output.AppendLine("            " + UnsupportedWidth), metadata);
     }
 
     /// <summary>Invokes one custom operation without adding framing or inspecting payload fields.</summary>

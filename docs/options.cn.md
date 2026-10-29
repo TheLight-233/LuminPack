@@ -87,7 +87,7 @@ List<string> copy = LuminPackSerializer.Deserialize<List<string>, LuminPackUtf16
 
 默认仍为 `Length`：UTF-16 使用 4 字节头，UTF-8 使用 8 字节头。`VarInt` 将每个原有有符号长度头加一，再以规范的无符号 base-128 编码存储，占 1–5 字节。null 映射为零，空字符串映射为一。UTF-16 保留原始 UTF-16 或紧凑 Latin-1 负载及原有最低位标记；UTF-8 保留字节数和字符数两个字段，分别编码，null 和空字符串也保留两个字段。例如，UTF-16 的 `"a"` 为 `04 61`，UTF-8 的 `"a"` 为 `02 02 61`。
 
-包含 16 个单字符 ASCII 字符串的 `List<string>`，使用 UTF-16 `Length` 时共 84 字节，使用 UTF-16 `VarInt` 时共 36 字节，均包含不变的 4 字节集合元素数。可变长度头增加了分支和长度计算，可能降低吞吐量。读写双方必须选择相同表示，不能混用或自动识别。JSON 和集合元素数的头部不受影响。`StringRecordLength<TOptions>()` 对 `VarInt` 返回保守的头部上界（5 或 10 字节）；精确记录大小请使用 `Sizeof` 或 `GetStringLength<TOptions>`。
+包含 16 个单字符 ASCII 字符串的 `List<string>`，使用 UTF-16 `Length` 时共 84 字节，使用 UTF-16 `VarInt` 时共 36 字节，均包含不变的 4 字节集合元素数。可变长度头增加了分支和长度计算，可能降低吞吐量。读写双方必须选择相同表示，不能混用或自动识别。JSON 和集合元素数的头部不受影响。`StringRecordLength<TOptions>()` 对 `VarInt` 返回保守的头部上界（5 或 10 字节），不是精确的记录大小。
 
 ## 字符串转码
 

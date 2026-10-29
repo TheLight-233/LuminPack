@@ -32,8 +32,7 @@ public static partial class LuminPackExtensionGenerator
             string type = FormatterTypeName.Get(types[i]);
             sb.Append("if (typeof(T) == typeof(").Append(type).Append(")) return new global::LuminPack.Code.LuminPackFormatter { WriteValue = (nint)(delegate*<ref global::LuminPack.Core.LuminPackWriter, in ").Append(type)
                 .Append(", void>)&Lazy").Append(i).Append("<TProfile>.Write, ReadValue = (nint)(delegate*<ref global::LuminPack.Core.LuminPackReader, ref ").Append(type)
-                .Append(", void>)&Lazy").Append(i).Append("<TProfile>.Read, CalculateOffset = (nint)(delegate*<ref global::LuminPack.Core.LuminPackEvaluator, in ").Append(type)
-                .Append(", void>)&Lazy").Append(i).Append("<TProfile>.Size");
+                .Append(", void>)&Lazy").Append(i).Append("<TProfile>.Read");
             if (CanRegisterFormatter(types[i], compilation, true))
                 sb.Append(", WriteValueJson = (nint)(delegate*<ref global::LuminPack.Core.LuminPackJsonWriter, in ").Append(type).Append(", void>)&Lazy").Append(i)
                     .Append("<TProfile>.WriteJson, ReadValueJson = (nint)(delegate*<ref global::LuminPack.Core.LuminPackJsonReader, ref ").Append(type).Append(", void>)&Lazy").Append(i).Append("<TProfile>.ReadJson");
@@ -45,14 +44,14 @@ public static partial class LuminPackExtensionGenerator
             string type = FormatterTypeName.Get(types[i]);
             targets.TryGetValue(type, out var direct);
             sb.Append("private static class Lazy").Append(i).AppendLine("<TProfile> where TProfile : struct, global::LuminPack.Option.ILuminPackOptions {");
-            foreach (string operation in new[] { "Write", "Read", "Size", "WriteJson", "ReadJson" })
+            foreach (string operation in new[] { "Write", "Read", "WriteJson", "ReadJson" })
             {
                 bool json = operation.EndsWith("Json", StringComparison.Ordinal);
                 if (json && !CanRegisterFormatter(types[i], compilation, true)) continue;
                 bool read = operation.StartsWith("Read", StringComparison.Ordinal);
-                string state = operation == "Size" ? "Evaluator" : json ? read ? "JsonReader" : "JsonWriter" : read ? "Reader" : "Writer";
-                string api = operation == "Size" ? "Sizeof" : (read ? "Deserialize" : "Serialize") + (json ? "Json" : "");
-                string argument = operation == "Size" ? "ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in value)" : (read ? "ref " : "in ") + "value";
+                string state = json ? read ? "JsonReader" : "JsonWriter" : read ? "Reader" : "Writer";
+                string api = (read ? "Deserialize" : "Serialize") + (json ? "Json" : "");
+                string argument = (read ? "ref " : "in ") + "value";
                 sb.Append("internal static void ").Append(operation).Append("(ref global::LuminPack.Core.LuminPack").Append(state).Append(" state, ").Append(read ? "ref " : "in ").Append(type).AppendLine(" value) {");
                 sb.Append("if (typeof(TProfile) == typeof(global::LuminPack.Option.LuminPackDeclaredOptions)) ")
                     .AppendLine(direct?.Call(api, null, "state", "value") ?? "global::LuminPack.LuminPackSerializer." + api + "(ref state, " + argument + ");");

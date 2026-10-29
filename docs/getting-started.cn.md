@@ -61,9 +61,6 @@ Person other = LuminPackSerializer.Deserialize<Person>(bytes);
 // JSON
 string json = LuminPackSerializer.SerializeJson(person);
 Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
-
-// 精确的二进制长度
-int size = LuminPackSerializer.Sizeof(person);
 ```
 
 具体类型重载（`Serialize(person)`、`Deserialize(bytes, ref copy)`）直接调用为该类型生成的代码。泛型重载（`Deserialize<Person>(bytes)`）经过一个按类型在首次使用时创建的入口。

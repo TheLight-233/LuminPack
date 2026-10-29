@@ -23,7 +23,6 @@ internal static partial class SerializerCompiledOptionRegression
                     Root value = new Case();
                     var bytes = LuminPackSerializer.Serialize(value);
                     if (bytes[0] != 1) throw new Exception("Wide framing changed.");
-                    if (LuminPackSerializer.Sizeof(value) != bytes.Length) throw new Exception("Wide size changed.");
                     Root copy = LuminPackSerializer.Deserialize<Root>(bytes);
                     var reused = copy;
                     LuminPackSerializer.Deserialize(bytes, ref copy);

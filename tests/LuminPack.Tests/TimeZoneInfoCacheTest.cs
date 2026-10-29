@@ -35,7 +35,6 @@ public class TimeZoneInfoCacheTest
                 for (int i = 0; i < text.Length; i++) expected[5 + i] = (byte)text[i];
             }
             Assert.Equal(expected, LuminPackSerializer.Serialize(zone));
-            Assert.Equal(expected.Length, LuminPackSerializer.Sizeof(zone));
             TimeZoneInfo? copy = null;
             Assert.Equal(expected.Length, LuminPackSerializer.Deserialize(expected.AsSpan(), ref copy));
             Assert.Equal(text, copy!.ToSerializedString());
@@ -219,7 +218,6 @@ public class TimeZoneInfoCacheTest
         TimeZoneInfo? copy = null;
         Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TProfile>(bytes.AsSpan(), ref copy));
         Assert.Equal(zone.ToSerializedString(), copy!.ToSerializedString());
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof<TProfile>(zone));
         string json = LuminPackSerializer.SerializeJson<TProfile>(zone);
         copy = null;
         LuminPackSerializer.DeserializeJson<TProfile>(json, ref copy);

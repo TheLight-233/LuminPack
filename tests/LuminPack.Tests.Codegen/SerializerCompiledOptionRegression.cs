@@ -76,24 +76,24 @@ internal static partial class SerializerCompiledOptionRegression
                 {
                     var list = Enumerable.Repeat("a",16).ToList();
                     byte[] bytes = LuminPackSerializer.Serialize(list);
-                    if(bytes.Length!=36 || LuminPackSerializer.Sizeof(list)!=36)throw new Exception("Variable list size.");
+                    if(bytes.Length!=36)throw new Exception("Variable list size.");
                     List<string> copy=null; LuminPackSerializer.Deserialize(bytes,ref copy);
                     if(!copy.SequenceEqual(list))throw new Exception("Variable list read.");
                     string original=copy[0]; LuminPackSerializer.Deserialize(bytes,ref copy);
                     if(!ReferenceEquals(original,copy[0]))throw new Exception("List string reuse.");
                     bytes=LuminPackSerializer.Serialize<LuminPackUtf8VarIntOptions>(list);
-                    if(bytes.Length!=52 || LuminPackSerializer.Sizeof<List<string>,LuminPackUtf8VarIntOptions>(list)!=52)throw new Exception("UTF-8 variable list size.");
+                    if(bytes.Length!=52)throw new Exception("UTF-8 variable list size.");
                     if(!LuminPackSerializer.Deserialize<List<string>,LuminPackUtf8VarIntOptions>(bytes).SequenceEqual(list))throw new Exception("UTF-8 variable list read.");
                     bytes=LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(list);
                     if(bytes.Length!=84)throw new Exception("Fixed profile changed.");
                     var model=new Model{Names=list};bytes=LuminPackSerializer.Serialize(model);
-                    if(LuminPackSerializer.Sizeof(model)!=bytes.Length || LuminPackSerializer.Deserialize<Model>(bytes).Utf8!=model.Utf8)throw new Exception("Member profile.");
+                    if(LuminPackSerializer.Deserialize<Model>(bytes).Utf8!=model.Utf8)throw new Exception("Member profile.");
                     Root root=new Case{Name="root",Names=list};bytes=LuminPackSerializer.Serialize(root);
-                    if(((Case)LuminPackSerializer.Deserialize<Root>(bytes)).Names.Count!=16 || LuminPackSerializer.Sizeof(root)!=bytes.Length)throw new Exception("Union profile.");
+                    if(((Case)LuminPackSerializer.Deserialize<Root>(bytes)).Names.Count!=16)throw new Exception("Union profile.");
                     bytes=LuminPackSerializer.Serialize<LuminPackUtf8VarIntOptions>(root);
                     if(((Case)LuminPackSerializer.Deserialize<Root,LuminPackUtf8VarIntOptions>(bytes)).Name!="root")throw new Exception("UTF-8 Union profile.");
                     var named=new Named{Names=list};bytes=LuminPackSerializer.Serialize(named);
-                    if(bytes[2]!=5 || LuminPackSerializer.Sizeof(named)!=bytes.Length || LuminPackSerializer.Deserialize<Named>(bytes).Names.Count!=16)throw new Exception("Named profile.");
+                    if(bytes[2]!=5 || LuminPackSerializer.Deserialize<Named>(bytes).Names.Count!=16)throw new Exception("Named profile.");
                     bytes=LuminPackSerializer.Serialize<LuminPackUtf8VarIntOptions>(named);
                     if(bytes[2]!=4 || LuminPackSerializer.Deserialize<Named,LuminPackUtf8VarIntOptions>(bytes).Names.Count!=16)throw new Exception("Named UTF-8 profile.");
                     var circle=new Circle{Text="circle"};circle.Next=circle;bytes=LuminPackSerializer.Serialize(circle);var restored=LuminPackSerializer.Deserialize<Circle>(bytes);
@@ -188,14 +188,13 @@ internal static partial class SerializerCompiledOptionRegression
             {
                 public static void Check()
                 {
-                    LuminPackSerializer.Register<Opaque, AssemblyProfile>(&Write<AssemblyProfile>, &Read<AssemblyProfile>, &WriteJson<AssemblyProfile>, &ReadJson<AssemblyProfile>, &Size<AssemblyProfile>);
-                    LuminPackSerializer.Register<Opaque, LuminPackDefaultOptions>(&Write<LuminPackDefaultOptions>, &Read<LuminPackDefaultOptions>, &WriteJson<LuminPackDefaultOptions>, &ReadJson<LuminPackDefaultOptions>, &Size<LuminPackDefaultOptions>);
+                    LuminPackSerializer.Register<Opaque, AssemblyProfile>(&Write<AssemblyProfile>, &Read<AssemblyProfile>, &WriteJson<AssemblyProfile>, &ReadJson<AssemblyProfile>);
+                    LuminPackSerializer.Register<Opaque, LuminPackDefaultOptions>(&Write<LuminPackDefaultOptions>, &Read<LuminPackDefaultOptions>, &WriteJson<LuminPackDefaultOptions>, &ReadJson<LuminPackDefaultOptions>);
                     var value = new Opaque { Text = "\u4E2D\uD83D\uDE00" };
                     byte[] expected = LuminPackSerializer.Serialize<string, AssemblyProfile>(value.Text);
                     byte[] bytes = LuminPackSerializer.Serialize<Opaque>(value);
                     if (!System.Linq.Enumerable.SequenceEqual(expected, bytes)) throw new System.Exception("Registered assembly encoding changed.");
                     if (LuminPackSerializer.Deserialize<Opaque>(bytes).Text != value.Text) throw new System.Exception("Registered assembly read changed.");
-                    if (LuminPackSerializer.Sizeof<Opaque>(value) != bytes.Length) throw new System.Exception("Registered assembly sizing changed.");
                     string json = LuminPackSerializer.SerializeJson<Opaque>(value);
                     if (LuminPackSerializer.DeserializeJson<Opaque>(json).Text != value.Text) throw new System.Exception("Registered assembly JSON changed.");
                     bytes = LuminPackSerializer.Serialize<Opaque, LuminPackDefaultOptions>(value);
@@ -218,11 +217,6 @@ internal static partial class SerializerCompiledOptionRegression
                     string text = "";
                     LuminPackSerializer.DeserializeJson<string, TOptions>(ref reader, ref text);
                     value = new() { Text = text };
-                }
-                public static void Size<TOptions>(ref LuminPackEvaluator evaluator, in Opaque value) where TOptions : struct, ILuminPackOptions
-                {
-                    string text = value.Text;
-                    LuminPackSerializer.Sizeof<string, TOptions>(ref evaluator, ref text);
                 }
             }
             """;

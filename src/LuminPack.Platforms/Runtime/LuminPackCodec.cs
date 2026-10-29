@@ -1,5 +1,6 @@
 using LuminPack.Code;
 using LuminPack.Core;
+using LuminPack.Utility;
 
 namespace LuminPack.Platforms;
 
@@ -13,11 +14,6 @@ public delegate void LuminPackWrite<T>(ref LuminPackWriter writer, in T value);
 /// <param name="reader">The bounded input cursor.</param><param name="value">The destination.</param>
 public delegate void LuminPackRead<T>(ref LuminPackReader reader, ref T value);
 
-/// <summary>Accumulates the exact Core binary representation size.</summary>
-/// <typeparam name="T">The platform value type.</typeparam>
-/// <param name="evaluator">The caller-owned size accumulator.</param><param name="value">The value to measure.</param>
-public delegate void LuminPackSize<T>(ref LuminPackEvaluator evaluator, in T value);
-
 /// <summary>Groups an explicit platform codec with bounded, complete-record convenience entries.</summary>
 /// <typeparam name="T">The platform value type.</typeparam>
 /// <remarks>This adapter invokes Core cursors. It does not replace generated dispatch or reinterpret native layout.</remarks>
@@ -25,15 +21,13 @@ public sealed class LuminPackCodec<T>
 {
     private readonly LuminPackWrite<T> _write;
     private readonly LuminPackRead<T> _read;
-    private readonly LuminPackSize<T> _size;
 
     /// <summary>Creates a codec from static, type-specific operations.</summary>
-    /// <param name="write">The complete writer.</param><param name="read">The complete reader.</param><param name="size">The exact size operation.</param>
-    public LuminPackCodec(LuminPackWrite<T> write, LuminPackRead<T> read, LuminPackSize<T> size)
+    /// <param name="write">The complete writer.</param><param name="read">The complete reader.</param>
+    public LuminPackCodec(LuminPackWrite<T> write, LuminPackRead<T> read)
     {
         _write = write ?? LuminPackExceptionHelper.ThrowArgumentNullException<LuminPackWrite<T>>(nameof(write));
         _read = read ?? LuminPackExceptionHelper.ThrowArgumentNullException<LuminPackRead<T>>(nameof(read));
-        _size = size ?? LuminPackExceptionHelper.ThrowArgumentNullException<LuminPackSize<T>>(nameof(size));
     }
 
     /// <summary>Writes one value into a caller-owned Core operation.</summary>
@@ -44,32 +38,23 @@ public sealed class LuminPackCodec<T>
     /// <param name="reader">The bounded input cursor.</param><param name="value">The destination.</param>
     public void Read(ref LuminPackReader reader, ref T value) => _read(ref reader, ref value);
 
-    /// <summary>Adds the exact binary size to a caller-owned evaluator.</summary>
-    /// <param name="evaluator">The size accumulator.</param><param name="value">The value.</param>
-    public void Size(ref LuminPackEvaluator evaluator, in T value) => _size(ref evaluator, value);
-
-    /// <summary>Evaluates a value without materializing serialized output.</summary>
-    /// <param name="value">The value.</param><returns>The complete record size.</returns>
-    public int GetSize(in T value)
-    {
-        int bytes = 0;
-        var evaluator = new LuminPackEvaluator(ref bytes);
-        try { _size(ref evaluator, value); }
-        finally { evaluator.Dispose(); }
-        if (bytes < 0) LuminPackExceptionHelper.ThrowInvalidDataException("Platform record size overflowed.");
-        return bytes;
-    }
-
-    /// <summary>Serializes an explicit platform record into exactly sized output.</summary>
+    /// <summary>Serializes an explicit platform record into a new array holding exactly the written bytes.</summary>
     /// <param name="value">The value.</param><returns>The complete record bytes.</returns>
     public byte[] Serialize(in T value)
     {
-        byte[] bytes = new byte[GetSize(value)];
-        Span<byte> output = bytes;
-        var writer = new LuminPackWriter(ref output);
-        _write(ref writer, value);
-        if (writer.Position != bytes.Length) LuminPackExceptionHelper.ThrowInvalidDataException("Platform codec size and writer disagree.");
-        return bytes;
+        var buffer = LuminBufferWriterPool.Rent();
+        try
+        {
+            var writer = new LuminPackWriter(buffer);
+            _write(ref writer, value);
+            byte[] bytes = new byte[writer.CurrentIndex];
+            writer.GetSpan().CopyTo(bytes);
+            return bytes;
+        }
+        finally
+        {
+            LuminBufferWriterPool.Return(buffer);
+        }
     }
 
     /// <summary>Reads exactly one record and rejects trailing input before publishing the destination.</summary>

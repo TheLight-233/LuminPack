@@ -16,7 +16,7 @@ Part of [LuminPack](../../README.md)
 
 ---
 
-Shared typed adapters for the optional platform modules. Core depends on none of these projects. The adapter calls existing Core Reader/Writer/Evaluator operations; it brings no reflection serializer, runtime type map, SIMD algorithm or replacement layout mechanism.
+Shared typed adapters for the optional platform modules. Core depends on none of these projects. The adapter calls existing Core Reader/Writer operations; it brings no reflection serializer, runtime type map, SIMD algorithm or replacement layout mechanism.
 
 ## 📦 Modules
 

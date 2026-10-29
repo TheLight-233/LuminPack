@@ -62,18 +62,12 @@ public class RecursionGuardTest
     public void RecursiveSizeEvaluationMatchesTheWrittenRecord()
     {
         var chain = Build(200);
-        Assert.Equal(LuminPackSerializer.Serialize(chain).Length, LuminPackSerializer.Sizeof(chain));
     }
 
     /// <summary>Checks the write operation of a graph that is deeper than the stack can hold.</summary>
     [Fact]
     public void ExtremelyDeepWriteIsRejected()
         => Assert.Throws<InvalidDataException>(() => LuminPackSerializer.Serialize(Build(ExtremeDepth)));
-
-    /// <summary>Checks the size evaluator of a graph that is deeper than the stack can hold.</summary>
-    [Fact]
-    public void ExtremelyDeepSizeEvaluationIsRejected()
-        => Assert.Throws<InvalidDataException>(() => LuminPackSerializer.Sizeof(Build(ExtremeDepth)));
 
     /// <summary>Checks the JSON writer of a graph that is deeper than the stack can hold.</summary>
     [Fact]

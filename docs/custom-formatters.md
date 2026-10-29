@@ -38,11 +38,10 @@ Provide exactly one of these method sets:
 | --- | --- |
 | Binary | `Serialize`, `Deserialize` |
 | Binary and JSON | plus `SerializeJson(ref LuminPackJsonWriter, in T)` and `DeserializeJson(ref LuminPackJsonReader, ref T)` |
-| Binary, JSON and size | plus `CalculateOffset(ref LuminPackEvaluator, in T)` |
 
 - Methods must be `static` and `public` or `internal`.
 - Your methods own the complete representation: null handling, reuse and string encoding.
-- Diagnostics `LuminPack100` to `LuminPack108` report missing or non-static methods, wrong signatures, half a JSON pair, a size method without JSON, unsupported generic types or Union roots, and skipped registration when unsafe code is disabled.
+- Diagnostics `LuminPack100` to `LuminPack108` report missing or non-static methods, wrong signatures, half a JSON pair, unsupported generic types or Union roots, and skipped registration when unsafe code is disabled.
 - When a `Custom` type is a member of another `[LuminPackable]` type, mark that member `[LuminPackableObject]` so it calls your formatter instead of being inlined.
 - Default JSON registrations use UTF-16. A UTF-8 JSON document needs a registration for the matching closed profile.
 
@@ -74,7 +73,6 @@ unsafe
 | --- | --- |
 | `Register<T>(write, read)` | Binary |
 | `Register<T>(write, read, writeJson, readJson)` | Binary and JSON |
-| `Register<T>(write, read, writeJson, readJson, calculateOffset)` | Binary, JSON and size |
 | `Register<T, TOptions>(...)` | The same, for one closed option profile |
 
 - Registering the same type twice throws `ArgumentException`.

@@ -87,7 +87,7 @@ List<string> copy = LuminPackSerializer.Deserialize<List<string>, LuminPackUtf16
 
 The default remains `Length`: four header bytes for UTF-16 and eight for UTF-8. `VarInt` encodes each existing signed length header plus one as canonical unsigned base-128 (one to five bytes). Null maps to zero and empty maps to one. UTF-16 retains the raw UTF-16 or compact Latin-1 payload and its existing low-bit discriminator; UTF-8 retains both its byte and character counts, each encoded separately, including for null and empty strings. For example, UTF-16 `"a"` is `04 61`; UTF-8 `"a"` is `02 02 61`.
 
-A `List<string>` of sixteen one-character ASCII strings takes 84 bytes with UTF-16 `Length` and 36 with UTF-16 `VarInt`, including its unchanged four-byte collection count. Variable headers add branches and length calculations, so they can reduce throughput. Both ends must select the same representation; these formats are not interchangeable or auto-detected. JSON and collection count headers are unaffected. `StringRecordLength<TOptions>()` returns a conservative header bound for `VarInt` (five or ten bytes); use `Sizeof` or `GetStringLength<TOptions>` for an exact record size.
+A `List<string>` of sixteen one-character ASCII strings takes 84 bytes with UTF-16 `Length` and 36 with UTF-16 `VarInt`, including its unchanged four-byte collection count. Variable headers add branches and length calculations, so they can reduce throughput. Both ends must select the same representation; these formats are not interchangeable or auto-detected. JSON and collection count headers are unaffected. `StringRecordLength<TOptions>()` returns a conservative header bound for `VarInt` (five or ten bytes), not an exact record size.
 
 ## String transcoding
 

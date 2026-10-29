@@ -38,11 +38,10 @@ public sealed class MyVector
 | --- | --- |
 | 仅二进制 | `Serialize`、`Deserialize` |
 | 二进制与 JSON | 再加 `SerializeJson(ref LuminPackJsonWriter, in T)` 和 `DeserializeJson(ref LuminPackJsonReader, ref T)` |
-| 二进制、JSON 与大小计算 | 再加 `CalculateOffset(ref LuminPackEvaluator, in T)` |
 
 - 方法必须是 `static`，并且是 `public` 或 `internal`。
 - 你的方法负责完整的数据表示：null 处理、复用和字符串编码。
-- 诊断 `LuminPack100` 到 `LuminPack108` 会报告：缺少方法或方法不是 static、签名不对、JSON 方法只写了一半、有大小计算但 JSON 不全、不支持的泛型类型或 Union 根，以及未开启 unsafe 导致注册被跳过。
+- 诊断 `LuminPack100` 到 `LuminPack108` 会报告：缺少方法或方法不是 static、签名不对、JSON 方法只写了一半、不支持的泛型类型或 Union 根，以及未开启 unsafe 导致注册被跳过。
 - `Custom` 类型作为其他 `[LuminPackable]` 类型的成员时，给该成员标 `[LuminPackableObject]`，让它调用你的格式化器而不是被内联展开。
 - 默认的 JSON 注册使用 UTF-16。UTF-8 的 JSON 文档需要为对应的闭合配置单独注册。
 
@@ -75,7 +74,6 @@ unsafe
 | --- | --- |
 | `Register<T>(write, read)` | 二进制 |
 | `Register<T>(write, read, writeJson, readJson)` | 二进制与 JSON |
-| `Register<T>(write, read, writeJson, readJson, calculateOffset)` | 二进制、JSON 与大小计算 |
 | `Register<T, TOptions>(...)` | 同上，针对某个闭合配置 |
 
 - 同一类型重复注册会抛出 `ArgumentException`。

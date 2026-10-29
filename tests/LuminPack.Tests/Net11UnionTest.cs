@@ -113,21 +113,6 @@ namespace LuminPackUnitTest
                 results.Add($"✗ Net11Union C# union JSON - ERROR: {ex.Message}");
             }
 
-            // Sizeof agrees with serialized length
-            try
-            {
-                var p = new Net11Pet(new UnionCat { Id = 3 });
-                int size = LuminPackSerializer.Sizeof(p);
-                int actual = LuminPackSerializer.Serialize(p).Length;
-                results.Add(size == actual
-                    ? "✓ Net11Union Sizeof - PASSED"
-                    : "✗ Net11Union Sizeof - FAILED");
-            }
-            catch (Exception ex)
-            {
-                results.Add($"✗ Net11Union Sizeof - ERROR: {ex.Message}");
-            }
-
             // Generic union Option<T>
             try
             {

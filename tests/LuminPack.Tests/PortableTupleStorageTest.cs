@@ -20,7 +20,6 @@ public class PortableTupleStorageTest
         Assert.Equal(expected, LuminPackSerializer.Serialize(value));
         Assert.Equal(expected, LuminPackSerializer.Serialize(renamed));
         Assert.Equal(expected, LuminPackSerializer.Serialize(unnamed));
-        Assert.Equal(expected.Length, LuminPackSerializer.Sizeof(value));
         Assert.Equal(value, LuminPackSerializer.Deserialize<PortableNamedTupleRecord>(expected));
         Assert.Equal(renamed, LuminPackSerializer.Deserialize<PortableRenamedTupleRecord>(expected));
         Assert.Equal(unnamed, LuminPackSerializer.Deserialize<PortableUnnamedTupleRecord>(expected));
@@ -41,7 +40,6 @@ public class PortableTupleStorageTest
             .Concat(new byte[] { value.Tail }).ToArray();
         Assert.Equal(62, expected.Length);
         Assert.Equal(expected, LuminPackSerializer.Serialize(value));
-        Assert.Equal(expected.Length, LuminPackSerializer.Sizeof(value));
         Assert.Equal(value, LuminPackSerializer.Deserialize<PortableLongTupleRecord>(expected));
         var values = new[] { value, value, value };
         var payload = BitConverter.GetBytes(values.Length).Concat(values.SelectMany(_ => expected)).ToArray();
@@ -63,7 +61,6 @@ public class PortableTupleStorageTest
             Assert.Equal(expected, LuminPackSerializer.Serialize(values));
             Assert.Equal(expected, LuminPackSerializer.Serialize(values.ToList()));
             Assert.Equal(expected, LuminPackSerializer.Serialize(new Memory<PortableNamedTupleRecord>(values)));
-            Assert.Equal(expected.Length, LuminPackSerializer.Sizeof(values));
 
             var reused = new PortableNamedTupleRecord[length];
             var original = reused;
@@ -90,7 +87,6 @@ public class PortableTupleStorageTest
             .Concat(BitConverter.GetBytes(value.Value.Inner.Value)).Concat(BitConverter.GetBytes(value.Value.Inner.Code)).ToArray();
         Assert.Equal(15, expected.Length);
         Assert.Equal(expected, LuminPackSerializer.Serialize(value));
-        Assert.Equal(expected.Length, LuminPackSerializer.Sizeof(value));
         Assert.Equal(value, LuminPackSerializer.Deserialize<PortableTupleEnvelope<(int Id, (long Value, short Code) Inner)>>(expected));
     }
 
@@ -131,7 +127,6 @@ public class PortableTupleStorageTest
         Assert.True(expected[4] != 0);
         Assert.Equal(MemoryMarshal.AsBytes(values.AsSpan()).ToArray(), expected.AsSpan(5).ToArray());
         Assert.Equal(expected, LuminPackSerializer.Serialize(values.ToList()));
-        Assert.Equal(expected.Length, LuminPackSerializer.Sizeof(values));
         Assert.Equal(values, ConcreteReads.Read<(byte Tag, long Value, short Code)[]>(expected, static (b, ref v) => LuminPackSerializer.Deserialize(b, ref v)));
         Assert.Equal(values, ConcreteReads.Read<List<(byte Tag, long Value, short Code)>>(expected, static (b, ref v) => LuminPackSerializer.Deserialize(b, ref v)));
     }

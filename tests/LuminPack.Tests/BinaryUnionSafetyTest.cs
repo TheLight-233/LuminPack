@@ -120,7 +120,7 @@ internal static class BinaryUnionSafetyTest
     /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
-        RunCase(results, nameof(BoxedStructUnionRoundTripsAndSizeMatches), BoxedStructUnionRoundTripsAndSizeMatches);
+        RunCase(results, nameof(BoxedStructUnionRoundTrips), BoxedStructUnionRoundTrips);
         RunCase(results, nameof(ClassUnionUsesStaticTagDispatch), ClassUnionUsesStaticTagDispatch);
         RunCase(results, nameof(InterfaceUnionUsesStaticTagDispatch), InterfaceUnionUsesStaticTagDispatch);
         RunCase(results, nameof(KnownTagUsesStaticDeserializeSwitch), KnownTagUsesStaticDeserializeSwitch);
@@ -137,8 +137,6 @@ internal static class BinaryUnionSafetyTest
         DynamicUnionBase value = new StaticDynamicUnionMember { Value = 123 };
         var payload = LuminPackSerializer.Serialize(value);
         Assert(payload[0] == 1, "The class union fast path wrote the wrong constant tag.");
-        Assert(LuminPackSerializer.Sizeof(value) == payload.Length,
-            "The class union static Sizeof path disagrees with Serialize.");
 
         var result = LuminPackSerializer.Deserialize<DynamicUnionBase>(payload);
         Assert(result is StaticDynamicUnionMember { Value: 123 },
@@ -152,8 +150,6 @@ internal static class BinaryUnionSafetyTest
         var payload = LuminPackSerializer.Serialize(value);
         var json = LuminPackSerializer.SerializeJson(value);
         Assert(payload[0] == 7, "The interface union fast path wrote the wrong constant tag.");
-        Assert(LuminPackSerializer.Sizeof(value) == payload.Length,
-            "The interface union static Sizeof path disagrees with Serialize.");
         Assert(LuminPackSerializer.Deserialize<IFastInterfaceUnion>(payload) is FastInterfaceUnionMember { Value: 456 },
             "The interface union binary fast path did not round-trip.");
         Assert(LuminPackSerializer.DeserializeJson<IFastInterfaceUnion>(json) is FastInterfaceUnionMember { Value: 456 },
@@ -294,10 +290,6 @@ internal static class BinaryUnionSafetyTest
             "The first explicit closed-generic union member wrote the wrong wire tag.");
         Assert(secondPayload[0] == 12,
             "The second explicit closed-generic union member wrote the wrong wire tag.");
-        Assert(LuminPackSerializer.Sizeof(closed) == closedPayload.Length,
-            "The first closed-generic union member size did not match its payload.");
-        Assert(LuminPackSerializer.Sizeof(second) == secondPayload.Length,
-            "The second closed-generic union member size did not match its payload.");
         Assert(LuminPackSerializer.Deserialize<IMixedGenericUnion<int>>(closedPayload) is
                 MixedGenericUnionMember<int> { Value: 91 },
             "The first explicit closed-generic union member did not round-trip.");
@@ -306,8 +298,8 @@ internal static class BinaryUnionSafetyTest
             "The second explicit closed-generic union member did not round-trip.");
     }
 
-    /// <summary>Verifies boxed struct union round trips and size matches.</summary>
-    private static void BoxedStructUnionRoundTripsAndSizeMatches()
+    /// <summary>Verifies boxed struct union round trips.</summary>
+    private static void BoxedStructUnionRoundTrips()
     {
         ISerializable value = new Struct1
         {
@@ -316,16 +308,9 @@ internal static class BinaryUnionSafetyTest
             C = Guid.Parse("8bd49956-c49f-4ba2-a880-c7527fa3db90")
         };
 
-        var rawValue = (Struct1)value;
-        var rawSize = LuminPackSerializer.Sizeof(rawValue);
-        var rawPayload = LuminPackSerializer.Serialize(rawValue);
-        var expectedSize = LuminPackSerializer.Sizeof(value);
         var payload = LuminPackSerializer.Serialize(value);
         var result = LuminPackSerializer.Deserialize<ISerializable>(payload);
 
-        Assert(expectedSize == payload.Length,
-            $"Boxed struct union Sizeof returned {expectedSize}, but serialization wrote {payload.Length} bytes " +
-            $"(direct struct: Sizeof {rawSize}, wrote {rawPayload.Length}).");
         Assert(result is Struct1 actual &&
                actual.A == 123456789 &&
                actual.B == new DateTime(2026, 7, 28, 12, 34, 56, DateTimeKind.Utc) &&

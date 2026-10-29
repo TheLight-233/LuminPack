@@ -9,7 +9,7 @@ internal static class CompilerResolverRegression
     /// <summary>Requires retained generation to rebuild safely when option equality is unavailable.</summary>
     internal static void Run()
     {
-        const string source = "using LuminPack.Attribute; [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Minimal)] [LuminPackable] public class ResolverPayload { public int Value; } public static class Entry { public static int Measure(ResolverPayload value) => LuminPack.LuminPackSerializer.Sizeof(value); }";
+        const string source = "using LuminPack.Attribute; [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Minimal)] [LuminPackable] public class ResolverPayload { public int Value; } public static class Entry { public static byte[] Measure(ResolverPayload value) => LuminPack.LuminPackSerializer.Serialize(value); }";
         var tree = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.CSharp10), "ResolverPayload.cs");
         var resolved = CompatibilityCompilationReferences.Create();
         GeneratorDriver driver = CSharpGeneratorDriver.Create(new ISourceGenerator[]

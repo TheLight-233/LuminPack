@@ -40,7 +40,6 @@ public class FinalBoundaryRegressionTest
         bytes = LuminPackSerializer.Serialize<PriorityQueue<string, int>, LuminPackUtf16LengthOptions>(strings);
         var copy = LuminPackSerializer.Deserialize<PriorityQueue<string, int>, LuminPackUtf16LengthOptions>(bytes);
         Assert.Equal("\u00E9\u4E2D", copy.Dequeue());
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof<PriorityQueue<string, int>, LuminPackUtf16LengthOptions>(strings));
     }
 
     /// <summary>Checks storage cast recognition when a closed payload type is also named As.</summary>
@@ -80,12 +79,10 @@ public class FinalBoundaryRegressionTest
         var source = new ReadOnlySequence<int?>(first, 0, last, last.Memory.Length);
         var bytes = LuminPackSerializer.Serialize(source);
         Assert.Equal(15, bytes.Length);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(source));
         Assert.Equal(source.ToArray(), LuminPackSerializer.Deserialize<ReadOnlySequence<int?>>(bytes).ToArray());
         var pairs = new ReadOnlySequence<KeyValuePair<byte, long>>(new[] { KeyValuePair.Create((byte)17, long.MaxValue) });
         bytes = LuminPackSerializer.Serialize(pairs);
         Assert.Equal(13, bytes.Length);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(pairs));
         Assert.Equal(pairs.ToArray(), LuminPackSerializer.Deserialize<ReadOnlySequence<KeyValuePair<byte, long>>>(bytes).ToArray());
     }
 
@@ -96,7 +93,6 @@ public class FinalBoundaryRegressionTest
         int?[] values = { 255, null, 7 };
         var list = values.ToImmutableList();
         Assert.Equal(values, LuminPackSerializer.Deserialize<ImmutableList<int?>>(LuminPackSerializer.Serialize(list)).ToArray());
-        Assert.Equal(LuminPackSerializer.Serialize(list).Length, LuminPackSerializer.Sizeof(list));
         var queue = ImmutableQueue.CreateRange(values);
         Assert.Equal(values, LuminPackSerializer.Deserialize<ImmutableQueue<int?>>(LuminPackSerializer.Serialize(queue)).ToArray());
         var stack = ImmutableStack.CreateRange(values);
@@ -126,12 +122,10 @@ public class FinalBoundaryRegressionTest
         IEnumerable<int?> enumerable = values.Select(item => item);
         var bytes = LuminPackSerializer.Serialize(enumerable);
         Assert.Equal(expected, bytes);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(enumerable));
         Assert.Equal(values, LuminPackSerializer.Deserialize<IEnumerable<int?>>(bytes).ToArray());
         var wrapper = new Collection<int?>(new NonListStorage<int?>(values));
         bytes = LuminPackSerializer.Serialize(wrapper);
         Assert.Equal(expected, bytes);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(wrapper));
         Assert.Equal(values, LuminPackSerializer.Deserialize<Collection<int?>>(bytes).ToArray());
         var destination = new Collection<int?>(new NonListStorage<int?>(new int?[] { 99 }));
         var original = destination;
@@ -168,16 +162,10 @@ public class FinalBoundaryRegressionTest
     {
         int?[] values = { 1, null, 255 };
         var list = values.ToList();
-        Assert.Equal(LuminPackSerializer.Serialize(list).Length, LuminPackSerializer.Sizeof(list));
         var collection = new Collection<int?>(list);
-        Assert.Equal(LuminPackSerializer.Serialize(collection).Length, LuminPackSerializer.Sizeof(collection));
         var queue = new Queue<int?>(values);
-        Assert.Equal(LuminPackSerializer.Serialize(queue).Length, LuminPackSerializer.Sizeof(queue));
         var immutable = ImmutableArray.Create(values);
-        Assert.Equal(LuminPackSerializer.Serialize(immutable).Length, LuminPackSerializer.Sizeof(immutable));
         var pairs = new List<KeyValuePair<byte, long>> { new(17, 123456789) };
-        Assert.Equal(LuminPackSerializer.Serialize(pairs).Length, LuminPackSerializer.Sizeof(pairs));
-        Assert.Equal(4, LuminPackSerializer.Sizeof(default(ImmutableArray<int>)));
     }
 
     /// <summary>Checks string-pair list roots retain cursor publication, null keys and existing list identity.</summary>
@@ -186,7 +174,6 @@ public class FinalBoundaryRegressionTest
     {
         var expected = new List<KeyValuePair<string, int>> { new("first", 255), new(null!, -7), new("last", int.MaxValue) };
         byte[] bytes = LuminPackSerializer.Serialize(expected);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof(expected));
         Assert.Equal(expected, LuminPackSerializer.Deserialize<List<KeyValuePair<string, int>>>(bytes));
         var destination = new List<KeyValuePair<string, int>> { new("old", 1), new("tail", 2), new("tail", 3), new("remove", 4) };
         var original = destination;
@@ -198,7 +185,6 @@ public class FinalBoundaryRegressionTest
         Assert.Equal(bytes.Length, reader.Position);
         Assert.Equal(17, reader.Read<int>());
         bytes = LuminPackSerializer.Serialize<List<KeyValuePair<string, int>>, LuminPackUtf16LengthOptions>(expected);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Sizeof<List<KeyValuePair<string, int>>, LuminPackUtf16LengthOptions>(expected));
         LuminPackSerializer.Deserialize<List<KeyValuePair<string, int>>, LuminPackUtf16LengthOptions>(bytes.AsSpan(), ref destination);
         Assert.Same(original, destination);
         Assert.Equal(expected, destination);
@@ -209,22 +195,13 @@ public class FinalBoundaryRegressionTest
     public void BclSizesCoverTheirCompleteBinaryRecords()
     {
         var memory = new Memory<int>(new[] { 1, 2 });
-        Assert.Equal(LuminPackSerializer.Serialize(memory).Length, LuminPackSerializer.Sizeof(memory));
         var readOnly = new ReadOnlyMemory<int>(new[] { 1, 2 });
-        Assert.Equal(LuminPackSerializer.Serialize(readOnly).Length, LuminPackSerializer.Sizeof(readOnly));
         var segment = new ArraySegment<int>(new[] { 1, 2 });
-        Assert.Equal(LuminPackSerializer.Serialize(segment).Length, LuminPackSerializer.Sizeof(segment));
-        Assert.Equal(4, LuminPackSerializer.Sizeof(default(ArraySegment<int>)));
         var matrix = new int[,] { { 1, 2 } };
-        Assert.Equal(LuminPackSerializer.Serialize(matrix).Length, LuminPackSerializer.Sizeof(matrix));
         var integer = BigInteger.Pow(2, 3000) + 123;
-        Assert.Equal(LuminPackSerializer.Serialize(integer).Length, LuminPackSerializer.Sizeof(integer));
-        Assert.Equal(5, LuminPackSerializer.Sizeof(BigInteger.Zero));
         var bits = new BitArray(33, true);
-        Assert.Equal(LuminPackSerializer.Serialize(bits).Length, LuminPackSerializer.Sizeof(bits));
         var priorities = new PriorityQueue<string, int>();
         priorities.Enqueue("one", 1);
-        Assert.Equal(LuminPackSerializer.Serialize(priorities).Length, LuminPackSerializer.Sizeof(priorities));
     }
 
     /// <summary>Checks independently valid pair JSON and complete entry consumption inside arrays.</summary>
@@ -297,7 +274,6 @@ public class FinalBoundaryRegressionTest
         copy = LuminPackSerializer.DeserializeJson<int[,]>("{\"L\\u0065ngths\":[1,1],\"LowerBounds\":[0,0],\"Val\\u0075es\":[17]}");
         Assert.Equal(17, copy[0, 0]);
         Assert.Throws<NotSupportedException>(() => LuminPackSerializer.Serialize(source));
-        Assert.Throws<NotSupportedException>(() => LuminPackSerializer.Sizeof(source));
     }
 
     /// <summary>Checks malformed shape records cannot publish an inconsistent multidimensional array.</summary>

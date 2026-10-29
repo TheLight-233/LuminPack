@@ -126,26 +126,6 @@ public unsafe class DefaultReferenceContextTest
         Assert.Same(owner.ReaderState, copy.OptionState);
     }
 
-    /// <summary>Uses an independent evaluator context per default owner and the same context within an append scope.</summary>
-    [Fact]
-    public void DefaultEvaluationMatchesIndependentAndSharedWrites()
-    {
-        var source=CreateNode();
-        int expected=Write(source).Length;
-        Assert.Equal(expected,Size(source));
-        Assert.Equal(expected,Size(source));
-        int size=0;
-        var evaluator=new LuminPackEvaluator(ref size);
-        LuminPackSerializer.Sizeof(ref evaluator,ref source);
-        LuminPackSerializer.Sizeof(ref evaluator,ref source);
-        Assert.Equal(expected+2,size);
-        evaluator.OptionState.Reset();
-        int reset=0;
-        var second=new LuminPackEvaluator(ref reset,evaluator.OptionState);
-        LuminPackSerializer.Sizeof(ref second,ref source);
-        Assert.Equal(expected,reset);
-    }
-
     /// <summary>Shares the parent's implicit context through independently owned staging buffers.</summary>
     [Fact]
     public void StagingKeepsRepeatedAndSelfReferences()
@@ -161,10 +141,6 @@ public unsafe class DefaultReferenceContextTest
         LuminPackSerializer.Deserialize(ref reader,ref value);
         Assert.Same(value!.First,value.Second);
         Assert.Same(value.First,value.First!.Next);
-        int size=0;
-        var evaluator=new LuminPackEvaluator(ref size);
-        LuminPackSerializer.Sizeof(ref evaluator,ref source);
-        Assert.Equal(writer.Position,size);
     }
 
     /// <summary>Does not retain default-scope objects globally or share reference maps between threads.</summary>
@@ -240,11 +216,6 @@ public unsafe class DefaultReferenceContextTest
             return value!;
         }
     }
-
-    /// <summary>Evaluates the reference graph through an independent implicit scope.</summary>
-    /// <param name="value">The complete source graph.</param>
-    /// <returns>The complete record width.</returns>
-    private static int Size(ContextNode value){int size=0;var evaluator=new LuminPackEvaluator(ref size);LuminPackSerializer.Sizeof(ref evaluator,ref value);return size;}
 
     /// <summary>Observes a default writer's source outside the collecting test's stack frame.</summary>
     /// <returns>The source's weak lifetime observation.</returns>

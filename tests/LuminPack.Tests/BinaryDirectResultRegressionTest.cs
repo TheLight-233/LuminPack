@@ -85,8 +85,6 @@ internal static class BinaryDirectResultRegressionTest
             SmallNestedGenericAndFreshCollectionsRoundTrip);
         RunCase(results, nameof(PartiallyReadReuseResultKeepsRootIdentityAndPublishesThePrefix),
             PartiallyReadReuseResultKeepsRootIdentityAndPublishesThePrefix);
-        RunCase(results, nameof(ArraySizeofMatchesSerializedLength),
-            ArraySizeofMatchesSerializedLength);
         RunCase(results, nameof(NullClassElementsConsumeTheirWireHeader),
             NullClassElementsConsumeTheirWireHeader);
         RunCase(results, nameof(FreshDictionaryBuilderPreservesDictionarySemantics),
@@ -182,18 +180,6 @@ internal static class BinaryDirectResultRegressionTest
         // published while the untouched tail keeps its original value. This is not a transactional update.
         Assert(ReferenceEquals(target, original) && original.Id == 7 && original.Tail == "original",
             "Binary direct-result parsing did not keep the root identity and publish only the read prefix.");
-    }
-
-    /// <summary>Verifies array sizeof matches serialized length.</summary>
-    private static void ArraySizeofMatchesSerializedLength()
-    {
-        int[] unmanaged = [1, 2, 3, 5, 8];
-        string?[] managed = ["alpha", null, "gamma"];
-
-        Assert(LuminPackSerializer.Sizeof(unmanaged) == LuminPackSerializer.Serialize(unmanaged).Length,
-            "Unmanaged array CalculateOffset did not match serialized length.");
-        Assert(LuminPackSerializer.Sizeof(managed) == LuminPackSerializer.Serialize(managed).Length,
-            "Reference array CalculateOffset did not match serialized length.");
     }
 
     /// <summary>Verifies null class elements consume their wire header.</summary>

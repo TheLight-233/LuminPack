@@ -20,7 +20,6 @@ public class Support32bitTest
         Assert.Equal(11, expected.Length);
         Assert.True(Unsafe.SizeOf<PortablePadded>() > expected.Length);
         Assert.Equal(expected, LuminPackSerializer.Serialize(value));
-        Assert.Equal(expected.Length, LuminPackSerializer.Sizeof(value));
         Assert.Equal(value, LuminPackSerializer.Deserialize<PortablePadded>(expected));
     }
 
@@ -61,7 +60,6 @@ public class Support32bitTest
         Assert.Equal(values.Length, BitConverter.ToInt32(written, 0));
         Assert.Contains(written[4], new byte[] { 1, 2 });
         Assert.Equal(4 + 1 + values.Length * (written[4] == 1 ? 16 : 12), written.Length);
-        Assert.Equal(written.Length, LuminPackSerializer.Sizeof(values));
         Assert.Equal(written, LuminPackSerializer.Serialize(values.ToList()));
         Assert.Empty(ConcreteReads.Read<RawPadded[]>(LuminPackSerializer.Serialize(Array.Empty<RawPadded>()), static (b, ref v) => LuminPackSerializer.Deserialize(b, ref v)));
         Assert.Equal(4, LuminPackSerializer.Serialize(Array.Empty<RawPadded>()).Length);
@@ -108,8 +106,6 @@ public class Support32bitTest
         byte[] expected = BitConverter.GetBytes(values.Length).Concat(values.SelectMany(Expected)).ToArray();
         Assert.Equal(expected, LuminPackSerializer.Serialize(values));
         Assert.Equal(expected, LuminPackSerializer.Serialize(values.ToList()));
-        Assert.Equal(expected.Length, LuminPackSerializer.Sizeof(values));
-        Assert.Equal(expected.Length, LuminPackSerializer.Sizeof(values.ToList()));
         var copy = LuminPackSerializer.Deserialize<PortablePadded[]>(expected);
         Assert.Equal(values, copy);
         var original = copy;
@@ -179,7 +175,6 @@ public class Support32bitTest
         PortableGeneric<long> copy = default;
         ReadGeneric(ref reader, ref copy);
         Assert.Equal(value, copy);
-        Assert.Equal(expected.Length, LuminPackSerializer.Sizeof(value));
     }
 
     /// <summary>Exercises the open state overload through its closed formatter dispatch.</summary>

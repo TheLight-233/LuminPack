@@ -40,7 +40,6 @@ internal static class SerializerSharedFacadeRegression
                 {
                     var value = new A { Id = 17, Text = "\u00E9\u4E2D" };
                     var bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(value);
-                    if (LuminPackSerializer.Sizeof<LuminPackUtf16LengthOptions>(value) != bytes.Length) throw new Exception("Profile size changed.");
                     var target = new A();
                     var original = target;
                     LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(bytes.AsSpan(), ref target);
@@ -58,17 +57,14 @@ internal static class SerializerSharedFacadeRegression
                     var fixedValue = new C { Id = 5, Flag = true };
                     var fixedBytes = LuminPackSerializer.Serialize(fixedValue);
                     C fixedCopy = null;
-                    if (LuminPackSerializer.Deserialize(fixedBytes.AsSpan(), ref fixedCopy) != fixedBytes.Length || fixedCopy.Id != 5 || !fixedCopy.Flag ||
-                        LuminPackSerializer.Sizeof(fixedValue) != fixedBytes.Length) throw new Exception("Fixed record round trip changed.");
-                    int scalar = 23;
-                    if (LuminPackSerializer.Sizeof(scalar) != 4) throw new Exception("Scalar size result became payload-dependent.");
+                    if (LuminPackSerializer.Deserialize(fixedBytes.AsSpan(), ref fixedCopy) != fixedBytes.Length || fixedCopy.Id != 5 || !fixedCopy.Flag) throw new Exception("Fixed record round trip changed.");
                     byte tag = 7;
                     byte[] data = LuminPackSerializer.Serialize(tag);
                     byte[] array = LuminPackSerializer.Serialize(data);
                     byte[] restored = null;
                     LuminPackSerializer.Deserialize(array.AsSpan(), ref restored);
                     if (data.Length != 1 || data[0] != tag || !restored.SequenceEqual(data)) throw new Exception("Byte-array API result changed.");
-                    scalar = 0;
+                    int scalar = 0;
                     var sequence = new ReadOnlySequence<byte>(LuminPackSerializer.Serialize(23));
                     if (LuminPackSerializer.Deserialize(sequence, ref scalar) != 4 || scalar != 23) throw new Exception("Raw sequence changed.");
                     var tuple = (17, 19);
@@ -88,12 +84,14 @@ internal static class SerializerSharedFacadeRegression
         foreach (string type in new[] { "global::A", "global::B" })
         {
             var concrete = facade.Where(method => method.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == "value" && parameter.Type?.ToString() == type)).ToArray();
-            Require(concrete.Count(method => method.TypeParameterList == null) == 16 && concrete.Count(method => method.TypeParameterList?.Parameters.Count == 1) == 16,
+            Require(concrete.Count(method => method.TypeParameterList == null) == 15 && concrete.Count(method => method.TypeParameterList?.Parameters.Count == 1) == 15,
                 "Sharing changed the complete concrete signatures for " + type);
             Require(concrete.Where(method => method.TypeParameterList != null).All(method => method.Body!.Statements.Count == 1 && method.Body.ToString().Contains("__LuminFacade_", StringComparison.Ordinal)),
                 "A managed full facade retained repeated profile bodies.");
             var adapters = methods.Where(method => method.Parent is StructDeclarationSyntax && method.ParameterList.Parameters.LastOrDefault()?.Type?.ToString() == type).ToArray();
-            Require(adapters.Length == 5 && adapters.All(method => method.ExpressionBody?.Expression is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } } &&
+            // Only direct records evaluate an exact width, so the other adapters reject it instead of dispatching.
+            Require(adapters.Length == 5 && adapters.Where(method => method.Identifier.ValueText != "Size").All(method =>
+                method.ExpressionBody?.Expression is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax { Name: GenericNameSyntax generic } } &&
                 generic.TypeArgumentList.Arguments.Count == 1), "Concrete adapters added generic payload dispatch.");
             Require(adapters.All(method => method.ParameterList.Parameters.All(parameter => parameter.Modifiers.Any(SyntaxKind.ScopedKeyword) == modern)),
                 "Adapter ref-safety annotations differ from the target state APIs.");

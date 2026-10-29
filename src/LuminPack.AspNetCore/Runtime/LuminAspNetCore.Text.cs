@@ -6,7 +6,7 @@ namespace LuminPack.AspNetCore;
 public static unsafe partial class LuminAspNetCore
 {
     /// <summary>Gets the logical-value StringSegment codec.</summary>
-    public static LuminPackCodec<global::Microsoft.Extensions.Primitives.StringSegment> StringSegmentCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.Extensions.Primitives.StringSegment> StringSegmentCodec { get; } = new(Write, Read);
 
     /// <summary>Writes only the public logical text value, preserving null and empty.</summary>
     /// <param name="writer">The Core cursor.</param><param name="value">The HTTP value.</param>
@@ -24,16 +24,8 @@ public static unsafe partial class LuminAspNetCore
         reader = pending;
     }
 
-    /// <summary>Adds the complete default-profile Core string record width.</summary>
-    /// <param name="evaluator">The Core accumulator.</param><param name="value">The HTTP value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.Extensions.Primitives.StringSegment value)
-    {
-        string? text = value.Value;
-        evaluator.Add(evaluator.GetStringLength(ref text));
-    }
-
     /// <summary>Gets the logical-value HostString codec.</summary>
-    public static LuminPackCodec<global::Microsoft.AspNetCore.Http.HostString> HostStringCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.AspNetCore.Http.HostString> HostStringCodec { get; } = new(Write, Read);
 
     /// <summary>Writes only the public logical text value, preserving null and empty.</summary>
     /// <param name="writer">The Core cursor.</param><param name="value">The HTTP value.</param>
@@ -51,16 +43,8 @@ public static unsafe partial class LuminAspNetCore
         reader = pending;
     }
 
-    /// <summary>Adds the complete default-profile Core string record width.</summary>
-    /// <param name="evaluator">The Core accumulator.</param><param name="value">The HTTP value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.AspNetCore.Http.HostString value)
-    {
-        string? text = value.Value;
-        evaluator.Add(evaluator.GetStringLength(ref text));
-    }
-
     /// <summary>Gets the logical-value PathString codec.</summary>
-    public static LuminPackCodec<global::Microsoft.AspNetCore.Http.PathString> PathStringCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.AspNetCore.Http.PathString> PathStringCodec { get; } = new(Write, Read);
 
     /// <summary>Writes only the public logical text value, preserving null and empty.</summary>
     /// <param name="writer">The Core cursor.</param><param name="value">The HTTP value.</param>
@@ -78,16 +62,8 @@ public static unsafe partial class LuminAspNetCore
         reader = pending;
     }
 
-    /// <summary>Adds the complete default-profile Core string record width.</summary>
-    /// <param name="evaluator">The Core accumulator.</param><param name="value">The HTTP value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.AspNetCore.Http.PathString value)
-    {
-        string? text = value.Value;
-        evaluator.Add(evaluator.GetStringLength(ref text));
-    }
-
     /// <summary>Gets the logical-value QueryString codec.</summary>
-    public static LuminPackCodec<global::Microsoft.AspNetCore.Http.QueryString> QueryStringCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.AspNetCore.Http.QueryString> QueryStringCodec { get; } = new(Write, Read);
 
     /// <summary>Writes only the public logical text value, preserving null and empty.</summary>
     /// <param name="writer">The Core cursor.</param><param name="value">The HTTP value.</param>
@@ -105,16 +81,8 @@ public static unsafe partial class LuminAspNetCore
         reader = pending;
     }
 
-    /// <summary>Adds the complete default-profile Core string record width.</summary>
-    /// <param name="evaluator">The Core accumulator.</param><param name="value">The HTTP value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.AspNetCore.Http.QueryString value)
-    {
-        string? text = value.Value;
-        evaluator.Add(evaluator.GetStringLength(ref text));
-    }
-
     /// <summary>Gets the logical-value FragmentString codec.</summary>
-    public static LuminPackCodec<global::Microsoft.AspNetCore.Http.FragmentString> FragmentStringCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::Microsoft.AspNetCore.Http.FragmentString> FragmentStringCodec { get; } = new(Write, Read);
 
     /// <summary>Writes only the public logical text value, preserving null and empty.</summary>
     /// <param name="writer">The Core cursor.</param><param name="value">The HTTP value.</param>
@@ -132,21 +100,13 @@ public static unsafe partial class LuminAspNetCore
         reader = pending;
     }
 
-    /// <summary>Adds the complete default-profile Core string record width.</summary>
-    /// <param name="evaluator">The Core accumulator.</param><param name="value">The HTTP value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::Microsoft.AspNetCore.Http.FragmentString value)
-    {
-        string? text = value.Value;
-        evaluator.Add(evaluator.GetStringLength(ref text));
-    }
-
     /// <summary>Registers the public text records and their generated Custom wrappers.</summary>
     static partial void RegisterTextValues()
     {
-        PlatformRegistration.Add<global::Microsoft.Extensions.Primitives.StringSegment>(&Write, &Read, &Size, StringSegmentCodec);
-        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.HostString>(&Write, &Read, &Size, HostStringCodec);
-        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.PathString>(&Write, &Read, &Size, PathStringCodec);
-        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.QueryString>(&Write, &Read, &Size, QueryStringCodec);
-        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.FragmentString>(&Write, &Read, &Size, FragmentStringCodec);
+        PlatformRegistration.Add<global::Microsoft.Extensions.Primitives.StringSegment>(&Write, &Read, StringSegmentCodec);
+        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.HostString>(&Write, &Read, HostStringCodec);
+        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.PathString>(&Write, &Read, PathStringCodec);
+        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.QueryString>(&Write, &Read, QueryStringCodec);
+        PlatformRegistration.Add<global::Microsoft.AspNetCore.Http.FragmentString>(&Write, &Read, FragmentStringCodec);
     }
 }

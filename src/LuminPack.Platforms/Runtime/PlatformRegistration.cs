@@ -11,18 +11,18 @@ public static unsafe class PlatformRegistration
 {
     private static readonly object Sync = new();
 
-    /// <summary>Installs a binary/size codec only when no application entry already exists.</summary>
+    /// <summary>Installs a binary codec only when no application entry already exists.</summary>
     /// <typeparam name="T">The platform payload.</typeparam>
-    /// <param name="write">The static binary writer.</param><param name="read">The static binary reader.</param><param name="size">The exact size operation.</param>
+    /// <param name="write">The static binary writer.</param><param name="read">The static binary reader.</param>
     /// <param name="codec">The explicit codec also made available to generated Custom value wrappers.</param>
     public static void Add<T>(delegate*<ref LuminPackWriter, in T, void> write,
-        delegate*<ref LuminPackReader, ref T, void> read, delegate*<ref LuminPackEvaluator, in T, void> size, LuminPackCodec<T> codec)
+        delegate*<ref LuminPackReader, ref T, void> read, LuminPackCodec<T> codec)
     {
         lock (Sync)
         {
             nint key = LuminPackMarshal.GetMethodTable(typeof(T));
             if (!LuminPackFormatterRegistry.TryGetValue(in key, out _))
-                LuminPackFormatterRegistry.Register(typeof(T), (nint)write, (nint)read, calculateOffset: (nint)size);
+                LuminPackFormatterRegistry.Register(typeof(T), (nint)write, (nint)read);
             LuminPackValue<T>.Configure(codec);
             nint wrapperKey = LuminPackMarshal.GetMethodTable(typeof(LuminPackValue<T>));
             if (!LuminPackFormatterRegistry.TryGetValue(in wrapperKey, out _))
@@ -31,8 +31,7 @@ public static unsafe class PlatformRegistration
                     (nint)(delegate*<ref LuminPackWriter, in LuminPackValue<T>, void>)&LuminPackValue<T>.Serialize,
                     (nint)(delegate*<ref LuminPackReader, ref LuminPackValue<T>, void>)&LuminPackValue<T>.Deserialize,
                     (nint)(delegate*<ref LuminPackJsonWriter, in LuminPackValue<T>, void>)&LuminPackValue<T>.SerializeJson,
-                    (nint)(delegate*<ref LuminPackJsonReader, ref LuminPackValue<T>, void>)&LuminPackValue<T>.DeserializeJson,
-                    (nint)(delegate*<ref LuminPackEvaluator, in LuminPackValue<T>, void>)&LuminPackValue<T>.CalculateOffset);
+                    (nint)(delegate*<ref LuminPackJsonReader, ref LuminPackValue<T>, void>)&LuminPackValue<T>.DeserializeJson);
             }
         }
     }

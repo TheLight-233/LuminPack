@@ -53,8 +53,6 @@ internal static class SerializerUnionInliningRegression
                         var actual = LuminPackSerializer.Serialize(in value);
                         if (!actual.AsSpan().SequenceEqual(expected) || string.Join(",", Events) != callbacks)
                             throw new Exception("Class union wire or callback order changed.");
-                        if (value is not UnknownCat && LuminPackSerializer.Sizeof(value) != LuminPackSerializer.Sizeof<Animal>(value))
-                            throw new Exception("Union size evaluation changed.");
                         foreach (var encoding in new[] { LuminPack.Option.LuminPackStringEncoding.UTF8, LuminPack.Option.LuminPackStringEncoding.UTF16 })
             {
                 if (encoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)
@@ -127,19 +125,18 @@ internal static class SerializerUnionInliningRegression
         Require(driver.GetRunResult().Results.All(result => result.Exception == null), string.Join(Environment.NewLine, driver.GetRunResult().Results.Select(result => result.Exception)));
         var errors = output.GetDiagnostics().Concat(diagnostics).Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
         Require(errors.Length == 0, string.Join(Environment.NewLine, errors));
-        int entries = 0, jsonEntries = 0, sizeEntries = 0;
+        int entries = 0, jsonEntries = 0;
         foreach (var tree in output.SyntaxTrees.Where(tree => Path.GetFileName(tree.FilePath).StartsWith("LuminPackSerializer.", StringComparison.Ordinal)))
         {
             var model = output.GetSemanticModel(tree);
             foreach (var method in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Where(method => method.TypeParameterList == null &&
-                method.Identifier.ValueText is "Serialize" or "SerializeJson" or "Sizeof" &&
+                method.Identifier.ValueText is "Serialize" or "SerializeJson" &&
                 method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() is
                     "global::Animal" or "global::IShape" or "global::EnvelopeBase<int>" or "global::EnvelopeBase<string>")))
             {
                 string name = method.Identifier.ValueText;
                 if (name == "Serialize") entries++;
-                else if (name == "SerializeJson") jsonEntries++;
-                else sizeEntries++;
+                else jsonEntries++;
 
                 var calls = method.DescendantNodes().OfType<InvocationExpressionSyntax>().ToArray();
                 bool perTypeFormatter = calls.Any(call => (model.GetSymbolInfo(call).Symbol as IMethodSymbol) is { } symbol &&
@@ -167,16 +164,16 @@ internal static class SerializerUnionInliningRegression
                         statement.Expression.ToString().Contains("GetMethodTable", StringComparison.Ordinal)),
                     "A concrete union entry retained a switch-on-tag lookup dispatch: " + name);
 
-                if (name is "Serialize" or "Sizeof")
+                if (name == "Serialize")
                 {
                     Require(calls.Any(call => call.Expression is MemberAccessExpressionSyntax forward &&
                         forward.Name.Identifier.ValueText.StartsWith("__LuminPackUnion", StringComparison.Ordinal)),
-                        "A concrete union write/size entry lost its single virtual union forwarding layer: " + name);
+                        "A concrete union write entry lost its single virtual union forwarding layer: " + name);
                 }
             }
         }
         Require(entries == 5, "Expected two class, one interface, and two closed generic concrete write entries.");
-        Require(jsonEntries != 0 && sizeEntries != 0, "Union JSON and size entries were not inspected.");
+        Require(jsonEntries != 0, "Union JSON entries were not inspected.");
         using var image = new MemoryStream();
         var emit = output.Emit(image);
         Require(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics));

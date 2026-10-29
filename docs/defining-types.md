@@ -103,7 +103,7 @@ The bound covers headers and all nested data under every string option the type 
 
 ## Supported types
 
-Besides `[LuminPackable]` types, these are built in, for binary, JSON and size evaluation:
+Besides `[LuminPackable]` types, these are built in, for binary and JSON:
 
 | Category | Types |
 | --- | --- |

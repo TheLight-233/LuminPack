@@ -10,7 +10,7 @@ namespace LuminPack.SkiaSharp;
 public static unsafe partial class LuminSkiaSharp
 {
     /// <summary>Gets the explicit SKPoint codec.</summary>
-    public static LuminPackCodec<global::SkiaSharp.SKPoint> SKPointCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::SkiaSharp.SKPoint> SKPointCodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -36,12 +36,8 @@ public static unsafe partial class LuminSkiaSharp
         reader = pending;
     }
 
-    /// <summary>Adds the exact 8-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::SkiaSharp.SKPoint value) => evaluator.Add(8);
-
     /// <summary>Gets the explicit SKPointI codec.</summary>
-    public static LuminPackCodec<global::SkiaSharp.SKPointI> SKPointICodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::SkiaSharp.SKPointI> SKPointICodec { get; } = new(Write, Read);
 
     /// <summary>Writes X, Y in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -67,12 +63,8 @@ public static unsafe partial class LuminSkiaSharp
         reader = pending;
     }
 
-    /// <summary>Adds the exact 8-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::SkiaSharp.SKPointI value) => evaluator.Add(8);
-
     /// <summary>Gets the explicit SKSize codec.</summary>
-    public static LuminPackCodec<global::SkiaSharp.SKSize> SKSizeCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::SkiaSharp.SKSize> SKSizeCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Width, Height in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -98,12 +90,8 @@ public static unsafe partial class LuminSkiaSharp
         reader = pending;
     }
 
-    /// <summary>Adds the exact 8-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::SkiaSharp.SKSize value) => evaluator.Add(8);
-
     /// <summary>Gets the explicit SKSizeI codec.</summary>
-    public static LuminPackCodec<global::SkiaSharp.SKSizeI> SKSizeICodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::SkiaSharp.SKSizeI> SKSizeICodec { get; } = new(Write, Read);
 
     /// <summary>Writes Width, Height in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -129,12 +117,8 @@ public static unsafe partial class LuminSkiaSharp
         reader = pending;
     }
 
-    /// <summary>Adds the exact 8-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::SkiaSharp.SKSizeI value) => evaluator.Add(8);
-
     /// <summary>Gets the explicit SKRect codec.</summary>
-    public static LuminPackCodec<global::SkiaSharp.SKRect> SKRectCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::SkiaSharp.SKRect> SKRectCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Left, Top, Right, Bottom in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -166,12 +150,8 @@ public static unsafe partial class LuminSkiaSharp
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::SkiaSharp.SKRect value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit SKRectI codec.</summary>
-    public static LuminPackCodec<global::SkiaSharp.SKRectI> SKRectICodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::SkiaSharp.SKRectI> SKRectICodec { get; } = new(Write, Read);
 
     /// <summary>Writes Left, Top, Right, Bottom in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -203,12 +183,8 @@ public static unsafe partial class LuminSkiaSharp
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::SkiaSharp.SKRectI value) => evaluator.Add(16);
-
     /// <summary>Gets the explicit SKMatrix codec.</summary>
-    public static LuminPackCodec<global::SkiaSharp.SKMatrix> SKMatrixCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::SkiaSharp.SKMatrix> SKMatrixCodec { get; } = new(Write, Read);
 
     /// <summary>Writes ScaleX, SkewX, TransX, SkewY, ScaleY, TransY, Persp0, Persp1, Persp2 in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -255,12 +231,8 @@ public static unsafe partial class LuminSkiaSharp
         reader = pending;
     }
 
-    /// <summary>Adds the exact 36-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::SkiaSharp.SKMatrix value) => evaluator.Add(36);
-
     /// <summary>Gets the explicit SKColor codec.</summary>
-    public static LuminPackCodec<global::SkiaSharp.SKColor> SKColorCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::SkiaSharp.SKColor> SKColorCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Red, Green, Blue, Alpha in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -292,12 +264,8 @@ public static unsafe partial class LuminSkiaSharp
         reader = pending;
     }
 
-    /// <summary>Adds the exact 4-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::SkiaSharp.SKColor value) => evaluator.Add(4);
-
     /// <summary>Gets the explicit SKColorF codec.</summary>
-    public static LuminPackCodec<global::SkiaSharp.SKColorF> SKColorFCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<global::SkiaSharp.SKColorF> SKColorFCodec { get; } = new(Write, Read);
 
     /// <summary>Writes Red, Green, Blue, Alpha in order.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The platform value.</param>
@@ -329,23 +297,19 @@ public static unsafe partial class LuminSkiaSharp
         reader = pending;
     }
 
-    /// <summary>Adds the exact 16-byte record size.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The platform value.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in global::SkiaSharp.SKColorF value) => evaluator.Add(16);
-
-    /// <summary>Registers these binary/size codecs for existing Core generic fallback paths, preserving explicit application entries.</summary>
+    /// <summary>Registers these binary codecs for existing Core generic fallback paths, preserving explicit application entries.</summary>
     /// <remarks>Ordinary generated nested and raw unmanaged operations retain their original contracts.</remarks>
     public static void Register()
     {
-        PlatformRegistration.Add<global::SkiaSharp.SKPoint>(&Write, &Read, &Size, SKPointCodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKPointI>(&Write, &Read, &Size, SKPointICodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKSize>(&Write, &Read, &Size, SKSizeCodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKSizeI>(&Write, &Read, &Size, SKSizeICodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKRect>(&Write, &Read, &Size, SKRectCodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKRectI>(&Write, &Read, &Size, SKRectICodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKMatrix>(&Write, &Read, &Size, SKMatrixCodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKColor>(&Write, &Read, &Size, SKColorCodec);
-        PlatformRegistration.Add<global::SkiaSharp.SKColorF>(&Write, &Read, &Size, SKColorFCodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKPoint>(&Write, &Read, SKPointCodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKPointI>(&Write, &Read, SKPointICodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKSize>(&Write, &Read, SKSizeCodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKSizeI>(&Write, &Read, SKSizeICodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKRect>(&Write, &Read, SKRectCodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKRectI>(&Write, &Read, SKRectICodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKMatrix>(&Write, &Read, SKMatrixCodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKColor>(&Write, &Read, SKColorCodec);
+        PlatformRegistration.Add<global::SkiaSharp.SKColorF>(&Write, &Read, SKColorFCodec);
         RegisterAdditional();
     }
 

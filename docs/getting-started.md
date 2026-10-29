@@ -61,9 +61,6 @@ Person other = LuminPackSerializer.Deserialize<Person>(bytes);
 // JSON
 string json = LuminPackSerializer.SerializeJson(person);
 Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
-
-// Exact binary size
-int size = LuminPackSerializer.Sizeof(person);
 ```
 
 Concrete overloads (`Serialize(person)`, `Deserialize(bytes, ref copy)`) call the generated code for that type directly. Generic overloads (`Deserialize<Person>(bytes)`) go through a per-type entry created on first use.

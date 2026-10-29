@@ -14,8 +14,8 @@ public enum GeneratorType : byte
 
     /// <summary>
     /// The source generator emits no formatter for the type. The user implements static
-    /// Serialize/Deserialize methods (optionally SerializeJson/DeserializeJson and
-    /// CalculateOffset) and the generator automatically registers them through
+    /// Serialize/Deserialize methods (optionally SerializeJson/DeserializeJson) and the
+    /// generator automatically registers them through
     /// <c>LuminPackSerializer.Register&lt;T&gt;</c> at module initialization.
     /// </summary>
     Custom

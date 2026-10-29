@@ -128,7 +128,6 @@ public static partial class LuminPackExtensionGenerator
                 {
                     "Serialize" or "SerializeJson" => new[] { "Write", "WriteValue", "WriteValueWithCompress" },
                     "Deserialize" or "DeserializeJson" => new[] { "Read", "ReadValue", "ReadFreshValue" },
-                    "CalculateOffset" => new[] { "CalculateOffset" },
                     _ => Array.Empty<string>()
                 };
                 if (supportedCalls.Length == 0) continue;
@@ -142,7 +141,7 @@ public static partial class LuminPackExtensionGenerator
                         !supportedCalls.Contains(access.Name.Identifier.ValueText, StringComparer.Ordinal)) continue;
                     string receiver = semantic.GetTypeInfo(access.Expression).Type?.ToDisplayString();
                     if (receiver is not ("LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" or
-                        "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader" or "LuminPack.Core.LuminPackEvaluator")) continue;
+                        "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader")) continue;
                     foreach (var argument in invocation.ArgumentList.Arguments)
                     {
                         var argumentType = semantic.GetTypeInfo(argument.Expression).Type;

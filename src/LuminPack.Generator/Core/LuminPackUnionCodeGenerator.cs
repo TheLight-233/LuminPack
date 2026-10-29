@@ -188,61 +188,6 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("            }");
     }
 
-    /// <summary>Size calculation for a .NET 11 union struct.</summary>
-    /// <param name="data">The metadata describing the serializable type.</param>
-    /// <param name="sb">The builder receiving generated source code.</param>
-    /// <param name="classGlobalName">The class global name used by this operation.</param>
-    public static void GenerateCalculateOffsetCodeStruct(
-        LuminDataInfo data,
-        StringBuilder sb,
-        string classGlobalName)
-    {
-        sb.AppendLine("            if (value.Value is null)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                evaluator += 1;");
-        sb.AppendLine("                return;");
-        sb.AppendLine("            }");
-        sb.AppendLine();
-
-        string suffix = LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(data.TypeSymbol.OriginalDefinition);
-        if (!data.isGeneric)
-        {
-            sb.AppendLine("            switch (ResolveCase_" + suffix + "(value.Value))");
-        }
-        else
-        {
-            sb.AppendLine("            switch (ResolveCase_" + suffix + "<" + string.Join(", ", data.GenericParameters) + ">(value.Value))");
-        }
-        sb.AppendLine("            {");
-        foreach (LuminUnionMemberInfo member in data.UnionMembers)
-        {
-            string memberType = GetMemberType(data, member);
-            sb.AppendLine($"                case {member.Id}:");
-            sb.AppendLine("                {");
-            sb.AppendLine($"                    evaluator.CalculateUnionHeader({member.Id});");
-            sb.AppendLine($"                    var typed{member.Id} = ({memberType})value.Value;");
-            sb.AppendLine($"                    evaluator.CalculateOffset(ref typed{member.Id});");
-            sb.AppendLine("                    return;");
-            sb.AppendLine("                }");
-        }
-        sb.AppendLine("                default:");
-        sb.AppendLine("                {");
-        foreach (LuminUnionMemberInfo member in data.UnionMembers)
-        {
-            string memberType = GetMemberType(data, member);
-            sb.AppendLine($"                    if (value.Value is {memberType} member{member.Id})");
-            sb.AppendLine("                    {");
-            sb.AppendLine($"                        evaluator.CalculateUnionHeader({member.Id});");
-            sb.AppendLine($"                        evaluator.CalculateOffset(ref member{member.Id});");
-            sb.AppendLine("                        return;");
-            sb.AppendLine("                    }");
-        }
-        sb.AppendLine("                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNotFoundInUnionType(value.Value.GetType(), typeof(" + classGlobalName + "));");
-        sb.AppendLine("                    return;");
-        sb.AppendLine("                }");
-        sb.AppendLine("            }");
-    }
-
     /// <summary>Appends JSON serialization statements for the analyzed type.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
@@ -435,30 +380,6 @@ public static class LuminPackUnionCodeGenerator
         sb.AppendLine("                    break;");
         sb.AppendLine("            }");
 
-    }
-
-    /// <summary>Appends statements that calculate the binary payload size.</summary>
-    /// <param name="data">The metadata describing the serializable type.</param>
-    /// <param name="sb">The builder receiving generated source code.</param>
-    /// <param name="classGlobalName">The class global name used by this operation.</param>
-    public static void GenerateCalculateOffsetCode(
-        LuminDataInfo data,
-        StringBuilder sb,
-        string classGlobalName)
-    {
-        if (!data.isValueType)
-        {
-            sb.AppendLine("            if (value is null)");
-            sb.AppendLine("            {");
-            sb.AppendLine("                evaluator += 1;");
-            sb.AppendLine("                return;");
-            sb.AppendLine("            }");
-        }
-
-        sb.AppendLine();
-        string suffix = LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(data.TypeSymbol.OriginalDefinition);
-        sb.AppendLine($"            value.__LuminPackUnionCalculateOffset_{suffix}(ref evaluator);");
-        sb.AppendLine();
     }
 
     /// <summary>Appends JSON serialization statements for the analyzed type.</summary>

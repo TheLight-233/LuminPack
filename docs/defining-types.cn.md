@@ -103,7 +103,7 @@ public sealed partial class SmallRecord
 
 ## 内置支持的类型
 
-除 `[LuminPackable]` 类型外，以下类型内置支持二进制、JSON 和大小计算：
+除 `[LuminPackable]` 类型外，以下类型内置支持二进制和 JSON：
 
 | 类别 | 类型 |
 | --- | --- |

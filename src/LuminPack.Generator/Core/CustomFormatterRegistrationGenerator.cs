@@ -98,7 +98,6 @@ internal static class CustomFormatterRegistrationGenerator
             sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.SerializeJsonName}");
             sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.DeserializeJsonName}");
         }
-        if (tier >= 3) sb.AppendLine($"                , &{type}.{CustomFormatterAnalyzer.CalculateOffsetName}");
         sb.AppendLine("            );");
         return sb.ToString();
     }

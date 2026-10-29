@@ -85,8 +85,6 @@ internal static class SerializerBinaryInliningRegression
                         byte[] expected = LuminPackSerializer.Serialize<Payload>(in value);
                         byte[] actual = LuminPackSerializer.Serialize(in value);
                         if (!actual.AsSpan().SequenceEqual(expected)) throw new Exception("Concrete write changed the binary contract.");
-                        if (LuminPackSerializer.Sizeof(value) != LuminPackSerializer.Sizeof<Payload>(value))
-                            throw new Exception("Concrete size evaluation changed the original generic contract.");
                         var buffer = LuminBufferWriterPool.Rent();
                         try
                         {
@@ -242,7 +240,7 @@ internal static class SerializerBinaryInliningRegression
         {
             var model = output.GetSemanticModel(tree);
             foreach (var method in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Where(method =>
-                method.TypeParameterList == null && method.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeAsync" or "DeserializeAsync" or "Sizeof" or "SerializeJson" or "DeserializeJson" &&
+                method.TypeParameterList == null && method.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeAsync" or "DeserializeAsync" or "SerializeJson" or "DeserializeJson" &&
                 method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().TrimEnd('?') == "global::Payload")))
             {
                 inspected++;
@@ -260,13 +258,13 @@ internal static class SerializerBinaryInliningRegression
             }
         }
         // Light keeps the IBufferWriter facades only when a project call selects them, like the reusable-buffer overloads.
-        Require(inspected == 14, "Expected every selected concrete binary, asynchronous, JSON, and size payload entry; found " + inspected + ": " + string.Join(" | ", seen));
+        Require(inspected == 13, "Expected every selected concrete binary, asynchronous and JSON payload entry; found " + inspected + ": " + string.Join(" | ", seen));
         var implementations = output.SyntaxTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
             .Where(method => method.TypeParameterList?.Parameters.Count == 1 && method.ParameterList.Parameters.Count == 2 &&
                 method.ParameterList.Parameters[1].Type?.ToString() is "global::Payload" or "global::Payload?" &&
                 method.ParameterList.Parameters[0].Type?.ToString().Contains("LuminPack", StringComparison.Ordinal) == true &&
-                method.Identifier.ValueText is "RootWrite" or "RootRead" or "RootWriteJson" or "RootReadJson" or "Sizeof").ToArray();
-        Require(implementations.Length == 5, "Expected one state implementation for each payload operation.");
+                method.Identifier.ValueText is "RootWrite" or "RootRead" or "RootWriteJson" or "RootReadJson").ToArray();
+        Require(implementations.Length == 4, "Expected one state implementation for each payload operation.");
         VerifyJsonIntegerFallback(implementations.Single(method => method.Identifier.ValueText == "RootWriteJson"));
         var sharedJsonCalls = new Dictionary<ISymbol, int>(SymbolEqualityComparer.Default);
         foreach (var method in implementations)
@@ -285,8 +283,6 @@ internal static class SerializerBinaryInliningRegression
                     sharedJsonCalls[target] = sharedJsonCalls.TryGetValue(target, out int count) ? count + 1 : 1;
                     continue;
                 }
-                if (method.Identifier.ValueText == "Sizeof" && symbol?.ContainingType.Name == "LuminPackSerializer" && symbol.Name == "Sizeof")
-                    continue;
                 Require((symbol?.ContainingType.Name != "LuminPackSerializer" || symbol.MethodKind == MethodKind.LocalFunction) &&
                     !(symbol?.ContainingType.Name.StartsWith("LuminPackExtensions_", StringComparison.Ordinal) ?? false),
                     "An ordinary payload field retained a serializer or extension call instead of expanding: " + call);

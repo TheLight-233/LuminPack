@@ -73,7 +73,7 @@ unsafe
 ```
 
 - The tag must be unique and must not collide with a generated case; use `WriteWideUnionHeader` for wide tags.
-- All four methods are required. `Sizeof` throws for registered cases.
+- All four methods are required.
 - Registration is validated: duplicate tags, incompatible case types and missing methods are rejected.
 - Registration holds no strong references, so plugins loaded into a collectible `AssemblyLoadContext` can still unload. The code you register must stay loaded while it can be called.
 

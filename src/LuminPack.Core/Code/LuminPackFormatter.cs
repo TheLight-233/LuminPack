@@ -24,8 +24,6 @@ public struct LuminPackFormatter
     public nint WriteValueJson;
     /// <summary>Stores the read value json.</summary>
     public nint ReadValueJson;
-    /// <summary>Stores the calculate offset.</summary>
-    public nint CalculateOffset;
 }
 
 /// <summary>
@@ -47,14 +45,12 @@ public static class LuminPackFormatterRegistry
     /// <param name="readValue">The read value used by this operation.</param>
     /// <param name="writeValueJson">The write value json used by this operation.</param>
     /// <param name="readValueJson">The read value json used by this operation.</param>
-    /// <param name="calculateOffset">The calculate offset used by this operation.</param>
     public static void Register(
         Type type,
         nint writeValue,
         nint readValue,
         [System.Runtime.InteropServices.Optional] nint writeValueJson,
-        [System.Runtime.InteropServices.Optional] nint readValueJson,
-        [System.Runtime.InteropServices.Optional] nint calculateOffset)
+        [System.Runtime.InteropServices.Optional] nint readValueJson)
     {
         if (type is null) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(type));
         if (writeValue == 0) global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(writeValue));
@@ -65,8 +61,7 @@ public static class LuminPackFormatterRegistry
             WriteValue = writeValue,
             ReadValue = readValue,
             WriteValueJson = writeValueJson,
-            ReadValueJson = readValueJson,
-            CalculateOffset = calculateOffset
+            ReadValueJson = readValueJson
         };
 
         nint key = (nint)LuminPackMarshal.GetMethodTable(type);
@@ -98,17 +93,15 @@ public static partial class LuminPackFormatterRegistry<TOptions> where TOptions 
     /// <param name="readValue">The required binary reader method address.</param>
     /// <param name="writeValueJson">The optional JSON writer method address.</param>
     /// <param name="readValueJson">The optional JSON reader method address.</param>
-    /// <param name="calculateOffset">The optional exact binary evaluator method address.</param>
     public static void Register(Type type, nint writeValue, nint readValue,
         [System.Runtime.InteropServices.Optional] nint writeValueJson,
-        [System.Runtime.InteropServices.Optional] nint readValueJson,
-        [System.Runtime.InteropServices.Optional] nint calculateOffset)
+        [System.Runtime.InteropServices.Optional] nint readValueJson)
     {
         if (type is null) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(type));
         if (writeValue == 0) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(writeValue));
         if (readValue == 0) LuminPackExceptionHelper.ThrowArgumentNullException(nameof(readValue));
         var entry = new LuminPackFormatter { WriteValue = writeValue, ReadValue = readValue, WriteValueJson = writeValueJson,
-            ReadValueJson = readValueJson, CalculateOffset = calculateOffset };
+            ReadValueJson = readValueJson };
         nint key = LuminPackMarshal.GetMethodTable(type);
         // Resolve the closed profile before publishing its immutable entry.
         var entries = s_entries;

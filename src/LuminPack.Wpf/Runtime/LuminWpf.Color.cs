@@ -9,7 +9,7 @@ namespace LuminPack.Wpf;
 public static unsafe partial class LuminWpf
 {
     /// <summary>Gets the linear scRGB color codec.</summary>
-    public static LuminPackCodec<WpfColor> ColorCodec { get; } = new(Write, Read, Size);
+    public static LuminPackCodec<WpfColor> ColorCodec { get; } = new(Write, Read);
 
     /// <summary>Writes ScA, ScR, ScG and ScB, retaining linear/HDR components.</summary>
     /// <param name="writer">The Core output cursor.</param><param name="value">The color without an external color context.</param>
@@ -36,14 +36,6 @@ public static unsafe partial class LuminWpf
         reader = pending;
     }
 
-    /// <summary>Adds the exact public scRGB record width, rejecting unsupported external profiles.</summary>
-    /// <param name="evaluator">The Core size accumulator.</param><param name="value">The color.</param>
-    public static void Size(ref LuminPackEvaluator evaluator, in WpfColor value)
-    {
-        if (value.ColorContext is not null) LuminPackExceptionHelper.ThrowNotSupportedException("Profile-backed WPF colors require an application color-profile contract.");
-        evaluator.Add(16);
-    }
-
     /// <summary>Registers the explicit linear color record.</summary>
-    static partial void RegisterAdditional() => PlatformRegistration.Add<WpfColor>(&Write, &Read, &Size, ColorCodec);
+    static partial void RegisterAdditional() => PlatformRegistration.Add<WpfColor>(&Write, &Read, ColorCodec);
 }

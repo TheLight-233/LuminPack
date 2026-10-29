@@ -132,7 +132,7 @@ public sealed class FormatterRegistryInitializationTest
                         LuminPackFormatterRegistry.TryGetValue(in keys[index], out foundEntry);
                     nint expected = (index + 1) * 16;
                     if (!found || foundEntry.WriteValue != expected + 1 || foundEntry.ReadValue != expected + 2 ||
-                        foundEntry.WriteValueJson != expected + 3 || foundEntry.ReadValueJson != expected + 4 || foundEntry.CalculateOffset != expected + 5)
+                        foundEntry.WriteValueJson != expected + 3 || foundEntry.ReadValueJson != expected + 4)
                         Interlocked.CompareExchange(ref failure, "A concurrent registry lookup lost or mixed method addresses.", null);
                 }
                 catch (Exception exception) { Interlocked.CompareExchange(ref failure, exception.ToString(), null); }
@@ -168,8 +168,8 @@ public sealed class FormatterRegistryInitializationTest
     private static void RegisterPublication(Type payload, int index, bool compiled)
     {
         nint value = (index + 1) * 16;
-        if (compiled) LuminPackFormatterRegistry<PublicationProfile>.Register(payload, value + 1, value + 2, value + 3, value + 4, value + 5);
-        else LuminPackFormatterRegistry.Register(payload, value + 1, value + 2, value + 3, value + 4, value + 5);
+        if (compiled) LuminPackFormatterRegistry<PublicationProfile>.Register(payload, value + 1, value + 2, value + 3, value + 4);
+        else LuminPackFormatterRegistry.Register(payload, value + 1, value + 2, value + 3, value + 4);
     }
 
     /// <summary>Provides a unique key without executing the placeholder method addresses.</summary>

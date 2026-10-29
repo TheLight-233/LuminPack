@@ -36,11 +36,6 @@ namespace LuminPack.Unity
             value = result;
         }
 
-        /// <summary>Adds the exact 8-byte binary size for Vector2.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Vector2 value) => evaluator.Add(8);
-
         /// <summary>Writes the 12-byte field-ordered Vector3 value.</summary>
         /// <param name="writer">The existing output cursor.</param>
         /// <param name="value">The value to encode.</param>
@@ -70,11 +65,6 @@ namespace LuminPack.Unity
             result.z = field2;
             value = result;
         }
-
-        /// <summary>Adds the exact 12-byte binary size for Vector3.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Vector3 value) => evaluator.Add(12);
 
         /// <summary>Writes the 16-byte field-ordered Vector4 value.</summary>
         /// <param name="writer">The existing output cursor.</param>
@@ -110,11 +100,6 @@ namespace LuminPack.Unity
             value = result;
         }
 
-        /// <summary>Adds the exact 16-byte binary size for Vector4.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Vector4 value) => evaluator.Add(16);
-
         /// <summary>Writes the 8-byte field-ordered Vector2Int value.</summary>
         /// <param name="writer">The existing output cursor.</param>
         /// <param name="value">The value to encode.</param>
@@ -140,11 +125,6 @@ namespace LuminPack.Unity
             result.y = field1;
             value = result;
         }
-
-        /// <summary>Adds the exact 8-byte binary size for Vector2Int.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Vector2Int value) => evaluator.Add(8);
 
         /// <summary>Writes the 12-byte field-ordered Vector3Int value.</summary>
         /// <param name="writer">The existing output cursor.</param>
@@ -175,11 +155,6 @@ namespace LuminPack.Unity
             result.z = field2;
             value = result;
         }
-
-        /// <summary>Adds the exact 12-byte binary size for Vector3Int.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Vector3Int value) => evaluator.Add(12);
 
         /// <summary>Writes the 16-byte field-ordered Quaternion value.</summary>
         /// <param name="writer">The existing output cursor.</param>
@@ -215,11 +190,6 @@ namespace LuminPack.Unity
             value = result;
         }
 
-        /// <summary>Adds the exact 16-byte binary size for Quaternion.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Quaternion value) => evaluator.Add(16);
-
         /// <summary>Writes the 16-byte field-ordered Color value.</summary>
         /// <param name="writer">The existing output cursor.</param>
         /// <param name="value">The value to encode.</param>
@@ -253,11 +223,6 @@ namespace LuminPack.Unity
             result.a = field3;
             value = result;
         }
-
-        /// <summary>Adds the exact 16-byte binary size for Color.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Color value) => evaluator.Add(16);
 
         /// <summary>Writes the 4-byte field-ordered Color32 value.</summary>
         /// <param name="writer">The existing output cursor.</param>
@@ -293,11 +258,6 @@ namespace LuminPack.Unity
             value = result;
         }
 
-        /// <summary>Adds the exact 4-byte binary size for Color32.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Color32 value) => evaluator.Add(4);
-
         /// <summary>Writes the 16-byte field-ordered Rect value.</summary>
         /// <param name="writer">The existing output cursor.</param>
         /// <param name="value">The value to encode.</param>
@@ -331,11 +291,6 @@ namespace LuminPack.Unity
             result.height = field3;
             value = result;
         }
-
-        /// <summary>Adds the exact 16-byte binary size for Rect.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Rect value) => evaluator.Add(16);
 
         /// <summary>Writes the 16-byte field-ordered RectInt value.</summary>
         /// <param name="writer">The existing output cursor.</param>
@@ -371,11 +326,6 @@ namespace LuminPack.Unity
             value = result;
         }
 
-        /// <summary>Adds the exact 16-byte binary size for RectInt.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in RectInt value) => evaluator.Add(16);
-
         /// <summary>Writes the 24-byte field-ordered Bounds value.</summary>
         /// <param name="writer">The existing output cursor.</param>
         /// <param name="value">The value to encode.</param>
@@ -402,11 +352,6 @@ namespace LuminPack.Unity
             value = result;
         }
 
-        /// <summary>Adds the exact 24-byte binary size for Bounds.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Bounds value) => evaluator.Add(24);
-
         /// <summary>Writes the 24-byte field-ordered BoundsInt value.</summary>
         /// <param name="writer">The existing output cursor.</param>
         /// <param name="value">The value to encode.</param>
@@ -432,11 +377,6 @@ namespace LuminPack.Unity
             result.size = field1;
             value = result;
         }
-
-        /// <summary>Adds the exact 24-byte binary size for BoundsInt.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in BoundsInt value) => evaluator.Add(24);
 
         /// <summary>Writes the 24-byte field-ordered Ray value.</summary>
         /// <param name="writer">The existing output cursor.</param>
@@ -468,11 +408,6 @@ namespace LuminPack.Unity
             value = result;
         }
 
-        /// <summary>Adds the exact 24-byte binary size for Ray.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Ray value) => evaluator.Add(24);
-
         /// <summary>Writes the 16-byte field-ordered Ray2D value.</summary>
         /// <param name="writer">The existing output cursor.</param>
         /// <param name="value">The value to encode.</param>
@@ -503,11 +438,6 @@ namespace LuminPack.Unity
             value = result;
         }
 
-        /// <summary>Adds the exact 16-byte binary size for Ray2D.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Ray2D value) => evaluator.Add(16);
-
         /// <summary>Writes the 16-byte field-ordered Plane value.</summary>
         /// <param name="writer">The existing output cursor.</param>
         /// <param name="value">The value to encode.</param>
@@ -533,11 +463,6 @@ namespace LuminPack.Unity
             result.distance = field1;
             value = result;
         }
-
-        /// <summary>Adds the exact 16-byte binary size for Plane.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Plane value) => evaluator.Add(16);
 
         /// <summary>Writes the 64-byte field-ordered Matrix4x4 value.</summary>
         /// <param name="writer">The existing output cursor.</param>
@@ -621,11 +546,6 @@ namespace LuminPack.Unity
             value = result;
         }
 
-        /// <summary>Adds the exact 64-byte binary size for Matrix4x4.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Matrix4x4 value) => evaluator.Add(64);
-
         /// <summary>Writes the 4-byte field-ordered LayerMask value.</summary>
         /// <param name="writer">The existing output cursor.</param>
         /// <param name="value">The value to encode.</param>
@@ -647,11 +567,5 @@ namespace LuminPack.Unity
             result.value = field0;
             value = result;
         }
-
-        /// <summary>Adds the exact 4-byte binary size for LayerMask.</summary>
-        /// <param name="evaluator">The caller-owned size accumulator.</param>
-        /// <param name="value">The value whose fixed size is added.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in LayerMask value) => evaluator.Add(4);
-
     }
 }

@@ -42,7 +42,6 @@ internal static class SerializerRootApiRegression
             "S.DeserializeJson(text.AsSpan(), ref value);",
             "S.DeserializeJson(buffer, ref value);",
             "_ = S.DeserializeAsync(stream, value);",
-            "_ = Sizeof(value: value);",
             "S.Serialize(in value, output);",
             "S.SerializeJson(value, output);",
         ];
@@ -70,7 +69,7 @@ internal static class SerializerRootApiRegression
         var empty = Run(Create(references, "Minimal", ""), out _);
         Require(!empty.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Any(file => file.HintName.Contains("Unused", StringComparison.Ordinal)), "Empty Minimal roots must not fall back to Light.");
         var full = Run(Create(references, "Full", ""), out _);
-        Require(Concrete(full, "Payload").Length == 16 && Concrete(full, "Unused").Length == 16, "Full concrete API compatibility changed.");
+        Require(Concrete(full, "Payload").Length == 15 && Concrete(full, "Unused").Length == 15, "Full concrete API compatibility changed.");
 
         const string forwarding = """
             public static class Entry
@@ -87,7 +86,7 @@ internal static class SerializerRootApiRegression
         Require(Concrete(forwardedGroup, "Payload").Length == 0 && forwardedGroup.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
             .Any(file => file.HintName.Contains("Payload", StringComparison.Ordinal)), "A generic forwarding method group lost its closed formatter root.");
 
-        var group = Run(Create(references, "Minimal", "public static class Entry { public static Func<Payload, int> Group = S.Sizeof; }"), out _);
+        var group = Run(Create(references, "Minimal", "public static class Entry { public static Func<Payload, string> Group = S.SerializeJson; }"), out _);
         Require(Concrete(group, "Payload").Length == 1, "Contextual method groups must retain their selected overload.");
         VerifyTransition(references);
         VerifyUnrelatedEdit(references);
@@ -96,7 +95,7 @@ internal static class SerializerRootApiRegression
         VerifyUnmarkedConsumer(references);
         VerifyBclProfiles(references);
         VerifyConcreteScalarPaths(references);
-        Console.WriteLine("Passed 16 first-build overload selections, Full/Light/Minimal roots, generic forwarding, method groups, API edits, and external generic fallback.");
+        Console.WriteLine("Passed 15 first-build overload selections, Full/Light/Minimal roots, generic forwarding, method groups, API edits, and external generic fallback.");
     }
 
     /// <summary>Requires statically typed scalar facades to use the same stateless raw core as the generic fast path.</summary>
@@ -196,7 +195,7 @@ internal static class SerializerRootApiRegression
                         var value = new Lazy<int>(17);
                         var bytes = LuminPackSerializer.Serialize<Lazy<int>, LuminPackUtf16LengthOptions>(value);
                         var copy = LuminPackSerializer.Deserialize<Lazy<int>, LuminPackUtf16LengthOptions>(bytes);
-                        if (copy.Value != 17 || LuminPackSerializer.Sizeof<Lazy<int>, LuminPackUtf16LengthOptions>(value) != bytes.Length)
+                        if (copy.Value != 17)
                             throw new Exception("Lazy primitive profile failed.");
                         int? number = 255;
                         bytes = LuminPackSerializer.Serialize<int?, LuminPackUtf16LengthOptions>(number);
@@ -257,7 +256,7 @@ internal static class SerializerRootApiRegression
                     byte[] bytes = S.Serialize(in value);
                     Parent restored = null!;
                     S.Deserialize(bytes.AsSpan(), ref restored);
-                    if (restored.Child.Value != 913 || S.Sizeof(value) != bytes.Length) throw new Exception("Binary or nested formatter parity failed.");
+                    if (restored.Child.Value != 913) throw new Exception("Binary or nested formatter parity failed.");
                     foreach (var encoding in new[] { LuminPack.Option.LuminPackStringEncoding.UTF8, LuminPack.Option.LuminPackStringEncoding.UTF16 })
             {
                 if (encoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)
@@ -306,12 +305,12 @@ internal static class SerializerRootApiRegression
     {
         var before = Create(references, "Light", "public static class Entry { public static object Call(Payload value) => S.Serialize(in value); }");
         var tree = before.SyntaxTrees.Last();
-        var after = before.ReplaceSyntaxTree(tree, CSharpSyntaxTree.ParseText(tree.ToString().Replace("S.Serialize(in value)", "S.Sizeof(value)", StringComparison.Ordinal), Parse, tree.FilePath));
+        var after = before.ReplaceSyntaxTree(tree, CSharpSyntaxTree.ParseText(tree.ToString().Replace("S.Serialize(in value)", "S.SerializeJson(value)", StringComparison.Ordinal), Parse, tree.FilePath));
         var retained = Run(before, out _).RunGeneratorsAndUpdateCompilation(after, out var output, out _);
         CheckErrors(output);
         var fresh = Run(after, out _);
         var actual = Concrete(retained, "Payload");
-        Require(actual.Length == 1 && actual[0].Identifier.ValueText == "Sizeof", "A call-only edit reused a stale concrete overload mask.");
+        Require(actual.Length == 1 && actual[0].Identifier.ValueText == "SerializeJson", "A call-only edit reused a stale concrete overload mask.");
         Require(Sources(retained).SequenceEqual(Sources(fresh)), "Retained call-edit output differs from fresh generation.");
     }
 

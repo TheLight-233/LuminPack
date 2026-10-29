@@ -12,8 +12,7 @@ internal static class SerializerMechanismRegression
     /// <param name="references">Runtime and platform references.</param>
     internal static void Run(MetadataReference[] references)
     {
-        var current = Inspect(references, [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], "CurrentMechanisms");
-        Require(current.SparseSize == current.SparseBytes, "Named version metadata was omitted from current size evaluation.");
+        Inspect(references, [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], "CurrentMechanisms");
         Console.WriteLine("Passed Local + As storage views, ordinary Union virtual dispatch, and generic Union virtual plus cached-slot switches.");
     }
 
@@ -22,7 +21,7 @@ internal static class SerializerMechanismRegression
     /// <param name="generators">The analyzer pair under review.</param>
     /// <param name="name">The isolated output assembly name.</param>
     /// <returns>Observable serialization output and canonical hidden Union bodies.</returns>
-    private static (string Wire, string[] UnionBodies, int SparseSize, int SparseBytes) Inspect(MetadataReference[] references, ISourceGenerator[] generators, string name)
+    private static (string Wire, string[] UnionBodies) Inspect(MetadataReference[] references, ISourceGenerator[] generators, string name)
     {
         string source = """
             using System;
@@ -133,9 +132,7 @@ internal static class SerializerMechanismRegression
                         valueCopy.Enum != WideEnum.High || valueCopy.Missing != null || valueCopy.Present != 79 || valueCopy.Queue.Dequeue() != 83 || valueCopy.Stack.Pop() != 101)
                         throw new Exception("Value, nullable, enum, or collection ordering changed.");
                     // Present nullable markers intentionally changed; compare every unaffected member independently.
-                    if (LuminPackSerializer.Sizeof(values) != LuminPackSerializer.Serialize(values).Length)
-                        throw new Exception("Nullable graph evaluation differs from its complete binary record.");
-                    Add(values, results, recordSize: false, recordBinary: false);
+                    Add(values, results, recordBinary: false);
                     Add(values.Raw, results);
                     Add(values.Managed, results);
                     Add(values.Enum, results);
@@ -145,13 +142,10 @@ internal static class SerializerMechanismRegression
                     results.Add(string.Join(",", Events));
                     return string.Join("|", results);
                 }
-                public static int SparseSize() => LuminPackSerializer.Sizeof(new VersionGap { First = 53, Last = 59 });
-                public static int SparseBytes() => LuminPackSerializer.Serialize(new VersionGap { First = 53, Last = 59 }).Length;
-                private static void Add<T>(T value, List<string> results, bool recordSize = true, bool recordBinary = true)
+                private static void Add<T>(T value, List<string> results, bool recordBinary = true)
                 {
                     BINARY_PROFILE_RECORD
                     if (recordBinary) results.Add(Convert.ToHexString(bytes));
-                    if (recordSize) results.Add(size.ToString());
                     JSON_PROFILE_LOOP
                 }
             }
@@ -169,7 +163,6 @@ internal static class SerializerMechanismRegression
         // Compare the same explicit binary profile after the approved default-encoding change.
         string binaryRecord = """
             byte[] bytes = LuminPackSerializer.Serialize<T, LuminPack.Option.LuminPackUtf8LengthOptions>(value);
-            int size = recordSize ? LuminPackSerializer.Sizeof<T, LuminPack.Option.LuminPackUtf8LengthOptions>(value) : 0;
             """;
         source = source.Replace("BINARY_PROFILE_RECORD", binaryRecord, StringComparison.Ordinal)
             .Replace("JSON_PROFILE_LOOP", profileLoop, StringComparison.Ordinal);
@@ -213,8 +206,7 @@ internal static class SerializerMechanismRegression
             image.Position = 0;
             var assembly = context.LoadFromStream(image);
             var entry = assembly.GetType("Entry")!;
-            return ((string)entry.GetMethod("Capture")!.Invoke(null, null)!, bodies,
-                (int)entry.GetMethod("SparseSize")!.Invoke(null, null)!, (int)entry.GetMethod("SparseBytes")!.Invoke(null, null)!);
+            return ((string)entry.GetMethod("Capture")!.Invoke(null, null)!, bodies);
         }
         finally { context.Unload(); }
     }
@@ -265,7 +257,6 @@ internal static class SerializerMechanismRegression
                 "WritePolymorphismValue" => "SerializeUnion",
                 "WriteValue" => "WritePayload",
                 "Serialize" or "SerializeJson" => "WritePayload",
-                "CalculateOffset" => "Sizeof",
                 _ => access.Name.Identifier.ValueText
             };
             var canonical = node.WithExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,

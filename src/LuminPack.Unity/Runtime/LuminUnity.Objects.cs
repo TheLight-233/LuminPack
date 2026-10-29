@@ -42,11 +42,6 @@ namespace LuminPack.Unity
             reader = cursor;
         }
 
-        /// <summary>Adds the exact explicit curve record size.</summary>
-        /// <param name="evaluator">Size accumulator.</param><param name="value">Curve or null.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in AnimationCurve? value)
-            => evaluator.Add(value is null ? 1 : checked(13 + value.length * 32));
-
         /// <summary>Writes gradient interpolation, color space, color keys and alpha keys without native pointers.</summary>
         /// <param name="writer">Output cursor.</param><param name="value">Gradient or null.</param>
         public static void Write(ref LuminPackWriter writer, in Gradient? value)
@@ -91,11 +86,6 @@ namespace LuminPack.Unity
             reader = cursor;
         }
 
-        /// <summary>Adds the exact explicit gradient record size.</summary>
-        /// <param name="evaluator">Size accumulator.</param><param name="value">Gradient or null.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in Gradient? value)
-            => evaluator.Add(value is null ? 1 : checked(17 + value.colorKeys.Length * 20 + value.alphaKeys.Length * 8));
-
         /// <summary>Writes the four public inset values of a nullable native RectOffset owner.</summary>
         /// <param name="writer">Output cursor.</param><param name="value">Offset or null.</param>
         public static void Write(ref LuminPackWriter writer, in RectOffset? value)
@@ -119,10 +109,6 @@ namespace LuminPack.Unity
             value = result;
             reader = cursor;
         }
-
-        /// <summary>Adds the exact inset record size.</summary>
-        /// <param name="evaluator">Size accumulator.</param><param name="value">Offset or null.</param>
-        public static void Size(ref LuminPackEvaluator evaluator, in RectOffset? value) => evaluator.Add(value is null ? 1 : 17);
 
         /// <summary>Writes one complete null object record.</summary><param name="writer">Output cursor.</param>
         private static void WriteNull(ref LuminPackWriter writer)

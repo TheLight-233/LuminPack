@@ -18,13 +18,12 @@ public static partial class LuminPackExtensionGenerator
         IReadOnlyDictionary<string, LazyForwardingTargets> targets)
     {
         var sb = new StringBuilder("#nullable enable annotations\n#pragma warning disable CS0162, CS0168, CS0219, CS0436, CS0649\nnamespace LuminPack { public static partial class LuminPackSerializer { internal static partial class FormatterDispatch {\n");
-        foreach (string operation in new[] { "Serialize", "Deserialize", "Sizeof", "SerializeJson", "DeserializeJson" })
+        foreach (string operation in new[] { "Serialize", "Deserialize", "SerializeJson", "DeserializeJson" })
         {
             bool json = operation.EndsWith("Json", StringComparison.Ordinal);
             bool read = operation.StartsWith("Deserialize", StringComparison.Ordinal);
-            bool size = operation == "Sizeof";
-            string state = "global::LuminPack.Core.LuminPack" + (size ? "Evaluator" : json ? read ? "JsonReader" : "JsonWriter" : read ? "Reader" : "Writer");
-            string passing = read || size ? "ref" : "in";
+            string state = "global::LuminPack.Core.LuminPack" + (json ? read ? "JsonReader" : "JsonWriter" : read ? "Reader" : "Writer");
+            string passing = read ? "ref" : "in";
             string delegateName = "Safe" + operation + "Delegate";
             string cache = "Safe" + operation;
             sb.AppendLine("private delegate void " + delegateName + "<T>(ref " + state + " state, " + passing + " T value);");

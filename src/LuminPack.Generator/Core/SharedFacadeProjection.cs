@@ -124,7 +124,8 @@ internal sealed class SharedFacadeProjection
                 wrapper.WithoutLeadingTrivia().WithoutTrailingTrivia().NormalizeWhitespace().ToFullString(), DocumentHelper(helper)));
         }
         // Opaque formatter shapes can already use the generic fallback. Preserve that exact choice in their adapter.
-        return stateCalls.Count == 5
+        // Only a direct record's allocating write evaluates its exact width; the other four operations are always present.
+        return new[] { "Serialize", "Deserialize", "SerializeJson", "DeserializeJson" }.All(stateCalls.ContainsKey)
             ? new Contribution(candidates.ToArray(), BuildAdapter(type, adapterName, metadata.IsNet8, stateCalls))
             : new Contribution(Array.Empty<Candidate>(), string.Empty);
     }
@@ -203,7 +204,7 @@ internal sealed class SharedFacadeProjection
     /// <param name="type">The exact or generic payload type.</param>
     /// <param name="profile">The adapter profile, or null for interface declarations.</param>
     /// <param name="scoped">Whether scoped parameter annotations are supported.</param>
-    /// <param name="stateCalls">The original concrete or fallback selection for each operation.</param>
+    /// <param name="stateCalls">The original concrete or fallback selection for each operation; an absent width is unsupported.</param>
     private static void AppendAdapterMethods(StringBuilder text, string type, string profile, bool scoped, IReadOnlyDictionary<string, bool> stateCalls)
     {
         foreach (string operation in new[] { "Serialize", "Deserialize", "SerializeJson", "DeserializeJson", "Sizeof" })
@@ -219,8 +220,11 @@ internal sealed class SharedFacadeProjection
             if (profile != null) text.AppendLine("[MethodImpl(MethodImplOptions.AggressiveInlining)]");
             text.Append(profile == null ? "" : "public ").Append("void ").Append(adapter).Append('(').Append(scope)
                 .Append("ref global::LuminPack.Core.").Append(state).Append(" state, ").Append(scope).Append(modifier).Append(' ').Append(type).Append(" value)");
-            if (profile != null) text.Append(" => global::LuminPack.LuminPackSerializer.").Append(operation).Append('<')
-                .Append(stateCalls[operation] ? type + ", " : "").Append(profile).Append(">(ref state, ").Append(modifier).Append(" value)");
+            bool fallback = false;
+            if (profile != null && !stateCalls.TryGetValue(operation, out fallback))
+                text.Append(" => ").Append(global::LuminPack.Code.Core.LuminPackExtensionGenerator.UnsupportedWidth.TrimEnd(';'));
+            else if (profile != null) text.Append(" => global::LuminPack.LuminPackSerializer.").Append(operation).Append('<')
+                .Append(fallback ? type + ", " : "").Append(profile).Append(">(ref state, ").Append(modifier).Append(" value)");
             text.AppendLine(";");
         }
     }

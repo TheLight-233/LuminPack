@@ -81,9 +81,8 @@ public sealed class CompactStringRecordTest
     /// <returns>The encoded record.</returns>
     private static byte[] WriteVarInt<TOptions>(string? text) where TOptions : struct, ILuminPackOptions
     {
-        int size = 0;
-        var evaluator = new LuminPackEvaluator(ref size);
-        size = evaluator.GetStringLength<TOptions>(ref text);
+        var evaluator = new LuminPackEvaluator();
+        int size = evaluator.GetStringLength<TOptions>(ref text);
         byte[] guarded = Enumerable.Repeat((byte)0xCD, size + 16).ToArray();
         Span<byte> output = guarded.AsSpan(8, size);
         var writer = new LuminPackWriter(ref output);

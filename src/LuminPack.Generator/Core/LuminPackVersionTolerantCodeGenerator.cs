@@ -88,34 +88,6 @@ public static class LuminPackVersionTolerantCodeGenerator
             : local + "." + field.Identifier + " = " + value + ";"));
     }
 
-    /// <summary>Appends statements that calculate the exact named record size.</summary>
-    /// <param name="data">The metadata describing the serializable type.</param>
-    /// <param name="sb">The builder receiving generated source code.</param>
-    /// <param name="classGlobalName">The class global name used by this operation.</param>
-    public static void GenerateCalculateOffsetCode(LuminDataInfo data, StringBuilder sb, string classGlobalName)
-    {
-        if (!data.isValueType)
-            sb.AppendLine("            if (value is null) { evaluator += 1; return; }");
-        sb.AppendLine($"            int size = 4 + {data.VersionSchemaType}.Metadata.Length;");
-        sb.AppendLine($"            ref var local = ref LuminPackMarshal.As<{classGlobalName}, {TypeMetaChecker.BuildLocalClassName(data)}>(ref value);");
-        for (int i = 0; i < data.fields.Count; i++)
-        {
-            var field = data.fields[i];
-            if (LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type))
-                sb.AppendLine($"            size += Unsafe.SizeOf<{field.TypeName}>() + LuminPackEvaluator.CalculateVarInt(Unsafe.SizeOf<{field.TypeName}>());");
-            else
-            {
-                sb.AppendLine($"            var {field.Name}TempLength = evaluator.Value;");
-                sb.AppendLine("            {");
-                sb.AppendLine($"                var __luminPackOffsetValue = {Access(field)};");
-                sb.AppendLine("                evaluator.CalculateOffset(ref __luminPackOffsetValue);");
-                sb.AppendLine("            }");
-                sb.AppendLine($"            size += LuminPackEvaluator.CalculateVarInt(evaluator.Value - {field.Name}TempLength);");
-            }
-        }
-        sb.AppendLine("            evaluator += size;");
-    }
-
     /// <summary>Appends binary serialization statements using fixed batches or the shared-state buffer.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
