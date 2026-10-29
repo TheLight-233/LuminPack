@@ -1089,8 +1089,7 @@ private MemoryPackSerializerOptions memoryPackSerializerOption = new MemoryPackS
     [Benchmark(Baseline = true)]
     public void LuminPackSerialize()
     {
-        _luminWriter.ResetCore();
-        _luminWriter.WriterState.ResetOperationState();
+        _luminWriter.ResetForReuse();
         LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(_data, _luminWriter);
     }
 

@@ -188,7 +188,7 @@ public static class LuminPackCircleReferenceCodeGenerator
             sb.AppendLine("            var writerBuffer = global::LuminPack.Utility.LuminBufferWriterPool.Rent();");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
-            sb.AppendLine($"                var tempWriter = new LuminPackWriter(writerBuffer, writer.OptionState);");
+            sb.AppendLine($"                var tempWriter = new LuminPackWriter(writerBuffer); tempWriter.Options = writer.OptionState;");
             sb.AppendLine($"                Span<int> offsets = stackalloc int[{memberCount}];");
             // Process members in order, skipping empty entries.
             for (int order = 0; order < memberCount; order++)

@@ -47,10 +47,7 @@ public static partial class LuminPackSerializerGenerator
                     var buffer = LuminBufferWriterPool.Rent();
                     try
                     {
-                        var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();
-                        state.Init(option);
-                        try { SerializeCore(buffer, state, in value); }
-                        finally { state.Reset(); }
+                        SerializeCore(buffer, in value);
                         await buffer.WriteToAndResetAsync(stream, cancellationToken).ConfigureAwait(false);
                         await stream.FlushAsync(cancellationToken).ConfigureAwait(false);
                     }
@@ -111,19 +108,24 @@ public static partial class LuminPackSerializerGenerator
                 /// <remarks>Uses compiled options and clears only temporary operation state.</remarks>
                 __ACCESS__ static int DeserializeJson<T>(LuminBufferWriter bufferWriter, ref T value)
                 {
-                    var state = bufferWriter.ReaderState;
-                    try { return DeserializeJsonCore(bufferWriter.GetSpan(), state, ref value); }
-                    finally { state.ResetOperationState(); }
+                    try
+                    {
+                        var reader = new LuminPackJsonReader(bufferWriter);
+                        if (!FormatterDispatch.__LuminPackJsonReadBoundary<T>(ref reader, false)) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value");
+                        global::LuminPack.LuminPackSerializer.DeserializeJson(ref reader, ref value);
+                        FormatterDispatch.__LuminPackJsonReadBoundary<T>(ref reader, true);
+                        return reader.CurrentIndex;
+                    }
+                    finally { bufferWriter.ReaderState.ResetOperationState(); }
                 }
 
                 /// <summary>Writes <typeparamref name="T"/> using its selected formatter and caller-owned binary state.</summary>
                 /// <typeparam name="T">The payload type.</typeparam>
                 /// <param name="buffer">The destination storage.</param>
-                /// <param name="state">The initialized operation context.</param>
                 /// <param name="value">The value to serialize.</param>
-                private static void SerializeCore<T>(LuminBufferWriter buffer, LuminPackWriterOptionalState state, in T value)
+                private static void SerializeCore<T>(LuminBufferWriter buffer, in T value)
                 {
-                    var writer = new LuminPackWriter(buffer, state);
+                    var writer = new LuminPackWriter(buffer);
                     writer.WriteValue(in value);
                     buffer.CompleteWrite(writer.CurrentIndex);
                 }
@@ -131,11 +133,10 @@ public static partial class LuminPackSerializerGenerator
                 /// <summary>Writes <typeparamref name="T"/> using its selected formatter and caller-owned JSON state.</summary>
                 /// <typeparam name="T">The payload type.</typeparam>
                 /// <param name="buffer">The destination storage.</param>
-                /// <param name="state">The initialized reference-tracking context.</param>
                 /// <param name="value">The value to serialize.</param>
-                private static void SerializeJsonCore<T>(LuminBufferWriter buffer, LuminPackWriterOptionalState state, in T value)
+                private static void SerializeJsonCore<T>(LuminBufferWriter buffer, in T value)
                 {
-                    var writer = new LuminPackJsonWriter(buffer, state);
+                    var writer = new LuminPackJsonWriter(buffer);
                     writer.WriteValue(in value);
                     buffer.CompleteWrite(writer.CurrentIndex);
                 }

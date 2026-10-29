@@ -81,3 +81,5 @@ int size = LuminPackSerializer.Sizeof(person);
 - Under NativeAOT, reading a non-null `System.Type` throws `PlatformNotSupportedException`.
 - A `Custom` type used as a member of another model needs `[LuminPackableObject]` on that member.
 - `[LuminPackBounded(n)]` is a promise; a wrong bound can write past the buffer.
+
+- Binary and JSON reader/writer `Options` are properties. Readers constructed from a buffer bind its reader state; writers prefer explicit state to the associated buffer state. Use `OptionState` when an initialized context is required.

@@ -56,7 +56,13 @@ namespace LuminPack.Core
         /// <summary>The number of bytes already committed to the external destination.</summary>
         public long CommittedBytes;
         /// <summary>The operation's options and reference tracking state.</summary>
-        public readonly LuminPackWriterOptionalState Options;
+        private LuminPackWriterOptionalState? _options;
+        /// <summary>Gets or sets the operation reference context.</summary>
+        public LuminPackWriterOptionalState? Options
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)] get => _options ?? Owner?.WriterState;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)] set => _options = value;
+        }
         /// <summary>The current JSON container nesting depth.</summary>
         public int Depth;
         /// <summary>Whether the current container has not yet written an element.</summary>
@@ -96,7 +102,7 @@ namespace LuminPack.Core
         /// <remarks>On netstandard2.1, managed span storage must remain pinned for the complete writer lifetime. Dispose an external streaming writer to release its staging lease after a failure.</remarks>
         public LuminPackJsonWriter(ref Span<byte> bufferReference, LuminPackWriterOptionalState state)
         {
-            Options = state;
+            _options = state;
             Buffer = bufferReference;
             Position = 0;
             Owner = null;
@@ -111,7 +117,7 @@ namespace LuminPack.Core
         /// <param name = "state">The reusable state associated with the operation.</param>
         public LuminPackJsonWriter(LuminBufferWriter? bufferWriter, LuminPackWriterOptionalState state)
         {
-            Options = state;
+            _options = state;
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
             Buffer = bufferWriter.BeginCursorWrite(out int position);
@@ -130,7 +136,6 @@ namespace LuminPack.Core
         {
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
-            Options = bufferWriter.WriterState;
             Buffer = bufferWriter.BeginCursorWrite(out int position);
             Position = position;
             Owner = bufferWriter;
@@ -152,7 +157,7 @@ namespace LuminPack.Core
                 LuminPackExceptionHelper.ThrowArgumentNullException(nameof(output));
             if (initialSizeHint <= 0)
                 LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(initialSizeHint));
-            Options = state;
+            _options = state;
             Output = output;
             Owner = null;
             CommittedBytes = 0;
@@ -204,7 +209,7 @@ namespace LuminPack.Core
         }
 
         /// <summary>Gets the option state.</summary>
-        public LuminPackWriterOptionalState OptionState => Options;
+        public LuminPackWriterOptionalState OptionState => Options ?? (Options = new LuminPackWriterOptionalState());
         /// <summary>Gets the current index.</summary>
         public int CurrentIndex => Position;
         /// <summary>Gets the total JSON bytes written, including committed output chunks.</summary>

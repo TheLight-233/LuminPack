@@ -45,6 +45,8 @@ Physical placement never changes namespaces or representations.
 - **Options** are stateless value-type profiles (`ILuminPackOptions`) passed as generic arguments, so profile decisions fold to constants.
 - **Buffers.** `LuminBufferWriter` is an `IBufferWriter<byte>` over one `ArrayPool<byte>.Shared` array, together with the binary/JSON reference states of an append session. Its usable range starts on a 64-byte boundary observed at rent time. Logical capacity and growth thresholds remain independent of pool bucket sizes; a growth that fits the rented array extends the range in place. Writers take a `ref byte` when they bind to the storage or refresh it after growth; on netstandard2.1 they take a `byte*`, and the buffer keeps the rented array pinned with a `GCHandle` from rent until return.
 
+Binary and JSON readers constructed from a buffer bind its reader reference context. Writers resolve an explicit reference context first, then the associated buffer context. `OptionState` provides an initialized context.
+
 ## Generator
 
 Two incremental generators run in every consuming compilation:

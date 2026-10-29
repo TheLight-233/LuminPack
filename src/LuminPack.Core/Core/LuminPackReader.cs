@@ -62,7 +62,13 @@ namespace LuminPack.Core
         }
         /// <summary>The explicit or materialized reference context, or null before an implicit scope requests state.</summary>
         /// <remarks>Use <see cref="OptionState"/> when reference tracking requires an initialized context.</remarks>
-        public LuminPackReaderOptionalState? Options;
+        private LuminPackReaderOptionalState? _options;
+        /// <summary>Gets or sets the operation reference context.</summary>
+        public LuminPackReaderOptionalState? Options
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)] get => _options;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)] set => _options = value;
+        }
 
         #region Constructors
 
@@ -70,7 +76,7 @@ namespace LuminPack.Core
         /// <param name = "option">An explicit shared reference context, or null for a lazily owned independent context.</param>
         public LuminPackReader(LuminPackReaderOptionalState? option = null)
         {
-            Options = option;
+            _options = option;
             Buffer = default;
             Position = 0;
         }
@@ -81,7 +87,7 @@ namespace LuminPack.Core
         /// <remarks>On netstandard2.1, caller-owned managed span storage must remain pinned for the complete operation lifetime.</remarks>
         public LuminPackReader(ref Span<byte> bufferReference, LuminPackReaderOptionalState? option = null)
         {
-            Options = option;
+            _options = option;
             Buffer = bufferReference;
             Position = 0;
         }
@@ -92,17 +98,17 @@ namespace LuminPack.Core
         /// <remarks>On netstandard2.1, caller-owned managed span storage must remain pinned for the complete operation lifetime.</remarks>
         public LuminPackReader(ref ReadOnlySpan<byte> bufferReference, LuminPackReaderOptionalState? option = null)
         {
-            Options = option;
+            _options = option;
             Buffer = LuminPackMarshal.CreateSpan(ref GetNonNullPinnableReference(bufferReference), bufferReference.Length);
             Position = 0;
         }
 
-        /// <summary>Initializes a new instance of <c>LuminPackReader</c>.</summary>
-        /// <param name = "bufferWriter">The writer receiving the output data.</param>
+        /// <summary>Initializes a new instance of <c>LuminPackReader</c> using the buffer's input and reference context.</summary>
+        /// <param name = "bufferWriter">The buffer containing the input data and reader state.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal LuminPackReader(LuminBufferWriter bufferWriter)
+        public LuminPackReader(LuminBufferWriter bufferWriter)
         {
-            Options = bufferWriter.ReaderState;
+            _options = bufferWriter.ReaderState;
             Buffer = bufferWriter.GetSpan();
             Position = 0;
         }
@@ -127,7 +133,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public readonly void CopyTo(ref LuminPackReader destination)
         {
-            destination.Options = Options;
+            destination._options = _options;
 #if NET8_0_OR_GREATER
             destination.Cursor = ref Cursor;
 #else

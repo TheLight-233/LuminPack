@@ -25,28 +25,26 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            CancellationToken cancellationToken = default)");
         sb.AppendLine("        {");
         sb.AppendLine("            var tempWriter = LuminBufferWriterPool.Rent();");
-        sb.AppendLine("            var state = _threadStaticWriterOptionalState ??= new LuminPackWriterOptionalState();");
-        sb.AppendLine("            state.Init(option);");
         sb.AppendLine("            try");
         sb.AppendLine("            {");
 
         if (metaInfo.IsNet9_OR_GREATER)
         {
             // For .NET 9+ keep the original code directly (compiler allows it)
-            sb.AppendLine("                var writer = new LuminPackWriter(tempWriter, state);");
+            sb.AppendLine("                var writer = new LuminPackWriter(tempWriter);");
             AppendBinaryOperation(sb, read: false);
             sb.AppendLine("                tempWriter.CompleteWrite(writer.CurrentIndex);");
         }
         else
         {
             // For older frameworks, define a static local function that does the synchronous serialization
-            sb.AppendLine("                static void WriteValue(LuminBufferWriter tempWriter, LuminPackWriterOptionalState state, in " + typeName + " value)");
+            sb.AppendLine("                static void WriteValue(LuminBufferWriter tempWriter, in " + typeName + " value)");
             sb.AppendLine("                {");
-            sb.AppendLine("                    var writer = new LuminPackWriter(tempWriter, state);");
+            sb.AppendLine("                    var writer = new LuminPackWriter(tempWriter);");
             AppendBinaryOperation(sb, read: false, indent: 20);
             sb.AppendLine("                    tempWriter.CompleteWrite(writer.CurrentIndex);");
             sb.AppendLine("                }");
-            sb.AppendLine("                WriteValue(tempWriter, state, in value);");
+            sb.AppendLine("                WriteValue(tempWriter, in value);");
         }
 
         sb.AppendLine("                await tempWriter.WriteToAndResetAsync(stream, cancellationToken).ConfigureAwait(false);");
@@ -54,7 +52,6 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
-        sb.AppendLine("                state.Reset();");
         sb.AppendLine("                LuminBufferWriterPool.Return(tempWriter);");
         sb.AppendLine("            }");
         sb.AppendLine("        }");

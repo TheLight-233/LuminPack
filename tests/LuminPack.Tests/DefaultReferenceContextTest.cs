@@ -98,6 +98,34 @@ public unsafe class DefaultReferenceContextTest
         Assert.Same(explicitState,overridden.OptionState);
     }
 
+    /// <summary>Resolves JSON writer state from its owner while allowing an explicit override.</summary>
+    [Fact]
+    public void JsonBufferOwnerResolvesReferenceState()
+    {
+        using var owner = new LuminBufferWriter(true);
+        var writer = new LuminPackJsonWriter(owner);
+        Assert.Same(owner.WriterState, writer.Options);
+        var explicitState = new LuminPackWriterOptionalState();
+        writer.Options = explicitState;
+        Assert.Same(explicitState, writer.OptionState);
+        var second = new LuminPackJsonWriter(owner);
+        Assert.Same(owner.WriterState, second.OptionState);
+    }
+
+    /// <summary>Binds both buffer-based readers to the buffer reference context.</summary>
+    [Fact]
+    public void BufferReadersShareReferenceState()
+    {
+        using var owner = new LuminBufferWriter(true);
+        var reader = new LuminPackReader(owner);
+        var jsonReader = new LuminPackJsonReader(owner);
+        Assert.Same(owner.ReaderState, reader.OptionState);
+        Assert.Same(owner.ReaderState, jsonReader.OptionState);
+        LuminPackReader copy = default;
+        reader.CopyTo(ref copy);
+        Assert.Same(owner.ReaderState, copy.OptionState);
+    }
+
     /// <summary>Uses an independent evaluator context per default owner and the same context within an append scope.</summary>
     [Fact]
     public void DefaultEvaluationMatchesIndependentAndSharedWrites()

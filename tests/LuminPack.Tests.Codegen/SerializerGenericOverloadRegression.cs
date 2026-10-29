@@ -60,6 +60,11 @@ internal static class SerializerGenericOverloadRegression
                     var buffer = LuminBufferWriterPool.Rent();
                     try
                     {
+                        var binaryReader = new LuminPack.Core.LuminPackReader(buffer);
+                        var jsonReader = new LuminPack.Core.LuminPackJsonReader(buffer);
+                        if (!ReferenceEquals(binaryReader.OptionState, buffer.ReaderState) ||
+                            !ReferenceEquals(jsonReader.OptionState, buffer.ReaderState))
+                            throw new Exception("Buffer readers did not share the buffer reference state.");
                         LuminPackSerializer.Serialize<GenericPayload, TProfile>(in value, buffer);
                         if (!buffer.GetSpan().SequenceEqual(expected))
                             throw new Exception("Buffer-owned binary fallback ignored its configuration.");
@@ -171,6 +176,31 @@ internal static class SerializerGenericOverloadRegression
     {
         var methods = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
             .SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, Parse).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
+        Require(!methods.SelectMany(method => method.DescendantNodes().OfType<VariableDeclaratorSyntax>()).Any(variable =>
+            variable.Initializer?.Value is MemberAccessExpressionSyntax access &&
+            access.Name.Identifier.ValueText is "ReaderState" or "WriterState"),
+            "A generated facade retains an unnecessary buffer state local.");
+        foreach (string core in new[] { "SerializeCore", "SerializeJsonCore" })
+        {
+            var bodies = methods.Where(method => method.Identifier.ValueText == core).ToArray();
+            Require(bodies.Length > 0, "A pooled write core is missing.");
+            foreach (var body in bodies)
+                Require(body.ParameterList.Parameters.All(parameter => !parameter.Type!.ToString().Contains("OptionalState", StringComparison.Ordinal)),
+                    "A pooled write core still takes a separate state.");
+            var boundBodies = bodies.Where(body => body.DescendantNodes().OfType<ObjectCreationExpressionSyntax>()
+                .Any(creation => creation.Type.ToString() is "LuminPackWriter" or "LuminPackJsonWriter")).ToArray();
+            Require(boundBodies.Length > 0, "A pooled write core has no bound state body.");
+            foreach (var body in boundBodies)
+            {
+                Require(body.DescendantNodes().OfType<ObjectCreationExpressionSyntax>().Any(creation =>
+                    creation.Type.ToString() is "LuminPackWriter" or "LuminPackJsonWriter" && creation.ArgumentList!.Arguments.Count == 1),
+                    "A pooled write core does not use the single-buffer constructor: " + body.ToString());
+            }
+        }
+        var asyncWrites = methods.Where(method => method.Identifier.ValueText == "SerializeAsync" && method.TypeParameterList?.Parameters.Count == 1).ToArray();
+        Require(asyncWrites.Length > 0, "A generic asynchronous write is missing.");
+        Require(asyncWrites.All(method => !method.ToString().Contains("_threadStaticWriterOptionalState", StringComparison.Ordinal)),
+            "A pooled asynchronous write still uses serializer TLS.");
         var entries = methods.Where(method => method.Identifier.ValueText is "Serialize" or "SerializeJson" &&
             method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "LuminBufferWriter")).ToArray();
         Require(entries.Length >= 4, "Shared binary/JSON default and compiled-profile append entries are missing.");

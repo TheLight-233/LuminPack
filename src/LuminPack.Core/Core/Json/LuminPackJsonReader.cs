@@ -81,7 +81,13 @@ namespace LuminPack.Core
 #endif
         }
         /// <summary>The operation's options and reference tracking state.</summary>
-        public readonly LuminPackReaderOptionalState Options;
+        private LuminPackReaderOptionalState? _options;
+        /// <summary>Gets or sets the operation reference context.</summary>
+        public LuminPackReaderOptionalState? Options
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)] get => _options;
+            [MethodImpl(MethodImplOptions.AggressiveInlining)] set => _options = value;
+        }
         /// <summary>Pooled storage for decoding escaped UTF-8 strings.</summary>
         public byte[]? Utf8StringScratch;
         /// <summary>Pooled storage for decoding escaped UTF-16 strings.</summary>
@@ -249,7 +255,7 @@ namespace LuminPack.Core
         /// <remarks>On netstandard2.1, caller-owned managed input must remain pinned throughout parsing, allocations and callbacks.</remarks>
         public LuminPackJsonReader(ref Span<byte> bufferReference, LuminPackReaderOptionalState state)
         {
-            Options = state;
+            _options = state;
             Buffer = bufferReference;
             Position = 0;
             Depth = 0;
@@ -267,7 +273,7 @@ namespace LuminPack.Core
         /// <remarks>On netstandard2.1, caller-owned managed input must remain pinned throughout parsing, allocations and callbacks.</remarks>
         public LuminPackJsonReader(ref ReadOnlySpan<byte> bufferReference, LuminPackReaderOptionalState state)
         {
-            Options = state;
+            _options = state;
             Buffer = bufferReference;
             Position = 0;
             Depth = 0;
@@ -279,12 +285,12 @@ namespace LuminPack.Core
             Utf16StringScratch = null;
         }
 
-        /// <summary>Initializes a new instance of <c>LuminPackJsonReader</c>.</summary>
-        /// <param name = "bufferWriter">The writer receiving the output data.</param>
+        /// <summary>Initializes a new instance of <c>LuminPackJsonReader</c> using the buffer's input and reference context.</summary>
+        /// <param name = "bufferWriter">The buffer containing the input data and reader state.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal LuminPackJsonReader(LuminBufferWriter bufferWriter)
+        public LuminPackJsonReader(LuminBufferWriter bufferWriter)
         {
-            Options = bufferWriter.ReaderState;
+            _options = bufferWriter.ReaderState;
             Buffer = bufferWriter.GetSpan();
             Position = 0;
             Depth = 0;
@@ -332,7 +338,7 @@ namespace LuminPack.Core
         /// <summary>Gets the current index.</summary>
         public int CurrentIndex => Position;
         /// <summary>Gets the option state.</summary>
-        public LuminPackReaderOptionalState OptionState => Options;
+        public LuminPackReaderOptionalState OptionState => Options ?? (Options = new LuminPackReaderOptionalState());
 
         /// <summary>Releases the selected token after a complete generated value operation.</summary>
         [System.ComponentModel.EditorBrowsable(System.ComponentModel.EditorBrowsableState.Never)]

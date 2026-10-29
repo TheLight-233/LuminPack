@@ -45,6 +45,8 @@
 - **选项**是无状态的值类型配置（`ILuminPackOptions`），作为泛型参数传递，配置判断会折叠为常量。
 - **缓冲区。** `LuminBufferWriter` 是基于一个 `ArrayPool<byte>.Shared` 数组的 `IBufferWriter<byte>`，同时持有一个追加会话的二进制/JSON 引用状态。可用区间从租用时观察到的 64 字节边界开始。逻辑容量和扩容阈值不受数组池桶大小影响；扩容仍能放进已租数组时原地扩展。writer 绑定存储或扩容后刷新时取得 `ref byte`；netstandard2.1 上取得 `byte*`，缓冲区用 `GCHandle` 从租用到归还一直固定该数组。
 
+从缓冲区构造的二进制和 JSON Reader 绑定其读取引用上下文。Writer 优先使用显式引用上下文，其次使用关联缓冲区的上下文。`OptionState` 提供已初始化的上下文。
+
 ## 生成器
 
 每个使用 LuminPack 的编译中运行两个增量生成器：

@@ -147,7 +147,7 @@ public static class LuminPackVersionTolerantCodeGenerator
             sb.AppendLine("            var writerBuffer = global::LuminPack.Utility.LuminBufferWriterPool.Rent();");
             sb.AppendLine("            try");
             sb.AppendLine("            {");
-            sb.AppendLine("                var tempWriter = new LuminPackWriter(writerBuffer, writer.OptionState);");
+            sb.AppendLine("                var tempWriter = new LuminPackWriter(writerBuffer); tempWriter.Options = writer.OptionState;");
             sb.AppendLine($"                Span<int> offsets = stackalloc int[{memberCount}];");
             for (int i = 0; i < memberCount; i++)
             {

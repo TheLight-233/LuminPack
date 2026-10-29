@@ -190,6 +190,11 @@ try
         SerializerFormatterDispatchRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-generic-overloads"])
+    {
+        SerializerGenericOverloadRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-compiled-options"])
     {
         SerializerCompiledOptionRegression.Run(references);
