@@ -450,8 +450,18 @@ public static partial class LuminPackMarshal
             int used = view._count;
             if (used == count)
             {
-                for (int i = 0; i < count; i++)
-                    global::LuminPack.Core.LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)i * Unsafe.SizeOf<T>()), in Unsafe.Add(ref entry, (nint)i).Value);
+                // Cursors instead of an index: the indexed form scaled the element width and recomputed
+                // both addresses every iteration, which the JIT lowered to a sign extension and an extra
+                // scaled address per element.
+                ref var entryCursor = ref entry;
+                ref byte at = ref destination;
+                int left = count;
+                do
+                {
+                    global::LuminPack.Core.LuminPackWriter.Write(ref at, in entryCursor.Value);
+                    entryCursor = ref Unsafe.Add(ref entryCursor, 1);
+                    at = ref Unsafe.Add(ref at, Unsafe.SizeOf<T>());
+                } while (--left != 0);
             }
             else
             {
