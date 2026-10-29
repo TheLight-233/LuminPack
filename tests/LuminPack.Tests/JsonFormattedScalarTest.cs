@@ -179,6 +179,8 @@ public class JsonFormattedScalarTest
         LuminPackSerializer.SerializeJson(offset, buffer);
         LuminPackSerializer.SerializeJson(id, buffer);
         LuminPackSerializer.SerializeJson(elapsed, buffer);
+        // Reuse the same capacity; an ever-growing append session would rent new managed storage.
+        buffer.ResetCore();
     }
 
     /// <summary>Verifies assert writer text.</summary>

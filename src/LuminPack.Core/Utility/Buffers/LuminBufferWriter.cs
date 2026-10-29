@@ -13,7 +13,7 @@ namespace LuminPack.Utility;
 /// <remarks>The pool is thread-safe. A writer rented from it is not thread-safe and must remain exclusively owned.</remarks>
 public static class LuminBufferWriterPool
 {
-    /// <summary>Gets the largest native buffer retained by the pool.</summary>
+    /// <summary>Gets the largest pooled buffer retained by the pool.</summary>
     public const int MaxPooledBufferSize = 4 * 1024 * 1024; // 4MB
     /// <summary>Gets the maximum number of writers retained in the shared central slots.</summary>
     public const int MaxPoolSize = 32;
@@ -74,7 +74,7 @@ public static class LuminBufferWriterPool
     /// <param name="writer">The writer to reset and return.</param>
     /// <remarks>
     /// Return clears the published payload, writer reference tracking, reader reference tracking, and restores
-    /// <see cref="LuminBufferWriter.WriterState"/> to LuminPack defaults. Oversized native buffers are disposed instead of cached.
+    /// <see cref="LuminBufferWriter.WriterState"/> to LuminPack defaults. Oversized pooled buffers are disposed instead of cached.
     /// The instance must not be accessed after this call unless it is rented again.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -158,7 +158,7 @@ public static class LuminBufferWriterPool
 }
 
 /// <summary>
-/// Owns a reusable native byte buffer together with the writer and reader reference states used by
+/// Owns a reusable, cache-line aligned managed byte buffer together with the writer and reader reference states used by
 /// high-performance LuminPack operations.
 /// </summary>
 /// <remarks>
@@ -167,22 +167,41 @@ public static class LuminBufferWriterPool
 /// nested serialization. Rent a second writer for nested operations.</para>
 /// <para><see cref="WriterState"/> remains configured for the entire Rent-to-Return lifetime. Returning the writer restores
 /// both operation states. Serialization options are statically compiled.</para>
+/// <para>Storage is one <see cref="ArrayPool{T}.Shared"/> array whose usable range starts at the first 64-byte boundary
+/// observed when it is rented. Its logical capacity follows the 32 KiB initial size, 1.5x growth and 87.5 percent threshold;
+/// rented arrays come in power-of-two buckets, so a growth that still fits the array extends the range in place without
+/// copying. Every exposed byte was cleared or written by this owner. As an <see cref="IBufferWriter{T}"/>, the writer
+/// appends after <see cref="CurrentIndex"/>.</para>
 /// </remarks>
-public sealed class LuminBufferWriter : IDisposable
+public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
 {
     internal const int InitialBufferSize = 32 * 1024;
     internal const int GrowthNumerator = 3;
     internal const int GrowthDenominator = 2;
     private const int MinimumReservedHeadroom = 256;
 
-    private BufferSegment _buffer;
+    /// <summary>The cache-line size of the usable range's start.</summary>
+    private const int Alignment = 64;
 
-    /// <summary>Gets the current native buffer growth threshold.</summary>
-    internal int BufferCheckLimit => _buffer.ResizeThreshold;
+    /// <summary>The largest byte array length the runtime accepts.</summary>
+    internal const int MaxArrayLength = 0x7FFFFFC7;
 
-    private unsafe int* _currentIndex;
+    /// <summary>The storage array; an empty array stands for released storage, so the range accessors need no null test.</summary>
+    private byte[] _buffer = [];
+
+    /// <summary>The array index of the first usable byte.</summary>
+    private int _offset;
+
+    /// <summary>The logical capacity.</summary>
+    private int _capacity;
+
+    /// <summary>The established 87.5 percent growth threshold of <see cref="_capacity"/>.</summary>
+    private int _threshold;
 
     internal int _writtenCount;
+
+    /// <summary>The address of a live external write index, or zero once a length is published.</summary>
+    private nint _liveIndex;
 
     internal bool _disposed;
 
@@ -198,45 +217,115 @@ public sealed class LuminBufferWriter : IDisposable
     /// <summary>Gets the reader operation state owned by this buffer.</summary>
     public readonly LuminPackReaderOptionalState ReaderState;
 
-    /// <summary>Gets the number of bytes currently published as the writer's payload.</summary>
-    public unsafe int CurrentIndex
-    {
-        get
-        {
-            return _currentIndex is null || _writtenCount != 0 ? _writtenCount : *_currentIndex;
-        }
-    }
-
-    /// <summary>Gets the capacity of the native buffer in bytes.</summary>
-    public int TotalLength => _buffer.TotalLength;
-
-    /// <summary>Gets whether this writer currently owns an allocated native buffer.</summary>
-    public bool UseFirstBuffer => !_buffer.IsNull;
-
     /// <summary>Creates a reusable writer and operation context.</summary>
-    /// <param name="useFirstBuffer">Whether to allocate the initial native buffer immediately.</param>
-    /// <remarks>Directly constructed instances must be disposed. Pool users should call <see cref="LuminBufferWriterPool.Return"/>.</remarks>
+    /// <param name="useFirstBuffer">Whether to acquire the initial buffer immediately.</param>
+    /// <remarks>Directly constructed instances should be disposed. Pool users should call <see cref="LuminBufferWriterPool.Return"/>.</remarks>
     public LuminBufferWriter(bool useFirstBuffer)
     {
-
         WriterState = new LuminPackWriterOptionalState();
         ReaderState = new LuminPackReaderOptionalState();
-        this._buffer = useFirstBuffer
-            ? new BufferSegment(InitialBufferSize)
-            : default;
+        if (useFirstBuffer)
+            Grow(InitialBufferSize);
     }
 
-    /// <summary>Releases native resources when the instance is finalized.</summary>
-    ~LuminBufferWriter()
+    /// <summary>Gets the current buffer growth threshold.</summary>
+    internal int BufferCheckLimit => _threshold;
+
+    /// <summary>Gets the number of bytes currently published as the writer's payload.</summary>
+    public int CurrentIndex
     {
-        Dispose();
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => _liveIndex == 0 || _writtenCount != 0 ? _writtenCount : RefAt<int>(_liveIndex);
     }
 
-    /// <summary>Gets the complete writable native buffer without limiting the span to the published payload.</summary>
-    /// <returns>A span over the current native allocation.</returns>
+    /// <summary>Gets the logical capacity of the buffer in bytes.</summary>
+    public int TotalLength => _capacity;
+
+    /// <summary>Gets whether this writer currently owns storage.</summary>
+    public bool UseFirstBuffer => _capacity != 0;
+
+    /// <summary>Gets the first usable byte; a reference to the empty array's data without storage.</summary>
+    private ref byte Data
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => ref Unsafe.Add(ref GetNotNullArrayReference(_buffer), (nint)(uint)_offset);
+    }
+
+    /// <summary>Gets the complete logical range.</summary>
+    private Span<byte> Window
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        get => MemoryMarshal.CreateSpan(ref Data, _capacity);
+    }
+
+    #region IBufferWriter
+
+    /// <summary>Publishes <paramref name="count"/> bytes written after <see cref="CurrentIndex"/>.</summary>
+    /// <param name="count">The number of bytes written into the last returned span or memory.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public void Advance(int count)
+    {
+        int index = CurrentIndex;
+        if ((uint)count > (uint)(_capacity - index))
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(count));
+        _writtenCount = index + count;
+        _liveIndex = 0;
+    }
+
+    /// <summary>Returns writable memory after <see cref="CurrentIndex"/>.</summary>
+    /// <param name="sizeHint">The minimum length; zero requests a nonempty buffer.</param>
+    /// <returns>The writable memory.</returns>
+    Memory<byte> IBufferWriter<byte>.GetMemory(int sizeHint)
+    {
+        int index = ReserveFree(sizeHint);
+        return new Memory<byte>(_buffer, _offset + index, _capacity - index);
+    }
+
+    /// <summary>Returns a writable span after <see cref="CurrentIndex"/>.</summary>
+    /// <param name="sizeHint">The minimum length; zero requests a nonempty buffer.</param>
+    /// <returns>The writable span.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    Span<byte> IBufferWriter<byte>.GetSpan(int sizeHint)
+    {
+        int index = ReserveFree(sizeHint);
+        return MemoryMarshal.CreateSpan(ref Unsafe.Add(ref Data, (nint)(uint)index), _capacity - index);
+    }
+
+    /// <summary>Ensures free capacity after the payload for the buffer-writer contract.</summary>
+    /// <param name="sizeHint">The requested free bytes.</param>
+    /// <returns>The current payload length.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private int ReserveFree(int sizeHint)
+    {
+        int index = CurrentIndex;
+        int free = _capacity - index;
+        // A negative hint also exceeds the free range as an unsigned value and is rejected on the growth path.
+        if ((uint)sizeHint > (uint)free || free == 0)
+            GrowForHint(index, sizeHint);
+        return index;
+    }
+
+    /// <summary>Validates a size hint and grows until it fits.</summary>
+    /// <param name="index">The current payload length.</param>
+    /// <param name="sizeHint">The requested free bytes.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void GrowForHint(int index, int sizeHint)
+    {
+        if (sizeHint < 0)
+            global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(sizeHint));
+        EnsureCapacity(checked(index + Math.Max(sizeHint, 1)));
+    }
+
+    #endregion
+
+    #region Payload access
+
+    /// <summary>Gets the complete writable buffer without limiting the span to the published payload.</summary>
+    /// <returns>A span over the current logical capacity.</returns>
     /// <remarks>The span is invalidated by resize, reset that frees storage, Return, or Dispose. Callers must publish a
     /// valid length separately and must not retain the span.</remarks>
-    public Span<byte> DangerousGetBuffer() => _buffer.WrittenBuffer;
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public Span<byte> DangerousGetBuffer() => Window;
 
     /// <summary>Copies the published payload from <paramref name="index"/> into newly allocated managed memory.</summary>
     /// <param name="index">The zero-based payload offset at which copying begins.</param>
@@ -244,8 +333,8 @@ public sealed class LuminBufferWriter : IDisposable
     [Obsolete("This method causes GC allocations. Avoid calling it frequently; consider using GetSpan instead.")]
     public Memory<byte> GetMemory(int index = 0)
     {
-        if (_buffer.IsNull)
-            AllocateInitialBuffer();
+        if (_capacity == 0)
+            Grow(InitialBufferSize);
 
         if ((uint)index > (uint)CurrentIndex)
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(index));
@@ -257,24 +346,20 @@ public sealed class LuminBufferWriter : IDisposable
     /// <returns>A span whose length is <see cref="CurrentIndex"/>.</returns>
     /// <remarks>The span is borrowed and is invalidated by subsequent writes, resize, Return, or Dispose.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public Span<byte> GetSpan()
-    {
-        return _buffer.WrittenBuffer.Slice(0, CurrentIndex);
-    }
+    public Span<byte> GetSpan() => Window.Slice(0, CurrentIndex);
 
-    /// <summary>Gets the complete writable native buffer, allocating the initial segment if necessary.</summary>
+    /// <summary>Gets the complete writable buffer, acquiring the initial storage if necessary.</summary>
     /// <returns>A span over the full current capacity.</returns>
     /// <remarks>This is a low-level borrowed span and is invalidated by resize, Return, or Dispose.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public Span<byte> GetFullSpan()
     {
-        if (_buffer.IsNull)
-            AllocateInitialBuffer();
-
-        return _buffer.WrittenBuffer;
+        if (_capacity == 0)
+            Grow(InitialBufferSize);
+        return Window;
     }
 
-    /// <summary>Copies input into reusable native storage for a pointer reader whose consumer cannot pin managed input.</summary>
+    /// <summary>Copies input into owned storage and publishes its length.</summary>
     /// <param name="source">The complete input payload.</param>
     public void LoadSpan(ReadOnlySpan<byte> source)
     {
@@ -284,7 +369,7 @@ public sealed class LuminBufferWriter : IDisposable
         CompleteWrite(source.Length);
     }
 
-    /// <summary>Copies a raw sequence into this reusable native buffer and publishes its length.</summary>
+    /// <summary>Copies a raw sequence into this reusable buffer and publishes its length.</summary>
     /// <remarks>Invalidates previous borrowed spans. Oversized buffers follow the normal pool retention limit.</remarks>
     /// <param name="source">The input data to process.</param>
     public void LoadSequence(in ReadOnlySequence<byte> source)
@@ -296,42 +381,25 @@ public sealed class LuminBufferWriter : IDisposable
         CompleteWrite(length);
     }
 
-    /// <summary>Performs the allocate initial buffer step for the current operation.</summary>
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private void AllocateInitialBuffer()
-    {
-        _buffer = new BufferSegment(InitialBufferSize);
-    }
+    #endregion
 
-    /// <summary>Associates the native buffer with an externally managed write index.</summary>
-    /// <param name="index">The index whose address remains valid while the writer uses the buffer.</param>
+    #region Cursor sessions
+
+    /// <summary>Associates the buffer with an externally managed write index.</summary>
+    /// <param name="index">The stationary index whose address remains valid while the writer uses the buffer.</param>
     /// <remarks>This low-level API is intended for LuminPack writer implementations. The reference must not outlive its scope.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe void SetCurrentIndexPtr(ref int index)
-    {
-        int* position = (int*)Unsafe.AsPointer(ref index);
-        _currentIndex = position;
-        _buffer.SetCurrentIndexPtr(position);
-    }
+    public void SetCurrentIndexPtr(ref int index) => _liveIndex = AddressOf(ref index);
 
     /// <summary>Begins an appended record without resetting its existing payload or reference state.</summary>
     /// <param name="index">Receives the current absolute position and supplies the active writer's cursor storage.</param>
     /// <returns>The full writable allocation, including the existing payload prefix.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal unsafe Span<byte> BeginWrite(out int index)
+    internal Span<byte> BeginWrite(out int index)
     {
-        index = CurrentIndex;
-        var span = GetFullSpan();
-        // An append stream must support the same initial fixed record as a fresh writer.
-        if (index != 0 && (index > _buffer.ResizeThreshold || _buffer.TotalLength - index < InitialBufferSize))
-        {
-            PrepareAppend(index);
-            span = _buffer.WrittenBuffer;
-        }
+        var span = BeginCursorWrite(out index);
         _writtenCount = 0;
-        int* position = (int*)Unsafe.AsPointer(ref index);
-        _currentIndex = position;
-        _buffer.SetCurrentIndexPtr(position);
+        _liveIndex = AddressOf(ref index);
         return span;
     }
 
@@ -342,13 +410,12 @@ public sealed class LuminBufferWriter : IDisposable
     internal Span<byte> BeginCursorWrite(out int index)
     {
         index = CurrentIndex;
-        var span = GetFullSpan();
-        if (index != 0 && (index > _buffer.ResizeThreshold || _buffer.TotalLength - index < InitialBufferSize))
-        {
+        if (_capacity == 0)
+            Grow(InitialBufferSize);
+        // An append stream must support the same initial fixed record as a fresh writer.
+        else if (index != 0 && (index > _threshold || _capacity - index < InitialBufferSize))
             PrepareAppend(index);
-            span = _buffer.WrittenBuffer;
-        }
-        return span;
+        return Window;
     }
 
     /// <summary>Restores fresh-writer fixed-record headroom at the append container boundary.</summary>
@@ -356,45 +423,77 @@ public sealed class LuminBufferWriter : IDisposable
     [MethodImpl(MethodImplOptions.NoInlining)]
     private void PrepareAppend(int index)
     {
-        _buffer.Resize(CalculateExpandedCapacity(_buffer.TotalLength, checked(index + InitialBufferSize), reserveWriteHeadroom: true));
+        Grow(CalculateExpandedCapacity(_capacity, checked(index + InitialBufferSize), reserveWriteHeadroom: true));
     }
 
     /// <summary>Publishes <paramref name="count" /> bytes written by a LuminPack writer.</summary>
     /// <param name="count">The number of entries involved in the operation.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe void CompleteWrite(int count)
+    public void CompleteWrite(int count)
     {
         _writtenCount = count;
-        _currentIndex = null;
-        _buffer.Flush();
+        _liveIndex = 0;
     }
 
     /// <summary>Ensures capacity for the current binary writer position without advancing it.</summary>
     /// <param name="writer">The binary writer whose buffer reference is refreshed after a resize.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Check(ref LuminPackWriter writer) => _buffer.Check(ref writer);
+    public void Check(ref LuminPackWriter writer)
+    {
+        if (writer.Position > _threshold) // 87.5% load threshold.
+            GrowAndRefresh(ref writer);
+    }
 
     /// <summary>Ensures capacity for the current JSON writer position without advancing it.</summary>
     /// <param name="writer">The JSON writer whose buffer reference is refreshed after a resize.</param>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Check(ref LuminPackJsonWriter writer) => _buffer.Check(ref writer);
+    public void Check(ref LuminPackJsonWriter writer)
+    {
+        if (writer.Position > _threshold) // 87.5% load threshold.
+            GrowAndRefresh(ref writer);
+    }
+
+    /// <summary>Grows past the threshold and refreshes the binary writer's storage window.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void GrowAndRefresh(ref LuminPackWriter writer)
+    {
+        Grow(CalculateExpandedCapacity(_capacity, _capacity, reserveWriteHeadroom: false));
+        writer.FlushBuffer();
+    }
+
+    /// <summary>Grows past the threshold and refreshes the JSON writer's storage window.</summary>
+    /// <param name="writer">The writer receiving the output data.</param>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private void GrowAndRefresh(ref LuminPackJsonWriter writer)
+    {
+        Grow(CalculateExpandedCapacity(_capacity, _capacity, reserveWriteHeadroom: false));
+        writer.FlushBuffer();
+    }
+
+    /// <summary>Applies the established collection headroom threshold without escaping binary writer state.</summary>
+    /// <param name="position">The successful absolute collection cursor.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal void CheckPosition(int position)
+    {
+        if (position > _threshold)
+            Grow(CalculateExpandedCapacity(_capacity, _capacity, reserveWriteHeadroom: false));
+    }
+
+    #endregion
+
+    #region Output
 
     /// <summary>Copies the published payload to a new byte array and resets the published buffer length.</summary>
     /// <returns>A newly allocated array, or an empty array when no bytes are published.</returns>
-    /// <remarks>This method produces result GC allocation. It resets bytes while preserving the native buffer owner.</remarks>
-    public unsafe byte[] ToArrayAndReset()
+    /// <remarks>This method produces result GC allocation. It resets bytes while preserving the storage.</remarks>
+    public byte[] ToArrayAndReset()
     {
         var length = CurrentIndex;
         if (length == 0) return [];
 
         var result = AllocateUninitializedArray<byte>(length);
-        var dest = result.AsSpan();
-
-        if (UseFirstBuffer)
-        {
-            _buffer.WrittenBuffer.Slice(0, length).CopyTo(dest);
-        }
-
+        GetSpan().CopyTo(result);
         ResetCore();
         return result;
     }
@@ -410,7 +509,7 @@ public sealed class LuminBufferWriter : IDisposable
         {
             int compressedSize = LuminCompressor.Compress(span, dest);
             EnsureCapacity(compressedSize);
-            dest.AsSpan(0, compressedSize).CopyTo(_buffer.WrittenBuffer);
+            dest.AsSpan(0, compressedSize).CopyTo(Window);
             PublishLength(compressedSize);
             return compressedSize;
         }
@@ -430,7 +529,7 @@ public sealed class LuminBufferWriter : IDisposable
         {
             int decompressedSize = LuminCompressor.Decompress(span, dest);
             EnsureCapacity(decompressedSize);
-            dest.AsSpan(0, decompressedSize).CopyTo(_buffer.WrittenBuffer);
+            dest.AsSpan(0, decompressedSize).CopyTo(Window);
             PublishLength(decompressedSize);
             return decompressedSize;
         }
@@ -496,19 +595,13 @@ public sealed class LuminBufferWriter : IDisposable
 
     /// <summary>Copies the published payload to a binary writer and then resets this buffer's payload.</summary>
     /// <param name="writer">The destination binary writer.</param>
-    public unsafe void WriteToAndReset(ref LuminPackWriter writer)
+    public void WriteToAndReset(ref LuminPackWriter writer)
     {
         var length = CurrentIndex;
         if (length == 0) return;
 
-#if NET8_0_OR_GREATER
-        global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref writer.Cursor, ref _buffer.WrittenBuffer.GetPinnableReference(), (uint)length);
-#else
-        global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.AsRef<byte>(writer.Cursor), ref _buffer.WrittenBuffer.GetPinnableReference(), (uint)length);
-#endif
-
+        CopyBlockUnaligned(ref writer.CurrentReference, ref Data, (uint)length);
         writer.Advance(length);
-
         ResetCore();
     }
 
@@ -516,37 +609,31 @@ public sealed class LuminBufferWriter : IDisposable
     /// <param name="stream">The destination stream.</param>
     /// <param name="cancellationToken">A token that can cancel the stream write.</param>
     /// <returns>A task-like value that completes after the write.</returns>
+    /// <remarks>The stream reads the owned array directly; the writer must stay unchanged until the task completes.</remarks>
     public async ValueTask WriteToAndResetAsync(Stream stream, CancellationToken cancellationToken)
     {
         var length = CurrentIndex;
         if (length == 0) return;
 
-        var buffer = ArrayPool<byte>.Shared.Rent(length);
-        try
-        {
-            _buffer.WrittenBuffer.Slice(0, length).CopyTo(buffer);
-            await stream.WriteAsync(new ReadOnlyMemory<byte>(buffer, 0, length), cancellationToken).ConfigureAwait(false);
-        }
-        finally
-        {
-            ArrayPool<byte>.Shared.Return(buffer);
-        }
-
+        await stream.WriteAsync(new ReadOnlyMemory<byte>(_buffer, _offset, length), cancellationToken).ConfigureAwait(false);
         ResetCore();
     }
 
-    /// <summary>Resets the published byte count without freeing the native buffer or changing <see cref="WriterState"/>.</summary>
+    #endregion
+
+    #region Reset and lifetime
+
+    /// <summary>Resets the published byte count without releasing the storage or changing <see cref="WriterState"/>.</summary>
     /// <remarks>This low-level reset does not clear reference state. Use <see cref="ResetForReuse"/> for an independent session,
     /// or <see cref="LuminBufferWriterPool.Return"/> when returning a pooled buffer.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe void ResetCore()
+    public void ResetCore()
     {
         _writtenCount = 0;
-        _buffer.Flush();
-        _currentIndex = null;
+        _liveIndex = 0;
     }
 
-    /// <summary>Clears the payload and both reference tables while retaining the native capacity for reuse.</summary>
+    /// <summary>Clears the payload and both reference tables while retaining the storage capacity for reuse.</summary>
     /// <remarks>Call this before starting an independent serialization session or after a failed append.
     /// Serialization into this buffer never resets its contents or reference tables automatically.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -564,40 +651,43 @@ public sealed class LuminBufferWriter : IDisposable
         ResetForReuse();
     }
 
-    /// <summary>Performs the publish length step for the current operation.</summary>
-    /// <param name="length">The number of bytes or elements to process.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private unsafe void PublishLength(int length)
+    /// <summary>Clears both reference tables and returns a nonempty payload's storage to the array pool.</summary>
+    /// <remarks>This does not return the instance to the pool. Use <see cref="ResetForReuse"/> to retain the capacity.</remarks>
+    public void Reset()
     {
-        _writtenCount = length;
-    }
-
-    /// <summary>Clears both reference tables and releases a nonempty payload's native storage.</summary>
-    /// <remarks>This does not return the instance to the pool. Use <see cref="ResetForReuse"/> to retain native capacity.</remarks>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public unsafe void Reset()
-    {
-        if (CurrentIndex != 0) _buffer.Clear();
+        if (CurrentIndex != 0) ReleaseStorage();
         ResetForReuse();
     }
 
-    /// <summary>Releases the native buffer and clears the reference state owned by this instance.</summary>
+    /// <summary>Returns the storage and clears the reference state owned by this instance.</summary>
     /// <remarks>Pool-rented instances should normally be returned through <see cref="LuminBufferWriterPool.Return"/>.</remarks>
     public void Dispose()
     {
         if (_disposed) return;
 
         ResetForPool();
-        _buffer.Dispose();
-
-        GC.SuppressFinalize(this);
-
+        ReleaseStorage();
         _disposed = true;
     }
 
+    /// <summary>Returns the storage while keeping the writer usable; the next write acquires the initial capacity.</summary>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    internal void ReleaseStorage()
+    {
+        var buffer = _buffer;
+        _buffer = [];
+        _offset = 0;
+        _capacity = 0;
+        _threshold = 0;
+        if (buffer.Length != 0) ArrayPool<byte>.Shared.Return(buffer);
+    }
+
+    #endregion
+
+    #region Capacity
+
     /// <summary>
-    /// Ensures the unmanaged buffer is at least <paramref name="minCapacity"/> bytes,
-    /// allocating or resizing in place as needed.
+    /// Ensures the buffer is at least <paramref name="minCapacity"/> bytes, acquiring or growing storage as needed.
     /// Called by <see cref="LuminCompressor"/> before writing compressed/decompressed output.
     /// </summary>
     /// <param name="minCapacity">The min capacity used by this operation.</param>
@@ -606,36 +696,37 @@ public sealed class LuminBufferWriter : IDisposable
         if (minCapacity < 0)
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(minCapacity));
 
-        if (_buffer.IsNull)
-            _buffer = new BufferSegment(CalculateExpandedCapacity(0, minCapacity, reserveWriteHeadroom: true));
-        else if (_buffer.TotalLength < minCapacity)
-        {
-            int newCapacity = CalculateExpandedCapacity(
-                _buffer.TotalLength,
-                minCapacity,
-                reserveWriteHeadroom: true);
-            _buffer.Resize(newCapacity);
-        }
+        if (_capacity < minCapacity)
+            Grow(CalculateExpandedCapacity(_capacity, minCapacity, reserveWriteHeadroom: true));
     }
 
-    /// <summary>Frees the native buffer while keeping the writer usable; the next write allocates the initial segment.</summary>
+    /// <summary>Grows the logical capacity, preserving every existing byte and clearing the added range.</summary>
+    /// <param name="capacity">The new logical capacity.</param>
+    /// <remarks>Growth inside the current array keeps its storage; otherwise the bytes move to a larger rented array and the
+    /// previous array is returned only after the copy. Renting is the only step that can fail.</remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    internal void ReleaseStorage()
+    private void Grow(int capacity)
     {
-        _buffer.Dispose();
-        _buffer = default;
-    }
+        int current = _capacity;
+        if (capacity <= current) return;
 
-    /// <summary>Gets the native storage address after a completed growth operation.</summary>
-    internal nint BufferPointer => _buffer.BufferPtr;
+        var buffer = _buffer;
+        if (capacity > buffer.Length - _offset)
+        {
+            // The slack lets the usable range start on a cache-line boundary; only the largest arrays forgo it.
+            var next = ArrayPool<byte>.Shared.Rent(capacity <= MaxArrayLength - (Alignment - 1) ? capacity + (Alignment - 1) : capacity);
+            ref byte start = ref GetNotNullArrayReference(next);
+            int offset = (int)(-AddressOf(ref start) & (Alignment - 1));
+            if (next.Length - offset < capacity) offset = 0;
+            if (current != 0) CopyBlockUnaligned(ref Unsafe.Add(ref start, (nint)(uint)offset), ref Data, (uint)current);
+            _buffer = next;
+            _offset = offset;
+            if (buffer.Length != 0) ArrayPool<byte>.Shared.Return(buffer);
+        }
 
-    /// <summary>Applies the established collection headroom threshold without escaping binary writer state.</summary>
-    /// <param name="position">The successful absolute collection cursor.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    internal void CheckPosition(int position)
-    {
-        if (position > _buffer.ResizeThreshold)
-            _buffer.Resize(CalculateExpandedCapacity(_buffer.TotalLength, _buffer.TotalLength, reserveWriteHeadroom: false));
+        MemoryMarshal.CreateSpan(ref Unsafe.Add(ref Data, (nint)(uint)current), capacity - current).Clear();
+        _capacity = capacity;
+        _threshold = capacity - (capacity >> 3);
     }
 
     /// <summary>Calculates the serialized size contribution of expanded capacity.</summary>
@@ -660,7 +751,16 @@ public sealed class LuminBufferWriter : IDisposable
         }
 
         long capacity = Math.Max(InitialBufferSize, Math.Max(geometricGrowth, requiredCapacity));
-        return capacity >= int.MaxValue ? int.MaxValue : (int)capacity;
+        // Managed storage ends at the runtime's array limit; a larger explicit request fails when it is allocated.
+        return capacity > MaxArrayLength ? Math.Max(MaxArrayLength, minCapacity) : (int)capacity;
+    }
+
+    /// <summary>Performs the publish length step for the current operation.</summary>
+    /// <param name="length">The number of bytes or elements to process.</param>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private void PublishLength(int length)
+    {
+        _writtenCount = length;
     }
 
     /// <summary>
@@ -668,166 +768,8 @@ public sealed class LuminBufferWriter : IDisposable
     /// Used by <see cref="LuminCompressor"/> after writing a complete compressed/decompressed block.
     /// </summary>
     /// <param name="count">The number of entries involved in the operation.</param>
-    [System.Runtime.CompilerServices.MethodImpl(
-        System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     internal void SetWrittenCount(int count) => PublishLength(count);
 
-}
-
-/// <summary>Provides buffer segment functionality.</summary>
-internal unsafe struct BufferSegment : IDisposable
-{
-    IntPtr _buffer;
-    int _resizeThreshold;
-
-    /// <summary>Gets the established 87.5 percent growth threshold.</summary>
-    internal readonly int ResizeThreshold => _resizeThreshold;
-    int* _written;
-    int _totalLength;
-    bool _disposed;
-
-    /// <summary>____cacheline_aligned.</summary>
-    private const int Alignment = 64;
-
-    /// <summary>Gets the is null.</summary>
-    public bool IsNull => _buffer == IntPtr.Zero;
-
-    /// <summary>Gets the buffer ptr.</summary>
-    public IntPtr BufferPtr => _buffer;
-
-    /// <summary>Gets the written count.</summary>
-    public int WrittenCount => *_written;
-
-    /// <summary>Gets the total length.</summary>
-    public int TotalLength => _totalLength;
-
-    /// <summary>Gets the written buffer.</summary>
-    public Span<byte> WrittenBuffer => new Span<byte>(_buffer.ToPointer(), _totalLength);
-
-    /// <summary>Initializes a new instance of <c>BufferSegment</c>.</summary>
-    /// <param name="size">The number of bytes or elements to process.</param>
-    public BufferSegment(int size)
-    {
-#if NET8_0_OR_GREATER
-        _buffer = new IntPtr(NativeMemory.AlignedAlloc((nuint)size, Alignment));
-        Unsafe.InitBlockUnaligned(_buffer.ToPointer(), 0, (uint)size);
-#else
-        // Unity's HGlobal allocator already returns memory aligned for native data.
-        // Keep exactly one owning pointer so resize/free cannot disagree about which
-        // address belongs to the native heap.
-        _buffer = Marshal.AllocHGlobal(size);
-        Unsafe.InitBlockUnaligned(_buffer.ToPointer(), 0, (uint)size);
-#endif
-        _totalLength = size;
-        _resizeThreshold = _totalLength - (_totalLength >> 3);
-    }
-
-    /// <summary>Grows the buffer when the writer crosses its resize threshold and refreshes the storage reference.</summary>
-    /// <param name="writer">The writer receiving the output data.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Check(ref LuminPackWriter writer)
-    {
-        if (writer.Position > _resizeThreshold) // 87.5% load threshold.
-            ResizeAndRefresh(ref writer);
-    }
-
-    /// <summary>Grows the buffer when the writer crosses its resize threshold and refreshes the storage reference.</summary>
-    /// <param name="writer">The writer receiving the output data.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Check(ref LuminPackJsonWriter writer)
-    {
-        if (writer.Position > _resizeThreshold) // 87.5% load threshold.
-            ResizeAndRefresh(ref writer);
-    }
-
-    /// <summary>Performs the resize and refresh step for the current operation.</summary>
-    /// <param name="writer">The writer receiving the output data.</param>
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private void ResizeAndRefresh(ref LuminPackWriter writer)
-    {
-        Resize(LuminBufferWriter.CalculateExpandedCapacity(
-            _totalLength,
-            _totalLength,
-            reserveWriteHeadroom: false));
-        writer.FlushBuffer();
-        _resizeThreshold = _totalLength - (_totalLength >> 3);
-    }
-
-    /// <summary>Performs the resize and refresh step for the current operation.</summary>
-    /// <param name="writer">The writer receiving the output data.</param>
-    [MethodImpl(MethodImplOptions.NoInlining)]
-    private void ResizeAndRefresh(ref LuminPackJsonWriter writer)
-    {
-        Resize(LuminBufferWriter.CalculateExpandedCapacity(
-            _totalLength,
-            _totalLength,
-            reserveWriteHeadroom: false));
-        writer.FlushBuffer();
-        _resizeThreshold = _totalLength - (_totalLength >> 3);
-    }
-
-    /// <summary>Clears the entries or buffered contents retained by this instance.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Clear()
-    {
-        if (_buffer != IntPtr.Zero)
-        {
-#if NET8_0_OR_GREATER
-            NativeMemory.AlignedFree(_buffer.ToPointer());
-#else
-            Marshal.FreeHGlobal(_buffer);
-#endif
-        }
-        _buffer = IntPtr.Zero;
-        _written = null;
-    }
-
-    /// <summary>Publishes pending buffer contents to the configured destination.</summary>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Flush()
-    {
-        _written = null;
-    }
-
-    /// <summary>Updates the current index ptr used by the current operation.</summary>
-    /// <param name="index">The position at which the operation starts.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void SetCurrentIndexPtr(ref int index)
-    {
-        _written = (int*)Unsafe.AsPointer(ref index);
-    }
-
-    /// <summary>Updates the current index ptr used by the current operation.</summary>
-    /// <param name="index">The position at which the operation starts.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void SetCurrentIndexPtr(int* index)
-    {
-        _written = index;
-    }
-
-    /// <summary>Performs the resize step for the current operation.</summary>
-    /// <param name="newSize">The new size used by this operation.</param>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public void Resize(int newSize)
-    {
-        if (newSize <= _totalLength) return;
-
-#if NET8_0_OR_GREATER
-        _buffer = new IntPtr(NativeMemory.AlignedRealloc(_buffer.ToPointer(), (nuint)newSize, Alignment));
-#else
-        _buffer = Marshal.ReAllocHGlobal(_buffer, (IntPtr)newSize);
-#endif
-        _totalLength = newSize;
-        _resizeThreshold = newSize - (newSize >> 3);
-    }
-
-    /// <summary>Releases the resources or pooled state owned by this instance.</summary>
-    public void Dispose()
-    {
-        if (_disposed) return;
-
-        Clear();
-
-        _disposed = true;
-    }
+    #endregion
 }

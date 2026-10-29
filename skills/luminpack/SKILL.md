@@ -45,7 +45,7 @@ int size = LuminPackSerializer.Sizeof(person);
 - Binary is little-endian. Raw unmanaged structs are copied with padding unless `StructLayout` says otherwise.
 - Group Union switches with `[LuminPackOption(WideTag = true, SingleImplementation = true)]` on the root class/interface only. These settings do not inherit or pin string profiles; legacy standalone markers remain compatible. `SingleImplementation` preserves Union framing and virtual dispatch. Collections always use their actual lengths.
 - There is **no runtime options object**. Options are `[LuminPackOption(...)]` declarations or a profile type argument such as `Serialize<LuminPackUtf8LengthOptions>(value)`.
-- `LuminBufferWriter` owns native memory: dispose it (or return it to its pool). Writes into it append; reset with `ResetForReuse()` between independent records.
+- `LuminBufferWriter` is an `IBufferWriter<byte>` over an `ArrayPool<byte>` rental: dispose it (or return it to its writer pool). Borrowed spans expire on growth, release or pool return. Writes into it append; reset with `ResetForReuse()` between independent records.
 - `Register` APIs take function pointers: the project needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>` and an `unsafe` block.
 - Reuse is not transactional: a failed read can leave members already updated.
 

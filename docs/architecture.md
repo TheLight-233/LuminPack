@@ -43,7 +43,7 @@ Physical placement never changes namespaces or representations.
 - **Cursor-local generated writes.** Generated object writers keep the cursor in a `ref byte __cursor` local, which the JIT keeps in a register, and call `ref`-returning writer operations. Consecutive bounded members share one `ReserveRecord` check and are then stored unchecked. The cursor is published with `CommitRecords` before any operation that uses the writer itself.
 - **Reader checks.** `EnsureReadable(count)` compares against the cached end before every unsafe load; it is active in Debug and Release.
 - **Options** are stateless value-type profiles (`ILuminPackOptions`) passed as generic arguments, so profile decisions fold to constants.
-- **Buffers.** `LuminBufferWriter` owns native memory and the binary/JSON reference states of an append session.
+- **Buffers.** `LuminBufferWriter` is an `IBufferWriter<byte>` over one `ArrayPool<byte>.Shared` array, together with the binary/JSON reference states of an append session. Its usable range starts on a 64-byte boundary observed at rent time. Logical capacity and growth thresholds remain independent of pool bucket sizes; a growth that fits the rented array extends the range in place. Writers take a `ref byte` (netstandard2.1: a `byte*` taken under `fixed`) when they bind to the storage or refresh it after growth.
 
 ## Generator
 

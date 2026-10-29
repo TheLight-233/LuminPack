@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using LuminPack;
@@ -17,6 +18,9 @@ internal static class BufferResizeColdPathRegressionTest
     /// <param name="results">The results used by this operation.</param>
     public static void Run(List<string> results)
     {
+        RunCase(results, nameof(ManagedCursorsSurviveCompactionAndGrowth), ManagedCursorsSurviveCompactionAndGrowth);
+        RunCase(results, nameof(RentedStorageIsAlignedAndCleared), RentedStorageIsAlignedAndCleared);
+        RunCase(results, nameof(BufferWriterContractAppendsAfterPayload), BufferWriterContractAppendsAfterPayload);
         RunCase(results, nameof(CapacityPolicyUses32KiBAndFiftyPercentGrowth),
             CapacityPolicyUses32KiBAndFiftyPercentGrowth);
         RunCase(results, nameof(BinaryCheckPreservesBytesAcrossMultipleGrowths),
@@ -27,6 +31,71 @@ internal static class BufferResizeColdPathRegressionTest
             JsonCheckPreservesValidPayloadAcrossMultipleGrowths);
         RunCase(results, nameof(LargeGeneratedStringAndArrayRoundTripAfterGrowth),
             LargeGeneratedStringAndArrayRoundTripAfterGrowth);
+    }
+
+    /// <summary>Checks live binary cursors across compacting collections and relocating growth.</summary>
+    private static void ManagedCursorsSurviveCompactionAndGrowth()
+    {
+        using var buffer = new LuminBufferWriter(true);
+        var writer = new LuminPackWriter(buffer);
+        writer.Write(1234567);
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        writer.Write(7654321);
+        writer.EnsureAdditionalCapacity(100_000);
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        writer.Write(2468);
+        var payload = writer.GetSpan();
+        Assert(System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(payload) == 1234567 &&
+            System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(payload.Slice(4)) == 7654321 &&
+            System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(payload.Slice(8)) == 2468,
+            "Compaction or growth invalidated a live binary cursor.");
+    }
+
+    /// <summary>Checks the rented start alignment, in-place growth and clearing of reused storage.</summary>
+    private static void RentedStorageIsAlignedAndCleared()
+    {
+        using (var dirty = new LuminBufferWriter(true))
+            dirty.GetFullSpan().Fill(0xA5);
+
+        using var buffer = new LuminBufferWriter(true);
+        var initial = buffer.GetFullSpan();
+        Assert((Unsafe.ByteOffset(ref Unsafe.NullRef<byte>(), ref MemoryMarshal.GetReference(initial)) & 63) == 0,
+            "The rented storage did not start on a cache-line boundary.");
+        Assert(initial.IndexOfAnyExcept((byte)0) < 0, "Rented storage exposed bytes of an earlier owner.");
+
+        initial[0] = 0x6D;
+        ref byte start = ref MemoryMarshal.GetReference(initial);
+        buffer.EnsureCapacity(buffer.TotalLength + 1);
+        var grown = buffer.GetFullSpan();
+        Assert(Unsafe.AreSame(ref start, ref MemoryMarshal.GetReference(grown)) && grown.Length == 48 * 1024,
+            "A growth that fits the power-of-two rental relocated the storage.");
+        Assert(grown[0] == 0x6D && grown.Slice(1).IndexOfAnyExcept((byte)0) < 0,
+            "In-place growth lost the payload or exposed stale bytes.");
+    }
+
+    /// <summary>Checks the <see cref="System.Buffers.IBufferWriter{T}"/> contract against the published payload.</summary>
+    private static void BufferWriterContractAppendsAfterPayload()
+    {
+        using var buffer = new LuminBufferWriter(false);
+        System.Buffers.IBufferWriter<byte> output = buffer;
+        var span = output.GetSpan();
+        Assert(span.Length > 0 && buffer.UseFirstBuffer, "GetSpan(0) did not return a nonempty buffer.");
+        span[0] = 1;
+        span[1] = 2;
+        output.Advance(2);
+        output.GetMemory(3).Span[0] = 3;
+        output.Advance(1);
+        Assert(buffer.CurrentIndex == 3 && buffer.GetSpan().SequenceEqual(new byte[] { 1, 2, 3 }),
+            "Advance did not append after the published payload.");
+
+        int large = buffer.TotalLength * 4;
+        Assert(output.GetSpan(large).Length >= large && buffer.GetSpan().SequenceEqual(new byte[] { 1, 2, 3 }),
+            "A size hint beyond capacity did not grow while preserving the payload.");
+
+        bool rejected = false;
+        try { output.Advance(buffer.TotalLength); }
+        catch (ArgumentOutOfRangeException) { rejected = true; }
+        Assert(rejected && buffer.CurrentIndex == 3, "Advance accepted a count beyond the free capacity.");
     }
 
     /// <summary>Verifies capacity policy uses32 ki b and fifty percent growth.</summary>
@@ -165,7 +234,7 @@ internal static class BufferResizeColdPathRegressionTest
     private static void WriteBlockAndCheck(ref LuminPackWriter writer, int count, byte value)
     {
         writer.EnsureAdditionalCapacity(count);
-        MemoryMarshal.CreateSpan(ref writer.Cursor, count).Fill(value);
+        MemoryMarshal.CreateSpan(ref writer.CurrentReference, count).Fill(value);
         writer.Advance(count);
         writer.CheckBuffer();
     }

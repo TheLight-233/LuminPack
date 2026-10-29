@@ -70,14 +70,14 @@ Only explicitly set properties override the enclosing scope. Built-in profiles: 
 ## Buffers
 
 ```csharp
-using var output = new LuminBufferWriter(true);     // LuminPack.Utility; native memory, must be disposed
+using var output = new LuminBufferWriter(true);     // LuminPack.Utility; pooled managed storage, must be disposed
 LuminPackSerializer.Serialize(a, output);
 LuminPackSerializer.Serialize(b, output);           // appended after a, shares reference state
 ReadOnlySpan<byte> written = output.GetSpan();
 output.ResetForReuse();                             // clear content + reference tables, keep capacity
 ```
 
-- `Reset()`: also releases non-empty native storage. `ResetCore()`: content only, keeps reference tables.
+- `Reset()`: also returns non-empty pooled storage. `ResetCore()`: content only, keeps reference tables.
 - After a failed write, reset before the next independent write.
 - Appended JSON documents have no separator.
 

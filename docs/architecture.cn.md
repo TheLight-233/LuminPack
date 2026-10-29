@@ -43,7 +43,7 @@
 - **生成代码的局部游标写入。** 生成的对象写入代码把游标放在局部变量 `ref byte __cursor` 中（JIT 会把它放在寄存器里），并调用返回 `ref` 的写入操作。连续的有界成员共享一次 `ReserveRecord` 检查，之后不再检查。在任何需要使用写入器本身的操作之前，用 `CommitRecords` 发布游标。
 - **Reader 检查。** `EnsureReadable(count)` 在每次 unsafe 加载前与缓存的结束位置比较；Debug 和 Release 下都启用。
 - **选项**是无状态的值类型配置（`ILuminPackOptions`），作为泛型参数传递，配置判断会折叠为常量。
-- **缓冲区。** `LuminBufferWriter` 拥有原生内存以及一个追加会话的二进制/JSON 引用状态。
+- **缓冲区。** `LuminBufferWriter` 是基于一个 `ArrayPool<byte>.Shared` 数组的 `IBufferWriter<byte>`，同时持有一个追加会话的二进制/JSON 引用状态。可用区间从租用时观察到的 64 字节边界开始。逻辑容量和扩容阈值不受数组池桶大小影响；扩容仍能放进已租数组时原地扩展。writer 绑定存储或扩容后刷新时取得 `ref byte`（netstandard2.1 在 `fixed` 中取得 `byte*`）。
 
 ## 生成器
 

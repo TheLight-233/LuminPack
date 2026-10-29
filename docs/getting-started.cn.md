@@ -107,7 +107,7 @@ LuminPackSerializer.Serialize(person, output);
 | 方法 | 作用 |
 | --- | --- |
 | `ResetForReuse()` | 清空内容和读写两张引用表，保留原生容量。 |
-| `Reset()` | 清空内容和两张引用表，并释放非空的原生缓冲区。 |
+| `Reset()` | 清空内容和两张引用表，并归还非空的池化数组。 |
 | `ResetCore()` | 只清空内容，保留引用表。复制/压缩的 `AndReset` 方法行为相同。 |
 
 - 写入抛出异常后，已写入的字节和引用状态仍然保留；开始下一次独立写入前调用 `ResetForReuse()`。

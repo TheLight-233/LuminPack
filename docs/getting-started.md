@@ -106,8 +106,8 @@ LuminPackSerializer.Serialize(person, output);
 
 | Method | Effect |
 | --- | --- |
-| `ResetForReuse()` | Clears content and both reference tables, keeps the native capacity. |
-| `Reset()` | Clears content and both reference tables, and releases a non-empty native buffer. |
+| `ResetForReuse()` | Clears content and both reference tables, keeps the pooled capacity. |
+| `Reset()` | Clears content and both reference tables, and returns a non-empty pooled buffer. |
 | `ResetCore()` | Clears content only; reference tables are kept. Copy/compress `AndReset` methods behave the same. |
 
 - After a write throws, the written bytes and reference state remain; call `ResetForReuse()` before the next independent write.
