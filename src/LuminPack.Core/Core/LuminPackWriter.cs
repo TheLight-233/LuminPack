@@ -23,7 +23,11 @@ namespace LuminPack.Core
 {
     /// <summary>Writes complete binary records with an advancing output cursor.</summary>
     [StructLayout(LayoutKind.Sequential)]
+#if NET8_0_OR_GREATER
+    public ref struct LuminPackWriter
+#else
     public unsafe ref struct LuminPackWriter
+#endif
     {
 #if NET8_0_OR_GREATER
         /// <summary>The advancing data cursor; caller-owned managed storage must remain pinned on netstandard2.1.</summary>
@@ -111,6 +115,13 @@ namespace LuminPack.Core
         #endregion
 
         #region Cursor and helpers
+
+        /// <summary>Exposes the advancing cursor to internal reference-based kernels on every target.</summary>
+        internal ref byte CurrentReference
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get => ref Current;
+        }
 
         /// <summary>Reserves a dynamic framing or collection block at its absolute position.</summary>
         /// <param name = "position">The first byte of the complete dynamic block.</param>
@@ -296,12 +307,12 @@ namespace LuminPack.Core
             /// <param name = "position">The preserved absolute output position.</param>
             public GrownStorage(LuminBufferWriter owner, int position)
             {
-                byte* buffer = (byte*)owner.BufferPointer;
-                Buffer = new Span<byte>(buffer, owner.TotalLength);
+                Buffer = owner.DangerousGetBuffer();
 #if NET8_0_OR_GREATER
-                Cursor = ref Unsafe.AsRef<byte>(buffer + position);
+                Cursor = ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), position);
 #else
-                Cursor = buffer + position;
+                fixed (byte* start = &MemoryMarshal.GetReference(Buffer))
+                    Cursor = start + position;
 #endif
                 CheckLimit = (uint)owner.BufferCheckLimit + 1;
             }
@@ -1144,7 +1155,7 @@ namespace LuminPack.Core
         /// any operation that uses the writer itself and resume from the writer's cursor afterwards.</remarks>
         [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public void CommitRecords(ref byte cursor)
+        public unsafe void CommitRecords(ref byte cursor)
         {
 #if NET8_0_OR_GREATER
             Cursor = ref cursor;
@@ -1475,7 +1486,7 @@ namespace LuminPack.Core
         /// <param name = "length">The record width.</param>
         /// <returns>The published cursor after growth.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static ref byte GrowRecord(ref LuminPackWriter writer, ref byte cursor, int length)
+        private static ref byte GrowRecord(scoped ref LuminPackWriter writer, ref byte cursor, int length)
         {
             writer.CommitRecords(ref cursor);
             writer.CheckBuffer();
@@ -1490,7 +1501,7 @@ namespace LuminPack.Core
         /// <param name = "value">The string.</param>
         /// <returns>The position after the record.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private static ref byte WriteRecordStringOutlined<TOptions>(ref LuminPackWriter writer, ref byte cursor, string? value)
+        private static ref byte WriteRecordStringOutlined<TOptions>(scoped ref LuminPackWriter writer, ref byte cursor, string? value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
             writer.CommitRecords(ref cursor);

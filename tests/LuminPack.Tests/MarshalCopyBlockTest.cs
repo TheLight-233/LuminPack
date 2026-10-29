@@ -12,6 +12,44 @@ namespace LuminPackUnitTest;
 [Collection(nameof(RuntimeStateCollection))]
 public unsafe class MarshalCopyBlockTest
 {
+    /// <summary>Checks retained hash outputs across all short/long boundaries and unaligned input slices.</summary>
+    [Fact]
+    public void RefHashKernelsRetainAllLengthBoundaries()
+    {
+        byte[] input = new byte[8192];
+        new Random(73681).NextBytes(input);
+        using var digest = System.Security.Cryptography.IncrementalHash.CreateHash(System.Security.Cryptography.HashAlgorithmName.SHA256);
+        Span<byte> word = stackalloc byte[8];
+        for (int length = 0; length <= 4096; length++)
+        for (int offset = 0; offset < 16; offset++)
+        {
+            var data = input.AsSpan(offset, length);
+            ulong hash = LuminPack.Internal.XxHash3.Hash64Utf8(data);
+            System.Buffers.Binary.BinaryPrimitives.WriteUInt64LittleEndian(word, hash);
+            digest.AppendData(word);
+            var chars = MemoryMarshal.Cast<byte, char>(data.Slice(0, length & ~1));
+            Assert.Equal(LuminPack.Internal.XxHash3.Hash64Utf8(MemoryMarshal.AsBytes(chars)),
+                LuminPack.Internal.XxHash3.Hash64Utf16(chars));
+        }
+        Assert.Equal("3A1A666138A4029094B40BAC238844FBAAF70A3A6CFA98E39500DE9EC01B18F6", Convert.ToHexString(digest.GetHashAndReset()));
+    }
+
+    /// <summary>Checks that span conversion retains partial output and legacy malformed-surrogate behavior.</summary>
+    [Fact]
+    public void SpanMarshalEncodingRetainsFailurePrefixes()
+    {
+        byte[] bytes = Enumerable.Repeat((byte)0xCD, 12).ToArray();
+        Assert.Equal(-1, LuminPackMarshal.GetBytes("a\u00E9".AsSpan(), bytes.AsSpan(2, 2)));
+        Assert.Equal((byte)'a', bytes[2]);
+        Assert.Equal((byte)0xCD, bytes[3]);
+        Assert.Equal(4, LuminPackMarshal.GetBytes("a\uD800b".AsSpan(), bytes.AsSpan(2, 8)));
+        Assert.Equal(new byte[] { 97, 239, 191, 189 }, bytes.AsSpan(2, 4).ToArray());
+        Assert.Equal((byte)0xCD, bytes[1]);
+        Assert.Equal((byte)0xCD, bytes[6]);
+        Assert.True(LuminPackMarshal.MemoryCompare(bytes, bytes));
+        Assert.False(LuminPackMarshal.MemoryCompare(bytes, bytes.AsSpan(1)));
+    }
+
     /// <summary>Checks all short lengths and source/destination cache-line offsets through both public overloads.</summary>
     [Fact]
     public void ShortCopiesPreserveExactRangesForEveryAlignment()

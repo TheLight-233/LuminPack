@@ -40,7 +40,11 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
     [SkipLocalsInit]
 #endif
+#if NET8_0_OR_GREATER
+    public ref struct LuminPackJsonReader
+#else
     public unsafe ref struct LuminPackJsonReader
+#endif
     {
         private ReadOnlySpan<byte> _buffer;
         /// <summary>The first byte after the input window, cached with every window change.</summary>

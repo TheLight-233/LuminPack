@@ -23,7 +23,11 @@ namespace LuminPack.Core
 {
     /// <summary>Reads complete binary records with an advancing input cursor and reusable storage.</summary>
     [StructLayout(LayoutKind.Sequential)]
+#if NET8_0_OR_GREATER
+    public ref struct LuminPackReader
+#else
     public unsafe ref struct LuminPackReader
+#endif
     {
 #if NET8_0_OR_GREATER
         /// <summary>The advancing data cursor; caller-owned managed storage must remain pinned on netstandard2.1.</summary>

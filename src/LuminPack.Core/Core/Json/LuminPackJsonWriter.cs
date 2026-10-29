@@ -13,7 +13,11 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
     [SkipLocalsInit]
 #endif
+#if NET8_0_OR_GREATER
+    public ref struct LuminPackJsonWriter
+#else
     public unsafe ref struct LuminPackJsonWriter
+#endif
     {
         private Span<byte> _buffer;
         /// <summary>The first byte after the current storage window, cached with every window change.</summary>
@@ -650,7 +654,7 @@ namespace LuminPack.Core
         /// </summary>
         /// <param name = "text">The text used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void WriteFormattedValue(ReadOnlySpan<char> text)
+        private void WriteFormattedValue(scoped ReadOnlySpan<char> text)
         {
             WriteFormattedValue<global::LuminPack.Option.LuminPackDefaultOptions>(text);
         }
@@ -1036,7 +1040,7 @@ namespace LuminPack.Core
         /// <param name = "text">The text used by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private void WriteFormattedValue<TOptions>(ReadOnlySpan<char> text)
+        private void WriteFormattedValue<TOptions>(scoped ReadOnlySpan<char> text)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
             WriteCommaIfNeeded<TOptions>();
@@ -1566,7 +1570,7 @@ namespace LuminPack.Core
         /// <summary>Writes string content utf8 to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void WriteStringContentUtf8(ReadOnlySpan<char> value)
+        private void WriteStringContentUtf8(scoped ReadOnlySpan<char> value)
         {
             WriteStringContentUtf8<global::LuminPack.Option.LuminPackDefaultOptions>(value);
         }
@@ -1574,7 +1578,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
         /// <summary>Writes string content utf8 encoded to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
-        private void WriteStringContentUtf8Encoded(ReadOnlySpan<char> value)
+        private void WriteStringContentUtf8Encoded(scoped ReadOnlySpan<char> value)
         {
             WriteStringContentUtf8Encoded<global::LuminPack.Option.LuminPackDefaultOptions>(value);
         }
@@ -1584,7 +1588,7 @@ namespace LuminPack.Core
         /// <summary>Writes string content utf8 escaped to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <param name = "escapeIndex">The escape index used by this operation.</param>
-        private void WriteStringContentUtf8Escaped(ReadOnlySpan<char> value, int escapeIndex)
+        private void WriteStringContentUtf8Escaped(scoped ReadOnlySpan<char> value, int escapeIndex)
         {
             WriteStringContentUtf8Escaped<global::LuminPack.Option.LuminPackDefaultOptions>(value, escapeIndex);
         }
@@ -1594,7 +1598,7 @@ namespace LuminPack.Core
         /// <summary>Writes utf8 string segment to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void WriteUtf8StringSegment(ReadOnlySpan<char> value)
+        private void WriteUtf8StringSegment(scoped ReadOnlySpan<char> value)
         {
             if (value.IsEmpty)
                 return;
@@ -1629,7 +1633,7 @@ namespace LuminPack.Core
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private int WriteUtf8StringSegmentSlow(ReadOnlySpan<char> value)
+        private int WriteUtf8StringSegmentSlow(scoped ReadOnlySpan<char> value)
         {
             EnsureCapacity(Encoding.UTF8.GetByteCount(value));
             return Encoding.UTF8.GetBytes(value, Buffer.Slice(Position));
@@ -1692,7 +1696,7 @@ namespace LuminPack.Core
         /// <summary>Writes string content utf16 to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private void WriteStringContentUtf16(ReadOnlySpan<char> value)
+        private void WriteStringContentUtf16(scoped ReadOnlySpan<char> value)
         {
             WriteStringContentUtf16<global::LuminPack.Option.LuminPackDefaultOptions>(value);
         }
@@ -1716,7 +1720,7 @@ namespace LuminPack.Core
 
         /// <summary>Writes string content utf16 slow to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
-        private void WriteStringContentUtf16Slow(ReadOnlySpan<char> value)
+        private void WriteStringContentUtf16Slow(scoped ReadOnlySpan<char> value)
         {
             WriteStringContentUtf16Slow<global::LuminPack.Option.LuminPackDefaultOptions>(value);
         }
@@ -1743,7 +1747,7 @@ namespace LuminPack.Core
 
         /// <summary>Writes string content slow to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>
-        private void WriteStringContentSlow(ReadOnlySpan<char> value)
+        private void WriteStringContentSlow(scoped ReadOnlySpan<char> value)
         {
             WriteStringContentSlow<global::LuminPack.Option.LuminPackDefaultOptions>(value);
         }
@@ -2105,7 +2109,7 @@ namespace LuminPack.Core
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private void WriteStringContentUtf8<TOptions>(ReadOnlySpan<char> value)
+        private void WriteStringContentUtf8<TOptions>(scoped ReadOnlySpan<char> value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
 #if NETSTANDARD2_1
@@ -2186,7 +2190,7 @@ namespace LuminPack.Core
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-        private void WriteStringContentUtf8Encoded<TOptions>(ReadOnlySpan<char> value)
+        private void WriteStringContentUtf8Encoded<TOptions>(scoped ReadOnlySpan<char> value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
             int escapeIndex = value.IndexOfAny(StringEscapeCharacters);
@@ -2203,7 +2207,7 @@ namespace LuminPack.Core
         /// <param name = "escapeIndex">The escape index used by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-        private void WriteStringContentUtf8Escaped<TOptions>(ReadOnlySpan<char> value, int escapeIndex)
+        private void WriteStringContentUtf8Escaped<TOptions>(scoped ReadOnlySpan<char> value, int escapeIndex)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
             while (true)
@@ -2359,7 +2363,7 @@ namespace LuminPack.Core
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
-        private void WriteStringContentUtf16<TOptions>(ReadOnlySpan<char> value)
+        private void WriteStringContentUtf16<TOptions>(scoped ReadOnlySpan<char> value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
             int escapeIndex = IndexOfJsonEscape(value);
@@ -2395,7 +2399,7 @@ namespace LuminPack.Core
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-        private void WriteStringContentUtf16Slow<TOptions>(ReadOnlySpan<char> value)
+        private void WriteStringContentUtf16Slow<TOptions>(scoped ReadOnlySpan<char> value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
             int lastWritten = 0;
@@ -2497,7 +2501,7 @@ namespace LuminPack.Core
         /// <param name="escapeIndex">The first escape after a complete ordinary prefix.</param>
         /// <typeparam name="TOptions">The stateless serialization profile.</typeparam>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private void WriteStringContentUtf16Prefix<TOptions>(ReadOnlySpan<char> value, int escapeIndex)
+        private void WriteStringContentUtf16Prefix<TOptions>(scoped ReadOnlySpan<char> value, int escapeIndex)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
             var prefix = value.Slice(0, escapeIndex);
@@ -2515,7 +2519,7 @@ namespace LuminPack.Core
         /// <param name="value">The complete UTF-16 content to scan.</param>
         /// <returns>The first exceptional character, or minus one for an ordinary span.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static int IndexOfJsonEscape(ReadOnlySpan<char> value)
+        private static int IndexOfJsonEscape(scoped ReadOnlySpan<char> value)
         {
 #if NET8_0_OR_GREATER
             if (value.Length >= 16)
@@ -2533,7 +2537,7 @@ namespace LuminPack.Core
         /// <param name = "value">The value consumed or produced by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
         [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
-        private void WriteStringContentSlow<TOptions>(ReadOnlySpan<char> value)
+        private void WriteStringContentSlow<TOptions>(scoped ReadOnlySpan<char> value)
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
             for (int i = 0; i < value.Length; i++)

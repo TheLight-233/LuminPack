@@ -435,16 +435,12 @@ public static partial class LuminPackMarshal
     /// <remarks>A set without removed entries holds its live elements in the first <c>Count</c> entries, which are copied without
     /// testing each entry. Each element uses the architecture-aware scalar core, so 32-bit targets keep block copies for values
     /// wider than four bytes. The writes stay inside the reserved record even if the set changes concurrently.</remarks>
-    public static unsafe void WriteHashSetRaw<T>(ref global::LuminPack.Core.LuminPackWriter writer, HashSet<T> set) where T : unmanaged
+    public static void WriteHashSetRaw<T>(ref global::LuminPack.Core.LuminPackWriter writer, HashSet<T> set) where T : unmanaged
     {
         int count = set.Count;
         int bytes = checked(count * Unsafe.SizeOf<T>());
         writer.EnsureAdditionalCapacity(checked(sizeof(int) + bytes));
-#if NET8_0_OR_GREATER
-        ref byte cursor = ref writer.Cursor;
-#else
-        ref byte cursor = ref Unsafe.AsRef<byte>(writer.Cursor);
-#endif
+        ref byte cursor = ref writer.CurrentReference;
         global::LuminPack.Core.LuminPackWriter.Write(ref cursor, in count);
         if (count != 0)
         {
@@ -479,15 +475,11 @@ public static partial class LuminPackMarshal
     /// <typeparam name="TValue">The raw value type.</typeparam>
     /// <remarks>On 64-bit targets, a key and value stored next to each other in eight bytes move as one load and store, addressed by
     /// index with one advance for the record. Other pairs and 32-bit targets use the architecture-aware scalar core per member.</remarks>
-    public static unsafe void WriteDenseRawPairs<TKey, TValue>(ref global::LuminPack.Core.LuminPackWriter writer, Dictionary<TKey, TValue> dictionary, int count)
+    public static void WriteDenseRawPairs<TKey, TValue>(ref global::LuminPack.Core.LuminPackWriter writer, Dictionary<TKey, TValue> dictionary, int count)
         where TKey : unmanaged where TValue : unmanaged
     {
         if (count == 0) return;
-#if NET8_0_OR_GREATER
-        CopyDenseRawPairs(ref writer.Cursor, dictionary, count);
-#else
-        CopyDenseRawPairs(ref Unsafe.AsRef<byte>(writer.Cursor), dictionary, count);
-#endif
+        CopyDenseRawPairs(ref writer.CurrentReference, dictionary, count);
         writer.Advance(count * (Unsafe.SizeOf<TKey>() + Unsafe.SizeOf<TValue>()));
     }
 
@@ -497,7 +489,7 @@ public static partial class LuminPackMarshal
     /// <param name="count">The positive number of pairs.</param>
     /// <typeparam name="TKey">The raw key type.</typeparam>
     /// <typeparam name="TValue">The raw value type.</typeparam>
-    internal static unsafe void CopyDenseRawPairs<TKey, TValue>(ref byte destination, Dictionary<TKey, TValue> dictionary, int count)
+    internal static void CopyDenseRawPairs<TKey, TValue>(ref byte destination, Dictionary<TKey, TValue> dictionary, int count)
         where TKey : unmanaged where TValue : unmanaged
     {
         var view = GetDictionaryView(dictionary);
@@ -577,10 +569,10 @@ public static partial class LuminPackMarshal
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe ref T GetNonNullPinnableReference<T>(Span<T> span)
+    public static ref T GetNonNullPinnableReference<T>(Span<T> span)
     {
         return ref span.Length == 0
-            ? ref Unsafe.AsRef<T>((void*)new IntPtr(1))
+            ? ref Unsafe.AddByteOffset(ref Unsafe.NullRef<T>(), (nint)1)
             : ref Unsafe.AsRef(in span.GetPinnableReference());
     }
 
@@ -589,12 +581,26 @@ public static partial class LuminPackMarshal
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe ref T GetNonNullPinnableReference<T>(ReadOnlySpan<T> span)
+    public static ref T GetNonNullPinnableReference<T>(ReadOnlySpan<T> span)
     {
         return ref span.Length == 0
-            ? ref Unsafe.AsRef<T>((void*)new IntPtr(1))
+            ? ref Unsafe.AddByteOffset(ref Unsafe.NullRef<T>(), (nint)1)
             : ref Unsafe.AsRef(in span.GetPinnableReference());
     }
+
+    /// <summary>Gets the numeric address of a reference without an unsafe context.</summary>
+    /// <param name="reference">A reference into stationary storage: the stack, pinned arrays or native memory.</param>
+    /// <typeparam name="T">The referenced type.</typeparam>
+    /// <returns>The address, which stays meaningful only while the storage cannot move.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static nint AddressOf<T>(ref T reference) => Unsafe.ByteOffset(ref Unsafe.NullRef<T>(), ref reference);
+
+    /// <summary>Reinterprets an address produced by <see cref="AddressOf{T}"/> as a reference.</summary>
+    /// <param name="address">The nonzero address of live stationary storage.</param>
+    /// <typeparam name="T">The referenced type.</typeparam>
+    /// <returns>A reference to the storage at <paramref name="address"/>.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static ref T RefAt<T>(nint address) => ref Unsafe.AddByteOffset(ref Unsafe.NullRef<T>(), address);
 
     /// <summary>
     /// Reinterprets the span as bytes.
@@ -658,49 +664,20 @@ public static partial class LuminPackMarshal
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe byte[] StructureToByteArray<T>(ref T value) where T : unmanaged
+    public static byte[] StructureToByteArray<T>(ref T value) where T : unmanaged
     {
-        byte[] result = new byte[sizeof(T)];
-        fixed (byte* dest = result)
-        {
-            Unsafe.Write(dest, value);
-        }
+        byte[] result = new byte[Unsafe.SizeOf<T>()];
+        CopyBlockUnaligned(ref MemoryMarshal.GetReference(result.AsSpan()), ref Unsafe.As<T, byte>(ref value), (uint)result.Length);
         return result;
     }
 
     /// <summary>
-    /// Compares memory blocks through pointers.
+    /// Compares complete byte spans without pinning their storage.
     /// </summary>
     /// <param name="a">The a used by this operation.</param>
     /// <param name="b">The b used by this operation.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
-    public static unsafe bool MemoryCompare(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b)
-    {
-        if (a.Length != b.Length) return false;
-        if (a.Length == 0) return true;
-
-        fixed (byte* aPtr = a, bPtr = b)
-        {
-            long* longA = (long*)aPtr;
-            long* longB = (long*)bPtr;
-            int longCount = a.Length / sizeof(long);
-
-            // Compare long-sized blocks first.
-            for (int i = 0; i < longCount; i++)
-            {
-                if (longA[i] != longB[i]) return false;
-            }
-
-            // Process the remaining bytes.
-            byte* remA = (byte*)&longA[longCount];
-            byte* remB = (byte*)&longB[longCount];
-            for (int i = 0; i < a.Length % sizeof(long); i++)
-            {
-                if (remA[i] != remB[i]) return false;
-            }
-        }
-        return true;
-    }
+    public static bool MemoryCompare(ReadOnlySpan<byte> a, ReadOnlySpan<byte> b) => a.SequenceEqual(b);
 
     /// <summary>
     /// Copies unmanaged memory.
@@ -792,12 +769,12 @@ public static partial class LuminPackMarshal
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe ref T AsRef<T>(IntPtr ptr) where T : unmanaged
+    public static ref T AsRef<T>(IntPtr ptr) where T : unmanaged
     {
         if (ptr == IntPtr.Zero)
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowArgumentNullException(nameof(ptr));
 
-        return ref Unsafe.AsRef<T>(ptr.ToPointer());
+        return ref RefAt<T>(ptr);
     }
 
     /// <summary>
@@ -899,7 +876,7 @@ public static partial class LuminPackMarshal
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe ref T GetNotNullArrayReference<T>(T[] array)
+    public static ref T GetNotNullArrayReference<T>(T[] array)
     {
 #if NET8_0_OR_GREATER
         return ref MemoryMarshal.GetArrayDataReference(array);
@@ -913,10 +890,10 @@ public static partial class LuminPackMarshal
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe ref byte GetNotNullArrayReference<T>(Array array)
+    public static ref byte GetNotNullArrayReference<T>(Array array)
     {
 #if NET8_0_OR_GREATER
-        return ref Unsafe.AddByteOffset(ref Unsafe.As<RawData>(array).Data, (nuint)(Unsafe.AsRef<MethodTable>(GetMethodTable((object)array).ToPointer()).BaseSize - 2 * sizeof(IntPtr)));
+        return ref MemoryMarshal.GetArrayDataReference(array);
 #else
         return ref DangerousGetArrayDataReference<T>(array!);
 #endif
@@ -927,7 +904,7 @@ public static partial class LuminPackMarshal
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe ref T GetArrayReference<T>(T[]? array)
+    public static ref T GetArrayReference<T>(T[]? array)
     {
         if (array is null)
             return ref Unsafe.NullRef<T>();
@@ -945,13 +922,13 @@ public static partial class LuminPackMarshal
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe ref byte GetArrayReference<T>(Array? array)
+    public static ref byte GetArrayReference<T>(Array? array)
     {
         if (array is null)
             return ref Unsafe.NullRef<byte>();
 
 #if NET8_0_OR_GREATER
-        return ref Unsafe.AddByteOffset(ref Unsafe.As<RawData>(array).Data, (nuint)(Unsafe.AsRef<MethodTable>(GetMethodTable((object)array).ToPointer()).BaseSize - 2 * sizeof(IntPtr)));
+        return ref MemoryMarshal.GetArrayDataReference(array);
 #else
         return ref DangerousGetArrayDataReference<T>(array!);
 #endif
@@ -973,10 +950,10 @@ public static partial class LuminPackMarshal
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe ref byte GetArrayDataReference<T>(Array array)
+    public static ref byte GetArrayDataReference<T>(Array array)
     {
         ref var elementRef = ref GetArrayReference<T>(array);
-        return ref Unsafe.AsRef<byte>(Unsafe.AsPointer(ref elementRef));
+        return ref elementRef;
     }
 
     /// <summary>Obtains the reference for the supplied input.</summary>
@@ -1024,35 +1001,23 @@ public static partial class LuminPackMarshal
     /// <param name="s">The s used by this operation.</param>
     /// <returns>The result of the operation.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe int CalculateStringByteCount(string s)
+    public static int CalculateStringByteCount(string s)
     {
         if (s.Length > 5)
             return Encoding.UTF8.GetByteCount(s);
 
         int total = 0;
-        fixed (char* ptr = s)
+        for (int index = 0; index < s.Length; index++)
         {
-            char* p = ptr;
-            int remaining = s.Length;
-            while (remaining > 0)
+            char c = s[index];
+            if (c <= 0x7F) total += 1;
+            else if (c <= 0x7FF) total += 2;
+            else if (char.IsHighSurrogate(c) && index + 1 < s.Length && char.IsLowSurrogate(s[index + 1]))
             {
-                char c = *p++;
-                remaining--;
-
-                if (c <= 0x7F) total += 1;
-                else if (c <= 0x7FF) total += 2;
-                else if (char.IsHighSurrogate(c))
-                {
-                    if (remaining > 0 && char.IsLowSurrogate(*p))
-                    {
-                        p++;
-                        remaining--;
-                        total += 4;
-                    }
-                    else total += 3; // Handle invalid surrogate pairs.
-                }
-                else total += 3;
+                index++;
+                total += 4;
             }
+            else total += 3;
         }
         return total;
     }
@@ -1086,113 +1051,84 @@ public static partial class LuminPackMarshal
     /// <param name="source">The input string.</param>
     /// <param name="destination">The destination span.</param>
     /// <returns>The number of bytes written, or -1 if the destination is too small.</returns>
-    public static unsafe int GetBytes(ReadOnlySpan<char> source, Span<byte> destination)
-    {
-        fixed (char* srcPtr = &source.GetPinnableReference())
-        fixed (byte* destPtr = &destination.GetPinnableReference())
-        {
-            return EncodeCore(srcPtr, source.Length, destPtr, destination.Length);
-        }
-    }
+    public static int GetBytes(ReadOnlySpan<char> source, Span<byte> destination)
+        => EncodeCore(source, destination);
 
-    /// <summary>Performs the encode core step for the current operation.</summary>
-    /// <param name="src">The input data to process.</param>
-    /// <param name="srcLength">The src length used by this operation.</param>
-    /// <param name="dest">The destination receiving the result.</param>
-    /// <param name="destMaxLength">The dest max length used by this operation.</param>
-    /// <returns>The result of the operation.</returns>
+    /// <summary>Encodes UTF-8 while preserving completed prefixes and legacy replacement boundaries.</summary>
+    /// <param name="source">The complete input characters.</param>
+    /// <param name="destination">The writable output range.</param>
+    /// <returns>The completed byte count, or minus one for insufficient capacity.</returns>
+    /// <remarks>Every store is covered by a preceding remaining-capacity check, so the references stay inside both spans.</remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static unsafe int EncodeCore(char* src, int srcLength, byte* dest, int destMaxLength)
+    private static int EncodeCore(ReadOnlySpan<char> source, Span<byte> destination)
     {
-        byte* destStart = dest;
-        char* srcEnd = src + srcLength;
-        char* srcCurrent = src;
+        ref char src = ref MemoryMarshal.GetReference(source);
+        ref byte dst = ref MemoryMarshal.GetReference(destination);
+        nint inputLength = source.Length, outputLength = destination.Length;
+        nint input = 0, output = 0;
 
-        // Process the ASCII prefix through the fast path.
-        ProcessAsciiPrefix(ref srcCurrent, srcEnd, ref dest, destMaxLength);
-
-        // Process the remaining characters.
-        while (srcCurrent < srcEnd)
+        // ASCII prefix.
+        while (input < inputLength && output < outputLength)
         {
-            if (dest >= destStart + destMaxLength) return -1; // Insufficient destination capacity.
+            char ascii = Unsafe.Add(ref src, input);
+            if (ascii > 0x7F) break;
+            Unsafe.Add(ref dst, output++) = (byte)ascii;
+            input++;
+        }
 
-            uint c = *srcCurrent++;
-
-            // ASCII characters in 0x00-0x7F.
+        while (input < inputLength)
+        {
+            if (output >= outputLength) return -1;
+            uint c = Unsafe.Add(ref src, input++);
             if (c <= 0x7F)
             {
-                *dest++ = (byte)c;
+                Unsafe.Add(ref dst, output++) = (byte)c;
                 continue;
             }
-
-            // Two-byte encoding for 0x80-0x7FF.
             if (c <= 0x7FF)
             {
-                if (dest + 1 >= destStart + destMaxLength) return -1;
-                *dest++ = (byte)(0xC0 | (c >> 6));
-                *dest++ = (byte)(0x80 | (c & 0x3F));
+                if (outputLength - output < 2) return -1;
+                Unsafe.Add(ref dst, output) = (byte)(0xC0 | (c >> 6));
+                Unsafe.Add(ref dst, output + 1) = (byte)(0x80 | (c & 0x3F));
+                output += 2;
                 continue;
             }
-
-            // Process surrogate pairs in the range 0x10000-0x10FFFF.
             if (char.IsHighSurrogate((char)c))
             {
-                if (srcCurrent >= srcEnd || dest + 3 >= destStart + destMaxLength)
-                    return WriteReplacementChar(ref dest, destStart, destMaxLength);
-
-                uint lowSurrogate = *srcCurrent++;
-                if (!char.IsLowSurrogate((char)lowSurrogate))
-                    return WriteReplacementChar(ref dest, destStart, destMaxLength);
-
-                uint codePoint = ((c - 0xD800U) << 10) + (lowSurrogate - 0xDC00U) + 0x10000U;
-                *dest++ = (byte)(0xF0 | (codePoint >> 18));
-                *dest++ = (byte)(0x80 | ((codePoint >> 12) & 0x3F));
-                *dest++ = (byte)(0x80 | ((codePoint >> 6) & 0x3F));
-                *dest++ = (byte)(0x80 | (codePoint & 0x3F));
+                if (input >= inputLength || outputLength - output < 4)
+                    return WriteReplacementChar(ref dst, output, outputLength);
+                uint low = Unsafe.Add(ref src, input++);
+                if (!char.IsLowSurrogate((char)low)) return WriteReplacementChar(ref dst, output, outputLength);
+                uint codePoint = ((c - 0xD800U) << 10) + (low - 0xDC00U) + 0x10000U;
+                Unsafe.Add(ref dst, output) = (byte)(0xF0 | (codePoint >> 18));
+                Unsafe.Add(ref dst, output + 1) = (byte)(0x80 | ((codePoint >> 12) & 0x3F));
+                Unsafe.Add(ref dst, output + 2) = (byte)(0x80 | ((codePoint >> 6) & 0x3F));
+                Unsafe.Add(ref dst, output + 3) = (byte)(0x80 | (codePoint & 0x3F));
+                output += 4;
                 continue;
             }
-
-            // Three-byte encoding for 0x800-0xFFFF.
-            if (dest + 2 >= destStart + destMaxLength) return -1;
-            *dest++ = (byte)(0xE0 | (c >> 12));
-            *dest++ = (byte)(0x80 | ((c >> 6) & 0x3F));
-            *dest++ = (byte)(0x80 | (c & 0x3F));
+            if (outputLength - output < 3) return -1;
+            Unsafe.Add(ref dst, output) = (byte)(0xE0 | (c >> 12));
+            Unsafe.Add(ref dst, output + 1) = (byte)(0x80 | ((c >> 6) & 0x3F));
+            Unsafe.Add(ref dst, output + 2) = (byte)(0x80 | (c & 0x3F));
+            output += 3;
         }
-
-        return (int)(dest - destStart);
+        return (int)output;
     }
 
-    /// <summary>Records ascii prefix in the current field metadata.</summary>
-    /// <param name="src">The input data to process.</param>
-    /// <param name="srcEnd">The src end used by this operation.</param>
-    /// <param name="dest">The destination receiving the result.</param>
-    /// <param name="destMaxLength">The dest max length used by this operation.</param>
+    /// <summary>Writes the legacy replacement sequence within the complete validated output range.</summary>
+    /// <param name="destination">The first byte of the writable output range.</param>
+    /// <param name="offset">The prefix already written.</param>
+    /// <param name="length">The complete output length.</param>
+    /// <returns>The completed byte count, or minus one for insufficient capacity.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static unsafe void ProcessAsciiPrefix(ref char* src, char* srcEnd, ref byte* dest, int destMaxLength)
+    private static int WriteReplacementChar(ref byte destination, nint offset, nint length)
     {
-        byte* destEnd = dest + destMaxLength;
-
-        // Process contiguous ASCII in blocks.
-        while (src < srcEnd && dest < destEnd)
-        {
-            if (*src > 0x7F) break;
-            *dest++ = (byte)*src++;
-        }
-    }
-
-    /// <summary>Writes replacement char to the current output.</summary>
-    /// <param name="dest">The destination receiving the result.</param>
-    /// <param name="destStart">The dest start used by this operation.</param>
-    /// <param name="destMaxLength">The dest max length used by this operation.</param>
-    /// <returns>The result of the operation.</returns>
-    [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    private static unsafe int WriteReplacementChar(ref byte* dest, byte* destStart, int destMaxLength)
-    {
-        if (dest + 2 >= destStart + destMaxLength) return -1;
-        *dest++ = 0xEF; // U+FFFD replacement character.
-        *dest++ = 0xBF;
-        *dest++ = 0xBD;
-        return (int)(dest - destStart);
+        if (length - offset < 3) return -1;
+        Unsafe.Add(ref destination, offset) = 0xEF;
+        Unsafe.Add(ref destination, offset + 1) = 0xBF;
+        Unsafe.Add(ref destination, offset + 2) = 0xBD;
+        return (int)(offset + 3);
     }
 
     /// <summary>Obtains the method table for the supplied input.</summary>
@@ -2081,16 +2017,12 @@ public static partial class LuminPackMarshal
     /// <param name="set">The original non-null set.</param>
     /// <remarks>Only one- or two-byte dense elements are grouped; other widths, sparse entries and 32-bit targets retain scalar storage.</remarks>
     [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
-    public static unsafe void WriteSmallHashSetRaw<T>(ref global::LuminPack.Core.LuminPackWriter writer, HashSet<T> set) where T : unmanaged
+    public static void WriteSmallHashSetRaw<T>(ref global::LuminPack.Core.LuminPackWriter writer, HashSet<T> set) where T : unmanaged
     {
         int count = set.Count;
         int bytes = checked(count * Unsafe.SizeOf<T>());
         writer.EnsureAdditionalCapacity(checked(sizeof(int) + bytes));
-#if NET8_0_OR_GREATER
-        ref byte cursor = ref writer.Cursor;
-#else
-        ref byte cursor = ref Unsafe.AsRef<byte>(writer.Cursor);
-#endif
+        ref byte cursor = ref writer.CurrentReference;
         global::LuminPack.Core.LuminPackWriter.Write(ref cursor, in count);
         if (count != 0)
         {

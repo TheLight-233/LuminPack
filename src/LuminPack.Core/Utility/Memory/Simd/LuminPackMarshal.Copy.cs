@@ -21,7 +21,7 @@ public static partial class LuminPackMarshal
     /// An explicitly registered netstandard2.1 native copy hook may handle complete blocks of at least sixteen bytes on 64-bit.
     /// </remarks>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
-    public static unsafe void CopyBlockUnaligned(ref byte destination, ref byte src, uint byteCount)
+    public static void CopyBlockUnaligned(ref byte destination, ref byte src, uint byteCount)
     {
 #if NETSTANDARD2_1
         if (Unsafe.SizeOf<IntPtr>() == 8 && byteCount >= 16 && global::LuminPack.Core.LuminPackBurst.TryCopy(ref destination, ref src, byteCount))
@@ -74,11 +74,11 @@ public static partial class LuminPackMarshal
     /// <remarks>The first and final vectors are stored unaligned and overlap the aligned body; every access stays inside the
     /// two complete ranges. The alignment is only a position hint: a relocation during the copy changes speed, not bytes.</remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static unsafe void CopyMediumBlock(ref byte destination, ref byte source, uint count)
+    private static void CopyMediumBlock(ref byte destination, ref byte source, uint count)
     {
         Vector256.LoadUnsafe(ref source).StoreUnsafe(ref destination);
         nuint last = count - (nuint)Vector256<byte>.Count;
-        nuint offset = (nuint)Vector256<byte>.Count - ((nuint)Unsafe.AsPointer(ref destination) & (nuint)(Vector256<byte>.Count - 1));
+        nuint offset = (nuint)Vector256<byte>.Count - ((nuint)Unsafe.ByteOffset(ref Unsafe.NullRef<byte>(), ref destination) & (nuint)(Vector256<byte>.Count - 1));
         for (; offset + 3 * (nuint)Vector256<byte>.Count <= last; offset += 4 * (nuint)Vector256<byte>.Count)
         {
             var first = Vector256.LoadUnsafe(ref source, offset);
