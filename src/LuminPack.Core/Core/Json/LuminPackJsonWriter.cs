@@ -2393,6 +2393,10 @@ namespace LuminPack.Core
             else
             {
 #if NET8_0_OR_GREATER
+                if (value.Length >= 512 && value.Length - escapeIndex > 32 && Output is null &&
+                    (!NeedsJsonEscape(value[escapeIndex + 1]) || !NeedsJsonEscape(value[escapeIndex + 2])) &&
+                    TryWriteStringContentUtf16Sparse<TOptions>(value, escapeIndex))
+                    return;
                 // External output can observe and change mutable span input while the prefix is published.
                 if (escapeIndex >= 16 && Output is null)
                     WriteStringContentUtf16Prefix<TOptions>(value, escapeIndex);
@@ -2519,6 +2523,77 @@ namespace LuminPack.Core
             global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref dst, ref src, (uint)byteCount);
             Advance(byteCount);
             WriteStringContentUtf16Slow<TOptions>(value.Slice(escapeIndex));
+        }
+#endif
+
+#if NET8_0_OR_GREATER
+        /// <summary>Writes long UTF-16 literal runs while retaining scalar handling for escape clusters.</summary>
+        /// <param name="value">The complete content, written only to owned or caller-provided contiguous storage.</param>
+        /// <param name="escapeIndex">The already located first escape.</param>
+        /// <typeparam name="TOptions">The stateless serialization profile.</typeparam>
+        /// <returns>Whether a sparse run was found and the complete content was written.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private bool TryWriteStringContentUtf16Sparse<TOptions>(scoped ReadOnlySpan<char> value, int escapeIndex)
+            where TOptions : struct, ILuminPackOptions
+        {
+            if (!HasUtf16LiteralRun(value, escapeIndex))
+                return false;
+
+            // Confirm that batching does not immediately enter a dense suffix before publishing any content.
+            int firstRun = escapeIndex + 1;
+            while (firstRun < value.Length && NeedsJsonEscape(value[firstRun])) firstRun++;
+            var following = value.Slice(firstRun);
+            int followingEscape = IndexOfJsonEscape(following);
+            if (followingEscape >= 0 && following.Length - followingEscape >= 32 &&
+                !HasUtf16LiteralRun(following, followingEscape, 16))
+                return false;
+
+            while (true)
+            {
+                if (escapeIndex > 0)
+                {
+                    int byteCount = checked(escapeIndex * 2);
+                    EnsureCapacity(byteCount);
+                    ref byte source = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(value));
+                    ref byte destination = ref Current;
+                    global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)byteCount);
+                    Advance(byteCount);
+                }
+
+                int end = escapeIndex;
+                while (end < value.Length && NeedsJsonEscape(value[end]) && TryWriteUtf16EscapePair(value[end])) end++;
+                if (end < value.Length && NeedsJsonEscape(value[end]))
+                {
+                    int start = end++;
+                    while (end < value.Length && NeedsJsonEscape(value[end])) end++;
+                    WriteStringContentUtf16Slow<TOptions>(value.Slice(start, end - start));
+                }
+                value = value.Slice(end);
+                escapeIndex = IndexOfJsonEscape(value);
+                if (escapeIndex < 0)
+                {
+                    WriteStringContentUtf16<TOptions>(value);
+                    return true;
+                }
+                if (escapeIndex < 32 && !HasUtf16LiteralRun(value, escapeIndex))
+                {
+                    WriteStringContentUtf16Slow<TOptions>(value);
+                    return true;
+                }
+            }
+        }
+
+        /// <summary>Bounds sparse-path admission and falls back when a later segment becomes dense.</summary>
+        /// <param name="value">The remaining UTF-16 content.</param>
+        /// <param name="escapeIndex">The located escape before a potential ordinary run.</param>
+        /// <param name="minimumLength">The required number of ordinary code units.</param>
+        /// <returns>Whether a short escape cluster is followed by the required ordinary run.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool HasUtf16LiteralRun(scoped ReadOnlySpan<char> value, int escapeIndex, int minimumLength = 32)
+        {
+            int start = escapeIndex + 1;
+            for (int skipped = 0; skipped < 4 && start < value.Length && NeedsJsonEscape(value[start]); skipped++) start++;
+            return value.Length - start >= minimumLength && IndexOfJsonEscape(value.Slice(start, minimumLength)) < 0;
         }
 #endif
 

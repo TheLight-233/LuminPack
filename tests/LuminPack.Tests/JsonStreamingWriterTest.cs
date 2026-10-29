@@ -91,6 +91,100 @@ public class JsonStreamingWriterTest
         }
     }
 
+    /// <summary>Checks sparse escapes, exact destinations and growth around the scalar and vector run boundaries.</summary>
+    /// <param name="length">The number of ordinary code units between escapes.</param>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(15)]
+    [InlineData(16)]
+    [InlineData(17)]
+    [InlineData(31)]
+    [InlineData(32)]
+    [InlineData(33)]
+    [InlineData(63)]
+    [InlineData(64)]
+    [InlineData(65)]
+    [InlineData(256)]
+    [InlineData(20_000)]
+    public void Utf16SparseEscapesKeepExactBytesAcrossDestinations(int length)
+    {
+        string ascii = new('x', length);
+        string unicode = new('\u4E2D', length);
+        string content = "\n" + ascii + "\"" + unicode + "\\\t\0\b\f" + ascii + "\r" + unicode + "\uD83D\uDE80";
+        string escaped = "\\n" + ascii + "\\\"" + unicode + "\\\\\\t\\u0000\\u0008\\u000c" + ascii + "\\r" + unicode + "\uD83D\uDE80";
+        foreach (bool property in new[] { false, true })
+        {
+            byte[] expected = Encoding.Unicode.GetBytes(property ? "{\"" + escaped + "\":null}" : "\"" + escaped + "\"");
+            byte[] guarded = Enumerable.Repeat((byte)0xCC, expected.Length + 32).ToArray();
+            Span<byte> destination = guarded.AsSpan(16, expected.Length);
+            var writer = new LuminPackJsonWriter(ref destination, new LuminPackWriterOptionalState());
+            if (property)
+            {
+                writer.WriteObjectStart<LuminPackDefaultOptions>();
+                writer.WritePropertyName<LuminPackDefaultOptions>(content.AsSpan());
+                writer.WriteNull<LuminPackDefaultOptions>();
+                writer.WriteObjectEnd<LuminPackDefaultOptions>();
+            }
+            else writer.Write<LuminPackDefaultOptions>(content);
+            Assert.Equal(expected, writer.GetSpan().ToArray());
+            Assert.All(guarded.Take(16), value => Assert.Equal((byte)0xCC, value));
+            Assert.All(guarded.Skip(expected.Length + 16), value => Assert.Equal((byte)0xCC, value));
+
+            Array.Fill(guarded, (byte)0xCC);
+            Span<byte> shortDestination = guarded.AsSpan(16, expected.Length - 2);
+            var shortWriter = new LuminPackJsonWriter(ref shortDestination, new LuminPackWriterOptionalState());
+            bool rejected = false;
+            try
+            {
+                if (property)
+                {
+                    shortWriter.WriteObjectStart<LuminPackDefaultOptions>();
+                    shortWriter.WritePropertyName<LuminPackDefaultOptions>(content.AsSpan());
+                    shortWriter.WriteNull<LuminPackDefaultOptions>();
+                    shortWriter.WriteObjectEnd<LuminPackDefaultOptions>();
+                }
+                else shortWriter.Write<LuminPackDefaultOptions>(content);
+            }
+            catch (Exception) { rejected = true; }
+            Assert.True(rejected, "An undersized UTF-16 destination was accepted.");
+            Assert.All(guarded.Take(16), value => Assert.Equal((byte)0xCC, value));
+            Assert.All(guarded.Skip(shortDestination.Length + 16), value => Assert.Equal((byte)0xCC, value));
+
+            using var buffer = new LuminPack.Utility.LuminBufferWriter(true);
+            var growing = new LuminPackJsonWriter(buffer, new LuminPackWriterOptionalState());
+            if (property)
+            {
+                growing.WriteObjectStart<LuminPackDefaultOptions>();
+                growing.WritePropertyName<LuminPackDefaultOptions>(content.AsSpan());
+                growing.WriteNull<LuminPackDefaultOptions>();
+                growing.WriteObjectEnd<LuminPackDefaultOptions>();
+            }
+            else growing.Write<LuminPackDefaultOptions>(content);
+            Assert.Equal(expected, growing.GetSpan().ToArray());
+        }
+    }
+
+    /// <summary>Checks changing escape density after a sparse prefix without losing a following literal tail.</summary>
+    [Fact]
+    public void Utf16SparseRunsKeepDenseTransitionsAndFollowingValues()
+    {
+        foreach (int run in new[] { 1, 15, 16, 17, 31, 32, 33, 64 })
+        {
+            string ordinary = new('\u4E2D', run);
+            string alternating = string.Concat(Enumerable.Repeat(ordinary + "\n", 128));
+            string value = "\n" + new string('x', 256) + "\t" + alternating + new string('\\', 128) + new string('z', 1024);
+            string escaped = "\\n" + new string('x', 256) + "\\t" +
+                string.Concat(Enumerable.Repeat(ordinary + "\\n", 128)) + new string('\\', 256) + new string('z', 1024);
+            using var buffer = new LuminPack.Utility.LuminBufferWriter(true);
+            var writer = new LuminPackJsonWriter(buffer, new LuminPackWriterOptionalState());
+            writer.WriteArrayStart<LuminPackDefaultOptions>();
+            writer.Write<LuminPackDefaultOptions>(value);
+            writer.Write<LuminPackDefaultOptions>("tail");
+            writer.WriteArrayEnd<LuminPackDefaultOptions>();
+            Assert.Equal(Encoding.Unicode.GetBytes("[\"" + escaped + "\",\"tail\"]"), writer.GetSpan().ToArray());
+        }
+    }
+
     /// <summary>Preserves the escape captured before an external output callback changes a mutable property name.</summary>
     [Fact]
     public void Utf16EscapeIsCapturedBeforeExternalPrefixPublication()
