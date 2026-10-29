@@ -11,6 +11,51 @@ namespace LuminPackUnitTest;
 /// <summary>Checks occupied reference slots and malformed string records.</summary>
 public class AuditSafetyRegressionTest
 {
+    /// <summary>Rejects incomplete dynamic payload destinations before copying or resetting the source.</summary>
+    /// <param name="capacity">The destination's logical capacity.</param>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(8)]
+    [InlineData(63)]
+    public void BufferPayloadCopyChecksDestinationBeforeWriting(int capacity)
+    {
+        using var source = new LuminBufferWriter(true);
+        byte[] payload = Enumerable.Repeat((byte)0x42, 64).ToArray();
+        source.LoadSpan(payload);
+        byte[] guarded = Enumerable.Repeat((byte)0xCC, 128).ToArray();
+        Span<byte> destination = guarded.AsSpan(16, capacity);
+        var writer = new LuminPackWriter(ref destination);
+        bool rejected = false;
+        try { source.WriteToAndReset(ref writer); }
+        catch (Exception error)
+        {
+            Assert.StartsWith("Span out of range", error.Message);
+            rejected = true;
+        }
+        Assert.True(rejected, "An incomplete payload destination was accepted.");
+        Assert.All(guarded, value => Assert.Equal((byte)0xCC, value));
+        Assert.Equal(0, writer.Position);
+        Assert.Equal(payload, source.GetSpan().ToArray());
+    }
+
+    /// <summary>Grows at the published append position before copying and resets the source only after success.</summary>
+    [Fact]
+    public void BufferPayloadCopyGrowsBeforeAppending()
+    {
+        using var source = new LuminBufferWriter(true);
+        using var destination = new LuminBufferWriter(true);
+        byte[] payload = Enumerable.Range(0, 70_000).Select(index => (byte)index).ToArray();
+        source.LoadSpan(payload);
+        destination.LoadSpan(new byte[] { 11, 17, 23 });
+        var writer = new LuminPackWriter(destination);
+        source.WriteToAndReset(ref writer);
+        destination.CompleteWrite(writer.Position);
+        Assert.Equal(payload.Length + 3, writer.Position);
+        Assert.Equal(new byte[] { 11, 17, 23 }, destination.GetSpan().Slice(0, 3).ToArray());
+        Assert.Equal(payload, destination.GetSpan().Slice(3).ToArray());
+        Assert.Equal(0, source.CurrentIndex);
+    }
+
     /// <summary>Exercises the existing facades with a declaration-selected external-input policy.</summary>
     [Fact]
     public void CompiledInputOptionChecksDuringReadAndPreservesReuse()

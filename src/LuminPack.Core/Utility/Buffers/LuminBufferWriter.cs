@@ -602,11 +602,13 @@ public sealed class LuminBufferWriter : IBufferWriter<byte>, IDisposable
 
     /// <summary>Copies the published payload to a binary writer and then resets this buffer's payload.</summary>
     /// <param name="writer">The destination binary writer.</param>
+    /// <remarks>Reserves the complete destination before copying. A failed reservation leaves the source payload intact.</remarks>
     public void WriteToAndReset(ref LuminPackWriter writer)
     {
         var length = CurrentIndex;
         if (length == 0) return;
 
+        writer.EnsureAdditionalCapacity(length);
         CopyBlockUnaligned(ref writer.CurrentReference, ref Data, (uint)length);
         writer.Advance(length);
         ResetCore();
