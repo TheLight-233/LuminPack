@@ -174,6 +174,10 @@ internal sealed class SafeReadProjection
                     "ReadDecimal" => "decimal", "ReadChar" => "char", "ReadString" => "string", _ => null };
                 if (scalar != null && args.Length == 0)
                     call = "ReadJsonValue<" + scalar + ", " + profile + ">(ref " + readerName + ")";
+                else if (name == "Read" && result.ArgumentList.Arguments.Count == 1 &&
+                    result.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword) &&
+                    _model.GetTypeInfo(node.ArgumentList.Arguments[0].Expression).Type?.SpecialType == SpecialType.System_String)
+                    call = "ReadJsonString<" + profile + ">(ref " + readerName + ", " + args + ")";
                 else if (name == "Read" && (access.Name is not GenericNameSyntax || profileCall) && args.Length == 0)
                     call = "ReadJsonToken<" + profile + ">(ref " + readerName + ")";
                 else if (name == "Read" && access.Name is GenericNameSyntax valueRead && args.Length == 0)

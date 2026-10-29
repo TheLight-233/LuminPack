@@ -103,6 +103,32 @@ internal static partial class SerializerCompiledOptionRegression
                     var boundedUtf8=new BoundedUtf8{Names=new List<string>{null,"","\u4E2D","\uD83D\uDE00"},Map=new Dictionary<string,string>{{"\u4E2D","\u00E9"}}};bytes=LuminPackSerializer.Serialize(boundedUtf8);
                     if(LuminPackSerializer.Deserialize<BoundedUtf8>(bytes).Map["\u4E2D"]!="\u00E9")throw new Exception("Bounded UTF-8 profile.");
                     boundedUtf8.Names.Add(new string('a',33));bytes=LuminPackSerializer.Serialize(boundedUtf8);bool rejected=false;try{LuminPackSerializer.Deserialize<BoundedUtf8>(bytes);}catch(Exception){rejected=true;}if(!rejected)throw new Exception("Variable string budget bypassed.");
+                    string invalidUtf8Json = LuminPackSerializer.SerializeJson(boundedUtf8);
+                    rejected = false;
+                    try { LuminPackSerializer.DeserializeJson<BoundedUtf8>(invalidUtf8Json); }
+                    catch (System.IO.InvalidDataException) { rejected = true; }
+                    if (!rejected) throw new Exception("UTF-8 JSON string budget bypassed.");
+                    bounded.Names = new List<string> { new string('a', 33) };
+                    string invalidUtf16Json = LuminPackSerializer.SerializeJson(bounded);
+                    rejected = false;
+                    try { LuminPackSerializer.DeserializeJson<Bounded>(invalidUtf16Json); }
+                    catch (System.IO.InvalidDataException) { rejected = true; }
+                    if (!rejected) throw new Exception("UTF-16 JSON string budget bypassed.");
+                    foreach (string text in new[] { new string('a', 32), new string('\n', 32), string.Concat(Enumerable.Repeat("\uD83D\uDE00", 16)) })
+                    {
+                        bounded.Names = new List<string> { text };
+                        string boundedJson = LuminPackSerializer.SerializeJson(bounded);
+                        var boundedCopy = LuminPackSerializer.DeserializeJson<Bounded>(boundedJson);
+                        string retainedText = boundedCopy.Names[0];
+                        LuminPackSerializer.DeserializeJson(boundedJson, ref boundedCopy);
+                        if (!ReferenceEquals(retainedText, boundedCopy.Names[0])) throw new Exception("Bounded UTF-16 JSON string reuse changed.");
+                        boundedUtf8.Names = new List<string> { text };
+                        string utf8Json = LuminPackSerializer.SerializeJson(boundedUtf8);
+                        var utf8Copy = LuminPackSerializer.DeserializeJson<BoundedUtf8>(utf8Json);
+                        retainedText = utf8Copy.Names[0];
+                        LuminPackSerializer.DeserializeJson(utf8Json, ref utf8Copy);
+                        if (!ReferenceEquals(retainedText, utf8Copy.Names[0])) throw new Exception("Bounded UTF-8 JSON string reuse changed.");
+                    }
                     string json=LuminPackSerializer.SerializeJson(model);
                     if(LuminPackSerializer.DeserializeJson<Model>(json).Names.Count!=16)throw new Exception("JSON profile.");
                 }

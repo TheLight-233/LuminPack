@@ -3,6 +3,7 @@ using System.Runtime.CompilerServices;
 using LuminPack.Core;
 using LuminPack.Code;
 using LuminPack.Option;
+using LuminPack.Utility;
 
 namespace LuminPack.Security;
 
@@ -149,6 +150,31 @@ public static partial class LuminPackInputPolicy
         bool matched = reader.TryReadPropertyName<StreamingJsonOptions<TOptions>>(utf8Name, utf16Name);
         if (matched) ObserveJsonToken<TOptions>(ref reader);
         return matched;
+    }
+
+    /// <summary>Checks string limits before materialization while preserving the original string reuse kernels.</summary>
+    /// <typeparam name="TOptions">The fixed document profile.</typeparam>
+    /// <param name="reader">The original token reader.</param>
+    /// <param name="value">The reusable destination string.</param>
+    public static void ReadJsonString<TOptions>(ref LuminPackJsonReader reader, ref string value) where TOptions : struct, ILuminPackOptions
+    {
+        if (CurrentInput == null || !CurrentInput.Reading || reader.CurrentTokenType != LuminPackJsonReader.JsonTokenType.String)
+        {
+            reader.Read<TOptions>(ref value);
+            return;
+        }
+        if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+        {
+            var text = ReadJsonNameUtf8<TOptions>(ref reader);
+            if (value is null || !StringSerializer.MatchesUtf8(text, value))
+                value = LuminPackJsonReader.CreateUtf8String(text);
+        }
+        else
+        {
+            var text = ReadJsonNameUtf16<TOptions>(ref reader);
+            if (value is null || !text.SequenceEqual(value.AsSpan()))
+                value = new string(text);
+        }
     }
 
     /// <summary>Retains the original ordered-name matcher with strict grammar and duplicate accounting.</summary>

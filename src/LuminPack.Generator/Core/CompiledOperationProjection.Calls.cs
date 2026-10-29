@@ -79,7 +79,7 @@ internal sealed partial class CompiledOperationProjection
                 return result.WithExpression(access.WithName(stableKernel.WithTypeArgumentList(stableKernel.TypeArgumentList.WithArguments(stableArguments))));
             }
             if (access.Expression.ToString() == "global::LuminPack.Security.LuminPackInputPolicy" &&
-                name is "ReadString" or "ReadJsonToken" or "ReadJsonValue" or "TryReadJsonProperty" or "TryReadOrderedJsonProperty" or "ReadStringRecord" or "ReadNextJsonFloat" or "RejectUnknownJson" or "ReadJsonNameUtf8" or "ReadJsonNameUtf16" &&
+                name is "ReadString" or "ReadJsonToken" or "ReadJsonValue" or "ReadJsonString" or "TryReadJsonProperty" or "TryReadOrderedJsonProperty" or "ReadStringRecord" or "ReadNextJsonFloat" or "RejectUnknownJson" or "ReadJsonNameUtf8" or "ReadJsonNameUtf16" &&
                 access.Name is GenericNameSyntax inputKernel)
             {
                 var inputArguments = inputKernel.TypeArgumentList.Arguments;
