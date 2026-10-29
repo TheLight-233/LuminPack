@@ -309,7 +309,7 @@ namespace LuminPack.Core
             {
                 Buffer = owner.DangerousGetBuffer();
 #if NET8_0_OR_GREATER
-                Cursor = ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), position);
+                Cursor = ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)position);
 #else
                 // The owner keeps its storage pinned until the array is returned.
                 Cursor = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(Buffer)) + position;
