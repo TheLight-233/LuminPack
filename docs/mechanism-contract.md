@@ -17,7 +17,7 @@ The history of individual approvals lives in Git. When this document, the code a
 3. **Only explicit approval of that concrete proposal authorizes the replacement.** A performance target, a refactoring, dead-code removal or a size reduction is not approval.
 4. **Correctness fixes are distinct.** A reproduced bug may be fixed while keeping the intended protocol. Record it as a fix with its regression test, not as an unchanged implementation.
 5. **Approved differences are recorded.** Add the approved rule to this document (not a dated narrative) and describe the change in the commit.
-6. **Do not commit, push or tag** unless the owner asks.
+6. **Commit completed work by default.** After completing a feature or fix and its relevant verification, commit only the task's changes using the [commit conventions](../CONTRIBUTING.md#commit-conventions), without asking for commit permission. Exclude unrelated or unfinished changes. Ask whether to push after committing unless the owner has already authorized that push. Tags and published-history rewrites still require explicit authorization.
 
 ## 2. Preserved mechanisms
 

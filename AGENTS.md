@@ -18,7 +18,7 @@ LuminPack is a source-generated binary and JSON serializer for .NET and Unity. R
 6. **Language.** English for code, comments, XML, diagnostics, tests and maintenance documents. README files and `*.cn.md` editions are the exception.
 7. **Documents.** README is the cover page; feature documentation lives in `docs`. Each document has an English `name.md` and a Chinese `name.cn.md`; update both. No release notes, version histories or experiment reports in README or `docs`.
 8. **Don't remove** storage placeholders or externally usable/generated members based only on call-site searches.
-9. **Don't commit** unless asked.
+9. **Commit completed work by default.** After completing a feature or fix and its relevant verification, commit the task's changes without asking for commit permission, following the commit conventions below. Keep unrelated or unfinished changes out. Ask whether to push after committing unless the owner has already authorized that push. Tags and published-history rewrites still require explicit authorization.
 10. **Commit titles.** Use `type(scope): description`, with a lowercase type and scope and a concise English imperative description. Use `feat` for features, `fix` for bug fixes, `perf` for performance, `refactor` for restructuring, `test` for tests, `docs` for documentation, `ci` for workflows, `build` for build tooling and `chore` for maintenance. Choose the affected component as the scope, for example `core`, `generator` or `benchmarks`; performance uses `perf`, never `pref`. Keep independent changes in separate commits. See [Contributing](CONTRIBUTING.md#commit-conventions).
 
 ## Working practice
