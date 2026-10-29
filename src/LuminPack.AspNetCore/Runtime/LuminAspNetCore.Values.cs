@@ -19,8 +19,14 @@ public static unsafe partial class LuminAspNetCore
     public static void Write(ref LuminPackWriter writer, in StringValues value)
     {
         if (value.Count > MaximumStringValues) LuminPackExceptionHelper.ThrowArgumentOutOfRangeException(nameof(value), "Too many HTTP string values.");
-        // The count header; each string record reserves its own capacity.
-        writer.EnsureAdditionalCapacity(sizeof(int));
+        var evaluator = new LuminPackEvaluator();
+        int size = sizeof(int);
+        for (int index = 0; index < value.Count; index++)
+        {
+            string? item = value[index];
+            size = checked(size + evaluator.GetStringLength(ref item));
+        }
+        writer.EnsureAdditionalCapacity(size);
         writer.WriteCollectionHeader(value.Count);
         for (int index = 0; index < value.Count; index++) writer.Write(value[index]);
     }

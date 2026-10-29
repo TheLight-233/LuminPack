@@ -19,6 +19,7 @@ RegistrationContract.Verify();
 CodecContract.Check(LuminAspNetCore.StringValuesCodec, default, "Default header");
 CodecContract.Check(LuminAspNetCore.StringValuesCodec, new StringValues("one"), "Single header");
 CodecContract.Check(LuminAspNetCore.StringValuesCodec, new StringValues(new string?[] { "one", null, "", "two" }), "Header values");
+CodecContract.Check(LuminAspNetCore.StringValuesCodec, new StringValues(new string?[] { "\u4E2D\u6587", "\uD83D\uDE80", null, "\u00E9" }), "Unicode header values");
 CodecContract.Check(LuminAspNetCore.StringSegmentCodec, default, "Null segment");
 CodecContract.Check(LuminAspNetCore.StringSegmentCodec, new StringSegment("prefix_value_tail", 7, 5), "Segment slice");
 CodecContract.Check(LuminAspNetCore.HostStringCodec, new HostString("example.com:8080"), "Host");
