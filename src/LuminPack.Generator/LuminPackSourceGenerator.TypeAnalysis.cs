@@ -27,7 +27,10 @@ namespace LuminPack.SourceGenerator
             foreach (var attribute in symbol.GetAttributes())
             {
                 if (attribute.AttributeClass?.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
-                    == "global::" + metadataName)
+                    == "global::" + metadataName &&
+                    attribute.ApplicationSyntaxReference is { } declaration &&
+                    ReferenceEquals(declaration.SyntaxTree, typeDeclaration.SyntaxTree) &&
+                    typeDeclaration.AttributeLists.Any(list => list.Span.Contains(declaration.Span)))
                     return symbol;
             }
 

@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Security.Cryptography;
 using System.Text;
 using LuminPack.SourceGenerator;
@@ -68,6 +69,126 @@ internal static class IncrementalGenerationChecks
         Verify("compiled root JSON validation", declaredOptions, Replace(declaredOptions, "A.cs", "ValidateJsonSyntax = false", "ValidateJsonSyntax = true"));
         VerifyDiagnosticReuse(resolvedReferences, "Shared.cs");
         VerifyDiagnosticReuse(resolvedReferences, string.Empty);
+        VerifyAttributeDiscovery(resolvedReferences);
+        VerifyReferenceLifetime(references);
+        VerifyReferenceInvalidation(resolvedReferences);
+        VerifyPartitionCacheLifetime();
+        VerifyDependencySharing(resolvedReferences);
+    }
+
+    /// <summary>Requires a replaced compilation reference to invalidate unchanged source declarations.</summary>
+    /// <param name="references">Platform and runtime references for the consumer.</param>
+    private static void VerifyReferenceInvalidation(MetadataReference[] references)
+    {
+        var dependency = CSharpCompilation.Create("ReferenceConstants",
+            new[] { CSharpSyntaxTree.ParseText("public static class Constants { public const int Order = 0; }", ParseOptions) }, references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
+        var changed = dependency.ReplaceSyntaxTree(dependency.SyntaxTrees.Single(),
+            CSharpSyntaxTree.ParseText("public static class Constants { public const int Order = 2; }", ParseOptions));
+        var consumer = CSharpCompilation.Create("ReferenceInvalidation", new[]
+        {
+            CSharpSyntaxTree.ParseText("[LuminPack.Attribute.LuminPackable] public class Model { [LuminPack.Attribute.LuminPackOrder(Constants.Order)] public int Value; [LuminPack.Attribute.LuminPackOrder(1)] public long Other; }", ParseOptions, "Model.cs")
+        }, references.Append(dependency.ToMetadataReference()), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+        Verify("compilation reference changed", consumer, consumer.WithReferences(references.Append(changed.ToMetadataReference())), 1);
+    }
+
+    /// <summary>Checks alias discovery and emits a partially declared payload exactly once.</summary>
+    /// <param name="references">Runtime metadata for the discovery compilation.</param>
+    private static void VerifyAttributeDiscovery(MetadataReference[] references)
+    {
+        var files = new Dictionary<string, string>
+        {
+            ["Alias.cs"] = "global using Pack = LuminPack.Attribute.LuminPackableAttribute;",
+            ["Model.cs"] = "namespace Discovery; [Pack] public partial class Model { public int Value; }",
+            ["Partial.cs"] = "namespace Discovery; public partial class Model { public long Other; }",
+            ["Record.cs"] = "namespace Discovery; [LuminPack.Attribute.LuminPackableAttribute] public partial record Record { public int Value; }",
+            ["Value.cs"] = "namespace Discovery; [Pack] public partial record struct Value { public int Number; }",
+            ["Utility.cs"] = "namespace Discovery; public class Utility { public int Value; }"
+        };
+        var input = CSharpCompilation.Create("AttributeDiscovery",
+            files.Select(file => CSharpSyntaxTree.ParseText(file.Value, ParseOptions, file.Key)), references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+        var driver = NewDriver().RunGenerators(input);
+        Require(!driver.GetRunResult().Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error),
+            "Partial or aliased attribute discovery reported a generator error.");
+        var sources = Sources(driver);
+        foreach (string name in new[] { "Model", "Record", "Value" })
+            Require(sources.ContainsKey("Discovery." + name + ".Extension.g.cs"), "Attribute discovery omitted " + name + ".");
+        Require(!sources.ContainsKey("Discovery.Utility.Extension.g.cs"), "Unattributed utility entered the type pipeline.");
+        Verify("partial storage changed", input, Replace(input, "Partial.cs", "long Other", "long Renamed"), 1);
+        var removed = Replace(input, "Model.cs", "[Pack]", string.Empty);
+        Verify("attribute removed", input, removed);
+        Verify("attribute restored", removed, input);
+        Verify("attribute alias changed", input, Replace(input, "Alias.cs", "LuminPack.Attribute.LuminPackableAttribute", "System.ObsoleteAttribute"));
+    }
+
+    /// <summary>Requires retained project guards to release compilation-backed metadata references.</summary>
+    /// <param name="references">Platform metadata used by both temporary compilations.</param>
+    private static void VerifyReferenceLifetime(MetadataReference[] references)
+    {
+        var lifetime = CreateReferenceGuard(references);
+        for (int attempt = 0; attempt < 8 && (lifetime.Consumer.IsAlive || lifetime.Reference.IsAlive); attempt++)
+        {
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
+            GC.Collect();
+        }
+        Require(!lifetime.Consumer.IsAlive, "A retained project guard kept its consumer compilation alive.");
+        Require(!lifetime.Reference.IsAlive, "A retained project guard kept a compilation-backed reference alive.");
+        GC.KeepAlive(lifetime.Guard);
+    }
+
+    /// <summary>Retains only the symbol-free project guard after using a source compilation reference.</summary>
+    /// <param name="references">Platform metadata for the reference fixture.</param>
+    /// <returns>A live guard and weak handles to the compilations it must not retain.</returns>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static (object Guard, WeakReference Consumer, WeakReference Reference) CreateReferenceGuard(MetadataReference[] references)
+    {
+        var dependency = CSharpCompilation.Create("GuardDependency",
+            new[] { CSharpSyntaxTree.ParseText("public class Dependency { public int Value; }", ParseOptions) }, references);
+        var consumer = CSharpCompilation.Create("GuardConsumer",
+            new[] { CSharpSyntaxTree.ParseText("public class Consumer { public Dependency Value; }", ParseOptions, "Consumer.cs") },
+            references.Append(dependency.ToMetadataReference()));
+        var type = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.FileSemanticObservationCache", throwOnError: true)!;
+        var context = type.GetMethod("For", BindingFlags.Static | BindingFlags.NonPublic)!.Invoke(null, new object[] { consumer })!;
+        var guard = type.GetProperty("ProjectGuard", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(context)!;
+        return (guard, new WeakReference(consumer), new WeakReference(dependency));
+    }
+
+    /// <summary>Checks that cache pruning preserves current values and releases removed output text.</summary>
+    private static void VerifyPartitionCacheLifetime()
+    {
+        var type = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.PartitionedSourceCache", throwOnError: true)!;
+        var cache = Activator.CreateInstance(type, nonPublic: true)!;
+        var wrap = type.GetMethod("Wrap", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        /// <summary>Builds one independently keyed partition through the production cache.</summary>
+        /// <param name="identity">The partition identity and body.</param>
+        /// <returns>The frozen complete file.</returns>
+        object Wrap(string identity) => wrap.Invoke(cache, new object?[] { "Lifetime", identity, "", identity, "", null, null })!;
+        var first = Wrap("first");
+        var second = Wrap("second");
+        string name = (string)second.GetType().GetField("Name", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(second)!;
+        type.GetMethod("Retain", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(cache, new object[] { new[] { name } });
+        Require(ReferenceEquals(second, Wrap("second")), "Pruning discarded a current partition's cached value.");
+        Require(!ReferenceEquals(first, Wrap("first")), "Pruning retained a removed partition's output.");
+        var fields = type.GetField("_entries", BindingFlags.Instance | BindingFlags.NonPublic)!;
+        type.GetMethod("Retain", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(cache, new object[] { Array.Empty<string>() });
+        Require(((System.Collections.IDictionary)fields.GetValue(cache)!).Count == 0, "An empty output batch kept obsolete partitions.");
+    }
+
+    /// <summary>Requires different output caches to share one compilation-local dependency closure.</summary>
+    /// <param name="references">Runtime metadata for the shared-closure fixture.</param>
+    private static void VerifyDependencySharing(MetadataReference[] references)
+    {
+        var input = CSharpCompilation.Create("SharedDependencyClosure", new[]
+        {
+            CSharpSyntaxTree.ParseText("[LuminPack.Attribute.LuminPackable] public class Model { public int Value; }", ParseOptions, "Model.cs")
+        }, references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+        var counters = ReadCounters();
+        NewDriver().RunGenerators(input);
+        var current = ReadCounters();
+        Require(current["TypeDependencyCacheHits"] > counters["TypeDependencyCacheHits"], "Output caches repeated the same dependency traversal.");
+        Require(current["TypeDependencyBuilds"] > counters["TypeDependencyBuilds"], "The dependency-sharing fixture did not build a closure.");
     }
 
     /// <summary>Compares exact generated sources/diagnostics and checks that cached work is skipped.</summary>

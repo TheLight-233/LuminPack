@@ -270,7 +270,7 @@ internal sealed class FileSemanticObservationCache
     private sealed class ProjectState
     {
         private readonly CompilationOptions _options;
-        private readonly MetadataReference[] _references;
+        private readonly WeakReference<MetadataReference>[] _references;
         private readonly ParseOptions[] _parseOptions;
         private readonly string _globalFacts;
         private readonly string _projectKey;
@@ -282,7 +282,8 @@ internal sealed class FileSemanticObservationCache
         /// <param name="globalFacts">Global syntax and lookup facts.</param>
         internal ProjectState(Compilation compilation, SyntaxTree[] trees, string globalFacts)
         {
-            _options = compilation.Options; _references = compilation.References.ToArray();
+            _options = compilation.Options;
+            _references = compilation.References.Select(reference => new WeakReference<MetadataReference>(reference)).ToArray();
             _parseOptions = trees.Select(tree => tree.Options).ToArray(); _globalFacts = globalFacts;
             _projectKey = compilation.AssemblyName + "\n" + string.Join("\n", trees.Select(tree => tree.FilePath));
         }
@@ -303,7 +304,8 @@ internal sealed class FileSemanticObservationCache
         /// <returns>Whether per-type dependency checks may proceed under the same project settings.</returns>
         internal bool Equivalent(ProjectState other) => _projectKey == other._projectKey && _globalFacts == other._globalFacts &&
             SameOptions(_options, other._options) && _parseOptions.SequenceEqual(other._parseOptions) &&
-            _references.Length == other._references.Length && _references.Zip(other._references, ReferenceEquals).All(equal => equal);
+            _references.Length == other._references.Length && _references.Zip(other._references,
+                (before, after) => before.TryGetTarget(out var left) && after.TryGetTarget(out var right) && ReferenceEquals(left, right)).All(equal => equal);
 
         /// <summary>Checks whether cross-compilation file reuse is still permitted.</summary>
         /// <param name="compilation">The current compilation.</param>
@@ -312,7 +314,8 @@ internal sealed class FileSemanticObservationCache
         /// <returns>Whether references, options, and global lookup facts match.</returns>
         internal bool Matches(Compilation compilation, SyntaxTree[] trees, string globalFacts) =>
             SameOptions(_options, compilation.Options) && _globalFacts == globalFacts && _parseOptions.SequenceEqual(trees.Select(tree => tree.Options)) &&
-            _references.Length == compilation.References.Count() && _references.Zip(compilation.References, ReferenceEquals).All(equal => equal);
+            _references.Length == compilation.References.Count() && _references.Zip(compilation.References,
+                (before, after) => before.TryGetTarget(out var reference) && ReferenceEquals(reference, after)).All(equal => equal);
     }
 
     /// <summary>Stores stable global lookup syntax once per physical tree identity.</summary>

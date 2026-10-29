@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -10,6 +11,18 @@ namespace LuminPack.SourceGenerator;
 internal sealed class PartitionedSourceCache
 {
     private readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
+
+    /// <summary>Releases files that no longer belong to the completed output batch.</summary>
+    /// <param name="names">Complete filenames still needed by the current batch.</param>
+    internal void Retain(IEnumerable<string> names)
+    {
+        var retained = new HashSet<string>(names, StringComparer.Ordinal);
+        lock (_entries)
+        {
+            foreach (var key in _entries.Where(pair => !retained.Contains(pair.Value.Source.Name)).Select(pair => pair.Key).ToArray())
+                _entries.Remove(key);
+        }
+    }
 
     /// <summary>Wraps a changed body or returns the exact previous complete file value.</summary>
     /// <param name="prefix">The generated file family.</param>

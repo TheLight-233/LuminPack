@@ -24,21 +24,38 @@ internal sealed class JsonValueProjection : CSharpSyntaxRewriter
     public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
     {
         var writers = _writers; var readers = _readers;
-        _writers = States(node, "LuminPackJsonWriter"); _readers = States(node, "LuminPackJsonReader");
+        States(node, out var currentWriters, out var currentReaders);
+        if (currentWriters.Count == 0 && currentReaders.Count == 0) return node;
+        _writers = currentWriters; _readers = currentReaders;
         try { return base.VisitMethodDeclaration(node); }
         finally { _writers = writers; _readers = readers; }
     }
 
     /// <summary>Recognizes declared JSON states without matching ordinary user member names.</summary>
     /// <param name="node">The generated method.</param>
-    /// <param name="type">The JSON state family.</param>
-    /// <returns>The parameter and local receiver names.</returns>
-    private static HashSet<string> States(MethodDeclarationSyntax node, string type)
+    /// <param name="writers">Receives the JSON writer parameter and local receiver names.</param>
+    /// <param name="readers">Receives the JSON reader parameter and local receiver names.</param>
+    private static void States(MethodDeclarationSyntax node, out HashSet<string> writers, out HashSet<string> readers)
     {
-        var names = new HashSet<string>(node.DescendantNodes().OfType<ParameterSyntax>().Where(parameter => parameter.Type?.ToString().EndsWith(type) == true).Select(parameter => parameter.Identifier.ValueText));
-        foreach (var variable in node.DescendantNodes().OfType<VariableDeclaratorSyntax>())
-            if (variable.Initializer?.Value is ObjectCreationExpressionSyntax creation && creation.Type.ToString().EndsWith(type)) names.Add(variable.Identifier.ValueText);
-        return names;
+        writers = new HashSet<string>();
+        readers = new HashSet<string>();
+        foreach (var descendant in node.DescendantNodes())
+        {
+            string type, name;
+            if (descendant is ParameterSyntax parameter)
+            {
+                type = parameter.Type?.ToString();
+                name = parameter.Identifier.ValueText;
+            }
+            else if (descendant is VariableDeclaratorSyntax { Initializer.Value: ObjectCreationExpressionSyntax creation } variable)
+            {
+                type = creation.Type.ToString();
+                name = variable.Identifier.ValueText;
+            }
+            else continue;
+            if (type?.EndsWith("LuminPackJsonWriter") == true) writers.Add(name);
+            if (type?.EndsWith("LuminPackJsonReader") == true) readers.Add(name);
+        }
     }
 
     /// <summary>Selects complete overloads after the declaration profile has already been propagated.</summary>

@@ -40,4 +40,6 @@ internal static class IncrementalGenerationMetrics
     internal static long InvocationFileFallbacks;
     internal static long BinaryOperationPlanBuilds;
     internal static long BinaryOperationExpansions;
+    internal static long TypeDependencyBuilds;
+    internal static long TypeDependencyCacheHits;
 }

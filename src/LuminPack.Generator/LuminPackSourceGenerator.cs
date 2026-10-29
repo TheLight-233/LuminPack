@@ -102,15 +102,8 @@ namespace LuminPack.SourceGenerator
 
 
             var typeDeclarations = context.SyntaxProvider.CreateSyntaxProvider(
-                static (node, _) => node
-                    is TypeDeclarationSyntax
-                    or StructDeclarationSyntax
-                    or InterfaceDeclarationSyntax
-                    or RecordDeclarationSyntax,
-                static (context, _) =>
-                {
-                    return GetTypeWithAttribute(context, LUMIN_PACKABLE_ATTRIBUTE);
-                })
+                static (node, _) => node is TypeDeclarationSyntax { AttributeLists.Count: > 0 },
+                static (syntax, _) => GetTypeWithAttribute(syntax, LUMIN_PACKABLE_ATTRIBUTE))
                 .Where(static symbol => symbol != null)
                 .Select(static (symbol, _) => symbol!)
                 .WithTrackingName("LuminPack.LuminPackable.1_ForAttributeLuminPackableAttribute");

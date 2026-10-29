@@ -148,7 +148,11 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
                         (ex.StackTrace ?? string.Empty).Replace("\r", " ").Replace("\n", " ")));
                     return spc.Freeze();
                 }
-                return pair.Complete(spc.Freeze());
+                var result = spc.Freeze();
+                var names = result.Files.Select(file => file.Name).ToArray();
+                invocationSupport.Files.Retain(names.Concat(new[] { PartitionedSourceCache.CreateHintName("LuminPack.Dispatch", "Formatters") }));
+                serializerFragments.Files.Retain(names.Concat(new[] { PartitionedSourceCache.CreateHintName("LuminPackSerializer.Common", "common") }));
+                return pair.Complete(result);
             }).WithTrackingName("LuminPack.Incremental.AggregateBatch");
 
         var aggregateFiles = aggregateResults.SelectMany(static (result, _) => result.Files)

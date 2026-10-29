@@ -197,6 +197,8 @@ internal sealed class TypeEmissionCache
         internal readonly Dictionary<string, string> Ownership;
         private readonly INamedTypeSymbol[] _unionCandidates;
         private readonly Dictionary<ISymbol, DirectDependencies> _direct = new Dictionary<ISymbol, DirectDependencies>(SymbolEqualityComparer.Default);
+        private readonly Dictionary<ITypeSymbol, DependencyClosure> _closures = new Dictionary<ITypeSymbol, DependencyClosure>(SymbolEqualityComparer.Default);
+        private readonly Dictionary<ITypeSymbol, DependencyClosure> _unionClosures = new Dictionary<ITypeSymbol, DependencyClosure>(SymbolEqualityComparer.Default);
         private readonly Dictionary<object, bool> _priorGuards = new Dictionary<object, bool>();
 
         /// <summary>Validates each prior project guard at most once for all type and facade entries.</summary>
@@ -255,6 +257,29 @@ internal sealed class TypeEmissionCache
         /// <param name="dependsOnUnion">Receives whether any nested operation reads automatic Union membership.</param>
         /// <returns>The declaring syntax trees that must survive for reuse.</returns>
         internal SyntaxTree[] Dependencies(ITypeSymbol root, Compilation compilation, bool union, out bool dependsOnUnion)
+        {
+            var closures = union ? _unionClosures : _closures;
+            lock (closures)
+            {
+                if (!closures.TryGetValue(root, out var closure))
+                {
+                    var trees = BuildDependencies(root, compilation, union, out bool nestedUnion);
+                    closures.Add(root, closure = new DependencyClosure(trees, nestedUnion));
+                    Interlocked.Increment(ref IncrementalGenerationMetrics.TypeDependencyBuilds);
+                }
+                else Interlocked.Increment(ref IncrementalGenerationMetrics.TypeDependencyCacheHits);
+                dependsOnUnion = closure.DependsOnUnion;
+                return closure.Trees;
+            }
+        }
+
+        /// <summary>Traverses a root's complete source closure once within its owning compilation.</summary>
+        /// <param name="root">The type whose semantic dependencies are required.</param>
+        /// <param name="compilation">The compilation owning every inspected symbol.</param>
+        /// <param name="union">Whether derived candidates affect the root.</param>
+        /// <param name="dependsOnUnion">Whether the closure reads automatic Union membership.</param>
+        /// <returns>The declaring trees required by all consumers of this root's dependency guard.</returns>
+        private SyntaxTree[] BuildDependencies(ITypeSymbol root, Compilation compilation, bool union, out bool dependsOnUnion)
         {
             dependsOnUnion = union;
             var pending = new Stack<ITypeSymbol>();
@@ -362,6 +387,19 @@ internal sealed class TypeEmissionCache
             }
             return new DirectDependencies(type.DeclaringSyntaxReferences.Select(reference => reference.SyntaxTree).Distinct().ToArray(), types.ToArray());
         }
+    }
+
+    /// <summary>Shares a completed dependency traversal only within its current-compilation facts.</summary>
+    private sealed class DependencyClosure
+    {
+        internal readonly SyntaxTree[] Trees;
+        internal readonly bool DependsOnUnion;
+
+        /// <summary>Captures the source closure and its Union invalidation requirement.</summary>
+        /// <param name="trees">All declaring source identities read by the traversal.</param>
+        /// <param name="dependsOnUnion">Whether candidate membership affects the root.</param>
+        internal DependencyClosure(SyntaxTree[] trees, bool dependsOnUnion)
+        { Trees = trees; DependsOnUnion = dependsOnUnion; }
     }
 
     /// <summary>Stores short-lived semantic adjacency only inside the current-compilation context.</summary>

@@ -169,6 +169,8 @@ public sealed partial class LuminPackSourceGenerator
                     .Replace("one dedicated file for the whole assembly", "shared declarations across assembly partitions"), item.Group.Options), item.Group.Options);
             result.AddSource(file.Name, file.Text);
         }
-        return result.Freeze();
+        var frozen = result.Freeze();
+        cache.Retain(frozen.Files.Select(file => file.Name));
+        return frozen;
     }
 }

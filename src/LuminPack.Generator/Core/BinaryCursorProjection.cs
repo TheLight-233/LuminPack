@@ -32,20 +32,30 @@ internal sealed class BinaryCursorProjection : CSharpSyntaxRewriter
     public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
     {
         if (node.Body == null) return node;
-        var states = new HashSet<string>(node.DescendantNodesAndSelf().OfType<ParameterSyntax>()
-            .Where(parameter => IsBinary(parameter.Type?.ToString())).Select(parameter => parameter.Identifier.ValueText), StringComparer.Ordinal);
-        foreach (var variable in node.DescendantNodes().OfType<VariableDeclaratorSyntax>())
-            if (variable.Parent is VariableDeclarationSyntax declaration && IsBinary(declaration.Type.ToString()) ||
-                variable.Initializer?.Value is ObjectCreationExpressionSyntax creation && IsBinary(creation.Type.ToString()))
-                states.Add(variable.Identifier.ValueText);
+        var states = new HashSet<string>(StringComparer.Ordinal);
+        var readers = new HashSet<string>(StringComparer.Ordinal);
+        var candidates = new List<LocalDeclarationStatementSyntax>();
+        foreach (var descendant in node.DescendantNodes())
+        {
+            if (descendant is ParameterSyntax parameter)
+            {
+                string type = parameter.Type?.ToString();
+                if (IsBinary(type)) states.Add(parameter.Identifier.ValueText);
+                if (IsBinaryReader(type)) readers.Add(parameter.Identifier.ValueText);
+            }
+            else if (descendant is VariableDeclaratorSyntax variable)
+            {
+                string type = (variable.Parent as VariableDeclarationSyntax)?.Type.ToString();
+                if (IsBinary(type) || variable.Initializer?.Value is ObjectCreationExpressionSyntax creation && IsBinary(creation.Type.ToString()))
+                    states.Add(variable.Identifier.ValueText);
+                if (IsBinaryReader(type)) readers.Add(variable.Identifier.ValueText);
+            }
+            else if (descendant is LocalDeclarationStatementSyntax { Declaration.Type: RefTypeSyntax } declaration)
+                candidates.Add(declaration);
+        }
         if (states.Count == 0) return node;
-        var readers = new HashSet<string>(node.DescendantNodesAndSelf().OfType<ParameterSyntax>()
-            .Where(parameter => IsBinaryReader(parameter.Type?.ToString())).Select(parameter => parameter.Identifier.ValueText), StringComparer.Ordinal);
-        foreach (var variable in node.DescendantNodes().OfType<VariableDeclaratorSyntax>())
-            if (variable.Parent is VariableDeclarationSyntax declaration && IsBinaryReader(declaration.Type.ToString()))
-                readers.Add(variable.Identifier.ValueText);
         var aliases = new Dictionary<string, string>(StringComparer.Ordinal);
-        foreach (var declaration in node.DescendantNodes().OfType<LocalDeclarationStatementSyntax>())
+        foreach (var declaration in candidates)
             if (declaration.Declaration.Type is RefTypeSyntax && declaration.Declaration.Variables.Count == 1 &&
                 declaration.Declaration.Variables[0].Initializer?.Value is RefExpressionSyntax reference &&
                 reference.Expression is InvocationExpressionSyntax { Expression: MemberAccessExpressionSyntax access } &&

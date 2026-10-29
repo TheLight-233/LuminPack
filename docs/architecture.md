@@ -83,6 +83,8 @@ Main components:
 
 Generation separates current semantic analysis from frozen output values. Each root's source, layout and diagnostics are compared before source production; unchanged values cause no output callback. Cross-compilation caches keep descriptions, syntax tree identities, copied settings and generated strings, never a `Compilation`, `SemanticModel` or symbol. Invalidation covers project-level facts (references, language settings, aliases, extension signatures) and source closures (observed types, members, attributes, partial declarations). `IncrementalGenerationMetrics` exposes internal counters for the incremental tests.
 
+Type discovery filters declarations without attributes before semantic binding and selects the partial declaration that actually carries the packable attribute. Dependency closures are shared within their owning compilation across output caches. Project guards keep weak metadata-reference identities so compilation-backed references cannot retain old projects. Completed output batches discard obsolete file wrappers. Compilation-wide guards and aggregate planning still inspect current project facts after edits; incremental generation does not mean that every stage does zero work for an unrelated edit.
+
 ### Generated files
 
 `LuminPackSerializer.g.cs` holds shared generic APIs; concrete type overloads live in hash-named partial files, stable when other types change. Every generated assembly owns a public `LuminPackSerializer`; generated files suppress CS0436 so a referenced assembly's copy is shadowed. Roots of each payload live in a `__LuminRoots_<hash>` container so overload resolution examines one payload per call.
