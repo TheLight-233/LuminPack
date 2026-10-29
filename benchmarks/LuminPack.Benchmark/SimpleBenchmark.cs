@@ -2,7 +2,6 @@
 using System.Buffers;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Jobs;
 using LuminPack;
 using LuminPack.Utility;
 
@@ -61,7 +60,7 @@ public sealed partial class SimpleClass : SimpleClassBase, Ifoo
     /// <returns>The result of the operation.</returns>
     public static SimpleClass Create()
     {
-        Random random = new Random();
+        Random random = new Random(12345);
         return new SimpleClass
         {
             Id = random.Next(),
@@ -176,12 +175,10 @@ public partial struct Transform
 }
 
 /// <summary>Provides simple benchmark functionality.</summary>
-[HideColumns("StdDev", "RatioSD", "Error")]
-[MinColumn, MaxColumn]
-[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
-[SimpleJob(RuntimeMoniker.Net10_0, launchCount: 3, warmupCount: 6, iterationCount: 15)]
+[MedianColumn, MinColumn, MaxColumn]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory, BenchmarkLogicalGroupRule.ByJob)]
+[Config(typeof(BenchmarkConfig))]
 [MemoryDiagnoser]
-[GcServer(true)]
 public class SimpleBenchmark
 {
     private SimpleClassBase myClass = SimpleClass.Create();
@@ -215,6 +212,7 @@ public class SimpleBenchmark
 
     /// <summary>Measures lumin pack serialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Serialize")]
     public void LuminPackSerialize()
     {
         luminBufferWriter.ResetCore();
@@ -222,7 +220,8 @@ public class SimpleBenchmark
     }
 
     /// <summary>Measures memory pack serialize for the configured benchmark input.</summary>
-    [Benchmark]
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("Serialize")]
     public void MemoryPackSerialize()
     {
         memoryBufferWriter.Reset();
@@ -231,6 +230,7 @@ public class SimpleBenchmark
 
     /// <summary>Measures message pack serialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Serialize")]
     public void MessagePackSerialize()
     {
         messageArrayBufferWriter.ResetWrittenCount();
@@ -239,6 +239,7 @@ public class SimpleBenchmark
 
     /// <summary>Measures nino serialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Serialize")]
     public void NinoSerialize()
     {
         ninoBufferWriter.ResetWrittenCount();
@@ -247,6 +248,7 @@ public class SimpleBenchmark
 
     /// <summary>Measures lumin pack deserialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Deserialize")]
     public void LuminPackDeserialize()
     {
         SimpleClassBase res = default;
@@ -254,7 +256,8 @@ public class SimpleBenchmark
     }
 
     /// <summary>Measures memory pack deserialize for the configured benchmark input.</summary>
-    [Benchmark]
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("Deserialize")]
     public void MemoryPackDeserialize()
     {
         var res = MemoryPackSerializer.Deserialize<SimpleClassBase>(buffer2);
@@ -262,6 +265,7 @@ public class SimpleBenchmark
 
     /// <summary>Measures message pack deserialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Deserialize")]
     public void MessagePackDeserialize()
     {
         var res = MessagePackSerializer.Deserialize<SimpleClassBase>(buffer3);
@@ -269,6 +273,7 @@ public class SimpleBenchmark
 
     /// <summary>Measures nino deserialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Deserialize")]
     public void NinoDeserialize()
     {
         var res = NinoDeserializer.Deserialize<SimpleClassBase>(buffer4);

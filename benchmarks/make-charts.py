@@ -1,13 +1,13 @@
 """Renders README benchmark charts (light and dark SVG) from a BenchmarkDotNet JSON report.
 
-Usage: python benchmarks/make-charts.py <artifacts directory> <output directory> [report-github.md files...]
+Usage: python benchmarks/make-charts.py <artifacts directory> <output directory> [report-github.md files...] [--job TieredPGO]
 Reads JSON or '*-report-github.md' reports and writes <suite>-light.svg, <suite>-dark.svg and summary.json.
 Only LuminPack, MemoryPack, MessagePack and the JSON libraries listed in SUITES are drawn.
 """
 import glob
+import argparse
 import json
 import os
-import sys
 from xml.sax.saxutils import escape
 
 SUITES = {
@@ -102,12 +102,16 @@ def parse_quantity(text, units):
     return float(number) * units.get(unit, 1.0)
 
 
-def read_markdown(path, results):
+def read_markdown(path, results, selected_job=None):
     """Reads the measured (non-Dry) rows of a '*-report-github.md' file."""
     suite = os.path.basename(path).split("-report")[0].split(".")[-1]
     header = None
+    report_job = None
+    seen = set()
     with open(path, encoding="utf-8") as stream:
         for line in stream:
+            if line.startswith("Job="):
+                report_job = line.split()[0].removeprefix("Job=")
             if not line.startswith("|"):
                 continue
             cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
@@ -119,35 +123,56 @@ def read_markdown(path, results):
             row = dict(zip(header, cells))
             if row.get("Job") == "Dry":
                 continue
-            results[suite + "." + row["Method"]] = {
+            if selected_job and row.get("Job", report_job) != selected_job:
+                continue
+            key = suite + "." + row["Method"]
+            if key in seen:
+                raise ValueError("Multiple jobs for " + key + "; select one with --job")
+            seen.add(key)
+            results[key] = {
                 "mean": parse_quantity(row["Mean"], {"ns": 1.0, "μs": 1e3, "us": 1e3, "ms": 1e6, "s": 1e9}),
                 "allocated": parse_quantity(row.get("Allocated", "-"), {"B": 1.0, "KB": 1024.0, "MB": 1048576.0}),
             }
 
 
 def main():
-    source, target = sys.argv[1], sys.argv[2]
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("source")
+    parser.add_argument("target")
+    parser.add_argument("reports", nargs="*")
+    parser.add_argument("--job", help="Select one JIT job, such as TieredPGO or FullOpts")
+    args = parser.parse_args()
+    source, target = args.source, args.target
     results, environment = {}, None
     # Markdown reports may be given as files or found in a directory; JSON reports are read from a directory.
-    markdown = [path for path in sys.argv[3:]] or glob.glob(os.path.join(source, "**", "*-report-github.md"), recursive=True)
+    markdown = args.reports or glob.glob(os.path.join(source, "**", "*-report-github.md"), recursive=True)
     for path in markdown:
-        read_markdown(path, results)
-    reports = [path for path in glob.glob(os.path.join(source, "**", "*.json"), recursive=True)] if not sys.argv[3:] else []
+        read_markdown(path, results, args.job)
+    reports = glob.glob(os.path.join(source, "**", "*-report*.json"), recursive=True) if not args.reports else []
     if not results and not reports:
         raise SystemExit("No BenchmarkDotNet report found under " + source)
     for path in reports:
         with open(path, encoding="utf-8") as stream:
             report = json.load(stream)
         environment = environment or report.get("HostEnvironmentInfo")
+        seen = set()
         for benchmark in report.get("Benchmarks", []):
             statistics = benchmark.get("Statistics") or {}
             if "Mean" not in statistics:
                 continue
+            job = benchmark.get("DisplayInfo", "").partition(": ")[2].partition("(")[0]
+            if args.job and job != args.job:
+                continue
             key = benchmark["Type"].split(".")[-1] + "." + benchmark["Method"]
+            if key in seen:
+                raise ValueError("Multiple jobs for " + key + "; select one with --job")
+            seen.add(key)
             results[key] = {"mean": statistics["Mean"], "error": statistics.get("StandardError"),
                             "allocated": (benchmark.get("Memory") or {}).get("BytesAllocatedPerOperation")}
+    if not results:
+        raise SystemExit("No completed benchmark results match the selected job")
     os.makedirs(target, exist_ok=True)
-    summary = {"environment": environment, "suites": {}}
+    summary = {"environment": environment, "job": args.job, "suites": {}}
     for suite, (title, panels) in SUITES.items():
         scoped = {method: results[suite + "." + method] for _, entries in panels for _, method in entries if suite + "." + method in results}
         if len(scoped) != sum(len(entries) for _, entries in panels):

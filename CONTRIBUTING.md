@@ -56,6 +56,8 @@ dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlat
 - The Unity workflow builds and runs Mono and IL2CPP players; it needs Unity license secrets.
 - Benchmarks run only through the manual `run_benchmarks` input and explicitly select the four maintained classes: `SimpleBenchmark`, `SerializeBenchmark`, `JsonBenchmark` and `PolymorphismBenchmark`. They are not a correctness gate.
 - The benchmark matrix uses Linux x64, macOS Intel x64 and Linux ARM64 hosts. It checks the actual process/OS architecture and Intel CPUID vendor before timing, and uploads separate results and host metadata for each host. Compare library ratios within a host; the operating systems and CPUs differ across hosts.
+- The manual `benchmark_jit` choice defaults to `both`: separate `TieredPGO` (tiered compilation and dynamic PGO enabled) and `FullOpts` (both disabled) jobs. FullOpts is a JIT stability control, not a substitute for production PGO results. Each job uses three processes, 8–30 adaptive warmup iterations and 15 measurements targeting one second each, retaining outliers. Fixed seeds and timestamps keep input bytes identical across processes; `--verify-fixtures` checks fresh instances and repeated setup before timing.
+- Full JSON and measurement CSV artifacts retain each process. `process-stability.md` and the job summary report process means, CV, max/min, allocations and LuminPack/reference ratios within the same operation and JIT job. A process spread above 10% produces a warning; inspect the distribution and native code before claiming a win. Independently launched libraries are not paired by process index.
 - BenchmarkDotNet polymorphism disassembly runs on Windows/Linux; the installed version does not support CoreCLR disassembly on macOS. Separate, untimed JIT probes capture optimized LuminPack and Nino polymorphism read/write assembly and generated-root metadata on the Linux benchmark hosts. The Intel macOS host runs all four timing and allocation fixtures without these probes. Benchmark validation, execution or required probe failures fail the job.
 - CI concurrency is scoped by event so a push does not cancel a manually started benchmark run. Registry worker tests launch their adjacent apphost to preserve the test process architecture, including self-contained x86.
 
@@ -63,9 +65,14 @@ dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlat
 
 ```text
 dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --filter *SimpleBenchmark*
+dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --jit-mode both --filter *PolymorphismBenchmark*
+dotnet run --project benchmarks/LuminPack.Benchmark -c Release -- --verify-fixtures
+python .github/scripts/analyze_benchmarks.py .tmp/benchmark-artifacts
+python benchmarks/make-charts.py .tmp/benchmark-artifacts .tmp/benchmark-charts --job TieredPGO
 ```
 
 Judge results by LuminPack's time divided by the reference library's, from the same run on the same machine; see section 5 of the contract.
+Binary tables use MemoryPack as the baseline within each operation; JSON tables use System.Text.Json. Chart generation requires `--job` when reports contain multiple JIT jobs, and never merges their rows.
 
 ## Source conventions
 

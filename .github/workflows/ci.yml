@@ -10,6 +10,11 @@ on:
         description: Run the four timing benchmarks on x64, Intel x64 and ARM64 hosts
         type: boolean
         default: false
+      benchmark_jit:
+        description: Separate production PGO timings from the FullOpts stability control
+        type: choice
+        options: [both, tiered, fullopts]
+        default: both
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name }}
@@ -44,6 +49,9 @@ jobs:
 
       - name: Run repository checks
         run: dotnet run --project tools/LuminPack.RepositoryChecks/LuminPack.RepositoryChecks.csproj -c Release -- .
+
+      - name: Check benchmark process analysis
+        run: python3 -m unittest discover -s .github/scripts -p 'test_analyze_benchmarks.py'
 
       - name: Audit dependency advisories
         run: dotnet restore LuminPack.sln -p:NuGetAuditMode=all -warnaserror:NU1900,NU1901,NU1902,NU1903,NU1904
@@ -143,7 +151,7 @@ jobs:
     name: Benchmark (${{ matrix.host }})
     if: github.event_name == 'workflow_dispatch' && inputs.run_benchmarks
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 120
+    timeout-minutes: 180
     strategy:
       fail-fast: false
       matrix:
@@ -189,10 +197,26 @@ jobs:
           dotnet run --project benchmarks/LuminPack.Benchmark/LuminPack.Benchmark.csproj -c Release -f net10.0 --no-build -- --verify-host '${{ matrix.arch }}' '${{ matrix.vendor }}' | tee .tmp/benchmark-artifacts/host.txt
           dotnet --info > .tmp/benchmark-artifacts/dotnet-info.txt
 
+      - name: Verify identical fixture bytes across processes and repeated setup
+        shell: bash
+        run: |
+          set -euo pipefail
+          benchmark=benchmarks/LuminPack.Benchmark/bin/Release/net10.0/LuminPack.Benchmark.dll
+          dotnet "$benchmark" --verify-fixtures > .tmp/benchmark-artifacts/fixtures-first.txt
+          dotnet "$benchmark" --verify-fixtures > .tmp/benchmark-artifacts/fixtures-second.txt
+          diff -u .tmp/benchmark-artifacts/fixtures-first.txt .tmp/benchmark-artifacts/fixtures-second.txt
+
       # Keep the selection explicit and restricted to the four maintained classes.
       - name: Run benchmarks
         shell: bash
+        env:
+          LUMINPACK_BENCHMARK_JIT: ${{ inputs.benchmark_jit }}
         run: dotnet run --project benchmarks/LuminPack.Benchmark/LuminPack.Benchmark.csproj -c Release -f net10.0 --no-build -- --filter 'LuminPackBenchmark.SimpleBenchmark.*' 'LuminPackBenchmark.SerializeBenchmark.*' 'LuminPackBenchmark.JsonBenchmark.*' 'LuminPackBenchmark.PolymorphismBenchmark.*' --artifacts "$GITHUB_WORKSPACE/.tmp/benchmark-artifacts" --buildTimeout 600
+
+      - name: Report process dispersion and reference ratios
+        if: ${{ !cancelled() }}
+        shell: bash
+        run: python3 .github/scripts/analyze_benchmarks.py .tmp/benchmark-artifacts --summary "$GITHUB_STEP_SUMMARY"
 
       # Capture separately from timing so JIT logging cannot affect the benchmark results.
       - name: Capture polymorphism JIT assembly

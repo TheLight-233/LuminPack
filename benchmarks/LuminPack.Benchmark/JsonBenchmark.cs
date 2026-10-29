@@ -1,7 +1,6 @@
 using System.Text.Json.Serialization;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Jobs;
 using LuminPack;
 using LuminPack.Option;
 using LuminPack.Utility;
@@ -38,12 +37,10 @@ internal partial class CharacterSaveDataJsonContext : JsonSerializerContext { }
 // ────────────────────────────────────────────────────────────────────────────
 
 /// <summary>Provides json benchmark functionality.</summary>
-[HideColumns("StdDev", "RatioSD", "Error")]
-[MinColumn, MaxColumn]
-[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
-[SimpleJob(RuntimeMoniker.Net10_0, launchCount: 3, warmupCount: 6, iterationCount: 15)]
+[MedianColumn, MinColumn, MaxColumn]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory, BenchmarkLogicalGroupRule.ByJob)]
+[Config(typeof(BenchmarkConfig))]
 [MemoryDiagnoser]
-[GcServer(true)]
 [MarkdownExporterAttribute.GitHub]
 public class JsonBenchmark
 {
@@ -113,7 +110,7 @@ public class JsonBenchmark
     // ── Serialize ────────────────────────────────────────────────────────────
 
     /// <summary>Measures lumin pack serialize to json for the configured benchmark input.</summary>
-    [Benchmark(Baseline = true)]
+    [Benchmark]
     [BenchmarkCategory("Serialize")]
     public void LuminPackSerializeToJson()
     {
@@ -122,7 +119,7 @@ public class JsonBenchmark
 
     /// <summary>Measures system text json serialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
-    [Benchmark]
+    [Benchmark(Baseline = true)]
     [BenchmarkCategory("Serialize")]
     public string SystemTextJsonSerialize()
         => System.Text.Json.JsonSerializer.Serialize(_data, StjOptions);
@@ -145,14 +142,14 @@ public class JsonBenchmark
 
     /// <summary>Measures lumin pack deserialize from json for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
-    [Benchmark(Baseline = true)]
+    [Benchmark]
     [BenchmarkCategory("Deserialize")]
     public CharacterSaveData LuminPackDeserializeFromJson()
         => LuminPackSerializer.DeserializeJson<CharacterSaveData, LuminPackDefaultOptions>(_luminPackJson);
 
     /// <summary>Measures system text json deserialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
-    [Benchmark]
+    [Benchmark(Baseline = true)]
     [BenchmarkCategory("Deserialize")]
     public CharacterSaveData SystemTextJsonDeserialize()
         => System.Text.Json.JsonSerializer.Deserialize<CharacterSaveData>(_systemTextJson, StjOptions);

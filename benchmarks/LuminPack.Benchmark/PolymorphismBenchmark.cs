@@ -3,7 +3,6 @@ using System.Buffers;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
-using BenchmarkDotNet.Jobs;
 using LuminPack;
 using LuminPack.Core;
 using LuminPack.Option;
@@ -794,12 +793,9 @@ public interface Ifoo
 
 
 /// <summary>Provides polymorphism benchmark functionality.</summary>
-[HideColumns("StdDev", "RatioSD", "Error")]
-[MinColumn, MaxColumn]
-[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
-[SimpleJob(RuntimeMoniker.Net10_0, launchCount: 3, warmupCount: 6, iterationCount: 15)]
+[MedianColumn, MinColumn, MaxColumn]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory, BenchmarkLogicalGroupRule.ByJob)]
 [MemoryDiagnoser]
-[GcServer(true)]
 [MarkdownExporterAttribute.GitHub]
 [Config(typeof(PolymorphismDisassemblyConfig))]
 public class PolymorphismBenchmark
@@ -820,6 +816,7 @@ public class PolymorphismBenchmark
     [GlobalSetup]
     public void SetUp()
     {
+        ((PolymorphismClass)myClass).Numbers2.Clear();
         for (int i = 0; i < 1000; i++)
         {
             switch (i % 20)
@@ -862,6 +859,7 @@ public class PolymorphismBenchmark
 
     /// <summary>Measures lumin pack serialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Serialize")]
     public void LuminPackSerialize()
     {
         luminBufferWriter.ResetCore();
@@ -870,7 +868,8 @@ public class PolymorphismBenchmark
     }
 
     /// <summary>Measures memory pack serialize for the configured benchmark input.</summary>
-    [Benchmark]
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("Serialize")]
     public void MemoryPackSerialize()
     {
         memoryBufferWriter.Reset();
@@ -879,6 +878,7 @@ public class PolymorphismBenchmark
 
     /// <summary>Measures message pack serialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Serialize")]
     public void MessagePackSerialize()
     {
         messageArrayBufferWriter.ResetWrittenCount();
@@ -887,6 +887,7 @@ public class PolymorphismBenchmark
 
     /// <summary>Measures nino serialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Serialize")]
     public void NinoSerialize()
     {
         ninoBufferWriter.ResetWrittenCount();
@@ -895,13 +896,15 @@ public class PolymorphismBenchmark
 
     /// <summary>Measures lumin pack deserialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Deserialize")]
     public void LuminPackDeserialize()
     {
         var res = LuminPackSerializer.Deserialize<PolymorphismClassBase, LuminPackUtf16LengthOptions>(buffer1);
     }
 
     /// <summary>Measures memory pack deserialize for the configured benchmark input.</summary>
-    [Benchmark]
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("Deserialize")]
     public void MemoryPackDeserialize()
     {
         var res = MemoryPackSerializer.Deserialize<PolymorphismClassBase>(buffer2);
@@ -909,6 +912,7 @@ public class PolymorphismBenchmark
 
     /// <summary>Measures message pack deserialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Deserialize")]
     public void MessagePackDeserialize()
     {
         var res = MessagePackSerializer.Deserialize<PolymorphismClassBase>(buffer3);
@@ -916,6 +920,7 @@ public class PolymorphismBenchmark
 
     /// <summary>Measures nino deserialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Deserialize")]
     public void NinoDeserialize()
     {
         var res = NinoDeserializer.Deserialize<PolymorphismClassBase>(buffer4);
@@ -923,7 +928,7 @@ public class PolymorphismBenchmark
 }
 
 /// <summary>Enables native disassembly on the hosts supported by the installed BenchmarkDotNet version.</summary>
-public sealed class PolymorphismDisassemblyConfig : ManualConfig
+public sealed class PolymorphismDisassemblyConfig : BenchmarkConfig
 {
     /// <summary>Keeps timing and allocation benchmarks available on macOS without an unsupported diagnoser.</summary>
     public PolymorphismDisassemblyConfig()

@@ -6,6 +6,7 @@ using System.Reflection;
 using System.Runtime;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics.X86;
+using System.Security.Cryptography;
 using System.Text;
 
 [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Minimal)]
@@ -22,10 +23,72 @@ internal static class Program
             return VerifyHost(architecture, vendor);
         if (args is ["--polymorphism-native-probe", var operation])
             return CapturePolymorphismNativeCode(operation);
+        if (args is ["--verify-fixtures"])
+            return VerifyFixtures();
 
-        var summaries = BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
+        int jitModeIndex = Array.IndexOf(args, "--jit-mode");
+        if (jitModeIndex >= 0)
+        {
+            if (jitModeIndex + 1 >= args.Length || args[jitModeIndex + 1] is not ("tiered" or "fullopts" or "both"))
+            {
+                Console.Error.WriteLine("--jit-mode requires tiered, fullopts or both.");
+                return 1;
+            }
+            Environment.SetEnvironmentVariable(LuminPackBenchmark.BenchmarkConfig.JitModeVariable, args[jitModeIndex + 1]);
+            args = args.Take(jitModeIndex).Concat(args.Skip(jitModeIndex + 2)).ToArray();
+        }
+
+        var summaries = BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args).ToArray();
+        if (summaries.Length == 0)
+            return args.Any(argument => argument is "--list" or "--help" or "--version" or "-h") ? 0 : 1;
         return summaries.Any(summary => summary.HasCriticalValidationErrors ||
             summary.Reports.Any(report => !report.Success)) ? 1 : 0;
+    }
+
+    /// <summary>Verifies repeated setup and fresh fixtures have identical serialized input bytes.</summary>
+    /// <returns>Zero for reproducible fixtures, or one when a payload changes.</returns>
+    private static int VerifyFixtures()
+    {
+        Type[] types = [typeof(LuminPackBenchmark.SimpleBenchmark), typeof(LuminPackBenchmark.SerializeBenchmark),
+            typeof(LuminPackBenchmark.JsonBenchmark), typeof(LuminPackBenchmark.PolymorphismBenchmark)];
+        foreach (Type type in types)
+        {
+            var expected = new Dictionary<string, byte[]>();
+            for (int instanceIndex = 0; instanceIndex < 2; instanceIndex++)
+            {
+                object instance = Activator.CreateInstance(type)!;
+                try
+                {
+                    for (int setup = 0; setup < 2; setup++)
+                    {
+                        type.GetMethod("SetUp")!.Invoke(instance, null);
+                        foreach (FieldInfo field in type.GetFields(BindingFlags.Instance | BindingFlags.NonPublic))
+                        {
+                            byte[]? payload = field.GetValue(instance) switch
+                            {
+                                byte[] bytes => bytes,
+                                string json => Encoding.UTF8.GetBytes(json),
+                                _ => null
+                            };
+                            if (payload is null) continue;
+                            if (expected.TryGetValue(field.Name, out byte[]? original))
+                            {
+                                if (!original.AsSpan().SequenceEqual(payload))
+                                {
+                                    Console.Error.WriteLine($"{type.Name}.{field.Name} changed between fixture setups.");
+                                    return 1;
+                                }
+                            }
+                            else expected.Add(field.Name, payload.ToArray());
+                        }
+                    }
+                }
+                finally { type.GetMethod("CleanUp")!.Invoke(instance, null); }
+            }
+            foreach (var payload in expected.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+                Console.WriteLine($"{type.Name}.{payload.Key}: {payload.Value.Length} bytes; SHA256 {Convert.ToHexString(SHA256.HashData(payload.Value))}");
+        }
+        return 0;
     }
 
     /// <summary>Checks the actual .NET process architecture and optional x86 CPU vendor before timing.</summary>

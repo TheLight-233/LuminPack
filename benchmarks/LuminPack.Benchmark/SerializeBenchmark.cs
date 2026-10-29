@@ -1,7 +1,6 @@
 using System.Buffers;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
-using BenchmarkDotNet.Jobs;
 using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Option;
@@ -150,7 +149,7 @@ public sealed partial class WeaponItem : ItemBase
         ItemId = id,
         ItemName = $"Weapon_{id:D3}",
         Rarity = rng.Next(1, 6),
-        ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 100000),
+        ObtainedAt = BenchmarkConfig.Timestamp - rng.Next(0, 100000),
         IsLocked = id % 4 == 0,
         AttackPower = (float)Math.Round(rng.NextDouble() * 5000, 2),
         CritRate = (float)Math.Round(rng.NextDouble() * 0.5, 4),
@@ -188,7 +187,7 @@ public sealed partial class ArmorItem : ItemBase
         ItemId = id + 1000,
         ItemName = $"Armor_{id:D3}",
         Rarity = rng.Next(1, 6),
-        ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 100000),
+        ObtainedAt = BenchmarkConfig.Timestamp - rng.Next(0, 100000),
         IsLocked = id % 5 == 0,
         Defense = (float)Math.Round(rng.NextDouble() * 3000, 2),
         MagicResist = (float)Math.Round(rng.NextDouble() * 2000, 2),
@@ -225,7 +224,7 @@ public sealed partial class ConsumableItem : ItemBase
         ItemId = id + 2000,
         ItemName = $"Potion_{id:D3}",
         Rarity = rng.Next(1, 4),
-        ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 50000),
+        ObtainedAt = BenchmarkConfig.Timestamp - rng.Next(0, 50000),
         IsLocked = false,
         Count = rng.Next(1, 99),
         MaxStack = 99,
@@ -260,7 +259,7 @@ public sealed partial class MountItem : ItemBase
         ItemId = id + 3000,
         ItemName = $"Mount_{id:D3}",
         Rarity = rng.Next(3, 6),
-        ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 200000),
+        ObtainedAt = BenchmarkConfig.Timestamp - rng.Next(0, 200000),
         IsLocked = true,
         SpeedBonus = (float)Math.Round(rng.NextDouble() * 0.6 + 0.2, 3),
         CanFly = rng.Next(3) == 0,
@@ -294,7 +293,7 @@ public sealed partial class QuestItem : ItemBase
         ItemId = id + 4000,
         ItemName = $"QuestItem_{id:D3}",
         Rarity = 1,
-        ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 30000),
+        ObtainedAt = BenchmarkConfig.Timestamp - rng.Next(0, 30000),
         IsLocked = true,
         QuestId = rng.Next(1, 200),
         ObjectiveName = $"Collect_{id}_DragonScale",
@@ -330,7 +329,7 @@ public sealed partial class PetItem : ItemBase
         ItemId = id + 5000,
         ItemName = $"Pet_{id:D3}",
         Rarity = rng.Next(2, 6),
-        ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 500000),
+        ObtainedAt = BenchmarkConfig.Timestamp - rng.Next(0, 500000),
         IsLocked = rng.Next(2) == 0,
         PetName = $"Spirit_{id}",
         Loyalty = rng.Next(0, 100),
@@ -369,7 +368,7 @@ public sealed partial class RelicItem : ItemBase
         ItemId = id + 6000,
         ItemName = $"Relic_{id:D3}",
         Rarity = rng.Next(3, 6),
-        ObtainedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 300000),
+        ObtainedAt = BenchmarkConfig.Timestamp - rng.Next(0, 300000),
         IsLocked = rng.Next(2) == 0,
         SetId = rng.Next(0, 20),
         PowerLevel = (float)Math.Round(rng.NextDouble() * 100, 2),
@@ -612,7 +611,7 @@ public sealed partial class CombatEventLog : EventLogBase
     /// <returns>The result of the operation.</returns>
     public static CombatEventLog Create(Random rng, int id) => new()
     {
-        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 86400),
+        Timestamp = BenchmarkConfig.Timestamp - rng.Next(0, 86400),
         Category = EventCategory.Combat,
         Summary = $"Combat with Enemy_{id}",
         TargetId = rng.Next(1, 9999),
@@ -645,7 +644,7 @@ public sealed partial class CraftingEventLog : EventLogBase
     /// <returns>The result of the operation.</returns>
     public static CraftingEventLog Create(Random rng, int id) => new()
     {
-        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 86400),
+        Timestamp = BenchmarkConfig.Timestamp - rng.Next(0, 86400),
         Category = EventCategory.Crafting,
         Summary = $"Crafted item #{id}",
         RecipeId = rng.Next(1, 500),
@@ -677,7 +676,7 @@ public sealed partial class TradeEventLog : EventLogBase
     /// <returns>The result of the operation.</returns>
     public static TradeEventLog Create(Random rng, int id) => new()
     {
-        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 86400),
+        Timestamp = BenchmarkConfig.Timestamp - rng.Next(0, 86400),
         Category = EventCategory.Trade,
         Summary = $"Trade with Player_{id}",
         PartnerId = rng.Next(100000, 999999),
@@ -709,7 +708,7 @@ public sealed partial class AchievementEventLog : EventLogBase
     /// <returns>The result of the operation.</returns>
     public static AchievementEventLog Create(Random rng, int id) => new()
     {
-        Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(0, 86400),
+        Timestamp = BenchmarkConfig.Timestamp - rng.Next(0, 86400),
         Category = EventCategory.System,
         Summary = $"Achievement unlocked #{id}",
         AchievementId = rng.Next(1, 1000),
@@ -865,7 +864,7 @@ public sealed partial class GuildInfo
         MaxMemberCount = 100,
         GuildNotice = "Welcome to LegendaryGuild! Guild events every Friday.",
         IsPublic = true,
-        CreatedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - rng.Next(100000, 5000000),
+        CreatedAt = BenchmarkConfig.Timestamp - rng.Next(100000, 5000000),
     };
 }
 
@@ -998,7 +997,7 @@ public sealed partial class CharacterSaveData
             Class = CharacterClass.Paladin,
             ServerRegion = 3,
             TotalPlayTime = rng.Next(0, 10_000_000),
-            LastSaveAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
+            LastSaveAt = BenchmarkConfig.Timestamp,
             IsOnline = true,
             IsDeleted = false,
             Title = "Conqueror of the Abyss",
@@ -1012,14 +1011,14 @@ public sealed partial class CharacterSaveData
             Guild = guild,
             StatsSnapshot = new Envelope<CharacterStats>
             {
-                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 3600,
+                Timestamp = BenchmarkConfig.Timestamp - 3600,
                 Tag = "hourly_snapshot",
                 Version = 3,
                 Payload = CharacterStats.Create(rng),
             },
             GuildSnapshot = new Envelope<GuildInfo>
             {
-                Timestamp = DateTimeOffset.UtcNow.ToUnixTimeSeconds() - 7200,
+                Timestamp = BenchmarkConfig.Timestamp - 7200,
                 Tag = "guild_snapshot",
                 Version = 1,
                 Payload = GuildInfo.Create(rng),
@@ -1043,12 +1042,10 @@ public sealed partial class CharacterSaveData
 // ────────────────────────────────────────────────────────────────────────────
 
 /// <summary>Provides serialize benchmark functionality.</summary>
-[HideColumns("StdDev", "RatioSD", "Error")]
-[MinColumn, MaxColumn]
-[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory)]
-[SimpleJob(RuntimeMoniker.Net10_0, launchCount: 3, warmupCount: 6, iterationCount: 15)]
+[MedianColumn, MinColumn, MaxColumn]
+[GroupBenchmarksBy(BenchmarkLogicalGroupRule.ByCategory, BenchmarkLogicalGroupRule.ByJob)]
+[Config(typeof(BenchmarkConfig))]
 [MemoryDiagnoser]
-[GcServer(true)]
 public class SerializeBenchmark
 {
     private CharacterSaveData _data = CharacterSaveData.Create();
@@ -1086,7 +1083,8 @@ private MemoryPackSerializerOptions memoryPackSerializerOption = new MemoryPackS
     public void CleanUp() => _luminWriter.Dispose();
 
     /// <summary>Measures lumin pack serialize for the configured benchmark input.</summary>
-    [Benchmark(Baseline = true)]
+    [Benchmark]
+    [BenchmarkCategory("Serialize")]
     public void LuminPackSerialize()
     {
         _luminWriter.ResetForReuse();
@@ -1094,7 +1092,8 @@ private MemoryPackSerializerOptions memoryPackSerializerOption = new MemoryPackS
     }
 
     /// <summary>Measures memory pack serialize for the configured benchmark input.</summary>
-    [Benchmark]
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("Serialize")]
     public void MemoryPackSerialize()
     {
         _memoryWriter.Reset();
@@ -1103,6 +1102,7 @@ private MemoryPackSerializerOptions memoryPackSerializerOption = new MemoryPackS
 
     /// <summary>Measures message pack serialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Serialize")]
     public void MessagePackSerialize()
     {
         _msgpackWriter.ResetWrittenCount();
@@ -1111,6 +1111,7 @@ private MemoryPackSerializerOptions memoryPackSerializerOption = new MemoryPackS
 
     /// <summary>Measures nino serialize for the configured benchmark input.</summary>
     [Benchmark]
+    [BenchmarkCategory("Serialize")]
     public void NinoSerialize()
     {
         _ninoWriter.ResetWrittenCount();
@@ -1120,24 +1121,28 @@ private MemoryPackSerializerOptions memoryPackSerializerOption = new MemoryPackS
     /// <summary>Measures lumin pack deserialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
     [Benchmark]
+    [BenchmarkCategory("Deserialize")]
     public CharacterSaveData LuminPackDeserialize()
         => LuminPackSerializer.Deserialize<CharacterSaveData, LuminPackUtf16LengthOptions>(_luminBuffer);
 
     /// <summary>Measures memory pack deserialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
-    [Benchmark]
+    [Benchmark(Baseline = true)]
+    [BenchmarkCategory("Deserialize")]
     public CharacterSaveData MemoryPackDeserialize()
         => MemoryPackSerializer.Deserialize<CharacterSaveData>(_memoryBuffer, memoryPackSerializerOption);
 
     /// <summary>Measures message pack deserialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
     [Benchmark]
+    [BenchmarkCategory("Deserialize")]
     public CharacterSaveData MessagePackDeserialize()
         => MessagePackSerializer.Deserialize<CharacterSaveData>(_msgpackBuffer);
 
     /// <summary>Measures nino deserialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>
     [Benchmark]
+    [BenchmarkCategory("Deserialize")]
     public CharacterSaveData NinoDeserialize()
         => NinoDeserializer.Deserialize<CharacterSaveData>(_ninoBuffer);
 }
