@@ -71,8 +71,12 @@ public static class KeyValuePairEmitter
         sb.AppendLine("            reader.TryConsumeArrayStart();");
         sb.AppendLine("            " + keyType + " key = default!;");
         sb.AppendLine("            " + valueType + " itemValue = default!;");
-        sb.AppendLine("            reader.ReadValue(ref key);");
-        sb.AppendLine("            reader.ReadValue(ref itemValue);");
+        sb.AppendLine("            if (reader.Read())");
+        sb.AppendLine("            {");
+        sb.AppendLine("                reader.ReadValue(ref key);");
+        sb.AppendLine("                if (reader.Read())");
+        sb.AppendLine("                    reader.ReadValue(ref itemValue);");
+        sb.AppendLine("            }");
         sb.AppendLine("            reader.ConsumeArrayEnd();");
         sb.AppendLine("            value = new global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">(key, itemValue);");
     }
