@@ -115,9 +115,11 @@ internal sealed class BinaryEntryInlining
     /// <param name="stack">The current recursive expansion path.</param>
     /// <param name="optionProfile">A containing member's statically selected profile, if present.</param>
     /// <param name="root">Whether the operation already owns the serializer's parameter bindings and return boundary.</param>
+    /// <param name="outlineNestedUserWrite">Whether the containing plan keeps nested user-type writes on their type entry.</param>
     /// <returns>The expanded block, or null at a retained recursive/custom boundary.</returns>
     private BlockSyntax Expand(BinaryOperationPlan plan, string operationName, IReadOnlyList<ExpressionSyntax> arguments,
-        IReadOnlyList<bool> aliases, HashSet<string> stack, string optionProfile = null, bool root = false)
+        IReadOnlyList<bool> aliases, HashSet<string> stack, string optionProfile = null, bool root = false,
+        bool outlineNestedUserWrite = false)
     {
         string key = plan.TypeName + "|" + operationName;
         if (stack.Contains(key) || !plan.Operations.TryGetValue(operationName, out var operation)) return null;
@@ -130,11 +132,12 @@ internal sealed class BinaryEntryInlining
         if (!_streaming && !root && (GeneratedExecutionPolicy.Reuse(operationName, operation) ||
             _reservedExpansionDepth == 0 && !operationName.Contains(":local:") &&
             CodeEmitterRegistry.GetEmitter(plan.TypeName).Read != null)) return null;
-        // A nested user-type write would copy its complete record body into every element site. Inside a
-        // keyed or nested collection that body pushes the surrounding root past the JIT's inline budget, so
-        // the writer's small reserve/store/publish helpers become real calls for every field. Keep that write
-        // on its generated type entry, which writes the same bytes from one compact call per element.
-        if (!root && operationName == "WriteValue" && !plan.TypeName.StartsWith("global::System.", StringComparison.Ordinal) &&
+        // A nested user-type write would copy its complete record body into every element site. Where the
+        // containing plan writes another value beside each element, that body pushes the root past the JIT's
+        // inline budget, so the writer's small reserve/store/publish helpers become real calls for every field.
+        // Keep that write on its generated type entry, which writes the same bytes from one compact call.
+        if (outlineNestedUserWrite && !root && operationName == "WriteValue" &&
+            !plan.TypeName.StartsWith("global::System.", StringComparison.Ordinal) &&
             operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackWriter") return null;
         if (arguments.Count != operation.Parameters.Length)
             return LuminPackExceptionHelper.ThrowInvalidOperationException<BlockSyntax>("Inline operation parameter mismatch: " + key);
@@ -240,6 +243,17 @@ internal sealed class BinaryEntryInlining
         var result = SyntaxFactory.Block(statements);
         return optionProfile == null ? result : result.WithAdditionalAnnotations(new SyntaxAnnotation(OptionScopeAnnotation, optionProfile));
     }
+
+    /// <summary>Returns whether a containing plan writes another value beside every user-type element.</summary>
+    /// <param name="typeName">The containing operation's closed type name.</param>
+    /// <returns>Whether a nested user-type write stays on its generated type entry.</returns>
+    /// <remarks>Keyed containers and user types interleave another write with each element; sequence containers
+    /// write one value per element and keep the inlined record body.</remarks>
+    private static bool OutlinesNestedUserWrites(string typeName) =>
+        !typeName.StartsWith("global::System.", StringComparison.Ordinal) ||
+        typeName.IndexOf("Dictionary<", StringComparison.Ordinal) >= 0 ||
+        typeName.IndexOf("SortedList<", StringComparison.Ordinal) >= 0 ||
+        typeName.IndexOf("KeyValuePair<", StringComparison.Ordinal) >= 0;
 
     /// <summary>Obtains the compiler-marked identity of one private operation support declaration.</summary>
     /// <param name="declaration">A mirror, constant field, or initialization helper.</param>
@@ -363,7 +377,8 @@ internal sealed class BinaryEntryInlining
             var arguments = call.ArgumentList.Arguments.Select(argument => (ExpressionSyntax)Visit(argument.Expression)).ToList();
             if (slot.Reduced) arguments.Insert(0, (ExpressionSyntax)Visit(((MemberAccessExpressionSyntax)call.Expression).Expression));
             var plan = slot.Local ? _plan : _owner.GetPlan(_owner.Resolve(slot.TypeName));
-            var expanded = _owner.Expand(plan, slot.Operation, arguments, slot.Aliases, _stack, slot.OptionProfile);
+            var expanded = _owner.Expand(plan, slot.Operation, arguments, slot.Aliases, _stack, slot.OptionProfile, false,
+                OutlinesNestedUserWrites(_plan.TypeName));
             if (expanded != null) return expanded.WithTriviaFrom(node);
             if (_owner._streaming && !slot.Local && slot.Operation.StartsWith("Read", StringComparison.Ordinal) && plan.Operations.ContainsKey(slot.Operation))
             {
