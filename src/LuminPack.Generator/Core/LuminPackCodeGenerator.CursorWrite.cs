@@ -141,6 +141,7 @@ public static partial class LuminPackCodeGenerator
                 index = end;
             }
             else if (kind == 2) builder.AppendLine(indent + "    __cursor = ref writer.WriteReservedRecordString(ref __cursor, " + name + ");");
+            else if (kind is 3 or 4) builder.AppendLine(indent + "    __cursor = ref " + writerType + ".WriteReservedSpanRecord(ref __cursor, " + name + ");");
             else builder.AppendLine(indent + "    __cursor = ref " + writerType + ".WriteReserved(ref __cursor, " + name + ");");
         }
         builder.AppendLine(indent + "}");

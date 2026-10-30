@@ -218,6 +218,10 @@ internal sealed class BinaryEntryInlining
         if (inputBoundary) _inputExpansionDepth++;
         try { body = (BlockSyntax)new OperationExpansion(this, plan, operation, prefix, exit, path, arguments[0], rootBindings).Visit(template); }
         finally { if (guaranteed) _reservedExpansionDepth--; if (inputBoundary) _inputExpansionDepth--; }
+        // An element record inlined into a sequence entry already owns one compact loop body, so its raw
+        // collection fields take the exact inline stores; outlined keyed entries keep the shared call.
+        if (!root && !plan.TypeName.StartsWith("global::System.", StringComparison.Ordinal))
+            body = (BlockSyntax)new InlineSpanRecordWrites().Visit(body);
         if (optionProfile != null && !operationName.EndsWith(":json", StringComparison.Ordinal))
             body = CompiledOptionProjection.Apply(body, plan.Options, arguments[0].ToString(), operation.Parameters[0].Type, optionProfile);
         if (guaranteed)
@@ -403,6 +407,27 @@ internal sealed class BinaryEntryInlining
                 return LuminPackExceptionHelper.ThrowInvalidOperationException<SyntaxNode>("A void binary operation returned a value.");
             return SyntaxFactory.GotoStatement(SyntaxKind.GotoStatement, SyntaxFactory.IdentifierName(SyntaxFactory.Identifier(_exit)
                 .WithAdditionalAnnotations(new SyntaxAnnotation(GeneratedOperationNames.RoleAnnotation, "end")))).WithTriviaFrom(node);
+        }
+    }
+
+    /// <summary>Replaces the shared outlined span-record copy with the inline stores of a sequence element record.</summary>
+    /// <remarks>The payload width was already proved by the enclosing record reservation; only the call differs.</remarks>
+    private sealed class InlineSpanRecordWrites : CSharpSyntaxRewriter
+    {
+        /// <summary>Selects a captured raw contiguous record call on the shared writer type.</summary>
+        /// <param name="node">The expanded invocation.</param>
+        /// <returns>The inline span write, or the unchanged invocation.</returns>
+        public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
+        {
+            var visited = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
+            if (visited.ArgumentList.Arguments.Count != 2 ||
+                visited.Expression is not MemberAccessExpressionSyntax { Name.Identifier.ValueText: "WriteReservedSpanRecord" } access ||
+                access.Expression.ToString() is not ("global::LuminPack.Core.LuminPackWriter" or "LuminPackWriter") ||
+                visited.ArgumentList.Arguments[1].Expression is not IdentifierNameSyntax record) return visited;
+            string cursor = visited.ArgumentList.Arguments[0].Expression.ToString();
+            string name = record.Identifier.ValueText;
+            return SyntaxFactory.ParseExpression("global::LuminPack.Core.LuminPackWriter.WriteReservedSpanInline(ref " + cursor + ", " +
+                name + ".IsNull, " + name + ".Elements)").WithTriviaFrom(visited);
         }
     }
 }

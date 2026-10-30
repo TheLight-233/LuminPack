@@ -1430,6 +1430,33 @@ namespace LuminPack.Core
             where T : unmanaged
             => ref Unsafe.Add(ref cursor, (nint)(uint)WriteReservedSpanOutlined(ref cursor, record.IsNull, record.Elements));
 
+        /// <summary>Writes a captured raw contiguous record kept on an outlined entry boundary.</summary>
+        /// <typeparam name = "T">The raw element type.</typeparam>
+        /// <param name = "cursor">The caller's current position, followed by room for the record's width.</param>
+        /// <param name = "record">The captured record.</param>
+        /// <returns>The position after the record.</returns>
+        /// <remarks>A keyed entry keeps this call, whose size-dispatched copy stays out of its compact body. Sequence
+        /// entries inline their element record and replace this call with <see cref = "WriteReservedSpanInline{T}"/>.</remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public static ref byte WriteReservedSpanRecord<T>(ref byte cursor, RawRecord<T> record)
+            where T : unmanaged
+            => ref Unsafe.Add(ref cursor, (nint)(uint)WriteReservedSpanOutlined(ref cursor, record.IsNull, record.Elements));
+
+        /// <summary>Writes a captured raw contiguous record inside an inlined element record.</summary>
+        /// <typeparam name = "T">The raw element type.</typeparam>
+        /// <param name = "cursor">The caller's current position, followed by room for the record's width.</param>
+        /// <param name = "isNull">Whether the collection was null.</param>
+        /// <param name = "elements">The captured elements.</param>
+        /// <returns>The position after the record.</returns>
+        /// <remarks>The enclosing record reservation proved the room, so this path inlines the exact stores instead of
+        /// paying a call per element for a small payload.</remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ref byte WriteReservedSpanInline<T>(ref byte cursor, bool isNull, scoped ReadOnlySpan<T> elements)
+            where T : unmanaged
+            => ref Unsafe.Add(ref cursor, (nint)(uint)WriteReservedSpan(ref cursor, isNull, elements));
+
         /// <summary>Writes a captured raw-pair dictionary record of exactly its captured count into reserved room.</summary>
         /// <typeparam name = "TKey">The raw key type.</typeparam>
         /// <typeparam name = "TValue">The raw value type.</typeparam>
