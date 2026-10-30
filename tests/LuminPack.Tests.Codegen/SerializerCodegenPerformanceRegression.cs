@@ -284,14 +284,16 @@ internal static partial class SerializerCodegenPerformanceRegression
             var architecture = entry.DescendantNodes().OfType<IfStatementSyntax>().Single(statement =>
                 statement.Condition.ToString().Contains("Unsafe.SizeOf<global::System.IntPtr>() == 8", StringComparison.Ordinal) &&
                 statement.Condition.ToString().Contains("Unsafe.ByteOffset", StringComparison.Ordinal));
-            // Field-wise fallbacks may spell their reads inline, but every typed access keeps its own 64-bit gate.
+            // Field-wise fallbacks may spell their reads inline, but every typed access keeps its own architecture gate;
+            // a value of at most four bytes is allowed on 32-bit, matching the writer's scalar store.
             Require(architecture.Else!.Statement.DescendantNodes().OfType<InvocationExpressionSyntax>()
                     .Where(call => call.Expression.ToString().EndsWith("Unaligned", StringComparison.Ordinal) ||
                         call.Expression.ToString().Contains("Unsafe.ReadUnaligned", StringComparison.Ordinal) ||
                         call.Expression.ToString().Contains("Unsafe.WriteUnaligned", StringComparison.Ordinal))
                     .Where(call => !call.Expression.ToString().Contains("CopyBlockUnaligned", StringComparison.Ordinal))
                     .All(call => call.Ancestors().TakeWhile(node => node != architecture.Else).OfType<IfStatementSyntax>().Any(gate =>
-                        gate.Condition.ToString() == "Unsafe.SizeOf<global::System.IntPtr>() == 8" && gate.Statement.Contains(call))),
+                        gate.Condition.ToString().StartsWith("Unsafe.SizeOf<global::System.IntPtr>() == 8", StringComparison.Ordinal) &&
+                        gate.Statement.Contains(call))),
                 "Fixed copies lost their address proof or bypassed the scalar architecture core.");
         }
         foreach (var entry in methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer" } &&
@@ -349,8 +351,11 @@ internal static partial class SerializerCodegenPerformanceRegression
         Require(sequences.Length >= 2, "The architecture regression lost its concrete unmanaged sequence entries.");
         foreach (var sequence in sequences)
         {
+            // The staged value read adds the writer's at-most-four-byte allowance to its architecture gate; the
+            // wider fixture types still keep the 32-bit block-copy fallback.
             var branches = sequence.DescendantNodes().OfType<IfStatementSyntax>().Where(statement =>
-                statement.Condition.ToString() == "global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8").ToArray();
+                statement.Condition.ToString().StartsWith("global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8",
+                    StringComparison.Ordinal)).ToArray();
             Require(branches.Length == 3 && branches.All(branch => branch.Else!.Statement.ToString().Contains("LuminPackMarshal.CopyBlockUnaligned", StringComparison.Ordinal) &&
                 !branch.Else.Statement.ToString().Contains("Unsafe.ReadUnaligned", StringComparison.Ordinal)),
                 "A direct or staged sequence bypasses the 32-bit block-copy path.");

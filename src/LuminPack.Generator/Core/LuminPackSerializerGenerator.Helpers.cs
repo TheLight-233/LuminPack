@@ -53,9 +53,12 @@ public static partial class LuminPackSerializerGenerator
     /// <param name="builder">The operation source builder.</param>
     /// <param name="typeName">The complete unmanaged type or guarded generic parameter.</param>
     /// <param name="span">The already staged input span.</param>
+    /// <remarks>A value of at most four bytes uses typed unaligned access on both pointer widths, mirroring the writer;
+    /// wider values keep the block copy on 32-bit targets.</remarks>
     private static void AppendUnmanagedSequenceValueRead(StringBuilder builder, string typeName, string span)
     {
-        builder.AppendLine("                if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8)");
+        builder.AppendLine("                if (global::System.Runtime.CompilerServices.Unsafe.SizeOf<global::System.IntPtr>() == 8 || " +
+            "global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + typeName + ">() <= 4)");
         builder.AppendLine("                {");
         builder.AppendLine("                    value = Unsafe.ReadUnaligned<" + typeName + ">(ref MemoryMarshal.GetReference(" + span + "));");
         builder.AppendLine("                }");

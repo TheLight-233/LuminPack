@@ -164,10 +164,11 @@ public static partial class LuminPackCodeGenerator
     /// <param name="location">The fixed input byte reference expression.</param>
     /// <param name="storage">The writable destination storage.</param>
     /// <param name="type">The destination storage type.</param>
-    /// <returns>A statement that uses typed unaligned access only on 64-bit and the block copy on 32-bit.</returns>
+    /// <returns>A statement that uses typed unaligned access on 64-bit and for values of at most four bytes, and the
+    /// block copy for wider values on 32-bit.</returns>
     /// <remarks>Large generated roots can exhaust the JIT's inlining limits; these intrinsics need no inlining.</remarks>
     private static string FixedRead(string location, string storage, string type)
-        => "if (Unsafe.SizeOf<global::System.IntPtr>() == 8) " + storage + " = Unsafe.ReadUnaligned<" + type + ">(ref " + location + "); " +
+        => "if (Unsafe.SizeOf<global::System.IntPtr>() == 8 || Unsafe.SizeOf<" + type + ">() <= 4) " + storage + " = Unsafe.ReadUnaligned<" + type + ">(ref " + location + "); " +
            "else global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.As<" + type + ", byte>(ref " + storage + "), ref " + location + ", (uint)Unsafe.SizeOf<" + type + ">());";
 
     /// <summary>Builds a constant or JIT-specializable byte width without inferring a struct's layout.</summary>

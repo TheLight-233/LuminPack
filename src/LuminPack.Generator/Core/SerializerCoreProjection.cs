@@ -324,7 +324,7 @@ internal static class SerializerCoreProjection
             }
             return SyntaxFactory.ParseStatement("{ ref " + type + " " + target + " = ref " + call.ArgumentList.Arguments[0].Expression +
                 "; " + capture +
-                "if (" + memory + ".SizeOf<global::System.IntPtr>() == 8) " + target + " = " + memory + ".ReadUnaligned<" + type + ">(ref " + source + "); " +
+                "if (" + memory + ".SizeOf<global::System.IntPtr>() == 8 || " + size + " <= 4) " + target + " = " + memory + ".ReadUnaligned<" + type + ">(ref " + source + "); " +
                 "else " + memory + ".CopyBlockUnaligned(ref " + memory + ".As<" + type + ", byte>(ref " + target + "), ref " + source + ", (uint)" + size + "); }").WithTriviaFrom(node);
         }
 

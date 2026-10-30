@@ -639,10 +639,12 @@ namespace LuminPack.Core
         /// <typeparam name = "T1">The reference-free storage type.</typeparam>
         /// <param name = "value1">The field participating in the memory operation.</param>
         /// <returns>The complete packed wire width.</returns>
+        /// <remarks>A value of at most four bytes uses typed unaligned access on both pointer widths, as the writer's
+        /// scalar store does; wider values keep the block copy on 32-bit targets.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int Read<T1>(ref byte reference, out T1 value1)
         {
-            if (Unsafe.SizeOf<IntPtr>() == 8)
+            if (Unsafe.SizeOf<IntPtr>() == 8 || Unsafe.SizeOf<T1>() <= 4)
             {
                 value1 = Unsafe.ReadUnaligned<T1>(ref reference);
             }
