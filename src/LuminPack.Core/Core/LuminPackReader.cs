@@ -1100,6 +1100,29 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public string? Read(string? current = null) => Read<LuminPackDefaultOptions>(current);
 
+        /// <summary>Reads validated string slots with the default profile, retaining equal immutable values.</summary>
+        /// <param name="strings">The destination slots after their collection framing has been validated.</param>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void ReadStrings(Span<string?> strings) => ReadStrings<LuminPackDefaultOptions>(strings);
+
+        /// <summary>Reads validated string slots while retaining per-record checks and unchanged heap references.</summary>
+        /// <typeparam name="TOptions">The stateless binary string profile.</typeparam>
+        /// <param name="strings">The destination slots after their collection framing has been validated.</param>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void ReadStrings<TOptions>(Span<string?> strings) where TOptions : struct, ILuminPackOptions
+        {
+            ref string? first = ref MemoryMarshal.GetReference(strings);
+            for (int i = 0; i < strings.Length; i++)
+            {
+                ref string? slot = ref Unsafe.Add(ref first, (nint)(uint)i);
+                string? current = slot;
+                string? decoded = Read<TOptions>(current);
+                if (!ReferenceEquals(current, decoded)) slot = decoded;
+            }
+        }
+
         /// <summary>Reads a complete compiled-profile record without exposing an integer cursor.</summary>
         /// <typeparam name = "TOptions">The stateless binary profile.</typeparam>
         /// <param name = "current">The immutable string available for reuse.</param>

@@ -9,7 +9,7 @@ using Xunit;
 namespace LuminPackUnitTest;
 
 /// <summary>Provides binary string hot path test functionality.</summary>
-public class BinaryStringHotPathTest
+public partial class BinaryStringHotPathTest
 {
     /// <summary>Uses different closed kernels over the same state without retaining a mutable mode snapshot.</summary>
     [Fact]

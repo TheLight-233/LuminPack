@@ -90,6 +90,11 @@ public static partial class ListEmitter
         }
         else
         {
+            if (EmitterTypeTraits.GetFirstTypeArgument(fieldData)?.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String)
+            {
+                sb.AppendLine("            reader.ReadStrings(span);");
+                return;
+            }
             sb.AppendLine("            for (int i = 0; i < length; i++)");
             sb.AppendLine("            {");
             EmitterTypeTraits.AppendReusableElementRead(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), "span[i]", "                ");

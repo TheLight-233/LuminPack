@@ -46,6 +46,7 @@
     <Compile Include="CompiledProfileTestSupport.cs;CompiledProfileTestKernels.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' == 'Safety'">
+    <Compile Include="BinaryStringHotPathTest.StringList.cs" />
     <Compile Include="TestSuites.cs;AuditSafetyRegressionTest.cs;ReaderBoundaryValidationTest.cs;ReaderFixedBoundsPolicyTest.cs;ReaderPreaccessBoundsTest.cs;RawScalarSpanSafetyTest.cs;TruncatedFixedHeaderTest.cs;CompressionSafetyPerfTest.cs;PrimitivesSerializationTest.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' == 'Simd'">

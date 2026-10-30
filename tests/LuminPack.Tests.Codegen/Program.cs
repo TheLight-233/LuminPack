@@ -36,6 +36,11 @@ try
         SerializerImmutableListWriteRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-string-list-reads"])
+    {
+        SerializerStringListReadRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-compound-string-reuse"])
     {
         SerializerCompoundStringReuseRegression.Run(references);

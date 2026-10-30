@@ -56,7 +56,11 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
         string type = state.Type.ToString();
         string payload = method.ParameterList.Parameters[1].Type.ToString();
         bool collection = payload.StartsWith("global::System.", System.StringComparison.Ordinal) || payload.Contains("[");
-        if (type.Contains("Json") || !collection || method.Body == null || !method.Body.DescendantNodes().Any(IsLoop)) return method;
+        if (type.Contains("Json") || !collection || method.Body == null) return method;
+        bool bulkStringRead = method.Body.DescendantNodes().OfType<InvocationExpressionSyntax>().Any(call =>
+            call.Expression is MemberAccessExpressionSyntax { Name.Identifier.ValueText: "ReadStrings" } access &&
+            access.Expression.ToString() == state.Identifier.ValueText);
+        if (!bulkStringRead && !method.Body.DescendantNodes().Any(IsLoop)) return method;
         string Unique(string name)
         {
             while (method.Body.DescendantTokens().Any(token => token.ValueText == name)) name += "_";
