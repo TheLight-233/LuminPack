@@ -64,11 +64,25 @@ public static class ImmutableArrayEmitter
         sb.AppendLine("                    else");
         sb.AppendLine("                    {");
         sb.AppendLine($"                        array = LuminPackMarshal.AllocateUninitializedArray<{elementType}>(length);");
-        sb.AppendLine("                        ref var first = ref LuminPackMarshal.GetNotNullArrayReference(array!);");
-        sb.AppendLine("                        for (nint i = 0; i < length; i++)");
-        sb.AppendLine("                        {");
-        sb.AppendLine("                            reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
-        sb.AppendLine("                        }");
+        if (element?.SpecialType == Microsoft.CodeAnalysis.SpecialType.System_String)
+        {
+            // The destination is immutable, but its ordered strings are valid reuse candidates: seed the new
+            // zeroed array with the previous content so the kernel retains equal immutable storage, then let
+            // the kernel decode short Latin-1 records inline instead of dispatching a formatter per element.
+            sb.AppendLine("                        if (!value.IsDefault && value.Length != 0)");
+            sb.AppendLine("                        {");
+            sb.AppendLine($"                            value.AsSpan().Slice(0, global::System.Math.Min(value.Length, length)).CopyTo(array);");
+            sb.AppendLine("                        }");
+            sb.AppendLine("                        reader.ReadStrings(array.AsSpan());");
+        }
+        else
+        {
+            sb.AppendLine("                        ref var first = ref LuminPackMarshal.GetNotNullArrayReference(array!);");
+            sb.AppendLine("                        for (nint i = 0; i < length; i++)");
+            sb.AppendLine("                        {");
+            sb.AppendLine("                            reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
+            sb.AppendLine("                        }");
+        }
         sb.AppendLine("                    }");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
