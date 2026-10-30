@@ -130,6 +130,12 @@ internal sealed class BinaryEntryInlining
         if (!_streaming && !root && (GeneratedExecutionPolicy.Reuse(operationName, operation) ||
             _reservedExpansionDepth == 0 && !operationName.Contains(":local:") &&
             CodeEmitterRegistry.GetEmitter(plan.TypeName).Read != null)) return null;
+        // A nested user-type write would copy its complete record body into every element site. Inside a
+        // keyed or nested collection that body pushes the surrounding root past the JIT's inline budget, so
+        // the writer's small reserve/store/publish helpers become real calls for every field. Keep that write
+        // on its generated type entry, which writes the same bytes from one compact call per element.
+        if (!root && operationName == "WriteValue" && !plan.TypeName.StartsWith("global::System.", StringComparison.Ordinal) &&
+            operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackWriter") return null;
         if (arguments.Count != operation.Parameters.Length)
             return LuminPackExceptionHelper.ThrowInvalidOperationException<BlockSyntax>("Inline operation parameter mismatch: " + key);
         var requiredSupport = new HashSet<string>(operation.Body.DescendantTokens().Where(token => token.GetAnnotations(BinaryOperationPlan.NameAnnotation).Any())
