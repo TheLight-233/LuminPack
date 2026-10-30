@@ -247,13 +247,14 @@ internal sealed class BinaryEntryInlining
     /// <summary>Returns whether a containing plan writes another value beside every user-type element.</summary>
     /// <param name="typeName">The containing operation's closed type name.</param>
     /// <returns>Whether a nested user-type write stays on its generated type entry.</returns>
-    /// <remarks>Keyed containers and user types interleave another write with each element; sequence containers
-    /// write one value per element and keep the inlined record body.</remarks>
+    /// <remarks>Keyed containers and user types interleave another write with each element; sequence containers,
+    /// including arrays of user types, write one value per element and keep the inlined record body.</remarks>
     private static bool OutlinesNestedUserWrites(string typeName) =>
-        !typeName.StartsWith("global::System.", StringComparison.Ordinal) ||
-        typeName.IndexOf("Dictionary<", StringComparison.Ordinal) >= 0 ||
-        typeName.IndexOf("SortedList<", StringComparison.Ordinal) >= 0 ||
-        typeName.IndexOf("KeyValuePair<", StringComparison.Ordinal) >= 0;
+        typeName.IndexOf('[') < 0 &&
+        (!typeName.StartsWith("global::System.", StringComparison.Ordinal) ||
+            typeName.IndexOf("Dictionary<", StringComparison.Ordinal) >= 0 ||
+            typeName.IndexOf("SortedList<", StringComparison.Ordinal) >= 0 ||
+            typeName.IndexOf("KeyValuePair<", StringComparison.Ordinal) >= 0);
 
     /// <summary>Obtains the compiler-marked identity of one private operation support declaration.</summary>
     /// <param name="declaration">A mirror, constant field, or initialization helper.</param>
