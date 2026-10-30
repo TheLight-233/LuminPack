@@ -3449,7 +3449,10 @@ namespace LuminPack.Core
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
             bool hasEscape = false;
-#if !NET8_0_OR_GREATER
+#if NET8_0_OR_GREATER
+            // Probe only after a literal run so dense escapes keep scalar scanning.
+            int literalProbe = unchecked(scan + 32);
+#else
             bool scanWithSwar = Unsafe.SizeOf<IntPtr>() == 8 && Buffer.Length - scan >= 32;
 #endif
             while (scan < Buffer.Length)
@@ -3487,12 +3490,24 @@ namespace LuminPack.Core
                     if (scan >= Buffer.Length)
                         global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
                     scan++;
+#if NET8_0_OR_GREATER
+                    literalProbe = unchecked(scan + 32);
+#endif
                 }
                 else
                 {
                     if (b < 0x20)
                         global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                     scan++;
+#if NET8_0_OR_GREATER
+                    if (scan == literalProbe && Buffer.Length - scan >= 32)
+                    {
+                        int special = FindStringSpecial<TOptions>(scan);
+                        if (special < 0)
+                            break;
+                        scan += special;
+                    }
+#endif
                 }
             }
 
@@ -3595,6 +3610,10 @@ namespace LuminPack.Core
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
             bool hasEscape = false;
+#if NET8_0_OR_GREATER
+            // Positions are byte offsets; thirty-two complete UTF-16 code units form a run.
+            int literalProbe = unchecked(scan + 64);
+#endif
             while (scan + 1 < Buffer.Length)
             {
                 char c = global::LuminPack.Core.LuminPackReader.Read<char>(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(scan)));
@@ -3619,18 +3638,48 @@ namespace LuminPack.Core
                     if (scan + 1 >= Buffer.Length)
                         global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON escape sequence");
                     scan += 2;
+#if NET8_0_OR_GREATER
+                    literalProbe = unchecked(scan + 64);
+#endif
                 }
                 else
                 {
                     if (c < 0x20)
                         global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unescaped control character in JSON string");
                     scan += 2;
+#if NET8_0_OR_GREATER
+                    if (scan == literalProbe && Buffer.Length - scan >= 64)
+                    {
+                        int special = FindStringSpecial<TOptions>(scan);
+                        if (special < 0)
+                            break;
+                        scan += special;
+                    }
+#endif
                 }
             }
 
             global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Unterminated JSON string");
             return default;
         }
+
+#if NET8_0_OR_GREATER
+        /// <summary>Finds the next string delimiter, escape or control within the remaining input window.</summary>
+        /// <typeparam name="TOptions">The compiled document encoding.</typeparam>
+        /// <param name="scan">The first unscanned byte offset.</param>
+        /// <returns>The byte distance to the next special character, or minus one if none remains.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private int FindStringSpecial<TOptions>(int scan) where TOptions : struct, ILuminPackOptions
+        {
+            // Keep the bounded search setup outside the scalar loop used by dense escapes.
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+                return Buffer.Slice(scan).IndexOfAny(NumberCharLookup.StringSpecialBytes);
+            int available = (Buffer.Length - scan) & ~1;
+            var remaining = MemoryMarshal.Cast<byte, char>(Buffer.Slice(scan, available));
+            int special = remaining.IndexOfAny(NumberCharLookup.StringSpecialChars);
+            return special < 0 ? -1 : special * sizeof(char);
+        }
+#endif
 
         /// <summary>Performs the skip string utf8 step for the current operation.</summary>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>

@@ -11,6 +11,91 @@ namespace LuminPackUnitTest;
 /// <summary>Provides json fused string scanner test functionality.</summary>
 public class JsonFusedStringScannerTest
 {
+    /// <summary>Checks reading and skipping escaped runs in unaligned, truncated and control-bearing windows.</summary>
+    /// <param name="utf8">Whether the input uses UTF-8 rather than UTF-16.</param>
+    /// <param name="strict">Whether strict JSON validation is selected.</param>
+    [Theory]
+    [InlineData(true, false)]
+    [InlineData(true, true)]
+    [InlineData(false, false)]
+    [InlineData(false, true)]
+    public void EscapedLiteralRunsRespectInputWindows(bool utf8, bool strict)
+    {
+        if (utf8)
+        {
+            if (strict) CheckEscapedLiteralWindows<TestStrictUtf8Length>();
+            else CheckEscapedLiteralWindows<TestUtf8Length>();
+        }
+        else
+        {
+            if (strict) CheckEscapedLiteralWindows<TestStrictUtf16Length>();
+            else CheckEscapedLiteralWindows<TestUtf16Length>();
+        }
+    }
+
+    /// <summary>Exercises literal-run search boundaries through decoded and validation-only string operations.</summary>
+    /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+    private static void CheckEscapedLiteralWindows<TOptions>() where TOptions : struct, ILuminPackOptions
+    {
+        Encoding encoding = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8 : Encoding.Unicode;
+        foreach (int length in new[] { 15, 16, 17, 31, 32, 33, 63, 64, 65, 255, 256, 257 })
+        {
+            string run = new('x', length);
+            string json = "\"\\n" + run + "\\\"" + run + "\\\\" + run + "\"";
+            string expected = JsonSerializer.Deserialize<string>(json)!;
+            byte[] bytes = encoding.GetBytes(json);
+            foreach (bool skip in new[] { false, true })
+            {
+                // A valid closing quote outside a shortened window must remain invisible to the search.
+                byte[] guarded = new byte[bytes.Length + 8];
+                bytes.CopyTo(guarded, 3);
+                Assert.Equal(expected, ReadEscapedWindow<TOptions>(guarded, bytes.Length, skip, expected));
+                foreach (int cut in new[] { 3, bytes.Length / 2, bytes.Length - 2, bytes.Length - 1 })
+                    Assert.Throws<FormatException>(() => ReadEscapedWindow<TOptions>(guarded, cut, skip, expected));
+
+                foreach (char control in Enumerable.Range(0, 32).Select(value => (char)value))
+                {
+                    byte[] malformed = encoding.GetBytes("\"\\n" + run + control + run + "\"");
+                    byte[] malformedGuarded = new byte[malformed.Length + 8];
+                    malformed.CopyTo(malformedGuarded, 3);
+                    Assert.Throws<FormatException>(() => ReadEscapedWindow<TOptions>(malformedGuarded, malformed.Length, skip, expected));
+                }
+                foreach (string escape in new[] { "\\q", "\\u00G0", "\\uD800", "\\uDC00" })
+                {
+                    byte[] malformed = encoding.GetBytes("\"\\n" + run + escape + run + "\"");
+                    byte[] malformedGuarded = new byte[malformed.Length + 8];
+                    malformed.CopyTo(malformedGuarded, 3);
+                    Assert.Throws<FormatException>(() => ReadEscapedWindow<TOptions>(malformedGuarded, malformed.Length, skip, expected));
+                }
+            }
+        }
+    }
+
+    /// <summary>Reads or skips a string from the exact input window without exposing its surrounding bytes.</summary>
+    /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+    /// <param name="guarded">The storage containing the input and its guards.</param>
+    /// <param name="length">The visible input length.</param>
+    /// <param name="skip">Whether to validate without decoding the string.</param>
+    /// <param name="expected">The result used by a validation-only operation.</param>
+    /// <returns>The decoded string, or the expected string after successful validation.</returns>
+    private static string ReadEscapedWindow<TOptions>(byte[] guarded, int length, bool skip, string expected)
+        where TOptions : struct, ILuminPackOptions
+    {
+        ReadOnlySpan<byte> input = guarded.AsSpan(3, length);
+        var reader = new LuminPackJsonReader(ref input, new LuminPackReaderOptionalState());
+        Assert.True(reader.Read<TOptions>());
+        string result;
+        if (skip)
+        {
+            reader.Skip<TOptions>();
+            result = expected;
+        }
+        else result = reader.Read<string, TOptions>();
+        Assert.Equal(length, reader.Position);
+        reader.EnsureEndOfDocument<TOptions>();
+        return result;
+    }
+
     /// <summary>Reads reused, null and explicitly selected strings among other JSON values.</summary>
     [Fact]
     public void StringReferenceReadsAdvanceAndConsumeTokens()
