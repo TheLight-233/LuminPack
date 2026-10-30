@@ -296,57 +296,64 @@ namespace LuminPack.Core
         /// <param name="negative">The negative used by this operation.</param>
         /// <param name="lowExponent">The low exponent used by this operation.</param>
         /// <param name="maxDigits">The max digits used by this operation.</param>
+        /// <param name="isFloat">Whether the source storage is binary32.</param>
         /// <param name="written">Receives the written produced by the operation.</param>
         /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool TryWriteShortDecimalUtf8(Span<byte> dest, double magnitude, ulong absBits, ulong exponent, bool negative, ulong lowExponent, int maxDigits, out int written)
+        private static bool TryWriteShortDecimalUtf8(Span<byte> dest, double magnitude, ulong absBits, ulong exponent, bool negative, ulong lowExponent, int maxDigits, bool isFloat, out int written)
         {
             written = 0;
             if (absBits == 0 || (ulong)(exponent - lowExponent) > 64UL || magnitude > 2_147_483_648.0)
                 return false;
 
-            // Cheap pre-filter: a value with more than three fraction digits is rejected with one
-            // multiply; the attempts below still do the exact verification.
-            double prefilter = magnitude * 1000.0;
-            if (prefilter != Math.Floor(prefilter))
-                return false;
-
-            int decimals = 1;
-            long scaled = (long)(magnitude * 10.0 + 0.5);
-            if ((double)scaled / 10.0 != magnitude)
+            // Doubles keep the cheap rejection: most arbitrary doubles carry more than three fraction
+            // digits. A widened float is almost never an exact multiple of 10^-3, so the same filter
+            // would reject nearly every rounded game-data value; floats attempt the candidates first.
+            if (!isFloat)
             {
-                decimals = 2;
-                scaled = (long)(magnitude * 100.0 + 0.5);
-                if ((double)scaled / 100.0 != magnitude)
+                double prefilter = magnitude * 1000.0;
+                if (prefilter != Math.Floor(prefilter))
+                    return false;
+            }
+
+            // Two widths cover one through four decimals: a 1-decimal value is its own 2-decimal
+            // candidate (its trailing zero is stripped below) and a 3-decimal value is its own
+            // 4-decimal candidate. At most one candidate of each width can round-trip to the source
+            // storage, so the first accepted candidate is the xjb canonical decimal.
+            for (int step = 0; step < 2; step++)
+            {
+                int decimals = step == 0 ? 2 : 4;
+                long scaled = (long)(magnitude * (decimals == 2 ? 100.0 : 10000.0) + 0.5);
+                if (scaled <= 0)
+                    continue;
+
+                // Floats verify through multiplication: a decimal within a few percent of a float
+                // half-ULP keeps the correctly rounded float after the double multiply.
+                double quotient = isFloat
+                    ? (double)scaled * (decimals == 2 ? 0.01 : 0.0001)
+                    : (double)scaled / (decimals == 2 ? 100.0 : 10000.0);
+                if (isFloat ? (float)quotient != magnitude : quotient != magnitude)
+                    continue;
+
+                while (scaled % 10 == 0)
                 {
-                    decimals = 3;
-                    scaled = (long)(magnitude * 1000.0 + 0.5);
-                    if ((double)scaled / 1000.0 != magnitude)
-                        return false;
+                    scaled /= 10;
+                    decimals--;
                 }
+
+                int length = CountDecimalDigits((ulong)scaled);
+                if (length > maxDigits)
+                    return false;
+
+                int pos = 0;
+                if (negative)
+                    dest[pos++] = (byte)'-';
+
+                written = pos + EmitFixedUtf8(dest.Slice(pos), (ulong)scaled, -decimals, length);
+                return true;
             }
 
-            while (decimals > 0 && scaled % 10 == 0)
-            {
-                scaled /= 10;
-                decimals--;
-            }
-
-            int length = CountDecimalDigits((ulong)scaled);
-
-            // Provably shortest: a shorter candidate would have to sit within half a float/double ULP of
-            // the value, while distinct decimals with fewer significant digits are further apart than
-            // that for these digit counts (float: <= 6 digits vs a 2^-24 relative spacing; double:
-            // <= 15 digits vs 2^-53). Longer forms fall through to the xjb core.
-            if (length > maxDigits)
-                return false;
-
-            int pos = 0;
-            if (negative)
-                dest[pos++] = (byte)'-';
-
-            written = pos + EmitFixedUtf8(dest.Slice(pos), (ulong)scaled, -decimals, length);
-            return true;
+            return false;
         }
 
         /// <summary>Attempts to write short decimal utf16 and reports whether it succeeded.</summary>
@@ -357,50 +364,55 @@ namespace LuminPack.Core
         /// <param name="negative">The negative used by this operation.</param>
         /// <param name="lowExponent">The low exponent used by this operation.</param>
         /// <param name="maxDigits">The max digits used by this operation.</param>
+        /// <param name="isFloat">Whether the source storage is binary32.</param>
         /// <param name="written">Receives the written produced by the operation.</param>
         /// <returns>Whether the requested condition or operation succeeded.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static bool TryWriteShortDecimalUtf16(Span<char> dest, double magnitude, ulong absBits, ulong exponent, bool negative, ulong lowExponent, int maxDigits, out int written)
+        private static bool TryWriteShortDecimalUtf16(Span<char> dest, double magnitude, ulong absBits, ulong exponent, bool negative, ulong lowExponent, int maxDigits, bool isFloat, out int written)
         {
             written = 0;
             if (absBits == 0 || (ulong)(exponent - lowExponent) > 64UL || magnitude > 2_147_483_648.0)
                 return false;
 
-            double prefilter = magnitude * 1000.0;
-            if (prefilter != Math.Floor(prefilter))
-                return false;
-
-            int decimals = 1;
-            long scaled = (long)(magnitude * 10.0 + 0.5);
-            if ((double)scaled / 10.0 != magnitude)
+            if (!isFloat)
             {
-                decimals = 2;
-                scaled = (long)(magnitude * 100.0 + 0.5);
-                if ((double)scaled / 100.0 != magnitude)
+                double prefilter = magnitude * 1000.0;
+                if (prefilter != Math.Floor(prefilter))
+                    return false;
+            }
+
+            for (int step = 0; step < 2; step++)
+            {
+                int decimals = step == 0 ? 2 : 4;
+                long scaled = (long)(magnitude * (decimals == 2 ? 100.0 : 10000.0) + 0.5);
+                if (scaled <= 0)
+                    continue;
+
+                double quotient = isFloat
+                    ? (double)scaled * (decimals == 2 ? 0.01 : 0.0001)
+                    : (double)scaled / (decimals == 2 ? 100.0 : 10000.0);
+                if (isFloat ? (float)quotient != magnitude : quotient != magnitude)
+                    continue;
+
+                while (scaled % 10 == 0)
                 {
-                    decimals = 3;
-                    scaled = (long)(magnitude * 1000.0 + 0.5);
-                    if ((double)scaled / 1000.0 != magnitude)
-                        return false;
+                    scaled /= 10;
+                    decimals--;
                 }
+
+                int length = CountDecimalDigits((ulong)scaled);
+                if (length > maxDigits)
+                    return false;
+
+                int pos = 0;
+                if (negative)
+                    dest[pos++] = '-';
+
+                written = pos + EmitFixedUtf16(dest.Slice(pos), (ulong)scaled, -decimals, length);
+                return true;
             }
 
-            while (decimals > 0 && scaled % 10 == 0)
-            {
-                scaled /= 10;
-                decimals--;
-            }
-
-            int length = CountDecimalDigits((ulong)scaled);
-            if (length > maxDigits)
-                return false;
-
-            int pos = 0;
-            if (negative)
-                dest[pos++] = '-';
-
-            written = pos + EmitFixedUtf16(dest.Slice(pos), (ulong)scaled, -decimals, length);
-            return true;
+            return false;
         }
 
         /// <summary>Writes float utf8 to the current output.</summary>
@@ -418,7 +430,7 @@ namespace LuminPack.Core
             if (TryWriteIntegralUtf8(dest, magnitude, absBits, exponent, negative, FloatLegacyLowExponent, 16_777_216.0, out int written))
                 return written;
 
-            if (TryWriteShortDecimalUtf8(dest, magnitude, absBits, exponent, negative, FloatLegacyLowExponent, 6, out written))
+            if (TryWriteShortDecimalUtf8(dest, magnitude, absBits, exponent, negative, FloatLegacyLowExponent, 6, true, out written))
                 return written;
 
             XjbFloat32.Convert(absBits, out ulong digits, out int exponent10);
@@ -441,7 +453,7 @@ namespace LuminPack.Core
             if (TryWriteIntegralUtf8(dest, magnitude, absBits, exponent, negative, DoubleLegacyLowExponent, 9_007_199_254_740_992.0, out int written))
                 return written;
 
-            if (TryWriteShortDecimalUtf8(dest, magnitude, absBits, exponent, negative, DoubleLegacyLowExponent, 15, out written))
+            if (TryWriteShortDecimalUtf8(dest, magnitude, absBits, exponent, negative, DoubleLegacyLowExponent, 15, false, out written))
                 return written;
 
             XjbFloat64.Convert(absBits, out ulong digits, out int exponent10);
@@ -464,7 +476,7 @@ namespace LuminPack.Core
             if (TryWriteIntegralUtf16(dest, magnitude, absBits, exponent, negative, FloatLegacyLowExponent, 16_777_216.0, out int written))
                 return written;
 
-            if (TryWriteShortDecimalUtf16(dest, magnitude, absBits, exponent, negative, FloatLegacyLowExponent, 6, out written))
+            if (TryWriteShortDecimalUtf16(dest, magnitude, absBits, exponent, negative, FloatLegacyLowExponent, 6, true, out written))
                 return written;
 
             XjbFloat32.Convert(absBits, out ulong digits, out int exponent10);
@@ -487,7 +499,7 @@ namespace LuminPack.Core
             if (TryWriteIntegralUtf16(dest, magnitude, absBits, exponent, negative, DoubleLegacyLowExponent, 9_007_199_254_740_992.0, out int written))
                 return written;
 
-            if (TryWriteShortDecimalUtf16(dest, magnitude, absBits, exponent, negative, DoubleLegacyLowExponent, 15, out written))
+            if (TryWriteShortDecimalUtf16(dest, magnitude, absBits, exponent, negative, DoubleLegacyLowExponent, 15, false, out written))
                 return written;
 
             XjbFloat64.Convert(absBits, out ulong digits, out int exponent10);
@@ -571,6 +583,26 @@ namespace LuminPack.Core
             int fractionDigits = -exponent10;
             if (fractionDigits < length)
             {
+                if ((uint)(fractionDigits - 1) <= 1u)
+                {
+                    ulong integer = fractionDigits == 1 ? digits / 10 : digits / 100;
+                    int integerDigits = WriteDigitsUtf8(dest, integer);
+                    ReadOnlySpan<byte> pairs = DigitPairs;
+                    dest[integerDigits] = (byte)'.';
+                    if (fractionDigits == 1)
+                    {
+                        dest[integerDigits + 1] = (byte)('0' + (int)(digits % 10));
+                    }
+                    else
+                    {
+                        int pair = (int)(digits % 100) << 1;
+                        dest[integerDigits + 1] = pairs[pair];
+                        dest[integerDigits + 2] = pairs[pair + 1];
+                    }
+
+                    return integerDigits + 1 + fractionDigits;
+                }
+
                 int written = WriteDigitsUtf8(dest, digits);
                 int dot = length - fractionDigits;
                 dest.Slice(dot, fractionDigits).CopyTo(dest.Slice(dot + 1));
@@ -607,6 +639,26 @@ namespace LuminPack.Core
             int fractionDigits = -exponent10;
             if (fractionDigits < length)
             {
+                if ((uint)(fractionDigits - 1) <= 1u)
+                {
+                    ulong integer = fractionDigits == 1 ? digits / 10 : digits / 100;
+                    int integerDigits = WriteDigitsUtf16(dest, integer);
+                    ReadOnlySpan<byte> pairs = DigitPairs;
+                    dest[integerDigits] = '.';
+                    if (fractionDigits == 1)
+                    {
+                        dest[integerDigits + 1] = (char)('0' + (int)(digits % 10));
+                    }
+                    else
+                    {
+                        int pair = (int)(digits % 100) << 1;
+                        dest[integerDigits + 1] = (char)pairs[pair];
+                        dest[integerDigits + 2] = (char)pairs[pair + 1];
+                    }
+
+                    return integerDigits + 1 + fractionDigits;
+                }
+
                 int written = WriteDigitsUtf16(dest, digits);
                 int dot = length - fractionDigits;
                 dest.Slice(dot, fractionDigits).CopyTo(dest.Slice(dot + 1));
