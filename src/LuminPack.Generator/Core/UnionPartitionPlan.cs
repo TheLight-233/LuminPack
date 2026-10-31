@@ -22,15 +22,20 @@ internal sealed class UnionPartitionPlan
     /// <summary>The cases and their narrow tags in tag order; the list index is the case index.</summary>
     internal readonly List<(int Id, string Type)> Cases;
 
+    /// <summary>Whether the compilation allows unsafe code, which <c>SkipLocalsInit</c> requires.</summary>
+    internal readonly bool SkipLocalsInit;
+
     /// <summary>Captures an eligible root.</summary>
     /// <param name="root">The fully qualified root type.</param>
     /// <param name="suffix">The root's generated slot suffix.</param>
     /// <param name="cases">The eligible cases in tag order.</param>
-    private UnionPartitionPlan(string root, string suffix, List<(int Id, string Type)> cases)
+    /// <param name="skipLocalsInit">Whether the kernels may skip zeroing their stack scratch.</param>
+    private UnionPartitionPlan(string root, string suffix, List<(int Id, string Type)> cases, bool skipLocalsInit)
     {
         Root = root;
         Suffix = suffix;
         Cases = cases;
+        SkipLocalsInit = skipLocalsInit;
     }
 
     /// <summary>Obtains the plan of a collection element or Union root.</summary>
@@ -59,7 +64,7 @@ internal sealed class UnionPartitionPlan
                 payload.SelectedConstructor is { Parameters.Count: > 0 }) return null;
             cases.Add((member.Id, named.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
         }
-        return new UnionPartitionPlan(root.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), cursor.Suffix, cases);
+        return new UnionPartitionPlan(root.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat), cursor.Suffix, cases, metadata.AllowUnsafe);
     }
 
     /// <summary>Emits the root's partition kernels and its lazily built case map.</summary>
@@ -140,6 +145,8 @@ internal sealed class UnionPartitionPlan
         sb.AppendLine($"{padding}[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
         // The cold partition body stays out of line so collection loops keep their inlining budget.
         sb.AppendLine($"{padding}[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        // Every scratch entry is written before it is read, so the kernels skip zeroing about 1.8 KB per chunk.
+        if (SkipLocalsInit) sb.AppendLine($"{padding}[global::System.Runtime.CompilerServices.SkipLocalsInit]");
         sb.AppendLine(write
             ? $"{padding}public static bool __LuminPackUnionPartitionWrite_{Suffix}(ref global::LuminPack.Core.LuminPackWriter writer, global::System.ReadOnlySpan<{Root}?> chunk)"
             : $"{padding}public static bool __LuminPackUnionPartitionRead_{Suffix}(ref global::LuminPack.Core.LuminPackReader reader, global::System.Span<{Root}?> chunk)");
