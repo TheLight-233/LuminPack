@@ -923,19 +923,19 @@ public sealed partial class CharacterSaveData
     /// <summary>Stores the guild snapshot.</summary>
     [Key(18)] public Envelope<GuildInfo> GuildSnapshot;
 
-    // Polymorphic collection 1: main inventory, seven derived types and 40 entries.
+    // Polymorphic collection 1: 64 independently selected inventory cases.
     /// <summary>Stores the bag.</summary>
     [Key(19)] public List<ItemBase> Bag;
 
-    // Polymorphic collection 2: storage, seven derived types and 25 entries.
+    // Polymorphic collection 2: 64 independently selected inventory cases.
     /// <summary>Stores the storage.</summary>
     [Key(20)] public List<ItemBase> Storage;
 
-    // Polymorphic collection 3: skills, four derived types and 20 entries.
+    // Polymorphic collection 3: 64 independently selected skill cases.
     /// <summary>Stores the skills.</summary>
     [Key(21)] public List<SkillBase> Skills;
 
-    // Polymorphic collection 4: recent events, four derived types and 30 entries.
+    // Polymorphic collection 4: 64 independently selected event cases.
     /// <summary>Stores the recent events.</summary>
     [Key(22)] public List<EventLogBase> RecentEvents;
 
@@ -955,37 +955,32 @@ public sealed partial class CharacterSaveData
     {
         var rng = new Random(42);
 
-        // Forty main inventory entries across seven derived types.
-        var bag = new List<ItemBase>();
-        for (int i = 1; i <= 8; i++) bag.Add(WeaponItem.Create(rng, i));
-        for (int i = 1; i <= 10; i++) bag.Add(ArmorItem.Create(rng, i));
-        for (int i = 1; i <= 10; i++) bag.Add(ConsumableItem.Create(rng, i));
-        for (int i = 1; i <= 4; i++) bag.Add(MountItem.Create(rng, i));
-        for (int i = 1; i <= 3; i++) bag.Add(QuestItem.Create(rng, i));
-        for (int i = 1; i <= 3; i++) bag.Add(PetItem.Create(rng, i));
-        for (int i = 1; i <= 2; i++) bag.Add(RelicItem.Create(rng, i));
-
-        // Storage contains 25 entries, primarily Armor, Relic, and Pet.
-        var storage = new List<ItemBase>();
-        for (int i = 1; i <= 8; i++) storage.Add(ArmorItem.Create(rng, i + 10));
-        for (int i = 1; i <= 6; i++) storage.Add(RelicItem.Create(rng, i));
-        for (int i = 1; i <= 5; i++) storage.Add(PetItem.Create(rng, i + 3));
-        for (int i = 1; i <= 4; i++) storage.Add(WeaponItem.Create(rng, i + 10));
-        for (int i = 1; i <= 2; i++) storage.Add(QuestItem.Create(rng, i + 3));
-
-        // Twenty skills across four derived types.
-        var skills = new List<SkillBase>();
-        for (int i = 1; i <= 8; i++) skills.Add(ActiveSkill.Create(rng, i));
-        for (int i = 1; i <= 6; i++) skills.Add(PassiveSkill.Create(rng, i));
-        for (int i = 1; i <= 3; i++) skills.Add(UltimateSkill.Create(rng, i));
-        for (int i = 1; i <= 3; i++) skills.Add(SupportSkill.Create(rng, i));
-
-        // Thirty event log entries across four derived types.
-        var events = new List<EventLogBase>();
-        for (int i = 1; i <= 12; i++) events.Add(CombatEventLog.Create(rng, i));
-        for (int i = 1; i <= 8; i++) events.Add(CraftingEventLog.Create(rng, i));
-        for (int i = 1; i <= 6; i++) events.Add(TradeEventLog.Create(rng, i));
-        for (int i = 1; i <= 4; i++) events.Add(AchievementEventLog.Create(rng, i));
+        // Keep type selection independent of each case's random payload consumption.
+        var cases = new Random(0x51A7);
+        const int polymorphicCount = 64;
+        var bag = new List<ItemBase>(polymorphicCount);
+        var storage = new List<ItemBase>(polymorphicCount);
+        var skills = new List<SkillBase>(polymorphicCount);
+        var events = new List<EventLogBase>(polymorphicCount);
+        for (int i = 1; i <= polymorphicCount; i++)
+        {
+            bag.Add(CreateRandomItem(rng, cases.Next(7), i));
+            storage.Add(CreateRandomItem(rng, cases.Next(7), i + polymorphicCount));
+            skills.Add(cases.Next(4) switch
+            {
+                0 => ActiveSkill.Create(rng, i),
+                1 => PassiveSkill.Create(rng, i),
+                2 => UltimateSkill.Create(rng, i),
+                _ => SupportSkill.Create(rng, i),
+            });
+            events.Add(cases.Next(4) switch
+            {
+                0 => CombatEventLog.Create(rng, i),
+                1 => CraftingEventLog.Create(rng, i),
+                2 => TradeEventLog.Create(rng, i),
+                _ => AchievementEventLog.Create(rng, i),
+            });
+        }
 
         var stats = CharacterStats.Create(rng);
         var guild = GuildInfo.Create(rng);
@@ -1035,6 +1030,22 @@ public sealed partial class CharacterSaveData
             UnlockedTitles = Enumerable.Range(1, 16).Select(i => $"Title_{i:D2}_Master").ToList(),
         };
     }
+
+    /// <summary>Creates a case selected independently from its payload values.</summary>
+    /// <param name="random">The deterministic payload random source.</param>
+    /// <param name="kind">The uniformly selected case index.</param>
+    /// <param name="id">The stable entry identifier.</param>
+    /// <returns>The selected inventory case.</returns>
+    private static ItemBase CreateRandomItem(Random random, int kind, int id) => kind switch
+    {
+        0 => WeaponItem.Create(random, id),
+        1 => ArmorItem.Create(random, id),
+        2 => ConsumableItem.Create(random, id),
+        3 => MountItem.Create(random, id),
+        4 => QuestItem.Create(random, id),
+        5 => PetItem.Create(random, id),
+        _ => RelicItem.Create(random, id),
+    };
 }
 
 // ────────────────────────────────────────────────────────────────────────────
