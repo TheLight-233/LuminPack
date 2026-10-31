@@ -233,12 +233,12 @@ jobs:
           for operation in lumin-write lumin-read nino-write nino-read; do
             case "$operation" in
               lumin-write)
-                export DOTNET_JitDisasm='*LuminPackSerialize* *RootWrite* *__LuminPackUnionSerialize*'
-                required='LuminPackBenchmark[.]FooA:__LuminPackUnionSerialize.*\(Tier1'
+                export DOTNET_JitDisasm='*LuminPackSerialize* *RootWrite* *__LuminPackUnionSerialize* *__LuminPackUnionPartition* *SerializeUnionAt*'
+                required='LuminPackBenchmark[.]IFoo:__LuminPackUnionPartitionWrite_.*\((Tier0-FullOpts|Tier1|FullOpts)'
                 ;;
               lumin-read)
-                export DOTNET_JitDisasm='*LuminPackDeserialize* *RootRead* *TryPeekUnionHeader*'
-                required=''
+                export DOTNET_JitDisasm='*LuminPackDeserialize* *RootRead* *TryPeekUnionHeader* *__LuminPackUnionPartition*'
+                required='LuminPackBenchmark[.]IFoo:__LuminPackUnionPartitionRead_.*\((Tier0-FullOpts|Tier1|FullOpts)'
                 ;;
               nino-write)
                 export DOTNET_JitDisasm='*NinoSerialize* *__WriteSubtype* *WriteEach* *WriteRawBody*'
@@ -262,7 +262,10 @@ jobs:
                 echo 'The generated polymorphic list reader was not identified.' >&2
                 exit 1
               fi
-              required="${list_root}:RootRead.*\\(Tier1"
+              if ! grep -Eq "${list_root}:RootRead" "$assembly"; then
+                echo 'The generated polymorphic list reader was not captured.' >&2
+                exit 1
+              fi
             fi
             if ! grep -Eq "$required" "$assembly"; then
               echo "The optimized $operation target was not captured in $assembly." >&2

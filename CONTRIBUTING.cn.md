@@ -58,7 +58,7 @@ dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlat
 - 基准测试矩阵使用 Linux x64、macOS Intel x64 和 Linux ARM64 原生主机。计时前校验实际进程与操作系统架构，以及 Intel 主机的 CPUID 厂商；各主机分别上传结果和环境信息。应在同一主机内比较各库的比值，跨主机的操作系统和 CPU 均有差异。
 - 手动输入 `benchmark_jit` 默认为 `both`，分别运行 `TieredPGO`（启用分层编译和动态 PGO）及 `FullOpts`（两者均关闭）。FullOpts 是用于排查 JIT 稳定性的对照，不能替代生产环境 PGO 结果。每组使用三个进程、8–30 次自适应预热和 15 次以一秒为目标的正式测量，保留离群值。固定随机种子与时间戳保证各进程的输入字节一致；计时前用 `--verify-fixtures` 验证新实例及重复初始化。
 - 完整 JSON 和测量 CSV 产物保留每个进程的数据。`process-stability.md` 与任务摘要报告进程均值、变异系数、最大值/最小值、分配量，以及相同操作、相同 JIT 配置下的 LuminPack/参照库比值。进程差异超过 10% 时发出警告；宣称提升前应检查分布与原生代码。各库的独立进程不能按进程编号当作配对样本。
-- BenchmarkDotNet 的多态反汇编在 Windows/Linux 上运行；当前版本不支持 macOS 上的 CoreCLR 反汇编。独立的非计时 JIT 探针在 Linux 基准主机上采集 LuminPack 和 Nino 多态读写的优化后汇编及生成方法信息。Intel macOS 主机运行全部四类耗时和分配测试，但不运行这些探针。基准验证、执行或必需探针失败会使任务失败。
+- BenchmarkDotNet 的多态反汇编在 Windows/Linux 上运行；当前版本不支持 macOS 上的 CoreCLR 反汇编。独立的非计时 JIT 探针在 Linux 基准主机上采集 LuminPack 分区内核、Nino 多态读写的优化后汇编及生成方法信息。LuminPack 分区内核使用激进优化编译时可能显示 Tier0-FullOpts；这不是 Tier1 PGO 结果。Intel macOS 主机运行全部四类耗时和分配测试，但不运行这些探针。基准验证、执行或必需探针失败会使任务失败。
 - CI 按事件区分并发组，推送不会取消手动启动的基准测试。注册表子进程测试启动测试程序集旁的 apphost，以保持与测试进程一致的架构，包括自包含 x86。
 
 ## 基准测试
