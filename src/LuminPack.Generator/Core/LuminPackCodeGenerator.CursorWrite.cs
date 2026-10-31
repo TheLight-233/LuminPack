@@ -127,7 +127,11 @@ public static partial class LuminPackCodeGenerator
             }
         }
         builder.AppendLine(indent + "    __cursor = ref writer.ReserveRecord(ref __cursor, checked(" + string.Join(" + ", terms) + "));");
-        if (header >= 0) builder.AppendLine(indent + "    __cursor = ref " + writerType + ".WriteReserved(ref __cursor, (byte)" + header + ");");
+        if (header >= 0)
+        {
+            builder.AppendLine(indent + "    __cursor = (byte)" + header + ";");
+            builder.AppendLine(indent + "    __cursor = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref __cursor, 1);");
+        }
         for (int index = first; index <= last; index++)
         {
             var field = fields[index];
