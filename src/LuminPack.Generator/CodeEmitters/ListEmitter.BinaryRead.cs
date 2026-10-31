@@ -117,7 +117,7 @@ public static partial class ListEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="partition">The eligible Union root.</param>
     private static void AppendPartitionReadChunk(StringBuilder sb, LuminPack.Code.Core.UnionPartitionPlan partition)
-        => AppendPartitionChunk(sb, partition, "length", $"{partition.Root}.__LuminPackUnionPartitionRead_{partition.Suffix}(ref reader, span.Slice(i, chunkLength))");
+        => CollectionEmitterKit.AppendPartitionChunk(sb, "                ", "i", "length", $"{partition.Root}.__LuminPackUnionPartitionRead_{partition.Suffix}(ref reader, span.Slice(i, chunkLength))");
 
     /// <summary>Appends binary reading statements for list values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>

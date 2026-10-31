@@ -24,6 +24,31 @@ public class UnionPartitionTest
         AssertEqual(source, copy);
     }
 
+    /// <summary>Partitions arrays and immutable arrays with the same records as lists.</summary>
+    /// <param name="pattern">The case sequence.</param>
+    [Theory]
+    [InlineData("random")]
+    [InlineData("runs")]
+    [InlineData("cycle")]
+    public void ArraysMatchPerElementRecords(string pattern)
+    {
+        var source = Create(900, pattern);
+        byte[] expected = Expected(source);
+        PartitionRoot[] array = source.ToArray();
+        byte[] arrayBytes = LuminPackSerializer.Serialize(array);
+        Assert.Equal(expected, arrayBytes);
+        AssertEqual(source, LuminPackSerializer.Deserialize<PartitionRoot[]>(arrayBytes)!.ToList());
+        var immutable = System.Collections.Immutable.ImmutableArray.CreateRange(source);
+        byte[] immutableBytes = LuminPackSerializer.Serialize(immutable);
+        Assert.Equal(expected, immutableBytes);
+        AssertEqual(source, LuminPackSerializer.Deserialize<System.Collections.Immutable.ImmutableArray<PartitionRoot>>(immutableBytes).ToList());
+        var reused = Create(900, pattern).ToArray();
+        var existing = reused[7];
+        LuminPackSerializer.Deserialize(arrayBytes, ref reused);
+        AssertEqual(source, reused.ToList());
+        Assert.Same(existing, reused[7]);
+    }
+
     /// <summary>Takes the per-element fallback for null elements in an otherwise partitioned chunk.</summary>
     [Fact]
     public void NullElementsKeepTheirRecords()

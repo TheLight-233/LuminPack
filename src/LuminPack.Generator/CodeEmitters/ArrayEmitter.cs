@@ -73,6 +73,19 @@ public static class ArrayEmitter
         sb.AppendLine("            writer.WriteCollectionHeader(ref index, value.Length);");
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
+        if (fieldData.UnionPartition is { } partition)
+        {
+            // Aligned chunks of fixed Union cases are offered to the partition kernel before the ordinary element write.
+            sb.AppendLine("            for (int i = 0; i < value.Length; i++)");
+            sb.AppendLine("            {");
+            CollectionEmitterKit.AppendPartitionChunk(sb, "                ", "i", "value.Length",
+                $"{partition.Root}.__LuminPackUnionPartitionWrite_{partition.Suffix}(ref writer, value.AsSpan(i, chunkLength))");
+            sb.AppendLine("                writer.CheckBuffer();");
+            sb.AppendLine("                writer.WriteValue(in value[i]);");
+            sb.AppendLine("            }");
+            sb.AppendLine("            writer.CheckBuffer();");
+            return;
+        }
         sb.AppendLine("            foreach (ref var item in value.AsSpan())");
         sb.AppendLine("            {");
         if ((fieldData.TypeSymbol as Microsoft.CodeAnalysis.IArrayTypeSymbol)?.ElementType.SpecialType != Microsoft.CodeAnalysis.SpecialType.System_String)
@@ -160,6 +173,7 @@ public static class ArrayEmitter
         sb.AppendLine(@"            ref var first = ref LuminPackMarshal.GetNotNullArrayReference(value!);");
         sb.AppendLine(@"            for (nint i = 0; i < length; i++)");
         sb.AppendLine(@"            {");
+        AppendPartitionRead(sb, fieldData);
         EmitterTypeTraits.AppendReusableElementRead(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData),
             "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)", "                ");
         sb.AppendLine(@"            }");
@@ -196,8 +210,19 @@ public static class ArrayEmitter
         sb.AppendLine(@"            ref var first = ref LuminPackMarshal.GetNotNullArrayReference(value!);");
         sb.AppendLine(@"            for (nint i = 0; i < length; i++)");
         sb.AppendLine(@"            {");
+        AppendPartitionRead(sb, fieldData);
         sb.AppendLine(@"                reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
         sb.AppendLine(@"            }");
+    }
+
+    /// <summary>Offers each aligned chunk of empty array slots to the element Union's partition kernel.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="fieldData">The metadata describing the array.</param>
+    private static void AppendPartitionRead(StringBuilder sb, LuminLocalFieldData fieldData)
+    {
+        if (fieldData.UnionPartition is { } partition)
+            CollectionEmitterKit.AppendPartitionChunk(sb, "                ", "i", "length",
+                $"{partition.Root}.__LuminPackUnionPartitionRead_{partition.Suffix}(ref reader, value.AsSpan((int)i, chunkLength))");
     }
 
     /// <summary>Appends JSON writing statements for array values.</summary>

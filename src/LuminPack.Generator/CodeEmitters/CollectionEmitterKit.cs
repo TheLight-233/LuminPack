@@ -64,6 +64,22 @@ internal static class CollectionEmitterKit
     /// <returns>Whether the per-element buffer check can be omitted.</returns>
     private static bool ChecksItself(ITypeSymbol element) => element?.SpecialType == SpecialType.System_String;
 
+    /// <summary>Offers the aligned chunk starting at an element index to a Union partition kernel at the top of an element loop.</summary>
+    /// <param name="sb">The generated statements.</param>
+    /// <param name="indent">The loop body indentation.</param>
+    /// <param name="index">The loop's element index, an <see cref="int"/> or <see cref="nint"/>.</param>
+    /// <param name="length">The element count expression.</param>
+    /// <param name="call">The kernel invocation over <c>chunkLength</c> elements starting at <paramref name="index"/>.</param>
+    /// <remarks>A declined chunk keeps the loop's ordinary element statements; an accepted chunk advances the index past it.</remarks>
+    internal static void AppendPartitionChunk(StringBuilder sb, string indent, string index, string length, string call)
+    {
+        sb.AppendLine($"{indent}if (({index} & (global::LuminPack.Code.LuminUnionPartition.ChunkLength - 1)) == 0 && {length} - {index} >= global::LuminPack.Code.LuminUnionPartition.MinimumLength)");
+        sb.AppendLine($"{indent}{{");
+        sb.AppendLine($"{indent}    int chunkLength = (int)global::System.Math.Min(global::LuminPack.Code.LuminUnionPartition.ChunkLength, {length} - {index});");
+        sb.AppendLine($"{indent}    if ({call}) {{ {index} += chunkLength - 1; continue; }}");
+        sb.AppendLine($"{indent}}}");
+    }
+
     /// <summary>Writes a count header and the elements of a span.</summary>
     /// <param name="sb">The generated statements.</param>
     /// <param name="element">The element symbol.</param>
@@ -71,7 +87,9 @@ internal static class CollectionEmitterKit
     /// <param name="span">An expression producing a <c>Span</c> or <c>ReadOnlySpan</c> of the elements.</param>
     /// <param name="indent">Statement indentation.</param>
     /// <param name="scalarElements">Whether the reader dispatches individual element formatters, as <see cref="AppendSpanRead"/> selects.</param>
-    internal static void AppendSpanWrite(StringBuilder sb, ITypeSymbol element, string elementType, string span, string indent, bool scalarElements = false)
+    /// <param name="partition">The eligible Union root whose aligned chunks are offered to its partition kernel, or null.</param>
+    internal static void AppendSpanWrite(StringBuilder sb, ITypeSymbol element, string elementType, string span, string indent, bool scalarElements = false,
+        LuminPack.Code.Core.UnionPartitionPlan partition = null)
     {
         sb.AppendLine(indent + "{");
         sb.AppendLine(indent + "    global::System.ReadOnlySpan<" + elementType + "> __items = " + span + ";");
@@ -103,6 +121,9 @@ internal static class CollectionEmitterKit
             sb.AppendLine(indent + "    writer.Write(__items.Length);");
             sb.AppendLine(indent + "    for (int __i = 0; __i < __items.Length; __i++)");
             sb.AppendLine(indent + "    {");
+            if (partition != null)
+                AppendPartitionChunk(sb, indent + "        ", "__i", "__items.Length",
+                    $"{partition.Root}.__LuminPackUnionPartitionWrite_{partition.Suffix}(ref writer, __items.Slice(__i, chunkLength))");
             if (!ChecksItself(element)) sb.AppendLine(indent + "        writer.CheckBuffer();");
             sb.AppendLine(indent + "        writer.WriteValue(in __items[__i]!);");
             sb.AppendLine(indent + "    }");
