@@ -33,6 +33,8 @@ public sealed class LuminLocalFieldData
     internal bool CanReadStableStringKeys;
     /// <summary>Stores the certified narrow tags and case types whose existing exact instances an int-keyed dictionary can refill in place.</summary>
     internal System.Collections.Generic.List<(int Id, string Type)> UnionSlotCases;
+    /// <summary>The Union root eligible for adaptive type-partitioned list dispatch, or null.</summary>
+    internal LuminPack.Code.Core.UnionPartitionPlan UnionPartition;
     /// <summary>Stores the name.</summary>
     public string Name;
     /// <summary>Stores the exact declaring storage level, including constructed generic arguments.</summary>

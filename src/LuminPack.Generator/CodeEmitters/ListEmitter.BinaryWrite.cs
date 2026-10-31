@@ -45,11 +45,28 @@ public static partial class ListEmitter
         }
         sb.AppendLine("            for (int i = 0; i < span.Length; i++)");
         sb.AppendLine("            {");
+        if (fieldData.UnionPartition is { } partition)
+            // Each aligned chunk of fixed Union cases is first offered to the partition kernel, which declines predictable chunks.
+            AppendPartitionChunk(sb, partition, "span.Length", $"{partition.Root}.__LuminPackUnionPartitionWrite_{partition.Suffix}(ref writer, span.Slice(i, chunkLength))");
         sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                writer.WriteValue(in span[i]!);");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
+    /// <summary>Appends the aligned chunk offer at the top of a Union element loop.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="partition">The eligible Union root.</param>
+    /// <param name="length">The element count expression.</param>
+    /// <param name="call">The kernel invocation over <c>chunkLength</c> elements starting at <c>i</c>.</param>
+    internal static void AppendPartitionChunk(StringBuilder sb, LuminPack.Code.Core.UnionPartitionPlan partition, string length, string call)
+    {
+        sb.AppendLine($"                if ((i & (global::LuminPack.Code.LuminUnionPartition.ChunkLength - 1)) == 0 && {length} - i >= global::LuminPack.Code.LuminUnionPartition.MinimumLength)");
+        sb.AppendLine("                {");
+        sb.AppendLine($"                    int chunkLength = global::System.Math.Min(global::LuminPack.Code.LuminUnionPartition.ChunkLength, {length} - i);");
+        sb.AppendLine($"                    if ({call}) {{ i += chunkLength - 1; continue; }}");
+        sb.AppendLine("                }");
+    }
+
     // Compressed serialization variants.
 
     /// <summary>Appends binary writing statements for list values.</summary>

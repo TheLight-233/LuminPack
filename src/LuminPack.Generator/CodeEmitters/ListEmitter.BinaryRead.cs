@@ -83,10 +83,20 @@ public static partial class ListEmitter
             sb.AppendLine("            if (!global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">())");
             sb.AppendLine("            { reader.Read<" + elementType + ">(span); return; }");
         }
+        var partition = fieldData.UnionPartition;
         if (freshValue)
         {
             sb.AppendLine("            ref var first = ref " + (useArrayDataIntrinsic ? "global::System.Runtime.InteropServices.MemoryMarshal.GetArrayDataReference(items)" : "LuminPackMarshal.DangerousGetArrayDataReference(items)") + ";");
-            sb.AppendLine("            for (int i = 0; i < length; i++) reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
+            if (partition != null)
+            {
+                sb.AppendLine("            for (int i = 0; i < length; i++)");
+                sb.AppendLine("            {");
+                AppendPartitionReadChunk(sb, partition);
+                sb.AppendLine("                reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
+                sb.AppendLine("            }");
+            }
+            else
+                sb.AppendLine("            for (int i = 0; i < length; i++) reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
         }
         else
         {
@@ -97,10 +107,17 @@ public static partial class ListEmitter
             }
             sb.AppendLine("            for (int i = 0; i < length; i++)");
             sb.AppendLine("            {");
+            if (partition != null) AppendPartitionReadChunk(sb, partition);
             EmitterTypeTraits.AppendReusableElementRead(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), "span[i]", "                ");
             sb.AppendLine("            }");
         }
     }
+
+    /// <summary>Offers each aligned chunk of fresh fixed Union records to the partition kernel.</summary>
+    /// <param name="sb">The builder receiving generated source code.</param>
+    /// <param name="partition">The eligible Union root.</param>
+    private static void AppendPartitionReadChunk(StringBuilder sb, LuminPack.Code.Core.UnionPartitionPlan partition)
+        => AppendPartitionChunk(sb, partition, "length", $"{partition.Root}.__LuminPackUnionPartitionRead_{partition.Suffix}(ref reader, span.Slice(i, chunkLength))");
 
     /// <summary>Appends binary reading statements for list values.</summary>
     /// <param name="fieldData">The metadata describing the field being processed.</param>

@@ -76,6 +76,9 @@ public static partial class LuminPackExtensionGenerator
             priorityQueue.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
             field.CanAccessPriorityQueueNodes = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess")?
                 .GetMembers("TryGetPriorityQueueNodes").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.DeclaredAccessibility == Accessibility.Public) == true;
+        if (type is INamedTypeSymbol { MetadataName: "List`1", TypeArguments.Length: 1 } unionList &&
+            unionList.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
+            field.UnionPartition = UnionPartitionPlan.Get(unionList.TypeArguments[0], compilation, metadata);
         if (type is INamedTypeSymbol { MetadataName: "Dictionary`2", TypeArguments.Length: 2 } dictionary &&
             dictionary.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
         {

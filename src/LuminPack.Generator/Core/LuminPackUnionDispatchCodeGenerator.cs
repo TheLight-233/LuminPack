@@ -34,6 +34,9 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         if (LuminPackUnionDispatchUtilities.IsCurrentCompilation(root, compilation))
             AppendPartialType(sb, root, (builder, indent) =>
                 AppendRootMethods(builder, indent, root, suffix, metaInfo, cursorPlan != null, data.UnionMembers.Select(member => member.Id).ToArray()));
+        var partitionPlan = UnionPartitionPlan.Get(data.TypeSymbol, compilation, metaInfo);
+        if (partitionPlan != null && LuminPackUnionDispatchUtilities.IsCurrentCompilation(root, compilation))
+            AppendPartialType(sb, root, (builder, indent) => partitionPlan.AppendRootMembers(builder, new string(' ', indent * 4)));
 
         foreach (var group in data.UnionMembers
                      .Where(member => IsFastPathMember(data, member))
