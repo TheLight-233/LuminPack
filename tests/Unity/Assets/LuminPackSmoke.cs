@@ -87,25 +87,14 @@ public static class LuminPackSmoke
             throw new InvalidOperationException("Packed framework storage lost data.");
     }
 
-    /// <summary>Schedules the headless Player smoke run after scene load.</summary>
+    /// <summary>Executes and terminates the headless Player with a meaningful exit status.</summary>
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void RunPlayer()
     {
         if (Application.isEditor) return;
-#if UNITY_WEBGL
-        Run();
-#else
+#if !UNITY_WEBGL
         if (!Application.isBatchMode) return;
-        var host = new GameObject("LuminPackSmokeRunner");
-        UnityEngine.Object.DontDestroyOnLoad(host);
-        host.AddComponent<LuminPackSmokePlayer>();
 #endif
-    }
-
-    /// <summary>Verifies the generated graph and returns the Player exit status.</summary>
-    /// <returns>Zero when all checks pass, otherwise one.</returns>
-    internal static int Run()
-    {
         try
         {
 #if !UNITY_WEBGL
@@ -117,25 +106,17 @@ public static class LuminPackSmoke
 #endif
             Verify();
             Debug.Log("LUMINPACK_UNITY_SMOKE_PASSED");
-            return 0;
+#if !UNITY_WEBGL
+            Application.Quit(0);
+#endif
         }
         catch (Exception exception)
         {
             Debug.LogError("LUMINPACK_UNITY_SMOKE_FAILED: " + exception);
-            return 1;
+#if !UNITY_WEBGL
+            Application.Quit(1);
+#endif
         }
-    }
-}
-
-/// <summary>Runs the headless Player on the first frame and quits outside engine initialization.</summary>
-internal sealed class LuminPackSmokePlayer : MonoBehaviour
-{
-    /// <summary>Waits one frame before running the Player smoke checks.</summary>
-    /// <returns>The coroutine that completes before the Player exits.</returns>
-    private System.Collections.IEnumerator Start()
-    {
-        yield return null;
-        Application.Quit(LuminPackSmoke.Run());
     }
 }
 
