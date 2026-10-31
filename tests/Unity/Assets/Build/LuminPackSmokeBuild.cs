@@ -21,6 +21,9 @@ public static class LuminPackSmokeBuild
     public static void Build()
         => BuildPlayer(BuildTarget.StandaloneLinux64, ScriptingImplementation.IL2CPP);
 
+    /// <summary>Builds a WebGL IL2CPP Player for execution in a browser.</summary>
+    public static void BuildWebGL() => BuildPlayer(BuildTarget.WebGL, ScriptingImplementation.IL2CPP);
+
     /// <summary>Builds a Windows x64 IL2CPP Player for local execution.</summary>
     public static void BuildWindows() => BuildPlayer(BuildTarget.StandaloneWindows64, ScriptingImplementation.IL2CPP);
 
@@ -54,14 +57,21 @@ public static class LuminPackSmokeBuild
         Directory.CreateDirectory(Path.Combine(projectRoot, "Assets/Scenes"));
         var scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene);
         EditorSceneManager.SaveScene(scene, "Assets/Scenes/Smoke.unity");
-        PlayerSettings.SetScriptingBackend(BuildTargetGroup.Standalone, backend);
-        PlayerSettings.SetApiCompatibilityLevel(BuildTargetGroup.Standalone, ApiCompatibilityLevel.NET_Standard_2_0);
+        var group = target == BuildTarget.WebGL ? BuildTargetGroup.WebGL : BuildTargetGroup.Standalone;
+        PlayerSettings.SetScriptingBackend(group, backend);
+        PlayerSettings.SetApiCompatibilityLevel(group, ApiCompatibilityLevel.NET_Standard_2_0);
+        if (target == BuildTarget.WebGL)
+        {
+            PlayerSettings.WebGL.compressionFormat = WebGLCompressionFormat.Disabled;
+            PlayerSettings.WebGL.exceptionSupport = WebGLExceptionSupport.FullWithoutStacktrace;
+        }
         string outputDirectory = Path.Combine(projectRoot, "build", target + "_" + backend);
         Directory.CreateDirectory(outputDirectory);
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
         {
             scenes = new[] { "Assets/Scenes/Smoke.unity" },
-            locationPathName = Path.Combine(outputDirectory, target == BuildTarget.StandaloneLinux64 ? "LuminPackSmoke" : target == BuildTarget.StandaloneOSX ? "LuminPackSmoke.app" : "LuminPackSmoke.exe"),
+            locationPathName = target == BuildTarget.WebGL ? outputDirectory : Path.Combine(outputDirectory,
+                target == BuildTarget.StandaloneLinux64 ? "LuminPackSmoke" : target == BuildTarget.StandaloneOSX ? "LuminPackSmoke.app" : "LuminPackSmoke.exe"),
             target = target,
             options = BuildOptions.None
         });

@@ -91,22 +91,31 @@ public static class LuminPackSmoke
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void RunPlayer()
     {
-        if (Application.isEditor || !Application.isBatchMode) return;
+        if (Application.isEditor) return;
+#if !UNITY_WEBGL
+        if (!Application.isBatchMode) return;
+#endif
         try
         {
+#if !UNITY_WEBGL
             string architecture = System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture.ToString().ToLowerInvariant();
             string expected = Environment.GetEnvironmentVariable("LUMINPACK_UNITY_ARCH");
             if (!string.IsNullOrEmpty(expected) && architecture != expected)
                 throw new InvalidOperationException("The Unity Player is running with the wrong architecture.");
             Debug.Log("LUMINPACK_UNITY_ARCH=" + architecture);
+#endif
             Verify();
             Debug.Log("LUMINPACK_UNITY_SMOKE_PASSED");
+#if !UNITY_WEBGL
             Application.Quit(0);
+#endif
         }
         catch (Exception exception)
         {
-            Debug.LogException(exception);
+            Debug.LogError("LUMINPACK_UNITY_SMOKE_FAILED: " + exception);
+#if !UNITY_WEBGL
             Application.Quit(1);
+#endif
         }
     }
 }

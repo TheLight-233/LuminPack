@@ -110,6 +110,69 @@ jobs:
     uses: ./.github/workflows/unity-extensions.yml
     secrets: inherit
 
+  webgl:
+    name: Unity ${{ matrix.unity }} WebGL
+    needs: extensions
+    if: always() && needs.extensions.result != 'skipped' && needs.extensions.result != 'cancelled'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        unity: ['2022.3.51f1', '6000.0.43f1']
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+      UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Check Unity license configuration
+        shell: bash
+        run: |
+          if [ -z "$UNITY_EMAIL" ] || [ -z "$UNITY_PASSWORD" ] || { [ -z "$UNITY_LICENSE" ] && [ -z "$UNITY_SERIAL" ]; }; then
+            echo 'Configure UNITY_EMAIL and UNITY_PASSWORD, plus UNITY_LICENSE or UNITY_SERIAL.' >&2
+            exit 1
+          fi
+      - name: Build and stage the Unity assemblies
+        shell: bash
+        run: |
+          echo 'm_EditorVersion: ${{ matrix.unity }}' > tests/Unity/ProjectSettings/ProjectVersion.txt
+          dotnet build src/LuminPack.Core/LuminPack.Core.csproj -c Release -f netstandard2.1 -p:CopyLocalLockFileAssemblies=true -p:GeneratePackageOnBuild=false
+          cp src/LuminPack.Core/bin/Release/netstandard2.1/LuminPack.Core.dll tests/Unity/Assets/Plugins/
+          cp src/LuminPack.Core/bin/Release/netstandard2.1/System.Collections.Immutable.dll tests/Unity/Assets/Plugins/
+          cp src/LuminPack.Core/bin/Release/netstandard2.1/System.Runtime.CompilerServices.Unsafe.dll tests/Unity/Assets/Plugins/
+          cp src/LuminPack.Generator/bin/Release/netstandard2.0/LuminPack.Generator.dll tests/Unity/Assets/Plugins/
+      - name: Build the WebGL Player
+        uses: game-ci/unity-builder@v4
+        with:
+          projectPath: tests/Unity
+          unityVersion: ${{ matrix.unity }}
+          targetPlatform: WebGL
+          buildMethod: LuminPackSmokeBuild.BuildWebGL
+          allowDirtyBuild: true
+      - name: Run the WebGL Player in headless Chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p .tmp
+          npm install --prefix .tmp/webgl-ci --no-save --no-package-lock playwright-core@1.52.0
+          node .github/scripts/run-unity-webgl.cjs tests/Unity/build/WebGL_IL2CPP 2>&1 | tee .tmp/unity-webgl.log
+      - name: Upload WebGL logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unity-webgl-${{ matrix.unity }}
+          path: |
+            .tmp/unity-webgl.log
+            tests/Unity/Logs
+          if-no-files-found: warn
+
   native-desktop:
     name: Unity ${{ matrix.target }} ${{ matrix.arch }} ${{ matrix.backend }}
     if: github.event_name == 'workflow_dispatch' && inputs.run_native_desktop
