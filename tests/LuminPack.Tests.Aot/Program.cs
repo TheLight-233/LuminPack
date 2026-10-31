@@ -28,7 +28,6 @@ internal static class Program
         }
         CheckPlatform();
         CheckStringPaths();
-        LuminPack.WireCompatibility.WireFixtures.CheckVariablePartitions();
         CheckLayoutPolicies();
         CheckBclJsonShapes();
         CheckExternalInput();

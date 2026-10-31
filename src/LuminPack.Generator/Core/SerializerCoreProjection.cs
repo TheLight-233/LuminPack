@@ -143,19 +143,6 @@ internal static class SerializerCoreProjection
                 method = method.WithBody(BinaryEntryCursorAliases.Rewrite(method.Body));
             if (state == "LuminPack.Core.LuminPackReader" && name is "Deserialize" or "DeserializeUnion")
                 method = method.WithBody(BinaryEntryCursorAliases.RewriteReader(method.Body));
-            if (type != null && name is "Serialize" or "SerializeUnion" or "Sizeof" &&
-                VariableUnionPayloadPlan.GetCase(type, compilation, metadata) is { } variableCase)
-            {
-                method = method.WithBody((BlockSyntax)new VariableUnionPayloadProjection.Strings().Visit(method.Body));
-                if (name == "SerializeUnion" && state == "LuminPack.Core.LuminPackWriter" && !variableCase.FixedCursor &&
-                    metadata.IsNet8 && (int)metadata.CSharpVersion >= 1100 && !metadata.IsForUnity &&
-                    !metadata.ParseOptions.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal)))
-                {
-                    VariableUnionPayloadProjection.Append(method, core, variableCase,
-                        LuminPackSourceGenerator.GetSerializationMetadata((INamedTypeSymbol)type, compilation, metadata));
-                    continue;
-                }
-            }
             if (name == "SerializeUnion" && state == "LuminPack.Core.LuminPackWriter" && method.TypeParameterList == null &&
                 !CompiledOptions.Resolve(type, compilation).Input.Enabled &&
                 FixedUnionCursorPlan.CanUsePayload(type, compilation, metadata))

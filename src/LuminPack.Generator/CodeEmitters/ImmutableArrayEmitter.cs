@@ -83,7 +83,7 @@ public static class ImmutableArrayEmitter
             sb.AppendLine("                        {");
             if (fieldData.UnionPartition is { } partition)
                 CollectionEmitterKit.AppendPartitionChunk(sb, "                            ", "i", "length",
-                    $"{partition.Root}.{partition.ReadMethod}(ref reader, array.AsSpan((int)i, chunkLength))");
+                    $"{partition.Root}.__LuminPackUnionPartitionRead_{partition.Suffix}(ref reader, array.AsSpan((int)i, chunkLength))");
             sb.AppendLine("                            reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
             sb.AppendLine("                        }");
         }

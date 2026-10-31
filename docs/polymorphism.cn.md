@@ -34,7 +34,6 @@ LuminPackSerializer.Deserialize(bytes, ref copy);   // copy 是 Circle
 - **1 到 4 个 case。** 先逐个做精确类型判断，再回到虚调用；虚调用继续服务注册的和外部的 case。
 - **更多 case。** 单次虚调用。
 - **固定 case 的列表。** 在 .NET 8 及以上（非 Unity），如果 `List<T>`、数组或 `ImmutableArray<T>` 的所有 case 都是固定记录（public 非托管字段、无回调），不可预测的 256 元素块会按 case 分组，在预先计算的偏移处逐组写入或读取，避免每个元素一次分派误预测。可预测的块（长段同类、单一类型占多数、规律周期）保留逐元素路径。
-- **变长 case 的列表。** 相同的自动 ATPD 路径也支持 string、raw 数组/List，以及本地定长字段 class 的数组/List；2–64 个窄标签 case 全部必须是普通、可直接访问且无回调的契约。上界为 O(1)：UTF-16 Length 字符串直接 raw copy，宽度为 `4 + 2 * Length`；raw 序列使用元素数和宽度；UTF-8 字符串采用上界；定长对象序列使用 Count 乘以最大对象宽度。写后仅压紧上界留下的空隙。raw UTF-16 由 case 类型资格决定，包括可预测/短集合的回退和具体 case 写入，因此不随预测历史变化。现有 Reader 同时接受 raw 和紧凑记录。Latin-1 文本可能变大，不符合条件的类型仍保留紧凑字符串。`string[]`、`List<string>`、一般变长对象集合、回调、池、自定义/特殊契约和递归图保留普通分派；Token 和 VarInt 保留既有策略及逐元素分派。
 
 用 `[LuminPackOption(WideTag = true)]` 选择宽标签。`[LuminPackOption(SingleImplementation = true)]` 声明该根在所有程序集中只有一个实现；只有确定其他程序集不会再加 case 时才能使用。它保留既有 Union 帧，并在无注册时允许直接调用。独立的 `[LuminPackWideTag]` 和 `[LuminPackSingleImplementation]` 特性保留兼容，参见[选项](options.cn.md#union-类型契约开关)。
 

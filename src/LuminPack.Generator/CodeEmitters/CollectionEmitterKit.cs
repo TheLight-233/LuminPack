@@ -123,7 +123,7 @@ internal static class CollectionEmitterKit
             sb.AppendLine(indent + "    {");
             if (partition != null)
                 AppendPartitionChunk(sb, indent + "        ", "__i", "__items.Length",
-                    $"{partition.Root}.{partition.WriteMethod}(ref writer, __items.Slice(__i, chunkLength))");
+                    $"{partition.Root}.__LuminPackUnionPartitionWrite_{partition.Suffix}(ref writer, __items.Slice(__i, chunkLength))");
             if (!ChecksItself(element)) sb.AppendLine(indent + "        writer.CheckBuffer();");
             sb.AppendLine(indent + "        writer.WriteValue(in __items[__i]!);");
             sb.AppendLine(indent + "    }");

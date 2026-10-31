@@ -68,8 +68,6 @@ LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(bytes, ref copy);
 
 Built-in profiles: `LuminPackDefaultOptions` (UTF-16, fixed length), `LuminPackUtf8LengthOptions`, `LuminPackUtf8TokenOptions`, `LuminPackUtf16LengthOptions`, `LuminPackUtf16TokenOptions`, `LuminPackUtf8VarIntOptions`, `LuminPackUtf16VarIntOptions`. You can define your own as a `struct` implementing `ILuminPackOptions`.
 
-Eligible variable-payload ATPD Union cases use raw UTF-16 Length strings instead of compact Latin-1, including their concrete writes and ordinary virtual fallbacks. This is a generated type policy, not a mutable global option; other types, UTF-8, Token and VarInt retain their existing representation. See [Polymorphism](polymorphism.md).
-
 ## Compact length headers
 
 Select `VarInt` for collections of small strings when reducing bytes matters more than peak encoding speed:

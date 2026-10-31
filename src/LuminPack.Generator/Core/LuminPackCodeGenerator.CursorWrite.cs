@@ -160,7 +160,7 @@ public static partial class LuminPackCodeGenerator
     /// <param name="indent">The statement indentation.</param>
     /// <remarks>The block copy requires the actual field addresses to match the packed offsets on a 64-bit target; otherwise
     /// each field is stored at its packed offset through the architecture-aware fixed store.</remarks>
-    internal static void AppendReservedFixedGroup(StringBuilder builder, List<LuminDataField> fields, int first, int last, Func<LuminDataField, string> Storage, string indent)
+    private static void AppendReservedFixedGroup(StringBuilder builder, List<LuminDataField> fields, int first, int last, Func<LuminDataField, string> Storage, string indent)
     {
         const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
         const string writerType = "global::LuminPack.Core.LuminPackWriter";
@@ -360,7 +360,7 @@ public static partial class LuminPackCodeGenerator
     /// <summary>Accepts only elements the raw collection path copies as their native storage.</summary>
     /// <param name="element">The element type.</param>
     /// <returns>Whether the element is closed, raw, unmanaged and not Nullable.</returns>
-    internal static bool IsReservedElement(Microsoft.CodeAnalysis.ITypeSymbol element)
+    private static bool IsReservedElement(Microsoft.CodeAnalysis.ITypeSymbol element)
         => element is not Microsoft.CodeAnalysis.ITypeParameterSymbol &&
            element.OriginalDefinition.SpecialType != Microsoft.CodeAnalysis.SpecialType.System_Nullable_T &&
            PortableStructPlan.TryCreate(element) == null && !PortableStructPlan.RequiresClosedDispatch(element) &&

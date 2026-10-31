@@ -113,7 +113,7 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
             string receiver = access.Expression.ToString(), name = access.Name.Identifier.ValueText;
             if (receiver == state)
             {
-                if (name is "ReserveRecord" or "RecordBound" or "WriteReservedRecordString" or "WriteReservedPartitionRecordString" or "CommitRecords") continue;
+                if (name is "ReserveRecord" or "RecordBound" or "WriteReservedRecordString" or "CommitRecords") continue;
                 if (name == "Write" && nulls.Any(branch => branch.DescendantNodes().Contains(call))) continue;
                 return null;
             }

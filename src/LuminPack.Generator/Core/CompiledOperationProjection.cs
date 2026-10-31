@@ -64,7 +64,7 @@ internal sealed partial class CompiledOperationProjection : CSharpSyntaxRewriter
             bool facade = !stateEntry && IsFacadeOperation(identifier);
             if (!stateEntry && !facade) { members.Add((MemberDeclarationSyntax)Visit(member)); continue; }
             bool serializer = identifier.StartsWith("__InputRead_", StringComparison.Ordinal) || identifier is "SerializeJson" or "DeserializeJson" or "Serialize" or "Deserialize" or "Sizeof" or
-                "SerializeUnion" or "SerializeUnionPartitionAt" or "DeserializeUnion" or "DeserializeFresh" or "SerializeWithCompress" or "DeserializeWithCompress";
+                "SerializeUnion" or "DeserializeUnion" or "DeserializeFresh" or "SerializeWithCompress" or "DeserializeWithCompress";
             bool slot = identifier.StartsWith("__LuminPackUnionSerializeJson_", StringComparison.Ordinal) ||
                 identifier.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal) || identifier.StartsWith("__LuminPackUnionCalculateOffset_", StringComparison.Ordinal);
             bool lookup = identifier == "TryReadOrderedJsonProperty";
@@ -107,7 +107,7 @@ internal sealed partial class CompiledOperationProjection : CSharpSyntaxRewriter
          access.Expression.ToString() == "global::LuminPack.Security.LuminPackInputPolicy" && access.Name.Identifier.ValueText == "CheckInputProfile" ||
          access.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal" && access.Name.Identifier.ValueText == "TryReadStableStringKeys" ||
          access.Name.Identifier.ValueText.StartsWith("__LuminPackUnionCalculateOffset_", StringComparison.Ordinal) ||
-         access.Name.Identifier.ValueText is "Serialize" or "SerializeUnionPartitionAt" or "Deserialize" or "Sizeof" ||
+         access.Name.Identifier.ValueText is "Serialize" or "Deserialize" or "Sizeof" ||
          access.Expression.ToString() == "global::LuminPack.Code.LuminPackFormatterRegistry" ||
          (CompiledOptionProjection.WriterMethods.Contains(access.Name.Identifier.ValueText) || CompiledOptionProjection.ReaderMethods.Contains(access.Name.Identifier.ValueText) ||
           CompiledOptionProjection.EvaluatorMethods.Contains(access.Name.Identifier.ValueText)) &&

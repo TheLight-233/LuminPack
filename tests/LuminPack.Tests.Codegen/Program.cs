@@ -190,11 +190,6 @@ try
         SerializerUnionCursorRegression.Run(references);
         return 0;
     }
-    if (args is ["--verify-variable-union"])
-    {
-        SerializerUnionCursorRegression.VerifyVariablePartitions(references);
-        return 0;
-    }
     if (args is ["--verify-capacity-tiers"])
     {
         SerializerCapacityTierRegression.Run(references);

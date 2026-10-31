@@ -24,9 +24,9 @@ namespace LuminPack.Core
     /// <summary>Writes complete binary records with an advancing output cursor.</summary>
     [StructLayout(LayoutKind.Sequential)]
 #if NET8_0_OR_GREATER
-    public ref partial struct LuminPackWriter
+    public ref struct LuminPackWriter
 #else
-    public unsafe ref partial struct LuminPackWriter
+    public unsafe ref struct LuminPackWriter
 #endif
     {
 #if NET8_0_OR_GREATER

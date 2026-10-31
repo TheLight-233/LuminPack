@@ -38,8 +38,6 @@ internal static class WireFixtures
         Put(directory, "string-builder", new StringBuilder("Unity-LuminPack-\u754C-\uD83D\uDE00"));
         Put(directory, "multi-array", CreateGrid());
         Put(directory, "generated-model", CreateModel());
-        Put(directory, "union-variable-utf16", CreateVariableUnion(), Utf16Length);
-        Put(directory, "union-variable-utf8", CreateVariableUnion(), Utf8Length);
     }
 
     /// <summary>Verifies verify.</summary>
@@ -47,7 +45,6 @@ internal static class WireFixtures
     internal static void Verify(string directory)
     {
         VerifyWrittenBytes(directory);
-        CheckVariablePartitions();
         Check(Get<int>(directory, "int") == -123456789, "int");
         Check(Get<string>(directory, "string-utf8", Utf8Length) == "Unity \u2194 .NET 8 \uD83D\uDE00", "string-utf8");
         Check(Get<string>(directory, "string-utf16", Utf16Length) == "Unity \u2194 .NET 8 \uD83D\uDE00", "string-utf16");
@@ -89,37 +86,6 @@ internal static class WireFixtures
                 Check(File.ReadAllBytes(file).AsSpan().SequenceEqual(File.ReadAllBytes(Path.Combine(directory, Path.GetFileName(file)))), Path.GetFileName(file) + " written bytes");
         }
         finally { Directory.Delete(temporary, true); }
-    }
-
-    /// <summary>Executes actual mixed-size kernels in JIT, trimmed, native and Unity smoke players.</summary>
-    internal static void CheckVariablePartitions()
-    {
-        var source = CreateVariableUnion();
-        byte[] utf16 = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(source);
-        byte[] utf8 = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(source);
-        var left = LuminPackSerializer.Deserialize<List<WireVariableRoot>, LuminPackUtf16LengthOptions>(utf16);
-        var right = LuminPackSerializer.Deserialize<List<WireVariableRoot>, LuminPackUtf8LengthOptions>(utf8);
-        Check(LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(left).AsSpan().SequenceEqual(utf16), "variable-union-utf16");
-        Check(LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(right).AsSpan().SequenceEqual(utf8), "variable-union-utf8");
-        WireVariableRoot text = new WireVariableText { Id = 7, Text = "abc" };
-        byte[] raw = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(text);
-        Check(raw.Length == 15 && BitConverter.ToInt32(raw, 5) == 6, "variable-union-raw-policy");
-    }
-
-    /// <summary>Creates a deterministic random sequence containing exact and upper-bound payloads.</summary>
-    /// <returns>The shared cross-target fixture.</returns>
-    private static List<WireVariableRoot> CreateVariableUnion()
-    {
-        var random = new Random(0x51A7);
-        var result = new List<WireVariableRoot>();
-        for (int i = 0; i < 64; i++)
-            result.Add(random.Next(3) switch
-            {
-                0 => new WireVariableText { Id = i, Text = i % 5 == 0 ? null : i % 2 == 0 ? "Latin_" + i : "\u4E2D_" + i },
-                1 => new WireVariableNumbers { Id = i, Values = i % 7 == 0 ? null : Enumerable.Range(i, i % 9).ToArray() },
-                _ => new WireVariableObjects { Id = i, Values = i % 11 == 0 ? null : new List<WireFixedElement> { null!, new WireFixedElement { Value = i, Other = -i }, null! } }
-            });
-        return result;
     }
 
     /// <summary>Provides null, empty, Latin-1, Unicode and multi-byte header fixture records.</summary>
@@ -261,46 +227,4 @@ public struct WireStats
     public double Accuracy;
     /// <summary>Stores the alive.</summary>
     public bool Alive;
-}
-
-/// <summary>Owns the portable mixed-size Union fixture.</summary>
-[LuminPackable, LuminPackUnion(0, typeof(WireVariableText)), LuminPackUnion(1, typeof(WireVariableNumbers)), LuminPackUnion(2, typeof(WireVariableObjects))]
-public abstract partial class WireVariableRoot
-{
-    /// <summary>The stable entry identifier.</summary>
-    public int Id;
-}
-
-/// <summary>Stores a raw UTF-16 or upper-bound UTF-8 string.</summary>
-[LuminPackable]
-public sealed partial class WireVariableText : WireVariableRoot
-{
-    /// <summary>The nullable text.</summary>
-    public string? Text;
-}
-
-/// <summary>Stores a raw sequence with an exact length query.</summary>
-[LuminPackable]
-public sealed partial class WireVariableNumbers : WireVariableRoot
-{
-    /// <summary>The nullable raw elements.</summary>
-    public int[]? Values;
-}
-
-/// <summary>Stores nullable fixed objects whose count gives an O(1) upper bound.</summary>
-[LuminPackable]
-public sealed partial class WireVariableObjects : WireVariableRoot
-{
-    /// <summary>The nullable object sequence.</summary>
-    public List<WireFixedElement>? Values;
-}
-
-/// <summary>Supplies a fixed ordinary object payload.</summary>
-[LuminPackable]
-public sealed class WireFixedElement
-{
-    /// <summary>The first scalar.</summary>
-    public int Value;
-    /// <summary>The second scalar.</summary>
-    public int Other;
 }
