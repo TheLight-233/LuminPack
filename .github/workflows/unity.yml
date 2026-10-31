@@ -12,6 +12,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 concurrency:
   group: unity-license
@@ -39,6 +40,11 @@ jobs:
       UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
     steps:
       - uses: actions/checkout@v4
+      - name: Free disk space for the Unity image
+        shell: bash
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/local/share/boost
+          df -h /
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
@@ -63,11 +69,12 @@ jobs:
           cp src/LuminPack.Core/bin/Release/netstandard2.1/System.Runtime.CompilerServices.Unsafe.dll tests/Unity/Assets/Plugins/
           cp src/LuminPack.Generator/bin/Release/netstandard2.0/LuminPack.Generator.dll tests/Unity/Assets/Plugins/
       - name: Run Unity Mono editor tests
-        uses: game-ci/unity-test-runner@v4
+        uses: game-ci/unity-test-runner@32e57712352b500e17974b245a6dce9e11a73213 # v4.4.0
         with:
           projectPath: tests/Unity
           unityVersion: ${{ matrix.unity }}
           testMode: editmode
+          cliVersion: v0.1.72
           artifactsPath: .tmp/unity-tests
       - name: Build the IL2CPP Player
         uses: game-ci/unity-builder@v4
@@ -128,6 +135,11 @@ jobs:
       UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
     steps:
       - uses: actions/checkout@v4
+      - name: Free disk space for the Unity image
+        shell: bash
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/local/share/boost
+          df -h /
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x

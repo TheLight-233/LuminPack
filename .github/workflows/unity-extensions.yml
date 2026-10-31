@@ -9,6 +9,7 @@ on:
 
 permissions:
   contents: read
+  checks: write
 
 jobs:
   hosted:
@@ -23,6 +24,11 @@ jobs:
       UNITY_IMAGE: unityci/editor:ubuntu-${{ inputs.unity_version }}-linux-il2cpp-3
     steps:
       - uses: actions/checkout@v4
+      - name: Free disk space for the Unity image
+        shell: bash
+        run: |
+          sudo rm -rf /usr/local/lib/android /opt/ghc /usr/local/share/boost
+          df -h /
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
@@ -56,12 +62,13 @@ jobs:
           UNITY_VERSION: ${{ inputs.unity_version }}
         run: .github/scripts/invoke-unity-extensions.ps1 -PrepareHosted
       - name: Run Unity object and Burst contracts
-        uses: game-ci/unity-test-runner@v4
+        uses: game-ci/unity-test-runner@32e57712352b500e17974b245a6dce9e11a73213 # v4.4.0
         with:
           projectPath: .tmp/unity-extensions-native
           unityVersion: ${{ inputs.unity_version }}
           customImage: ${{ env.UNITY_IMAGE }}
           testMode: editmode
+          cliVersion: v0.1.72
           artifactsPath: .tmp/unity-extensions-results
       - name: Require the extension contract to pass
         shell: bash
