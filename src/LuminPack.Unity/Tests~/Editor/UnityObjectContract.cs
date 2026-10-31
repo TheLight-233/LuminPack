@@ -18,6 +18,7 @@ public static unsafe class UnityObjectContract
         { preWrapMode = WrapMode.Loop, postWrapMode = WrapMode.PingPong };
         var curveTarget = new AnimationCurve(new Keyframe(0, 9));
         Check<AnimationCurve>(curve, curveTarget, &LuminUnity.Write, &LuminUnity.Read);
+        CheckSize<AnimationCurve>(curve, &LuminUnity.Write, &LuminUnity.Size);
         for (int sample = -8; sample <= 24; sample++)
             Require(Mathf.Abs(curve.Evaluate(sample / 16f) - curveTarget.Evaluate(sample / 16f)) < 0.00001f, "Curve evaluation changed.");
 
@@ -26,10 +27,26 @@ public static unsafe class UnityObjectContract
             new[] { new GradientAlphaKey(0.125f, 0), new GradientAlphaKey(0.875f, 1) });
         var gradientTarget = new Gradient();
         Check<Gradient>(gradient, gradientTarget, &LuminUnity.Write, &LuminUnity.Read);
+        CheckSize<Gradient>(gradient, &LuminUnity.Write, &LuminUnity.Size);
         Require(gradientTarget.mode == gradient.mode && gradientTarget.colorSpace == gradient.colorSpace, "Gradient metadata changed.");
         Check<RectOffset>(new RectOffset(-1, 2, 3, -4), new RectOffset(10, 11, 12, 13), &LuminUnity.Write, &LuminUnity.Read);
+        CheckSize<RectOffset>(new RectOffset(-1, 2, 3, 4), &LuminUnity.Write, &LuminUnity.Size);
         LuminUnity.Register(); LuminUnity.Register();
         Debug.Log("LUMINPACK_UNITY_OBJECTS_OK: curve/gradient/offset native round trips, reuse, all truncations, nulls, exact-length writes and count validation.");
+    }
+
+    /// <summary>Checks evaluator widths against actual null and populated records.</summary>
+    /// <typeparam name="T">Native Unity owner type.</typeparam>
+    /// <param name="value">Populated owner.</param><param name="write">Writer.</param><param name="size">Size evaluator.</param>
+    private static void CheckSize<T>(T value, delegate*<ref LuminPackWriter, in T?, void> write,
+        delegate*<ref LuminPackEvaluator, in T?, void> size) where T : class
+    {
+        foreach (T? item in new T?[] { null, value })
+        {
+            var evaluator = new LuminPackEvaluator();
+            size(ref evaluator, item);
+            Require(evaluator.Value == Encode(item, write).Length, "Native object evaluator width changed.");
+        }
     }
 
     /// <summary>Runs an independent malformed/truncated input matrix before checking complete publication.</summary>
@@ -49,17 +66,17 @@ public static unsafe class UnityObjectContract
                 bool rejected = false;
                 try { read(ref reader, ref current); } catch (Exception) { rejected = true; }
                 Require(rejected && reader.Position == 0 && ReferenceEquals(destination, current), "Short record published a native owner or cursor.");
-                Require(before.SequenceEqual(Encode(current, write, size)), "Short record mutated a native owner.");
+                Require(before.SequenceEqual(Encode(current, write)), "Short record mutated a native owner.");
             }
             ReadOnlySpan<byte> complete = new ReadOnlySpan<byte>(input, record.Length);
             var full = new LuminPackReader(ref complete);
             read(ref full, ref current);
             Require(full.Position == record.Length && ReferenceEquals(current, destination), "Native owner reuse or cursor completion failed.");
-            Require(record.SequenceEqual(Encode(current, write, size)), "Native object record was not stable.");
+            Require(record.SequenceEqual(Encode(current, write)), "Native object record was not stable.");
             T? fresh = null;
             var freshReader = new LuminPackReader(ref complete);
             read(ref freshReader, ref fresh);
-            Require(fresh is not null && !ReferenceEquals(source, fresh) && record.SequenceEqual(Encode(fresh, write, size)), "Fresh native owner construction failed.");
+            Require(fresh is not null && !ReferenceEquals(source, fresh) && record.SequenceEqual(Encode(fresh, write)), "Fresh native owner construction failed.");
         }
         if (typeof(T) != typeof(RectOffset))
         {
@@ -74,11 +91,11 @@ public static unsafe class UnityObjectContract
                     bool rejected = false;
                     try { read(ref reader, ref current); } catch (Exception) { rejected = true; }
                     Require(rejected && reader.Position == 0, "Forged key count was accepted or advanced the caller.");
-                    Require(record.SequenceEqual(Encode(current, write, size)), "Forged count changed native state.");
+                    Require(record.SequenceEqual(Encode(current, write)), "Forged count changed native state.");
                 }
             }
         }
-        byte[] nullRecord = Encode<T>(null, write, size);
+        byte[] nullRecord = Encode<T>(null, write);
         Require(nullRecord.Length == 1, "Null object framing changed.");
         fixed (byte* input = nullRecord)
         {

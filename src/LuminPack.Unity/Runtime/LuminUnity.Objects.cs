@@ -8,6 +8,21 @@ namespace LuminPack.Unity
 {
     public static unsafe partial class LuminUnity
     {
+        /// <summary>Adds the exact encoded width of a nullable curve.</summary>
+        /// <param name="evaluator">Size accumulator.</param><param name="value">Curve or null.</param>
+        public static void Size(ref LuminPackEvaluator evaluator, in AnimationCurve? value)
+            => evaluator.Add(value is null ? 1 : checked(13 + value.keys.Length * 32));
+
+        /// <summary>Adds the exact encoded width of a nullable gradient.</summary>
+        /// <param name="evaluator">Size accumulator.</param><param name="value">Gradient or null.</param>
+        public static void Size(ref LuminPackEvaluator evaluator, in Gradient? value)
+            => evaluator.Add(value is null ? 1 : checked(17 + value.colorKeys.Length * 20 + value.alphaKeys.Length * 8));
+
+        /// <summary>Adds the exact encoded width of a nullable offset.</summary>
+        /// <param name="evaluator">Size accumulator.</param><param name="value">Offset or null.</param>
+        public static void Size(ref LuminPackEvaluator evaluator, in RectOffset? value)
+            => evaluator.Add(value is null ? 1 : 17);
+
         /// <summary>Writes a nullable curve as wrap modes and explicit keyframe values, never its native handle.</summary>
         /// <param name="writer">Output cursor.</param><param name="value">Curve or null.</param>
         public static void Write(ref LuminPackWriter writer, in AnimationCurve? value)
