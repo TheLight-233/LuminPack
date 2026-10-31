@@ -74,6 +74,7 @@ internal static class SerializerUnionCursorRegression
     /// <param name="references">Current platform and runtime references.</param>
     internal static void Run(MetadataReference[] references)
     {
+        VerifyCollectionDispatch(references);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var before = Compilation(references, mode, true);
@@ -161,6 +162,67 @@ internal static class SerializerUnionCursorRegression
         Require(!safe.GetRunResult().Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), "Unsafe-disabled cursor generation failed.");
         Execute(safeOutput);
         Console.WriteLine("Passed fixed Union cursor signatures, internal XML policy, large fixed growth, public/private/property/callback/versioned guards, exact-case call-site chains, wide/generic fallback, four pruning modes, unsafe-disabled output and retained/fresh volatility, widening and profile edits.");
+    }
+
+    /// <summary>Compiles modern fixed Union collections and verifies ordered per-element wire and round trips.</summary>
+    /// <param name="references">Current platform and runtime references.</param>
+    private static void VerifyCollectionDispatch(MetadataReference[] references)
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Collections.Immutable;
+            using System.Linq;
+            using LuminPack;
+            using LuminPack.Attribute;
+            [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
+            [LuminPackable, LuminPackUnion(0, typeof(First)), LuminPackUnion(1, typeof(Second))]
+            public abstract partial class CollectionRoot { public int Id; }
+            [LuminPackable] public sealed partial class First : CollectionRoot { public long Value; }
+            [LuminPackable] public sealed partial class Second : CollectionRoot { public int Value; }
+            public static class Entry
+            {
+                public static void Check()
+                {
+                    foreach (int count in new[] { 64, 600 })
+                    {
+                        var random = new Random(197);
+                        var values = new CollectionRoot[count];
+                        for (int i = 0; i < count; i++) values[i] = random.Next(2) == 0
+                            ? (CollectionRoot)new First { Id = i, Value = i * 71L }
+                            : new Second { Id = i, Value = -i };
+                        values[count - 1] = null;
+                        byte[] array = LuminPackSerializer.Serialize(values);
+                        byte[] list = LuminPackSerializer.Serialize(new List<CollectionRoot>(values));
+                        byte[] immutable = LuminPackSerializer.Serialize(ImmutableArray.CreateRange(values));
+                        if (!array.AsSpan().SequenceEqual(list) || !array.AsSpan().SequenceEqual(immutable))
+                            throw new Exception("Union collection wire differs by container.");
+                        var copies = new[] {
+                            LuminPackSerializer.Deserialize<CollectionRoot[]>(array),
+                            LuminPackSerializer.Deserialize<List<CollectionRoot>>(list).ToArray(),
+                            LuminPackSerializer.Deserialize<ImmutableArray<CollectionRoot>>(immutable).ToArray()
+                        };
+                        foreach (var copy in copies)
+                            if (!LuminPackSerializer.Serialize(copy).AsSpan().SequenceEqual(array))
+                                throw new Exception("Union collection order or payload changed.");
+                    }
+                }
+            }
+            """;
+        var options = new CSharpParseOptions(LanguageVersion.CSharp13, preprocessorSymbols: new[] { "NET8_0_OR_GREATER" });
+        foreach (string mode in new[] { "Full", "Minimal" })
+        {
+            var compilation = CSharpCompilation.Create("UnionCollections_" + mode,
+                new[] { CSharpSyntaxTree.ParseText(source.Replace("MODE", mode), options) }, references,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+            var driver = CSharpGeneratorDriver.Create(new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator() },
+                parseOptions: options).RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+            Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+            string generated = Generated(driver);
+            Require(!generated.Contains("__LuminPackUnionPartition", StringComparison.Ordinal) &&
+                !generated.Contains("LuminUnionPartitionMap", StringComparison.Ordinal), "Fixed Union collections must use per-element dispatch.");
+            Execute(output);
+        }
     }
 
     /// <summary>Checks the dictionary call site tests exactly the fixed cases in tag order before falling back to the cursor slot.</summary>

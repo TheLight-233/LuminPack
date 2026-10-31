@@ -159,7 +159,7 @@ if (args.Contains("--verify-binary-write-inlining-policy", StringComparer.Ordina
 if (args.Contains("--verify-union-dispatch-tiers", StringComparer.Ordinal))
 {
     UnionDispatchTierRegression.Run();
-    Console.WriteLine("Passed Union dispatch tier and partition eligibility verification.");
+    Console.WriteLine("Passed Union dispatch tier and per-element collection verification.");
     return;
 }
 

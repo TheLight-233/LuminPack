@@ -103,7 +103,7 @@
 | 项目 | 范围 |
 | --- | --- |
 | `tests/LuminPack.Tests` | xUnit 运行时测试。`LuminPackTestArea` 选择 `All`（默认）、`Safety`、`Simd` 或 `Hooks`（带原生 Hook 探针的 `netstandard2.1` 资产）。 |
-| `tests/LuminPack.Tests.Codegen` | 使用 SDK 自带 Roslyn 的生成代码契约：XML 文档、机制、内联、Union 游标、复用、分片、外部 Union、选项。 |
+| `tests/LuminPack.Tests.Codegen` | 使用 SDK 自带 Roslyn 的生成代码契约：XML 文档、机制、内联、Union 游标、复用、Union 集合、外部 Union、选项。 |
 | `tests/LuminPack.Tests.Generator` | 使用 Roslyn 4.3 的生成器流水线：并发、emitter 形态、裁剪模式、增量失效（`--verify-incremental`）。 |
 | `tests/LuminPack.Tests.Aot` | 裁剪/NativeAOT 冒烟程序和数据格式夹具（`--wire verify`）；加 `-p:LuminPackPackageVersion=<v>` 时改用打包好的 NuGet 包运行。 |
 | `tests/LuminPack.Tests.Platforms` | 平台适配契约，用 `LuminPackPlatform` 选择平台。 |

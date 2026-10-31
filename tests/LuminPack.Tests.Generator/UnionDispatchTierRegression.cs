@@ -2,7 +2,7 @@ using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
-/// <summary>Checks the tiered Union write dispatch and the adaptive partition eligibility of List members.</summary>
+/// <summary>Checks tiered Union writes and per-element dispatch for contiguous collections.</summary>
 internal static class UnionDispatchTierRegression
 {
     /// <summary>Runs every tier scenario.</summary>
@@ -38,16 +38,15 @@ internal static class UnionDispatchTierRegression
 
         string cases(int count) => "using LuminPack.Attribute;\n[LuminPackable] public abstract partial class Many { public int Id; }\n" +
             string.Concat(Enumerable.Range(0, count).Select(index => $"[LuminPackable] public sealed partial class Case{index} : Many {{ public int Value; }}\n")) +
-            "[LuminPackable] public partial class Holder { public System.Collections.Generic.List<Many> Items = new(); }\n";
+            "[LuminPackable] public partial class Holder { public System.Collections.Generic.List<Many> Items = new(); public Many[] ArrayItems; public System.Collections.Immutable.ImmutableArray<Many> ImmutableItems; }\n";
         string four = Compiled(Generate(cases(4), register: true), "Many");
         Require(Enumerable.Range(0, 4).All(index => four.Contains($"if (value is global::Case{index})")), "Four cases must all be guarded.", four);
         string five = Compiled(Generate(cases(5), register: true), "Many");
         Require(!five.Contains("value is global::Case"), "More than four cases must keep the single virtual call.", five);
 
-        // Portable targets keep per-element List dispatch; modern-target partition output and its records are covered by
-        // UnionPartitionTest in a real build, which also binds the inlined entry operations this harness cannot bind.
-        string portable = Generate(cases(5), register: true);
-        Require(!portable.Contains("__LuminPackUnionPartition"), "netstandard2.1 must keep per-element List dispatch.", "");
+        string collections = Generate(cases(5), register: true);
+        Require(!collections.Contains("__LuminPackUnionPartition") && !collections.Contains("LuminUnionPartitionMap"),
+            "Fixed Union lists, arrays and immutable arrays must retain per-element dispatch.", collections);
     }
 
     /// <summary>Runs both generators over one source file.</summary>

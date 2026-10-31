@@ -45,9 +45,6 @@ public static partial class ListEmitter
         }
         sb.AppendLine("            for (int i = 0; i < span.Length; i++)");
         sb.AppendLine("            {");
-        if (fieldData.UnionPartition is { } partition)
-            // Each aligned chunk of fixed Union cases is first offered to the partition kernel, which declines predictable chunks.
-            CollectionEmitterKit.AppendPartitionChunk(sb, "                ", "i", "span.Length", $"{partition.Root}.__LuminPackUnionPartitionWrite_{partition.Suffix}(ref writer, span.Slice(i, chunkLength))");
         sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                writer.WriteValue(in span[i]!);");
         sb.AppendLine("            }");

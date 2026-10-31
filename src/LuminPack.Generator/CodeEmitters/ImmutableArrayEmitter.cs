@@ -15,8 +15,7 @@ public static class ImmutableArrayEmitter
     {
         // An empty array is a zero count for every element kind; only a default array is the null record.
         sb.AppendLine("            if (value.IsDefault) { writer.EnsureAdditionalCapacity(4); writer.WriteNullCollectionHeader(); return; }");
-        CollectionEmitterKit.AppendSpanWrite(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), GetFirstGeneric(fieldData.TypeName), "value.AsSpan()", "            ",
-            partition: fieldData.UnionPartition);
+        CollectionEmitterKit.AppendSpanWrite(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), GetFirstGeneric(fieldData.TypeName), "value.AsSpan()", "            ");
     }
 
     /// <summary>Appends binary reading statements for immutable array values.</summary>
@@ -81,9 +80,6 @@ public static class ImmutableArrayEmitter
             sb.AppendLine("                        ref var first = ref LuminPackMarshal.GetNotNullArrayReference(array!);");
             sb.AppendLine("                        for (nint i = 0; i < length; i++)");
             sb.AppendLine("                        {");
-            if (fieldData.UnionPartition is { } partition)
-                CollectionEmitterKit.AppendPartitionChunk(sb, "                            ", "i", "length",
-                    $"{partition.Root}.__LuminPackUnionPartitionRead_{partition.Suffix}(ref reader, array.AsSpan((int)i, chunkLength))");
             sb.AppendLine("                            reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
             sb.AppendLine("                        }");
         }

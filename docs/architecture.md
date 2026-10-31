@@ -102,7 +102,7 @@ Roslyn cancellation is checked before changed-type analysis and between aggregat
 | Project | Scope |
 | --- | --- |
 | `tests/LuminPack.Tests` | xUnit runtime tests. `LuminPackTestArea` selects `All` (default), `Safety`, `Simd`, or `Hooks` (the `netstandard2.1` asset with native hook probes). |
-| `tests/LuminPack.Tests.Codegen` | Generated-code contracts with the SDK's Roslyn: XML docs, mechanisms, inlining, Union cursors, reuse, partitions, external Unions, options. |
+| `tests/LuminPack.Tests.Codegen` | Generated-code contracts with the SDK's Roslyn: XML docs, mechanisms, inlining, Union cursors, reuse, Union collections, external Unions, options. |
 | `tests/LuminPack.Tests.Generator` | Generator pipeline with Roslyn 4.3: concurrency, emitter shapes, pruning modes, incremental invalidation (`--verify-incremental`). |
 | `tests/LuminPack.Tests.Aot` | Trimmed/NativeAOT smoke program and wire fixtures (`--wire verify`); with `-p:LuminPackPackageVersion=<v>` it runs against the packed NuGet packages. |
 | `tests/LuminPack.Tests.Platforms` | Platform adapter contracts, selected with `LuminPackPlatform`. |
