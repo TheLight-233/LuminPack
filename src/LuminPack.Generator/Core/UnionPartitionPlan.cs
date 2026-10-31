@@ -138,6 +138,8 @@ internal sealed class UnionPartitionPlan
             sb.AppendLine($"{padding}/// <returns>False, without reading, when the caller must read the chunk element by element.</returns>");
         }
         sb.AppendLine($"{padding}[global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]");
+        // The cold partition body stays out of line so collection loops keep their inlining budget.
+        sb.AppendLine($"{padding}[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
         sb.AppendLine(write
             ? $"{padding}public static bool __LuminPackUnionPartitionWrite_{Suffix}(ref global::LuminPack.Core.LuminPackWriter writer, global::System.ReadOnlySpan<{Root}?> chunk)"
             : $"{padding}public static bool __LuminPackUnionPartitionRead_{Suffix}(ref global::LuminPack.Core.LuminPackReader reader, global::System.Span<{Root}?> chunk)");
