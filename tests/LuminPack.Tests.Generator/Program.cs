@@ -156,6 +156,13 @@ if (args.Contains("--verify-binary-write-inlining-policy", StringComparer.Ordina
     return;
 }
 
+if (args.Contains("--verify-union-dispatch-tiers", StringComparer.Ordinal))
+{
+    UnionDispatchTierRegression.Run();
+    Console.WriteLine("Passed Union dispatch tier and partition eligibility verification.");
+    return;
+}
+
 if (args.Contains("--verify-multidimensional-read-formatter-shape", StringComparer.Ordinal))
 {
     MultiDimensionalArrayReadShapeRegression.Run();

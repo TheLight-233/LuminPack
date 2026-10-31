@@ -48,12 +48,14 @@ internal sealed partial class CompiledOperationProjection
         source.AppendLine("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
         source.Append("public static void ").Append(method.Identifier.ValueText).Append("_Compiled<").Append(profileParameter).Append(">(ref ").Append(method.ParameterList.Parameters[0].Type).Append(" writer, ")
             .Append(rootName).Append(" value) where ").Append(profileParameter).AppendLine(" : struct, global::LuminPack.Option.ILuminPackOptions {");
+        // Write slots use the tiered dispatch; offset calculation keeps the original virtual call.
+        var tier = root != null && operation != "__LuminPackUnionCalculateOffset_" ? UnionDispatchTierPlan.Get(root, _compilation) : null;
         foreach (var profile in profiles)
         {
             string name = method.Identifier.ValueText + (profile.Identity == declared.Identity ? "" : "_Options_" + profile.Identity);
             source.Append("if (default(").Append(profileParameter).Append(").StringEncoding == (global::LuminPack.Option.LuminPackStringEncoding)").Append(profile.Encoding);
             if (!json) source.Append(" && default(").Append(profileParameter).Append(").StringRecording == (global::LuminPack.Option.LuminPackStringRecording)").Append(profile.Recording);
-            source.Append(") { value.").Append(name).AppendLine("(ref writer); return; }");
+            source.Append(") ").AppendLine(tier?.Dispatch(name) ?? "{ value." + name + "(ref writer); return; }");
         }
         source.AppendLine("global::LuminPack.Code.LuminPackExceptionHelper.ThrowInvalidOperationException(\"The compiled profile has an invalid string encoding or recording mode.\"); }");
         members.Add(SyntaxFactory.ParseMemberDeclaration(source.ToString()).NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
