@@ -15,15 +15,20 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: unity-license
+  cancel-in-progress: false
 
 jobs:
   unity:
-    # License-backed jobs are explicitly enabled by the repository owner.
+    name: Unity ${{ matrix.unity }} Mono and IL2CPP
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        unity: ['2022.3.51f1', '6000.0.43f1']
     # Forks must never execute code using the owner's Unity credentials.
     if: >-
-      ((github.event_name == 'workflow_dispatch' && !inputs.run_native_desktop) || vars.LUMINPACK_UNITY_CI == 'true') &&
+      (github.event_name != 'workflow_dispatch' || !inputs.run_native_desktop) &&
       (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     runs-on: ubuntu-latest
     timeout-minutes: 90
@@ -45,6 +50,10 @@ jobs:
             echo "Configure UNITY_LICENSE or the UNITY_EMAIL/UNITY_PASSWORD/UNITY_SERIAL secrets before enabling Unity CI."
             exit 1
           fi
+      - name: Select the Unity version
+        shell: bash
+        run: |
+          echo 'm_EditorVersion: ${{ matrix.unity }}' > tests/Unity/ProjectSettings/ProjectVersion.txt
       - name: Build and stage the actual Unity assemblies
         shell: bash
         run: |
@@ -57,14 +66,14 @@ jobs:
         uses: game-ci/unity-test-runner@v4
         with:
           projectPath: tests/Unity
-          unityVersion: 2022.3.51f1
+          unityVersion: ${{ matrix.unity }}
           testMode: editmode
           artifactsPath: .tmp/unity-tests
       - name: Build the IL2CPP Player
         uses: game-ci/unity-builder@v4
         with:
           projectPath: tests/Unity
-          unityVersion: 2022.3.51f1
+          unityVersion: ${{ matrix.unity }}
           targetPlatform: StandaloneLinux64
           buildMethod: LuminPackSmokeBuild.Build
           allowDirtyBuild: true
@@ -81,12 +90,25 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: unity-mono-il2cpp
+          name: unity-mono-il2cpp-${{ matrix.unity }}
           path: |
             .tmp/unity-tests
             .tmp/unity-player.log
             tests/Unity/Logs
           if-no-files-found: warn
+
+  extensions:
+    needs: unity
+    if: always() && needs.unity.result != 'skipped' && needs.unity.result != 'cancelled'
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        unity: ['2022.3.51f1', '6000.0.43f1']
+    with:
+      unity_version: ${{ matrix.unity }}
+    uses: ./.github/workflows/unity-extensions.yml
+    secrets: inherit
 
   native-desktop:
     name: Unity ${{ matrix.target }} ${{ matrix.arch }} ${{ matrix.backend }}

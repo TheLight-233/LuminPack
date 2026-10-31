@@ -51,9 +51,9 @@ dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlat
 
 - `ci.yml`：仓库检查、构建、生成代码与生成器契约、增量验证、运行时测试、Hook 测试区、数据格式夹具，以及从新打包的 NuGet 包安装的测试。
 - `runtime-compatibility.yml`：在 Windows、Linux、macOS（x64 和 ARM64）上运行裁剪版和 NativeAOT 程序，标量/SSSE3/AVX2 回退以及 x86。AVX-512 硬件测试在推送及同仓库拉取请求时自动运行，手动运行时也默认开启；手动运行可取消勾选 `run_avx512`，或勾选 `avx512_only` 只运行此硬件检查。默认并行探测四台 `ubuntu-latest` 运行器的真实 AVX-512F/BW 支持；所有支持的运行器都会执行测试，任何测试失败或没有运行器支持时硬件检查失败。GitHub 不保证一定能分配到支持的运行器。可设置仓库变量 `LUMINPACK_AVX512_RUNNER`，指定支持 AVX-512 的 Linux x64 runner 标签（如 `avx512`），固定使用专用运行器。来自 fork 的拉取请求不执行此任务，即使选择了自托管 runner。按 CPU 厂商和 ARM32 的运行仍需手动触发，并需要带对应标签的自托管 runner。
-- Unity 工作流构建并运行 Mono 和 IL2CPP Player，需要配置 Unity 许可证密钥。
+- 配置 Unity 许可证密钥后，推送和同仓库拉取请求会在 Linux 托管运行器上用 Unity 2022.3.51f1 和 6000.0.43f1 依次运行 Editor 测试、IL2CPP smoke Player、Unity 对象和 Burst Editor 合约测试，共用一个许可证。未配置密钥时许可证检查会失败。Fork 拉取请求跳过需要许可证的任务。手动运行的 Windows 和 macOS 原生 Player 检查仍需要预先激活许可证的自托管运行器；Linux 测试不能验证这些平台。
 - `test-areas.yml` 在 Windows、Linux 和 macOS 上以 Debug、Release 运行 Safety 测试区；三个系统均执行 AspNetCore、Avalonia、Maui、MonoGame、SkiaSharp 适配契约，Windows 额外执行 Drawing 和 Wpf。适配模块使用已有 Core 二进制，因此先构建 Core。
-- 推送到 `main`、`refactor` 或创建拉取请求均会触发托管检查。Unity 执行仍需要已配置的许可证或原生运行器；`.github/scripts` 下的辅助脚本随工作流纳入版本控制。
+- 推送到 `main`、`refactor` 或创建拉取请求均会触发托管检查。Unity 执行需要配置许可证密钥；`.github/scripts` 下的辅助脚本随工作流纳入版本控制。
 - 基准测试只能通过手动的 `run_benchmarks` 输入触发，明确限定为现有四类：`SimpleBenchmark`、`SerializeBenchmark`、`JsonBenchmark`、`PolymorphismBenchmark`，不作为正确性门禁。
 - 基准测试矩阵使用 Linux x64、macOS Intel x64 和 Linux ARM64 原生主机。计时前校验实际进程与操作系统架构，以及 Intel 主机的 CPUID 厂商；各主机分别上传结果和环境信息。应在同一主机内比较各库的比值，跨主机的操作系统和 CPU 均有差异。
 - 手动输入 `benchmark_jit` 默认为 `both`，分别运行 `TieredPGO`（启用分层编译和动态 PGO）及 `FullOpts`（两者均关闭）。FullOpts 是用于排查 JIT 稳定性的对照，不能替代生产环境 PGO 结果。每组使用三个进程、8–30 次自适应预热和 15 次以一秒为目标的正式测量，保留离群值。固定随机种子与时间戳保证各进程的输入字节一致；计时前用 `--verify-fixtures` 验证新实例及重复初始化。

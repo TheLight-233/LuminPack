@@ -1,41 +1,92 @@
 name: Unity extensions
 
 on:
-  workflow_dispatch:
+  workflow_call:
+    inputs:
+      unity_version:
+        required: true
+        type: string
 
 permissions:
   contents: read
 
 jobs:
-  native:
-    name: Native extension contracts (${{ matrix.platform }})
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - platform: windows-x64
-            runner: [self-hosted, unity, Windows, X64]
-          - platform: macos-arm64
-            runner: [self-hosted, unity, macOS, ARM64]
-    runs-on: ${{ matrix.runner }}
+  hosted:
+    name: Unity ${{ inputs.unity_version }} extension contracts (Linux Editor and Burst)
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+      UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+      UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+      UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}
+      UNITY_IMAGE: unityci/editor:ubuntu-${{ inputs.unity_version }}-linux-il2cpp-3
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 11.0.x
           dotnet-quality: preview
-      - name: Build the netstandard Core dependency
-        run: dotnet build src/LuminPack.Core/LuminPack.Core.csproj -c Release -f netstandard2.1 -p:CopyLocalLockFileAssemblies=true -p:GeneratePackageOnBuild=false
-      - name: Project the authoritative Core algorithms
-        run: dotnet run --project src/LuminPack.Burst/CodeGen~/LuminPack.Burst.CodeGen.csproj -c Release -- .
-      - name: Execute actual native object and Burst pointer contracts
+      - name: Check Unity license configuration
+        shell: bash
+        run: |
+          if [ -z "$UNITY_LICENSE" ] && { [ -z "$UNITY_EMAIL" ] || [ -z "$UNITY_PASSWORD" ] || [ -z "$UNITY_SERIAL" ]; }; then
+            echo 'Configure Unity license secrets before enabling Unity CI.' >&2
+            exit 1
+          fi
+      - name: Extract the managed references from the same Unity image
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull "$UNITY_IMAGE"
+          container=$(docker create "$UNITY_IMAGE")
+          trap 'docker rm -f "$container" >/dev/null' EXIT
+          mkdir -p "$RUNNER_TEMP/unity-managed"
+          docker cp "$container:/opt/unity/Editor/Data/Managed/UnityEngine/." "$RUNNER_TEMP/unity-managed/"
+          test -f "$RUNNER_TEMP/unity-managed/UnityEngine.CoreModule.dll"
+      - name: Build Core and project the Burst algorithms
+        shell: bash
+        run: |
+          dotnet build src/LuminPack.Core/LuminPack.Core.csproj -c Release -f netstandard2.1 -p:CopyLocalLockFileAssemblies=true -p:GeneratePackageOnBuild=false
+          dotnet run --project src/LuminPack.Burst/CodeGen~/LuminPack.Burst.CodeGen.csproj -c Release -- .
+      - name: Prepare the extension test project
         shell: pwsh
-        run: .github/scripts/invoke-unity-extensions.ps1
-      - name: Upload native execution log
+        env:
+          UNITY_MANAGED_PATH: ${{ runner.temp }}/unity-managed
+          UNITY_VERSION: ${{ inputs.unity_version }}
+        run: .github/scripts/invoke-unity-extensions.ps1 -PrepareHosted
+      - name: Run Unity object and Burst contracts
+        uses: game-ci/unity-test-runner@v4
+        with:
+          projectPath: .tmp/unity-extensions-native
+          unityVersion: ${{ inputs.unity_version }}
+          customImage: ${{ env.UNITY_IMAGE }}
+          testMode: editmode
+          artifactsPath: .tmp/unity-extensions-results
+      - name: Require the extension contract to pass
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          matches = []
+          for path in Path('.tmp/unity-extensions-results').rglob('*.xml'):
+              try:
+                  root = ET.parse(path).getroot()
+              except ET.ParseError:
+                  continue
+              matches.extend(case for case in root.iter('test-case')
+                             if case.get('fullname') == 'LuminPackExtensionValidation.Run')
+          if not matches or any(case.get('result') != 'Passed' for case in matches):
+              raise SystemExit('The Unity extension contract did not pass.')
+          PY
+      - name: Upload Unity extension results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: unity-extensions-${{ matrix.platform }}
-          path: .tmp/unity-extensions-results
+          name: unity-extensions-linux-${{ inputs.unity_version }}
+          path: |
+            .tmp/unity-extensions-results
+            .tmp/unity-extensions-native/Logs
           if-no-files-found: warn
