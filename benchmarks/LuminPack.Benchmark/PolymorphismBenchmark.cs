@@ -21,103 +21,6 @@ using Nino.Core;
 
 #nullable disable
 
-/// <summary>Provides polymorphism class base functionality.</summary>
-[LuminPackable]
-[NinoType]
-[MemoryPackable]
-[MemoryPackUnion(1, typeof(PolymorphismClass))]
-[MessagePackObject]
-[Union(1, typeof(PolymorphismClass))]
-public abstract partial class PolymorphismClassBase
-{
-    /// <summary>Stores the base id.</summary>
-    [Key(10)]
-    [LuminPackOrder(0)]
-    public int BaseID;
-
-    /// <summary>Writes  to the current output.</summary>
-    public abstract void Write();
-}
-
-/// <summary>Provides polymorphism class functionality.</summary>
-[MemoryPackable]
-[MessagePackObject]
-[LuminPackable]
-[NinoType]
-public sealed partial class PolymorphismClass : PolymorphismClassBase, Ifoo
-{
-    /// <summary>Stores the id.</summary>
-    [Key(0)]
-    [LuminPackOrder(1)]
-    public int Id;
-    /// <summary>Stores the tag.</summary>
-    [Key(1)]
-    [LuminPackOrder(2)]
-    public bool Tag;
-    /// <summary>Stores the numbers.</summary>
-    [Key(8)]
-    [LuminPackOrder(3)]
-    public int[] Numbers;
-    /// <summary>Stores the numbers2.</summary>
-    [Key(3)]
-    [LuminPackOrder(4)]
-    public List<IFoo> Numbers2;
-    /// <summary>Stores the map1.</summary>
-    [Key(4)]
-    [LuminPackOrder(5)]
-    public Dictionary<int, IFoo> Map1;
-    /// <summary>Stores the foo.</summary>
-    [Key(5)]
-    [LuminPackOrder(6)]
-    public FooD Foo;
-    /// <summary>Stores the set.</summary>
-    [Key(6)]
-    [LuminPackOrder(7)]
-    public HashSet<int> Set;
-
-    /// <summary>Creates a sample instance for the benchmark.</summary>
-    /// <returns>The result of the operation.</returns>
-    public static PolymorphismClass Create()
-    {
-        Random random = new Random(12345);
-        return new PolymorphismClass
-        {
-            Id = random.Next(),
-            Tag = random.Next() % 2 == 0,
-            Numbers = Enumerable.Range(0, 100).Select(_ => random.Next()).ToArray(),
-            Numbers2 = new(),
-            Map1 = new Dictionary<int, IFoo>()
-            {
-                {1, FooA.Create()},
-                {2, FooB.Create()},
-                {3, FooC.Create()},
-                {4, FooD.Create()},
-                {5, FooA.Create()},
-                {6, FooB.Create()},
-                {7, FooC.Create()},
-                {8, FooD.Create()},
-                {9, FooA.Create()},
-                {10, FooB.Create()},
-                {11, FooC.Create()},
-                {12, FooD.Create()},
-            },
-            Foo = new FooD()
-            {
-                Card = new Transform(random.Next(), random.Next(), random.Next()),
-                CardB = new Transform(random.Next(), random.Next(), random.Next()),
-                CardC = new Transform(random.Next(), random.Next(), random.Next()),
-                CardD = new Transform(random.Next(), random.Next(), random.Next()),
-            },
-            Set = new HashSet<int>(Enumerable.Range(0, 100).Select(_ => random.Next()).ToList())
-
-        };
-    }
-
-    /// <summary>Writes  to the current output.</summary>
-    public override void Write() => Console.WriteLine("Yeah！！！");
-}
-
-
 /// <summary>Provides i foo functionality.</summary>
 [NinoType]
 [MemoryPackable]
@@ -800,130 +703,147 @@ public interface Ifoo
 [Config(typeof(PolymorphismDisassemblyConfig))]
 public class PolymorphismBenchmark
 {
-    private PolymorphismClassBase myClass = PolymorphismClass.Create();
+    /// <summary>The number of distinct random case sequences rotated between invocations.</summary>
+    private const int ListCount = 16;
+
+    /// <summary>The element count of each sequence.</summary>
+    private const int ListLength = 1000;
 
     private LuminBufferWriter luminBufferWriter = LuminBufferWriterPool.Rent();
     private MemoryPack.Internal.ReusableLinkedArrayBufferWriter memoryBufferWriter = MemoryPack.Internal.ReusableLinkedArrayBufferWriterPool.Rent();
     private NinoArrayBufferWriter ninoBufferWriter = new NinoArrayBufferWriter(100000);
     private ArrayBufferWriter<byte> messageArrayBufferWriter = new ArrayBufferWriter<byte>(100000);
 
+    private List<IFoo>[] lists;
+    private byte[][] luminPayloads;
+    private byte[][] memoryPayloads;
+    private byte[][] messagePayloads;
+    private byte[][] ninoPayloads;
+    private int next;
+
+    // The first sequence's payloads, compared by --verify-fixtures.
     private byte[] buffer1;
     private byte[] buffer2;
     private byte[] buffer3;
     private byte[] buffer4;
 
-/// <summary>Updates the up used by the current operation.</summary>
+    /// <summary>Builds distinct uniformly random sequences over all twenty IFoo cases with fixed seeds.</summary>
+    /// <remarks>Rotating sequences keeps the branch predictor from memorizing one replayed order.</remarks>
     [GlobalSetup]
     public void SetUp()
     {
-        ((PolymorphismClass)myClass).Numbers2.Clear();
-        for (int i = 0; i < 1000; i++)
+        lists = new List<IFoo>[ListCount];
+        luminPayloads = new byte[ListCount][];
+        memoryPayloads = new byte[ListCount][];
+        messagePayloads = new byte[ListCount][];
+        ninoPayloads = new byte[ListCount][];
+        for (int list = 0; list < ListCount; list++)
         {
-            switch (i % 20)
-            {
-                case 0: ((PolymorphismClass)myClass).Numbers2.Add(FooA.Create()); break;
-                case 1: ((PolymorphismClass)myClass).Numbers2.Add(FooB.Create()); break;
-                case 2: ((PolymorphismClass)myClass).Numbers2.Add(FooC.Create()); break;
-                case 3: ((PolymorphismClass)myClass).Numbers2.Add(FooD.Create()); break;
-                case 4: ((PolymorphismClass)myClass).Numbers2.Add(FooE.Create()); break;
-                case 5: ((PolymorphismClass)myClass).Numbers2.Add(FooF.Create()); break;
-                case 6: ((PolymorphismClass)myClass).Numbers2.Add(FooG.Create()); break;
-                case 7: ((PolymorphismClass)myClass).Numbers2.Add(FooH.Create()); break;
-                case 8: ((PolymorphismClass)myClass).Numbers2.Add(FooI.Create()); break;
-                case 9: ((PolymorphismClass)myClass).Numbers2.Add(FooJ.Create()); break;
-                case 10: ((PolymorphismClass)myClass).Numbers2.Add(FooK.Create()); break;
-                case 11: ((PolymorphismClass)myClass).Numbers2.Add(FooL.Create()); break;
-                case 12: ((PolymorphismClass)myClass).Numbers2.Add(FooM.Create()); break;
-                case 13: ((PolymorphismClass)myClass).Numbers2.Add(FooN.Create()); break;
-                case 14: ((PolymorphismClass)myClass).Numbers2.Add(FooO.Create()); break;
-                case 15: ((PolymorphismClass)myClass).Numbers2.Add(FooP.Create()); break;
-                case 16: ((PolymorphismClass)myClass).Numbers2.Add(FooQ.Create()); break;
-                case 17: ((PolymorphismClass)myClass).Numbers2.Add(FooR.Create()); break;
-                case 18: ((PolymorphismClass)myClass).Numbers2.Add(FooS.Create()); break;
-                case 19: ((PolymorphismClass)myClass).Numbers2.Add(FooZ.Create()); break;
-            }
+            var random = new Random(20261031 + list);
+            var items = new List<IFoo>(ListLength);
+            for (int index = 0; index < ListLength; index++) items.Add(CreateFoo(random.Next(20)));
+            lists[list] = items;
+            luminPayloads[list] = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(items);
+            memoryPayloads[list] = MemoryPackSerializer.Serialize(items);
+            messagePayloads[list] = MessagePackSerializer.Serialize(items);
+            ninoPayloads[list] = NinoSerializer.Serialize(items);
         }
-
-        buffer1 = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(myClass);
-        buffer2 = MemoryPackSerializer.Serialize(myClass);
-        buffer3 = MessagePackSerializer.Serialize(myClass);
-        buffer4 = NinoSerializer.Serialize(myClass);
+        buffer1 = luminPayloads[0];
+        buffer2 = memoryPayloads[0];
+        buffer3 = messagePayloads[0];
+        buffer4 = ninoPayloads[0];
+        next = 0;
     }
 
-    /// <summary>Measures clean up for the configured benchmark input.</summary>
+    /// <summary>Creates one sample instance of a case.</summary>
+    /// <param name="kind">The case index from 0 to 19.</param>
+    /// <returns>The sample instance.</returns>
+    private static IFoo CreateFoo(int kind) => kind switch
+    {
+        0 => FooA.Create(), 1 => FooB.Create(), 2 => FooC.Create(), 3 => FooD.Create(), 4 => FooE.Create(),
+        5 => FooF.Create(), 6 => FooG.Create(), 7 => FooH.Create(), 8 => FooI.Create(), 9 => FooJ.Create(),
+        10 => FooK.Create(), 11 => FooL.Create(), 12 => FooM.Create(), 13 => FooN.Create(), 14 => FooO.Create(),
+        15 => FooP.Create(), 16 => FooQ.Create(), 17 => FooR.Create(), 18 => FooS.Create(), _ => FooZ.Create(),
+    };
+
+    /// <summary>Selects the next sequence.</summary>
+    /// <returns>The sequence index.</returns>
+    private int Next() => next = (next + 1) & (ListCount - 1);
+
+    /// <summary>Returns the pooled LuminPack buffer.</summary>
     [GlobalCleanup]
     public void CleanUp()
     {
         luminBufferWriter.Dispose();
     }
 
-    /// <summary>Measures lumin pack serialize for the configured benchmark input.</summary>
+    /// <summary>Measures LuminPack writing a random List of every IFoo case.</summary>
     [Benchmark]
     [BenchmarkCategory("Serialize")]
     public void LuminPackSerialize()
     {
         luminBufferWriter.ResetCore();
         luminBufferWriter.WriterState.ResetOperationState();
-        LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(myClass, luminBufferWriter);
+        LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(lists[Next()], luminBufferWriter);
     }
 
-    /// <summary>Measures memory pack serialize for the configured benchmark input.</summary>
+    /// <summary>Measures MemoryPack writing a random List of every IFoo case.</summary>
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Serialize")]
     public void MemoryPackSerialize()
     {
         memoryBufferWriter.Reset();
-        MemoryPackSerializer.Serialize(memoryBufferWriter, myClass);
+        MemoryPackSerializer.Serialize(memoryBufferWriter, lists[Next()]);
     }
 
-    /// <summary>Measures message pack serialize for the configured benchmark input.</summary>
+    /// <summary>Measures MessagePack writing a random List of every IFoo case.</summary>
     [Benchmark]
     [BenchmarkCategory("Serialize")]
     public void MessagePackSerialize()
     {
         messageArrayBufferWriter.ResetWrittenCount();
-        MessagePackSerializer.Serialize(messageArrayBufferWriter, myClass);
+        MessagePackSerializer.Serialize(messageArrayBufferWriter, lists[Next()]);
     }
 
-    /// <summary>Measures nino serialize for the configured benchmark input.</summary>
+    /// <summary>Measures Nino writing a random List of every IFoo case.</summary>
     [Benchmark]
     [BenchmarkCategory("Serialize")]
     public void NinoSerialize()
     {
         ninoBufferWriter.ResetWrittenCount();
-        NinoSerializer.Serialize(myClass, ninoBufferWriter);
+        NinoSerializer.Serialize(lists[Next()], ninoBufferWriter);
     }
 
-    /// <summary>Measures lumin pack deserialize for the configured benchmark input.</summary>
+    /// <summary>Measures LuminPack reading a random List of every IFoo case.</summary>
     [Benchmark]
     [BenchmarkCategory("Deserialize")]
     public void LuminPackDeserialize()
     {
-        var res = LuminPackSerializer.Deserialize<PolymorphismClassBase, LuminPackUtf16LengthOptions>(buffer1);
+        var res = LuminPackSerializer.Deserialize<List<IFoo>, LuminPackUtf16LengthOptions>(luminPayloads[Next()]);
     }
 
-    /// <summary>Measures memory pack deserialize for the configured benchmark input.</summary>
+    /// <summary>Measures MemoryPack reading a random List of every IFoo case.</summary>
     [Benchmark(Baseline = true)]
     [BenchmarkCategory("Deserialize")]
     public void MemoryPackDeserialize()
     {
-        var res = MemoryPackSerializer.Deserialize<PolymorphismClassBase>(buffer2);
+        var res = MemoryPackSerializer.Deserialize<List<IFoo>>(memoryPayloads[Next()]);
     }
 
-    /// <summary>Measures message pack deserialize for the configured benchmark input.</summary>
+    /// <summary>Measures MessagePack reading a random List of every IFoo case.</summary>
     [Benchmark]
     [BenchmarkCategory("Deserialize")]
     public void MessagePackDeserialize()
     {
-        var res = MessagePackSerializer.Deserialize<PolymorphismClassBase>(buffer3);
+        var res = MessagePackSerializer.Deserialize<List<IFoo>>(messagePayloads[Next()]);
     }
 
-    /// <summary>Measures nino deserialize for the configured benchmark input.</summary>
+    /// <summary>Measures Nino reading a random List of every IFoo case.</summary>
     [Benchmark]
     [BenchmarkCategory("Deserialize")]
     public void NinoDeserialize()
     {
-        var res = NinoDeserializer.Deserialize<PolymorphismClassBase>(buffer4);
+        var res = NinoDeserializer.Deserialize<List<IFoo>>(ninoPayloads[Next()]);
     }
 }
 
