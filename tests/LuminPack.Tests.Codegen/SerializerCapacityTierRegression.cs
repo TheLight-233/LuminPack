@@ -55,8 +55,8 @@ internal static class SerializerCapacityTierRegression
                     method.ParameterList.Parameters[0].Type!.ToString().Contains("LuminPackWriter", StringComparison.Ordinal)).ToArray();
             var bounded = methods.Single(method => Payload(method) == "global::BoundedRoot");
             Require(Calls(bounded.Body!, "EnsureAdditionalCapacity").Count() == 1 && Calls(bounded.Body!, "CompleteReservedRecord").Count() == 1 &&
-                !Calls(bounded.Body!, "TryEnsureCapacity").Any() && Calls(bounded.Body!, "Write").Any(call =>
-                    call.ArgumentList.Arguments.LastOrDefault()?.Expression.IsKind(SyntaxKind.TrueLiteralExpression) == true),
+                !Calls(bounded.Body!, "TryEnsureCapacity").Any() && !Calls(bounded.Body!, "CheckBuffer").Any() &&
+                Calls(bounded.Body!, "GetListSpan").Any() && bounded.Body!.DescendantNodes().OfType<ForStatementSyntax>().Any(),
                 "A complete guaranteed record retained an internal container check or lost its root reservation.");
             var strings = methods.Single(method => Payload(method) == "global::System.Collections.Generic.List<string>");
             Require(!Calls(strings.Body!, "TryEnsureCapacity").Any() && Calls(strings.Body!, "Write").Any(),
