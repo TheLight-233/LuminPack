@@ -104,14 +104,14 @@ namespace LuminPack.Burst
         /// <summary>Counts set bits without requiring optional CPU features.</summary><param name="value">Input.</param><returns>The population count.</returns>
         internal static int PopCount(uint value)
         {
-            if (Unity.Burst.Intrinsics.X86.Popcnt.IsPopcntSupported) return Unity.Burst.Intrinsics.X86.Popcnt.popcnt_u32(value);
+            if (global::Unity.Burst.Intrinsics.X86.Popcnt.IsPopcntSupported) return global::Unity.Burst.Intrinsics.X86.Popcnt.popcnt_u32(value);
             value -= (value >> 1) & 0x55555555;
             value = (value & 0x33333333) + ((value >> 2) & 0x33333333);
             return (int)((((value + (value >> 4)) & 0x0F0F0F0F) * 0x01010101) >> 24);
         }
         /// <summary>Counts low zero bits.</summary><param name="value">Input.</param><returns>The count including 64 for zero.</returns>
         internal static int TrailingZeroCount(ulong value)
-        { if (Unity.Burst.Intrinsics.X86.Bmi1.IsBmi1Supported) return (int)Unity.Burst.Intrinsics.X86.Bmi1.tzcnt_u64(value); if (value == 0) return 64; int count = 0; while ((value & 1) == 0) { value >>= 1; count++; } return count; }
+        { if (global::Unity.Burst.Intrinsics.X86.Bmi1.IsBmi1Supported) return (int)global::Unity.Burst.Intrinsics.X86.Bmi1.tzcnt_u64(value); if (value == 0) return 64; int count = 0; while ((value & 1) == 0) { value >>= 1; count++; } return count; }
         /// <summary>Counts low zero bits.</summary><param name="value">Input.</param><returns>The count including 32 for zero.</returns>
         internal static int TrailingZeroCount(uint value) => value == 0 ? 32 : TrailingZeroCount((ulong)value);
     }
