@@ -30,8 +30,8 @@ jobs:
       - name: Check Unity license configuration
         shell: bash
         run: |
-          if [ -z "$UNITY_LICENSE" ] && { [ -z "$UNITY_EMAIL" ] || [ -z "$UNITY_PASSWORD" ] || [ -z "$UNITY_SERIAL" ]; }; then
-            echo 'Configure Unity license secrets before enabling Unity CI.' >&2
+          if [ -z "$UNITY_EMAIL" ] || [ -z "$UNITY_PASSWORD" ] || { [ -z "$UNITY_LICENSE" ] && [ -z "$UNITY_SERIAL" ]; }; then
+            echo 'Configure UNITY_EMAIL and UNITY_PASSWORD, plus UNITY_LICENSE or UNITY_SERIAL.' >&2
             exit 1
           fi
       - name: Extract the managed references from the same Unity image

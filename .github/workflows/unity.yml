@@ -8,7 +8,6 @@ on:
         type: boolean
         default: false
   push:
-    branches: [main, refactor]
   pull_request:
 
 permissions:
@@ -17,6 +16,7 @@ permissions:
 concurrency:
   group: unity-license
   cancel-in-progress: false
+  queue: max
 
 jobs:
   unity:
@@ -46,8 +46,8 @@ jobs:
       - name: Check Unity license configuration
         shell: bash
         run: |
-          if [ -z "$UNITY_LICENSE" ] && { [ -z "$UNITY_EMAIL" ] || [ -z "$UNITY_PASSWORD" ] || [ -z "$UNITY_SERIAL" ]; }; then
-            echo "Configure UNITY_LICENSE or the UNITY_EMAIL/UNITY_PASSWORD/UNITY_SERIAL secrets before enabling Unity CI."
+          if [ -z "$UNITY_EMAIL" ] || [ -z "$UNITY_PASSWORD" ] || { [ -z "$UNITY_LICENSE" ] && [ -z "$UNITY_SERIAL" ]; }; then
+            echo "Configure UNITY_EMAIL and UNITY_PASSWORD, plus UNITY_LICENSE or UNITY_SERIAL."
             exit 1
           fi
       - name: Select the Unity version

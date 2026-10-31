@@ -38,8 +38,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # actionlint 1.7.12 predates GitHub's concurrency.queue setting.
       - name: Validate workflow definitions
         uses: docker://rhysd/actionlint:1.7.12
+        with:
+          args: -ignore unexpected.key..queue..for..concurrency..section
 
       # LuminPack.RepositoryChecks and the generated-code contract tests target net11.0.
       - uses: actions/setup-dotnet@v4
