@@ -150,7 +150,9 @@ internal sealed class SafeReadProjection
             bool profileCall = access.Name is GenericNameSyntax profileName && profileName.TypeArgumentList.Arguments.Last().ToString().IndexOf("Options", StringComparison.Ordinal) >= 0;
             if (!_json)
             {
-                if (name == "ReadLength") call = "ReadLength(ref " + readerName + ", " + (args.Length == 0 ? "1" : args) + ", " + SafeOperationProjection.Schema + ")";
+                if (name == "ReadStrings" && result.ArgumentList.Arguments.Count == 1)
+                    call = "ReadStrings<" + profile + ">(ref " + readerName + ", " + args + ")";
+                else if (name == "ReadLength") call = "ReadLength(ref " + readerName + ", " + (args.Length == 0 ? "1" : args) + ", " + SafeOperationProjection.Schema + ")";
                 else if (name == "TryReadCollectionHead") call = "TryReadCollectionHead(ref " + readerName + ", " + args + (result.ArgumentList.Arguments.Count == 1 ? ", 1" : "") + ", " + SafeOperationProjection.Schema + ")";
                 else if (name == "PeekCollectionHeader") call = "PeekCollectionHeader(ref " + readerName + ", " + args + (result.ArgumentList.Arguments.Count == 1 ? ", 1" : "") + ", " + SafeOperationProjection.Schema + ")";
                 else if (name == "PeekObjectHeader") call = "PeekObjectHeader(ref " + readerName + ")";

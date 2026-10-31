@@ -345,6 +345,19 @@ public static partial class LuminPackInputPolicy
         return result;
     }
 
+    /// <summary>Reads each string slot through the active input budget while preserving unchanged references.</summary>
+    /// <typeparam name="TOptions">The exact original binary string profile.</typeparam>
+    /// <param name="reader">The original advancing Reader.</param><param name="strings">Destination slots.</param>
+    public static void ReadStrings<TOptions>(ref LuminPackReader reader, Span<string?> strings) where TOptions : struct, ILuminPackOptions
+    {
+        for (int index = 0; index < strings.Length; index++)
+        {
+            string? current = strings[index];
+            string? decoded = ReadString<TOptions>(ref reader, current);
+            if (!ReferenceEquals(current, decoded)) strings[index] = decoded;
+        }
+    }
+
     /// <summary>Preserves ref-string publication through the original bounded payload reader.</summary>
     /// <typeparam name="TOptions">The fixed binary profile.</typeparam><param name="reader">The original reader.</param>
     /// <param name="value">The caller's immutable candidate, replaced only after successful decoding.</param>

@@ -51,6 +51,7 @@ internal static partial class SerializerCompiledOptionRegression
         const string source = """
             using System;
             using System.Collections.Generic;
+            using System.Collections.Immutable;
             using System.Linq;
             using LuminPack;
             using LuminPack.Attribute;
@@ -70,6 +71,7 @@ internal static partial class SerializerCompiledOptionRegression
             [LuminPackable(GeneratorType.CircleReference)] public class Circle { [LuminPackOrder(0)] public string Text; [LuminPackOrder(1)] public Circle Next; }
             [LuminPackable, LuminPackOption(UntrustedData = true, MaxStringLength = 32)] public class Bounded { public List<string> Names = new(); public Dictionary<string,string> Map = new(); }
             [LuminPackable, LuminPackOption(UntrustedData = true, MaxStringLength = 32, StringEncoding = LuminPackStringEncoding.UTF8)] public class BoundedUtf8 { public List<string> Names = new(); public Dictionary<string,string> Map = new(); }
+            [LuminPackable, LuminPackOption(UntrustedData = true, MaxStringLength = 32, StringEncoding = LuminPackStringEncoding.UTF8)] public class BoundedImmutable { public ImmutableArray<string> Names = ImmutableArray<string>.Empty; }
             public static class Entry
             {
                 public static void Check()
@@ -103,6 +105,18 @@ internal static partial class SerializerCompiledOptionRegression
                     var boundedUtf8=new BoundedUtf8{Names=new List<string>{null,"","\u4E2D","\uD83D\uDE00"},Map=new Dictionary<string,string>{{"\u4E2D","\u00E9"}}};bytes=LuminPackSerializer.Serialize(boundedUtf8);
                     if(LuminPackSerializer.Deserialize<BoundedUtf8>(bytes).Map["\u4E2D"]!="\u00E9")throw new Exception("Bounded UTF-8 profile.");
                     boundedUtf8.Names.Add(new string('a',33));bytes=LuminPackSerializer.Serialize(boundedUtf8);bool rejected=false;try{LuminPackSerializer.Deserialize<BoundedUtf8>(bytes);}catch(Exception){rejected=true;}if(!rejected)throw new Exception("Variable string budget bypassed.");
+                    var immutable = new BoundedImmutable { Names = ImmutableArray.Create("a", "\u4E2D", new string('a', 32)) };
+                    bytes = LuminPackSerializer.Serialize(immutable);
+                    var immutableCopy = LuminPackSerializer.Deserialize<BoundedImmutable>(bytes);
+                    if (!immutableCopy.Names.SequenceEqual(immutable.Names)) throw new Exception("Bounded immutable strings changed.");
+                    string retainedImmutable = immutableCopy.Names[1];
+                    LuminPackSerializer.Deserialize(bytes, ref immutableCopy);
+                    if (!ReferenceEquals(retainedImmutable, immutableCopy.Names[1])) throw new Exception("Bounded immutable string reuse changed.");
+                    immutable.Names = ImmutableArray.Create(new string('a', 33));
+                    bytes = LuminPackSerializer.Serialize(immutable);
+                    rejected = false;
+                    try { LuminPackSerializer.Deserialize<BoundedImmutable>(bytes); } catch (System.IO.InvalidDataException) { rejected = true; }
+                    if (!rejected) throw new Exception("Immutable string budget bypassed.");
                     string invalidUtf8Json = LuminPackSerializer.SerializeJson(boundedUtf8);
                     rejected = false;
                     try { LuminPackSerializer.DeserializeJson<BoundedUtf8>(invalidUtf8Json); }

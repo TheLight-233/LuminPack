@@ -65,7 +65,7 @@ internal sealed class CompiledOptionProjection : CSharpSyntaxRewriter
                 stableKernel.TypeArgumentList.Arguments.Add(SyntaxFactory.ParseTypeName(_profileType))))));
         }
         if (node.Expression is MemberAccessExpressionSyntax inputAccess && inputAccess.Expression.ToString() == "global::LuminPack.Security.LuminPackInputPolicy" &&
-            inputAccess.Name.Identifier.ValueText is "ReadString" or "ReadJsonToken" or "ReadJsonValue" or "ReadJsonString" or "TryReadJsonProperty" or "TryReadOrderedJsonProperty" or "ReadStringRecord" or "ReadNextJsonFloat" or "RejectUnknownJson" or "ReadJsonNameUtf8" or "ReadJsonNameUtf16" &&
+            inputAccess.Name.Identifier.ValueText is "ReadString" or "ReadStrings" or "ReadJsonToken" or "ReadJsonValue" or "ReadJsonString" or "TryReadJsonProperty" or "TryReadOrderedJsonProperty" or "ReadStringRecord" or "ReadNextJsonFloat" or "RejectUnknownJson" or "ReadJsonNameUtf8" or "ReadJsonNameUtf16" &&
             inputAccess.Name is GenericNameSyntax inputKernel && node.ArgumentList.Arguments.Count > 0 && IsReceiver(node.ArgumentList.Arguments[0].Expression))
         {
             var inputArguments = inputKernel.TypeArgumentList.Arguments;
