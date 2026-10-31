@@ -28,7 +28,14 @@ LuminPackSerializer.Deserialize(bytes, ref copy);   // copy is Circle
 - Generic cases are supported: an open case (`typeof(Case<>)`) covers the closed types actually used, and a closed case (`typeof(Case<int>)`) has priority over it.
 - On .NET 11, a C# `union` declaration marked `[LuminPackable]` is recognized as a Union root and uses the same wire format.
 
-Picking the right case costs a single virtual call — no type checks, no lookups. Use `[LuminPackOption(WideTag = true)]` to select wide tags. `[LuminPackOption(SingleImplementation = true)]` declares that a root has exactly one implementation everywhere; only use it when no other assembly can add a case. It retains the existing Union frame and virtual dispatch. The separate `[LuminPackWideTag]` and `[LuminPackSingleImplementation]` attributes remain compatible; see [Options](options.md#union-contract-switches).
+Picking the right case is tiered at compile time, and the wire format is the same for every tier:
+
+- **One case, no registration.** When `Register` APIs are not generated and no other assembly can add a case (the root is not externally visible, has no externally accessible constructor, or declares `SingleImplementation`), a root with one sealed case calls it directly.
+- **One to four cases.** Each case is tested exactly before the virtual call, which still serves registered and foreign cases.
+- **More cases.** A single virtual call.
+- **Lists of fixed cases.** On .NET 8+ (not Unity), a `List<T>` whose cases are all fixed records (unmanaged public fields, no callbacks) groups unpredictable 256-element chunks by case and writes or reads each group at precomputed offsets, avoiding a mispredicted dispatch per element. Predictable chunks (long runs, a dominant case, regular cycles) keep the per-element path.
+
+Use `[LuminPackOption(WideTag = true)]` to select wide tags. `[LuminPackOption(SingleImplementation = true)]` declares that a root has exactly one implementation everywhere; only use it when no other assembly can add a case. It retains the existing Union frame, and without registration it allows the direct call. The separate `[LuminPackWideTag]` and `[LuminPackSingleImplementation]` attributes remain compatible; see [Options](options.md#union-contract-switches).
 
 ## Types from referenced assemblies
 

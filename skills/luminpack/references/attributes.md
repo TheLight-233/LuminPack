@@ -10,7 +10,7 @@ All attributes are in `LuminPack.Attribute`; option enums are in `LuminPack.Opti
 | `[assembly: LuminPackable(typeof(T))]` | assembly | Generate a type from a referenced assembly; repeatable; open generics (`typeof(G<>)`) cover the closed types used; works for Union roots. |
 | `[LuminPackUnion(tag, typeof(Case))]` | interface, abstract class | Declare a Union case explicitly (tags 0..65535; below 250 is one byte). Cases marked `[LuminPackable]` are also collected automatically. |
 | `[LuminPackOption(WideTag = true)]` | class/interface Union root | Accept wide tags; small tags retain their one-byte encoding. Declaration only. `[LuminPackWideTag]` remains compatible. |
-| `[LuminPackOption(SingleImplementation = true)]` | class/interface Union root | Promise one implementation everywhere; retains Union framing and virtual dispatch. `[LuminPackSingleImplementation]` remains compatible. |
+| `[LuminPackOption(SingleImplementation = true)]` | class/interface Union root | Promise one implementation everywhere; retains Union framing and, without generated `Register` APIs, lets the single sealed case be called directly. `[LuminPackSingleImplementation]` remains compatible. |
 | `[LuminPackBounded(maxBytes)]` | class, struct | Promise a maximum complete binary size; removes inner capacity checks. A wrong bound can overrun the buffer. |
 | `[LuminPackOption(...)]` | assembly, type, field, property | Compile-time options; see below. |
 | `[assembly: LuminPackGeneratorOptions(mode, register)]` | assembly | `LuminPackGenerationMode.Full/Medium/Light/Minimal`; `LuminPackRegisterMode.Auto/Disabled`. |
@@ -50,7 +50,7 @@ Delegate targets use the formatter signature of the member type, for example `st
 | `ValidateJsonSyntax` | false | Whole JSON document. |
 | `StandardFormat` | `"G"` | Constant for Custom/formatted kernels. |
 | `WideTag` | false | Class/interface declaration only; accepts wide Union tags. Small tags still occupy one byte. |
-| `SingleImplementation` | false | Class/interface declaration only; caller guarantees one implementation everywhere. Retains Union framing and virtual dispatch. |
+| `SingleImplementation` | false | Class/interface declaration only; caller guarantees one implementation everywhere. Retains Union framing; without registration the single sealed case is called directly. |
 | `StructLayout` | `LuminPackStructLayout.Tagged` | Assembly or struct. `Packed`: no padding, same bytes on 32/64-bit. `Native`: full native storage, identical layouts required. |
 | `UntrustedData` + `Max*` limits | off | Root type or assembly; bounded protocol for hostile input. |
 
