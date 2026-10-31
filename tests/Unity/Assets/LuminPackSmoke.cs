@@ -103,6 +103,7 @@ public static class LuminPackSmoke
     }
 
     /// <summary>Verifies the generated graph and returns the Player exit status.</summary>
+    /// <returns>Zero when all checks pass, otherwise one.</returns>
     internal static int Run()
     {
         try
@@ -129,6 +130,8 @@ public static class LuminPackSmoke
 /// <summary>Runs the headless Player on the first frame and quits outside engine initialization.</summary>
 internal sealed class LuminPackSmokePlayer : MonoBehaviour
 {
+    /// <summary>Waits one frame before running the Player smoke checks.</summary>
+    /// <returns>The coroutine that completes before the Player exits.</returns>
     private System.Collections.IEnumerator Start()
     {
         yield return null;
