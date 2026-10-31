@@ -120,12 +120,13 @@ internal sealed partial class CompiledOperationProjection
             bool kernel = state && kernels.Contains(name);
             if (kernel && !json && access.Name is GenericNameSyntax fixedProfile && fixedProfile.TypeArgumentList.Arguments[0].ToString().Contains("LuminPackFixedOptions")) return result;
             bool formatter = access.Expression.ToString().EndsWith("FormatterDispatch", StringComparison.Ordinal);
-            bool serializer = (IsFacadeOperation(name) || name is "SerializeUnion" or "DeserializeUnion" or "DeserializeFresh" or "SerializeWithCompress" or "DeserializeWithCompress") &&
+            bool serializer = (IsFacadeOperation(name) || name is "SerializeUnion" or "SerializeUnionPartitionAt" or "DeserializeUnion" or "DeserializeFresh" or "SerializeWithCompress" or "DeserializeWithCompress") &&
                 (access.Expression.ToString().Contains("LuminPackSerializer") || formatter);
             if (formatter && name is "__LuminPackJsonEncoding" or "__LuminPackJsonReadBoundary") serializer = true;
             bool union = name.StartsWith("__LuminPackUnionSerializeJson_", StringComparison.Ordinal) || name.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal) ||
                 name.StartsWith("__LuminPackUnionCalculateOffset_", StringComparison.Ordinal);
-            bool boundary = union || name == "TryReadOrderedJsonProperty";
+            bool boundary = union || name == "TryReadOrderedJsonProperty" ||
+                name.StartsWith("__LuminPackUnionPartitionVariable", StringComparison.Ordinal);
             if (!kernel && !serializer && !boundary) return result;
             var arguments = access.Name is GenericNameSyntax generic ? generic.TypeArgumentList.Arguments : default;
             if (serializer && !formatter && !_dispatch && arguments.Count == 0 && _payload != null) arguments = arguments.Add(SyntaxFactory.ParseTypeName(_payload));

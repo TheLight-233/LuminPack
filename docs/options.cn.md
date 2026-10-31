@@ -68,6 +68,8 @@ LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(bytes, ref copy);
 
 内置配置：`LuminPackDefaultOptions`（UTF-16、固定长度记录）、`LuminPackUtf8LengthOptions`、`LuminPackUtf8TokenOptions`、`LuminPackUtf16LengthOptions`、`LuminPackUtf16TokenOptions`、`LuminPackUtf8VarIntOptions`、`LuminPackUtf16VarIntOptions`。也可以自己定义一个实现 `ILuminPackOptions` 的 `struct`。
 
+符合变长 ATPD 条件的 Union case 使用 raw UTF-16 Length 字符串，不做紧凑 Latin-1，包括具体 case 写入和普通虚调用回退。这是生成的类型策略，不是可变的全局选项；其他类型、UTF-8、Token 和 VarInt 保留既有表示。参见[多态](polymorphism.cn.md)。
+
 ## 紧凑长度头
 
 小字符串集合更重视字节数而不是最高编码速度时，可以选择 `VarInt`：

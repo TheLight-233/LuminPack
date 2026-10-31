@@ -15,6 +15,7 @@ public static class LuminPackSmoke
     public static void Verify()
     {
         VerifyLayouts();
+        VerifyVariableUnions();
         var value = new UnityMessage
         {
             Id = 42,
@@ -45,6 +46,26 @@ public static class LuminPackSmoke
         UnityTracked trackedCopy = LuminPackSerializer.Deserialize<UnityTracked>(LuminPackSerializer.Serialize(tracked));
         if (!ReferenceEquals(trackedCopy, trackedCopy.Next))
             throw new InvalidOperationException("Unity reference tracking failed.");
+    }
+
+    /// <summary>Verifies the raw string policy is identical on Unity's ordinary Union fallback.</summary>
+    private static void VerifyVariableUnions()
+    {
+        UnityVariableRoot value = new UnityVariableText { Id = 7, Text = "abc" };
+        byte[] bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(value);
+        if (bytes.Length != 15 || BitConverter.ToInt32(bytes, 5) != 6)
+            throw new InvalidOperationException("Unity variable Union raw string policy differs from modern targets.");
+        var values = new List<UnityVariableRoot>();
+        var random = new Random(197);
+        for (int i = 0; i < 64; i++) values.Add(random.Next(2) == 0
+            ? (UnityVariableRoot)new UnityVariableText { Id = i, Text = i % 3 == 0 ? null : "text_" + i }
+            : new UnityVariableArray { Id = i, Values = new[] { i, -i, i + 1 } });
+        byte[] utf16 = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(values);
+        byte[] utf8 = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(values);
+        var left = LuminPackSerializer.Deserialize<List<UnityVariableRoot>, LuminPackUtf16LengthOptions>(utf16);
+        var right = LuminPackSerializer.Deserialize<List<UnityVariableRoot>, LuminPackUtf8LengthOptions>(utf8);
+        if (left.Count != 64 || right.Count != 64 || !(left[0] is UnityVariableText || left[0] is UnityVariableArray))
+            throw new InvalidOperationException("Unity variable Union payloads did not round trip.");
     }
 
     /// <summary>Reads real 32/64-bit wire models and verifies all three explicit storage policies.</summary>
@@ -170,3 +191,27 @@ public sealed class UnityVersionTwo { [LuminPackOldName("Name")] public string D
 /// <summary>Exercises cyclic object reconstruction.</summary>
 [LuminPackable(GeneratorType.CircleReference)]
 public sealed class UnityTracked { [LuminPackOrder(0)] public UnityTracked Next; }
+
+/// <summary>Shares the modern variable Union write policy while retaining Unity's ordinary dispatch.</summary>
+[LuminPackable, LuminPackUnion(0, typeof(UnityVariableText)), LuminPackUnion(1, typeof(UnityVariableArray))]
+public abstract partial class UnityVariableRoot
+{
+    /// <summary>The entry identifier.</summary>
+    public int Id;
+}
+
+/// <summary>Exercises raw UTF-16 strings in Unity's compiled Union slots.</summary>
+[LuminPackable]
+public sealed partial class UnityVariableText : UnityVariableRoot
+{
+    /// <summary>The nullable text.</summary>
+    public string Text;
+}
+
+/// <summary>Exercises an O(1) raw sequence alongside the text case.</summary>
+[LuminPackable]
+public sealed partial class UnityVariableArray : UnityVariableRoot
+{
+    /// <summary>The raw payload.</summary>
+    public int[] Values;
+}

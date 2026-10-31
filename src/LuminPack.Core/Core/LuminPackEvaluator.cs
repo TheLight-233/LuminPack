@@ -9,7 +9,7 @@ namespace LuminPack.Core;
 /// size API; it supports no reference tracking, Union, Custom or registered payload.</remarks>
 [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
 [StructLayout(LayoutKind.Auto)]
-public ref struct LuminPackEvaluator
+public ref partial struct LuminPackEvaluator
 {
     private int _value;
 

@@ -79,7 +79,7 @@ public static class ArrayEmitter
             sb.AppendLine("            for (int i = 0; i < value.Length; i++)");
             sb.AppendLine("            {");
             CollectionEmitterKit.AppendPartitionChunk(sb, "                ", "i", "value.Length",
-                $"{partition.Root}.__LuminPackUnionPartitionWrite_{partition.Suffix}(ref writer, value.AsSpan(i, chunkLength))");
+                $"{partition.Root}.{partition.WriteMethod}(ref writer, value.AsSpan(i, chunkLength))");
             sb.AppendLine("                writer.CheckBuffer();");
             sb.AppendLine("                writer.WriteValue(in value[i]);");
             sb.AppendLine("            }");
@@ -222,7 +222,7 @@ public static class ArrayEmitter
     {
         if (fieldData.UnionPartition is { } partition)
             CollectionEmitterKit.AppendPartitionChunk(sb, "                ", "i", "length",
-                $"{partition.Root}.__LuminPackUnionPartitionRead_{partition.Suffix}(ref reader, value.AsSpan((int)i, chunkLength))");
+                $"{partition.Root}.{partition.ReadMethod}(ref reader, value.AsSpan((int)i, chunkLength))");
     }
 
     /// <summary>Appends JSON writing statements for array values.</summary>

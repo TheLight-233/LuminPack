@@ -25,6 +25,10 @@ internal sealed class UnionPartitionPlan
     /// <summary>Whether the compilation allows unsafe code, which <c>SkipLocalsInit</c> requires.</summary>
     internal readonly bool SkipLocalsInit;
 
+    internal VariableUnionPayloadPlan Variable;
+    internal string WriteMethod => "__LuminPackUnionPartition" + (Variable == null ? "Write_" : "VariableWrite_") + Suffix;
+    internal string ReadMethod => "__LuminPackUnionPartition" + (Variable == null ? "Read_" : "VariableRead_") + Suffix;
+
     /// <summary>Captures an eligible root.</summary>
     /// <param name="root">The fully qualified root type.</param>
     /// <param name="suffix">The root's generated slot suffix.</param>
@@ -48,6 +52,9 @@ internal sealed class UnionPartitionPlan
         // C# 11 ref cursor reassignment and runtime type identity words are required; IL2CPP type handles are not identity words.
         if (!metadata.IsNet8 || (int)metadata.CSharpVersion < 1100 || metadata.IsForUnity ||
             metadata.ParseOptions.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", System.StringComparison.Ordinal))) return null;
+        if (VariableUnionPayloadPlan.GetRoot(type, compilation, metadata) is { } variable)
+            return new UnionPartitionPlan(variable.Root, variable.Suffix,
+                variable.Cases.Select(item => (item.Id, item.Type)).ToList(), metadata.AllowUnsafe) { Variable = variable };
         var cursor = FixedUnionCursorPlan.GetRoot(type, compilation, metadata);
         if (cursor == null || type is not INamedTypeSymbol root) return null;
         var data = LuminPackSourceGenerator.GetSerializationMetadata(root, compilation, metadata);
@@ -72,6 +79,7 @@ internal sealed class UnionPartitionPlan
     /// <param name="padding">The member indentation.</param>
     internal void AppendRootMembers(StringBuilder sb, string padding)
     {
+        if (Variable != null) { VariableUnionPartitionEmitter.Append(sb, padding, this); return; }
         string map = "__LuminPackPartition_" + Suffix;
         string partition = "global::LuminPack.Code.LuminUnionPartition";
         string unsafeAs = "global::System.Runtime.CompilerServices.Unsafe.As";

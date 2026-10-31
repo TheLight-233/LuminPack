@@ -74,6 +74,7 @@ internal static class SerializerUnionCursorRegression
     /// <param name="references">Current platform and runtime references.</param>
     internal static void Run(MetadataReference[] references)
     {
+        VerifyVariablePartitions(references);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var before = Compilation(references, mode, true);
@@ -226,6 +227,156 @@ internal static class SerializerUnionCursorRegression
         var result = compilation.Emit(image);
         Require(result.Success, string.Join(Environment.NewLine, result.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));
         Assembly.Load(image.ToArray()).GetType("Entry")!.GetMethod("Check")!.Invoke(null, null);
+    }
+
+    /// <summary>Checks exact and upper-bound variable partitions against ordinary records and their checked readers.</summary>
+    /// <param name="references">Platform and runtime references.</param>
+    internal static void VerifyVariablePartitions(MetadataReference[] references)
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using System.Collections.Immutable;
+            using System.Linq;
+            using LuminPack;
+            using LuminPack.Attribute;
+            using LuminPack.Core;
+            using LuminPack.Option;
+            using LuminPack.Utility;
+            [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
+            [LuminPackable, LuminPackUnion(0, typeof(TextCase)), LuminPackUnion(1, typeof(ArrayCase)), LuminPackUnion(2, typeof(ScalarCase))]
+            public abstract partial class VariableRoot { public int Id; }
+            [LuminPackable] public sealed partial class TextCase : VariableRoot { public string? Text; }
+            [LuminPackable] public sealed partial class ArrayCase : VariableRoot { public int[]? Values; }
+            [LuminPackable] public sealed partial class ScalarCase : VariableRoot { public long Value; }
+            public sealed class Foreign : VariableRoot { }
+            [LuminPackable] public sealed class FixedElement { public int X; public double Y; }
+            [LuminPackable, LuminPackUnion(0, typeof(ObjectCase)), LuminPackUnion(1, typeof(ObjectTextCase))]
+            public abstract partial class ObjectRoot { public int Id; }
+            [LuminPackable] public sealed partial class ObjectCase : ObjectRoot { public List<FixedElement>? Values; }
+            [LuminPackable] public sealed partial class ObjectTextCase : ObjectRoot { public string? Text; }
+            [LuminPackable, LuminPackUnion(0, typeof(UnsupportedCase)), LuminPackUnion(1, typeof(UnsupportedTextCase))]
+            public abstract partial class UnsupportedRoot { }
+            [LuminPackable] public sealed partial class UnsupportedCase : UnsupportedRoot { public string[]? Values; }
+            [LuminPackable] public sealed partial class UnsupportedTextCase : UnsupportedRoot { public string? Text; }
+            public static class Entry
+            {
+                private delegate bool WriteChunk(ref LuminPackWriter writer, ReadOnlySpan<VariableRoot> values);
+                public static void Check()
+                {
+                    foreach (int count in new[] { 0, 1, 31, 32, 64, 255, 256, 257, 600 })
+                    foreach (bool predictable in new[] { false, true })
+                    {
+                        var random = new Random(197);
+                        var values = new List<VariableRoot>();
+                        for (int i = 0; i < count; i++)
+                            values.Add((predictable ? i % 3 : random.Next(3)) switch
+                            {
+                                0 => new TextCase { Id = i, Text = i % 5 == 0 ? null : new string(i % 2 == 0 ? 'a' : '\u4e2d', i % 81) },
+                                1 => new ArrayCase { Id = i, Values = i % 7 == 0 ? null : Enumerable.Range(i, i % 31).ToArray() },
+                                _ => new ScalarCase { Id = i, Value = -i * 71L }
+                            });
+                        CheckValues(values, false, !predictable && count == 64);
+                        CheckValues(values, true, !predictable && count == 64);
+                        var varint = LuminPackSerializer.Serialize<LuminPackUtf16VarIntOptions>(values);
+                        if (!LuminPackSerializer.Serialize<LuminPackUtf16VarIntOptions>(LuminPackSerializer.Deserialize<List<VariableRoot>, LuminPackUtf16VarIntOptions>(varint)).AsSpan().SequenceEqual(varint)) throw new Exception("VarInt fallback changed.");
+                        if (count > 1) { var saved = values[1]; values[1] = null!; CheckValues(values, false); values[1] = saved; }
+                    }
+                    VariableRoot raw = new TextCase { Id = 7, Text = "abc" };
+                    byte[] rawBytes = LuminPackSerializer.Serialize(raw);
+                    if (rawBytes.Length != 15 || BitConverter.ToInt32(rawBytes, 5) != 6) throw new Exception("Partition UTF-16 was compacted.");
+                    byte[] legacy = new byte[] { 0, 7, 0, 0, 0, 7, 0, 0, 0, 97, 98, 99 };
+                    if (LuminPackSerializer.Deserialize<VariableRoot>(legacy) is not TextCase { Id: 7, Text: "abc" }) throw new Exception("An existing compact Union record is no longer readable.");
+                    var concrete = LuminPackSerializer.Serialize(new TextCase { Id = 7, Text = "abc" });
+                    if (concrete.Length != 15 || BitConverter.ToInt32(concrete, 5) != 6) throw new Exception("Concrete case policy differs.");
+                    UnsupportedRoot unsupported = new UnsupportedTextCase { Text = "abc" };
+                    if (LuminPackSerializer.Serialize(unsupported).Length != 8) throw new Exception("Unsupported root lost its compact string policy.");
+                    var objects = new List<ObjectRoot>();
+                    var kinds = new Random(31);
+                    for (int i = 0; i < 300; i++) objects.Add(kinds.Next(2) == 0
+                        ? new ObjectCase { Id = i, Values = i % 11 == 0 ? null : new List<FixedElement> { null!, new() { X = i, Y = i + 0.5 }, null! } }
+                        : new ObjectTextCase { Id = i, Text = new string('x', i % 17) });
+                    byte[] objectBytes = LuminPackSerializer.Serialize(objects);
+                    var expected = new List<byte>(BitConverter.GetBytes(objects.Count));
+                    foreach (var item in objects) expected.AddRange(LuminPackSerializer.Serialize(item));
+                    if (!objectBytes.AsSpan().SequenceEqual(expected.ToArray()) || !LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<List<ObjectRoot>>(objectBytes)).AsSpan().SequenceEqual(objectBytes)) throw new Exception("Fixed-object upper-bound compaction changed records.");
+                    var foreign = new List<VariableRoot> { raw, new Foreign() };
+                    bool rejected = false;
+                    try { LuminPackSerializer.Serialize(foreign); } catch { rejected = true; }
+                    if (!rejected) throw new Exception("Foreign fallback was bypassed.");
+                }
+                private static void CheckValues(List<VariableRoot> values, bool utf8, bool requirePartition = false)
+                {
+                    byte[] bytes = utf8 ? LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(values) : LuminPackSerializer.Serialize(values);
+                    var expected = new List<byte>(BitConverter.GetBytes(values.Count));
+                    foreach (var value in values) expected.AddRange(utf8 ? LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(value) : LuminPackSerializer.Serialize(value));
+                    if (!bytes.AsSpan().SequenceEqual(expected.ToArray())) throw new Exception("Variable partition wire mismatch.");
+                    var copy = utf8 ? LuminPackSerializer.Deserialize<List<VariableRoot>, LuminPackUtf8LengthOptions>(bytes) : LuminPackSerializer.Deserialize<List<VariableRoot>>(bytes);
+                    byte[] again = utf8 ? LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(copy) : LuminPackSerializer.Serialize(copy);
+                    if (!bytes.AsSpan().SequenceEqual(again)) throw new Exception("Variable partition roundtrip mismatch.");
+                    var array = values.ToArray();
+                    byte[] arrayBytes = utf8 ? LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(array) : LuminPackSerializer.Serialize(array);
+                    var immutable = ImmutableArray.CreateRange(values);
+                    byte[] immutableBytes = utf8 ? LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(immutable) : LuminPackSerializer.Serialize(immutable);
+                    if (!arrayBytes.AsSpan().SequenceEqual(bytes) || !immutableBytes.AsSpan().SequenceEqual(bytes)) throw new Exception("Contiguous collection policy mismatch.");
+                    if (values.Count == 64 && values.All(item => item is not null))
+                    {
+                        var definition = typeof(VariableRoot).GetMethods().Single(method => method.Name.StartsWith("__LuminPackUnionPartitionVariableWrite_") && method.IsGenericMethodDefinition);
+                        var kernel = (WriteChunk)definition.MakeGenericMethod(utf8 ? typeof(LuminPackUtf8LengthOptions) : typeof(LuminPackDefaultOptions)).CreateDelegate(typeof(WriteChunk));
+                        using var buffer = new LuminBufferWriter(true);
+                        var writer = new LuminPackWriter(buffer); writer.EnsureAdditionalCapacity(4); writer.Write(values.Count);
+                        bool accepted = false;
+                        for (int attempt = 0; attempt < (requirePartition ? 64 : 1); attempt++)
+                        {
+                            writer.Position = 4; accepted = kernel(ref writer, values.ToArray());
+                            if (accepted) break;
+                            if (writer.Position != 4) throw new Exception("Declined kernel advanced the cursor.");
+                        }
+                        if (requirePartition && !accepted) throw new Exception("Random variable chunk never used ATPD.");
+                        if (accepted) { buffer.CompleteWrite(writer.Position); if (!buffer.GetSpan().SequenceEqual(bytes)) throw new Exception("Direct partition kernel mismatch."); }
+                    }
+                    if (values.Count != 0)
+                    {
+                        bool rejected = false;
+                        try { if (utf8) LuminPackSerializer.Deserialize<List<VariableRoot>, LuminPackUtf8LengthOptions>(bytes[..^1]); else LuminPackSerializer.Deserialize<List<VariableRoot>>(bytes[..^1]); } catch { rejected = true; }
+                        if (!rejected) throw new Exception("Truncated partition was accepted.");
+                        var target = copy!; object? first = target[0];
+                        if (utf8) LuminPackSerializer.Deserialize<List<VariableRoot>, LuminPackUtf8LengthOptions>(bytes, ref target); else LuminPackSerializer.Deserialize(bytes, ref target);
+                        if (!ReferenceEquals(first, target[0])) throw new Exception("Existing Union instance was replaced.");
+                    }
+                    if (values.Count == 600)
+                    {
+                        using var output = new LuminBufferWriter(true);
+                        byte[] prefix = new byte[32700]; Array.Fill(prefix, (byte)0xa5);
+                        var writer = new LuminPackWriter(output); writer.EnsureAdditionalCapacity(prefix.Length); prefix.CopyTo(writer.Buffer); writer.Position = prefix.Length; output.CompleteWrite(writer.Position);
+                        if (utf8) LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(values, output); else LuminPackSerializer.Serialize(values, output);
+                        if (!output.GetSpan().Slice(0, prefix.Length).SequenceEqual(prefix) || !output.GetSpan().Slice(prefix.Length).SequenceEqual(bytes)) throw new Exception("Appending a variable partition across growth corrupted output.");
+                    }
+                }
+            }
+            """;
+        foreach (string mode in new[] { "Full", "Minimal" })
+        {
+            var parse = new CSharpParseOptions(LanguageVersion.CSharp13, preprocessorSymbols: new[] { "NET8_0_OR_GREATER", "NET9_0_OR_GREATER" });
+            var input = CSharpCompilation.Create("VariablePartitions_" + mode + "_" + Guid.NewGuid().ToString("N"),
+                new[] { CSharpSyntaxTree.ParseText(source.Replace("MODE", mode), parse) }, references,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+            var driver = CSharpGeneratorDriver.Create(new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator() }, parseOptions: parse)
+                .RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
+            Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+            string generated = string.Join("\n", Files(driver));
+            Require(generated.Contains("__LuminPackUnionPartitionVariableWrite_", StringComparison.Ordinal) &&
+                generated.Contains("SerializeUnionPartitionAt", StringComparison.Ordinal) && generated.Contains("reader.EnsureReadable(position)", StringComparison.Ordinal),
+                "Variable partition kernels or checked read framing are missing.");
+            Execute(output);
+            var originalTree = input.SyntaxTrees.Single();
+            string editedSource = originalTree.ToString().Replace("public long Value; }", "public long Value; [LuminPackOnSerializing] public static void Before() { } }");
+            var edited = input.ReplaceSyntaxTree(originalTree, CSharpSyntaxTree.ParseText(editedSource, parse));
+            var retained = driver.RunGeneratorsAndUpdateCompilation(edited, out var editedOutput, out _);
+            Require(!editedOutput.GetDiagnostics().Any(item => item.Severity == DiagnosticSeverity.Error), "A sibling callback edit broke the compiled fallback.");
+            var fresh = CSharpGeneratorDriver.Create(new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator() }, parseOptions: parse).RunGenerators(edited);
+            Require(Files(retained).SequenceEqual(Files(fresh)), "A sibling payload edit left stale ATPD or raw-string eligibility in retained generation.");
+        }
     }
 
     /// <summary>Reports a structural, documentation or runtime regression.</summary>

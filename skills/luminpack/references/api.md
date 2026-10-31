@@ -161,5 +161,5 @@ Readers and writers advance a cursor (`ref byte`, or `byte*` on netstandard2.1).
 
 - Binary object: `(byte memberCount 0..249, values...)`, `255` = null. Collection: `(int count, values...)`, `-1` = null. Union: `(byte tag, value)` or `(250, ushort tag, value)`, `255` = null.
 - Version-tolerant: `(251, 1, profile, count, metadata..., lengths..., payloads...)`. Reference tracking: slot lengths + reference id; `250` refers back.
-- UTF-16 strings: `(int header, payload)`; `-1` null, `0` empty, odd header = compact Latin-1. UTF-8: `(int byteCount, int utf16Length, bytes)`.
+- UTF-16 strings: `(int header, payload)`; eligible variable ATPD case types force raw UTF-16 Length payloads with the even `2 * Length` header, including ordinary fallbacks; `-1` null, `0` empty, odd header = compact Latin-1. UTF-8: `(int byteCount, int utf16Length, bytes)`.
 - JSON: objects by member name; arrays for sequences and tuples; dictionaries as `[[k, v], ...]`; Unions `{"$type":tag,"$value":{...}}`; references `$id` / `$ref`; multidimensional arrays `{"Lengths":[..],"LowerBounds":[..],"Values":[..]}`.

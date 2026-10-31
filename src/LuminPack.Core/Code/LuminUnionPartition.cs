@@ -5,7 +5,7 @@ using System.Runtime.CompilerServices;
 namespace LuminPack.Code;
 
 /// <summary>
-/// Maps the exact runtime types of a Union root's fixed generated cases to dense case indexes for collection
+/// Maps the exact runtime types of a Union root's generated cases to dense case indexes for collection
 /// partition dispatch. Built once per root by generated code; it keeps raw type identities and no <see cref="Type"/>.
 /// </summary>
 [EditorBrowsable(EditorBrowsableState.Never)]
@@ -17,7 +17,7 @@ public sealed class LuminUnionPartitionMap
     private readonly ulong _multiplier;
     private readonly int _shift;
 
-    /// <summary>The complete record width (narrow tag plus fixed payload) of each case index.</summary>
+    /// <summary>The complete fixed record width of each case, or zero when a variable kernel supplies its own layout.</summary>
     public readonly int[] Widths;
 
     /// <summary>The case index of each narrow tag byte, or 0xFF for a tag without a fixed generated case.</summary>
@@ -154,6 +154,23 @@ public static class LuminUnionPartition
             int current = map.TagCases[input[position]];
             if (current == 0xFF) return true;
             position += map.Widths[current];
+            Count(successors, previous, current, ref hits, ref known);
+            previous = current;
+        }
+        return Decide(successors, hits, known);
+    }
+
+    /// <summary>Applies the ordinary successor probe to already validated variable-record case indexes.</summary>
+    /// <param name="cases">At least the leading probe's dense case indexes.</param>
+    /// <param name="successors">The root's thread-owned successor and backoff table.</param>
+    /// <returns>Whether the original per-element operation should be retained.</returns>
+    public static bool IsPredictableCases(ReadOnlySpan<byte> cases, Span<byte> successors)
+    {
+        if (cases.Length < ProbeLength || Skip(successors)) return true;
+        int hits = 0, known = 0, previous = -1;
+        for (int index = 0; index < ProbeLength; index++)
+        {
+            int current = cases[index];
             Count(successors, previous, current, ref hits, ref known);
             previous = current;
         }
