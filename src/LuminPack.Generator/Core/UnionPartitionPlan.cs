@@ -76,7 +76,7 @@ internal sealed class UnionPartitionPlan
         sb.AppendLine($"{padding}    /// <summary>The root's case map.</summary>");
         sb.AppendLine($"{padding}    internal static readonly global::LuminPack.Code.LuminUnionPartitionMap Map = Create();");
         sb.AppendLine();
-        sb.AppendLine($"{padding}    /// <summary>Per-thread successor statistics of the predictability probe, followed by its reused-verdict count.</summary>");
+        sb.AppendLine($"{padding}    /// <summary>Per-thread successor statistics of the predictability probe, followed by its reused-verdict count and next reuse length.</summary>");
         sb.AppendLine($"{padding}    [global::System.ThreadStatic] internal static byte[]? Successors;");
         sb.AppendLine();
         sb.AppendLine($"{padding}    /// <summary>Measures each case's record width by writing an uninitialized instance once.</summary>");
@@ -101,11 +101,11 @@ internal sealed class UnionPartitionPlan
         sb.AppendLine($"{padding}    }}");
         sb.AppendLine();
         sb.AppendLine($"{padding}    /// <summary>Gets the calling thread's successor statistics.</summary>");
-        sb.AppendLine($"{padding}    /// <returns>A table with one entry per case and a final reused-verdict count.</returns>");
+        sb.AppendLine($"{padding}    /// <returns>A table with one entry per case, the reused-verdict count and the next reuse length.</returns>");
         sb.AppendLine($"{padding}    internal static global::System.Span<byte> GetSuccessors()");
         sb.AppendLine($"{padding}    {{");
         sb.AppendLine($"{padding}        var successors = Successors;");
-        sb.AppendLine($"{padding}        if (successors is null) {{ successors = new byte[{Cases.Count + 1}]; successors.AsSpan(0, {Cases.Count}).Fill(0xFF); Successors = successors; }}");
+        sb.AppendLine($"{padding}        if (successors is null) {{ successors = new byte[{Cases.Count + 2}]; successors.AsSpan(0, {Cases.Count}).Fill(0xFF); Successors = successors; }}");
         sb.AppendLine($"{padding}        return successors;");
         sb.AppendLine($"{padding}    }}");
         sb.AppendLine($"{padding}}}");

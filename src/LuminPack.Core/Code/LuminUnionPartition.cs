@@ -111,15 +111,15 @@ public static class LuminUnionPartition
     /// <summary>The number of leading chunk elements whose case transitions are probed.</summary>
     private const int ProbeLength = 32;
 
-    /// <summary>The number of following chunks that reuse a predictable verdict without probing.</summary>
-    private const byte SkippedChunks = 7;
+    /// <summary>The longest run of following chunks that reuse a predictable verdict without probing.</summary>
+    private const int MaximumSkippedChunks = 31;
 
     /// <summary>Estimates whether per-element dispatch over a value chunk will be predicted well.</summary>
     /// <typeparam name="T">The Union root.</typeparam>
     /// <param name="map">The root's case map.</param>
     /// <param name="chunk">The chunk to classify.</param>
-    /// <param name="successors">The previous successor of each case (0xFF when unknown) followed by the number of chunks that
-    /// still reuse a predictable verdict; kept across chunks.</param>
+    /// <param name="successors">The previous successor of each case (0xFF when unknown), then the number of chunks that still
+    /// reuse a predictable verdict and the length of the next reuse; kept across chunks.</param>
     /// <returns>True when the ordinary per-element path should be used.</returns>
     public static bool IsPredictable<T>(LuminUnionPartitionMap map, ReadOnlySpan<T> chunk, Span<byte> successors) where T : class
     {
@@ -141,8 +141,8 @@ public static class LuminUnionPartition
     /// <param name="map">The root's case map.</param>
     /// <param name="input">The unread input window.</param>
     /// <param name="count">The number of records in the chunk.</param>
-    /// <param name="successors">The previous successor of each case (0xFF when unknown) followed by the number of chunks that
-    /// still reuse a predictable verdict; kept across chunks.</param>
+    /// <param name="successors">The previous successor of each case (0xFF when unknown), then the number of chunks that still
+    /// reuse a predictable verdict and the length of the next reuse; kept across chunks.</param>
     /// <returns>True when the ordinary per-element path should be used.</returns>
     public static bool IsPredictable(LuminUnionPartitionMap map, ReadOnlySpan<byte> input, int count, Span<byte> successors)
     {
@@ -261,19 +261,22 @@ public static class LuminUnionPartition
     }
 
     /// <summary>Consumes one chunk of a previous predictable verdict.</summary>
-    /// <param name="successors">The successor table whose last entry counts the remaining reused verdicts.</param>
+    /// <param name="successors">The successor table whose second-to-last entry counts the remaining reused verdicts.</param>
     /// <returns>Whether the chunk reuses the verdict without probing.</returns>
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private static bool Skip(Span<byte> successors)
     {
-        ref byte remaining = ref successors[successors.Length - 1];
+        ref byte remaining = ref successors[successors.Length - 2];
         if (remaining == 0) return false;
         remaining--;
         return true;
     }
 
-    /// <summary>Keeps per-element dispatch when at least two thirds of known transitions repeat, and reuses that verdict.</summary>
-    /// <param name="successors">The successor table whose last entry counts the remaining reused verdicts.</param>
+    /// <summary>
+    /// Keeps per-element dispatch when at least two thirds of known transitions repeat. Consecutive predictable verdicts are
+    /// reused for 1, 3, 7, 15 and then 31 chunks without probing; an unpredictable verdict restarts that backoff.
+    /// </summary>
+    /// <param name="successors">The successor table ending with the remaining reused verdicts and the next reuse length.</param>
     /// <param name="hits">Repeated transitions.</param>
     /// <param name="known">Transitions with a remembered successor.</param>
     /// <returns>Whether the chunk is predictable.</returns>
@@ -281,8 +284,12 @@ public static class LuminUnionPartition
     private static bool Decide(Span<byte> successors, int hits, int known)
     {
         bool predictable = known >= 8 && hits * 3 >= known * 2;
-        if (predictable) successors[successors.Length - 1] = SkippedChunks;
-        return predictable;
+        ref byte next = ref successors[successors.Length - 1];
+        if (!predictable) { next = 0; return false; }
+        int length = next == 0 ? 1 : next;
+        successors[successors.Length - 2] = (byte)length;
+        next = (byte)Math.Min(length * 2 + 1, MaximumSkippedChunks);
+        return true;
     }
 
     /// <summary>Converts a comparison to 0 or 1 without a branch.</summary>
