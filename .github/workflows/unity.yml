@@ -90,6 +90,8 @@ jobs:
           set -euo pipefail
           player=$(find tests/Unity/build build -type f -name LuminPackSmoke 2>/dev/null | head -n 1 || true)
           test -n "$player"
+          # The Unity container may leave the Player and its data owned by root.
+          sudo chown -R "$(id -u):$(id -g)" "$(dirname "$player")"
           chmod +x "$player"
           timeout 120 "$player" -batchmode -nographics -logFile /dev/stdout | tee .tmp/unity-player.log
           grep -q LUMINPACK_UNITY_SMOKE_PASSED .tmp/unity-player.log
