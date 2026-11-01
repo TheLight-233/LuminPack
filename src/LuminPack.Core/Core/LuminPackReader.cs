@@ -1460,9 +1460,20 @@ namespace LuminPack.Core
 
         /// <summary>Reads var int u int32 from the current input.</summary>
         /// <returns>The result of the operation.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public uint ReadVarIntUInt32()
         {
             sbyte typeCode = this.Read<sbyte>();
+            if (typeCode >= 0) return (uint)typeCode;
+            return ReadExtendedVarIntUInt32(typeCode);
+        }
+
+        /// <summary>Decodes an extended tagged integer outside the common one-byte path.</summary>
+        /// <param name="typeCode">The already consumed original type code.</param>
+        /// <returns>The original checked integer value.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private uint ReadExtendedVarIntUInt32(sbyte typeCode)
+        {
             switch (typeCode)
             {
                 case VarIntCodes.Byte:
@@ -1488,9 +1499,20 @@ namespace LuminPack.Core
 
         /// <summary>Reads var int int32 from the current input.</summary>
         /// <returns>The result of the operation.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadVarIntInt32()
         {
             sbyte typeCode = this.Read<sbyte>();
+            if (typeCode >= 0) return (int)typeCode;
+            return ReadExtendedVarIntInt32(typeCode);
+        }
+
+        /// <summary>Decodes an extended tagged integer outside the common one-byte path.</summary>
+        /// <param name="typeCode">The already consumed original type code.</param>
+        /// <returns>The original checked integer value.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private int ReadExtendedVarIntInt32(sbyte typeCode)
+        {
             switch (typeCode)
             {
                 case VarIntCodes.Byte:

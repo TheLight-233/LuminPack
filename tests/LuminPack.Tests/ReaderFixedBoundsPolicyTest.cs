@@ -3,6 +3,7 @@ using LuminPack;
 using LuminPack.Code;
 using LuminPack.Core;
 using LuminPack.Option;
+using LuminPack.Internal;
 using Xunit;
 
 namespace LuminPackUnitTest;
@@ -10,6 +11,76 @@ namespace LuminPackUnitTest;
 /// <summary>Preserves the approved all-build Reader checks at fixed cursor and dynamic record boundaries.</summary>
 public class ReaderFixedBoundsPolicyTest
 {
+    /// <summary>Retains every tagged integer representation, checked conversion and truncated-payload failure.</summary>
+    [Fact]
+    public void TaggedReferenceIntegersKeepCheckedReads()
+    {
+        foreach (sbyte code in new[] { VarIntCodes.Byte, VarIntCodes.SByte, VarIntCodes.UInt16, VarIntCodes.Int16,
+                     VarIntCodes.UInt32, VarIntCodes.Int32, VarIntCodes.UInt64, VarIntCodes.Int64 })
+        {
+            Span<byte> buffer = new byte[16];
+            var writer = new LuminPackWriter(ref buffer);
+            writer.Write(code);
+            switch (code)
+            {
+                case VarIntCodes.Byte: writer.Write((byte)42); break;
+                case VarIntCodes.SByte: writer.Write((sbyte)42); break;
+                case VarIntCodes.UInt16: writer.Write((ushort)42); break;
+                case VarIntCodes.Int16: writer.Write((short)42); break;
+                case VarIntCodes.UInt32: writer.Write(42u); break;
+                case VarIntCodes.Int32: writer.Write(42); break;
+                case VarIntCodes.UInt64: writer.Write(42ul); break;
+                case VarIntCodes.Int64: writer.Write(42L); break;
+            }
+            ReadOnlySpan<byte> input = buffer[..writer.Position];
+            var reader = new LuminPackReader(ref input);
+            Assert.Equal(42, reader.ReadVarIntInt32());
+            Assert.Equal(input.Length, reader.Position);
+            reader = new LuminPackReader(ref input);
+            Assert.Equal(42u, reader.ReadVarIntUInt32());
+            Assert.Equal(input.Length, reader.Position);
+            for (int length = 0; length < input.Length; length++)
+            {
+                ReadOnlySpan<byte> shortened = input[..length];
+                var shortReader = new LuminPackReader(ref shortened);
+                Exception? failure = null;
+                try { shortReader.ReadVarIntInt32(); } catch (Exception error) { failure = error; }
+                Assert.NotNull(failure);
+                Assert.InRange(shortReader.Position, 0, length);
+                shortReader = new LuminPackReader(ref shortened);
+                failure = null;
+                try { shortReader.ReadVarIntUInt32(); } catch (Exception error) { failure = error; }
+                Assert.NotNull(failure);
+                Assert.InRange(shortReader.Position, 0, length);
+            }
+        }
+        foreach (sbyte value in new sbyte[] { -120, -1, 0, 127 })
+        {
+            ReadOnlySpan<byte> input = new[] { unchecked((byte)value) };
+            var reader = new LuminPackReader(ref input);
+            Assert.Equal(value, reader.ReadVarIntInt32());
+            reader = new LuminPackReader(ref input);
+            if (value >= 0) Assert.Equal((uint)value, reader.ReadVarIntUInt32());
+            else
+            {
+                Exception? failure = null;
+                try { reader.ReadVarIntUInt32(); } catch (Exception error) { failure = error; }
+                Assert.IsType<OverflowException>(failure);
+            }
+            Assert.Equal(1, reader.Position);
+        }
+        byte[] wide = new byte[9];
+        wide[0] = unchecked((byte)VarIntCodes.UInt64);
+        BinaryPrimitives.WriteUInt64LittleEndian(wide.AsSpan(1), uint.MaxValue);
+        ReadOnlySpan<byte> wideInput = wide;
+        var wideReader = new LuminPackReader(ref wideInput);
+        Assert.Equal(uint.MaxValue, wideReader.ReadVarIntUInt32());
+        wideReader = new LuminPackReader(ref wideInput);
+        Exception? overflow = null;
+        try { wideReader.ReadVarIntInt32(); } catch (Exception error) { overflow = error; }
+        Assert.IsType<OverflowException>(overflow);
+    }
+
     /// <summary>Rejects negative, overflowing and overlong JSON cursor movement without changing its position.</summary>
     /// <param name="count">The invalid advance width.</param>
     [Theory]
