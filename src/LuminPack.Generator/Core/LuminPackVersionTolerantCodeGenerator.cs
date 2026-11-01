@@ -91,7 +91,13 @@ public static class LuminPackVersionTolerantCodeGenerator
     /// <summary>Appends binary serialization statements using fixed batches or the shared-state buffer.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
-    public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb)
+    public static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb) => GenerateSerializeCode(data, sb, false);
+
+    /// <summary>Emits the original record while selecting a supported cached fixed-prefix operation.</summary>
+    /// <param name="data">The complete declared member contract.</param>
+    /// <param name="sb">The generated operation body.</param>
+    /// <param name="fixedPrefix">Whether the referenced runtime supports fixed-prefix copying.</param>
+    internal static void GenerateSerializeCode(LuminDataInfo data, StringBuilder sb, bool fixedPrefix)
     {
         string classGlobalName = data.classFullName;
         foreach (var item in data.callBackMethods.Where(x => x.Item2 is SerializeCallBackType.OnSerializing))
@@ -102,10 +108,15 @@ public static class LuminPackVersionTolerantCodeGenerator
         int memberCount = data.fields.Count;
         if (LuminPackCodeGenerator.FindAllUnmanagedType(data.fields))
         {
-            sb.AppendLine($"            writer.WriteVersionHeader({memberCount});");
-            sb.AppendLine($"            writer.WriteVersionMetadata({data.VersionSchemaType}.Metadata, {memberCount});");
-            for (int i = 0; i < memberCount; i++)
-                sb.AppendLine($"            writer.WriteVarInt(Unsafe.SizeOf<{data.fields[i].TypeName}>());");
+            if (fixedPrefix && VersionMetadataEncoder.FixedLengths(data) != null)
+                sb.AppendLine($"            writer.WriteVersionPrefix({data.VersionSchemaType}.DefaultFixedPrefix);");
+            else
+            {
+                sb.AppendLine($"            writer.WriteVersionHeader({memberCount});");
+                sb.AppendLine($"            writer.WriteVersionMetadata({data.VersionSchemaType}.Metadata, {memberCount});");
+                for (int i = 0; i < memberCount; i++)
+                    sb.AppendLine($"            writer.WriteVarInt(Unsafe.SizeOf<{data.fields[i].TypeName}>());");
+            }
             for (int start = 0; start < memberCount; start += MaxParametersPerCall)
             {
                 var batch = data.fields.Skip(start).Take(MaxParametersPerCall).ToArray();

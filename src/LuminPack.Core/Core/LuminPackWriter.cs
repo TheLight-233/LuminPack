@@ -2395,6 +2395,23 @@ namespace LuminPack.Core
             Advance(__fixed23Length);
         }
 
+        /// <summary>Writes a generated fixed prefix with the default binary profile.</summary>
+        /// <param name="prefix">The complete UTF-8 length-profile header, metadata and fixed length table.</param>
+        public void WriteVersionPrefix(scoped ReadOnlySpan<byte> prefix) => WriteVersionPrefix<LuminPackDefaultOptions>(prefix);
+
+        /// <summary>Copies a generated fixed prefix and stamps the actual compiled profile.</summary>
+        /// <typeparam name="TOptions">The selected stateless binary profile.</typeparam>
+        /// <param name="prefix">The complete generated header, metadata and fixed length table.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteVersionPrefix<TOptions>(scoped ReadOnlySpan<byte> prefix) where TOptions : struct, ILuminPackOptions
+        {
+            if (prefix.Length < 4) LuminPackExceptionHelper.ThrowArgumentException("A version prefix must contain a complete header.", nameof(prefix));
+            EnsureAdditionalCapacity(prefix.Length);
+            prefix.CopyTo(Buffer.Slice(Position, prefix.Length));
+            Unsafe.Add(ref Current, 2) = BinaryProfile<TOptions>();
+            Advance(prefix.Length);
+        }
+
         /// <summary>Copies the complete cached name and type table at its dynamic framing boundary.</summary>
         /// <param name = "metadata">The generated immutable metadata table.</param>
         /// <param name = "count">The number of payload lengths that follow the metadata.</param>

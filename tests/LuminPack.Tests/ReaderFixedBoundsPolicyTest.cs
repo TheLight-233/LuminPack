@@ -11,6 +11,40 @@ namespace LuminPackUnitTest;
 /// <summary>Preserves the approved all-build Reader checks at fixed cursor and dynamic record boundaries.</summary>
 public class ReaderFixedBoundsPolicyTest
 {
+    /// <summary>Compares fused version prefixes with the established header and metadata operations.</summary>
+    [Fact]
+    public void FixedVersionPrefixesKeepEveryCompiledProfile()
+    {
+        CheckVersionPrefix<LuminPackDefaultOptions>();
+        CheckVersionPrefix<LuminPackUtf8LengthOptions>();
+        CheckVersionPrefix<LuminPackUtf8TokenOptions>();
+        CheckVersionPrefix<LuminPackUtf16TokenOptions>();
+        CheckVersionPrefix<LuminPackUtf8VarIntOptions>();
+        CheckVersionPrefix<LuminPackUtf16VarIntOptions>();
+    }
+
+    /// <summary>Checks exact-capacity prefix writes and surrounding guards with one closed profile.</summary>
+    /// <typeparam name="TOptions">The actual document profile.</typeparam>
+    private static void CheckVersionPrefix<TOptions>() where TOptions : struct, ILuminPackOptions
+    {
+        foreach (int length in new[] { 0, 1, 3, 4, 15, 16, 31, 32, 127, 128 })
+        {
+            byte[] metadata = Enumerable.Range(0, length).Select(index => (byte)(index * 17)).ToArray();
+            byte[] prefix = LuminPackVersionField.CreateDefaultPrefix(metadata, 8);
+            byte[] actual = Enumerable.Repeat((byte)0xCC, prefix.Length + 16).ToArray();
+            byte[] expected = (byte[])actual.Clone();
+            Span<byte> target = actual.AsSpan(8, prefix.Length);
+            Span<byte> reference = expected.AsSpan(8, prefix.Length);
+            var writer = new LuminPackWriter(ref target);
+            var original = new LuminPackWriter(ref reference);
+            writer.WriteVersionPrefix<TOptions>(prefix);
+            original.WriteVersionHeader<TOptions>(8);
+            original.WriteVersionMetadata(metadata, 0);
+            Assert.Equal(expected, actual);
+            Assert.Equal(prefix.Length, writer.Position);
+        }
+    }
+
     /// <summary>Retains every tagged integer representation, checked conversion and truncated-payload failure.</summary>
     [Fact]
     public void TaggedReferenceIntegersKeepCheckedReads()

@@ -37,6 +37,8 @@ public partial class PlayerV2
 
 These two models read each other's data in both directions.
 
+Fixed primitive schemas reuse their cached header, name/type metadata and length table in one prefix copy, with the selected compiled binary profile stamped into the header. Runtime-dependent widths and evolved-schema mapping retain their original paths.
+
 - Members are identified by their exact, case-sensitive names. `LuminPackOrder` is optional and only sets the write order.
 - Unknown members are skipped by their recorded length. Missing members are set to `default`, also when reading into an existing object.
 - `[LuminPackOldName]` keeps a renamed member readable. Binary writes keep the oldest name, so older readers still understand new data. After several renames, keep every old name in chronological order:

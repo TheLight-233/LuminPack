@@ -29,7 +29,7 @@ public static partial class LuminPackExtensionGenerator
 
         // The root owns its full inline implementation. Shared non-root formatters are emitted
         // once by the assembly invocation pipeline, so multiple roots can reuse one state API.
-        GenerateRootBinaryExtensions(sb, data, typeName, metaInfo);
+        GenerateRootBinaryExtensions(sb, data, typeName, metaInfo, SupportsFixedVersionPrefix(data, compilation));
         GenerateRootJsonExtensions(sb, data, typeName, metaInfo);
         // Local layout mirrors and accessors are partitioned into shared assembly files.
 
@@ -134,15 +134,25 @@ public static partial class LuminPackExtensionGenerator
         return true;
     }
 
+    /// <summary>Checks the referenced runtime before emitting the optional fixed version-prefix operation.</summary>
+    /// <param name="data">The declared generation mode.</param>
+    /// <param name="compilation">The consumer's actual runtime references.</param>
+    /// <returns>Whether named version records may use the fused runtime operation.</returns>
+    private static bool SupportsFixedVersionPrefix(LuminDataInfo data, Compilation compilation) =>
+        data.generatorType == GeneratorType.VersionTolerant &&
+        compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter")?.GetMembers("WriteVersionPrefix").OfType<IMethodSymbol>()
+            .Any(method => method.Arity == 1 && method.Parameters.Length == 1) == true;
+
     /// <summary>Builds the root binary extensions source from the supplied metadata.</summary>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="typeName">The C# type name to use in generated source.</param>
     /// <param name="metaInfo">The language, framework, and generation settings.</param>
-    private static void GenerateRootBinaryExtensions(StringBuilder sb, LuminDataInfo data, string typeName, MetaInfo metaInfo)
+    /// <param name="fixedVersionPrefix">Whether the referenced runtime exposes the fused version-prefix operation.</param>
+    private static void GenerateRootBinaryExtensions(StringBuilder sb, LuminDataInfo data, string typeName, MetaInfo metaInfo, bool fixedVersionPrefix)
     {
         AppendRootMethodHeader(sb, "WriteValue", "LuminPackWriter", typeName, data, metaInfo, read: false);
-        GenerateMyselfSerialize(data, sb);
+        GenerateMyselfSerialize(data, sb, fixedVersionPrefix: fixedVersionPrefix);
         sb.AppendLine("        }");
         sb.AppendLine();
         AppendRootMethodHeader(sb, "ReadValue", "LuminPackReader", typeName, data, metaInfo, read: true);
@@ -170,7 +180,7 @@ public static partial class LuminPackExtensionGenerator
         if (!data.isUnion)
         {
             AppendRootMethodHeader(sb, "WritePolymorphismValue", "LuminPackWriter", typeName, data, metaInfo, read: false);
-            GenerateMyselfSerialize(data, sb, polymorphism: true);
+            GenerateMyselfSerialize(data, sb, polymorphism: true, fixedVersionPrefix: fixedVersionPrefix);
             sb.AppendLine("        }");
             sb.AppendLine();
             AppendRootMethodHeader(sb, "ReadPolymorphismValue", "LuminPackReader", typeName, data, metaInfo, read: true);
@@ -424,7 +434,8 @@ public static partial class LuminPackExtensionGenerator
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="polymorphism">The polymorphism used by this operation.</param>
-    private static void GenerateMyselfSerialize(LuminDataInfo data, StringBuilder sb, bool polymorphism = false)
+    /// <param name="fixedVersionPrefix">Whether the referenced runtime supports fused fixed version prefixes.</param>
+    private static void GenerateMyselfSerialize(LuminDataInfo data, StringBuilder sb, bool polymorphism = false, bool fixedVersionPrefix = false)
     {
         if (data.isUnion)
         {
@@ -447,7 +458,7 @@ public static partial class LuminPackExtensionGenerator
                 LuminPackCircleReferenceCodeGenerator.GenerateSerializeCode(data, sb);
                 break;
             case GeneratorType.VersionTolerant:
-                LuminPackVersionTolerantCodeGenerator.GenerateSerializeCode(data, sb);
+                LuminPackVersionTolerantCodeGenerator.GenerateSerializeCode(data, sb, fixedVersionPrefix);
                 break;
         }
     }
