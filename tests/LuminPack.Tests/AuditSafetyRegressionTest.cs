@@ -82,6 +82,12 @@ public class AuditSafetyRegressionTest
     [InlineData(33)]
     [InlineData(64)]
     [InlineData(65)]
+    [InlineData(127)]
+    [InlineData(128)]
+    [InlineData(129)]
+    [InlineData(255)]
+    [InlineData(256)]
+    [InlineData(257)]
     public void CompiledInputBooleanGroupsRejectEveryInvalidLane(int count)
     {
         var source = new AuditExternalArrays

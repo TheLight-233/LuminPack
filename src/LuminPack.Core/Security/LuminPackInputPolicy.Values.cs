@@ -457,6 +457,17 @@ public static partial class LuminPackInputPolicy
     /// <param name="payload">The already bounded original wire bytes.</param><param name="schema">The exact fixed contract.</param>
     private static void ValidateFixed(ReadOnlySpan<byte> payload, LuminPackSafeSchema schema)
     {
+        var root = schema.Nodes[0];
+        if (root.Kind == LuminPackSafeKind.Sequence && root.Children.Length == 1 &&
+            schema.Nodes[root.Children[0]].Kind == LuminPackSafeKind.Boolean && schema.Nodes[root.Children[0]].Storage == 1)
+        {
+            if (payload.Length < 4) Invalid("The binary payload is truncated.");
+            int count = System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(payload);
+            if (count < -1 || (count < 0 ? 4L : 4L + count) != payload.Length)
+                Invalid("The schema did not consume the complete binary payload.");
+            SafeBinaryValidator.ValidateBooleans(payload.Slice(4));
+            return;
+        }
         var context = CurrentInput!;
         context.DomainBudget.Reset(UnlimitedDomainLimits);
         SafeBinaryValidator.Validate(payload, schema, context.DomainBudget);
@@ -481,8 +492,15 @@ public static partial class LuminPackInputPolicy
             reader.EnsureReadable(offset, width);
             if (validate)
             {
-                context.DomainBudget.Reset(UnlimitedDomainLimits);
-                SafeBinaryValidator.Validate(reader.Buffer.Slice(offset, width), schema, context.DomainBudget, child);
+                if (width == 1 && schema.Nodes[child].Kind == LuminPackSafeKind.Boolean)
+                {
+                    if (reader.Buffer[offset] > 1) Invalid("A Boolean has a noncanonical storage value.");
+                }
+                else
+                {
+                    context.DomainBudget.Reset(UnlimitedDomainLimits);
+                    SafeBinaryValidator.Validate(reader.Buffer.Slice(offset, width), schema, context.DomainBudget, child);
+                }
             }
             offset = checked(offset + width);
         }

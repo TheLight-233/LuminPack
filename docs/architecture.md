@@ -81,7 +81,7 @@ Main components:
 5. Simplify blocks and choose readable local names (presentation only).
 6. Format, add XML documentation, and publish the text through the cache boundary.
 
-Closed external-input descriptors include generated fixed-width/domain facts and a finite depth bound. The binary validator specializes proven and runtime-checked depth paths while retaining cumulative work charges; descriptors from earlier generators keep interpreted validation. Boolean sequence domains use bounded four-byte groups and scalar tails. Fixed version writers reuse the original cached prefix and stamp the compiled profile. Int32/UInt32 reference lengths and ids keep their positive one-byte path small, with the original tagged conversions in outlined helpers.
+Closed external-input descriptors include generated fixed-width/domain facts and a finite depth bound. The binary validator specializes proven and runtime-checked depth paths while retaining cumulative work charges; descriptors from earlier generators keep interpreted validation. Boolean domains use bounded framework scans or portable four-byte groups and scalar tails; already budgeted domains bypass repeated schema interpretation. Fixed version writers reuse the original cached prefix and stamp the compiled profile. Int32/UInt32 reference lengths and ids keep their positive one-byte path small, with the original tagged conversions in outlined helpers.
 
 ### Incremental boundaries
 

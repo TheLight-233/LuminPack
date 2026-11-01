@@ -31,6 +31,22 @@ internal static unsafe class SafeBinaryValidator
         }
     }
 
+    /// <summary>Checks canonical Boolean storage with bounded framework scans or the portable four-byte fallback.</summary>
+    /// <param name="bytes">The complete validated Boolean payload.</param>
+    internal static void ValidateBooleans(ReadOnlySpan<byte> bytes)
+    {
+#if NET8_0_OR_GREATER
+        if (bytes.IndexOfAnyExcept((byte)0, (byte)1) >= 0)
+            LuminPackInputPolicy.Invalid("A Boolean has a noncanonical storage value.");
+#else
+        int index = 0;
+        for (; index <= bytes.Length - 4; index += 4)
+            if ((BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(index, 4)) & 0xFEFEFEFEu) != 0)
+                LuminPackInputPolicy.Invalid("A Boolean has a noncanonical storage value.");
+        for (; index < bytes.Length; index++)
+            if (bytes[index] > 1) LuminPackInputPolicy.Invalid("A Boolean has a noncanonical storage value.");
+#endif
+    }
     /// <summary>Selects a closed graph whose depth cannot exceed the active quota.</summary>
     private struct ProvenDepth { }
     /// <summary>Retains runtime depth limits for recursive, unknown and potentially over-limit graphs.</summary>
@@ -190,18 +206,6 @@ internal static unsafe class SafeBinaryValidator
                 }
                 if (node.Kind == LuminPackSafeKind.Dictionary) Read<TDepth>(node.Children[1], depth + 1, false);
             }
-        }
-
-        /// <summary>Checks Boolean storage in bounded four-byte groups with a byte-wise tail.</summary>
-        /// <param name="bytes">The complete validated Boolean payload.</param>
-        private static void ValidateBooleans(ReadOnlySpan<byte> bytes)
-        {
-            int index = 0;
-            for (; index <= bytes.Length - 4; index += 4)
-                if ((BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(index, 4)) & 0xFEFEFEFEu) != 0)
-                    LuminPackInputPolicy.Invalid("A Boolean has a noncanonical storage value.");
-            for (; index < bytes.Length; index++)
-                if (bytes[index] > 1) LuminPackInputPolicy.Invalid("A Boolean has a noncanonical storage value.");
         }
 
         /// <summary>Checks scalar domains using bounded byte reads rather than architecture-sensitive aggregate loads.</summary>
