@@ -404,6 +404,9 @@ internal static partial class SerializerCodegenPerformanceRegression
         foreach (var call in method.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(call =>
                      call.Expression is MemberAccessExpressionSyntax access && access.Name.Identifier.ValueText is "ReadUnaligned" or "CopyBlockUnaligned"))
         {
+            if (((MemberAccessExpressionSyntax)call.Expression).Name.Identifier.ValueText == "CopyBlockUnaligned")
+                Require(call.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned",
+                    "A pair scalar fallback bypassed the shared raw-copy contract: " + call);
             var statement = call.Ancestors().OfType<StatementSyntax>().First();
             var block = statement.Parent as BlockSyntax;
             if (block == null || !block.Statements.Any(item => item.ToString().Contains("EnsureReadable", StringComparison.Ordinal)))

@@ -326,7 +326,7 @@ internal static class SerializerCoreProjection
             return SyntaxFactory.ParseStatement("{ ref " + type + " " + target + " = ref " + call.ArgumentList.Arguments[0].Expression +
                 "; " + capture +
                 "if (" + memory + ".SizeOf<global::System.IntPtr>() == 8 || " + size + " <= 4) " + target + " = " + memory + ".ReadUnaligned<" + type + ">(ref " + source + "); " +
-                "else " + memory + ".CopyBlockUnaligned(ref " + memory + ".As<" + type + ", byte>(ref " + target + "), ref " + source + ", (uint)" + size + "); }").WithTriviaFrom(node);
+                "else global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref " + memory + ".As<" + type + ", byte>(ref " + target + "), ref " + source + ", (uint)" + size + "); }").WithTriviaFrom(node);
         }
 
         /// <summary>Captures the temporary model without retaining it in generated results.</summary>
