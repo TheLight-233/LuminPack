@@ -128,7 +128,11 @@ internal static class LuminPackSerializerDocumentation
                     navigation = "global::LuminPack.LuminPackSerializer." + container + "." + rootName;
                 }
                 if (navigation != null)
+                {
+                    const string owner = "global::LuminPack.LuminPackSerializer.";
+                    if (navigation.StartsWith(owner, StringComparison.Ordinal)) navigation = navigation.Substring(owner.Length);
                     remarks.Add(new XElement("para", "Generated implementation: ", new XElement("see", new XAttribute("cref", navigation)), "."));
+                }
             }
             else if (method.TypeParameterList != null)
             {

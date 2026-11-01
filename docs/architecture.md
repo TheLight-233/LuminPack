@@ -107,6 +107,8 @@ Local helper functions use PascalCase with collision-safe numeric suffixes. Scal
 
 Final contract documentation is rendered as text changes limited to method-leading trivia. This avoids constructing XML syntax trees that would immediately be converted back to text, while preserving the exact comments, directives, indentation and executable source.
 
+Root links use names relative to their containing serializer to avoid repeating its namespace on every overload. The compiler binds them to the same methods and emits complete canonical method identifiers in the documentation XML.
+
 ## Tests
 
 | Project | Scope |
