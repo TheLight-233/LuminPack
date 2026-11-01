@@ -178,6 +178,14 @@ internal sealed class BinaryOperationPlan
             _ => false
         }).ToArray();
         var layoutNames = new Dictionary<ISymbol, string>(SymbolEqualityComparer.Default);
+        string layoutOwner;
+        if (type is INamedTypeSymbol owner)
+            layoutOwner = LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(owner);
+        else
+        {
+            using var hash = System.Security.Cryptography.SHA256.Create();
+            layoutOwner = "array_" + string.Concat(hash.ComputeHash(Encoding.UTF8.GetBytes(name)).Select(value => value.ToString("x2")));
+        }
         foreach (var layout in layouts)
         {
             var declaration = layout is FieldDeclarationSyntax field ? (SyntaxNode)field.Declaration.Variables[0] : layout;
@@ -185,8 +193,7 @@ internal sealed class BinaryOperationPlan
             // A base mirror emitted in two different generic roots can carry different
             // substituted constraints. Keep each operation plan's complete layout family
             // independent rather than reusing the first same-spelled declaration.
-            if (symbol != null) layoutNames[symbol] = Prefix + "layout_" +
-                (type is INamedTypeSymbol owner ? LuminPackUnionDispatchCodeGenerator.GetSlotSuffix(owner) : "array") + "_" + symbol.Name;
+            if (symbol != null) layoutNames[symbol] = Prefix + "layout_" + layoutOwner + "_" + symbol.Name;
         }
         var operations = ImmutableDictionary.CreateBuilder<string, BinaryOperation>(StringComparer.Ordinal);
         foreach (var method in container.Members.OfType<MethodDeclarationSyntax>().Where(method => IsOperation(method.Identifier.ValueText)))

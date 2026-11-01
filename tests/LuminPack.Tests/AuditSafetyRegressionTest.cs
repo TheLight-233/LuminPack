@@ -11,6 +11,30 @@ namespace LuminPackUnitTest;
 /// <summary>Checks occupied reference slots and malformed string records.</summary>
 public class AuditSafetyRegressionTest
 {
+    /// <summary>Keeps each closed array's schema and Boolean-domain checks independent inside one root.</summary>
+    [Fact]
+    public void CompiledInputArraySchemasRemainDistinct()
+    {
+        var source = new AuditExternalArrays { Flags = [true, false, true], Values = [3, 5, 8], Bytes = [17, 23] };
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        AuditExternalArrays copy = null!;
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref copy));
+        Assert.Equal(source.Flags, copy.Flags);
+        Assert.Equal(source.Values, copy.Values);
+        Assert.Equal(source.Bytes, copy.Bytes);
+        bytes[LuminPack.Security.LuminPackInputPolicy.HeaderSize + 1 + sizeof(int)] = 2;
+        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(bytes, ref copy));
+
+        var reversed = new AuditExternalReversedArrays { Values = [3, 5, 8], Flags = [true, false, true] };
+        bytes = LuminPackSerializer.Serialize(reversed);
+        AuditExternalReversedArrays reversedCopy = null!;
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref reversedCopy));
+        Assert.Equal(reversed.Flags, reversedCopy.Flags);
+        Assert.Equal(reversed.Values, reversedCopy.Values);
+        bytes[LuminPack.Security.LuminPackInputPolicy.HeaderSize + 1 + sizeof(int) * (reversed.Values.Length + 2)] = 2;
+        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(bytes, ref reversedCopy));
+    }
+
     /// <summary>Rejects incomplete dynamic payload destinations before copying or resetting the source.</summary>
     /// <param name="capacity">The destination's logical capacity.</param>
     [Theory]
@@ -488,4 +512,21 @@ public struct AuditOverlapping
     [FieldOffset(0)] public long A;
     [FieldOffset(0)] public long B;
     [FieldOffset(8)] public byte C;
+}
+
+/// <summary>Places three distinct closed array contracts in the same streaming read.</summary>
+[LuminPackable, LuminPackOption(UntrustedData = true)]
+public sealed class AuditExternalArrays
+{
+    public bool[] Flags = [];
+    public int[] Values = [];
+    public byte[] Bytes = [];
+}
+
+/// <summary>Checks Boolean validation when another array's schema is captured first.</summary>
+[LuminPackable, LuminPackOption(UntrustedData = true)]
+public sealed class AuditExternalReversedArrays
+{
+    public int[] Values = [];
+    public bool[] Flags = [];
 }
