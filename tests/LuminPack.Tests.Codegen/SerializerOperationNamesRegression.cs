@@ -12,7 +12,7 @@ internal static class SerializerOperationNamesRegression
     internal static void Run(MetadataReference[] references)
     {
         const string source = """
-            public sealed class Item { public int offset = 7; public int __lpCollision = 11; }
+            public sealed class Item { public int offset = 7; public int __lpCollision = 11; public int __cursor = 37; }
             public static class Entry
             {
                 private static int __LuminLayout0 = 13;
@@ -28,6 +28,8 @@ internal static class SerializerOperationNamesRegression
                     int __lpFixed = 23;
                     int __lpNamed = 29;
                     int __lpPartial = 31;
+                    int cursor = 41;
+                    int __lpCursor = 43;
                     var item = new Item();
                     ref int __lpAlias = ref __lpResult;
                     __lpAlias += item.offset;
@@ -35,7 +37,7 @@ internal static class SerializerOperationNamesRegression
                     __lpResult = 0;
                     __lpExit:
                     return offset + __lpOffset + __lpResult + __lpCollision + item.__lpCollision + __lpKeyword + __lpFixed +
-                        __lpNamed + nameof(__lpNamed).Length + __lpPartial + __LuminLayout0 + Calls;
+                        __lpNamed + nameof(__lpNamed).Length + __lpPartial + __LuminLayout0 + Calls + cursor + __lpCursor + item.__cursor;
                 }
             }
             """;
@@ -48,7 +50,7 @@ internal static class SerializerOperationNamesRegression
         {
             ["__lpOffset"] = "offset", ["__lpResult"] = "result", ["__lpCollision"] = "collision",
             ["__lpKeyword"] = "class", ["__lpFixed"] = "__luminFixedBlock", ["__lpNamed"] = "named",
-            ["__lpPartial"] = "partial", ["__lpAlias"] = "result", ["__lpExit"] = "end", ["__LuminLayout0"] = "cache"
+            ["__lpPartial"] = "partial", ["__lpAlias"] = "result", ["__lpExit"] = "end", ["__LuminLayout0"] = "cache", ["__lpCursor"] = "__cursor"
         };
         var marked = tree.GetRoot().ReplaceTokens(tree.GetRoot().DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken)), (token, _) =>
         {
@@ -73,6 +75,8 @@ internal static class SerializerOperationNamesRegression
         var locals = method.DescendantNodes().OfType<VariableDeclaratorSyntax>().Select(variable => variable.Identifier.ValueText).ToArray();
         Require(locals.Contains("offset2") && locals.Contains("result") && locals.Contains("result2") && locals.Contains("fixedBlock") && locals.Contains("local"),
             "Readable role names, deterministic suffixes or keyword sanitization were omitted.");
+        Require(locals.Contains("cursor2") && !locals.Contains("__cursor") && !locals.Contains("__lpCursor"),
+            "A proven compiler cursor kept its internal spelling or collided with an existing local.");
         Require(locals.Contains("__lpCollision") && locals.Contains("__lpNamed") && locals.Contains("__lpPartial"),
             "A user-name collision, nameof observation or incomplete compiler identity was renamed.");
         Require(method.DescendantNodes().OfType<LabeledStatementSyntax>().Single().Identifier.ValueText == "end0",

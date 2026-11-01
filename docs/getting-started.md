@@ -65,6 +65,10 @@ Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
 
 Concrete overloads (`Serialize(person)`, `Deserialize(bytes, ref copy)`) call the generated code for that type directly. Generic overloads (`Deserialize<Person>(bytes)`) go through a per-type entry created on first use.
 
+The XML remarks of concrete model overloads include a **Generated implementation** link to the binary or JSON `Root` method. Follow that link in your IDE to inspect the implementation without stepping through forwarding methods. It also works for closed generic models. Raw unmanaged binary reads may call the runtime directly and therefore have no separate `RootRead`; Custom formatters keep their user-defined entry points. `Sizeof` describes evaluation rather than a read/write root.
+
+Generated roots use four-space indentation and role-based local names such as `cursor` and `nameSnapshot1`. Cursor record groups label the fields they process with ordinary `// Fields:` and `// Field:` comments. Compiler-owned locals are renamed after their bindings are known; your own field names are preserved, including names beginning with underscores.
+
 Read methods that take `ref` return the number of bytes (or characters) consumed.
 
 ## Entry points

@@ -110,6 +110,12 @@ internal static class SerializerDocumentationRegression
 
             [LuminPackable]
             internal class DocumentationInternal { public int Value; }
+
+            [LuminPackable]
+            public class DocumentationBox<T> { public T Value = default!; }
+
+            [LuminPackable]
+            public class DocumentationBoxHolder { public DocumentationBox<int> Box = new(); }
             """;
 
         var options = new CSharpParseOptions(LanguageVersion.Preview, documentationMode,
@@ -138,6 +144,17 @@ internal static class SerializerDocumentationRegression
         var generated = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
         foreach (var file in generated)
         {
+            if (documentationMode != DocumentationMode.None)
+            {
+                var model = output.GetSemanticModel(file.SyntaxTree);
+                foreach (var link in file.SyntaxTree.GetRoot().DescendantNodes(descendIntoTrivia: true).OfType<XmlCrefAttributeSyntax>()
+                    .Where(attribute => attribute.Cref.ToString().Contains(".__LuminRoots_", StringComparison.Ordinal)))
+                {
+                    Require(model.GetSymbolInfo(link.Cref).Symbol is IMethodSymbol target &&
+                        target.Name.StartsWith("Root", StringComparison.Ordinal) && target.DeclaringSyntaxReferences.Length == 1,
+                        "A Root documentation link did not bind to one generated method: " + link);
+                }
+            }
             var documentedSyntax = CSharpSyntaxTree.ParseText(file.SourceText, options.WithDocumentationMode(DocumentationMode.Parse)).GetRoot();
             foreach (var method in documentedSyntax.DescendantNodes().OfType<BaseMethodDeclarationSyntax>())
             {
@@ -190,6 +207,13 @@ internal static class SerializerDocumentationRegression
         foreach (var overload in modelOverloads)
         {
             var documentation = ReadDocumentation(overload);
+            var implementation = overload.GetLeadingTrivia().Where(trivia => trivia.HasStructure)
+                .SelectMany(trivia => trivia.GetStructure()!.DescendantNodes()).OfType<XmlCrefAttributeSyntax>()
+                .Where(attribute => attribute.Cref.ToString().Contains(".__LuminRoots_", StringComparison.Ordinal)).ToArray();
+            if (overload.Identifier.ValueText != "Sizeof")
+            {
+                Require(implementation.Length == 1, "A concrete model overload has no direct Root navigation link.");
+            }
             Require(documentation.Element("summary")!.Elements("see").Any(element =>
                 (string?)element.Attribute("cref") == "T:DocumentationModel" && element.IsEmpty),
                 "Missing compact concrete type link in the overload summary: " + overload.Identifier);

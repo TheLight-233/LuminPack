@@ -99,6 +99,8 @@
 
 `GeneratedSourceDocumentation` 和 `LuminPackSerializerDocumentation` 只为可直接调用的 `LuminPackSerializer` API 和门面类型添加紧凑 XML 文档。API 注释来自同一份类型分析，包含类型、成员顺序与筛选、CLR 布局与线上布局、缓冲区语义和返回值单位。内部状态转发方法、执行根方法、Union 槽、布局辅助方法和私有门面适配器省略 XML，可执行代码保持不变。生成文件屏蔽 CS1591，启用文档警告时也无需为这些实现细节补 XML。
 
+具体模型 API 的说明通过编译器绑定的 `cref` 直接链接到对应的嵌套二进制或 JSON Root 方法。没有独立 Root 的原始非托管二进制读取、Custom 入口以及大小计算不会获得不存在的读写链接。最终展示会移除已证明归属的局部变量角色中的内部前缀，为记录成员快照使用描述性名称，并用字段注释标记游标记录组。用户成员名和可执行语句保持不变。
+
 <a id="tests"></a>
 ## 测试
 

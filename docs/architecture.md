@@ -99,6 +99,8 @@ Roslyn cancellation is checked before changed-type analysis and between aggregat
 
 `GeneratedSourceDocumentation` and `LuminPackSerializerDocumentation` add compact XML documentation only to directly callable `LuminPackSerializer` APIs and the facade type. API comments describe the same analyzed type, member order and filters, CLR versus wire layout, buffer semantics and return units. Internal state forwarders, execution roots, Union slots, layout helpers and private facade adapters omit XML; their executable code is unchanged. CS1591 is suppressed in generated files so enabling documentation warnings does not require XML on these implementation details.
 
+Concrete model API remarks link directly to the appropriate nested binary or JSON Root method through a compiler-bound `cref`. Raw unmanaged binary readers without a separate Root, Custom entries and size evaluation do not acquire fictitious read/write links. Final presentation removes internal prefixes from proven local roles, gives captured record members descriptive snapshot names and labels cursor record groups with field comments. These changes preserve user member names and executable statements.
+
 ## Tests
 
 | Project | Scope |

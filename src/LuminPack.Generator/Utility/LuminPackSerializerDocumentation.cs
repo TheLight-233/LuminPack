@@ -107,6 +107,20 @@ internal static class LuminPackSerializerDocumentation
 
                 var typeId = type.GetDocumentationCommentId();
                 if (typeId != null) documentation.Add(new XElement("seealso", new XAttribute("cref", typeId)));
+                if (type is INamedTypeSymbol named &&
+                    CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named) &&
+                    TypeMetaChecker.CheckGeneratorType(named) != GeneratorType.Custom && name != "Sizeof" &&
+                    !(name.StartsWith("Deserialize", StringComparison.Ordinal) && !name.Contains("Json") &&
+                        named.IsValueType && TypeMetaChecker.CheckGeneratorType(named) == GeneratorType.Object &&
+                        CodeEmitters.EmitterTypeTraits.CanUseUnmanagedSerialization(named)))
+                {
+                    string rootName = name.StartsWith("Deserialize", StringComparison.Ordinal) ? "RootRead" : "RootWrite";
+                    if (name.Contains("Json")) rootName += "Json";
+                    string container = RootContainerProjection.ContainerPrefix + RootContainerProjection.Hash(
+                        RootContainerProjection.PayloadKey(FormatterTypeName.Get(type)));
+                    remarks.Add(new XElement("para", "Generated implementation: ", new XElement("see",
+                        new XAttribute("cref", "global::LuminPack.LuminPackSerializer." + container + "." + rootName)), "."));
+                }
             }
             else if (method.TypeParameterList != null)
             {

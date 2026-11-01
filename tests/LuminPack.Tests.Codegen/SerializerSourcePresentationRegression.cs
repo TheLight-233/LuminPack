@@ -16,7 +16,48 @@ internal static class SerializerSourcePresentationRegression
         VerifyBlockChains(references);
         VerifyTriviaAndAnnotations();
         SerializerOperationNamesRegression.Run(references);
+        VerifyGeneratedRoots(references);
         Console.WriteLine("Passed generated source presentation: block scopes, storage lifetimes, trivia, annotations, Release IL, and execution.");
+    }
+
+    /// <summary>Checks real generated cursor records, member snapshots and user names after all projections.</summary>
+    /// <param name="references">Platform and runtime references used by the generated fixture.</param>
+    private static void VerifyGeneratedRoots(MetadataReference[] references)
+    {
+        const string source = """
+            using LuminPack.Attribute;
+            [LuminPackable]
+            public partial class PresentationModel
+            {
+                public int Id;
+                public string Name = "";
+                public string __cursor = "";
+                public string Description { get; set; } = "";
+            }
+            """;
+        var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER"]);
+        var compilation = CSharpCompilation.Create("PresentationRoots", [CSharpSyntaxTree.ParseText(source, parse)], references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release, allowUnsafe: true));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(
+            [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
+        driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+        var errors = output.GetDiagnostics().Concat(diagnostics).Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error).ToArray();
+        Require(errors.Length == 0, string.Join(Environment.NewLine, errors.Select(error => error.ToString())));
+        var roots = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+            .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+            .Where(method => method.Identifier.ValueText.StartsWith("Root", StringComparison.Ordinal)).ToArray();
+        Require(roots.Length >= 4, "Expected complete binary and JSON roots.");
+        var write = roots.Single(method => method.Identifier.ValueText == "RootWrite" &&
+            method.ParameterList.Parameters[1].Type!.ToString().Contains("PresentationModel", StringComparison.Ordinal));
+        var names = write.DescendantNodes().OfType<VariableDeclaratorSyntax>().Select(variable => variable.Identifier.ValueText).ToArray();
+        Require(names.Contains("cursor") && names.Any(name => name.StartsWith("nameSnapshot", StringComparison.Ordinal)) &&
+            names.All(name => !name.StartsWith("__", StringComparison.Ordinal)), "Root locals still expose internal cursor or snapshot identities.");
+        Require(write.ToFullString().Contains("value.__cursor", StringComparison.Ordinal), "The user's field spelling changed.");
+        Require(write.ToFullString().Contains("// Fields: Id, Name, __cursor, Description", StringComparison.Ordinal) &&
+            write.ToFullString().Contains("// Field: Name", StringComparison.Ordinal), "Cursor records lost their member annotations.");
+        using var image = new MemoryStream();
+        var emitted = output.Emit(image);
+        Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
     }
 
     /// <summary>Compiles representative control flow before and after removing redundant wrapper scopes.</summary>

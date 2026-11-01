@@ -50,6 +50,8 @@ internal static class GeneratedOperationNames
                 if (string.IsNullOrEmpty(role) || role.StartsWith("__lumin_", StringComparison.Ordinal)) continue;
                 if (role.StartsWith("__lumin", StringComparison.Ordinal) && role.Length > 7)
                     role = char.ToLowerInvariant(role[7]) + role.Substring(8);
+                role = role.TrimStart('_');
+                if (role.Length != 0) role = char.ToLowerInvariant(role[0]) + role.Substring(1);
                 if (!SyntaxFacts.IsValidIdentifier(role) || SyntaxFacts.GetKeywordKind(role) != SyntaxKind.None ||
                     SyntaxFacts.GetContextualKeywordKind(role) != SyntaxKind.None) role = "local";
                 string name = role;

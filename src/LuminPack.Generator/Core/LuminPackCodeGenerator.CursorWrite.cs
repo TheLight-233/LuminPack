@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using LuminPack.SourceGenerator;
 using LuminPack.SourceGenerator.CodeEmitters;
+using Microsoft.CodeAnalysis.CSharp;
 
 namespace LuminPack.Code.Core;
 
@@ -95,6 +96,7 @@ public static partial class LuminPackCodeGenerator
     {
         const string writerType = "global::LuminPack.Core.LuminPackWriter";
         using var scope = new CompiledOptionFieldScope(builder, fields[first].Options);
+        builder.AppendLine(indent + "// Fields: " + string.Join(", ", fields.Skip(first).Take(last - first + 1).Select(field => field.Name)));
         if (first == last && header < 0)
         {
             // A lone record checks itself.
@@ -113,7 +115,7 @@ public static partial class LuminPackCodeGenerator
         {
             var field = fields[index];
             int kind = ReservedKind(field);
-            string name = "__m" + index;
+            string name = RecordSnapshotName(field, index);
             if (kind == 1) terms.Add(GetUnmanagedFieldSize(field));
             else if (kind == 2)
             {
@@ -136,7 +138,8 @@ public static partial class LuminPackCodeGenerator
         {
             var field = fields[index];
             int kind = ReservedKind(field);
-            string name = "__m" + index;
+            string name = RecordSnapshotName(field, index);
+            if (kind != 1) builder.AppendLine(indent + "    // Field: " + field.Name);
             if (kind == 1)
             {
                 int end = index;
@@ -149,6 +152,16 @@ public static partial class LuminPackCodeGenerator
             else builder.AppendLine(indent + "    __cursor = ref " + writerType + ".WriteReserved(ref __cursor, " + name + ");");
         }
         builder.AppendLine(indent + "}");
+    }
+
+    /// <summary>Names a member snapshot before the bound presentation pass removes internal prefixes.</summary>
+    /// <param name="field">The member captured once for reservation and storage.</param>
+    /// <param name="index">Its unique position in the serialized member list.</param>
+    /// <returns>A source-valid snapshot identifier with the member's role when available.</returns>
+    private static string RecordSnapshotName(LuminDataField field, int index)
+    {
+        string name = "__" + field.Name + "Snapshot" + index;
+        return SyntaxFacts.IsValidIdentifier(name) ? name : "__memberSnapshot" + index;
     }
 
     /// <summary>Stores consecutive fixed fields into reserved room, copying a proven contiguous block or each field.</summary>
