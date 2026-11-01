@@ -185,6 +185,11 @@ public static class TypeMetaChecker
         if (attribute is null)
             return false;
 
+        // Dependency discovery also checks annotations before a diagnostic scope exists.
+        // Keep the same shape decision there; metadata analysis reports the diagnostic.
+        if (_diagnosticContext is null)
+            return true;
+
         _reportedOverrideAnnotations ??= new HashSet<ISymbol>(SymbolEqualityComparer.Default);
         if (_reportedOverrideAnnotations.Add(property))
         {

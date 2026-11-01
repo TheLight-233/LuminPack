@@ -34,6 +34,13 @@ if (args.Contains("--verify-incremental", StringComparer.Ordinal))
     return;
 }
 
+if (args.Contains("--verify-override-diagnostics", StringComparer.Ordinal))
+{
+    VerifyOverrideAnnotationDiagnostics(references);
+    Console.WriteLine("Passed override-annotation diagnostics outside metadata scopes.");
+    return;
+}
+
 // <summary>Verifies verify read only collection builder.</summary>
 // <param name="references">The references used by this operation.</param>
 static void VerifyReadOnlyCollectionBuilder(MetadataReference[] references)
@@ -265,11 +272,50 @@ if (!failures.IsEmpty)
 }
 
 VerifyUnionPartialDiagnostic(references);
+VerifyOverrideAnnotationDiagnostics(references);
 VerifyScopedEmission(references);
 
 Console.WriteLine(
     $"Passed {CompilationCount} parallel compilations and " +
     $"{CompilationCount * ValidTypesPerCompilation} valid generated types.");
+
+// <summary>Checks that dependency discovery leaves override diagnostics to metadata analysis.</summary>
+// <param name="references">The references used by the fixture compilation.</param>
+static void VerifyOverrideAnnotationDiagnostics(MetadataReference[] references)
+{
+    const string source = """
+        using LuminPack.Attribute;
+        [LuminPackable]
+        public partial class Parent
+        {
+            public virtual int Value { get; set; }
+        }
+        [LuminPackable]
+        public partial class Child : Parent
+        {
+            [LuminPackIgnore]
+            public override int Value { get; set; }
+        }
+        """;
+    var parseOptions = new CSharpParseOptions(LanguageVersion.CSharp10);
+    foreach (string text in new[] { source, source.Replace("[LuminPackIgnore]", "", StringComparison.Ordinal) })
+    {
+        var compilation = CSharpCompilation.Create("OverrideAnnotationDiagnostics",
+            new[] { CSharpSyntaxTree.ParseText(text, parseOptions) }, references,
+            new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+        GeneratorDriver driver = CSharpGeneratorDriver.Create(new ISourceGenerator[]
+        {
+            new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()
+        }, parseOptions: parseOptions);
+        var result = driver.RunGenerators(compilation).GetRunResult();
+        bool expected = text.Contains("[LuminPackIgnore]", StringComparison.Ordinal);
+        if (result.Results.Any(run => run.Exception != null) ||
+            result.Diagnostics.Any(diagnostic => diagnostic.Id == "LuminPack099") ||
+            result.Diagnostics.Any(diagnostic => diagnostic.Id == "LuminPack007") != expected)
+            throw new InvalidOperationException("Override annotations must report LuminPack007 without escaping diagnostic scopes: " +
+                string.Join("; ", result.Diagnostics));
+    }
+}
 
 // <summary>Verifies verify union partial diagnostic.</summary>
 // <param name="references">The references used by this operation.</param>
