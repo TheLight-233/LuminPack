@@ -284,18 +284,27 @@ internal static partial class SerializerCodegenPerformanceRegression
             var architecture = entry.DescendantNodes().OfType<IfStatementSyntax>().Single(statement =>
                 statement.Condition.ToString().Contains("Unsafe.SizeOf<global::System.IntPtr>() == 8", StringComparison.Ordinal) &&
                 statement.Condition.ToString().Contains("Unsafe.ByteOffset", StringComparison.Ordinal));
-            // Field-wise fallbacks may spell their reads inline, but every typed access keeps its own architecture gate;
-            // a value of at most four bytes is allowed on 32-bit, matching the writer's scalar store.
+            // A statically proven small scalar needs no architecture branch. Wider and unknown storage keeps its gate.
             Require(architecture.Else!.Statement.DescendantNodes().OfType<InvocationExpressionSyntax>()
                     .Where(call => call.Expression.ToString().EndsWith("Unaligned", StringComparison.Ordinal) ||
                         call.Expression.ToString().Contains("Unsafe.ReadUnaligned", StringComparison.Ordinal) ||
                         call.Expression.ToString().Contains("Unsafe.WriteUnaligned", StringComparison.Ordinal))
                     .Where(call => !call.Expression.ToString().Contains("CopyBlockUnaligned", StringComparison.Ordinal))
-                    .All(call => call.Ancestors().TakeWhile(node => node != architecture.Else).OfType<IfStatementSyntax>().Any(gate =>
+                    .All(call => output.GetSemanticModel(call.SyntaxTree).GetSymbolInfo(call).Symbol is IMethodSymbol { TypeArguments.Length: 1 } bound &&
+                        bound.TypeArguments[0].SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte or
+                            SpecialType.System_Char or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32 or
+                            SpecialType.System_UInt32 or SpecialType.System_Single ||
+                        call.Ancestors().TakeWhile(node => node != architecture.Else).OfType<IfStatementSyntax>().Any(gate =>
                         gate.Condition.ToString().StartsWith("Unsafe.SizeOf<global::System.IntPtr>() == 8", StringComparison.Ordinal) &&
                         gate.Statement.Contains(call))),
                 "Fixed copies lost their address proof or bypassed the scalar architecture core.");
         }
+        var scalarLoads = unionReader.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(call =>
+            output.GetSemanticModel(call.SyntaxTree).GetSymbolInfo(call).Symbol is IMethodSymbol { Name: "ReadUnaligned", TypeArguments.Length: 1 } bound &&
+            bound.TypeArguments[0].SpecialType == SpecialType.System_Int32).ToArray();
+        Require(scalarLoads.Length != 0 && scalarLoads.All(call => !call.Ancestors().OfType<IfStatementSyntax>().Any(gate =>
+            gate.Condition.ToString().Contains("SizeOf<int>() <= 4", StringComparison.Ordinal))),
+            "A proven four-byte field retained an always-true architecture branch.");
         foreach (var entry in methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer" } &&
             method.Identifier.ValueText is "Serialize" or "Deserialize" or "SerializeUnion" or "DeserializeUnion" &&
             method.ParameterList.Parameters.Count == 2 && method.ParameterList.Parameters[0].Type!.ToString().Contains("LuminPack", StringComparison.Ordinal)))

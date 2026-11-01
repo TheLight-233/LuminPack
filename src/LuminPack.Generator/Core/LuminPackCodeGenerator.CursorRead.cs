@@ -19,7 +19,7 @@ public static partial class LuminPackCodeGenerator
         builder.AppendLine(indent + "{");
         builder.AppendLine(indent + "    ref byte fixedCursor = ref reader.GetCurrentSpanReference();");
         builder.AppendLine(indent + "    reader.Advance(" + GetUnmanagedFieldSize(field) + ");");
-        builder.AppendLine(indent + "    " + FixedRead("fixedCursor", target, GetGeneratedTypeName(field)));
+        builder.AppendLine(indent + "    " + FixedRead("fixedCursor", target, field));
         builder.AppendLine(indent + "}");
     }
 
