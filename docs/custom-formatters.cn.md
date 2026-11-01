@@ -1,6 +1,6 @@
 # ✍️ 自定义格式化器
 
-[English](custom-formatters.md) · [返回 README](../README.cn.md)
+[English](custom-formatters.md) · [返回 README](README.cn.md)
 
 ## `GeneratorType.Custom`
 

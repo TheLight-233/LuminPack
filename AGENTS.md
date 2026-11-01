@@ -1,6 +1,6 @@
 # Agent instructions
 
-[中文](AGENTS.cn.md)
+[中文](docs/AGENTS.cn.md)
 
 LuminPack is a source-generated binary and JSON serializer for .NET and Unity. Read these before changing code:
 
@@ -16,7 +16,7 @@ LuminPack is a source-generated binary and JSON serializer for .NET and Unity. R
 4. **SIMD.** Review scalar, 128/256/512-bit and ARM64 paths; guard by exact ISA features; keep bounded tails and a portable fallback; never touch memory outside a validated range. Unavailable hardware needs CI execution.
 5. **Performance evidence** is LuminPack's time divided by the reference library's, same machine, fixture, runtime, options and run, with repeated samples, dispersion and allocations. One isolated figure proves nothing; the machine is noisy.
 6. **Language.** English for code, comments, XML, diagnostics, tests and maintenance documents. README files and `*.cn.md` editions are the exception.
-7. **Documents.** README is the cover page; feature documentation lives in `docs`. Each document has an English `name.md` and a Chinese `name.cn.md`; update both. No release notes, version histories or experiment reports in README or `docs`.
+7. **Documents.** README is the cover page; feature documentation lives in `docs`. Each document has an English `name.md` and a Chinese `name.cn.md`; update both. All Chinese editions live under `docs`: root-page translations directly in `docs`, and module README translations in `docs/modules/<module>.cn.md`. English documents keep their existing locations. No release notes, version histories or experiment reports in README or `docs`.
 8. **Don't remove** storage placeholders or externally usable/generated members based only on call-site searches.
 9. **Commit completed work by default.** After completing a feature or fix and its relevant verification, commit the task's changes without asking for commit permission, following the commit conventions below. Keep unrelated or unfinished changes out. Ask whether to push after committing unless the owner has already authorized that push. Tags and published-history rewrites still require explicit authorization.
 10. **Commit titles.** Use `type(scope): description`, with a lowercase type and scope and a concise English imperative description. Use `feat` for features, `fix` for bug fixes, `perf` for performance, `refactor` for restructuring, `test` for tests, `docs` for documentation, `ci` for workflows, `build` for build tooling and `chore` for maintenance. Choose the affected component as the scope, for example `core`, `generator` or `benchmarks`; performance uses `perf`, never `pref`. Keep independent changes in separate commits. See [Contributing](CONTRIBUTING.md#commit-conventions).

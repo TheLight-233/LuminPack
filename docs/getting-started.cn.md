@@ -1,6 +1,6 @@
 # 🚀 快速开始
 
-[English](getting-started.md) · [返回 README](../README.cn.md)
+[English](getting-started.md) · [返回 README](README.cn.md)
 
 ## 安装
 

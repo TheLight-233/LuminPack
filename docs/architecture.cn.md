@@ -14,6 +14,7 @@
 | `src/LuminPack.Unity`、`src/LuminPack.Burst` | 可选的 Unity 值类型编解码，以及原生 Hook 表的 Burst 后端。 |
 | `src/LuminPack.Platforms` 及各适配包 | 共享适配层，以及 ASP.NET Core、Avalonia、Drawing、MAUI、MonoGame、SkiaSharp、WPF 的编解码。 |
 | `tests/` | 见[测试](#tests)。 |
+| `docs/` | 英文功能指南及所有中文文档。根目录页面的译文直接放在这里，模块 README 译文放在 `docs/modules/<模块名>.cn.md`。英文根目录页面和模块 README 保留原有位置。 |
 | `benchmarks/LuminPack.Benchmark` | BenchmarkDotNet 对比：`SimpleBenchmark`、`SerializeBenchmark`、`JsonBenchmark`、`PolymorphismBenchmark`。 |
 | `tools/` | `LuminPack.RepositoryChecks`（源码规范检查）、性能探针、xjb 表生成。 |
 | `skills/luminpack` | 给 AI 助手使用的 Skill。 |

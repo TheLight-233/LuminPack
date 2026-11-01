@@ -6,7 +6,7 @@
 
 ![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![Burst 1.8](https://img.shields.io/badge/Burst-1.8-000000?style=flat-square&logo=unity&logoColor=white) ![ABI v3](https://img.shields.io/badge/kernel%20ABI-v3-F97316?style=flat-square) ![x64 | ARM64](https://img.shields.io/badge/arch-x64%20%7C%20ARM64-2EA043?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
 
-**English** · [简体中文](README.cn.md)
+**English** · [简体中文](../../docs/modules/LuminPack.Burst.cn.md)
 
 Part of [LuminPack](../../README.md) · [Unity guide](../../docs/unity.md) · [Burst hooks](../../docs/burst-hooks.md) · [Unity value codecs](../LuminPack.Unity/README.md)
 

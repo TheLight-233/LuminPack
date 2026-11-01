@@ -1,14 +1,14 @@
 <div align="center">
 
-# 🖌️ LuminPack.SkiaSharp
+# 🪟 LuminPack.Wpf
 
-**SkiaSharp 几何、颜色与矩阵的二进制编解码器**
+**WPF 几何、3D 类型与颜色的二进制编解码器**
 
-![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![net8.0](https://img.shields.io/badge/target-net8.0-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![SkiaSharp](https://img.shields.io/badge/SkiaSharp-2C3E50?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
+![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![net8.0](https://img.shields.io/badge/target-net8.0--windows-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![WPF](https://img.shields.io/badge/WPF-0078D4?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
 
-[English](README.md) · **简体中文**
+[English](../../src/LuminPack.Wpf/README.md) · **简体中文**
 
-属于 [LuminPack](../../README.cn.md) · [全部平台模块](../LuminPack.Platforms/README.cn.md)
+属于 [LuminPack](../README.cn.md) · [全部平台模块](LuminPack.Platforms.cn.md)
 
 [支持的类型](#-支持的类型) · [快速开始](#-快速开始) · [保证](#-保证) · [构建](#-构建)
 
@@ -16,27 +16,28 @@
 
 ---
 
-基础生成器无法处理 Skia 中具有代表性的值类型构造函数。这些编解码器描述几何、颜色以及透视矩阵的全部分量，绝不复制任何 Skia 原生句柄。
+基础生成器不支持 WPF 中具有代表性的构造函数。这些公开记录还会保留 Empty 几何与线性 scRGB 颜色，而不是依赖 WPF 的私有存储。
 
 ## 📦 支持的类型
 
 | 类别 | 类型 |
 | --- | --- |
-| 几何 | `SKPoint` · `SKPointI` · `SKSize` · `SKSizeI` · `SKRect` · `SKRectI` |
-| 变换 | `SKMatrix` |
-| 颜色 | `SKColor` · `SKColorF` |
+| 2D 几何 | `Point` · `Vector` · `Size` · `Rect` · `Int32Rect` · `Thickness` · `CornerRadius` |
+| 布局 | `GridLength` |
+| 3D | `Point3D` · `Vector3D` · `Quaternion` · `Size3D` · `Rect3D` · `Matrix3D` |
+| 变换与颜色 | `Matrix` · `Color` |
 
 ## 🚀 快速开始
 
 ### 直接调用编解码器
 
 ```csharp
-using LuminPack.SkiaSharp;
+using LuminPack.Wpf;
 
-LuminSkiaSharp.Register(); // 在并发序列化之前初始化一次。
-var value = new SkiaSharp.SKPoint(1, 2);
-byte[] bytes = LuminSkiaSharp.SKPointCodec.Serialize(value);
-var restored = LuminSkiaSharp.SKPointCodec.Deserialize(bytes);
+LuminWpf.Register(); // 在并发序列化之前初始化一次。
+var value = new System.Windows.Point(1.25, 2.25);
+byte[] bytes = LuminWpf.PointCodec.Serialize(value);
+var restored = LuminWpf.PointCodec.Deserialize(bytes);
 ```
 
 直接调用编解码器无需注册。
@@ -52,13 +53,17 @@ using LuminPack.Platforms;
 [LuminPackable]
 public partial class Snapshot
 {
-    public LuminPackValue<SkiaSharp.SKPoint> Position;
+    public LuminPackValue<System.Windows.Point> Position;
 }
 ```
 
 - `LuminPackValue<T>` 可与平台值隐式互相转换，不添加类型标识或对象帧。
-- 在生成的入口使用它之前调用 `LuminSkiaSharp.Register()`。
+- 在生成的入口使用它之前调用 `LuminWpf.Register()`。
 - 这些包装器的 JSON 回调会显式拒绝调用——平台模块只支持二进制。
+
+### Empty 几何与颜色
+
+Empty 几何写入一个标记以及完整的定长标量负载。`Color` 使用 `ScA`/`ScR`/`ScG`/`ScB`；带配置文件的 `ColorContext` 值会被拒绝，而不是悄悄丢失其外部配置文件。
 
 ## ✅ 保证
 
@@ -79,10 +84,10 @@ public partial class Snapshot
 先构建 Core，再基于现有的 **net8.0** Core 程序集构建这个可选项目：
 
 ```powershell
-dotnet build src/LuminPack.SkiaSharp/LuminPack.SkiaSharp.csproj -c Release `
+dotnet build src/LuminPack.Wpf/LuminPack.Wpf.csproj -c Release `
   -p:LuminPackCorePath="C:/Artifacts/LuminPack.Core.dll"
 ```
 
 该项目使用只读的程序集引用，绝不会构建 Core 或其生成器。Core 既不引用本模块也不引用共享适配器，这些源码项目也不会作为 NuGet 包发布。
 
-关于针对性验证与支持边界，请参阅[共享平台适配器](../LuminPack.Platforms/README.cn.md)。
+关于针对性验证与支持边界，请参阅[共享平台适配器](LuminPack.Platforms.cn.md)。

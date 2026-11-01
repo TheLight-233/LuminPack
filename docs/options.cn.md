@@ -1,6 +1,6 @@
 # 🔧 编译期选项
 
-[English](options.md) · [返回 README](../README.cn.md)
+[English](options.md) · [返回 README](README.cn.md)
 
 LuminPack 没有运行时选项对象。设置通过 `[LuminPackOption]` 声明，并编译进生成的代码，所以没开启的功能在运行时没有任何开销。
 

@@ -6,7 +6,7 @@
 
 ![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![net8.0](https://img.shields.io/badge/target-net8.0-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![MonoGame](https://img.shields.io/badge/MonoGame-E73C00?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
 
-**English** · [简体中文](README.cn.md)
+**English** · [简体中文](../../docs/modules/LuminPack.MonoGame.cn.md)
 
 Part of [LuminPack](../../README.md) · [all platform modules](../LuminPack.Platforms/README.md)
 

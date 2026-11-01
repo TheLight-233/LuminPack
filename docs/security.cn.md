@@ -1,6 +1,6 @@
 # 🛡️ 安全
 
-[English](security.md) · [返回 README](../README.cn.md)
+[English](security.md) · [返回 README](README.cn.md)
 
 LuminPack 是带有性能导向原生存储路径的强类型序列化器。默认配置面向相互兼容、可信的数据生产方。仅有边界检查并不能让任意数据模型都适合处理恶意输入。应用的数据模型、生成的代码、格式化器和可选的原生内核都属于可信代码。
 

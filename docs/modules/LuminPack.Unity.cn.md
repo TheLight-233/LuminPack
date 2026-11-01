@@ -6,9 +6,9 @@
 
 ![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![netstandard2.1](https://img.shields.io/badge/target-netstandard2.1-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![Unity](https://img.shields.io/badge/Unity-Mono%20%7C%20IL2CPP-000000?style=flat-square&logo=unity&logoColor=white) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
 
-[English](README.md) · **简体中文**
+[English](../../src/LuminPack.Unity/README.md) · **简体中文**
 
-属于 [LuminPack](../../README.cn.md) · [Unity 指南](../../docs/unity.cn.md) · [Burst 后端](../LuminPack.Burst/README.cn.md)
+属于 [LuminPack](../README.cn.md) · [Unity 指南](../unity.cn.md) · [Burst 后端](LuminPack.Burst.cn.md)
 
 [支持的类型](#-支持的类型) · [快速开始](#-快速开始) · [工作方式](#-工作方式) · [安全性](#-安全性) · [安装与构建](#-安装与构建) · [测试](#-测试)
 

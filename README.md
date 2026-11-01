@@ -16,7 +16,7 @@
 ![Unity](https://img.shields.io/badge/Unity-Mono%20%7C%20IL2CPP-000000?style=flat-square&logo=unity&logoColor=white)
 ![NativeAOT](https://img.shields.io/badge/NativeAOT-ready-2EA043?style=flat-square)
 
-**English** · [简体中文](README.cn.md)
+**English** · [简体中文](docs/README.cn.md)
 
 [Quick Start](#-quick-start) ·
 [Features](#-features) ·

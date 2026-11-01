@@ -1,6 +1,6 @@
 # 🎮 Unity、IL2CPP 与 NativeAOT
 
-[English](unity.md) · [返回 README](../README.cn.md)
+[English](unity.md) · [返回 README](README.cn.md)
 
 ## Unity
 

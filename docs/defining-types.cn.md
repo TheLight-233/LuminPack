@@ -1,6 +1,6 @@
 # 🎯 定义类型
 
-[English](defining-types.md) · [返回 README](../README.cn.md)
+[English](defining-types.md) · [返回 README](README.cn.md)
 
 ## `[LuminPackable]`
 
@@ -120,4 +120,4 @@ public sealed partial class SmallRecord
 | Immutable 与 Frozen | `ImmutableArray`、`ImmutableList`、`ImmutableQueue`、`ImmutableStack`、`ImmutableDictionary`、`ImmutableHashSet`、`ImmutableSortedDictionary`、`ImmutableSortedSet`、`ReadOnlyCollectionBuilder`、`FrozenDictionary`、`FrozenSet`（.NET 8+） |
 | 接口 | `IEnumerable<T>`、`ICollection<T>`、`IReadOnlyCollection<T>`、`IList<T>`、`IReadOnlyList<T>`、`ISet<T>`、`IReadOnlySet<T>`、`IDictionary<K,V>`、`IReadOnlyDictionary<K,V>`、`ILookup<K,V>`、`IGrouping<K,V>` 以及 `IImmutable*` 接口 |
 
-引擎和 UI 的值类型（Unity、MonoGame、WPF、Avalonia、MAUI、SkiaSharp、System.Drawing、ASP.NET Core）由 [README](../README.cn.md#-平台扩展包) 中列出的可选平台包提供。
+引擎和 UI 的值类型（Unity、MonoGame、WPF、Avalonia、MAUI、SkiaSharp、System.Drawing、ASP.NET Core）由 [README](README.cn.md#-平台扩展包) 中列出的可选平台包提供。

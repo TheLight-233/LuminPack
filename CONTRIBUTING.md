@@ -1,6 +1,6 @@
 # Contributing to LuminPack
 
-[中文](CONTRIBUTING.cn.md)
+[中文](docs/CONTRIBUTING.cn.md)
 
 Read the [mechanism contract](docs/mechanism-contract.md) and the [architecture](docs/architecture.md) before changing runtime or generator code.
 
@@ -90,7 +90,7 @@ Binary tables use MemoryPack as the baseline within each operation; JSON tables 
 ## Documentation
 
 - README is the project cover: introduction, installation, usage and links. No release notes, version histories, migration notices or experiment reports in README or `docs`.
-- Every README, AGENTS, CONTRIBUTING and `docs` page has an English `name.md` and a Chinese `name.cn.md`. Update both.
+- Every README, AGENTS, CONTRIBUTING and feature guide has an English `name.md` and a Chinese `name.cn.md`. Update both. Keep all Chinese editions under `docs`: root-page translations directly in `docs`, module README translations in `docs/modules/<module>.cn.md`, and feature translations beside their English guides. English documents keep their existing locations.
 - Update `skills/luminpack` when public usage changes.
 
 ## Commit conventions

@@ -1,8 +1,8 @@
 # 参与贡献
 
-[English](CONTRIBUTING.md)
+[English](../CONTRIBUTING.md)
 
-修改运行时或生成器代码前，请先阅读[机制契约](docs/mechanism-contract.cn.md)和[架构](docs/architecture.cn.md)。
+修改运行时或生成器代码前，请先阅读[机制契约](mechanism-contract.cn.md)和[架构](architecture.cn.md)。
 
 ## 构建
 
@@ -90,7 +90,7 @@ python benchmarks/make-charts.py .tmp/benchmark-artifacts .tmp/benchmark-charts 
 ## 文档
 
 - README 是项目封面：介绍、安装、使用和链接。README 和 `docs` 中不放发布说明、版本历史、迁移通知或实验报告。
-- 每个 README、AGENTS、CONTRIBUTING 以及 `docs` 页面都有英文 `name.md` 和中文 `name.cn.md`，两者一起更新。
+- 每个 README、AGENTS、CONTRIBUTING 以及功能指南都有英文 `name.md` 和中文 `name.cn.md`，两者一起更新。所有中文版统一放在 `docs` 下：根目录页面译文直接放在 `docs`，模块 README 译文放在 `docs/modules/<模块名>.cn.md`，功能指南译文与英文版放在一起。英文文档保留原有位置。
 - 公共用法改变时更新 `skills/luminpack`。
 
 ## 提交规范

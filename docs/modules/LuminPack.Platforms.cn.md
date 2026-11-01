@@ -6,9 +6,9 @@
 
 ![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![net8.0](https://img.shields.io/badge/target-net8.0-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
 
-[English](README.md) · **简体中文**
+[English](../../src/LuminPack.Platforms/README.md) · **简体中文**
 
-属于 [LuminPack](../../README.cn.md)
+属于 [LuminPack](../README.cn.md)
 
 [模块](#-模块) · [工作方式](#-工作方式) · [保证](#-保证) · [构建与测试](#-构建与测试)
 
@@ -22,15 +22,15 @@
 
 | 模块 | 序列化内容 |
 | --- | --- |
-| 🌐 [LuminPack.AspNetCore](../LuminPack.AspNetCore/README.cn.md) | MVC/Minimal API 的二进制请求体，以及逻辑 HTTP 值类型（含多值与 null 元素的请求头） |
-| 🖼️ [LuminPack.Avalonia](../LuminPack.Avalonia/README.cn.md) | 公开的不可变几何、相对坐标、颜色与完整矩阵 |
-| 🎨 [LuminPack.Drawing](../LuminPack.Drawing/README.cn.md) | WinForms/System.Drawing 数据，包括命名/系统/空颜色的身份信息 |
-| 🪟 [LuminPack.Wpf](../LuminPack.Wpf/README.cn.md) | 公开几何、Empty 哨兵值、变换、网格尺寸与线性 scRGB 颜色 |
-| 📱 [LuminPack.Maui](../LuminPack.Maui/README.cn.md) | MAUI Graphics 可移植几何与可为 null 的托管颜色，不依赖移动端 UI |
-| 🕹️ [LuminPack.MonoGame](../LuminPack.MonoGame/README.cn.md) | 存档中的数学与游戏数据值，无需 Game 或图形上下文 |
-| 🖌️ [LuminPack.SkiaSharp](../LuminPack.SkiaSharp/README.cn.md) | 几何、颜色与透视矩阵值，不含原生渲染句柄 |
+| 🌐 [LuminPack.AspNetCore](LuminPack.AspNetCore.cn.md) | MVC/Minimal API 的二进制请求体，以及逻辑 HTTP 值类型（含多值与 null 元素的请求头） |
+| 🖼️ [LuminPack.Avalonia](LuminPack.Avalonia.cn.md) | 公开的不可变几何、相对坐标、颜色与完整矩阵 |
+| 🎨 [LuminPack.Drawing](LuminPack.Drawing.cn.md) | WinForms/System.Drawing 数据，包括命名/系统/空颜色的身份信息 |
+| 🪟 [LuminPack.Wpf](LuminPack.Wpf.cn.md) | 公开几何、Empty 哨兵值、变换、网格尺寸与线性 scRGB 颜色 |
+| 📱 [LuminPack.Maui](LuminPack.Maui.cn.md) | MAUI Graphics 可移植几何与可为 null 的托管颜色，不依赖移动端 UI |
+| 🕹️ [LuminPack.MonoGame](LuminPack.MonoGame.cn.md) | 存档中的数学与游戏数据值，无需 Game 或图形上下文 |
+| 🖌️ [LuminPack.SkiaSharp](LuminPack.SkiaSharp.cn.md) | 几何、颜色与透视矩阵值，不含原生渲染句柄 |
 
-Unity 有独立的模块：[LuminPack.Unity](../LuminPack.Unity/README.cn.md) 与 [LuminPack.Burst](../LuminPack.Burst/README.cn.md)。
+Unity 有独立的模块：[LuminPack.Unity](LuminPack.Unity.cn.md) 与 [LuminPack.Burst](LuminPack.Burst.cn.md)。
 
 ## 🔧 工作方式
 

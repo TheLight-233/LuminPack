@@ -1,6 +1,6 @@
 # 🪶 生成模式
 
-[English](generation-modes.md) · [返回 README](../README.cn.md)
+[English](generation-modes.md) · [返回 README](README.cn.md)
 
 默认情况下，生成器为它观察到的每个类型生成代码。大型项目可以把生成范围裁剪到真正会被序列化的类型，减小程序集体积、加快编译。
 

@@ -54,6 +54,7 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 
 ## Where to look
 
+- [English overview](../../README.md) and [Chinese overview](../../docs/README.cn.md). All Chinese editions live under `docs`; module translations are in `docs/modules`.
 - [API reference](references/api.md): every entry point, profiles, buffers, registration, Custom formatters, low-level API, helpers.
 - [Attribute catalog](references/attributes.md): every attribute and option with examples.
 

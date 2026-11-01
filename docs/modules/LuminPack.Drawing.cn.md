@@ -6,9 +6,9 @@
 
 ![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![net8.0](https://img.shields.io/badge/target-net8.0-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![System.Drawing](https://img.shields.io/badge/System.Drawing-0078D4?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
 
-[English](README.md) · **简体中文**
+[English](../../src/LuminPack.Drawing/README.md) · **简体中文**
 
-属于 [LuminPack](../../README.cn.md) · [全部平台模块](../LuminPack.Platforms/README.cn.md)
+属于 [LuminPack](../README.cn.md) · [全部平台模块](LuminPack.Platforms.cn.md)
 
 [支持的类型](#-支持的类型) · [快速开始](#-快速开始) · [保证](#-保证) · [构建](#-构建)
 
@@ -89,4 +89,4 @@ dotnet build src/LuminPack.Drawing/LuminPack.Drawing.csproj -c Release `
 
 该项目使用只读的程序集引用，绝不会构建 Core 或其生成器。Core 既不引用本模块也不引用共享适配器，这些源码项目也不会作为 NuGet 包发布。
 
-关于针对性验证与支持边界，请参阅[共享平台适配器](../LuminPack.Platforms/README.cn.md)。
+关于针对性验证与支持边界，请参阅[共享平台适配器](LuminPack.Platforms.cn.md)。

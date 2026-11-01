@@ -1,6 +1,6 @@
 # 🎭 多态（Union）
 
-[English](polymorphism.md) · [返回 README](../README.cn.md)
+[English](polymorphism.md) · [返回 README](README.cn.md)
 
 ## Union 根类型
 

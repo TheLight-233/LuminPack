@@ -8,7 +8,7 @@
 
 [![NuGet](https://img.shields.io/nuget/v/LuminPack.svg?style=flat-square&logo=nuget&label=NuGet)](https://www.nuget.org/packages/LuminPack)
 [![Downloads](https://img.shields.io/nuget/dt/LuminPack.svg?style=flat-square&logo=nuget&label=Downloads)](https://www.nuget.org/packages/LuminPack)
-[![License](https://img.shields.io/github/license/TheLight-233/LuminPack?style=flat-square&label=License)](LICENSE)
+[![License](https://img.shields.io/github/license/TheLight-233/LuminPack?style=flat-square&label=License)](../LICENSE)
 [![Stars](https://img.shields.io/github/stars/TheLight-233/LuminPack?style=flat-square&logo=github&label=Stars)](https://github.com/TheLight-233/LuminPack/stargazers)
 
 ![.NET](https://img.shields.io/badge/.NET-8%20%7C%209%20%7C%2010%20%7C%2011-512BD4?style=flat-square&logo=dotnet&logoColor=white)
@@ -16,7 +16,7 @@
 ![Unity](https://img.shields.io/badge/Unity-Mono%20%7C%20IL2CPP-000000?style=flat-square&logo=unity&logoColor=white)
 ![NativeAOT](https://img.shields.io/badge/NativeAOT-ready-2EA043?style=flat-square)
 
-[English](README.md) · **简体中文**
+[English](../README.md) · **简体中文**
 
 [快速开始](#-快速开始) ·
 [特性](#-特性) ·
@@ -131,7 +131,7 @@ dotnet add package LuminPack
 
 [`LuminPack`](https://www.nuget.org/packages/LuminPack) 会自动带上匹配版本的源代码生成器。支持 `netstandard2.1` 以及 `net8.0` – `net11.0`。
 
-> 🎮 **使用 Unity？** 把 API 兼容级别设为 .NET Standard 2.1，然后参阅 [Unity 指南](docs/unity.cn.md)。
+> 🎮 **使用 Unity？** 把 API 兼容级别设为 .NET Standard 2.1，然后参阅 [Unity 指南](unity.cn.md)。
 
 ## 🚀 快速开始
 
@@ -157,7 +157,7 @@ string json = LuminPackSerializer.SerializeJson(person);
 Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
 ```
 
-就这么简单——`LuminPackSerializer` 会生成到你的项目里，为你序列化的每个类型提供重载。缓冲区、流和 `IBufferWriter<byte>` 的用法见[快速开始](docs/getting-started.cn.md)。
+就这么简单——`LuminPackSerializer` 会生成到你的项目里，为你序列化的每个类型提供重载。缓冲区、流和 `IBufferWriter<byte>` 的用法见[快速开始](getting-started.cn.md)。
 
 ## 🧭 功能速览
 
@@ -176,7 +176,7 @@ byte[] bytes = LuminPackSerializer.Serialize(shape);
 Shape back = LuminPackSerializer.Deserialize<Shape>(bytes);   // Circle
 ```
 
-➡️ [多态指南](docs/polymorphism.cn.md)
+➡️ [多态指南](polymorphism.cn.md)
 </details>
 
 <details>
@@ -195,7 +195,7 @@ public partial class SaveData
 }
 ```
 
-➡️ [版本容忍指南](docs/versioning.cn.md)
+➡️ [版本容忍指南](versioning.cn.md)
 </details>
 
 <details>
@@ -216,7 +216,7 @@ public partial class Bullet
 }
 ```
 
-➡️ [复用指南](docs/reuse.cn.md)
+➡️ [复用指南](reuse.cn.md)
 </details>
 
 <details>
@@ -231,7 +231,7 @@ public partial class Node
 }
 ```
 
-➡️ [引用跟踪](docs/versioning.cn.md#reference-tracking)
+➡️ [引用跟踪](versioning.cn.md#reference-tracking)
 </details>
 
 <details>
@@ -248,7 +248,7 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 }
 ```
 
-➡️ [选项指南](docs/options.cn.md)
+➡️ [选项指南](options.cn.md)
 </details>
 
 ## 📊 基准测试
@@ -257,7 +257,7 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 
 | 🖥️ 测试环境 | |
 | --- | --- |
-| 运行环境 | GitHub Actions `ubuntu-latest`（[CI 工作流](.github/workflows/ci.yml)的 `Benchmark (linux-x64)` 任务） |
+| 运行环境 | GitHub Actions `ubuntu-latest`（[CI 工作流](../.github/workflows/ci.yml)的 `Benchmark (linux-x64)` 任务） |
 | CPU | AMD EPYC 7763 2.61 GHz · 2 核 / 4 线程 |
 | 系统 | Ubuntu 24.04.5 LTS |
 | 运行时 | .NET 10.0.14 · X64 RyuJIT（x86-64-v3 / AVX2） |
@@ -269,8 +269,8 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 真实的存档数据，包含嵌套对象、List、字典和字符串。
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks/SerializeBenchmark-dark.svg">
-  <img alt="游戏存档基准" src="docs/assets/benchmarks/SerializeBenchmark-light.svg" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/benchmarks/SerializeBenchmark-dark.svg">
+  <img alt="游戏存档基准" src="assets/benchmarks/SerializeBenchmark-light.svg" width="100%">
 </picture>
 
 ### 🧱 简单类
@@ -278,8 +278,8 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 包含数字、数组、List 和字典的小型类——经典的微基准形态。
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks/SimpleBenchmark-dark.svg">
-  <img alt="简单类基准" src="docs/assets/benchmarks/SimpleBenchmark-light.svg" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/benchmarks/SimpleBenchmark-dark.svg">
+  <img alt="简单类基准" src="assets/benchmarks/SimpleBenchmark-light.svg" width="100%">
 </picture>
 
 ### 🎭 多态
@@ -287,8 +287,8 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 带有多个具体实现的接口与抽象类。
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks/PolymorphismBenchmark-dark.svg">
-  <img alt="多态基准" src="docs/assets/benchmarks/PolymorphismBenchmark-light.svg" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/benchmarks/PolymorphismBenchmark-dark.svg">
+  <img alt="多态基准" src="assets/benchmarks/PolymorphismBenchmark-light.svg" width="100%">
 </picture>
 
 ### 📜 JSON
@@ -296,8 +296,8 @@ public partial struct Packet            // 32 位和 64 位上字节完全一致
 同一份游戏存档的 JSON 文本，与最流行的 .NET JSON 库对比。
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/benchmarks/JsonBenchmark-dark.svg">
-  <img alt="JSON 基准" src="docs/assets/benchmarks/JsonBenchmark-light.svg" width="100%">
+  <source media="(prefers-color-scheme: dark)" srcset="assets/benchmarks/JsonBenchmark-dark.svg">
+  <img alt="JSON 基准" src="assets/benchmarks/JsonBenchmark-light.svg" width="100%">
 </picture>
 
 想在自己的硬件上验证？可以在本地运行同样的四个基准类，也可以手动触发 CI 工作流并启用 `run_benchmarks`，从按主机分别保存的 `benchmark-artifacts-*` 中获取新结果：
@@ -310,18 +310,18 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -f net10.0 -- --f
 
 | | 指南 | 内容 |
 | :---: | --- | --- |
-| 🚀 | [快速开始](docs/getting-started.cn.md) | 安装、第一个类型、所有入口、缓冲区与流 |
-| 🎯 | [定义类型](docs/defining-types.cn.md) | 成员、顺序、构造、回调、大小担保、支持的类型 |
-| 🎭 | [多态](docs/polymorphism.cn.md) | Union、泛型 case、其他程序集中的类型、手动注册 |
-| 📝 | [版本容忍与引用跟踪](docs/versioning.cn.md) | 模型演进、成员重命名、共享对象与循环 |
-| ♻️ | [复用与零分配](docs/reuse.cn.md) | 读入已有对象、实例池、输出缓冲区 |
-| 🔧 | [编译期选项](docs/options.cn.md) | 字符串编码、选项配置、JSON 限制、32/64 位结构体布局 |
-| 🪶 | [生成模式](docs/generation-modes.cn.md) | `Full`、`Medium`、`Light`、`Minimal` |
-| ✍️ | [自定义格式化器](docs/custom-formatters.cn.md) | 手写格式、`Register<T>`、底层读写器 |
-| 💡 | [IDE 代码修复](docs/code-fixes.cn.md) | 随包提供的生成器诊断快速修复与 Fix All |
-| 🎮 | [Unity、IL2CPP 与 NativeAOT](docs/unity.cn.md) | Unity 配置、Burst、裁剪 |
-| 📐 | [数据格式](docs/formats.cn.md) | 二进制布局与 JSON 表示 |
-| 🛡️ | [安全](docs/security.cn.md) | 可移植性、不可信输入、加密 |
+| 🚀 | [快速开始](getting-started.cn.md) | 安装、第一个类型、所有入口、缓冲区与流 |
+| 🎯 | [定义类型](defining-types.cn.md) | 成员、顺序、构造、回调、大小担保、支持的类型 |
+| 🎭 | [多态](polymorphism.cn.md) | Union、泛型 case、其他程序集中的类型、手动注册 |
+| 📝 | [版本容忍与引用跟踪](versioning.cn.md) | 模型演进、成员重命名、共享对象与循环 |
+| ♻️ | [复用与零分配](reuse.cn.md) | 读入已有对象、实例池、输出缓冲区 |
+| 🔧 | [编译期选项](options.cn.md) | 字符串编码、选项配置、JSON 限制、32/64 位结构体布局 |
+| 🪶 | [生成模式](generation-modes.cn.md) | `Full`、`Medium`、`Light`、`Minimal` |
+| ✍️ | [自定义格式化器](custom-formatters.cn.md) | 手写格式、`Register<T>`、底层读写器 |
+| 💡 | [IDE 代码修复](code-fixes.cn.md) | 随包提供的生成器诊断快速修复与 Fix All |
+| 🎮 | [Unity、IL2CPP 与 NativeAOT](unity.cn.md) | Unity 配置、Burst、裁剪 |
+| 📐 | [数据格式](formats.cn.md) | 二进制布局与 JSON 表示 |
+| 🛡️ | [安全](security.cn.md) | 可移植性、不可信输入、加密 |
 
 ## 🧩 平台扩展包
 
@@ -329,31 +329,31 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -f net10.0 -- --f
 
 | 包 | 新增支持 |
 | --- | --- |
-| 🎮 [LuminPack.Unity](src/LuminPack.Unity/README.cn.md) | 向量、颜色、包围盒、矩阵、曲线、渐变 |
-| 🔥 [LuminPack.Burst](src/LuminPack.Burst/README.cn.md) | Unity 上的 Burst 加速内核 |
-| 🌐 [LuminPack.AspNetCore](src/LuminPack.AspNetCore/README.cn.md) | MVC 与 Minimal API 二进制请求体、HTTP 值类型 |
-| 🖼️ [LuminPack.Avalonia](src/LuminPack.Avalonia/README.cn.md) | 几何、颜色、矩阵 |
-| 🎨 [LuminPack.Drawing](src/LuminPack.Drawing/README.cn.md) | `System.Drawing.Color` |
-| 📱 [LuminPack.Maui](src/LuminPack.Maui/README.cn.md) | MAUI Graphics 几何与颜色 |
-| 🕹️ [LuminPack.MonoGame](src/LuminPack.MonoGame/README.cn.md) | 向量、矩阵、包围体 |
-| 🖌️ [LuminPack.SkiaSharp](src/LuminPack.SkiaSharp/README.cn.md) | 几何、颜色、矩阵 |
-| 🪟 [LuminPack.Wpf](src/LuminPack.Wpf/README.cn.md) | 几何、3D 类型、颜色 |
+| 🎮 [LuminPack.Unity](modules/LuminPack.Unity.cn.md) | 向量、颜色、包围盒、矩阵、曲线、渐变 |
+| 🔥 [LuminPack.Burst](modules/LuminPack.Burst.cn.md) | Unity 上的 Burst 加速内核 |
+| 🌐 [LuminPack.AspNetCore](modules/LuminPack.AspNetCore.cn.md) | MVC 与 Minimal API 二进制请求体、HTTP 值类型 |
+| 🖼️ [LuminPack.Avalonia](modules/LuminPack.Avalonia.cn.md) | 几何、颜色、矩阵 |
+| 🎨 [LuminPack.Drawing](modules/LuminPack.Drawing.cn.md) | `System.Drawing.Color` |
+| 📱 [LuminPack.Maui](modules/LuminPack.Maui.cn.md) | MAUI Graphics 几何与颜色 |
+| 🕹️ [LuminPack.MonoGame](modules/LuminPack.MonoGame.cn.md) | 向量、矩阵、包围体 |
+| 🖌️ [LuminPack.SkiaSharp](modules/LuminPack.SkiaSharp.cn.md) | 几何、颜色、矩阵 |
+| 🪟 [LuminPack.Wpf](modules/LuminPack.Wpf.cn.md) | 几何、3D 类型、颜色 |
 
 ## 🤖 AI Skill
 
-在用 AI 编程助手？[`skills/luminpack`](skills/luminpack/SKILL.md) 能教会它写出正确的 LuminPack 代码——特性、API、Union、版本容忍、自定义格式化器以及常见陷阱。把这个目录放进助手的 Skill 目录（例如 `.claude/skills/`）即可。
+在用 AI 编程助手？[`skills/luminpack`](../skills/luminpack/SKILL.md) 能教会它写出正确的 LuminPack 代码——特性、API、Union、版本容忍、自定义格式化器以及常见陷阱。把这个目录放进助手的 Skill 目录（例如 `.claude/skills/`）即可。
 
 ## 🤝 参与贡献
 
-欢迎提交 Issue 和 Pull Request！请先阅读[贡献指南](CONTRIBUTING.cn.md)；[架构概览](docs/architecture.cn.md)和[设计约束](docs/mechanism-contract.cn.md)介绍了库的整体结构。
+欢迎提交 Issue 和 Pull Request！请先阅读[贡献指南](CONTRIBUTING.cn.md)；[架构概览](architecture.cn.md)和[设计约束](mechanism-contract.cn.md)介绍了库的整体结构。
 
 ## 💖 致谢
 
-LuminPack 早期从 [MemoryPack](https://github.com/Cysharp/MemoryPack) 的设计中学到了很多，此后沿着自己的方向独立演进。JSON 浮点数格式化移植自 [xjb](docs/xjb-NOTICE.md)。
+LuminPack 早期从 [MemoryPack](https://github.com/Cysharp/MemoryPack) 的设计中学到了很多，此后沿着自己的方向独立演进。JSON 浮点数格式化移植自 [xjb](xjb-NOTICE.md)。
 
 ## 📄 许可证
 
-LuminPack 基于 [MIT 许可证](LICENSE)发布。第三方声明：[xjb 许可证](docs/xjb-LICENSE.txt)（Apache 2.0）· [xjb 声明](docs/xjb-NOTICE.md)。
+LuminPack 基于 [MIT 许可证](../LICENSE)发布。第三方声明：[xjb 许可证](xjb-LICENSE.txt)（Apache 2.0）· [xjb 声明](xjb-NOTICE.md)。
 
 <div align="center">
 

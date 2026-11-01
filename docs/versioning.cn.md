@@ -1,6 +1,6 @@
 # 📝 版本容忍与引用跟踪
 
-[English](versioning.md) · [返回 README](../README.cn.md)
+[English](versioning.md) · [返回 README](README.cn.md)
 
 ## 选择模式
 

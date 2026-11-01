@@ -6,9 +6,9 @@
 
 ![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![Burst 1.8](https://img.shields.io/badge/Burst-1.8-000000?style=flat-square&logo=unity&logoColor=white) ![ABI v3](https://img.shields.io/badge/kernel%20ABI-v3-F97316?style=flat-square) ![x64 | ARM64](https://img.shields.io/badge/arch-x64%20%7C%20ARM64-2EA043?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
 
-[English](README.md) · **简体中文**
+[English](../../src/LuminPack.Burst/README.md) · **简体中文**
 
-属于 [LuminPack](../../README.cn.md) · [Unity 指南](../../docs/unity.cn.md) · [Burst 钩子](../../docs/burst-hooks.cn.md) · [Unity 值编解码器](../LuminPack.Unity/README.cn.md)
+属于 [LuminPack](../README.cn.md) · [Unity 指南](../unity.cn.md) · [Burst 钩子](../burst-hooks.cn.md) · [Unity 值编解码器](LuminPack.Unity.cn.md)
 
 [快速开始](#-快速开始) · [内核](#-内核) · [硬件](#-硬件) · [生命周期](#-生命周期) · [安装与构建](#-安装与构建) · [测试](#-测试)
 

@@ -6,9 +6,9 @@
 
 ![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![net8.0](https://img.shields.io/badge/target-net8.0-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![ASP.NET Core](https://img.shields.io/badge/ASP.NET%20Core-512BD4?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
 
-[English](README.md) · **简体中文**
+[English](../../src/LuminPack.AspNetCore/README.md) · **简体中文**
 
-属于 [LuminPack](../../README.cn.md) · [全部平台模块](../LuminPack.Platforms/README.cn.md)
+属于 [LuminPack](../README.cn.md) · [全部平台模块](LuminPack.Platforms.cn.md)
 
 [特性](#-特性) · [MVC](#-mvc) · [Minimal API](#-minimal-api) · [错误与限制](#-错误与限制) · [HTTP 值类型](#-http-值类型) · [构建](#-构建)
 
@@ -93,7 +93,7 @@ app.MapPost("/messages", async (HttpRequest request) =>
 | `StringSegment` | 只编码选中的片段，而不是整个底层字符串 |
 | `HostString` · `PathString` · `QueryString` · `FragmentString` | 公开的逻辑 `Value`，包括 null 和空值 |
 
-二进制字符串使用声明默认的 Core 配置。使用 `LuminAspNetCore.Register()` 初始化这些值编解码器；直接调用编解码器无需注册。生成 DTO 的字段可以按照[共享适配器](../LuminPack.Platforms/README.cn.md)中的说明使用 `LuminPackValue<T>`。
+二进制字符串使用声明默认的 Core 配置。使用 `LuminAspNetCore.Register()` 初始化这些值编解码器；直接调用编解码器无需注册。生成 DTO 的字段可以按照[共享适配器](LuminPack.Platforms.cn.md)中的说明使用 `LuminPackValue<T>`。
 
 ## 🔨 构建
 

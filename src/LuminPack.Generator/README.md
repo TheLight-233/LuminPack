@@ -6,7 +6,7 @@
 
 ![Roslyn](https://img.shields.io/badge/Roslyn-source%20generator-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![Analyzer](https://img.shields.io/badge/analyzer-included-2EA043?style=flat-square)
 
-**English** · [简体中文](README.cn.md)
+**English** · [简体中文](../../docs/modules/LuminPack.Generator.cn.md)
 
 Part of [LuminPack](../../README.md) · [Generation modes](../../docs/generation-modes.md) · [Compile-time options](../../docs/options.md)
 

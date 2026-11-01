@@ -6,7 +6,7 @@
 
 ![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![netstandard2.1](https://img.shields.io/badge/target-netstandard2.1-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![Unity](https://img.shields.io/badge/Unity-Mono%20%7C%20IL2CPP-000000?style=flat-square&logo=unity&logoColor=white) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
 
-**English** · [简体中文](README.cn.md)
+**English** · [简体中文](../../docs/modules/LuminPack.Unity.cn.md)
 
 Part of [LuminPack](../../README.md) · [Unity guide](../../docs/unity.md) · [Burst backend](../LuminPack.Burst/README.md)
 

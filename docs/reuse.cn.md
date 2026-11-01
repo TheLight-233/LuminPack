@@ -1,6 +1,6 @@
 # ♻️ 复用与零分配
 
-[English](reuse.md) · [返回 README](../README.cn.md)
+[English](reuse.md) · [返回 README](README.cn.md)
 
 ## 读入已有对象
 

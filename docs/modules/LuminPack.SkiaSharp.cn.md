@@ -1,14 +1,14 @@
 <div align="center">
 
-# 🖼️ LuminPack.Avalonia
+# 🖌️ LuminPack.SkiaSharp
 
-**Avalonia 几何、颜色与矩阵的二进制编解码器**
+**SkiaSharp 几何、颜色与矩阵的二进制编解码器**
 
-![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![net8.0](https://img.shields.io/badge/target-net8.0-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![Avalonia](https://img.shields.io/badge/Avalonia-8B44AC?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
+![Optional](https://img.shields.io/badge/module-optional-8B5CF6?style=flat-square) ![net8.0](https://img.shields.io/badge/target-net8.0-512BD4?style=flat-square&logo=dotnet&logoColor=white) ![SkiaSharp](https://img.shields.io/badge/SkiaSharp-2C3E50?style=flat-square) ![Source only](https://img.shields.io/badge/NuGet-source%20only-lightgrey?style=flat-square)
 
-[English](README.md) · **简体中文**
+[English](../../src/LuminPack.SkiaSharp/README.md) · **简体中文**
 
-属于 [LuminPack](../../README.cn.md) · [全部平台模块](../LuminPack.Platforms/README.cn.md)
+属于 [LuminPack](../README.cn.md) · [全部平台模块](LuminPack.Platforms.cn.md)
 
 [支持的类型](#-支持的类型) · [快速开始](#-快速开始) · [保证](#-保证) · [构建](#-构建)
 
@@ -16,28 +16,27 @@
 
 ---
 
-基础生成器无法处理 Avalonia 中具有代表性的不可变构造函数。这些编解码器通过公开 API 重建值，并完整保留透视矩阵分量和相对坐标单位。
+基础生成器无法处理 Skia 中具有代表性的值类型构造函数。这些编解码器描述几何、颜色以及透视矩阵的全部分量，绝不复制任何 Skia 原生句柄。
 
 ## 📦 支持的类型
 
 | 类别 | 类型 |
 | --- | --- |
-| 几何 | `Point` · `Vector` · `Size` · `Rect` · `Thickness` · `CornerRadius` |
-| 像素单位 | `PixelPoint` · `PixelVector` · `PixelSize` · `PixelRect` |
-| 相对坐标 | `RelativePoint` · `RelativeRect` |
-| 变换与颜色 | `Matrix` · `Color` |
+| 几何 | `SKPoint` · `SKPointI` · `SKSize` · `SKSizeI` · `SKRect` · `SKRectI` |
+| 变换 | `SKMatrix` |
+| 颜色 | `SKColor` · `SKColorF` |
 
 ## 🚀 快速开始
 
 ### 直接调用编解码器
 
 ```csharp
-using LuminPack.Avalonia;
+using LuminPack.SkiaSharp;
 
-LuminAvalonia.Register(); // 在并发序列化之前初始化一次。
-var value = new Avalonia.Point(1.25, 2.25);
-byte[] bytes = LuminAvalonia.PointCodec.Serialize(value);
-var restored = LuminAvalonia.PointCodec.Deserialize(bytes);
+LuminSkiaSharp.Register(); // 在并发序列化之前初始化一次。
+var value = new SkiaSharp.SKPoint(1, 2);
+byte[] bytes = LuminSkiaSharp.SKPointCodec.Serialize(value);
+var restored = LuminSkiaSharp.SKPointCodec.Deserialize(bytes);
 ```
 
 直接调用编解码器无需注册。
@@ -53,12 +52,12 @@ using LuminPack.Platforms;
 [LuminPackable]
 public partial class Snapshot
 {
-    public LuminPackValue<Avalonia.Point> Position;
+    public LuminPackValue<SkiaSharp.SKPoint> Position;
 }
 ```
 
 - `LuminPackValue<T>` 可与平台值隐式互相转换，不添加类型标识或对象帧。
-- 在生成的入口使用它之前调用 `LuminAvalonia.Register()`。
+- 在生成的入口使用它之前调用 `LuminSkiaSharp.Register()`。
 - 这些包装器的 JSON 回调会显式拒绝调用——平台模块只支持二进制。
 
 ## ✅ 保证
@@ -80,10 +79,10 @@ public partial class Snapshot
 先构建 Core，再基于现有的 **net8.0** Core 程序集构建这个可选项目：
 
 ```powershell
-dotnet build src/LuminPack.Avalonia/LuminPack.Avalonia.csproj -c Release `
+dotnet build src/LuminPack.SkiaSharp/LuminPack.SkiaSharp.csproj -c Release `
   -p:LuminPackCorePath="C:/Artifacts/LuminPack.Core.dll"
 ```
 
 该项目使用只读的程序集引用，绝不会构建 Core 或其生成器。Core 既不引用本模块也不引用共享适配器，这些源码项目也不会作为 NuGet 包发布。
 
-关于针对性验证与支持边界，请参阅[共享平台适配器](../LuminPack.Platforms/README.cn.md)。
+关于针对性验证与支持边界，请参阅[共享平台适配器](LuminPack.Platforms.cn.md)。

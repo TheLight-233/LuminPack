@@ -14,6 +14,7 @@ All changes are subject to the [mechanism contract](mechanism-contract.md).
 | `src/LuminPack.Unity`, `src/LuminPack.Burst` | Optional Unity value codecs and the Burst backend for the native hook table. |
 | `src/LuminPack.Platforms` and adapters | Shared adapter plus ASP.NET Core, Avalonia, Drawing, MAUI, MonoGame, SkiaSharp and WPF codecs. |
 | `tests/` | See [Tests](#tests). |
+| `docs/` | English feature guides and all Chinese editions. Root-page translations live directly here; module README translations live in `docs/modules/<module>.cn.md`. English root pages and module READMEs keep their existing locations. |
 | `benchmarks/LuminPack.Benchmark` | BenchmarkDotNet comparisons: `SimpleBenchmark`, `SerializeBenchmark`, `JsonBenchmark`, `PolymorphismBenchmark`. |
 | `tools/` | `LuminPack.RepositoryChecks` (source standards), performance probes, xjb table generation. |
 | `skills/luminpack` | Usage skill for AI assistants. |

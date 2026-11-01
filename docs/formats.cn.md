@@ -1,6 +1,6 @@
 # 📐 数据格式
 
-[English](formats.md) · [返回 README](../README.cn.md)
+[English](formats.md) · [返回 README](README.cn.md)
 
 二进制与 JSON 是两套独立的协议。不要把 `Serialize` 的输出交给 `DeserializeJson`，反之亦然。
 
