@@ -76,7 +76,8 @@ internal sealed class SharedFacadeProjection
     /// <returns>Offsets and completed source strings without a retained syntax tree.</returns>
     private static Contribution Analyze(string type, string source, MetaInfo metadata)
     {
-        var root = CSharpSyntaxTree.ParseText(Prefix + source + "}", metadata.ParseOptions).GetRoot();
+        // API XML stays in the original text; this tree only analyzes executable method spans.
+        var root = CSharpSyntaxTree.ParseText(Prefix + source + "}", metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None)).GetRoot();
         var candidates = new List<Candidate>();
         var stateCalls = new Dictionary<string, bool>(StringComparer.Ordinal);
         string adapterName = Identity("__LuminFacadeFor", type);
