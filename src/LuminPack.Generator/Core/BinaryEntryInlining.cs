@@ -140,6 +140,12 @@ internal sealed class BinaryEntryInlining
         if (outlineNestedUserWrite && !root && operationName == "WriteValue" &&
             !plan.TypeName.StartsWith("global::System.", StringComparison.Ordinal) &&
             operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackWriter") return null;
+        if (operation.Parameters.Length == arguments.Count + 1 &&
+            operation.Parameters[operation.Parameters.Length - 1].OriginalName == SafeOperationProjection.FixedProofParameter)
+        {
+            arguments = arguments.Concat(new[] { SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression) }).ToArray();
+            aliases = aliases.Concat(new[] { false }).ToArray();
+        }
         if (arguments.Count != operation.Parameters.Length)
             return LuminPackExceptionHelper.ThrowInvalidOperationException<BlockSyntax>("Inline operation parameter mismatch: " + key);
         var requiredSupport = new HashSet<string>(operation.Body.DescendantTokens().Where(token => token.GetAnnotations(BinaryOperationPlan.NameAnnotation).Any())
@@ -168,10 +174,19 @@ internal sealed class BinaryEntryInlining
             !operationName.Contains(":local:");
         string exit = root && !guaranteed ? null : prefix + "exit";
         var statements = new List<StatementSyntax>();
-        var rootBindings = root ? new Dictionary<string, ExpressionSyntax>(StringComparer.Ordinal) : null;
+        var rootBindings = new Dictionary<string, ExpressionSyntax>(StringComparer.Ordinal);
+        bool provenBinding = false;
         for (int index = 0; index < arguments.Count; index++)
         {
             var parameter = operation.Parameters[index];
+            if (parameter.OriginalName == SafeOperationProjection.FixedProofParameter &&
+                arguments[index] is LiteralExpressionSyntax literal &&
+                literal.Kind() is SyntaxKind.TrueLiteralExpression or SyntaxKind.FalseLiteralExpression)
+            {
+                rootBindings.Add(parameter.Name, literal);
+                provenBinding = true;
+                continue;
+            }
             if (root)
             {
                 rootBindings.Add(parameter.Name, arguments[index]);
@@ -219,6 +234,7 @@ internal sealed class BinaryEntryInlining
         if (inputBoundary) _inputExpansionDepth++;
         try { body = (BlockSyntax)new OperationExpansion(this, plan, operation, prefix, exit, path, arguments[0], rootBindings).Visit(template); }
         finally { if (guaranteed) _reservedExpansionDepth--; if (inputBoundary) _inputExpansionDepth--; }
+        if (provenBinding) body = (BlockSyntax)new ProvenInputConstants().Visit(body);
         // An element record inlined into a sequence entry already owns one compact loop body, so its raw
         // collection fields take the exact inline stores; outlined keyed entries keep the shared call.
         if (!root && !plan.TypeName.StartsWith("global::System.", StringComparison.Ordinal))
@@ -254,6 +270,47 @@ internal sealed class BinaryEntryInlining
         Interlocked.Increment(ref IncrementalGenerationMetrics.BinaryOperationExpansions);
         var result = SyntaxFactory.Block(statements);
         return optionProfile == null ? result : result.WithAdditionalAnnotations(new SyntaxAnnotation(OptionScopeAnnotation, optionProfile));
+    }
+
+    /// <summary>Folds the compiler-bound input proof before emitting its single selected decoder body.</summary>
+    private sealed class ProvenInputConstants : CSharpSyntaxRewriter
+    {
+        /// <summary>Selects the original or guarded kernel using the proven literal.</summary>
+        /// <param name="node">A compiler-created conditional.</param><returns>The selected expression or unchanged conditional.</returns>
+        public override SyntaxNode VisitConditionalExpression(ConditionalExpressionSyntax node)
+        {
+            var result = (ConditionalExpressionSyntax)base.VisitConditionalExpression(node);
+            return result.Condition.IsKind(SyntaxKind.TrueLiteralExpression) ? result.WhenTrue :
+                result.Condition.IsKind(SyntaxKind.FalseLiteralExpression) ? result.WhenFalse : result;
+        }
+
+        /// <summary>Folds negated proof literals before selecting cleanup statements.</summary>
+        /// <param name="node">A compiler-created unary operation.</param><returns>The literal result or original operation.</returns>
+        public override SyntaxNode VisitPrefixUnaryExpression(PrefixUnaryExpressionSyntax node)
+        {
+            var result = (PrefixUnaryExpressionSyntax)base.VisitPrefixUnaryExpression(node);
+            if (!result.IsKind(SyntaxKind.LogicalNotExpression)) return result;
+            return result.Operand.IsKind(SyntaxKind.TrueLiteralExpression) ? SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression) :
+                result.Operand.IsKind(SyntaxKind.FalseLiteralExpression) ? SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression) : result;
+        }
+
+        /// <summary>Omits accounting cleanup only in the branch whose complete costs were already proven.</summary>
+        /// <param name="node">The generated accounting condition.</param><returns>The selected statement.</returns>
+        public override SyntaxNode VisitIfStatement(IfStatementSyntax node)
+        {
+            var result = (IfStatementSyntax)base.VisitIfStatement(node);
+            return result.Condition.IsKind(SyntaxKind.TrueLiteralExpression) ? result.Statement :
+                result.Condition.IsKind(SyntaxKind.FalseLiteralExpression) ? result.Else?.Statement ?? SyntaxFactory.Block() : result;
+        }
+
+        /// <summary>Removes an empty proven cleanup region while retaining every live finally and catch.</summary>
+        /// <param name="node">The generated object scope.</param><returns>The original decoder block or its retained cleanup region.</returns>
+        public override SyntaxNode VisitTryStatement(TryStatementSyntax node)
+        {
+            var result = (TryStatementSyntax)base.VisitTryStatement(node);
+            return result.Catches.Count == 0 && result.Finally != null &&
+                result.Finally.Block.DescendantNodes().All(child => child is BlockSyntax) ? result.Block : result;
+        }
     }
 
     /// <summary>Returns whether a containing plan writes another value beside every user-type element.</summary>

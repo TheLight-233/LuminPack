@@ -126,6 +126,13 @@ internal static class BinaryExtensionProjection
             if (_states.Contains(access.Expression.ToString()) && name is "WriteStringRecord" or "ReadStringRecord")
             {
                 string target = name == "WriteStringRecord" ? "Write" : "Read";
+                // Profile propagation is complete. The scope marker forwards every option unchanged,
+                // so the final runtime kernel can consume its underlying profile directly.
+                if (access.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: 1 } kernelProfile &&
+                    kernelProfile.TypeArgumentList.Arguments[0] is QualifiedNameSyntax
+                    { Right: GenericNameSyntax { Identifier.ValueText: "LuminPackFixedOptions", TypeArgumentList.Arguments.Count: 1 } scope } qualified &&
+                    qualified.Left.ToString() == "global::LuminPack.Option")
+                    access = access.WithName(kernelProfile.WithTypeArgumentList(SyntaxFactory.TypeArgumentList(scope.TypeArgumentList.Arguments)));
                 if (name == "ReadStringRecord" && rewritten.ArgumentList.Arguments.Count == 0)
                     rewritten = rewritten.WithArgumentList(rewritten.ArgumentList.AddArguments(SyntaxFactory.Argument(SyntaxFactory.ParseExpression("(string?)null"))));
                 return rewritten.WithExpression(access.WithName(access.Name is GenericNameSyntax generic ? generic.WithIdentifier(SyntaxFactory.Identifier(target)) : SyntaxFactory.IdentifierName(target)));

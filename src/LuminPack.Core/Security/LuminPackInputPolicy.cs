@@ -53,9 +53,11 @@ public static partial class LuminPackInputPolicy
     /// <summary>Rejects an ambient profile that disagrees with the selected external schema.</summary>
     /// <typeparam name="TActual">The actual operation profile.</typeparam>
     /// <typeparam name="TExpected">The schema's declared profile.</typeparam>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
     public static void CheckInputProfile<TActual, TExpected>()
         where TActual : struct, ILuminPackOptions where TExpected : struct, ILuminPackOptions
     {
+        if (typeof(TActual) == typeof(TExpected)) return;
         if (default(TActual).StringEncoding != default(TExpected).StringEncoding ||
             default(TActual).StringRecording != default(TExpected).StringRecording ||
             default(TActual).MaxJsonDepth != default(TExpected).MaxJsonDepth ||

@@ -51,12 +51,14 @@ internal sealed class SafeReadProjection
 
     /// <summary>Scopes resource accounting around the original complete read body.</summary>
     /// <param name="method">The unchanged typed read.</param><param name="json">Whether it reads JSON.</param>
+    /// <param name="fixedProof">An optional compiler-created flag for a fully validated scalar/string root.</param>
+    /// <param name="fixedMembers">The already validated member marker on a proven fixed root.</param>
     /// <returns>The instrumented body with original early returns and cleanup.</returns>
-    internal BlockSyntax Rewrite(MethodDeclarationSyntax method, bool json)
+    internal BlockSyntax Rewrite(MethodDeclarationSyntax method, bool json, string fixedProof = null, int fixedMembers = -1)
     {
         string state = method.ParameterList.Parameters[0].Identifier.Text;
         string value = method.ParameterList.Parameters[1].Identifier.Text;
-        var body = (BlockSyntax)new Calls(_model, state, _options.TypeName, json).Visit(method.Body);
+        var body = (BlockSyntax)new Calls(_model, state, _options.TypeName, json, fixedProof, fixedMembers).Visit(method.Body);
         if (IsTrivial(_type) || _type.SpecialType == SpecialType.System_String) return body;
         if (!json && IsFlatSequence(_type) && !method.Body.ToString().Contains(".CopyTo(ref"))
         {
@@ -78,8 +80,11 @@ internal sealed class SafeReadProjection
             else if (simple is "HashSet`1" or "SortedSet`1" or "ISet`1" or "IReadOnlySet`1" or "ImmutableHashSet`1" or "ImmutableSortedSet`1" or "FrozenSet`1")
                 completion += Policy + ".CompleteSet<" + args + ">(" + value + ", __inputValueScope);";
         }
-        return (BlockSyntax)SyntaxFactory.ParseStatement("{ var __inputValueScope = " + Policy + enter + state + ", " + SafeOperationProjection.Schema + "); bool __inputValueDone = false; try { " +
-            string.Join("\n", body.Statements) + " __inputValueDone = true; } finally { try { if (__inputValueDone) { " + completion + " } } finally { " + Policy + exit + " } } }");
+        string scope = Policy + enter + state + ", " + SafeOperationProjection.Schema + ")";
+        if (fixedProof != null) scope = fixedProof + " ? default(global::LuminPack.Security.LuminPackInputPolicy.ObjectScope) : " + scope;
+        return (BlockSyntax)SyntaxFactory.ParseStatement("{ var __inputValueScope = " + scope + "; bool __inputValueDone = false; try { " +
+            string.Join("\n", body.Statements) + " __inputValueDone = true; } finally { " + (fixedProof == null ? "" : "if (!" + fixedProof + ") ") +
+            "{ try { if (__inputValueDone) { " + completion + " } } finally { " + Policy + exit + " } } } }");
     }
 
     /// <summary>Identifies scalars whose every storage bit pattern is already a valid value.</summary>
@@ -124,11 +129,29 @@ internal sealed class SafeReadProjection
         private readonly SemanticModel _model;
         private readonly string _state, _profile;
         private readonly bool _json;
+        private readonly string _fixedProof;
+        private readonly int _fixedMembers;
+        private const string ProvenVoidCall = "LuminPack.ProvenVoidCall";
         /// <summary>Captures the original reader and fixed profile.</summary>
         /// <param name="model">Original template bindings.</param><param name="state">Reader parameter.</param>
         /// <param name="profile">Declared profile.</param><param name="json">Whether this is JSON.</param>
-        internal Calls(SemanticModel model, string state, string profile, bool json)
-        { _model = model; _state = state; _profile = profile; _json = json; }
+        /// <param name="fixedProof">The optional proven-root flag.</param>
+        /// <param name="fixedMembers">The fixed root's validated member count.</param>
+        internal Calls(SemanticModel model, string state, string profile, bool json, string fixedProof = null, int fixedMembers = -1)
+        { _model = model; _state = state; _profile = profile; _json = json; _fixedProof = fixedProof; _fixedMembers = fixedMembers; }
+
+        /// <summary>Keeps proven and guarded void kernels in ordinary conditional statements.</summary>
+        /// <param name="node">The original void call statement.</param>
+        /// <returns>The selected original or guarded call without a void conditional expression.</returns>
+        public override SyntaxNode VisitExpressionStatement(ExpressionStatementSyntax node)
+        {
+            var result = (ExpressionStatementSyntax)base.VisitExpressionStatement(node);
+            var original = result.Expression.GetAnnotations(ProvenVoidCall).FirstOrDefault();
+            if (original == null) return result;
+            return SyntaxFactory.IfStatement(SyntaxFactory.IdentifierName(_fixedProof),
+                SyntaxFactory.ExpressionStatement(SyntaxFactory.ParseExpression(original.Data)),
+                SyntaxFactory.ElseClause(result.WithExpression(result.Expression.WithoutAnnotations(ProvenVoidCall))));
+        }
 
         /// <summary>Checks actual consumed lengths and tokens before allocation and publication.</summary>
         /// <param name="node">The original read call.</param><returns>The original or guarded call.</returns>
@@ -201,7 +224,12 @@ internal sealed class SafeReadProjection
                 else if (name == "TryReadEntry")
                     return SyntaxFactory.ParseExpression("(" + Policy + ".CanUseTrustedJsonEntry && " + result + ")").WithTriviaFrom(node);
             }
-            return call == null ? result : SyntaxFactory.ParseExpression(Policy + "." + call).WithTriviaFrom(node);
+            string proven = call == "ReadMarker(ref " + readerName + ")" && _fixedMembers >= 0
+                ? "(byte)" + _fixedMembers.ToString(System.Globalization.CultureInfo.InvariantCulture) : result.ToString();
+            if (call != null && _fixedProof != null && symbol?.ReturnsVoid == true)
+                return SyntaxFactory.ParseExpression(Policy + "." + call).WithAdditionalAnnotations(new SyntaxAnnotation(ProvenVoidCall, result.ToString()));
+            return call == null ? result : SyntaxFactory.ParseExpression(_fixedProof == null ? Policy + "." + call :
+                "(" + _fixedProof + " ? " + proven + " : " + Policy + "." + call + ")").WithTriviaFrom(node);
         }
     }
 }

@@ -11,6 +11,7 @@ internal static partial class SerializerCompiledOptionRegression
     /// <param name="references">The current runtime metadata.</param>
     private static void VerifyInputFacts(CSharpParseOptions parse, MetadataReference[] references)
     {
+        VerifyFixedInput(parse, references);
         const string source = """
             using System;
             using LuminPack;

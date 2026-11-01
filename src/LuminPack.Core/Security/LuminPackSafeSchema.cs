@@ -151,6 +151,11 @@ public sealed class LuminPackSafeSchema
     internal readonly byte[] JsonPrefix;
     private readonly bool _jsonSupported;
     internal readonly int StaticDepth;
+    internal readonly int FixedObjectWidth;
+    internal readonly int ProvenObjectMembers = -1;
+    internal readonly int[]? FixedBooleanOffsets;
+    internal readonly bool FixedPresentAllowed, FixedNullAllowed;
+    internal readonly int ProvenPayloadLimit;
     /// <summary>The compiler-selected document encoding, zero for UTF-8 and one for UTF-16.</summary>
     public int DocumentEncoding => JsonEncoding;
 
@@ -212,7 +217,66 @@ public sealed class LuminPackSafeSchema
         int maxStringLength, int maxObjects, int maxDepth, long maxWork, int maxJsonDepth, int maxSchemaDepth)
         : this(identity, nodes, jsonEncoding, rejection, maxInputBytes, maxDecompressedBytes, maxAllocationBytes,
             maxCollectionLength, maxStringLength, maxObjects, maxDepth, maxWork, maxJsonDepth)
-    { StaticDepth = maxSchemaDepth; }
+    {
+        StaticDepth = maxSchemaDepth;
+        if (rejection != null || Nodes.Length == 0 || Nodes[0].Kind != LuminPackSafeKind.Object || Nodes[0].Rank != 0) return;
+        FixedNullAllowed = FixedCostsFit(1, 0, 0, false);
+        int width = 1;
+        int strings = 0;
+        var booleans = new System.Collections.Generic.List<int>();
+        foreach (int child in Nodes[0].Children)
+        {
+            var node = Nodes[child];
+            if (node.Kind == LuminPackSafeKind.String) { strings++; continue; }
+            if (node.FixedWidth < 0 || !(node.Kind is >= LuminPackSafeKind.Boolean and <= LuminPackSafeKind.Char ||
+                node.Kind is LuminPackSafeKind.Guid or LuminPackSafeKind.TimeSpan)) return;
+            if (node.Kind == LuminPackSafeKind.Boolean) booleans.Add(width);
+            width = checked(width + node.FixedWidth);
+        }
+        ProvenObjectMembers = Nodes[0].Children.Length;
+        if (strings != 0)
+        {
+            ProvenPayloadLimit = StringCostsLimit(strings);
+            return;
+        }
+        FixedObjectWidth = width;
+        FixedBooleanOffsets = booleans.ToArray();
+        FixedPresentAllowed = FixedCostsFit(width, Nodes[0].Children.Length, Nodes[0].Storage, true);
+    }
+
+    /// <summary>Bounds every original charge of a flat scalar/string object by its validated payload length.</summary>
+    /// <param name="strings">The number of declared string slots, including possibly null or empty values.</param>
+    /// <returns>The largest payload for which all original quotas are proven, or zero for the guarded path.</returns>
+    private int StringCostsLimit(int strings)
+    {
+        int fields = Nodes[0].Children.Length;
+        if (Limits.MaxObjects < strings + 1 || Limits.MaxDepth < 2) return 0;
+        long allocationBase = 4096L + 4L * LuminPackInputPolicy.HeaderSize + Nodes[0].Storage + 64L + 128L * strings;
+        long workBase = LuminPackInputPolicy.HeaderSize + 1L + fields + (fields == 0 ? 0 : 1);
+        if (Limits.MaxAllocationBytes < allocationBase || Limits.MaxWork < workBase) return 0;
+        long limit = Math.Min((long)Limits.MaxInputBytes - LuminPackInputPolicy.HeaderSize, Limits.MaxDecompressedBytes);
+        limit = Math.Min(limit, Limits.MaxStringLength);
+        // Input framing charges four bytes of allocation per byte; decoded text adds at most another four.
+        limit = Math.Min(limit, (Limits.MaxAllocationBytes - allocationBase) / 8);
+        limit = Math.Min(limit, (Limits.MaxWork - workBase) / 2);
+        return (int)Math.Max(0, limit);
+    }
+
+    /// <summary>Proves the original streaming charges for a fixed scalar object before it can use a stateless read.</summary>
+    /// <param name="width">The exact payload width including its marker.</param>
+    /// <param name="fields">The number of immediate scalar fields.</param>
+    /// <param name="storage">The original conservative object storage estimate.</param>
+    /// <param name="present">Whether an object is present instead of a null marker.</param>
+    /// <returns>Whether every original resource charge fits the active immutable policy.</returns>
+    private bool FixedCostsFit(int width, int fields, int storage, bool present)
+    {
+        long frame = LuminPackInputPolicy.HeaderSize + (long)width;
+        long allocations = 4 * frame + 4096 + (present ? storage + 64L : 0);
+        long work = frame + 1 + fields + (fields == 0 ? 0 : 1);
+        return frame <= Limits.MaxInputBytes && width <= Limits.MaxDecompressedBytes &&
+            allocations <= Limits.MaxAllocationBytes && work <= Limits.MaxWork &&
+            (!present || Limits.MaxObjects >= 1) && Limits.MaxDepth >= (fields == 0 ? 1 : 2);
+    }
 
     /// <summary>Rejects unsupported schemas and machine byte orders before interpreting payload data.</summary>
     public void EnsureSupported()

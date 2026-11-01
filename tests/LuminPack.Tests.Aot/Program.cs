@@ -226,6 +226,24 @@ internal static class Program
         rejected = false;
         try { _ = global::LuminPackUnitTest.ConcreteReads.Read<AotExternal>(LuminPackSerializer.Serialize(new AotExternal { Values = new int[5] }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AotExternal concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)); } catch (InvalidDataException) { rejected = true; }
         Check(rejected, "External collection quota was bypassed.");
+        var scalar = new AotExternalScalar { Id = 23, Flag = true, Stamp = 123456789 };
+        byte[] scalarBytes = LuminPackSerializer.Serialize(scalar);
+        AotExternalScalar? scalarCopy = null;
+        LuminPackSerializer.Deserialize(scalarBytes, ref scalarCopy);
+        Check(scalarCopy!.Stamp == scalar.Stamp && scalarCopy.Flag, "The proven scalar read failed.");
+        scalarBytes[61] = 2; rejected = false;
+        try { LuminPackSerializer.Deserialize(scalarBytes, ref scalarCopy); } catch (InvalidDataException) { rejected = true; }
+        Check(rejected, "The proven scalar read accepted invalid Boolean storage.");
+        var text = new AotExternalText { Id = 31, Text = "\u4e2d\ud83d\ude00", Flag = true };
+        byte[] textBytes = LuminPackSerializer.Serialize(text);
+        AotExternalText? textCopy = null;
+        LuminPackSerializer.Deserialize(textBytes, ref textCopy);
+        var originalText = textCopy;
+        LuminPackSerializer.Deserialize(textBytes, ref textCopy);
+        Check(ReferenceEquals(originalText, textCopy) && textCopy!.Text == text.Text && textCopy.Flag, "The proven text read changed reuse.");
+        textBytes[^1] = 2; rejected = false;
+        try { LuminPackSerializer.Deserialize(textBytes, ref textCopy); } catch (InvalidDataException) { rejected = true; }
+        Check(rejected, "The proven text read missed a trailing Boolean domain.");
     }
 
     /// <summary>Fails the executable if an observable generated operation changed.</summary>
@@ -235,6 +253,24 @@ internal static class Program
     {
         if (!condition) throw new InvalidOperationException(message);
     }
+}
+
+/// <summary>Checks stateless scalar accounting and domain guards in native consumers.</summary>
+[LuminPackable, LuminPackOption(UntrustedData = true)]
+public class AotExternalScalar
+{
+    public int Id;
+    public bool Flag;
+    public long Stamp;
+}
+
+/// <summary>Checks generated string validation and reuse in native consumers.</summary>
+[LuminPackable, LuminPackOption(UntrustedData = true)]
+public class AotExternalText
+{
+    public int Id;
+    public string Text = "";
+    public bool Flag;
 }
 
 /// <summary>Checks the same external policy in JIT, package, trimming and NativeAOT executables.</summary>

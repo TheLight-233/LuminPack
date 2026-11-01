@@ -12,6 +12,202 @@ namespace LuminPackUnitTest;
 /// <summary>Checks occupied reference slots and malformed string records.</summary>
 public class AuditSafetyRegressionTest
 {
+    /// <summary>Rejects malformed Unicode, null counts and variable headers before a proven string can be decoded.</summary>
+    [Fact]
+    public void ProvenStringsRetainAllEncodingChecks()
+    {
+        var invalid = new (int Mode, byte[] Bytes)[]
+        {
+            (0, [0xff, 0]), (2, [0x00, 0xdc, 0, 0]),
+            (1, [1, 0, 0, 0, 1, 0, 0, 0, 0xff]),
+            (1, [255, 255, 255, 255, 1, 0, 0, 0]),
+            (3, [2, 0, 0, 0, 0x00, 0xdc]),
+            (3, [4, 0, 0, 0, 0x00, 0xd8, 0x41, 0]),
+            (4, [0, 1]), (4, [2, 2, 0xff]), (4, [0x80, 0, 0]),
+            (5, [3, 0x00, 0xdc]), (5, [0x81, 0]), (5, [0xff, 0xff, 0xff, 0xff, 9])
+        };
+        foreach (var (mode, bytes) in invalid)
+        {
+            int position = 0;
+            Assert.False(LuminPackInputPolicy.TrySkipProvenString(bytes, ref position, mode));
+            Assert.Equal(0, position);
+        }
+        var valid = new (int Mode, byte[] Bytes)[]
+        {
+            (0, [0]), (2, [0, 0]), (1, [255, 255, 255, 255, 255, 255, 255, 255]),
+            (3, [255, 255, 255, 255]), (3, [4, 0, 0, 0, 0x3d, 0xd8, 0x00, 0xde]),
+            (4, [0, 0]), (5, [0]), (5, [5, 0x3d, 0xd8, 0x00, 0xde])
+        };
+        foreach (var (mode, bytes) in valid)
+        {
+            int position = 0;
+            Assert.True(LuminPackInputPolicy.TrySkipProvenString(bytes, ref position, mode));
+            Assert.Equal(bytes.Length, position);
+            for (int length = 0; length < bytes.Length; length++)
+            {
+                position = 0;
+                Assert.False(LuminPackInputPolicy.TrySkipProvenString(bytes.AsSpan(0, length), ref position, mode));
+                Assert.Equal(0, position);
+            }
+        }
+    }
+
+    /// <summary>Audits conservative string resource proofs against the original accounting at each quota boundary.</summary>
+    [Fact]
+    public void ProvenStringResourcesStayWithinStreamingQuotas()
+    {
+        foreach (int characters in new[] { 1, 7, 64, 1024 })
+        {
+            byte[] payload = new byte[5 + characters]; payload[0] = 1;
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(1), characters * 2 + 1);
+            payload.AsSpan(5).Fill((byte)'a');
+            LuminPackSafeSchema Policy(int encoded = 8192, int decoded = 8192, long allocation = 131072,
+                int strings = 4096, int objects = 4, int depth = 4, long work = 32768) => new("TextInputQuota", new[]
+                {
+                    new LuminPackSafeNode(LuminPackSafeKind.Object, 24, children: [1]),
+                    new LuminPackSafeNode(LuminPackSafeKind.String, 24, mode: 3)
+                }, 1, null, encoded, decoded, allocation, 0, strings, objects, depth, work, 64, 2);
+            byte[] frame = LuminPackInputPolicy.Pack(payload, Policy(), false);
+            foreach (var schema in new[]
+            {
+                Policy(), Policy(encoded: frame.Length), Policy(encoded: frame.Length - 1),
+                Policy(decoded: payload.Length), Policy(decoded: payload.Length - 1),
+                Policy(allocation: 4L * frame.Length + 4096 + 88 + 4L * characters + 128 - 1),
+                Policy(strings: characters), Policy(strings: characters - 1),
+                Policy(objects: 2), Policy(objects: 1), Policy(depth: 2), Policy(depth: 1),
+                Policy(work: frame.Length + payload.Length + 1), Policy(work: frame.Length + payload.Length)
+            })
+            {
+                bool admitted = LuminPackInputPolicy.TryOpenProvenFrame(frame, schema, 1, out _, out _);
+                bool succeeded = false;
+                var operation = LuminPackInputPolicy.BeginOperation(new object(), schema, true);
+                try
+                {
+                    ReadOnlySpan<byte> data = LuminPackInputPolicy.OpenStreaming(frame, schema, out _, out _);
+                    var reader = new LuminPackReader(ref data);
+                    var scope = LuminPackInputPolicy.EnterObject(ref reader, schema);
+                    try
+                    {
+                        Assert.Equal(1, LuminPackInputPolicy.ReadMarker(ref reader));
+                        Assert.Equal(characters, LuminPackInputPolicy.ReadString<LuminPackUtf16LengthOptions>(ref reader, null)!.Length);
+                        LuminPackInputPolicy.CompleteObject(ref reader, ref scope);
+                        succeeded = true;
+                    }
+                    finally { LuminPackInputPolicy.ExitObject(in scope); }
+                }
+                catch (System.IO.InvalidDataException) { }
+                finally { LuminPackInputPolicy.EndOperation(operation); }
+                Assert.True(!admitted || succeeded, "A stateless proof admitted a record which exceeds an original quota.");
+            }
+        }
+    }
+
+    /// <summary>Rejects malformed fixed records before publishing fields on the generated stateless path.</summary>
+    [Fact]
+    public void CompiledFixedInputsRetainBoundsDomainsAndReuse()
+    {
+        var source = new AuditExternalFixed { Number = 42, Flag = true, Stamp = 123456789 };
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        var target = new AuditExternalFixed { Number = 91 };
+        var original = target;
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref target));
+        Assert.Same(original, target);
+        Assert.Equal(source.Stamp, target.Stamp);
+        foreach (int offset in Enumerable.Range(0, LuminPackInputPolicy.HeaderSize).Concat(new[] { 56, 61 }))
+        {
+            byte[] forged = (byte[])bytes.Clone();
+            forged[offset] ^= 0x40;
+            target.Number = 91; target.Flag = false;
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(forged, ref target));
+            Assert.Equal(91, target.Number);
+            Assert.False(target.Flag);
+        }
+        for (int length = 0; length < bytes.Length; length++)
+        {
+            byte[] shortened = bytes[..length];
+            target.Number = 91;
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize(shortened, ref target));
+            Assert.Equal(91, target.Number);
+        }
+        byte[] empty = LuminPackSerializer.Serialize((AuditExternalFixed?)null);
+        Assert.Equal(empty.Length, LuminPackSerializer.Deserialize(empty, ref target));
+        Assert.Same(original, target);
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref target));
+    }
+
+    /// <summary>Compares stateless admission with every exact streaming quota boundary for the same scalar graph.</summary>
+    [Fact]
+    public void CompiledFixedProofPreservesExactQuotas()
+    {
+        byte[] payload = new byte[14];
+        payload[0] = 3; payload[1] = 42; payload[5] = 1;
+        byte[] frame = LuminPackInputPolicy.Pack(payload, FixedInputSchema(), false);
+        byte[] empty = LuminPackInputPolicy.Pack(new byte[] { 255 }, FixedInputSchema(), false);
+        Assert.False(LuminPackInputPolicy.TryOpenFixedFrame(frame, FixedInputSchema(), 15, 3, out _, out _));
+        Assert.False(LuminPackInputPolicy.TryOpenFixedFrame(frame, FixedInputSchema(), 14, 2, out _, out _));
+        var cases = new[]
+        {
+            (FixedInputSchema(encoded: 70), true), (FixedInputSchema(encoded: 69), false),
+            (FixedInputSchema(decoded: 14), true), (FixedInputSchema(decoded: 13), false),
+            (FixedInputSchema(allocation: 4464), true), (FixedInputSchema(allocation: 4463), false),
+            (FixedInputSchema(objects: 1), true), (FixedInputSchema(objects: 0), false),
+            (FixedInputSchema(depth: 2), true), (FixedInputSchema(depth: 1), false),
+            (FixedInputSchema(work: 75), true), (FixedInputSchema(work: 74), false)
+        };
+        foreach (var (schema, expected) in cases)
+        {
+            Assert.Equal(expected, LuminPackInputPolicy.TryOpenFixed(frame, schema, out _, out _));
+            if (expected) ReadFixedStreaming(frame, schema);
+            else Assert.Throws<System.IO.InvalidDataException>(() => ReadFixedStreaming(frame, schema));
+        }
+        var nullPolicy = FixedInputSchema(encoded: 57, decoded: 1, allocation: 4324, objects: 0, depth: 1, work: 58);
+        Assert.True(LuminPackInputPolicy.TryOpenFixed(empty, nullPolicy, out _, out _));
+        ReadFixedStreaming(empty, nullPolicy);
+        foreach (var schema in new[] { FixedInputSchema(work: 57), FixedInputSchema(allocation: 4323) })
+        {
+            Assert.False(LuminPackInputPolicy.TryOpenFixed(empty, schema, out _, out _));
+            Assert.Throws<System.IO.InvalidDataException>(() => ReadFixedStreaming(empty, schema));
+        }
+    }
+
+    /// <summary>Creates identical scalar descriptors with independently tightened immutable input quotas.</summary>
+    /// <param name="encoded">The complete frame byte quota.</param>
+    /// <param name="decoded">The payload byte quota.</param>
+    /// <param name="allocation">The cumulative allocation quota.</param>
+    /// <param name="objects">The object quota.</param>
+    /// <param name="depth">The value depth quota.</param>
+    /// <param name="work">The cumulative work quota.</param>
+    /// <returns>The original reviewed scalar graph with generated fixed facts.</returns>
+    private static LuminPackSafeSchema FixedInputSchema(int encoded = 1024, int decoded = 1024, long allocation = 8192,
+        int objects = 8, int depth = 4, long work = 1024) => new("FixedInputQuota", new[]
+        {
+            new LuminPackSafeNode(LuminPackSafeKind.Object, 24, children: [1, 2, 3]),
+            new LuminPackSafeNode(LuminPackSafeKind.Int32, 4, 4, 1, false),
+            new LuminPackSafeNode(LuminPackSafeKind.Boolean, 1, 1, 1, true),
+            new LuminPackSafeNode(LuminPackSafeKind.Int64, 8, 8, 1, false)
+        }, 1, null, encoded, decoded, allocation, 0, 0, objects, depth, work, 64, 2);
+
+    /// <summary>Executes the original streaming accounting without application fields to audit each proof boundary.</summary>
+    /// <param name="frame">The unchanged fixed input frame.</param>
+    /// <param name="schema">The active immutable quota policy.</param>
+    private static void ReadFixedStreaming(byte[] frame, LuminPackSafeSchema schema)
+    {
+        var operation = LuminPackInputPolicy.BeginOperation(new object(), schema, true);
+        try
+        {
+            ReadOnlySpan<byte> input = LuminPackInputPolicy.OpenStreaming(frame, schema, out _, out _);
+            var reader = new LuminPackReader(ref input);
+            var scope = LuminPackInputPolicy.EnterObject(ref reader, schema);
+            try
+            {
+                if (LuminPackInputPolicy.ReadMarker(ref reader) != 255) reader.Advance(13);
+                Assert.Equal(input.Length, reader.Position);
+            }
+            finally { LuminPackInputPolicy.ExitObject(in scope); }
+        }
+        finally { LuminPackInputPolicy.EndOperation(operation); }
+    }
+
     /// <summary>Rejects malformed inline child headers and domains before publishing a replacement child.</summary>
     [Fact]
     public void CompiledInputNestedObjectsKeepTypedGuards()
@@ -702,4 +898,13 @@ public sealed class AuditExternalNestedObjectLimit
 public sealed class AuditExternalNestedDepthLimit
 {
     public AuditExternalNestedChild? Child;
+}
+
+/// <summary>A scalar class whose complete read cost can be proven before entering the original decoder.</summary>
+[LuminPackable, LuminPackOption(UntrustedData = true)]
+public sealed class AuditExternalFixed
+{
+    public int Number;
+    public bool Flag;
+    public long Stamp;
 }
