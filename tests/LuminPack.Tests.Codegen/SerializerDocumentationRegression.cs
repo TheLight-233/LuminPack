@@ -116,6 +116,12 @@ internal static class SerializerDocumentationRegression
 
             [LuminPackable]
             public class DocumentationBoxHolder { public DocumentationBox<int> Box = new(); }
+
+            [LuminPackable]
+            public struct DocumentationEmpty { }
+
+            [LuminPackable, LuminPackOption(UntrustedData = true)]
+            public class DocumentationGuarded { public int Value; public string Name = ""; }
             """;
 
         var options = new CSharpParseOptions(LanguageVersion.Preview, documentationMode,
@@ -200,6 +206,11 @@ internal static class SerializerDocumentationRegression
         string serializer = string.Join(Environment.NewLine, serializerFiles.Select(file => file.SourceText.ToString()));
         var methods = serializerFiles.SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, options.WithDocumentationMode(DocumentationMode.Parse))
             .GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).Where(IsUserApi).ToArray();
+        var genericModelOverloads = methods.Where(method => method.Identifier.ValueText != "Sizeof" &&
+            method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().Contains("global::DocumentationBox<int>", StringComparison.Ordinal) == true)).ToArray();
+        Require(genericModelOverloads.Length > 2 && genericModelOverloads.All(method => ReadDocumentation(method).Descendants("see")
+            .Count(element => ((string?)element.Attribute("cref"))?.Contains(".__LuminRoots_", StringComparison.Ordinal) == true) == 1),
+            "Closed generic model overloads lost their direct Root navigation links.");
         var modelOverloads = methods.Where(method => method.Parent is ClassDeclarationSyntax { Identifier.ValueText: "LuminPackSerializer" } && method.TypeParameterList == null &&
             (method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString() == "global::DocumentationModel") ||
              method.ReturnType.ToString().Contains("global::DocumentationModel", StringComparison.Ordinal))).ToArray();
