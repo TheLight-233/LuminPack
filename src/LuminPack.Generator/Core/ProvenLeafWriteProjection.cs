@@ -38,8 +38,9 @@ internal sealed class ProvenLeafWriteProjection : CSharpSyntaxRewriter
             loops[0].Type is not RefTypeSyntax) return node;
         var rewritten = RewriteElement(node, loops[0], original, loops[0].Identifier.ValueText, FormatterTypeName.Get(element), out var helper, out var profileGate);
         if (rewritten == null) return node;
-        string name = "__writeOriginalSequence";
-        while (node.DescendantTokens().Any(token => token.ValueText == name)) name += "_";
+        string name = "WriteOriginalSequence";
+        int suffix = 2;
+        while (node.DescendantTokens().Any(token => token.ValueText == name)) name = "WriteOriginalSequence" + suffix++;
         var fallback = (LocalFunctionStatementSyntax)SyntaxFactory.ParseStatement(
             "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] static void " + name + "() {}");
         fallback = fallback.WithParameterList(node.ParameterList).WithBody((BlockSyntax)new ColdLabels(name).Visit(node.Body));

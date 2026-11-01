@@ -54,11 +54,14 @@ internal static class SerializerSourcePresentationRegression
                 public System.Collections.Generic.Dictionary<string, int> Map = new();
                 public int[] Items = System.Array.Empty<int>();
                 public PresentationUnion Choice = null!;
+                public PresentationLeaf[] Leaves = System.Array.Empty<PresentationLeaf>();
             }
             [LuminPackable, LuminPackUnion(0, typeof(PresentationCase))]
             public abstract partial class PresentationUnion { }
             [LuminPackable]
             public sealed partial class PresentationCase : PresentationUnion { public int Code; }
+            [LuminPackable]
+            public sealed partial class PresentationLeaf { public int Code; public string Text = ""; }
             [LuminPackable, LuminPackBounded(128)]
             public partial class PresentationBounded { public int Id; public string Name = ""; }
             [LuminPackable(GeneratorType.VersionTolerant)]
@@ -122,6 +125,9 @@ internal static class SerializerSourcePresentationRegression
             roots.Any(root => root.DescendantNodes().OfType<LocalFunctionStatementSyntax>()
                 .Any(function => function.Identifier.ValueText == "ReadPairElement")),
             "The presentation fixture omitted outlined collection helpers.");
+        Require(roots.Any(root => root.DescendantNodes().OfType<LocalFunctionStatementSyntax>()
+                .Any(function => function.Identifier.ValueText == "WriteOriginalSequence")),
+            "The presentation fixture omitted the outlined array fallback.");
         using var image = new MemoryStream();
         var emitted = output.Emit(image);
         Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
