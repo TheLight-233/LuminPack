@@ -71,6 +71,8 @@ internal static class SerializerOperationNamesRegression
         var rewritten = (SyntaxNode)rewrite.Invoke(null, [marked])!;
         var repeated = (SyntaxNode)rewrite.Invoke(null, [marked])!;
         Require(rewritten.ToFullString() == repeated.ToFullString(), "Generated local names were nondeterministic.");
+        Require(rewritten.ToFullString() == ((SyntaxNode)rewrite.Invoke(null, [rewritten])!).ToFullString(),
+            "Final presentation renamed an already presented local a second time.");
         var method = rewritten.DescendantNodes().OfType<MethodDeclarationSyntax>().Single(declaration => declaration.Identifier.ValueText == "Check");
         var locals = method.DescendantNodes().OfType<VariableDeclaratorSyntax>().Select(variable => variable.Identifier.ValueText).ToArray();
         Require(locals.Contains("offset2") && locals.Contains("result") && locals.Contains("result2") && locals.Contains("fixedBlock") && locals.Contains("local"),

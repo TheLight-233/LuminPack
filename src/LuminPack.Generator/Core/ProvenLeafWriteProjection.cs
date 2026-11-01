@@ -166,7 +166,8 @@ internal sealed class ProvenLeafWriteProjection : CSharpSyntaxRewriter
         helper = (LocalFunctionStatementSyntax)SyntaxFactory.ParseStatement("[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] " +
             "static void " + helperName + "(ref global::LuminPack.Core.LuminPackWriter " + state + ", ref " + element + " " + item + ") {}");
         helper = helper.WithBody(original);
-        return loop.WithStatement(SyntaxFactory.Block(guard, SyntaxFactory.ParseStatement(helperName + "(ref " + state + ", ref " + item + ");")));
+        return GeneratedOperationNames.MarkLocal(loop.WithStatement(SyntaxFactory.Block(guard,
+            SyntaxFactory.ParseStatement(helperName + "(ref " + state + ", ref " + item + ");"))), boundName, "leafRecordBound");
     }
 
     /// <summary>Widens every addition before evaluating the original complete bound.</summary>

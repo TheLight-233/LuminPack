@@ -149,8 +149,8 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
         var helper = (LocalFunctionStatementSyntax)SyntaxFactory.ParseStatement(
             "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] static void " + helperName + "() {}");
         helper = helper.WithParameterList(method.ParameterList).WithBody(body);
-        return method.WithBody(SyntaxFactory.Block(excluded, guard,
-            SyntaxFactory.ParseStatement(helperName + "(ref " + state + ", " + input + ");"), helper));
+        return GeneratedOperationNames.MarkLocal(method.WithBody(SyntaxFactory.Block(excluded, guard,
+            SyntaxFactory.ParseStatement(helperName + "(ref " + state + ", " + input + ");"), helper)), boundName, "objectRecordBound");
     }
 
     /// <summary>Widens the complete positive bound before any checked-int arithmetic.</summary>

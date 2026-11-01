@@ -17,6 +17,16 @@ internal static class GeneratedOperationNames
     /// <returns>The same source with readable and collision-free method-local names.</returns>
     internal static SyntaxNode Rewrite(SyntaxNode root) => new MethodNames().Visit(root);
 
+    /// <summary>Marks a local whose unique identity was reserved by a late projection against every existing token.</summary>
+    /// <typeparam name="T">The generated syntax node containing its declaration and uses.</typeparam>
+    /// <param name="node">The projection result containing the newly introduced local.</param>
+    /// <param name="identity">The reserved compiler-only identity.</param>
+    /// <param name="role">The local's presentation role.</param>
+    /// <returns>The same executable syntax with the new identity marked for final presentation.</returns>
+    internal static T MarkLocal<T>(T node, string identity, string role) where T : SyntaxNode
+        => node.ReplaceTokens(node.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken) && token.ValueText == identity),
+            (token, _) => token.WithAdditionalAnnotations(new SyntaxAnnotation(RoleAnnotation, role)));
+
     /// <summary>Reserves each method's existing identifiers before choosing presentation names for its private locals.</summary>
     private sealed class MethodNames : CSharpSyntaxRewriter
     {
@@ -95,6 +105,6 @@ internal static class GeneratedOperationNames
         /// <returns>The renamed local token or the original token.</returns>
         public override SyntaxToken VisitToken(SyntaxToken token)
             => token.HasAnnotations(RoleAnnotation) && _names.TryGetValue(token.ValueText, out string name)
-                ? token.CopyAnnotationsTo(SyntaxFactory.Identifier(name).WithTriviaFrom(token)) : base.VisitToken(token);
+                ? token.CopyAnnotationsTo(SyntaxFactory.Identifier(name).WithTriviaFrom(token)).WithoutAnnotations(RoleAnnotation) : base.VisitToken(token);
     }
 }

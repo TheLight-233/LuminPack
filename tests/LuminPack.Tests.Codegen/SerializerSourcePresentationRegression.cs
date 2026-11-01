@@ -34,6 +34,13 @@ internal static class SerializerSourcePresentationRegression
                 public string __cursor = "";
                 public string Description { get; set; } = "";
             }
+            [LuminPackable]
+            public partial class PresentationProof
+            {
+                public int Id;
+                public string Name = "";
+                public string objectRecordBound = "";
+            }
             """;
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER"]);
         var compilation = CSharpCompilation.Create("PresentationRoots", [CSharpSyntaxTree.ParseText(source, parse)], references,
@@ -55,6 +62,11 @@ internal static class SerializerSourcePresentationRegression
         Require(write.ToFullString().Contains("value.__cursor", StringComparison.Ordinal), "The user's field spelling changed.");
         Require(write.ToFullString().Contains("// Fields: Id, Name, __cursor, Description", StringComparison.Ordinal) &&
             write.ToFullString().Contains("// Field: Name", StringComparison.Ordinal), "Cursor records lost their member annotations.");
+        var provenWrite = roots.Single(method => method.Identifier.ValueText == "RootWrite" &&
+            method.ParameterList.Parameters[1].Type!.ToString().Contains("PresentationProof", StringComparison.Ordinal));
+        var proofNames = provenWrite.DescendantNodes().OfType<VariableDeclaratorSyntax>().Select(variable => variable.Identifier.ValueText).ToArray();
+        Require(proofNames.Contains("objectRecordBound2") && proofNames.All(name => !name.StartsWith("__", StringComparison.Ordinal)),
+            "A late record-bound local retained its internal spelling or collided with the user's field.");
         using var image = new MemoryStream();
         var emitted = output.Emit(image);
         Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));
