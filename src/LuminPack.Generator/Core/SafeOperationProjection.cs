@@ -136,7 +136,8 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
         if (fixedInput)
             text += check + "if (" + admission + (_fixed.HasStrings || _fixed.Booleans.Count == 0 ? "" : " && (__fixedPayload[0] == 255 || (" +
                     string.Join(" && ", _fixed.Booleans.Select(offset => "__fixedPayload[" + offset.ToString(System.Globalization.CultureInfo.InvariantCulture) + "] <= 1")) + "))") +
-                ") { if (__fixedPayload[0] != 255) { __fixedPayload = __fixedPayload.Slice(1); var __fixedReader = new " + stateType +
+                ") { if (__fixedPayload[0] != 255) { __fixedPayload = __fixedPayload.Slice(1" +
+                (_fixed.HasStrings ? "" : ", " + (_fixed.Width - 1).ToString(System.Globalization.CultureInfo.InvariantCulture)) + "); var __fixedReader = new " + stateType +
                 "(ref __fixedPayload); __safeOriginalOperation(ref __fixedReader, " + payload + ", true);" +
                 "if (__fixedReader.Position != __fixedPayload.Length) " + Policy + ".RejectIncompleteValue(); } " + state + ".Advance(__fixedConsumed); return; }" +
                 "__safeFixedFallback(ref " + state + ", " + payload + ");" +

@@ -12,6 +12,26 @@ namespace LuminPackUnitTest;
 /// <summary>Checks occupied reference slots and malformed string records.</summary>
 public class AuditSafetyRegressionTest
 {
+    /// <summary>Does not truncate a descriptor member count into an otherwise matching object marker.</summary>
+    [Fact]
+    public void FixedPrefixProofRejectsUnrepresentableMemberCounts()
+    {
+        var schema = new LuminPackSafeSchema("ExcessMembers", new[]
+        {
+            new LuminPackSafeNode(LuminPackSafeKind.Object, 24, children: Enumerable.Repeat(1, 300).ToArray()),
+            new LuminPackSafeNode(LuminPackSafeKind.Byte, 1, 1, 1, false)
+        }, 1, null, 8192, 8192, 131072, 0, 0, 8, 4, 32768, 64, 2);
+        byte[] payload = new byte[301]; payload[0] = unchecked((byte)300);
+        byte[] frame = new byte[LuminPackInputPolicy.HeaderSize + payload.Length];
+        System.Text.Encoding.ASCII.GetBytes("LPSAFE02").CopyTo(frame, 0);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(frame.AsSpan(12), payload.Length);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(frame.AsSpan(16), payload.Length);
+        System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes("ExcessMembers")).CopyTo(frame, 24);
+        payload.CopyTo(frame, LuminPackInputPolicy.HeaderSize);
+        Assert.False(LuminPackInputPolicy.TryOpenFixedFrame(frame, schema, 301, 300, out _, out _));
+        Assert.False(LuminPackInputPolicy.TryOpenProvenFrame(frame, schema, 300, out _, out _));
+    }
+
     /// <summary>Rejects malformed Unicode, null counts and variable headers before a proven string can be decoded.</summary>
     [Fact]
     public void ProvenStringsRetainAllEncodingChecks()

@@ -155,6 +155,7 @@ public sealed class LuminPackSafeSchema
     internal readonly int ProvenObjectMembers = -1;
     internal readonly int[]? FixedBooleanOffsets;
     internal readonly bool FixedPresentAllowed, FixedNullAllowed;
+    internal readonly byte[]? FixedPresentPrefix, FixedNullPrefix;
     internal readonly int ProvenPayloadLimit;
     /// <summary>The compiler-selected document encoding, zero for UTF-8 and one for UTF-16.</summary>
     public int DocumentEncoding => JsonEncoding;
@@ -219,7 +220,8 @@ public sealed class LuminPackSafeSchema
             maxCollectionLength, maxStringLength, maxObjects, maxDepth, maxWork, maxJsonDepth)
     {
         StaticDepth = maxSchemaDepth;
-        if (rejection != null || Nodes.Length == 0 || Nodes[0].Kind != LuminPackSafeKind.Object || Nodes[0].Rank != 0) return;
+        if (rejection != null || Nodes.Length == 0 || Nodes[0].Kind != LuminPackSafeKind.Object || Nodes[0].Rank != 0 ||
+            Nodes[0].Children.Length > 249) return;
         FixedNullAllowed = FixedCostsFit(1, 0, 0, false);
         int width = 1;
         int strings = 0;
@@ -242,6 +244,22 @@ public sealed class LuminPackSafeSchema
         FixedObjectWidth = width;
         FixedBooleanOffsets = booleans.ToArray();
         FixedPresentAllowed = FixedCostsFit(width, Nodes[0].Children.Length, Nodes[0].Storage, true);
+        if (FixedPresentAllowed) FixedPresentPrefix = CreateFixedPrefix(width, Nodes[0].Children.Length);
+        if (FixedNullAllowed) FixedNullPrefix = CreateFixedPrefix(1, 255);
+    }
+
+    /// <summary>Freezes every original frame byte and marker for an exact-width quota-proven record.</summary>
+    /// <param name="width">The complete payload width, including its marker.</param>
+    /// <param name="marker">The original member count or null marker.</param>
+    /// <returns>The unchanged complete header followed by its exact object marker.</returns>
+    private byte[] CreateFixedPrefix(int width, int marker)
+    {
+        var prefix = new byte[LuminPackInputPolicy.HeaderSize + 1];
+        BinaryPrefix.CopyTo(prefix, 0);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(prefix.AsSpan(12, 4), width);
+        System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(prefix.AsSpan(16, 4), width);
+        prefix[LuminPackInputPolicy.HeaderSize] = (byte)marker;
+        return prefix;
     }
 
     /// <summary>Bounds every original charge of a flat scalar/string object by its validated payload length.</summary>

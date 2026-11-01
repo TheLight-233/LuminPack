@@ -1,6 +1,4 @@
-using System.Buffers.Binary;
 using System.Runtime.CompilerServices;
-using LuminPack.Core;
 
 namespace LuminPack.Security;
 
@@ -37,25 +35,19 @@ public static partial class LuminPackInputPolicy
         out ReadOnlySpan<byte> payload, out int consumed)
     {
         payload = default; consumed = 0;
-        if (schema.FixedBooleanOffsets == null || !BitConverter.IsLittleEndian || input.Length < HeaderSize ||
-            width != schema.FixedObjectWidth || members != schema.ProvenObjectMembers ||
-            (!schema.FixedNullAllowed && !schema.FixedPresentAllowed)) return false;
-        int length = BinaryPrimitives.ReadInt32LittleEndian(input.Slice(12, 4));
-        if ((length != 1 && length != width) || length > input.Length - HeaderSize ||
-            length != BinaryPrimitives.ReadInt32LittleEndian(input.Slice(16, 4)) ||
-            BinaryPrimitives.ReadUInt32LittleEndian(input.Slice(8, 4)) != 0 ||
-            BinaryPrimitives.ReadUInt32LittleEndian(input.Slice(20, 4)) != 0 ||
-            !input.Slice(0, 8).SequenceEqual(Magic) || !input.Slice(24, 32).SequenceEqual(schema.Fingerprint.AsSpan(0, 32))) return false;
-        var value = input.Slice(HeaderSize, length);
-        if (value[0] == 255)
+        if (!BitConverter.IsLittleEndian || width != schema.FixedObjectWidth || members != schema.ProvenObjectMembers) return false;
+        if (schema.FixedPresentPrefix != null && input.Length >= HeaderSize + width &&
+            input.Slice(0, HeaderSize + 1).SequenceEqual(schema.FixedPresentPrefix.AsSpan(0, HeaderSize + 1)))
         {
-            if (length != 1 || !schema.FixedNullAllowed) return false;
+            payload = input.Slice(HeaderSize, width); consumed = HeaderSize + width;
+            return true;
         }
-        else
+        if (schema.FixedNullPrefix != null && input.Length >= HeaderSize + 1 &&
+            input.Slice(0, HeaderSize + 1).SequenceEqual(schema.FixedNullPrefix.AsSpan(0, HeaderSize + 1)))
         {
-            if (length != width || value[0] != members || !schema.FixedPresentAllowed) return false;
+            payload = input.Slice(HeaderSize, 1); consumed = HeaderSize + 1;
+            return true;
         }
-        payload = value; consumed = HeaderSize + length;
-        return true;
+        return false;
     }
 }
