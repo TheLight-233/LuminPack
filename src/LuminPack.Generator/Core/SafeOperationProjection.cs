@@ -106,6 +106,15 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
         return result;
     }
 
+    /// <summary>Identifies roots whose original scalar/string decoder never consumes leased reference identities.</summary>
+    /// <param name="type">The exact closed root.</param>
+    /// <param name="compilation">The consumer's runtime capabilities.</param>
+    /// <param name="metadata">The complete generation settings.</param>
+    /// <param name="options">The root's immutable profile.</param>
+    /// <returns>Whether a managed span facade can use an independent lazy reader state.</returns>
+    internal static bool CanUseStatelessFacade(ITypeSymbol type, Compilation compilation, MetaInfo metadata, CompiledOptions options)
+        => options.Input.Enabled && CreateFixedInput(type, compilation, metadata, options) != null;
+
     /// <summary>Retains one formatter body with its existing state, callbacks, construction and reuse.</summary>
     /// <param name="node">The original operation.</param>
     /// <returns>The same operation with selected framing and checks.</returns>

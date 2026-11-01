@@ -215,6 +215,12 @@ try
         SerializerCompiledOptionRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-input-facts"])
+    {
+        SerializerCompiledOptionRegression.VerifyInputFacts(references);
+        Console.WriteLine("Passed bounded input proofs and reader ownership contracts.");
+        return 0;
+    }
     if (args is ["--verify-documentation"])
     {
         SerializerDocumentationRegression.Run(references);

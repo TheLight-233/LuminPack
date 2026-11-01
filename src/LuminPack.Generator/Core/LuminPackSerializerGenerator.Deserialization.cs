@@ -20,7 +20,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine(_currentRawScalar || _currentDirectRecord || statelessRead
             ? "        /// <remarks>This record reads directly from the input without pooled operation state.</remarks>"
             : "        /// <remarks>This convenience overload may use thread-static reader operation state.</remarks>");
-        if (_currentRawScalar) sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+        if (_currentRawScalar || statelessRead) sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
         sb.AppendLine("        " + _currentAccess + " static int Deserialize(");
         sb.AppendLine("            ReadOnlySpan<byte> buffer, ref " + typeName + " value,");
         sb.AppendLine("            LuminPackSerializerOption? options = null)");

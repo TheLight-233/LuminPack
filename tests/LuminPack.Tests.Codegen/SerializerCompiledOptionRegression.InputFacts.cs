@@ -6,6 +6,11 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 internal static partial class SerializerCompiledOptionRegression
 {
+    /// <summary>Executes only the bounded input proof and reader ownership contracts.</summary>
+    /// <param name="references">The actual framework and runtime references.</param>
+    internal static void VerifyInputFacts(MetadataReference[] references)
+        => VerifyInputFacts(new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]), references);
+
     /// <summary>Checks finite depth proofs, recursive fallback and retained-driver invalidation in both emission tiers.</summary>
     /// <param name="parse">The supported consuming language and framework.</param>
     /// <param name="references">The current runtime metadata.</param>

@@ -226,8 +226,11 @@ public static partial class LuminPackSerializerGenerator
         bool previousScalar = _currentRawScalar;
         bool previousRecord = _currentDirectRecord;
         bool previousFixed = _currentFixedRecord;
-        _currentContainsReferences = CompiledOptions.Resolve(type, compilation).Input.Enabled || !global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.CanUseUnmanagedSerialization(type);
-        bool managedInput = !CompiledOptions.Resolve(type, compilation).Input.Enabled && !RequiresStationaryInput(compilation, metadata);
+        var options = CompiledOptions.Resolve(type, compilation);
+        _currentContainsReferences = options.Input.Enabled || !global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.CanUseUnmanagedSerialization(type);
+        bool stationaryInput = RequiresStationaryInput(compilation, metadata);
+        bool managedInput = !options.Input.Enabled && !stationaryInput;
+        bool statelessInput = !stationaryInput && SafeOperationProjection.CanUseStatelessFacade(type, compilation, metadata, options);
         _currentRawScalar = managedInput && CodeEmitterRegistry.KnownValueTypes.Contains(typeName) && !_currentContainsReferences.Value;
         _currentFixedRecord = managedInput && !_currentRawScalar &&
             (global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.IsFixedRecord(type) ||
@@ -240,7 +243,7 @@ public static partial class LuminPackSerializerGenerator
                 ? FormatterTypeName.Get(nullable.TypeArguments[0]) : null;
             AppendTypeOverloads(builder, typeName, metadata, apis, nullableElementType,
                 managedInput && typeName == "global::System.TimeZoneInfo",
-                managedInput && global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.IsStatelessScalarSequenceRead(type),
+                statelessInput || managedInput && global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.IsStatelessScalarSequenceRead(type),
                 managedInput ? global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.GetExactScalarInterfaceWriteImplementation(type) : null,
                 type is INamedTypeSymbol { TypeArguments.Length: 1 } collection &&
                 global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.CanGroupSmallHashSetWrites(collection.TypeArguments[0], compilation),
@@ -322,13 +325,13 @@ public static partial class LuminPackSerializerGenerator
     /// <param name="apis">The exact concrete overloads to emit, or all for legacy behavior.</param>
     /// <param name="nullableElementType">The raw scalar underlying a proven direct Nullable record, or null for other records.</param>
     /// <param name="timeZoneSnapshot">Whether the managed-input target can use the complete cached time-zone snapshot directly.</param>
-    /// <param name="statelessSequenceRead">Whether only the sequence read entry may omit unused reference state.</param>
+    /// <param name="statelessRead">Whether the span read entry may omit unused leased reference state.</param>
     /// <param name="exactInterfaceWrite">The proven exact implementation for allocating writes, or null for the original entry.</param>
     /// <param name="smallHashSetWrite">Whether the referenced runtime supports grouped stores for this small raw element.</param>
     /// <param name="fixedEnum">Whether the unchanged enum root has an exact native scalar width.</param>
     /// <param name="rawSequenceWriteElement">The proven raw sequence element for direct allocating writes only.</param>
     private static void AppendTypeOverloads(StringBuilder sb, string typeName, MetaInfo metaInfo, SerializerApiKind apis = SerializerApiKind.All,
-        string nullableElementType = null, bool timeZoneSnapshot = false, bool statelessSequenceRead = false, string exactInterfaceWrite = null,
+        string nullableElementType = null, bool timeZoneSnapshot = false, bool statelessRead = false, string exactInterfaceWrite = null,
         bool smallHashSetWrite = false, bool fixedEnum = false, string rawSequenceWriteElement = null)
     {
         if ((apis & SerializerApiKind.SerializeArray) != 0) AppendSerialize(sb, typeName, nullableElementType, timeZoneSnapshot, exactInterfaceWrite, smallHashSetWrite, fixedEnum, rawSequenceWriteElement);
@@ -336,7 +339,7 @@ public static partial class LuminPackSerializerGenerator
         if ((apis & SerializerApiKind.SerializeJsonString) != 0) AppendSerializeJson(sb, typeName);
         if ((apis & SerializerApiKind.SerializeJsonBuffer) != 0) AppendSerializeJsonBuffer(sb, typeName);
         if ((apis & SerializerApiKind.SerializeAsync) != 0) AppendSerializeAsync(sb, typeName, metaInfo);
-        if ((apis & SerializerApiKind.DeserializeSpanRef) != 0) AppendDeserializeSpanRef(sb, typeName, timeZoneSnapshot || statelessSequenceRead, fixedEnum);
+        if ((apis & SerializerApiKind.DeserializeSpanRef) != 0) AppendDeserializeSpanRef(sb, typeName, timeZoneSnapshot || statelessRead, fixedEnum);
         if ((apis & SerializerApiKind.DeserializeBufferRef) != 0) AppendDeserializeBufferRef(sb, typeName);
         if ((apis & SerializerApiKind.DeserializeSequenceRef) != 0) AppendDeserializeSequenceRef(sb, typeName);
         if ((apis & SerializerApiKind.DeserializeJsonStringRef) != 0) AppendDeserializeJsonStringRef(sb, typeName);

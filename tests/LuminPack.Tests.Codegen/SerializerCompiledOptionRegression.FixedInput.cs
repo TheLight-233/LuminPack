@@ -2,6 +2,7 @@ using System.Reflection;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 internal static partial class SerializerCompiledOptionRegression
 {
@@ -203,6 +204,30 @@ internal static partial class SerializerCompiledOptionRegression
         if (sources.Where(text => text.StartsWith("ProofScalar.Extension", StringComparison.Ordinal))
             .Any(text => text.Contains(".TryOpenFixedFrame(")) != proven)
             throw new InvalidOperationException("The fixed proof did not track the callback contract.");
+        var methods = output.SyntaxTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();
+        var helpers = methods.Where(method => method.Identifier.ValueText.StartsWith("__LuminFacade", StringComparison.Ordinal))
+            .GroupBy(method => method.Identifier.ValueText, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.First(), StringComparer.Ordinal);
+        bool Leases(MethodDeclarationSyntax method, HashSet<string> visited)
+        {
+            if (method.Body == null) return false;
+            if (method.Body.ToString().Contains(".Lease(")) return true;
+            foreach (var call in method.Body.DescendantNodes().OfType<InvocationExpressionSyntax>())
+            {
+                string name = call.Expression is SimpleNameSyntax simple ? simple.Identifier.ValueText :
+                    call.Expression is MemberAccessExpressionSyntax access ? access.Name.Identifier.ValueText : "";
+                if (helpers.TryGetValue(name, out var helper) && visited.Add(name) && Leases(helper, visited)) return true;
+            }
+            return false;
+        }
+        var facades = methods
+            .Where(method => method.Identifier.ValueText == "Deserialize" && method.ParameterList.Parameters.Count == 2 &&
+                method.ParameterList.Parameters[0].Type!.ToString().Contains("ReadOnlySpan<byte>") &&
+                method.ParameterList.Parameters[1].Type!.ToString().Contains("ProofScalar"))
+            .ToArray();
+        if (facades.Length == 0 || facades.Any(method => Leases(method, new HashSet<string>(StringComparer.Ordinal))) == proven)
+            throw new InvalidOperationException("The scalar facade did not preserve its selected reader-state ownership: " +
+                input.AssemblyName + ", proven=" + proven + ", methods=" + facades.Length + ", leased=" +
+                facades.Count(method => Leases(method, new HashSet<string>(StringComparer.Ordinal))) + ".");
         GeneratorDriver fresh = CSharpGeneratorDriver.Create(
             [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
         fresh = fresh.RunGenerators(input);
