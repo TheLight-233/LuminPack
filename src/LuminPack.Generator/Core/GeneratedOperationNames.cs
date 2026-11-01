@@ -26,6 +26,12 @@ internal static class GeneratedOperationNames
         public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
         {
             if (node.Body == null) return node;
+            var marked = node.Body.GetAnnotatedTokens(RoleAnnotation).Where(IsLocalDeclaration)
+                .GroupBy(token => token.ValueText, StringComparer.Ordinal).Where(group => group.Count() == 1)
+                .Select(group => group.First()).Where(token => token.GetAnnotations(RoleAnnotation)
+                    .Any(annotation => !string.IsNullOrEmpty(annotation.Data) &&
+                        !annotation.Data.StartsWith("__lumin_", StringComparison.Ordinal))).ToArray();
+            if (marked.Length == 0) return node;
             var tokens = node.DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken)).ToArray();
             var occurrences = tokens.GroupBy(token => token.ValueText, StringComparer.Ordinal)
                 .ToDictionary(group => group.Key, group => group.ToArray(), StringComparer.Ordinal);
@@ -34,12 +40,8 @@ internal static class GeneratedOperationNames
                 .SelectMany(call => call.ArgumentList.Arguments)
                 .SelectMany(argument => argument.DescendantNodes().OfType<IdentifierNameSyntax>())
                 .Select(identifier => identifier.Identifier.ValueText), StringComparer.Ordinal);
-            var declarations = node.Body.DescendantTokens().Where(token => token.HasAnnotations(RoleAnnotation) && IsLocalDeclaration(token))
-                .GroupBy(token => token.ValueText, StringComparer.Ordinal).Where(group => group.Count() == 1)
-                .Select(group => group.First()).Where(token => !observed.Contains(token.ValueText) &&
-                    occurrences[token.ValueText].All(use => use.HasAnnotations(RoleAnnotation)) &&
-                    token.GetAnnotations(RoleAnnotation).Any(annotation => !string.IsNullOrEmpty(annotation.Data) &&
-                        !annotation.Data.StartsWith("__lumin_", StringComparison.Ordinal))).ToArray();
+            var declarations = marked.Where(token => !observed.Contains(token.ValueText) &&
+                occurrences[token.ValueText].All(use => use.HasAnnotations(RoleAnnotation))).ToArray();
             if (declarations.Length == 0) return node;
             var eligible = new HashSet<string>(declarations.Select(token => token.ValueText), StringComparer.Ordinal);
             var reserved = new HashSet<string>(tokens.Where(token => !eligible.Contains(token.ValueText)).Select(token => token.ValueText), StringComparer.Ordinal);
