@@ -10,6 +10,7 @@
 | --- | --- |
 | `src/LuminPack.Core` | 运行时（NuGet 包 `LuminPack`，程序集 `LuminPack.Core`）：二进制和 JSON 读写器、直接分配写入使用的精确长度计算器、缓冲区、集合、布局转换、文本内核、压缩、ChaCha20-Poly1305、安全策略。目标框架 `netstandard2.1`、`net8.0` 到 `net11.0`。 |
 | `src/LuminPack.Generator` | 增量源代码生成器和分析器（`netstandard2.0`，Roslyn 4.3）。单独发布为一个包，运行时包 `LuminPack` 依赖它。 |
+| `src/LuminPack.CodeFixes` | IDE 快速修复（`netstandard2.0`，C# Workspaces 4.3），合并到 `LuminPack.Generator` 包。生成器只有构建依赖，没有程序集引用；运行时和生成器均不引用 Workspaces。见[代码修复](code-fixes.cn.md)。 |
 | `src/LuminPack.Unity`、`src/LuminPack.Burst` | 可选的 Unity 值类型编解码，以及原生 Hook 表的 Burst 后端。 |
 | `src/LuminPack.Platforms` 及各适配包 | 共享适配层，以及 ASP.NET Core、Avalonia、Drawing、MAUI、MonoGame、SkiaSharp、WPF 的编解码。 |
 | `tests/` | 见[测试](#tests)。 |
@@ -105,6 +106,7 @@
 | `tests/LuminPack.Tests` | xUnit 运行时测试。`LuminPackTestArea` 选择 `All`（默认）、`Safety`、`Simd` 或 `Hooks`（带原生 Hook 探针的 `netstandard2.1` 资产）。 |
 | `tests/LuminPack.Tests.Codegen` | 使用 SDK 自带 Roslyn 的生成代码契约：XML 文档、机制、内联、Union 游标、复用、Union 集合、外部 Union、选项。 |
 | `tests/LuminPack.Tests.Generator` | 使用 Roslyn 4.3 的生成器流水线：并发、emitter 形态、裁剪模式、增量失效（`--verify-incremental`）。 |
+| `tests/LuminPack.Tests.CodeFixes` | Roslyn 4.3 工作区检查：真实生成器诊断、源码修改、跨文档修复、构造函数选择、别名、注释和 Fix All。 |
 | `tests/LuminPack.Tests.Aot` | 裁剪/NativeAOT 冒烟程序和数据格式夹具（`--wire verify`）；加 `-p:LuminPackPackageVersion=<v>` 时改用打包好的 NuGet 包运行。 |
 | `tests/LuminPack.Tests.Platforms` | 平台适配契约，用 `LuminPackPlatform` 选择平台。 |
 | `tests/Unity` | Unity Mono/IL2CPP 冒烟工程。 |

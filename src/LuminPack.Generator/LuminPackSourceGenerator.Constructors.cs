@@ -56,6 +56,8 @@ namespace LuminPack.SourceGenerator
                         TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                             DiagnosticDescriptors.NoPublicConstructor,
                             location,
+                            additionalLocations: typeSymbol.OriginalDefinition.Locations.Where(static source => source.IsInSource),
+                            properties: null,
                             typeSymbol.Name));
                         return null;
                     }
@@ -130,6 +132,8 @@ namespace LuminPack.SourceGenerator
                 TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                     DiagnosticDescriptors.MultipleConstructorsRequireAttribute,
                     location,
+                    additionalLocations: typeSymbol.OriginalDefinition.Locations.Where(static source => source.IsInSource),
+                    properties: null,
                     typeSymbol.Name
                 ));
                 return null;
@@ -153,6 +157,8 @@ namespace LuminPack.SourceGenerator
                     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                         DiagnosticDescriptors.MultipleConstructorsRequireAttribute,
                         location,
+                        additionalLocations: typeSymbol.OriginalDefinition.Locations.Where(static source => source.IsInSource),
+                        properties: null,
                         typeSymbol.Name
                     ));
                     return null;

@@ -110,6 +110,9 @@ jobs:
       - name: Incremental generation verification
         run: dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-incremental
 
+      - name: Code fix workspace regressions
+        run: dotnet run --project tests/LuminPack.Tests.CodeFixes/LuminPack.Tests.CodeFixes.csproj -c Release
+
       - name: Unit tests
         run: dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release --no-build --logger trx --results-directory .tmp/test-results
 
@@ -127,6 +130,8 @@ jobs:
           $feed = Join-Path $env:GITHUB_WORKSPACE '.tmp/package-feed'
           $cache = Join-Path $env:GITHUB_WORKSPACE '.tmp/package-cache'
           dotnet pack src/LuminPack.Generator/LuminPack.Generator.csproj -c Release --no-build --no-restore -p:Version=0.0.0-ci -o $feed
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          dotnet run --project tests/LuminPack.Tests.CodeFixes/LuminPack.Tests.CodeFixes.csproj -c Release --no-build -- --verify-package (Join-Path $feed 'LuminPack.Generator.0.0.0-ci.nupkg')
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           dotnet pack src/LuminPack.Core/LuminPack.Core.csproj -c Release --no-build --no-restore -p:Version=0.0.0-ci -o $feed
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }

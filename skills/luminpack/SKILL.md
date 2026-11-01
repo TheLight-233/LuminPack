@@ -34,6 +34,8 @@ LuminPackSerializer.DeserializeJson(json, ref fromJson);  // reuses the existing
 
 `LuminPackSerializer` is generated into the consuming assembly (namespace `LuminPack`). Install with `dotnet add package LuminPack`; the generator package comes with it.
 
+IDE quick actions are bundled in `LuminPack.Generator`, which comes automatically with `LuminPack`; no additional package is needed. They fix supported generator diagnostics such as missing packable markers, Union partial declarations, invalid attributes and accessibility. Constructor diagnostics offer an explicit choice; other mechanical fixes support Fix All. Review edits that change modifiers. See [IDE code fixes](../../docs/code-fixes.md) for supported IDs and loading requirements.
+
 ## Rules that matter
 
 - Declare models `partial`. Union roots, their cases and every containing type **must** be `partial` (LuminPack035).

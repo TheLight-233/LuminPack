@@ -576,7 +576,7 @@ namespace LuminPack.SourceGenerator
                                 {
                                     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                                         DiagnosticDescriptors.ManagedArrayDataCompress,
-                                        _currentSymbol.Locations.FirstOrDefault() ?? _location,
+                                        member.Locations.FirstOrDefault() ?? _location,
                                         _mainSymbol.Name,
                                         field.Name,
                                         field.FullTypeName
@@ -656,7 +656,7 @@ namespace LuminPack.SourceGenerator
                                 {
                                     TypeMetaChecker._reportContext.Add(Diagnostic.Create(
                                         DiagnosticDescriptors.ManagedArrayDataCompress,
-                                        _currentSymbol.Locations.FirstOrDefault() ?? _location,
+                                        fieldMember.Locations.FirstOrDefault() ?? _location,
                                         _mainSymbol.Name,
                                         field.Name,
                                         field.FullTypeName

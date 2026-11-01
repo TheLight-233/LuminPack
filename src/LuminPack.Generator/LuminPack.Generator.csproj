@@ -26,12 +26,18 @@
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.3.0" PrivateAssets="all" />
+    <ProjectReference Include="../LuminPack.CodeFixes/LuminPack.CodeFixes.csproj" ReferenceOutputAssembly="false" PrivateAssets="all" />
     <None Include="../../README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
   <Target Name="IncludeAnalyzerInPackage" BeforeTargets="_GetPackageFiles">
+    <MSBuild Projects="../LuminPack.CodeFixes/LuminPack.CodeFixes.csproj" Targets="GetTargetPath" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0">
+      <Output TaskParameter="TargetOutputs" ItemName="_LuminPackCodeFixAssembly" />
+    </MSBuild>
     <ItemGroup>
       <None Include="$(TargetPath)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
       <None Include="$(TargetDir)$(AssemblyName).xml" Condition="Exists('$(TargetDir)$(AssemblyName).xml')" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+      <None Include="@(_LuminPackCodeFixAssembly)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+      <None Include="@(_LuminPackCodeFixAssembly->'%(RootDir)%(Directory)%(Filename).xml')" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     </ItemGroup>
   </Target>
 </Project>

@@ -318,6 +318,7 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -f net10.0 -- --f
 | 🔧 | [Compile-time Options](docs/options.md) | String encodings, option profiles, JSON limits, 32/64-bit struct layouts |
 | 🪶 | [Generation Modes](docs/generation-modes.md) | `Full`, `Medium`, `Light`, `Minimal` |
 | ✍️ | [Custom Formatters](docs/custom-formatters.md) | Hand-written formats, `Register<T>`, low-level reader and writer |
+| 💡 | [IDE Code Fixes](docs/code-fixes.md) | Included quick actions for generator diagnostics and Fix All |
 | 🎮 | [Unity, IL2CPP & NativeAOT](docs/unity.md) | Unity setup, Burst, trimming |
 | 📐 | [Wire Formats](docs/formats.md) | The binary layout and the JSON representation |
 | 🛡️ | [Security](docs/security.md) | Portability, untrusted input, encryption |

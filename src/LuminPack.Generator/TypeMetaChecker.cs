@@ -653,6 +653,8 @@ public static class TypeMetaChecker
             _reportContext.Add(Diagnostic.Create(
                 DiagnosticDescriptors.FieldMustBeLuminPackable,
                 location,
+                additionalLocations: symbol.OriginalDefinition.Locations.Where(static source => source.IsInSource),
+                properties: null,
                 symbol.Name
             ));
         }

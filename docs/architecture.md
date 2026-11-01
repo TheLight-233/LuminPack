@@ -10,6 +10,7 @@ All changes are subject to the [mechanism contract](mechanism-contract.md).
 | --- | --- |
 | `src/LuminPack.Core` | Runtime (NuGet package `LuminPack`, assembly `LuminPack.Core`): binary and JSON readers/writers, the exact-width evaluator behind direct allocating writes, buffers, collections, layout conversion, text kernels, compression, ChaCha20-Poly1305, security policy. Targets `netstandard2.1`, `net8.0` to `net11.0`. |
 | `src/LuminPack.Generator` | Incremental source generator and analyzer (`netstandard2.0`, Roslyn 4.3). Shipped as its own package; the runtime package `LuminPack` depends on it. |
+| `src/LuminPack.CodeFixes` | IDE quick actions (`netstandard2.0`, C# Workspaces 4.3), bundled in `LuminPack.Generator`. The generator has a build dependency without an assembly reference; neither runtime nor generator references Workspaces. See [code fixes](code-fixes.md). |
 | `src/LuminPack.Unity`, `src/LuminPack.Burst` | Optional Unity value codecs and the Burst backend for the native hook table. |
 | `src/LuminPack.Platforms` and adapters | Shared adapter plus ASP.NET Core, Avalonia, Drawing, MAUI, MonoGame, SkiaSharp and WPF codecs. |
 | `tests/` | See [Tests](#tests). |
@@ -104,6 +105,7 @@ Roslyn cancellation is checked before changed-type analysis and between aggregat
 | `tests/LuminPack.Tests` | xUnit runtime tests. `LuminPackTestArea` selects `All` (default), `Safety`, `Simd`, or `Hooks` (the `netstandard2.1` asset with native hook probes). |
 | `tests/LuminPack.Tests.Codegen` | Generated-code contracts with the SDK's Roslyn: XML docs, mechanisms, inlining, Union cursors, reuse, Union collections, external Unions, options. |
 | `tests/LuminPack.Tests.Generator` | Generator pipeline with Roslyn 4.3: concurrency, emitter shapes, pruning modes, incremental invalidation (`--verify-incremental`). |
+| `tests/LuminPack.Tests.CodeFixes` | Roslyn 4.3 workspace checks: real generator diagnostics, source edits, cross-document fixes, constructor selection, aliases, trivia and Fix All. |
 | `tests/LuminPack.Tests.Aot` | Trimmed/NativeAOT smoke program and wire fixtures (`--wire verify`); with `-p:LuminPackPackageVersion=<v>` it runs against the packed NuGet packages. |
 | `tests/LuminPack.Tests.Platforms` | Platform adapter contracts, selected with `LuminPackPlatform`. |
 | `tests/Unity` | Unity Mono/IL2CPP smoke project. |

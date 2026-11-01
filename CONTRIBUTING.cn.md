@@ -27,6 +27,9 @@ dotnet run --project tests/LuminPack.Tests.Codegen/LuminPack.Tests.Codegen.cspro
 dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release
 dotnet run --project tests/LuminPack.Tests.Generator/LuminPack.Tests.Generator.csproj -c Release -- --verify-incremental
 
+# IDE 代码修复：真实诊断、跨文档修改和 Fix All
+dotnet run --project tests/LuminPack.Tests.CodeFixes/LuminPack.Tests.CodeFixes.csproj -c Release
+
 # 运行时测试：单个框架、针对性过滤
 dotnet test tests/LuminPack.Tests/LuminPack.Tests.csproj -c Release -f net10.0 --filter "FullyQualifiedName~ReaderFixedBoundsPolicyTest"
 

@@ -318,6 +318,7 @@ dotnet run --project benchmarks/LuminPack.Benchmark -c Release -f net10.0 -- --f
 | 🔧 | [编译期选项](docs/options.cn.md) | 字符串编码、选项配置、JSON 限制、32/64 位结构体布局 |
 | 🪶 | [生成模式](docs/generation-modes.cn.md) | `Full`、`Medium`、`Light`、`Minimal` |
 | ✍️ | [自定义格式化器](docs/custom-formatters.cn.md) | 手写格式、`Register<T>`、底层读写器 |
+| 💡 | [IDE 代码修复](docs/code-fixes.cn.md) | 随包提供的生成器诊断快速修复与 Fix All |
 | 🎮 | [Unity、IL2CPP 与 NativeAOT](docs/unity.cn.md) | Unity 配置、Burst、裁剪 |
 | 📐 | [数据格式](docs/formats.cn.md) | 二进制布局与 JSON 表示 |
 | 🛡️ | [安全](docs/security.cn.md) | 可移植性、不可信输入、加密 |
