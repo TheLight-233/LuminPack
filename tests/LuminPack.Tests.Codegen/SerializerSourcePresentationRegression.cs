@@ -25,7 +25,10 @@ internal static class SerializerSourcePresentationRegression
     private static void VerifyGeneratedRoots(MetadataReference[] references)
     {
         const string source = """
+            #nullable enable
+            using LuminPack;
             using LuminPack.Attribute;
+            using LuminPack.Option;
             [LuminPackable]
             public partial class PresentationModel
             {
@@ -56,6 +59,16 @@ internal static class SerializerSourcePresentationRegression
             public abstract partial class PresentationUnion { }
             [LuminPackable]
             public sealed partial class PresentationCase : PresentationUnion { public int Code; }
+            [LuminPackable, LuminPackBounded(128)]
+            public partial class PresentationBounded { public int Id; public string Name = ""; }
+            [LuminPackable(GeneratorType.VersionTolerant)]
+            public partial class PresentationVersioned { [LuminPackOrder(0)] public int Id; }
+            [LuminPackable(GeneratorType.CircleReference)]
+            public partial class PresentationReference { [LuminPackOrder(0)] public PresentationReference? Next; }
+            [LuminPackable, LuminPackOption(UntrustedData = true)]
+            public partial class PresentationGuarded { public int Id; public string Name = ""; }
+            [LuminPackable, LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]
+            public partial struct PresentationPacked { public byte Tag; public long Id; }
             """;
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER"]);
         var compilation = CSharpCompilation.Create("PresentationRoots", [CSharpSyntaxTree.ParseText(source, parse)], references,
@@ -88,7 +101,12 @@ internal static class SerializerSourcePresentationRegression
         foreach (var root in roots)
         {
             var locals = root.DescendantNodes().OfType<VariableDeclaratorSyntax>().Select(variable => variable.Identifier.ValueText)
-                .Concat(root.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Select(function => function.Identifier.ValueText));
+                .Concat(root.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Select(function => function.Identifier.ValueText))
+                .Concat(root.DescendantNodes().OfType<ForEachStatementSyntax>().Select(iteration => iteration.Identifier.ValueText))
+                .Concat(root.DescendantNodes().OfType<SingleVariableDesignationSyntax>().Select(variable => variable.Identifier.ValueText))
+                .Concat(root.DescendantNodes().OfType<CatchDeclarationSyntax>().Select(exception => exception.Identifier.ValueText))
+                .Concat(root.DescendantNodes().OfType<LocalFunctionStatementSyntax>().SelectMany(function => function.ParameterList.Parameters)
+                    .Select(parameter => parameter.Identifier.ValueText));
             Require(locals.All(name => !name.StartsWith("__", StringComparison.Ordinal)),
                 "An object, collection or Union root retained an internal local identity: " + root.Identifier + " " +
                 string.Join(", ", locals.Where(name => name.StartsWith("__", StringComparison.Ordinal))));
@@ -96,6 +114,9 @@ internal static class SerializerSourcePresentationRegression
         Require(roots.Any(root => root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
                 .Any(variable => variable.Identifier.ValueText.StartsWith("scalarReadSource", StringComparison.Ordinal))),
             "The presentation fixture omitted lowered pair scalar reads.");
+        Require(roots.Any(root => root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+                .Any(variable => variable.Identifier.ValueText == "boundedStart")),
+            "The presentation fixture omitted the bounded-record starting position.");
         Require(roots.Any(root => root.DescendantNodes().OfType<LocalFunctionStatementSyntax>()
                 .Any(function => function.Identifier.ValueText == "ReadCompoundString")) &&
             roots.Any(root => root.DescendantNodes().OfType<LocalFunctionStatementSyntax>()

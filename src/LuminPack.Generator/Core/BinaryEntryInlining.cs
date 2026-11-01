@@ -227,7 +227,10 @@ internal sealed class BinaryEntryInlining
         if (guaranteed)
         {
             string state = arguments[0].ToString();
-            statements.Add(SyntaxFactory.ParseStatement("int " + prefix + "boundedStart = " + state + ".GetCurrentSpanIndex();"));
+            var start = (LocalDeclarationStatementSyntax)SyntaxFactory.ParseStatement("int " + prefix + "boundedStart = " + state + ".GetCurrentSpanIndex();");
+            var identity = start.Declaration.Variables[0].Identifier;
+            statements.Add(start.ReplaceToken(identity, identity.WithAdditionalAnnotations(
+                new SyntaxAnnotation(GeneratedOperationNames.RoleAnnotation, "boundedStart"))));
             statements.Add(SyntaxFactory.ParseStatement(state + ".EnsureAdditionalCapacity(" + plan.GuaranteedMaxBytes + ");"));
             statements.Add(body.WithAdditionalAnnotations(new SyntaxAnnotation(BinaryCollectionCapacity.ReservedAnnotation),
                 new SyntaxAnnotation(BinaryCollectionCapacity.GuaranteedAnnotation, plan.GuaranteedMaxBytes.ToString(System.Globalization.CultureInfo.InvariantCulture))));
@@ -239,8 +242,12 @@ internal sealed class BinaryEntryInlining
         if (guaranteed)
         {
             string state = arguments[0].ToString();
-            statements.Add(SyntaxFactory.ParseStatement("global::System.Diagnostics.Debug.Assert(" + state + ".GetCurrentSpanIndex() - " + prefix +
-                "boundedStart <= " + plan.GuaranteedMaxBytes + ", \"The LuminPackBounded complete-record guarantee was violated.\");"));
+            var assertion = SyntaxFactory.ParseStatement("global::System.Diagnostics.Debug.Assert(" + state + ".GetCurrentSpanIndex() - " + prefix +
+                "boundedStart <= " + plan.GuaranteedMaxBytes + ", \"The LuminPackBounded complete-record guarantee was violated.\");");
+            var identity = assertion.DescendantNodes().OfType<IdentifierNameSyntax>()
+                .Single(identifier => identifier.Identifier.ValueText == prefix + "boundedStart").Identifier;
+            statements.Add(assertion.ReplaceToken(identity, identity.WithAdditionalAnnotations(
+                new SyntaxAnnotation(GeneratedOperationNames.RoleAnnotation, "boundedStart"))));
             statements.Add(SyntaxFactory.ParseStatement(state + ".CompleteReservedRecord();"));
         }
         Interlocked.Increment(ref IncrementalGenerationMetrics.BinaryOperationExpansions);
