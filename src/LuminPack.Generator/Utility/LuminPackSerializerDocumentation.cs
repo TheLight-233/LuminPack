@@ -8,6 +8,7 @@ using LuminPack.Code.Core;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Text;
 
 namespace LuminPack.SourceGenerator;
 
@@ -52,7 +53,7 @@ internal static class LuminPackSerializerDocumentation
     {
         var typeLookup = types.ToDictionary(type => FormatterTypeName.Get(type), StringComparer.Ordinal);
         var contracts = new Dictionary<ITypeSymbol, XElement>(SymbolEqualityComparer.Default);
-        var methods = new Dictionary<BaseMethodDeclarationSyntax, BaseMethodDeclarationSyntax>();
+        var changes = new List<TextChange>();
 
         foreach (var method in root.DescendantNodes(node => node is not BaseMethodDeclarationSyntax).OfType<MethodDeclarationSyntax>())
         {
@@ -131,9 +132,10 @@ internal static class LuminPackSerializerDocumentation
             AddOverloadUsage(remarks, method);
             string indentation = GeneratedSourceDocumentation.GetIndentation(method, source, out _);
             string content = string.Join(Environment.NewLine + indentation + "/// ", documentation.Nodes().Select(node => node.ToString(SaveOptions.DisableFormatting)).SelectMany(text => text.Replace("\r\n", "\n").Split('\n')));
-            methods.Add(method, GeneratedSourceDocumentation.WithDocumentation(method, "/// " + content + Environment.NewLine, indentation));
+            changes.Add(new TextChange(TextSpan.FromBounds(method.FullSpan.Start, method.SpanStart),
+                GeneratedSourceDocumentation.DocumentationText(method, "/// " + content + Environment.NewLine, indentation)));
         }
-        return root.ReplaceNodes(methods.Keys, (method, _) => methods[method]).ToFullString();
+        return SourceText.From(source).WithChanges(changes).ToString();
     }
 
     /// <summary>Documents a type's generation mode, physical layout, and ordered member contract.</summary>

@@ -190,6 +190,45 @@ internal static class GeneratedSourceDocumentation
         return method.WithLeadingTrivia(leading);
     }
 
+    /// <summary>Renders final documentation trivia without parsing XML that will immediately be published as text.</summary>
+    /// <param name="method">The declaration whose leading XML trivia is replaced.</param>
+    /// <param name="documentation">Complete XML comment text, ending with a line break.</param>
+    /// <param name="indentation">The declaration's original indentation.</param>
+    /// <returns>Replacement leading trivia preserving ordinary comments, directives and declaration indentation.</returns>
+    internal static string DocumentationText(BaseMethodDeclarationSyntax method, string documentation, string indentation)
+    {
+        string normalized = string.Join(Environment.NewLine + indentation,
+            documentation.Replace("\r\n", "\n").TrimEnd().Split('\n').Select(line => line.TrimStart(' ', '\t'))) + Environment.NewLine;
+        var leading = new StringBuilder();
+        bool inserted = false;
+        int trailingWhitespace = 0;
+        foreach (var trivia in method.GetLeadingTrivia())
+        {
+            if (IsDocumentation(trivia))
+            {
+                if (!inserted)
+                {
+                    leading.Append(normalized);
+                    trailingWhitespace = 0;
+                }
+                inserted = true;
+            }
+            else
+            {
+                leading.Append(trivia.ToFullString());
+                trailingWhitespace = trivia.IsKind(SyntaxKind.WhitespaceTrivia)
+                    ? trailingWhitespace + trivia.FullSpan.Length : 0;
+            }
+        }
+        if (!inserted)
+        {
+            leading.Append(normalized);
+            trailingWhitespace = 0;
+        }
+        leading.Length -= trailingWhitespace;
+        return leading.Append(indentation).ToString();
+    }
+
     /// <summary>Inserts XML trivia while avoiding traversal of unchanged executable bodies.</summary>
     private sealed class DocumentationInserter : CSharpSyntaxRewriter
     {

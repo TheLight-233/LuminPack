@@ -14,9 +14,45 @@ internal static class SerializerDocumentationRegression
     internal static void Run(MetadataReference[] references)
     {
         VerifyExecutableTokens();
+        VerifyDocumentationText();
         foreach (var mode in new[] { DocumentationMode.None, DocumentationMode.Parse, DocumentationMode.Diagnose })
         {
             VerifyDocumentationMode(references, mode);
+        }
+    }
+
+    /// <summary>Requires final text rendering to match structured trivia across XML modes and declaration boundaries.</summary>
+    private static void VerifyDocumentationText()
+    {
+        var type = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.GeneratedSourceDocumentation", throwOnError: true)!;
+        var structured = type.GetMethod("WithDocumentation", BindingFlags.Static | BindingFlags.NonPublic)!;
+        var render = type.GetMethod("DocumentationText", BindingFlags.Static | BindingFlags.NonPublic)!;
+        foreach (var mode in new[] { DocumentationMode.None, DocumentationMode.Parse, DocumentationMode.Diagnose })
+        foreach (string leading in new[]
+        {
+            "",
+            "\t/// <summary>Old summary.</summary>\n\t",
+            "    /** <summary>Block documentation.</summary> */\n    ",
+            "    // Ordinary comment.\n    /// <summary>First.</summary>\n    // Keep this comment.\n    /// <remarks>Second.</remarks>\n    ",
+            "#if false\n    disabled text\n#endif\n    /// <summary>Active summary.</summary>\n    ",
+            "#pragma warning disable CS1591\n    /// <summary>Summary.</summary>\n    #region API\n    "
+        })
+        {
+            string source = "class C {\n" + leading +
+                "[System.Obsolete]\n\tpublic static string Serialize(string value) => value;\n}\n";
+            var root = CSharpSyntaxTree.ParseText(source, new CSharpParseOptions(LanguageVersion.Preview, mode)).GetRoot();
+            var method = root.DescendantNodes().OfType<MethodDeclarationSyntax>().Single();
+            const string documentation = "/// <summary>Updated &amp; escaped text.</summary>\r\n" +
+                "\t/// <param name=\"value\">The input.</param>\n" +
+                "/// <returns><see cref=\"string\" /></returns>\n";
+            foreach (string indentation in new[] { "", "    ", "\t" })
+            {
+                var replaced = (BaseMethodDeclarationSyntax)structured.Invoke(null, [method, documentation, indentation])!;
+                string text = (string)render.Invoke(null, [method, documentation, indentation])!;
+                string expected = root.ReplaceNode(method, replaced).ToFullString();
+                string actual = source[..method.FullSpan.Start] + text + source[method.SpanStart..];
+                Require(actual == expected, "Final documentation rendering changed XML, trivia or attributes in " + mode + ".");
+            }
         }
     }
 
