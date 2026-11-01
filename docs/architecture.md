@@ -105,6 +105,8 @@ Concrete model API remarks and built-in overloads with recognized execution root
 
 Local helper functions use PascalCase with collision-safe numeric suffixes. Scalar and Union call projections retain their original operand syntax and annotations so the presentation pass can still prove which identifiers belong to generated locals; names observed through `nameof` remain unchanged.
 
+Write-proof eligibility is memoized only within its projection's unchanged type and settings. Canonical runtime-profile checks use a weak compilation key and retain only a Boolean result; a new compilation always checks its own profile identities, including consumer-defined shadow types.
+
 Final contract documentation is rendered as text changes limited to method-leading trivia. This avoids constructing XML syntax trees that would immediately be converted back to text, while preserving the exact comments, directives, indentation and executable source.
 
 Root links use names relative to their containing serializer to avoid repeating its namespace on every overload. The compiler binds them to the same methods and emits complete canonical method identifiers in the documentation XML.

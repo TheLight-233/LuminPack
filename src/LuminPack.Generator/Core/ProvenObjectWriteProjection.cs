@@ -15,6 +15,7 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
     private readonly Compilation _compilation;
     private readonly MetaInfo _metadata;
     private readonly IReadOnlyDictionary<string, ITypeSymbol> _types;
+    private readonly Dictionary<INamedTypeSymbol, bool> _eligibility = new(SymbolEqualityComparer.Default);
 
     /// <summary>Captures only this generation's canonical model and target information.</summary>
     /// <param name="compilation">The original consumer compilation.</param>
@@ -41,6 +42,15 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
     /// <param name="element">The exact canonical concrete payload.</param>
     /// <returns>Whether its original direct field captures are pure.</returns>
     private bool Eligible(INamedTypeSymbol element)
+    {
+        if (_eligibility.TryGetValue(element, out bool eligible)) return eligible;
+        return _eligibility[element] = CheckEligibility(element);
+    }
+
+    /// <summary>Evaluates one payload's pure-field proof within this projection's unchanged compilation and settings.</summary>
+    /// <param name="element">The exact canonical concrete payload.</param>
+    /// <returns>Whether the payload satisfies every original eligibility condition.</returns>
+    private bool CheckEligibility(INamedTypeSymbol element)
     {
         if (element is not { TypeKind: TypeKind.Class, IsAbstract: false, IsGenericType: false } ||
             !SymbolEqualityComparer.Default.Equals(element.ContainingAssembly, _compilation.Assembly) ||
