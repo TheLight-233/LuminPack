@@ -149,7 +149,7 @@ internal sealed class BinaryOperationPlan
             !CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(type))
             return new BinaryOperationPlan(name, empty, ImmutableArray<MemberDeclarationSyntax>.Empty);
 
-        string source = LuminPackExtensionGenerator.GenerateOperationTemplates(type, compilation, metadata);
+        string source = LuminPackExtensionGenerator.GenerateOperationTemplates(type, compilation, metadata, streaming);
         // Plans bind executable syntax. Caller-facing XML is completed after the final projection.
         var templateOptions = metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None);
         var tree = CSharpSyntaxTree.ParseText(source, templateOptions);

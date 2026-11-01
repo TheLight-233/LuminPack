@@ -14,7 +14,15 @@ public static partial class LuminPackCodeGenerator
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="polymorphism">The polymorphism used by this operation.</param>
-    public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb, bool polymorphism = false)
+    public static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb, bool polymorphism = false) =>
+        GenerateDeserializeCode(data, sb, polymorphism, false);
+
+    /// <summary>Retains typed nested boundaries for independent external-input child accounting.</summary>
+    /// <param name="data">The original serialized contract.</param>
+    /// <param name="sb">The destination operation.</param>
+    /// <param name="polymorphism">Whether the caller already owns the object marker.</param>
+    /// <param name="guardNestedReads">Whether child reads need complete typed input guards.</param>
+    internal static void GenerateDeserializeCode(LuminDataInfo data, StringBuilder sb, bool polymorphism, bool guardNestedReads)
     {
         if (PortableStructPlan.RequiresClosedDispatch(data.TypeSymbol))
         {
@@ -68,7 +76,7 @@ public static partial class LuminPackCodeGenerator
                     while (last + 1 < data.fields.Count && !data.fields[last + 1].IsCompress && IsMergeableField(data.fields[last + 1])) last++;
                 if (TryGenerateCursorFixedGroup(sb, data.fields, index, last, Storage, "            ", write: false, allowBulkCopy: !polymorphism))
                     index = last;
-                else AppendCursorFieldRead(sb, field, Storage(field), "            ", 0, fresh: false, allowBulkCopy: !polymorphism);
+                else AppendCursorFieldRead(sb, field, Storage(field), "            ", 0, fresh: false, allowBulkCopy: !polymorphism, guardNestedReads);
             }
             foreach (var callback in data.callBackMethods.Where(item => item.Item2 == SerializeCallBackType.OnDeserialized))
                 sb.AppendLine(callback.Item3 ? "            " + concreteTypeName + "." + callback.Item1 + "();" : "            value?." + callback.Item1 + "();");
@@ -101,7 +109,7 @@ public static partial class LuminPackCodeGenerator
         if (!polymorphism && data.isValueType) sb.AppendLine("            reader.Advance(1);");
         if (!data.isValueType || HasReusableMembers(data.fields))
         {
-            AppendExistingObjectRead(sb, data, concreteTypeName, polymorphism);
+            AppendExistingObjectRead(sb, data, concreteTypeName, polymorphism, guardNestedReads);
         }
         if (canConstructDirectly)
             sb.AppendLine("            var result = new " + concreteTypeName + "();");
@@ -109,7 +117,7 @@ public static partial class LuminPackCodeGenerator
         {
             string target = canConstructDirectly && CanDeserializeDirectlyIntoConstructedObject(field)
                 ? "result." + field.Identifier : field.Name + "Temp";
-            AppendCursorFieldRead(sb, field, target, "            ", 0, fresh: true, allowBulkCopy: !polymorphism);
+            AppendCursorFieldRead(sb, field, target, "            ", 0, fresh: true, allowBulkCopy: !polymorphism, guardNestedReads);
         }
         sb.AppendLine();
         sb.AppendLine("            // Construct the object and populate its members.");

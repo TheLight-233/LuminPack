@@ -31,8 +31,9 @@ public static partial class LuminPackCodeGenerator
     /// <param name="depth">The finite analyzed inline depth.</param>
     /// <param name="fresh">Whether the destination has no reusable storage.</param>
     /// <param name="allowBulkCopy">Whether nested fixed groups may use the address-proven storage copy; Union payloads keep their cursor-offset form.</param>
+    /// <param name="guardNestedReads">Whether a typed boundary must account for each nested object.</param>
     private static void AppendCursorFieldRead(StringBuilder builder, LuminDataField field, string target, string indent, int depth, bool fresh,
-        bool allowBulkCopy = true)
+        bool allowBulkCopy = true, bool guardNestedReads = false)
     {
         using var scope = new CompiledOptionFieldScope(builder, field.Options,
             field.TypeSymbol == null ? null : FormatterTypeName.Get(field.TypeSymbol));
@@ -74,6 +75,20 @@ public static partial class LuminPackCodeGenerator
         }
         if (field.Type is LuminFiledType.Class or LuminFiledType.Struct && field.ClassFields.Count != 0)
         {
+            if (guardNestedReads)
+            {
+                builder.AppendLine(indent + "{");
+                if (field.Type == LuminFiledType.Class)
+                {
+                    builder.AppendLine(indent + "    reader.EnsureReadable(1);");
+                    builder.AppendLine(indent + "    var nestedInput = reader.Buffer[reader.Position] == 255 ? default(" + FormatterTypeName.Get(field.TypeSymbol) + ") : " + target + ";");
+                }
+                else builder.AppendLine(indent + "    var nestedInput = " + target + ";");
+                builder.AppendLine(indent + "    reader.ReadValue(ref nestedInput);");
+                builder.AppendLine(indent + "    " + target + " = nestedInput!;");
+                builder.AppendLine(indent + "}");
+                return;
+            }
             builder.AppendLine(indent + "{");
             if (field.Type == LuminFiledType.Class)
             {

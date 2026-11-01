@@ -14,8 +14,9 @@ public static partial class LuminPackExtensionGenerator
     /// <param name="type">The closed formatter type.</param>
     /// <param name="compilation">The current consumer compilation.</param>
     /// <param name="metadata">Current language and generation settings.</param>
+    /// <param name="guardNestedReads">Whether an enclosing external root needs typed child guards.</param>
     /// <returns>Only this type's operations and the layout declarations required to bind them.</returns>
-    internal static string GenerateOperationTemplates(ITypeSymbol type, Compilation compilation, MetaInfo metadata)
+    internal static string GenerateOperationTemplates(ITypeSymbol type, Compilation compilation, MetaInfo metadata, bool guardNestedReads = false)
     {
         var body = new StringBuilder();
         string name = FormatterTypeName.Get(type);
@@ -33,7 +34,8 @@ public static partial class LuminPackExtensionGenerator
             // Invalid models keep their original formatter boundary because their helper is absent.
             projectJsonHelper = !data.isUnion && !data.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error);
             if (data.isUnion && data.isValueType) LuminPackUnionCodeGenerator.GenerateCaseMapStruct(data, body);
-            GenerateRootBinaryExtensions(body, data, name, metadata, SupportsFixedVersionPrefix(data, compilation));
+            GenerateRootBinaryExtensions(body, data, name, metadata, SupportsFixedVersionPrefix(data, compilation),
+                guardNestedReads || CompiledOptions.Resolve(type, compilation).Input.Enabled);
             GenerateRootJsonExtensions(body, data, name, metadata);
             var registry = new LuminPackLocalLayoutGenerator.LocalLayoutRegistry();
             LuminPackLocalLayoutGenerator.AppendRootLocalClass(body, registry, data);

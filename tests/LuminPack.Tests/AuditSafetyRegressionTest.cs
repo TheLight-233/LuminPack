@@ -12,6 +12,59 @@ namespace LuminPackUnitTest;
 /// <summary>Checks occupied reference slots and malformed string records.</summary>
 public class AuditSafetyRegressionTest
 {
+    /// <summary>Rejects malformed inline child headers and domains before publishing a replacement child.</summary>
+    [Fact]
+    public void CompiledInputNestedObjectsKeepTypedGuards()
+    {
+        var source = new AuditExternalNested
+        {
+            Child = new AuditExternalNestedChild { Number = 42, Flag = true, Text = "nested" }, Tail = true
+        };
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        int child = LuminPackInputPolicy.HeaderSize + 1;
+        foreach (int offset in new[] { child, child + 1 + sizeof(int), bytes.Length - 1 })
+        {
+            byte[] forged = (byte[])bytes.Clone();
+            forged[offset] = offset == child ? (byte)0 : (byte)2;
+            var target = new AuditExternalNested();
+            Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(forged, ref target));
+            if (offset != bytes.Length - 1) Assert.Null(target.Child);
+            target = new AuditExternalNested { Child = new AuditExternalNestedChild { Number = 17, Flag = false, Text = "original" } };
+            var original = target.Child;
+            Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(forged, ref target));
+            Assert.Same(original, target.Child);
+            if (offset != bytes.Length - 1) Assert.False(target.Child.Flag);
+        }
+        var reused = new AuditExternalNested { Child = new AuditExternalNestedChild() };
+        var previous = reused.Child;
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref reused));
+        Assert.Same(previous, reused.Child);
+        Assert.True(reused.Child.Flag);
+        source.Child = null;
+        byte[] empty = LuminPackSerializer.Serialize(source);
+        LuminPackSerializer.Deserialize(empty, ref reused);
+        Assert.Null(reused.Child);
+        Assert.True(reused.Tail);
+    }
+
+    /// <summary>Charges inline child objects and their actual depth before their fields are decoded.</summary>
+    [Fact]
+    public void CompiledInputNestedObjectsKeepResourceLimits()
+    {
+        var child = new AuditExternalNestedChild { Number = 42, Flag = true };
+        var objects = new AuditExternalNestedObjectLimit { Child = child };
+        byte[] objectBytes = LuminPackSerializer.Serialize(objects);
+        AuditExternalNestedObjectLimit objectTarget = null!;
+        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(objectBytes, ref objectTarget));
+        var depth = new AuditExternalNestedDepthLimit { Child = child };
+        byte[] depthBytes = LuminPackSerializer.Serialize(depth);
+        AuditExternalNestedDepthLimit depthTarget = null!;
+        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(depthBytes, ref depthTarget));
+        depth.Child = null;
+        depthBytes = LuminPackSerializer.Serialize(depth);
+        Assert.Equal(depthBytes.Length, LuminPackSerializer.Deserialize(depthBytes, ref depthTarget));
+    }
+
     /// <summary>Checks every Boolean lane and tail before publishing a reused array.</summary>
     /// <param name="count">The complete Boolean payload width.</param>
     [Theory]
@@ -612,4 +665,35 @@ public sealed class AuditExternalReversedArrays
 {
     public int[] Values = [];
     public bool[] Flags = [];
+}
+
+/// <summary>Retains typed validation for an otherwise inline nested object followed by a fixed field.</summary>
+[LuminPackable, LuminPackOption(UntrustedData = true)]
+public sealed class AuditExternalNested
+{
+    public AuditExternalNestedChild? Child;
+    public bool Tail;
+}
+
+/// <summary>Combines fixed semantic domains with a variable field in an inline child.</summary>
+[LuminPackable]
+public sealed class AuditExternalNestedChild
+{
+    public int Number;
+    public bool Flag;
+    public string Text = "";
+}
+
+/// <summary>Allows the root but forbids allocating a second reference object.</summary>
+[LuminPackable, LuminPackOption(UntrustedData = true, MaxObjectCount = 1)]
+public sealed class AuditExternalNestedObjectLimit
+{
+    public AuditExternalNestedChild? Child;
+}
+
+/// <summary>Allows a null child but rejects the depth of its present primitive fields.</summary>
+[LuminPackable, LuminPackOption(UntrustedData = true, MaxDepth = 2)]
+public sealed class AuditExternalNestedDepthLimit
+{
+    public AuditExternalNestedChild? Child;
 }

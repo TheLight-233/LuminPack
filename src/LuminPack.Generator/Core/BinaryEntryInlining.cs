@@ -42,7 +42,7 @@ internal sealed class BinaryEntryInlining
     internal BinaryEntryInlining(ITypeSymbol root, Compilation compilation, MetaInfo metadata, BinaryOperationPlanCache cache)
     {
         _root = root; _compilation = compilation; _metadata = metadata; _cache = cache;
-        _streaming = SafeReadProjection.ContainsPolicy(root, compilation, metadata);
+        _streaming = CompiledOptions.Resolve(root, compilation).Input.Enabled;
         _types.Add(FormatterTypeName.Get(root), root);
         using (var hash = SHA256.Create())
             _layoutPrefix = "__LuminLayout_" + string.Concat(hash.ComputeHash(Encoding.UTF8.GetBytes(FormatterTypeName.Get(root)))
@@ -72,9 +72,10 @@ internal sealed class BinaryEntryInlining
     /// <returns>The dependency-guarded plan shared by all entries for this root.</returns>
     private BinaryOperationPlan GetPlan(ITypeSymbol type)
     {
-        string name = FormatterTypeName.Get(type);
+        bool streaming = _streaming || _inputExpansionDepth > 0;
+        string name = FormatterTypeName.Get(type) + (streaming ? "|input" : "|trusted");
         if (!_plans.TryGetValue(name, out var plan))
-            _plans.Add(name, plan = _cache.Get(type, _compilation, _metadata, _streaming));
+            _plans.Add(name, plan = _cache.Get(type, _compilation, _metadata, streaming));
         return plan;
     }
 
@@ -129,7 +130,7 @@ internal sealed class BinaryEntryInlining
                 .OrderBy(pair => int.Parse(pair.Key.Substring(pair.Key.LastIndexOf(':') + 1), System.Globalization.CultureInfo.InvariantCulture)).FirstOrDefault();
             if (inner.Value != null) operation = inner.Value;
         }
-        if (!_streaming && !root && (GeneratedExecutionPolicy.Reuse(operationName, operation) ||
+        if (!_streaming && _inputExpansionDepth == 0 && !root && (GeneratedExecutionPolicy.Reuse(operationName, operation) ||
             _reservedExpansionDepth == 0 && !operationName.Contains(":local:") &&
             CodeEmitterRegistry.GetEmitter(plan.TypeName).Read != null)) return null;
         // A nested user-type write would copy its complete record body into every element site. Where the
@@ -392,7 +393,7 @@ internal sealed class BinaryEntryInlining
             var expanded = _owner.Expand(plan, slot.Operation, arguments, slot.Aliases, _stack, slot.OptionProfile, false,
                 OutlinesNestedUserWrites(_plan.TypeName));
             if (expanded != null) return expanded.WithTriviaFrom(node);
-            if (_owner._streaming && !slot.Local && slot.Operation.StartsWith("Read", StringComparison.Ordinal) && plan.Operations.ContainsKey(slot.Operation))
+            if ((_owner._streaming || _owner._inputExpansionDepth > 0) && !slot.Local && slot.Operation.StartsWith("Read", StringComparison.Ordinal) && plan.Operations.ContainsKey(slot.Operation))
             {
                 string helper = _owner.InputReader(plan, slot.Operation);
                 var guarded = SyntaxFactory.ExpressionStatement(SyntaxFactory.InvocationExpression(SyntaxFactory.IdentifierName(helper),

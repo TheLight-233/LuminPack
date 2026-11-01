@@ -13,7 +13,8 @@ public static partial class LuminPackCodeGenerator
     /// <param name="data">The canonical object metadata.</param>
     /// <param name="typeName">The concrete runtime type.</param>
     /// <param name="polymorphism">Whether the Union reader already consumed the object framing.</param>
-    private static void AppendExistingObjectRead(StringBuilder sb, LuminDataInfo data, string typeName, bool polymorphism)
+    /// <param name="guardNestedReads">Whether nested values require complete typed input guards.</param>
+    private static void AppendExistingObjectRead(StringBuilder sb, LuminDataInfo data, string typeName, bool polymorphism, bool guardNestedReads)
     {
         // Approved 2026-10-19: read ordinary root members straight into their existing storage instead of
         // staging locals and committing after the parse. The NoInlining attribute on ReadExisting is
@@ -34,7 +35,7 @@ public static partial class LuminPackCodeGenerator
         if (data.fields.Any(static field => !CanDeserializeDirectlyIntoConstructedObject(field)))
             sb.AppendLine("            ref var reuseLocal = ref LuminPackMarshal.As<" + typeName + ", " + TypeMetaChecker.BuildLocalClassName(data) + ">(ref value!);");
         foreach (var field in data.fields)
-            AppendCursorFieldRead(sb, field, Storage(field), "            ", 0, fresh: false, allowBulkCopy: !polymorphism);
+            AppendCursorFieldRead(sb, field, Storage(field), "            ", 0, fresh: false, allowBulkCopy: !polymorphism, guardNestedReads);
         foreach (var callback in data.callBackMethods.Where(static callback => callback.Item2 == SerializeCallBackType.OnDeserialized))
             sb.AppendLine(callback.Item3 ? "            " + typeName + "." + callback.Item1 + "();" : "            value?." + callback.Item1 + "();");
         sb.AppendLine("            }");

@@ -30,6 +30,24 @@ internal static partial class SerializerCompiledOptionRegression
                     if (LuminPackSerializer.Deserialize(bytes, ref copy) != bytes.Length || copy.Child.Number != 17 ||
                         !copy.Child.Flag || copy.Child.Bits.Length != 3 || copy.Child.Bits[1])
                         throw new Exception("Frozen input facts changed the original read.");
+                    foreach (int offset in new[] { 57, 62 })
+                    {
+                        byte[] forged = (byte[])bytes.Clone();
+                        forged[offset] = offset == 57 ? (byte)0 : (byte)2;
+                        ProofRoot target = new ProofRoot();
+                        bool rejected = false;
+                        try { LuminPackSerializer.Deserialize(forged, ref target); }
+                        catch (System.IO.InvalidDataException) { rejected = true; }
+                        if (!rejected || target.Child != null)
+                            throw new Exception("An inline child bypassed typed validation before publication.");
+                    }
+                    var previous = copy.Child;
+                    LuminPackSerializer.Deserialize(bytes, ref copy);
+                    if (!ReferenceEquals(previous, copy.Child)) throw new Exception("The guarded child stopped reusing its original instance.");
+                    value.Child = null;
+                    bytes = LuminPackSerializer.Serialize(value);
+                    LuminPackSerializer.Deserialize(bytes, ref copy);
+                    if (copy.Child != null) throw new Exception("A null child retained a previously populated value.");
                 }
             }
             """;
@@ -42,7 +60,7 @@ internal static partial class SerializerCompiledOptionRegression
                 [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
             VerifyInputFactOutput(ref driver, input, parse, 4);
             var recursive = CSharpSyntaxTree.ParseText(source.Replace("MODE", mode)
-                .Replace("public int Number;", "public int Number; public ProofChild Next;"), parse, "InputFacts.cs");
+                .Replace("Bits = Array.Empty<bool>();", "Bits = Array.Empty<bool>(); public ProofChild Next;"), parse, "InputFacts.cs");
             var changed = input.ReplaceSyntaxTree(original, recursive);
             VerifyInputFactOutput(ref driver, changed, parse, 0);
             VerifyInputFactOutput(ref driver, input, parse, 4);

@@ -29,7 +29,8 @@ public static partial class LuminPackExtensionGenerator
 
         // The root owns its full inline implementation. Shared non-root formatters are emitted
         // once by the assembly invocation pipeline, so multiple roots can reuse one state API.
-        GenerateRootBinaryExtensions(sb, data, typeName, metaInfo, SupportsFixedVersionPrefix(data, compilation));
+        GenerateRootBinaryExtensions(sb, data, typeName, metaInfo, SupportsFixedVersionPrefix(data, compilation),
+            CompiledOptions.Resolve(data.TypeSymbol, compilation).Input.Enabled);
         GenerateRootJsonExtensions(sb, data, typeName, metaInfo);
         // Local layout mirrors and accessors are partitioned into shared assembly files.
 
@@ -149,7 +150,8 @@ public static partial class LuminPackExtensionGenerator
     /// <param name="typeName">The C# type name to use in generated source.</param>
     /// <param name="metaInfo">The language, framework, and generation settings.</param>
     /// <param name="fixedVersionPrefix">Whether the referenced runtime exposes the fused version-prefix operation.</param>
-    private static void GenerateRootBinaryExtensions(StringBuilder sb, LuminDataInfo data, string typeName, MetaInfo metaInfo, bool fixedVersionPrefix)
+    /// <param name="guardNestedReads">Whether external input requires typed nested object guards.</param>
+    private static void GenerateRootBinaryExtensions(StringBuilder sb, LuminDataInfo data, string typeName, MetaInfo metaInfo, bool fixedVersionPrefix, bool guardNestedReads)
     {
         AppendRootMethodHeader(sb, "WriteValue", "LuminPackWriter", typeName, data, metaInfo, read: false);
         GenerateMyselfSerialize(data, sb, fixedVersionPrefix: fixedVersionPrefix);
@@ -169,7 +171,7 @@ public static partial class LuminPackExtensionGenerator
         }
         else
         {
-            GenerateMyselfDeserialize(data, sb);
+            GenerateMyselfDeserialize(data, sb, guardNestedReads: guardNestedReads);
         }
         sb.AppendLine("        }");
         sb.AppendLine();
@@ -184,7 +186,7 @@ public static partial class LuminPackExtensionGenerator
             sb.AppendLine("        }");
             sb.AppendLine();
             AppendRootMethodHeader(sb, "ReadPolymorphismValue", "LuminPackReader", typeName, data, metaInfo, read: true);
-            GenerateMyselfDeserialize(data, sb, polymorphism: true);
+            GenerateMyselfDeserialize(data, sb, polymorphism: true, guardNestedReads: guardNestedReads);
             sb.AppendLine("        }");
             sb.AppendLine();
         }
@@ -467,7 +469,8 @@ public static partial class LuminPackExtensionGenerator
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="polymorphism">The polymorphism used by this operation.</param>
-    private static void GenerateMyselfDeserialize(LuminDataInfo data, StringBuilder sb, bool polymorphism = false)
+    /// <param name="guardNestedReads">Whether child object accounting needs typed boundaries.</param>
+    private static void GenerateMyselfDeserialize(LuminDataInfo data, StringBuilder sb, bool polymorphism = false, bool guardNestedReads = false)
     {
         if (data.isUnion)
         {
@@ -484,7 +487,7 @@ public static partial class LuminPackExtensionGenerator
         switch (data.generatorType)
         {
             case GeneratorType.Object:
-                LuminPackCodeGenerator.GenerateDeserializeCode(data, sb, polymorphism);
+                LuminPackCodeGenerator.GenerateDeserializeCode(data, sb, polymorphism, guardNestedReads);
                 break;
             case GeneratorType.CircleReference:
                 LuminPackCircleReferenceCodeGenerator.GenerateDeserializeCode(data, sb);
