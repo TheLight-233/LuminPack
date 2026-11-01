@@ -54,7 +54,7 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 
 ## Where to look
 
-- Concrete model overload XML remarks include a **Generated implementation** link to the binary or JSON Root for source inspection. Raw unmanaged reads without a separate Root and Custom formatter entry points keep their existing paths.
+- Concrete overload XML remarks include a **Generated implementation** link when the model or built-in formatter has a recognized binary or JSON Root. This covers closed generic models, collections and compound values. Raw unmanaged reads without a separate Root, Custom formatter entry points and generic type-selected fallback APIs keep their existing paths.
 - [English overview](../../README.md) and [Chinese overview](../../docs/README.cn.md). All Chinese editions live under `docs`; module translations are in `docs/modules`.
 - [API reference](references/api.md): every entry point, profiles, buffers, registration, Custom formatters, low-level API, helpers.
 - [Attribute catalog](references/attributes.md): every attribute and option with examples.

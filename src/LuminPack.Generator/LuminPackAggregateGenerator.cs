@@ -136,10 +136,13 @@ public sealed class LuminPackAggregateGenerator : IIncrementalGenerator
                     if (optionDeclarations.Length != 0)
                         spc.AddSource("LuminPackOptions.g.cs", GeneratedSourceDocumentation.Complete(string.Join(Environment.NewLine, optionDeclarations), meta.ParseOptions));
 
-                    foreach (var formatter in LuminPackExtensionGenerator.GenerateInvocationFiles(compilation, meta, reachability, invocationSupport, cancellationToken))
+                    var formatters = LuminPackExtensionGenerator.GenerateInvocationFiles(compilation, meta, reachability, invocationSupport,
+                        out var navigationTargets, cancellationToken);
+                    foreach (var formatter in formatters)
                         spc.AddSource(formatter.Name, formatter.Text);
 
-                    foreach (var serializer in LuminPackSerializerGenerator.GenerateSerializerFiles(compilation, meta, reachability, serializerFragments, cancellationToken))
+                    foreach (var serializer in LuminPackSerializerGenerator.GenerateSerializerFiles(compilation, meta, reachability, serializerFragments,
+                        cancellationToken, navigationTargets))
                         spc.AddSource(serializer.Name, serializer.Text);
                 }
                 catch (Exception ex) when (ex is not OperationCanceledException || !cancellationToken.IsCancellationRequested)

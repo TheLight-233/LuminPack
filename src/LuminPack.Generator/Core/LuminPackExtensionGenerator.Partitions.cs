@@ -22,6 +22,19 @@ public static partial class LuminPackExtensionGenerator
     /// <returns>Independently comparable partial extension files.</returns>
     internal static ImmutableArray<FrozenGeneratedSource> GenerateInvocationFiles(Compilation compilation, MetaInfo metadata,
         ReachabilityAnalysis reachability, InvocationSupportCache cache, CancellationToken cancellationToken = default)
+        => GenerateInvocationFiles(compilation, metadata, reachability, cache, out _, cancellationToken);
+
+    /// <summary>Emits formatter contributions and exposes their completed, symbol-free root facts.</summary>
+    /// <param name="compilation">The current consuming compilation.</param>
+    /// <param name="metadata">Current generation settings.</param>
+    /// <param name="reachability">The formatter roots, or null for Full.</param>
+    /// <param name="cache">Generator-instance type and dispatch contribution caches.</param>
+    /// <param name="navigationTargets">Receives actual direct roots after the output batch completes.</param>
+    /// <param name="cancellationToken">Stops obsolete generation between complete contributions.</param>
+    /// <returns>The unchanged formatter, dispatch and registration files.</returns>
+    internal static ImmutableArray<FrozenGeneratedSource> GenerateInvocationFiles(Compilation compilation, MetaInfo metadata,
+        ReachabilityAnalysis reachability, InvocationSupportCache cache, out IReadOnlyDictionary<string, LazyForwardingTargets> navigationTargets,
+        CancellationToken cancellationToken = default)
     {
         cancellationToken.ThrowIfCancellationRequested();
         var analysis = CompilationTypeAnalysisCache.GetOrCreate(compilation);
@@ -109,6 +122,7 @@ public static partial class LuminPackExtensionGenerator
             () => BuildLazyFormatters(compilation, metadata, reachability, lazyTargets));
         if (lazy.Length != 0) files.Add(new FrozenGeneratedSource("LuminPack.Dispatch.Lazy.g.cs", lazy));
         files.Add(new FrozenGeneratedSource("LuminPack.FormatterBridges.g.cs", SerializerCoreProjection.Bridges(extension, metadata)));
+        navigationTargets = lazyTargets;
         return files.ToImmutable();
     }
 

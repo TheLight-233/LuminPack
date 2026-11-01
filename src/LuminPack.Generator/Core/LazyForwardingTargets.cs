@@ -102,7 +102,10 @@ internal sealed class LazyForwardingTargets
                     generic.TypeArgumentList.Arguments.Select(argument => argument is IdentifierNameSyntax name && name.Identifier.ValueText == profile
                         ? (TypeSyntax)SyntaxFactory.IdentifierName("{profile}") : argument))))).WithoutTrivia().ToString();
             string passing = arguments[1].RefKindKeyword.IsKind(SyntaxKind.RefKeyword) ? "ref " : arguments[1].RefKindKeyword.IsKind(SyntaxKind.InKeyword) ? "in " : string.Empty;
-            targets[operation + (profile == null ? string.Empty : "<>")] = new Target(target, passing);
+            string documentation = container.WithoutTrivia() + "." + access.Name.Identifier.ValueText;
+            if (!documentation.StartsWith("global::", StringComparison.Ordinal))
+                documentation = "global::LuminPack.LuminPackSerializer." + documentation;
+            targets[operation + (profile == null ? string.Empty : "<>")] = new Target(target, passing, documentation);
         }
         return targets.Count == 0 ? Empty : new LazyForwardingTargets(targets);
     }
@@ -119,15 +122,24 @@ internal sealed class LazyForwardingTargets
         return target.Call.Replace("{profile}", profile) + "(ref " + state + ", " + target.Passing + value + ");";
     }
 
+    /// <summary>Returns the actual execution root for a concrete facade's XML navigation.</summary>
+    /// <param name="operation">The binary or JSON serializer operation.</param>
+    /// <returns>The fully qualified root method name, or null when no direct root exists.</returns>
+    internal string DocumentationTarget(string operation)
+        => _targets.TryGetValue(operation + "<>", out var target) || _targets.TryGetValue(operation, out target)
+            ? target.Documentation : null;
+
     /// <summary>One forwarder's root and payload passing convention.</summary>
     private sealed class Target
     {
         internal readonly string Call;
         internal readonly string Passing;
+        internal readonly string Documentation;
 
         /// <summary>Captures one recognized root call.</summary>
         /// <param name="call">The qualified root, with <c>{profile}</c> marking the forwarder's profile argument.</param>
         /// <param name="passing">The payload argument's passing keyword and trailing space, or empty for by-value.</param>
-        internal Target(string call, string passing) { Call = call; Passing = passing; }
+        /// <param name="documentation">The fully qualified method name without profile arguments.</param>
+        internal Target(string call, string passing, string documentation) { Call = call; Passing = passing; Documentation = documentation; }
     }
 }

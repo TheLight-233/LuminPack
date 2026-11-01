@@ -65,7 +65,7 @@ Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
 
 具体类型重载（`Serialize(person)`、`Deserialize(bytes, ref copy)`）直接调用为该类型生成的代码。泛型重载（`Deserialize<Person>(bytes)`）经过一个按类型在首次使用时创建的入口。
 
-具体模型重载的 XML 说明中提供 **Generated implementation** 链接，可在 IDE 中直接跳转到二进制或 JSON 的 `Root` 方法，不必逐层经过转发方法。闭合泛型模型也支持。原始非托管二进制读取可能直接调用运行时，因此没有独立的 `RootRead`；Custom 格式化器保留用户定义的入口。`Sizeof` 描述的是大小计算，不属于读写 Root。
+具体模型重载，以及具有执行根方法的内置重载，其 XML 说明中提供 **Generated implementation** 链接，可在 IDE 中直接跳转到二进制或 JSON 的 `Root` 方法，不必逐层经过转发方法。闭合泛型模型、集合与复合值在格式器具有根方法时都支持此导航。原始非托管二进制读取可能直接调用运行时，因此没有独立的 `RootRead`；Custom 格式化器保留用户定义的入口。根据泛型实参选择格式器的回退 API 没有唯一具体 Root 可供链接。`Sizeof` 描述的是大小计算，不属于读写 Root。
 
 生成的 Root 使用四空格缩进，并采用 `cursor`、`nameSnapshot1` 等按用途命名的局部变量。游标记录组使用普通的 `// Fields:` 和 `// Field:` 注释标明正在处理的字段。只在绑定关系已确定后重命名生成器自己的局部变量，用户字段名保持不变，包括以下划线开头的名称。
 

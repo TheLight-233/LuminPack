@@ -19,7 +19,68 @@ internal static class SerializerDocumentationRegression
         {
             VerifyDocumentationMode(references, mode);
         }
+        VerifyNavigationEdits(references);
     }
+
+    /// <summary>Refreshes model and collection Root links after raw storage becomes managed storage.</summary>
+    /// <param name="references">The platform and runtime references for the consumer.</param>
+    private static void VerifyNavigationEdits(MetadataReference[] references)
+    {
+        const string source = """
+            using System;
+            using System.Collections.Generic;
+            using LuminPack;
+            using LuminPack.Attribute;
+            [LuminPackable] public struct NavigationItem { public int Value; }
+            public static class NavigationEntry
+            {
+                public static byte[] Write(List<NavigationItem> value) => LuminPackSerializer.Serialize(value);
+                public static void Read(byte[] bytes, ref List<NavigationItem> value) => LuminPackSerializer.Deserialize(bytes.AsSpan(), ref value);
+                public static byte[] WriteItem(NavigationItem value) => LuminPackSerializer.Serialize(value);
+                public static void ReadItem(byte[] bytes, ref NavigationItem value) => LuminPackSerializer.Deserialize(bytes.AsSpan(), ref value);
+            }
+            """;
+        foreach (string mode in new[] { "Full", "Light" })
+        {
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Diagnose,
+                preprocessorSymbols: ["NET5_0_OR_GREATER", "NET6_0_OR_GREATER", "NET7_0_OR_GREATER", "NET8_0_OR_GREATER"]);
+            var tree = CSharpSyntaxTree.ParseText(source, parse, "Navigation.cs");
+            var settings = CSharpSyntaxTree.ParseText("[assembly: LuminPack.Attribute.LuminPackGeneratorOptions(LuminPack.Attribute.LuminPackGenerationMode." + mode + ")]", parse);
+            var input = CSharpCompilation.Create("NavigationEdits" + mode, [tree, settings], references,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
+            GeneratorDriver NewDriver() => CSharpGeneratorDriver.Create(
+                [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
+            var driver = NewDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
+            Require(!output.GetDiagnostics().Concat(diagnostics).Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error || diagnostic.Id == "CS1574"),
+                "Initial collection navigation does not bind in " + mode + ".");
+            string originalLinks = CollectionNavigation(driver);
+            var edited = input.ReplaceSyntaxTree(tree, CSharpSyntaxTree.ParseText(source.Replace("public int Value;", "public string Value;", StringComparison.Ordinal), parse, "Navigation.cs"));
+            driver = driver.RunGeneratorsAndUpdateCompilation(edited, out output, out diagnostics);
+            Require(!output.GetDiagnostics().Concat(diagnostics).Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error || diagnostic.Id == "CS1574"),
+                "Edited collection navigation does not bind in " + mode + ".");
+            string changedLinks = CollectionNavigation(driver);
+            Require(changedLinks != originalLinks, "The edited storage fixture did not change model Root availability in " + mode + ".");
+            string Text(GeneratorDriver current) => string.Join("\n", current.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+                .OrderBy(file => file.HintName, StringComparer.Ordinal).Select(file => file.HintName + "\n" + file.SourceText));
+            Require(Text(driver) == Text(NewDriver().RunGenerators(edited)), "A retained collection Root link differs from fresh output in " + mode + ".");
+            driver = driver.RunGeneratorsAndUpdateCompilation(input, out output, out diagnostics);
+            Require(CollectionNavigation(driver) == originalLinks && Text(driver) == Text(NewDriver().RunGenerators(input)),
+                "Restoring raw collection storage retained stale Root navigation in " + mode + ".");
+        }
+    }
+
+    /// <summary>Reads navigation links of the edited storage type and its collection.</summary>
+    /// <param name="driver">The completed generation.</param>
+    /// <returns>A deterministic sequence of the collection's actual Root links.</returns>
+    private static string CollectionNavigation(GeneratorDriver driver)
+        => string.Join("|", driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+            .Where(file => file.HintName.StartsWith("LuminPackSerializer.", StringComparison.Ordinal))
+            .SelectMany(file => file.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).Where(IsUserApi)
+            .Where(method => method.ParameterList.Parameters.Any(parameter => parameter.Identifier.ValueText == "value" &&
+                parameter.Type?.ToString().Replace(" ", string.Empty, StringComparison.Ordinal) is
+                    "global::System.Collections.Generic.List<global::NavigationItem>" or "global::NavigationItem"))
+            .SelectMany(method => ReadDocumentation(method).Descendants("see").Select(element => (string?)element.Attribute("cref")))
+            .Where(target => target?.Contains(".__LuminRoots_", StringComparison.Ordinal) == true).OrderBy(target => target, StringComparer.Ordinal));
 
     /// <summary>Requires final text rendering to match structured trivia across XML modes and declaration boundaries.</summary>
     private static void VerifyDocumentationText()
@@ -158,6 +219,15 @@ internal static class SerializerDocumentationRegression
 
             [LuminPackable, LuminPackOption(UntrustedData = true)]
             public class DocumentationGuarded { public int Value; public string Name = ""; }
+
+            [LuminPackable]
+            public class DocumentationCollections
+            {
+                public KeyValuePair<int, string> Pair;
+                public List<string> Names = new();
+                public Dictionary<string, int> Lookup = new();
+                public int[] Raw = Array.Empty<int>();
+            }
             """;
 
         var options = new CSharpParseOptions(LanguageVersion.Preview, documentationMode,
@@ -242,6 +312,7 @@ internal static class SerializerDocumentationRegression
         string serializer = string.Join(Environment.NewLine, serializerFiles.Select(file => file.SourceText.ToString()));
         var methods = serializerFiles.SelectMany(file => CSharpSyntaxTree.ParseText(file.SourceText, options.WithDocumentationMode(DocumentationMode.Parse))
             .GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).Where(IsUserApi).ToArray();
+        VerifyBuiltInRootNavigation(generated, methods);
         var genericModelOverloads = methods.Where(method => method.Identifier.ValueText != "Sizeof" &&
             method.ParameterList.Parameters.Any(parameter => parameter.Type?.ToString().Contains("global::DocumentationBox<int>", StringComparison.Ordinal) == true)).ToArray();
         Require(genericModelOverloads.Length > 2 && genericModelOverloads.All(method => ReadDocumentation(method).Descendants("see")
@@ -302,6 +373,47 @@ internal static class SerializerDocumentationRegression
                 "Allocating compression overloads must document their returned payload rather than a byte count.");
 
         File.WriteAllText(Path.Combine(Path.GetTempPath(), "LuminPack.SerializerDocumentationRegression.g.cs"), serializer);
+    }
+
+    /// <summary>Requires concrete built-in overloads to link to actual roots and omit links when an operation has none.</summary>
+    /// <param name="sources">The completed formatter and facade contributions.</param>
+    /// <param name="methods">Caller-facing methods parsed with documentation enabled.</param>
+    private static void VerifyBuiltInRootNavigation(IEnumerable<GeneratedSourceResult> sources, MethodDeclarationSyntax[] methods)
+    {
+        static string Payload(TypeSyntax type) => type.ToString().Replace("global::", string.Empty, StringComparison.Ordinal)
+            .Replace(" ", string.Empty, StringComparison.Ordinal);
+        var payloads = new HashSet<string>(StringComparer.Ordinal)
+        {
+            "System.Collections.Generic.KeyValuePair<int,string>",
+            "System.Collections.Generic.List<string>",
+            "System.Collections.Generic.Dictionary<string,int>",
+            "int[]"
+        };
+        var roots = sources.SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+            .Where(method => method.ParameterList.Parameters.Count == 2 && method.Identifier.ValueText is "RootWrite" or "RootRead" or "RootWriteJson" or "RootReadJson" &&
+                method.Parent is ClassDeclarationSyntax owner && owner.Identifier.ValueText.StartsWith("__LuminRoots_", StringComparison.Ordinal))
+            .ToDictionary(method => Payload(method.ParameterList.Parameters[1].Type!) + "|" + method.Identifier.ValueText,
+                method => "global::LuminPack.LuminPackSerializer." + ((ClassDeclarationSyntax)method.Parent!).Identifier.ValueText + "." + method.Identifier.ValueText,
+                StringComparer.Ordinal);
+        var observed = new HashSet<string>(StringComparer.Ordinal);
+        int links = 0;
+        foreach (var method in methods)
+        {
+            var value = method.ParameterList.Parameters.FirstOrDefault(parameter => parameter.Identifier.ValueText is "value" or "input");
+            if (value?.Type == null || !payloads.Contains(Payload(value.Type))) continue;
+            string payload = Payload(value.Type);
+            observed.Add(payload);
+            string name = method.Identifier.ValueText;
+            string operation = "Root" + (name.StartsWith("Deserialize", StringComparison.Ordinal) ? "Read" : "Write") +
+                (name.Contains("Json", StringComparison.Ordinal) ? "Json" : "");
+            string? expected = name == "Sizeof" ? null : roots.GetValueOrDefault(payload + "|" + operation);
+            var actual = ReadDocumentation(method).Descendants("see").Select(element => (string?)element.Attribute("cref"))
+                .Where(target => target?.Contains(".__LuminRoots_", StringComparison.Ordinal) == true).ToArray();
+            Require(expected == null ? actual.Length == 0 : actual.Length == 1 && actual[0] == expected,
+                "A concrete built-in API has missing or fictitious Root navigation: " + payload + " " + name);
+            links += actual.Length;
+        }
+        Require(observed.SetEquals(payloads) && links >= 30, "Built-in Root navigation was not exercised across the selected collection shapes.");
     }
 
     /// <summary>Identifies directly callable serializer APIs independently of the generator's documentation filter.</summary>

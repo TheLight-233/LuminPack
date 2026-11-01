@@ -32,14 +32,16 @@ internal static class LuminPackSerializerDocumentation
     /// <param name="types">Concrete payloads represented by the state methods.</param>
     /// <param name="compilation">Current serialization metadata inputs.</param>
     /// <param name="metadata">Current generation settings.</param>
+    /// <param name="navigationTargets">Actual roots for a concrete facade payload, when available.</param>
     /// <returns>Rich XML comments and unchanged executable tokens.</returns>
-    internal static string Enhance(CompilationUnitSyntax root, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata)
+    internal static string Enhance(CompilationUnitSyntax root, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata,
+        LazyForwardingTargets navigationTargets = null)
     {
         var completed = (CompilationUnitSyntax)GeneratedSourceDocumentation.CompleteRoot(root);
         string source = completed.ToFullString();
         if (!completed.DescendantNodes(node => node is not BaseMethodDeclarationSyntax)
             .OfType<BaseMethodDeclarationSyntax>().Any(GeneratedSourceDocumentation.IsUserApi)) return source;
-        return Enhance(completed, source, types, compilation, metadata);
+        return Enhance(completed, source, types, compilation, metadata, navigationTargets);
     }
 
     /// <summary>Applies contract documentation at method trivia boundaries.</summary>
@@ -48,8 +50,10 @@ internal static class LuminPackSerializerDocumentation
     /// <param name="types">Concrete payload contracts.</param>
     /// <param name="compilation">Current semantic inputs.</param>
     /// <param name="metadata">Current generation settings.</param>
+    /// <param name="navigationTargets">Actual direct roots of this concrete facade contribution.</param>
     /// <returns>The source with overload-specific remarks.</returns>
-    private static string Enhance(SyntaxNode root, string source, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata)
+    private static string Enhance(SyntaxNode root, string source, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata,
+        LazyForwardingTargets navigationTargets)
     {
         var typeLookup = types.ToDictionary(type => FormatterTypeName.Get(type), StringComparer.Ordinal);
         var contracts = new Dictionary<ITypeSymbol, XElement>(SymbolEqualityComparer.Default);
@@ -108,7 +112,9 @@ internal static class LuminPackSerializerDocumentation
 
                 var typeId = type.GetDocumentationCommentId();
                 if (typeId != null) documentation.Add(new XElement("seealso", new XAttribute("cref", typeId)));
-                if (type is INamedTypeSymbol named &&
+                string operation = (name.StartsWith("Deserialize", StringComparison.Ordinal) ? "Deserialize" : "Serialize") + (json ? "Json" : "");
+                string navigation = name == "Sizeof" ? null : navigationTargets?.DocumentationTarget(operation);
+                if (navigation == null && type is INamedTypeSymbol named &&
                     CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named) &&
                     TypeMetaChecker.CheckGeneratorType(named) != GeneratorType.Custom && name != "Sizeof" &&
                     !(name.StartsWith("Deserialize", StringComparison.Ordinal) && !name.Contains("Json") &&
@@ -119,9 +125,10 @@ internal static class LuminPackSerializerDocumentation
                     if (name.Contains("Json")) rootName += "Json";
                     string container = RootContainerProjection.ContainerPrefix + RootContainerProjection.Hash(
                         RootContainerProjection.PayloadKey(FormatterTypeName.Get(type)));
-                    remarks.Add(new XElement("para", "Generated implementation: ", new XElement("see",
-                        new XAttribute("cref", "global::LuminPack.LuminPackSerializer." + container + "." + rootName)), "."));
+                    navigation = "global::LuminPack.LuminPackSerializer." + container + "." + rootName;
                 }
+                if (navigation != null)
+                    remarks.Add(new XElement("para", "Generated implementation: ", new XElement("see", new XAttribute("cref", navigation)), "."));
             }
             else if (method.TypeParameterList != null)
             {

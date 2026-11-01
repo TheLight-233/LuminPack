@@ -53,11 +53,13 @@ public static partial class LuminPackSerializerGenerator
     /// <param name="reachability">The formatter and call-selected API roots.</param>
     /// <param name="cache">The generator-instance fragment and file cache.</param>
     /// <param name="cancellationToken">Stops obsolete generation between complete facade contributions.</param>
+    /// <param name="navigationTargets">Actual direct roots from the completed formatter contributions.</param>
     /// <returns>Common serializer support followed by stable per-type files.</returns>
     internal static ImmutableArray<FrozenGeneratedSource> GenerateSerializerFiles(Compilation compilation, MetaInfo metadata,
-        ReachabilityAnalysis reachability, SerializerFacadeCache cache, CancellationToken cancellationToken = default)
+        ReachabilityAnalysis reachability, SerializerFacadeCache cache, CancellationToken cancellationToken = default,
+        IReadOnlyDictionary<string, LazyForwardingTargets> navigationTargets = null)
     {
-        var parts = BuildSerializerParts(compilation, metadata, reachability, cache, cancellationToken);
+        var parts = BuildSerializerParts(compilation, metadata, reachability, cache, cancellationToken, navigationTargets);
         const string declaration = "    public static class LuminPackSerializer";
         const string partialDeclaration = "    public static partial class LuminPackSerializer";
         string footer = "    }" + Environment.NewLine + "}" + Environment.NewLine;
@@ -76,9 +78,10 @@ public static partial class LuminPackSerializerGenerator
     /// <param name="reachability">The current formatter and facade root filter.</param>
     /// <param name="fragments">The generator-instance concrete contribution cache.</param>
     /// <param name="cancellationToken">Stops obsolete generation before another concrete fragment is rendered.</param>
+    /// <param name="navigationTargets">Completed root facts without retained compiler inputs.</param>
     /// <returns>The unchanged legacy source components and canonical concrete identities.</returns>
     private static SerializerParts BuildSerializerParts(Compilation compilation, MetaInfo metaInfo, ReachabilityAnalysis reachability, SerializerFacadeCache fragments,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, IReadOnlyDictionary<string, LazyForwardingTargets> navigationTargets = null)
     {
         cancellationToken.ThrowIfCancellationRequested();
         // The serializer entry class is always emitted so user code can reference
@@ -140,9 +143,12 @@ public static partial class LuminPackSerializerGenerator
             _currentAccess = HasPublicSignature(type) ? "public" : "internal";
             string outputVariant = apis == SerializerApiKind.All ? null : ((int)apis).ToString(System.Globalization.CultureInfo.InvariantCulture);
             if (stationaryInput) outputVariant = (outputVariant ?? "all") + "|stationary-input";
+            LazyForwardingTargets targets = null;
+            if (navigationTargets?.TryGetValue(typeName, out targets) == true && targets.Key.Length != 0)
+                outputVariant = (outputVariant ?? "all") + "|roots:" + targets.Key;
             var frozen = fragments.Fragments.GetOrBuild(type, compilation, metaInfo, LuminPackGenerationTier.Full, () =>
             {
-                string text = RenderOverloadFragment(type, typeName, compilation, metaInfo, apis);
+                string text = RenderOverloadFragment(type, typeName, compilation, metaInfo, apis, targets);
                 return new FrozenTypeEmission(typeName, text, string.Empty,
                     new FrozenLayoutGroup(string.Empty, metaInfo.ParseOptions, Array.Empty<FrozenLayoutFragment>(), null), Array.Empty<Diagnostic>());
             }, serializerFragment: true, outputVariant: outputVariant);
@@ -210,8 +216,10 @@ public static partial class LuminPackSerializerGenerator
     /// <param name="compilation">The compilation supplying contract metadata.</param>
     /// <param name="metadata">The current generation settings.</param>
     /// <param name="apis">Concrete overloads selected by current project calls.</param>
+    /// <param name="navigationTargets">Actual roots of this concrete payload.</param>
     /// <returns>The complete overload block with legacy documentation.</returns>
-    private static string RenderOverloadFragment(ITypeSymbol type, string typeName, Compilation compilation, MetaInfo metadata, SerializerApiKind apis)
+    private static string RenderOverloadFragment(ITypeSymbol type, string typeName, Compilation compilation, MetaInfo metadata, SerializerApiKind apis,
+        LazyForwardingTargets navigationTargets)
     {
         var builder = new StringBuilder();
         var previousClassification = _currentContainsReferences;
@@ -241,7 +249,7 @@ public static partial class LuminPackSerializerGenerator
                     sequence.OriginalDefinition.ToDisplayString() == "System.Buffers.ReadOnlySequence<T>" &&
                     global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.IsKnownScalar(sequence.TypeArguments[0])
                     ? FormatterTypeName.Get(sequence.TypeArguments[0]) : null);
-            return DocumentFragment(builder.ToString(), new[] { type }, compilation, metadata);
+            return DocumentFragment(builder.ToString(), new[] { type }, compilation, metadata, navigationTargets);
         }
         finally
         {
@@ -275,8 +283,10 @@ public static partial class LuminPackSerializerGenerator
     /// <param name="types">Concrete documentation lookup types for this block.</param>
     /// <param name="compilation">The compilation supplying contract metadata.</param>
     /// <param name="metadata">The current parse and generation settings.</param>
+    /// <param name="navigationTargets">Actual direct roots for the concrete payload, when known.</param>
     /// <returns>Only the documented block; the temporary wrapper is discarded.</returns>
-    private static string DocumentFragment(string fragment, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata)
+    private static string DocumentFragment(string fragment, ITypeSymbol[] types, Compilation compilation, MetaInfo metadata,
+        LazyForwardingTargets navigationTargets = null)
     {
         string header = "namespace LuminPack" + Environment.NewLine + "{" + Environment.NewLine + "    public static class LuminPackSerializer" + Environment.NewLine + "    {" + Environment.NewLine;
         string footer = "    }" + Environment.NewLine + "}" + Environment.NewLine;
@@ -292,7 +302,7 @@ public static partial class LuminPackSerializerGenerator
             root = (CompilationUnitSyntax)new SafeFacadeProjection(options, types.Length == 0).Visit(root);
         if (RequiresStationaryInput(compilation, metadata)) root = (CompilationUnitSyntax)new PinnedReaderProjection(metadata.AllowUnsafe).Visit(root);
         root = (CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(root);
-        string documented = LuminPackSerializerDocumentation.Enhance(root, types, compilation, metadata);
+        string documented = LuminPackSerializerDocumentation.Enhance(root, types, compilation, metadata, navigationTargets);
         return documented.Substring(header.Length, documented.Length - header.Length - footer.Length);
     }
 
