@@ -4,6 +4,7 @@ using LuminPack.Core;
 using LuminPack.Attribute;
 using System.Runtime.InteropServices;
 using LuminPack.Utility;
+using LuminPack.Security;
 using Xunit;
 
 namespace LuminPackUnitTest;
@@ -11,6 +12,88 @@ namespace LuminPackUnitTest;
 /// <summary>Checks occupied reference slots and malformed string records.</summary>
 public class AuditSafetyRegressionTest
 {
+    /// <summary>Checks every Boolean lane and tail before publishing a reused array.</summary>
+    /// <param name="count">The complete Boolean payload width.</param>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(2)]
+    [InlineData(3)]
+    [InlineData(4)]
+    [InlineData(5)]
+    [InlineData(7)]
+    [InlineData(8)]
+    [InlineData(9)]
+    [InlineData(31)]
+    [InlineData(32)]
+    [InlineData(33)]
+    [InlineData(64)]
+    [InlineData(65)]
+    public void CompiledInputBooleanGroupsRejectEveryInvalidLane(int count)
+    {
+        var source = new AuditExternalArrays
+        {
+            Flags = Enumerable.Range(0, count).Select(index => (index & 1) == 0).ToArray(),
+            Values = [3, 5, 8], Bytes = [17, 23]
+        };
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        AuditExternalArrays target = null!;
+        LuminPackSerializer.Deserialize(bytes, ref target);
+        Assert.Equal(source.Flags, target.Flags);
+        var original = target.Flags;
+        for (int index = 0; index < count; index++)
+        foreach (byte invalid in new byte[] { 2, 3, 127, 128, 254, 255 })
+        {
+            byte[] forged = (byte[])bytes.Clone();
+            forged[LuminPackInputPolicy.HeaderSize + 1 + sizeof(int) + index] = invalid;
+            Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(forged, ref target));
+            Assert.Same(original, target.Flags);
+            Assert.Equal(source.Flags, target.Flags);
+        }
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref target));
+    }
+
+    /// <summary>Preserves exact work budgets and data-dependent depth acceptance with either descriptor generation.</summary>
+    /// <param name="proven">Whether the descriptor carries the compiler's finite depth proof.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void BooleanValidationPreservesWorkAndDepthLimits(bool proven)
+    {
+        foreach (int count in new[] { 0, 1, 2, 3, 4, 7, 8, 65 })
+        {
+            byte[] payload = new byte[sizeof(int) + count];
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(payload, count);
+            for (int index = sizeof(int); index < payload.Length; index++) payload[index] = (byte)(index & 1);
+            long work = 5L + 3L * count;
+            var schema = BooleanSchema(proven, 2, work);
+            SafeBinaryValidator.Validate(payload, schema, new SafeReadBudget(schema.Limits));
+            var insufficient = new LuminPackReadLimits(maxDepth: 2, maxWork: work - 1);
+            Assert.Throws<System.IO.InvalidDataException>(() => SafeBinaryValidator.Validate(payload, schema, new SafeReadBudget(insufficient)));
+            schema = BooleanSchema(proven, 1, work);
+            if (count == 0) SafeBinaryValidator.Validate(payload, schema, new SafeReadBudget(schema.Limits));
+            else Assert.Throws<System.IO.InvalidDataException>(() => SafeBinaryValidator.Validate(payload, schema, new SafeReadBudget(schema.Limits)));
+        }
+    }
+
+    /// <summary>Builds legacy and proven descriptors for the same original Boolean sequence.</summary>
+    /// <param name="proven">Whether the compiler proved the finite type depth.</param>
+    /// <param name="depth">The active input depth quota.</param>
+    /// <param name="work">The exact cumulative work quota.</param>
+    /// <returns>An immutable descriptor with the original wire shape.</returns>
+    private static LuminPackSafeSchema BooleanSchema(bool proven, int depth, long work)
+    {
+        var nodes = new[]
+        {
+            new LuminPackSafeNode(LuminPackSafeKind.Sequence, 8, children: [1]),
+            new LuminPackSafeNode(LuminPackSafeKind.Boolean, 1)
+        };
+        return proven
+            ? new LuminPackSafeSchema("BooleanBudget", nodes, 1, null, 8 * 1024 * 1024, 16 * 1024 * 1024,
+                64L * 1024 * 1024, 100_000, 1024 * 1024, 100_000, depth, work, 64, 2)
+            : new LuminPackSafeSchema("BooleanBudget", nodes, 1, maxDepth: depth, maxWork: work);
+    }
+
     /// <summary>Keeps each closed array's schema and Boolean-domain checks independent inside one root.</summary>
     [Fact]
     public void CompiledInputArraySchemasRemainDistinct()

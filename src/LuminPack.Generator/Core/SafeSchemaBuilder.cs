@@ -20,6 +20,7 @@ internal sealed class SafeSchemaBuilder
     private readonly Dictionary<string, int> _indices = new Dictionary<string, int>(StringComparer.Ordinal);
     private readonly StringBuilder _identity = new StringBuilder("LuminPack.Safe.2|");
     private string _rejection;
+    private readonly List<NodeFacts> _facts = new List<NodeFacts>();
 
     /// <summary>Retains symbols only during one uncached schema construction.</summary>
     /// <param name="compilation">The consumer compilation.</param>
@@ -37,10 +38,15 @@ internal sealed class SafeSchemaBuilder
     {
         var builder = new SafeSchemaBuilder(compilation, metadata);
         builder.Add(type, options);
+        bool frozenFacts = compilation.GetTypeByMetadataName("LuminPack.Security.LuminPackSafeNode")?.InstanceConstructors
+            .Any(constructor => constructor.Parameters.Any(parameter => parameter.Name == "fixedWidth")) == true &&
+            compilation.GetTypeByMetadataName("LuminPack.Security.LuminPackSafeSchema")?.InstanceConstructors
+            .Any(constructor => constructor.Parameters.Any(parameter => parameter.Name == "maxSchemaDepth")) == true;
+        if (frozenFacts) builder.FreezeFacts();
         return "new global::LuminPack.Security.LuminPackSafeSchema(" + Literal(builder._identity.ToString()) +
             ", new global::LuminPack.Security.LuminPackSafeNode[] { " + string.Join(", ", builder._nodes) + " }, " + options.Encoding +
             ", " + (builder._rejection == null ? "null" : Literal(builder._rejection)) + ", " + options.Input.Arguments + ", maxJsonDepth: " +
-            Math.Min(options.Input.Depth, options.Depth > 0 ? options.Depth : 64).ToString(CultureInfo.InvariantCulture) + ")";
+            Math.Min(options.Input.Depth, options.Depth > 0 ? options.Depth : 64).ToString(CultureInfo.InvariantCulture) + (frozenFacts ? ", maxSchemaDepth: " + builder._facts[0].DepthBound.ToString(CultureInfo.InvariantCulture) : "") + ")";
     }
 
     /// <summary>Quotes compiler-produced identifiers as C# literals.</summary>
@@ -61,6 +67,7 @@ internal sealed class SafeSchemaBuilder
         int index = _nodes.Count;
         _indices.Add(key, index);
         _nodes.Add(null);
+        _facts.Add(new NodeFacts());
         _identity.Append(index).Append(':').Append(key).Append(';');
         string kind = "Unsupported", storage = "8", extra = "";
         var children = new List<int>();
@@ -163,11 +170,80 @@ internal sealed class SafeSchemaBuilder
             }
         }
         if (kind == "Unsupported") Reject("The external-input option does not accept this unreviewed type: " + name);
+        _facts[index].Kind = kind; _facts[index].Rank = rank; _facts[index].Children = children.ToArray(); _facts[index].JsonChildren = jsonChildren.ToArray();
         _identity.Append("shape=").Append(kind).Append(':').Append(rank).Append(':').Append(string.Join(",", children)).Append(';');
         _nodes[index] = "new global::LuminPack.Security.LuminPackSafeNode(global::LuminPack.Security.LuminPackSafeKind." + kind + ", " + storage +
             ", mode: " + options.Mode + ", rank: " + rank + ", children: new int[] { " + string.Join(", ", children) +
             " }, jsonChildren: new int[] { " + string.Join(", ", jsonChildren) + " }, names: new string[] { " + string.Join(", ", names.Select(Literal)) + " }" + extra + ")";
         return index;
+    }
+
+    /// <summary>Holds generation-local fixed-layout and finite-depth facts for one closed schema node.</summary>
+    private sealed class NodeFacts
+    {
+        internal string Kind;
+        internal int Rank, Width, Depth = 1, DepthBound, WidthState, DepthState;
+        internal bool Domain;
+        internal int[] Children, JsonChildren;
+    }
+
+    /// <summary>Appends immutable facts while leaving the canonical schema identity and wire contract unchanged.</summary>
+    private void FreezeFacts()
+    {
+        for (int i = 0; i < _facts.Count; i++) { Width(i); Bound(i); }
+        for (int i = 0; i < _facts.Count; i++)
+        {
+            var fact = _facts[i];
+            _nodes[i] = _nodes[i].Substring(0, _nodes[i].Length - 1) + ", fixedWidth: " + fact.Width.ToString(CultureInfo.InvariantCulture) + ", fixedDepth: " + fact.Depth.ToString(CultureInfo.InvariantCulture) + ", fixedDomain: " + (fact.Domain ? "true" : "false") + ")";
+        }
+    }
+
+    /// <summary>Computes the original fixed-width interpreter's result once for each closed node.</summary>
+    /// <param name="index">The node whose packed children are analyzed.</param>
+    /// <returns>The exact wire width, or minus one for a variable shape.</returns>
+    private int Width(int index)
+    {
+        var fact = _facts[index];
+        if (fact.WidthState != 0) return fact.WidthState == 1 ? -1 : fact.Width;
+        fact.WidthState = 1;
+        fact.Domain = fact.Kind is "Boolean" or "Enum" or "Decimal" or "DateTime";
+        fact.Width = fact.Kind switch
+        {
+            "Boolean" or "Byte" or "SByte" => 1, "Int16" or "UInt16" or "Char" => 2,
+            "Int32" or "UInt32" or "Single" => 4, "Int64" or "UInt64" or "Double" or "DateTime" or "TimeSpan" => 8,
+            "Guid" or "Decimal" => 16, "Enum" => fact.Rank, _ => -1
+        };
+        if (fact.Kind == "Struct")
+        {
+            fact.Width = 0;
+            foreach (int child in fact.Children)
+            {
+                int width = Width(child);
+                if (width < 0) { fact.Width = -1; break; }
+                fact.Width = checked(fact.Width + width); fact.Depth = Math.Max(fact.Depth, _facts[child].Depth + 1); fact.Domain |= _facts[child].Domain;
+            }
+        }
+        fact.WidthState = 2;
+        return fact.Width;
+    }
+
+    /// <summary>Proves maximum declared value depth across binary and JSON edges, treating cycles as unknown.</summary>
+    /// <param name="index">The next closed node in the active graph.</param>
+    /// <returns>The finite maximum depth, or zero for a recursive or unsupported graph.</returns>
+    private int Bound(int index)
+    {
+        var fact = _facts[index];
+        if (fact.DepthState != 0) return fact.DepthState == 1 ? 0 : fact.DepthBound;
+        fact.DepthState = 1;
+        int depth = fact.Kind == "Unsupported" ? 0 : 1;
+        foreach (int child in fact.Children.Concat(fact.JsonChildren))
+        {
+            int childDepth = Bound(child);
+            if (childDepth == 0) { depth = 0; break; }
+            depth = Math.Max(depth, checked(childDepth + 1));
+        }
+        fact.DepthBound = depth; fact.DepthState = 2;
+        return depth;
     }
 
     /// <summary>Rejects raw nullable aggregates whose collection wire differs from their ordinary nullable formatter.</summary>

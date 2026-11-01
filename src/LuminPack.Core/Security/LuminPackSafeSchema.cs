@@ -81,6 +81,9 @@ public sealed class LuminPackSafeNode
     internal readonly bool Flags;
     internal readonly bool Sorted;
     internal readonly bool Signed;
+    // The original constructor retains interpretation when no generated fixed-layout facts are available.
+    internal readonly int FixedWidth = -2, FixedDepth = 1;
+    internal readonly bool FixedDomain;
 
     /// <summary>Captures an immutable schema node emitted from the original formatter metadata.</summary>
     /// <param name="kind">The reviewed wire shape.</param>
@@ -111,6 +114,27 @@ public sealed class LuminPackSafeNode
         Sorted = sorted;
         Signed = signed;
     }
+
+    /// <summary>Captures compiler-proven fixed wire facts alongside the original immutable node contract.</summary>
+    /// <param name="kind">The reviewed wire shape.</param>
+    /// <param name="storage">Actual or conservative CLR storage width.</param>
+    /// <param name="mode">The existing string mode.</param>
+    /// <param name="rank">Array rank, or primitive width for an enum.</param>
+    /// <param name="children">Ordered binary child node indices.</param>
+    /// <param name="jsonChildren">Ordered JSON member node indices.</param>
+    /// <param name="names">Exact JSON property names.</param>
+    /// <param name="values">Declared enum bit patterns.</param>
+    /// <param name="flags">Whether enum combinations are allowed.</param>
+    /// <param name="sorted">Whether keys use ordered comparison.</param>
+    /// <param name="signed">Whether an enum has a signed underlying value.</param>
+    /// <param name="fixedWidth">The exact fixed wire width, or minus one for a variable shape.</param>
+    /// <param name="fixedDepth">The original fixed-width analysis depth.</param>
+    /// <param name="fixedDomain">Whether the fixed storage contains semantically restricted values.</param>
+    public LuminPackSafeNode(LuminPackSafeKind kind, int storage, int fixedWidth, int fixedDepth, bool fixedDomain,
+        int mode = 3, int rank = 0, int[]? children = null, int[]? jsonChildren = null, string[]? names = null,
+        ulong[]? values = null, bool flags = false, bool sorted = false, bool signed = false)
+        : this(kind, storage, mode, rank, children, jsonChildren, names, values, flags, sorted, signed)
+    { FixedWidth = fixedWidth; FixedDepth = fixedDepth; FixedDomain = fixedDomain; }
 }
 
 /// <summary>A generated, immutable compatibility and validation contract for the separate safe envelope.</summary>
@@ -126,6 +150,7 @@ public sealed class LuminPackSafeSchema
     internal readonly byte[] BinaryPrefix;
     internal readonly byte[] JsonPrefix;
     private readonly bool _jsonSupported;
+    internal readonly int StaticDepth;
     /// <summary>The compiler-selected document encoding, zero for UTF-8 and one for UTF-16.</summary>
     public int DocumentEncoding => JsonEncoding;
 
@@ -166,6 +191,28 @@ public sealed class LuminPackSafeSchema
         JsonPrefix = (jsonEncoding == 0 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(
             "{\"$luminpack\":2,\"$schema\":\"" + Convert.ToBase64String(Fingerprint) + "\",\"$value\":");
     }
+
+    /// <summary>Freezes a graph with a compiler-proven finite depth bound and the unchanged protocol identity.</summary>
+    /// <param name="identity">The compiler-produced canonical schema and options identity.</param>
+    /// <param name="nodes">The root-first closed validation graph.</param>
+    /// <param name="jsonEncoding">Zero for UTF-8, one for UTF-16.</param>
+    /// <param name="rejection">A fail-closed explanation for an unsupported contract.</param>
+    /// <param name="maxInputBytes">Maximum encoded bytes.</param>
+    /// <param name="maxDecompressedBytes">Maximum decoded bytes.</param>
+    /// <param name="maxAllocationBytes">Estimated aggregate library allocations.</param>
+    /// <param name="maxCollectionLength">Maximum container count.</param>
+    /// <param name="maxStringLength">Maximum UTF-16 string length.</param>
+    /// <param name="maxObjects">Maximum reference-value count.</param>
+    /// <param name="maxDepth">Maximum value depth.</param>
+    /// <param name="maxWork">Maximum validation work.</param>
+    /// <param name="maxJsonDepth">The existing document profile's container bound.</param>
+    /// <param name="maxSchemaDepth">The finite declared value depth, or zero when recursive or unreviewed.</param>
+    public LuminPackSafeSchema(string identity, LuminPackSafeNode[] nodes, int jsonEncoding, string? rejection,
+        int maxInputBytes, int maxDecompressedBytes, long maxAllocationBytes, int maxCollectionLength,
+        int maxStringLength, int maxObjects, int maxDepth, long maxWork, int maxJsonDepth, int maxSchemaDepth)
+        : this(identity, nodes, jsonEncoding, rejection, maxInputBytes, maxDecompressedBytes, maxAllocationBytes,
+            maxCollectionLength, maxStringLength, maxObjects, maxDepth, maxWork, maxJsonDepth)
+    { StaticDepth = maxSchemaDepth; }
 
     /// <summary>Rejects unsupported schemas and machine byte orders before interpreting payload data.</summary>
     public void EnsureSupported()

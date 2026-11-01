@@ -22,10 +22,19 @@ internal static unsafe class SafeBinaryValidator
         fixed (byte* pinned = payload)
         {
             var cursor = new Cursor(new ReadOnlySpan<byte>(pinned, payload.Length), schema, budget);
-            cursor.Read(node, 1, false);
+            if ((schema.StaticDepth > 0 && schema.StaticDepth <= budget.Limits.MaxDepth) ||
+                (schema.Nodes[node].FixedWidth >= 0 && schema.Nodes[node].FixedDepth <= budget.Limits.MaxDepth))
+                cursor.Read<ProvenDepth>(node, 1, false);
+            else
+                cursor.Read<CheckedDepth>(node, 1, false);
             if (cursor.Position != payload.Length) LuminPackInputPolicy.Invalid("The schema did not consume the complete binary payload.");
         }
     }
+
+    /// <summary>Selects a closed graph whose depth cannot exceed the active quota.</summary>
+    private struct ProvenDepth { }
+    /// <summary>Retains runtime depth limits for recursive, unknown and potentially over-limit graphs.</summary>
+    private struct CheckedDepth { }
 
     /// <summary>Owns checked cursor arithmetic independently of the original decoder's target publication.</summary>
     private ref struct Cursor
@@ -67,36 +76,37 @@ internal static unsafe class SafeBinaryValidator
         /// <param name="index">The closed node index.</param>
         /// <param name="depth">The current graph depth.</param>
         /// <param name="key">Whether a duplicate-check key is required.</param>
+        /// <typeparam name="TDepth">The proven or runtime-checked depth policy.</typeparam>
         /// <returns>A comparer-safe primitive key, or the default value for other payloads.</returns>
-        internal SafeInputKey Read(int index, int depth, bool key)
+        internal SafeInputKey Read<TDepth>(int index, int depth, bool key) where TDepth : struct
         {
-            _budget.Depth(depth);
+            if (typeof(TDepth) == typeof(ProvenDepth)) _budget.Work(1); else _budget.Depth(depth);
             var node = _schema.Nodes[index];
             var kind = node.Kind;
             switch (kind)
             {
                 case LuminPackSafeKind.String: return String(node.Mode, key);
                 case LuminPackSafeKind.Struct:
-                    foreach (int child in node.Children) Read(child, depth + 1, false);
+                    foreach (int child in node.Children) Read<TDepth>(child, depth + 1, false);
                     return default;
                 case LuminPackSafeKind.Object:
                     byte marker = Take(1)[0];
                     if (marker == 255 && node.Rank == 0) return default;
                     if (marker != node.Children.Length) LuminPackInputPolicy.Invalid("The object member header disagrees with its schema.");
                     if (node.Rank == 0) { _budget.Object(); _budget.Allocate(node.Storage + 64L); }
-                    foreach (int child in node.Children) Read(child, depth + 1, false);
+                    foreach (int child in node.Children) Read<TDepth>(child, depth + 1, false);
                     return default;
                 case LuminPackSafeKind.Nullable:
                     byte present = Take(1)[0];
                     if (present == 255) return default;
                     if (present != 0) LuminPackInputPolicy.Invalid("The nullable marker is invalid.");
-                    return Read(node.Children[0], depth + 1, key);
+                    return Read<TDepth>(node.Children[0], depth + 1, key);
                 case LuminPackSafeKind.Sequence:
                 case LuminPackSafeKind.Set:
                 case LuminPackSafeKind.Dictionary:
                 case LuminPackSafeKind.Queue:
                 case LuminPackSafeKind.MultiArray:
-                    Collection(node, depth);
+                    Collection<TDepth>(node, depth);
                     return default;
                 case LuminPackSafeKind.Unsupported:
                     LuminPackInputPolicy.Invalid("The input uses an unreviewed wire shape.");
@@ -108,7 +118,8 @@ internal static unsafe class SafeBinaryValidator
         /// <summary>Checks framing, actual storage costs, uniqueness and all children before any target container exists.</summary>
         /// <param name="node">The collection contract.</param>
         /// <param name="depth">The current depth.</param>
-        private void Collection(LuminPackSafeNode node, int depth)
+        /// <typeparam name="TDepth">The selected graph depth policy.</typeparam>
+        private void Collection<TDepth>(LuminPackSafeNode node, int depth) where TDepth : struct
         {
             long dimensions = 1;
             if (node.Kind == LuminPackSafeKind.MultiArray)
@@ -144,13 +155,24 @@ internal static unsafe class SafeBinaryValidator
                 if (Count() != 0 || Count() != 0 || Count() != count) LuminPackInputPolicy.Invalid("The canonical queue framing is invalid.");
             bool unique = node.Kind is LuminPackSafeKind.Set or LuminPackSafeKind.Dictionary;
             var element = _schema.Nodes[node.Children[0]];
+            if (!unique && element.Kind == LuminPackSafeKind.Boolean && element.Storage == 1)
+            {
+                if (count != 0)
+                {
+                    if (typeof(TDepth) == typeof(ProvenDepth)) _budget.Work(1); else _budget.Depth(depth + 1);
+                    // Siblings have equal depth; retain the original work charge for every element.
+                    _budget.Work(count - 1L);
+                }
+                ValidateBooleans(Take(count));
+                return;
+            }
             if (!unique && element.Kind is LuminPackSafeKind.Byte or LuminPackSafeKind.SByte or
                 LuminPackSafeKind.Int16 or LuminPackSafeKind.UInt16 or LuminPackSafeKind.Int32 or LuminPackSafeKind.UInt32 or
                 LuminPackSafeKind.Int64 or LuminPackSafeKind.UInt64 or LuminPackSafeKind.Single or LuminPackSafeKind.Double or
                 LuminPackSafeKind.Char or LuminPackSafeKind.Guid or LuminPackSafeKind.TimeSpan)
             {
                 // Every bit pattern is valid for these fixed-width elements. Validate their complete range once.
-                if (count != 0) _budget.Depth(depth + 1);
+                if (count != 0) { if (typeof(TDepth) == typeof(ProvenDepth)) _budget.Work(1); else _budget.Depth(depth + 1); }
                 Take(checked(count * element.Storage));
                 return;
             }
@@ -159,15 +181,27 @@ internal static unsafe class SafeBinaryValidator
             var keys = unique ? new HashSet<SafeInputKey>(new SafeInputKeyComparer(_budget)) : null;
             for (int i = 0; i < count; i++)
             {
-                var item = Read(node.Children[0], depth + 1, unique);
+                var item = Read<TDepth>(node.Children[0], depth + 1, unique);
                 if (unique)
                 {
                     if (item.Text != null) _budget.Work(2L * count * item.Text.Length);
                     if (node.Kind == LuminPackSafeKind.Dictionary && item.IsNull) LuminPackInputPolicy.Invalid("A dictionary key is null.");
                     if (!keys!.Add(item)) LuminPackInputPolicy.Invalid("A set or dictionary contains duplicate keys or elements.");
                 }
-                if (node.Kind == LuminPackSafeKind.Dictionary) Read(node.Children[1], depth + 1, false);
+                if (node.Kind == LuminPackSafeKind.Dictionary) Read<TDepth>(node.Children[1], depth + 1, false);
             }
+        }
+
+        /// <summary>Checks Boolean storage in bounded four-byte groups with a byte-wise tail.</summary>
+        /// <param name="bytes">The complete validated Boolean payload.</param>
+        private static void ValidateBooleans(ReadOnlySpan<byte> bytes)
+        {
+            int index = 0;
+            for (; index <= bytes.Length - 4; index += 4)
+                if ((BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(index, 4)) & 0xFEFEFEFEu) != 0)
+                    LuminPackInputPolicy.Invalid("A Boolean has a noncanonical storage value.");
+            for (; index < bytes.Length; index++)
+                if (bytes[index] > 1) LuminPackInputPolicy.Invalid("A Boolean has a noncanonical storage value.");
         }
 
         /// <summary>Checks scalar domains using bounded byte reads rather than architecture-sensitive aggregate loads.</summary>

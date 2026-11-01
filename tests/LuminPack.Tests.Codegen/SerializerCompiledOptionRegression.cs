@@ -40,6 +40,7 @@ internal static partial class SerializerCompiledOptionRegression
         VerifyDeclarationConstants(parse, references);
         VerifyVarIntProfiles(parse, references);
         VerifyVarIntIncremental(parse, references);
+        VerifyInputFacts(parse, references);
         Console.WriteLine("Passed constrained generic compiled profiles, partial-helper API selection, registered assembly defaults and option diagnostics.");
     }
 

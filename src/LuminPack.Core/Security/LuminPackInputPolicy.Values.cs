@@ -433,7 +433,9 @@ public static partial class LuminPackInputPolicy
     /// <returns>The fixed width, or minus one for variable records.</returns>
     private static int FixedWidth(LuminPackSafeSchema schema, int index, out int depth, out bool validate)
     {
-        var node = schema.Nodes[index]; depth = 1; validate = false;
+        var node = schema.Nodes[index]; depth = node.FixedDepth; validate = node.FixedDomain;
+        if (node.FixedWidth != -2) return node.FixedWidth;
+        depth = 1; validate = false;
         if (node.Kind == LuminPackSafeKind.Struct)
         {
             int width = 0;
