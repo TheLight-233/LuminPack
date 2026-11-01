@@ -124,7 +124,7 @@ internal static class SerializerScalarInterfaceWriteRegression
         var first = Compile(source, "ChangedInterfaceWrite", parse, references);
         var (driver, _) = Generate(first, parse);
         Require(!Methods(driver).Any(method => method.Identifier.ValueText == "RootWriteExactInterface"), "A user element acquired framework scalar eligibility.");
-        var edited = first.ReplaceSyntaxTree(first.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(source.Replace("IList<UserElement>", "IList<int>", StringComparison.Ordinal), parse));
+        var edited = first.ReplaceSyntaxTree(first.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(source.Replace("IList<UserElement>", "IList<int>", StringComparison.Ordinal), parse));
         driver = driver.RunGeneratorsAndUpdateCompilation(edited, out _, out var diagnostics);
         Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
         var (fresh, _) = Generate(edited, parse);

@@ -129,8 +129,8 @@ internal static partial class SerializerCodegenPerformanceRegression
                     LuminPackSerializer.Deserialize(new ReadOnlySequence<byte>(start, 0, end, end.Memory.Length), ref largeCopy);
                     if (largeCopy.Tail != 857 || !LuminPackSerializer.Serialize(largeCopy).AsSpan().SequenceEqual(largeBytes))
                         throw new Exception("A pooled unmanaged sequence changed raw storage.");
-                    if (LuminPackSerializer.Deserialize<Narrow>(LuminPackSerializer.Serialize(Narrow.Value)) != Narrow.Value ||
-                        LuminPackSerializer.Deserialize<int>(LuminPackSerializer.Serialize(997)) != 997)
+                    if (global::LuminPackUnitTest.ConcreteReads.Read<Narrow>(LuminPackSerializer.Serialize(Narrow.Value), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Narrow concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) != Narrow.Value ||
+                        global::LuminPackUnitTest.ConcreteReads.Read<int>(LuminPackSerializer.Serialize(997), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) != 997)
                         throw new Exception("The architecture-compatible scalar/enum core changed values.");
                     Root value = new FixedChild { Head = 31, First = first, Second = second, Tail = -71 };
                     byte[] expected = new byte[45];
@@ -157,7 +157,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                         !LuminPackSerializer.Serialize(copy).AsSpan().SequenceEqual(expected))
                         throw new Exception("Padded repeated structs failed to round trip.");
                     var nested = new Nested { Value = (FixedChild)value, Tail = 41 };
-                    if (!LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<Nested>(LuminPackSerializer.Serialize(nested))).AsSpan().SequenceEqual(LuminPackSerializer.Serialize(nested)))
+                    if (!LuminPackSerializer.Serialize(global::LuminPackUnitTest.ConcreteReads.Read<Nested>(LuminPackSerializer.Serialize(nested), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Nested concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))).AsSpan().SequenceEqual(LuminPackSerializer.Serialize(nested)))
                         throw new Exception("A nested header batch changed the payload.");
                     var lists = new ListGraph
                     {
@@ -174,7 +174,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                         Tail = 103
                     };
                     var listBytes = LuminPackSerializer.Serialize(lists);
-                    var listCopy = LuminPackSerializer.Deserialize<ListGraph>(listBytes);
+                    var listCopy = global::LuminPackUnitTest.ConcreteReads.Read<ListGraph>(listBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ListGraph concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (listCopy.First.Count != 3 || listCopy.First[1] != null || listCopy.Second[0] != null ||
                         listCopy.First[2] is not TextChild { Text: "outer", Nested: InnerSecond { Text: "inner", Number: 107 }, __luminSwitchCursor0: 109 } ||
                         listCopy.Managed[0].Text != "managed" || listCopy.Managed[1].Value != null || listCopy.Tail != 103 ||
@@ -197,7 +197,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                     BitConverter.TryWriteBytes(adjacentExpected.AsSpan(41), -101L);
                     if (!adjacentBytes.AsSpan().SequenceEqual(adjacentExpected))
                         throw new Exception("An adjacent raw copy included a gap or omitted a member's padding.");
-                    var adjacentCopy = LuminPackSerializer.Deserialize<Contiguous>(adjacentBytes);
+                    var adjacentCopy = global::LuminPackUnitTest.ConcreteReads.Read<Contiguous>(adjacentBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Contiguous concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (!LuminPackSerializer.Serialize(adjacentCopy).AsSpan().SequenceEqual(adjacentExpected))
                         throw new Exception("A typed field read changed unmanaged struct padding.");
                     var existing = new Contiguous { Head = -1, Tail = -2 };
@@ -211,7 +211,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                     var bytes = LuminPackSerializer.Serialize(bulk);
                     if (bytes.Length != 1 + 4 + 4 + 48000 + 4 + 48000 + 4 + 80000 + 4)
                         throw new Exception("A large raw collection changed framing or padding.");
-                    var restored = LuminPackSerializer.Deserialize<Bulk>(bytes);
+                    var restored = global::LuminPackUnitTest.ConcreteReads.Read<Bulk>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Bulk concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     var roundTrip = LuminPackSerializer.Serialize(restored);
                     if (restored.Head != 53 || restored.Tail != 61 || restored.Values.Count != 3000 || restored.Array.Length != 3000 ||
                         restored.Numbers.Count != 20000 || !roundTrip.AsSpan().SequenceEqual(bytes))
@@ -221,10 +221,10 @@ internal static partial class SerializerCodegenPerformanceRegression
                         throw new Exception($"Raw collection mismatch: head={restored.Head}, tail={restored.Tail}, list={restored.Values.Count}, array={restored.Array.Length}, numbers={restored.Numbers.Count}, bytes={bytes.Length}/{roundTrip.Length}, first difference={different}.");
                     }
                     var repeated = new List<Bulk> { bulk, bulk };
-                    if (LuminPackSerializer.Deserialize<List<Bulk>>(LuminPackSerializer.Serialize(repeated)).Count != 2)
+                    if (global::LuminPackUnitTest.ConcreteReads.Read<List<Bulk>>(LuminPackSerializer.Serialize(repeated), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<Bulk> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Count != 2)
                         throw new Exception("Deferred collection cursors lost their capacity reservation.");
                     bool rejected = false;
-                    try { LuminPackSerializer.Deserialize<Bulk>(bytes.AsSpan(0, 32)); }
+                    try { global::LuminPackUnitTest.ConcreteReads.Read<Bulk>(bytes.AsSpan(0, 32), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Bulk concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)); }
                     catch (Exception exception) when (exception.GetType().Name == "LuminPackException") { rejected = true; }
                     if (!rejected) throw new Exception("A truncated raw collection was copied beyond its input.");
                     int[] numbers = { 17, 23 };
@@ -245,7 +245,7 @@ internal static partial class SerializerCodegenPerformanceRegression
             }
             """;
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET10_0_OR_GREATER", "NET11_0_OR_GREATER"]);
-        var compilation = CSharpCompilation.Create("CodegenPerformance", [CSharpSyntaxTree.ParseText(source, parse)], references,
+        var compilation = TestCompilation.Create("CodegenPerformance", [CSharpSyntaxTree.ParseText(source, parse)], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
         VerifyFreshListTemplates(compilation);
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
@@ -380,7 +380,7 @@ internal static partial class SerializerCodegenPerformanceRegression
         var emit = output.Emit(image);
         Require(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics.Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));
         Assembly.Load(image.ToArray()).GetType("Entry")!.GetMethod("Check")!.Invoke(null, null);
-        var originalTree = compilation.SyntaxTrees.Single();
+        var originalTree = compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs");
         var edited = compilation.ReplaceSyntaxTree(originalTree, originalTree.WithChangedText(
             Microsoft.CodeAnalysis.Text.SourceText.From(source.Replace("public volatile int Head;", "public int Head;", StringComparison.Ordinal))));
         var retained = driver.RunGenerators(edited).GetRunResult();
@@ -592,7 +592,7 @@ internal static partial class SerializerCodegenPerformanceRegression
         Require(rewrite.Visit(result)!.ToFullString() == result.ToFullString(), "Native offset projection is not idempotent.");
         foreach (bool overflow in new[] { false, true })
         {
-            var compilation = CSharpCompilation.Create("OffsetProbe_" + Guid.NewGuid().ToString("N"), [CSharpSyntaxTree.Create((CSharpSyntaxNode)result)], references,
+            var compilation = TestCompilation.Create("OffsetProbe_" + Guid.NewGuid().ToString("N"), [CSharpSyntaxTree.Create((CSharpSyntaxNode)result)], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, optimizationLevel: OptimizationLevel.Release, checkOverflow: overflow));
             using var image = new MemoryStream();
             var emitted = compilation.Emit(image);

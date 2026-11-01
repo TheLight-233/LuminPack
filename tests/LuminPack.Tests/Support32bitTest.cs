@@ -4,6 +4,7 @@ using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Core;
 using LuminPack.Generated;
+using LuminPack.Option;
 using Xunit;
 
 namespace LuminPackUnitTest;
@@ -20,7 +21,7 @@ public class Support32bitTest
         Assert.Equal(11, expected.Length);
         Assert.True(Unsafe.SizeOf<PortablePadded>() > expected.Length);
         Assert.Equal(expected, LuminPackSerializer.Serialize(value));
-        Assert.Equal(value, LuminPackSerializer.Deserialize<PortablePadded>(expected));
+        Assert.Equal(value, global::LuminPackUnitTest.ConcreteReads.Read<PortablePadded>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortablePadded concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Verifies that an unmarked nested struct is expanded inside a portable record.</summary>
@@ -30,7 +31,7 @@ public class Support32bitTest
         var value = new PortableNested { Prefix = 3, Inner = new RawPadded { Tag = 5, Value = 0x102030405060708 }, Tail = 9 };
         byte[] expected = new byte[] { 3, 5 }.Concat(BitConverter.GetBytes(value.Inner.Value)).Concat(new byte[] { 9 }).ToArray();
         Assert.Equal(expected, LuminPackSerializer.Serialize(value));
-        Assert.Equal(value, LuminPackSerializer.Deserialize<PortableNested>(expected));
+        Assert.Equal(value, global::LuminPackUnitTest.ConcreteReads.Read<PortableNested>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortableNested concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Verifies packed ABI declarations can retain raw copies when no padding exists.</summary>
@@ -88,14 +89,14 @@ public class Support32bitTest
         var value = new PortablePrivate(19, 0x123456789abcdef);
         var expected = new byte[] { 19 }.Concat(BitConverter.GetBytes(value.Value)).ToArray();
         Assert.Equal(expected, LuminPackSerializer.Serialize(value));
-        Assert.Equal(value.Value, LuminPackSerializer.Deserialize<PortablePrivate>(expected).Value);
+        Assert.Equal(value.Value, global::LuminPackUnitTest.ConcreteReads.Read<PortablePrivate>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortablePrivate concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Value);
         var sized = new PortableSized { Value = 41 };
         Assert.Equal(BitConverter.GetBytes(41), LuminPackSerializer.Serialize(sized));
-        Assert.Equal(41, LuminPackSerializer.Deserialize<PortableSized>(BitConverter.GetBytes(41)).Value);
+        Assert.Equal(41, global::LuminPackUnitTest.ConcreteReads.Read<PortableSized>(BitConverter.GetBytes(41), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortableSized concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Value);
         var explicitValue = new PortableExplicit { First = 5, Second = 123456789012345 };
         var explicitBytes = new byte[] { 5 }.Concat(BitConverter.GetBytes(explicitValue.Second)).ToArray();
         Assert.Equal(explicitBytes, LuminPackSerializer.Serialize(explicitValue));
-        Assert.Equal(explicitValue, LuminPackSerializer.Deserialize<PortableExplicit>(explicitBytes));
+        Assert.Equal(explicitValue, global::LuminPackUnitTest.ConcreteReads.Read<PortableExplicit>(explicitBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortableExplicit concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Verifies large arrays and lists share one packed payload and reuse existing storage.</summary>
@@ -106,19 +107,19 @@ public class Support32bitTest
         byte[] expected = BitConverter.GetBytes(values.Length).Concat(values.SelectMany(Expected)).ToArray();
         Assert.Equal(expected, LuminPackSerializer.Serialize(values));
         Assert.Equal(expected, LuminPackSerializer.Serialize(values.ToList()));
-        var copy = LuminPackSerializer.Deserialize<PortablePadded[]>(expected);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<PortablePadded[]>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortablePadded[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(values, copy);
         var original = copy;
         LuminPackSerializer.Deserialize(expected.AsSpan(), ref copy);
         Assert.Same(original, copy);
-        var list = LuminPackSerializer.Deserialize<List<PortablePadded>>(expected);
+        var list = global::LuminPackUnitTest.ConcreteReads.Read<List<PortablePadded>>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<PortablePadded> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(values, list);
         var originalList = list;
         LuminPackSerializer.Deserialize(expected.AsSpan(), ref list);
         Assert.Same(originalList, list);
         Assert.Equal(values, list);
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<PortablePadded[]>(expected.AsSpan(0, expected.Length - 1)));
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<List<PortablePadded>>(expected.AsSpan(0, expected.Length - 1)));
+        Assert.ThrowsAny<Exception>(() => global::LuminPackUnitTest.ConcreteReads.Read<PortablePadded[]>(expected.AsSpan(0, expected.Length - 1), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortablePadded[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+        Assert.ThrowsAny<Exception>(() => global::LuminPackUnitTest.ConcreteReads.Read<List<PortablePadded>>(expected.AsSpan(0, expected.Length - 1), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<PortablePadded> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Verifies packed root/member contracts and collection boundaries compose with following fields.</summary>
@@ -127,7 +128,7 @@ public class Support32bitTest
     {
         var value = new PortableContainer { First = 13, Value = Create(3), Array = new[] { Create(5) }, List = new() { Create(7) }, Last = 29 };
         var payload = LuminPackSerializer.Serialize(value);
-        var copy = LuminPackSerializer.Deserialize<PortableContainer>(payload);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<PortableContainer>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortableContainer concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(value.First, copy.First);
         Assert.Equal(value.Value, copy.Value);
         Assert.Equal(value.Array, copy.Array);
@@ -135,11 +136,11 @@ public class Support32bitTest
         Assert.Equal(value.Last, copy.Last);
         Assert.Equal(payload, LuminPackSerializer.Serialize(copy));
         var nested = new[] { new[] { Create(11) }, Array.Empty<PortablePadded>() };
-        var nestedCopy = LuminPackSerializer.Deserialize<PortablePadded[][]>(LuminPackSerializer.Serialize(nested));
+        var nestedCopy = global::LuminPackUnitTest.ConcreteReads.Read<PortablePadded[][]>(LuminPackSerializer.Serialize(nested), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortablePadded[][] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(nested[0], nestedCopy[0]);
         Assert.Empty(nestedCopy[1]);
         var dictionary = new Dictionary<int, PortablePadded> { [2] = Create(9) };
-        Assert.Equal(dictionary[2], LuminPackSerializer.Deserialize<Dictionary<int, PortablePadded>>(LuminPackSerializer.Serialize(dictionary))[2]);
+        Assert.Equal(dictionary[2], global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, PortablePadded>>(LuminPackSerializer.Serialize(dictionary), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, PortablePadded> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))[2]);
     }
 
     /// <summary>Verifies null and empty collection framing remains unchanged.</summary>
@@ -148,8 +149,8 @@ public class Support32bitTest
     {
         PortablePadded[]? array = null;
         List<PortablePadded>? list = null;
-        Assert.Null(LuminPackSerializer.Deserialize<PortablePadded[]>(LuminPackSerializer.Serialize(array)));
-        Assert.Null(LuminPackSerializer.Deserialize<List<PortablePadded>>(LuminPackSerializer.Serialize(list)));
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<PortablePadded[]>(LuminPackSerializer.Serialize(array), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortablePadded[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<List<PortablePadded>>(LuminPackSerializer.Serialize(list), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<PortablePadded> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         Assert.Equal(BitConverter.GetBytes(0), LuminPackSerializer.Serialize(Array.Empty<PortablePadded>()));
         Assert.Equal(BitConverter.GetBytes(0), LuminPackSerializer.Serialize(new List<PortablePadded>()));
     }
@@ -161,11 +162,11 @@ public class Support32bitTest
         var value = new PortableGeneric<long> { Tag = 11, Value = long.MaxValue - 17 };
         byte[] expected = new byte[] { 11 }.Concat(BitConverter.GetBytes(value.Value)).ToArray();
         Assert.Equal(expected, LuminPackSerializer.Serialize(value));
-        Assert.Equal(value, LuminPackSerializer.Deserialize<PortableGeneric<long>>(expected));
+        Assert.Equal(value, global::LuminPackUnitTest.ConcreteReads.Read<PortableGeneric<long>>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortableGeneric<long> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         var array = new[] { value };
         var payload = LuminPackSerializer.Serialize(array);
         Assert.Equal(BitConverter.GetBytes(1).Concat(expected).ToArray(), payload);
-        Assert.Equal(array, LuminPackSerializer.Deserialize<PortableGeneric<long>[]>(payload));
+        Assert.Equal(array, global::LuminPackUnitTest.ConcreteReads.Read<PortableGeneric<long>[]>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortableGeneric<long>[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         Span<byte> span = new byte[64];
         var writer = new LuminPackWriter(ref span);
         WriteGeneric(ref writer, in value);
@@ -177,19 +178,25 @@ public class Support32bitTest
         Assert.Equal(value, copy);
     }
 
-    /// <summary>Exercises the open state overload through its closed formatter dispatch.</summary>
+    /// <summary>Exercises a registered generic state entry with the closed portable representation.</summary>
     /// <typeparam name="T">The unmanaged field type.</typeparam>
     /// <param name="writer">The caller-owned output state.</param>
     /// <param name="value">The portable generic value.</param>
     private static void WriteGeneric<T>(ref LuminPackWriter writer, in PortableGeneric<T> value) where T : unmanaged
-        => LuminPackSerializer.Serialize(ref writer, in value);
+    {
+        LuminPackSerializer.RegisterTestProfile<PortableGeneric<T>, LuminPackDefaultOptions>();
+        LuminPackSerializer.Serialize(ref writer, in value);
+    }
 
-    /// <summary>Exercises an open reader entry without changing the closed portable representation.</summary>
+    /// <summary>Exercises a registered generic reader without changing the closed portable representation.</summary>
     /// <typeparam name="T">The unmanaged field type.</typeparam>
     /// <param name="reader">The caller-owned input state.</param>
     /// <param name="value">The destination storage.</param>
     private static void ReadGeneric<T>(ref LuminPackReader reader, ref PortableGeneric<T> value) where T : unmanaged
-        => LuminPackSerializer.Deserialize(ref reader, ref value);
+    {
+        LuminPackSerializer.RegisterTestProfile<PortableGeneric<T>, LuminPackDefaultOptions>();
+        LuminPackSerializer.Deserialize(ref reader, ref value);
+    }
 
     /// <summary>Verifies repeated portable array/List reads allocate no objects after warmup.</summary>
     [Fact]
@@ -224,12 +231,12 @@ public class Support32bitTest
         Assert.Equal(expected, LuminPackSerializer.Serialize(memory));
         Assert.Equal(expected, LuminPackSerializer.Serialize(readOnly));
         Assert.Equal(expected, LuminPackSerializer.Serialize(segment));
-        Assert.Equal(values[1..], LuminPackSerializer.Deserialize<Memory<PortablePadded>>(expected).ToArray());
-        Assert.Equal(values[1..], LuminPackSerializer.Deserialize<ReadOnlyMemory<PortablePadded>>(expected).ToArray());
-        Assert.Equal(values[1..], LuminPackSerializer.Deserialize<ArraySegment<PortablePadded>>(expected).ToArray());
+        Assert.Equal(values[1..], global::LuminPackUnitTest.ConcreteReads.Read<Memory<PortablePadded>>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Memory<PortablePadded> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).ToArray());
+        Assert.Equal(values[1..], global::LuminPackUnitTest.ConcreteReads.Read<ReadOnlyMemory<PortablePadded>>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReadOnlyMemory<PortablePadded> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).ToArray());
+        Assert.Equal(values[1..], global::LuminPackUnitTest.ConcreteReads.Read<ArraySegment<PortablePadded>>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ArraySegment<PortablePadded> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).ToArray());
         var matrix = new PortablePadded[,] { { Create(4), Create(5) } };
         var payload = LuminPackSerializer.Serialize(matrix);
-        Assert.Equal(matrix[0, 1], LuminPackSerializer.Deserialize<PortablePadded[,]>(payload)[0, 1]);
+        Assert.Equal(matrix[0, 1], global::LuminPackUnitTest.ConcreteReads.Read<PortablePadded[,]>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortablePadded[,] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))[0, 1]);
     }
 
     /// <summary>Creates a reproducible record with a nontrivial 64-bit field.</summary>

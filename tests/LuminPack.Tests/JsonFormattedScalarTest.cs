@@ -107,7 +107,7 @@ public class JsonFormattedScalarTest
         string json = LuminPackSerializer.SerializeJson(model);
         Assert.Contains("\"CreatedAt\":\"2023-11-15T06:13:20.0000000Z\"", json);
 
-        var roundTrip = LuminPackSerializer.DeserializeJson<FormattedScalarModel>(json);
+        var roundTrip = global::LuminPackUnitTest.ConcreteReads.ReadJson<FormattedScalarModel>(json, static (string concreteReadInput, ref FormattedScalarModel concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(model.CreatedAt, roundTrip.CreatedAt);
         Assert.Equal(model.SavedAt, roundTrip.SavedAt);
         Assert.Equal(model.Id, roundTrip.Id);
@@ -116,11 +116,11 @@ public class JsonFormattedScalarTest
 
         var list = new List<DateTimeOffset>(DateTimeOffsets);
         var listJson = LuminPackSerializer.SerializeJson(list);
-        Assert.Equal(list, LuminPackSerializer.DeserializeJson<List<DateTimeOffset>>(listJson));
+        Assert.Equal(list, global::LuminPackUnitTest.ConcreteReads.ReadJson<List<DateTimeOffset>>(listJson, static (string concreteReadInput, ref List<DateTimeOffset> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
 
         var array = (DateTime[])DateTimes.Clone();
         var arrayJson = LuminPackSerializer.SerializeJson(array);
-        Assert.Equal(array, LuminPackSerializer.DeserializeJson<DateTime[]>(arrayJson));
+        Assert.Equal(array, global::LuminPackUnitTest.ConcreteReads.ReadJson<DateTime[]>(arrayJson, static (string concreteReadInput, ref DateTime[] concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Verifies nullable values still emit null and values.</summary>
@@ -138,11 +138,11 @@ public class JsonFormattedScalarTest
 
         string nullJson = LuminPackSerializer.SerializeJson(none);
         Assert.Contains("\"OptionalAt\":null", nullJson);
-        Assert.Null(LuminPackSerializer.DeserializeJson<FormattedScalarModel>(nullJson).OptionalAt);
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.ReadJson<FormattedScalarModel>(nullJson, static (string concreteReadInput, ref FormattedScalarModel concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).OptionalAt);
 
         none.OptionalAt = new DateTime(2001, 2, 3, 4, 5, 6, DateTimeKind.Utc);
         string valueJson = LuminPackSerializer.SerializeJson(none);
-        Assert.Equal(none.OptionalAt, LuminPackSerializer.DeserializeJson<FormattedScalarModel>(valueJson).OptionalAt);
+        Assert.Equal(none.OptionalAt, global::LuminPackUnitTest.ConcreteReads.ReadJson<FormattedScalarModel>(valueJson, static (string concreteReadInput, ref FormattedScalarModel concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).OptionalAt);
     }
 
     /// <summary>Verifies writing scalars into a reusable buffer allocates nothing.</summary>
@@ -253,6 +253,7 @@ public class JsonFormattedScalarTest
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
     private static void AssertSerializerMatches<T>(T value, string expected)
     {
+        LuminPackSerializer.RegisterTestProfile<T, LuminPackDefaultOptions>();
         Assert.Equal(expected, LuminPackSerializer.SerializeJson(value));
 
         string utf16 = LuminPackSerializer.SerializeJson(value, new TestSerializationProfile

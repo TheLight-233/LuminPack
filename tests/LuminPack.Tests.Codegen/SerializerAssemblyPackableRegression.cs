@@ -165,13 +165,40 @@ internal static class SerializerAssemblyPackableRegression
                         throw new Exception("An annotated external generic type was not generated.");
                     return restored.Number + restored.Value;
                 }
-                private static T RoundTrip<T>(T value)
+                private static ExternalLibrary.ExternalNote RoundTrip(ExternalLibrary.ExternalNote value)
                 {
-                    byte[] bytes = LuminPackSerializer.Serialize<T>(value);
-                    T restored = default!;
-                    LuminPackSerializer.Deserialize<T>(bytes.AsSpan(), ref restored);
-                    string json = LuminPackSerializer.SerializeJson<T>(value);
-                    LuminPackSerializer.DeserializeJson<T>(json, ref restored);
+                    byte[] bytes = LuminPackSerializer.Serialize(value);
+                    ExternalLibrary.ExternalNote restored = default!;
+                    LuminPackSerializer.Deserialize(bytes.AsSpan(), ref restored);
+                    string json = LuminPackSerializer.SerializeJson(value);
+                    LuminPackSerializer.DeserializeJson(json, ref restored);
+                    return restored;
+                }
+                private static ExternalLibrary.ExternalEnvelope RoundTrip(ExternalLibrary.ExternalEnvelope value)
+                {
+                    byte[] bytes = LuminPackSerializer.Serialize(value);
+                    ExternalLibrary.ExternalEnvelope restored = default!;
+                    LuminPackSerializer.Deserialize(bytes.AsSpan(), ref restored);
+                    string json = LuminPackSerializer.SerializeJson(value);
+                    LuminPackSerializer.DeserializeJson(json, ref restored);
+                    return restored;
+                }
+                private static ExternalLibrary.ExternalNode RoundTrip(ExternalLibrary.ExternalNode value)
+                {
+                    byte[] bytes = LuminPackSerializer.Serialize(value);
+                    ExternalLibrary.ExternalNode restored = default!;
+                    LuminPackSerializer.Deserialize(bytes.AsSpan(), ref restored);
+                    string json = LuminPackSerializer.SerializeJson(value);
+                    LuminPackSerializer.DeserializeJson(json, ref restored);
+                    return restored;
+                }
+                private static ExternalLibrary.AnnotatedModel<int> RoundTrip(ExternalLibrary.AnnotatedModel<int> value)
+                {
+                    byte[] bytes = LuminPackSerializer.Serialize(value);
+                    ExternalLibrary.AnnotatedModel<int> restored = default!;
+                    LuminPackSerializer.Deserialize(bytes.AsSpan(), ref restored);
+                    string json = LuminPackSerializer.SerializeJson(value);
+                    LuminPackSerializer.DeserializeJson(json, ref restored);
                     return restored;
                 }
             }

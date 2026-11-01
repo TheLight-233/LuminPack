@@ -24,7 +24,7 @@ public sealed class BufferAppendTest
         };
         byte[] rawBytes = LuminPackSerializer.Serialize(raw);
         LuminPackSerializer.Serialize(raw, buffer);
-        LuminPackSerializer.Serialize<AppendLargeFixed>(raw, buffer);
+        LuminPackSerializer.Serialize((AppendLargeFixed)(raw), buffer);
         Assert.True(buffer.CurrentIndex <= buffer.TotalLength);
         Assert.True(buffer.GetSpan().SequenceEqual(rawBytes.Concat(rawBytes).ToArray()));
         buffer.ResetForReuse();
@@ -83,8 +83,8 @@ public sealed class BufferAppendTest
         byte[] prefix = Enumerable.Repeat((byte)0xA5, 32767).ToArray();
         buffer.LoadSequence(new System.Buffers.ReadOnlySequence<byte>(prefix));
         const string value = "appended \u4E2D\uD83D\uDE00";
-        byte[] expected = LuminPackSerializer.Serialize<string, LuminPackUtf16TokenOptions>(value);
-        LuminPackSerializer.Serialize<string, LuminPackUtf16TokenOptions>(value, buffer);
+        byte[] expected = LuminPackSerializer.Serialize<LuminPackUtf16TokenOptions>((string)(value));
+        LuminPackSerializer.Serialize<LuminPackUtf16TokenOptions>((string)(value), buffer);
         Assert.Equal(prefix.Length + expected.Length, buffer.CurrentIndex);
         Assert.True(buffer.GetSpan()[..prefix.Length].SequenceEqual(prefix));
         Assert.True(buffer.GetSpan()[prefix.Length..].SequenceEqual(expected));
@@ -102,10 +102,10 @@ public sealed class BufferAppendTest
         byte[] record = LuminPackSerializer.Serialize(versioned);
         int start = buffer.CurrentIndex;
         LuminPackSerializer.Serialize(versioned, buffer);
-        LuminPackSerializer.Serialize<CapacityTierTest.VersionedOrdinary>(versioned, buffer);
+        LuminPackSerializer.Serialize((CapacityTierTest.VersionedOrdinary)(versioned), buffer);
         Assert.True(buffer.GetSpan().Slice(start, record.Length).SequenceEqual(record));
         Assert.True(buffer.GetSpan()[(start + record.Length)..].SequenceEqual(record));
-        var restored = LuminPackSerializer.Deserialize<CapacityTierTest.VersionedOrdinary>(buffer.GetSpan()[start..]);
+        var restored = global::LuminPackUnitTest.ConcreteReads.Read<CapacityTierTest.VersionedOrdinary>(buffer.GetSpan()[start..], static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CapacityTierTest.VersionedOrdinary concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(versioned.Text, restored.Text);
         Assert.Equal(519, Assert.Single(restored.Values).Id);
     }
@@ -122,7 +122,7 @@ public sealed class BufferAppendTest
         value.Next = value;
         LuminPackSerializer.Serialize(value, buffer);
         int firstLength = buffer.CurrentIndex;
-        LuminPackSerializer.Serialize<AppendReferenceNode>(value, buffer);
+        LuminPackSerializer.Serialize((AppendReferenceNode)(value), buffer);
         Assert.True(buffer.WriterState.GetOrAddReference(value).existsReference);
         Assert.True(buffer.CurrentIndex - firstLength < firstLength);
         var next = new AppendReferenceNode
@@ -164,14 +164,14 @@ public sealed class BufferAppendTest
         buffer.WriterState.GetOrAddReference(marker);
         LuminPackSerializer.SerializeJson("first", buffer);
         byte[] first = Encoding.Unicode.GetBytes(LuminPackSerializer.SerializeJson("first"));
-        LuminPackSerializer.SerializeJson<string>("second", buffer);
+        LuminPackSerializer.SerializeJson((string)("second"), buffer);
         byte[] second = Encoding.Unicode.GetBytes(LuminPackSerializer.SerializeJson("second"));
         Assert.True(buffer.GetSpan().SequenceEqual(first.Concat(second).ToArray()));
         Assert.True(buffer.WriterState.GetOrAddReference(marker).existsReference);
         buffer.ResetForReuse();
-        LuminPackSerializer.SerializeJson<string, LuminPackUtf16LengthOptions>("first", buffer);
+        LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>((string)("first"), buffer);
         int offset = buffer.CurrentIndex;
-        LuminPackSerializer.SerializeJson<string, LuminPackUtf16LengthOptions>("second", buffer);
+        LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>((string)("second"), buffer);
         Assert.Equal("\"first\"", Encoding.Unicode.GetString(buffer.GetSpan()[..offset]));
         Assert.Equal("\"second\"", Encoding.Unicode.GetString(buffer.GetSpan()[offset..]));
     }
@@ -205,12 +205,12 @@ public sealed class BufferAppendTest
                     Failure = failure
                 };
                 if (generic)
-                    LuminPackSerializer.SerializeJson<AppendCustomFailure>(custom, buffer);
+                    LuminPackSerializer.SerializeJson((AppendCustomFailure)(custom), buffer);
                 else
                     LuminPackSerializer.SerializeJson(custom, buffer);
             }
             else if (generic)
-                LuminPackSerializer.Serialize<AppendFailureModel>(value, buffer);
+                LuminPackSerializer.Serialize((AppendFailureModel)(value), buffer);
             else
                 LuminPackSerializer.Serialize(value, buffer);
         });
@@ -222,7 +222,7 @@ public sealed class BufferAppendTest
         Assert.True(buffer.WriterState.GetOrAddReference(marker).existsReference);
         buffer.ResetForReuse();
         LuminPackSerializer.Serialize(456, buffer);
-        Assert.Equal(456, LuminPackSerializer.Deserialize<int>(buffer));
+        Assert.Equal(456, global::LuminPackUnitTest.ConcreteReads.Read<int>(buffer, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref int concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Clears both maps even when an explicitly reset payload has no published bytes.</summary>

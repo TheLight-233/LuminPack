@@ -56,7 +56,7 @@ internal static class BufferWriterSerializationTest
             "GetSpan did not expose exactly the published bytes.");
         Assert(writer.GetSpan().SequenceEqual(expected),
             "External writer payload differed from the array-returning overload.");
-        Assert(LuminPackSerializer.Deserialize<string>(writer.GetSpan()) == value,
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<string>(writer.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == value,
             "Published payload could not be deserialized.");
     }
 
@@ -80,7 +80,7 @@ internal static class BufferWriterSerializationTest
             "Appending a short record changed the previous record or its new suffix.");
         writer.ResetForReuse();
         LuminPackSerializer.Serialize(shortValue, writer);
-        Assert(LuminPackSerializer.Deserialize<string>(writer.GetSpan()) == shortValue,
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<string>(writer.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == shortValue,
             "Short payload from the reused writer could not be deserialized.");
     }
 
@@ -124,7 +124,7 @@ internal static class BufferWriterSerializationTest
             "ToArrayAndReset returned bytes outside the published payload.");
         Assert(writer.CurrentIndex == 0, "ToArrayAndReset did not clear CurrentIndex.");
         Assert(writer.GetSpan().IsEmpty, "ToArrayAndReset did not clear the published span.");
-        Assert(LuminPackSerializer.Deserialize<string>(actual) == value,
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<string>(actual, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == value,
             "ToArrayAndReset payload could not be deserialized.");
     }
 
@@ -204,7 +204,7 @@ internal static class BufferWriterSerializationTest
 
         const string value = "after-reset";
         LuminPackSerializer.Serialize(value, writer);
-        Assert(LuminPackSerializer.Deserialize<string>(writer.GetSpan()) == value,
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<string>(writer.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == value,
             "Buffer writer could not be reused after Reset released its buffer.");
     }
 
@@ -232,7 +232,7 @@ internal static class BufferWriterSerializationTest
             "Decompress did not publish the restored payload length.");
         Assert(writer.GetSpan().SequenceEqual(original),
             "In-place compression round-trip changed the serialized payload.");
-        Assert(LuminPackSerializer.Deserialize<string>(writer.GetSpan()) == value,
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<string>(writer.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == value,
             "Decompressed payload could not be deserialized.");
     }
 
@@ -261,7 +261,7 @@ internal static class BufferWriterSerializationTest
     {
         int[]? value = null;
         var payload = LuminPackSerializer.Serialize(value);
-        var result = LuminPackSerializer.Deserialize<int[]?>(payload);
+        var result = global::LuminPackUnitTest.ConcreteReads.Read<int[]?>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int[]? concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(result is null, "A null unmanaged array was not preserved.");
     }
 

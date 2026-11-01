@@ -66,7 +66,7 @@ internal static class SerializerScalarStorageReuseRegression
             Assembly.Load(Emit(output)).GetType("ScalarReuseEntry")!.GetMethod("Check")!.Invoke(null, null);
 
             string excluded = text.Replace("using Element = System.Int32;", "using Element = PortableElement;", StringComparison.Ordinal);
-            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(excluded, parse, "Shape.cs"));
+            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(excluded, parse, "Shape.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out var editedOutput, out diagnostics);
             CheckSelection(driver, scalar: false);
             Emit(editedOutput);

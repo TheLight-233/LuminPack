@@ -23,6 +23,7 @@
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="../LuminPack.Tests/ConcreteReads.cs" Link="TestSupport/ConcreteReads.cs" />
     <CompilerVisibleProperty Include="LuminPackGenerationMode" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackPackageVersion)' == ''">

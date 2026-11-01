@@ -1134,7 +1134,7 @@ private MemoryPackSerializerOptions memoryPackSerializerOption = new MemoryPackS
     [Benchmark]
     [BenchmarkCategory("Deserialize")]
     public CharacterSaveData LuminPackDeserialize()
-        => LuminPackSerializer.Deserialize<CharacterSaveData, LuminPackUtf16LengthOptions>(_luminBuffer);
+        { CharacterSaveData value = null!; LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(_luminBuffer, ref value); return value; }
 
     /// <summary>Measures memory pack deserialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>

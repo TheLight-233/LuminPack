@@ -43,7 +43,7 @@ When both are present, the more aggressive mode wins. The attribute's second arg
 
 ## Caveats
 
-- In `Light` and `Minimal`, serialization the generator cannot prove (reflection, `typeof`-driven code, calls from other assemblies) fails at run time like a type without a formatter. Use `Full` or `Medium` for those projects.
+- `Light` and `Minimal` retain only statically proven concrete API shapes. Use `Full` or `Medium` to retain more concrete APIs for external callers; calls that bind a generic payload API still require registration.
 - `Minimal` assumes every serialization happens through static `LuminPackSerializer` calls in the same assembly. Otherwise use `Light`.
 - Pruning never changes the wire format or the formatter used for a type; only which code exists.
-- Generic `LuminPackSerializer` calls on types outside the generated set need [registration](custom-formatters.md#runtime-registration).
+- Every generic payload `LuminPackSerializer` call needs [registration](custom-formatters.md#runtime-registration), including wrapper calls and types inside the generated set. Reachability alone does not register a formatter. `Full` and `Medium` retain more concrete APIs but do not provide automatic generic fallback.

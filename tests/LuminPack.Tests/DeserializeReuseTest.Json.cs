@@ -31,9 +31,9 @@ public partial class DeserializeReuseTest
             Array = [new() { Number = 8, Text = "array" }],
             Names = ["ascii", "quote\"\u00E9"], Numbers = [1, 2, 3], Tail = 99
         };
-        string json = LuminPackSerializer.SerializeJson<ReuseGraph, TOptions>(source);
+        string json = LuminPackSerializer.SerializeJson<TOptions>((ReuseGraph)(source));
         byte[] bytes = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(json);
-        var target = LuminPackSerializer.DeserializeJson<ReuseGraph, TOptions>(bytes);
+        var target = global::LuminPackUnitTest.ConcreteReads.ReadJson<ReuseGraph>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReuseGraph concreteReadTarget) => LuminPackSerializer.DeserializeJson<TOptions>(concreteReadInput, ref concreteReadTarget));
         var root = target;
         var child = target.Child;
         var text = child.Text;
@@ -45,7 +45,7 @@ public partial class DeserializeReuseTest
         var name = names[1];
         var numbers = target.Numbers;
         target.Tail = 0;
-        Assert.Equal(bytes.Length, LuminPackSerializer.DeserializeJson<ReuseGraph, TOptions>(bytes, ref target));
+        Assert.Equal(bytes.Length, LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref target));
         Assert.Same(root, target);
         Assert.Same(child, target.Child);
         Assert.Same(text, child.Text);
@@ -57,9 +57,9 @@ public partial class DeserializeReuseTest
         Assert.Same(name, names[1]);
         Assert.Same(numbers, target.Numbers);
         Assert.Equal(99, target.Tail);
-        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<ReuseGraph, TOptions>(bytes, ref target);
+        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<ReuseGraph, TOptions>(bytes, ref target);
+        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref target);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 
@@ -89,17 +89,17 @@ public partial class DeserializeReuseTest
 
         var pooled = new PooledNode();
         int rents = PooledNode.Rents;
-        LuminPackSerializer.DeserializeJson<PooledNode>("{\"Child\":{\"Number\":15}}", ref pooled);
+LuminPackSerializer.DeserializeJson("{\"Child\":{\"Number\":15}}", ref pooled);
         Assert.Equal(rents, PooledNode.Rents);
         Assert.Equal(15, pooled.Child.Number);
         PooledNode fresh = null!;
-        LuminPackSerializer.DeserializeJson<PooledNode>("{\"Child\":{\"Number\":16}}", ref fresh);
+LuminPackSerializer.DeserializeJson("{\"Child\":{\"Number\":16}}", ref fresh);
         Assert.Equal(rents + 1, PooledNode.Rents);
         Assert.Equal(16, fresh.Child.Number);
         var shared = PoolBackedNode.Shared;
         var sharedChild = shared.Child;
         rents = PoolBackedNode.Rents;
-        var rented = LuminPackSerializer.DeserializeJson<PoolBackedNode>("{\"Child\":{\"Number\":17}}");
+        var rented = global::LuminPackUnitTest.ConcreteReads.ReadJson<PoolBackedNode>("{\"Child\":{\"Number\":17}}", static (string concreteReadInput, ref PoolBackedNode concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert.Same(shared, rented);
         Assert.Same(sharedChild, rented.Child);
         Assert.Equal(17, sharedChild.Number);
@@ -112,22 +112,22 @@ public partial class DeserializeReuseTest
     {
         var target = new ReuseGraph { Tail = 1, Items = [new()] };
         var root = target;
-        LuminPackSerializer.DeserializeJson<ReuseGraph>("{\"Tail\":2,\"unknown\":[{}],\"Tail\":3}", ref target);
+LuminPackSerializer.DeserializeJson("{\"Tail\":2,\"unknown\":[{}],\"Tail\":3}", ref target);
         Assert.Same(root, target);
         Assert.Equal(3, target.Tail);
         Assert.Null(target.Child);
         Assert.Null(target.Items);
-        LuminPackSerializer.DeserializeJson<ReuseGraph>("null", ref target);
+LuminPackSerializer.DeserializeJson("null", ref target);
         Assert.Null(target);
         var managed = new ManagedNode { Child = new() };
         var child = managed.Child;
-        LuminPackSerializer.DeserializeJson<ManagedNode>("{\"Child\":{\"Number\":17}}", ref managed);
+LuminPackSerializer.DeserializeJson("{\"Child\":{\"Number\":17}}", ref managed);
         Assert.Same(child, managed.Child);
         Assert.Equal(17, child.Number);
         var generic = new GenericGraph<ReuseNode> { Child = new(), Items = [new()] };
         child = generic.Child;
         var item = generic.Items[0];
-        LuminPackSerializer.DeserializeJson<GenericGraph<ReuseNode>>("{\"Child\":{\"Number\":18},\"Items\":[{\"Number\":19}]}", ref generic);
+LuminPackSerializer.DeserializeJson("{\"Child\":{\"Number\":18},\"Items\":[{\"Number\":19}]}", ref generic);
         Assert.Same(child, generic.Child);
         Assert.Same(item, generic.Items[0]);
         Assert.Equal(18, child.Number);
@@ -141,25 +141,25 @@ public partial class DeserializeReuseTest
         var child = new ReuseNode();
         var list = new List<ReuseNode>(8) { child, new() };
         var original = list;
-        LuminPackSerializer.DeserializeJson<List<ReuseNode>>("[{\"Number\":21}]", ref list);
+LuminPackSerializer.DeserializeJson("[{\"Number\":21}]", ref list);
         Assert.Same(original, list);
         Assert.Same(child, Assert.Single(list));
         Assert.Equal(8, list.Capacity);
         IEnumerable<ReuseNode> sequence = list;
-        LuminPackSerializer.DeserializeJson<IEnumerable<ReuseNode>>("[{\"Number\":22}]", ref sequence);
+LuminPackSerializer.DeserializeJson("[{\"Number\":22}]", ref sequence);
         Assert.Same(list, sequence);
         Assert.Same(child, list[0]);
         var array = new[] { child };
         sequence = array;
-        LuminPackSerializer.DeserializeJson<IEnumerable<ReuseNode>>("[{\"Number\":23}]", ref sequence);
+LuminPackSerializer.DeserializeJson("[{\"Number\":23}]", ref sequence);
         Assert.Same(array, sequence);
         Assert.Same(child, array[0]);
-        LuminPackSerializer.DeserializeJson<ReuseNode[]>("[{\"Number\":24},null]", ref array);
+LuminPackSerializer.DeserializeJson("[{\"Number\":24},null]", ref array);
         Assert.Equal(2, array.Length);
         Assert.NotSame(child, array[0]);
         Assert.Null(array[1]);
         sequence = new HashSet<ReuseNode> { child };
-        LuminPackSerializer.DeserializeJson<IEnumerable<ReuseNode>>("[]", ref sequence);
+LuminPackSerializer.DeserializeJson("[]", ref sequence);
         Assert.IsType<List<ReuseNode>>(sequence);
         Assert.Empty(sequence);
     }
@@ -171,7 +171,7 @@ public partial class DeserializeReuseTest
         var child = new ReuseNode();
         var dictionary = new Dictionary<string, ReuseNode>(StringComparer.OrdinalIgnoreCase) { ["key"] = child, ["removed"] = new() };
         var original = dictionary;
-        LuminPackSerializer.DeserializeJson<Dictionary<string, ReuseNode>>("[[\"KEY\",{\"Number\":31}],[\"new\",null]]", ref dictionary);
+LuminPackSerializer.DeserializeJson("[[\"KEY\",{\"Number\":31}],[\"new\",null]]", ref dictionary);
         Assert.Same(original, dictionary);
         Assert.Same(StringComparer.OrdinalIgnoreCase, dictionary.Comparer);
         Assert.Same(child, dictionary["key"]);
@@ -179,11 +179,11 @@ public partial class DeserializeReuseTest
         Assert.False(dictionary.ContainsKey("removed"));
         Assert.Null(dictionary["new"]);
         IDictionary<string, ReuseNode> view = dictionary;
-        LuminPackSerializer.DeserializeJson<IDictionary<string, ReuseNode>>("[[\"key\",{\"Number\":32}]]", ref view);
+LuminPackSerializer.DeserializeJson("[[\"key\",{\"Number\":32}]]", ref view);
         Assert.Same(dictionary, view);
         Assert.Same(child, view["key"]);
         var numbers = new Dictionary<string, int> { ["key"] = 99 };
-        LuminPackSerializer.DeserializeJson<Dictionary<string, int>>("[[\"key\"]]", ref numbers);
+LuminPackSerializer.DeserializeJson("[[\"key\"]]", ref numbers);
         Assert.Equal(0, numbers["key"]);
     }
 
@@ -194,13 +194,13 @@ public partial class DeserializeReuseTest
         var array = new[] { new ReuseNode(), new ReuseNode(), new ReuseNode() };
         var child = array[1];
         Memory<ReuseNode> memory = array.AsMemory(1, 1);
-        LuminPackSerializer.DeserializeJson<Memory<ReuseNode>>("[{\"Number\":35}]", ref memory);
+LuminPackSerializer.DeserializeJson("[{\"Number\":35}]", ref memory);
         Assert.True(MemoryMarshal.TryGetArray((ReadOnlyMemory<ReuseNode>)memory, out var backing));
         Assert.Same(array, backing.Array);
         Assert.Equal(1, backing.Offset);
         Assert.Same(child, memory.Span[0]);
         var segment = new ArraySegment<ReuseNode>(array, 1, 1);
-        LuminPackSerializer.DeserializeJson<ArraySegment<ReuseNode>>("[{\"Number\":36}]", ref segment);
+LuminPackSerializer.DeserializeJson("[{\"Number\":36}]", ref segment);
         Assert.Same(array, segment.Array);
         Assert.Equal(1, segment.Offset);
         Assert.Same(child, segment[0]);
@@ -208,9 +208,9 @@ public partial class DeserializeReuseTest
         var map = new Dictionary<string, string> { ["key"] = "quote\"\u00E9" };
         var text = map["key"];
         byte[] bytes = Encoding.UTF8.GetBytes("[[\"key\",\"quote\\\"\\u00e9\"]]");
-        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<Dictionary<string, string>, TestUtf8Length>(bytes, ref map);
+        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<TestUtf8Length>(bytes, ref map);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<Dictionary<string, string>, TestUtf8Length>(bytes, ref map);
+        for (int i = 0; i < 128; i++) LuminPackSerializer.DeserializeJson<TestUtf8Length>(bytes, ref map);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         Assert.Same(text, map["key"]);
     }
@@ -222,25 +222,25 @@ public partial class DeserializeReuseTest
         ReuseUnion target = new FirstCase();
         var original = (FirstCase)target;
         var child = original.Child;
-        string json = LuminPackSerializer.SerializeJson<ReuseUnion>(new FirstCase { Child = new() { Number = 41 } });
-        LuminPackSerializer.DeserializeJson<ReuseUnion>(json, ref target);
+        string json = LuminPackSerializer.SerializeJson((ReuseUnion)(new FirstCase { Child = new() { Number = 41 } }));
+LuminPackSerializer.DeserializeJson(json, ref target);
         Assert.Same(original, target);
         Assert.Same(child, original.Child);
         Assert.Equal(41, child.Number);
-        json = LuminPackSerializer.SerializeJson<ReuseUnion>(new SecondCase { Number = 42 });
-        LuminPackSerializer.DeserializeJson<ReuseUnion>(json, ref target);
+        json = LuminPackSerializer.SerializeJson((ReuseUnion)(new SecondCase { Number = 42 }));
+LuminPackSerializer.DeserializeJson(json, ref target);
         Assert.Equal(42, Assert.IsType<SecondCase>(target).Number);
         var source = new TrackedNode { Number = 43 };
         source.Next = source;
         var tracked = new TrackedNode();
         var trackedRoot = tracked;
         json = LuminPackSerializer.SerializeJson(source);
-        LuminPackSerializer.DeserializeJson<TrackedNode>(json, ref tracked);
+LuminPackSerializer.DeserializeJson(json, ref tracked);
         Assert.Same(trackedRoot, tracked);
         Assert.Same(tracked, tracked.Next);
         Assert.Equal(43, tracked.Number);
         tracked.Next = tracked;
-        LuminPackSerializer.DeserializeJson<TrackedNode>("{\"$id\":0,\"Number\":44,\"Next\":{\"$id\":1,\"Number\":45,\"Next\":null}}", ref tracked);
+LuminPackSerializer.DeserializeJson("{\"$id\":0,\"Number\":44,\"Next\":{\"$id\":1,\"Number\":45,\"Next\":null}}", ref tracked);
         Assert.Same(trackedRoot, tracked);
         Assert.NotSame(tracked, tracked.Next);
         Assert.Equal(44, tracked.Number);
@@ -285,8 +285,8 @@ public partial class DeserializeReuseTest
     public void JsonReuseRejectsMalformedArrays(string json)
     {
         var array = new[] { new ReuseNode() };
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<ReuseNode[], TestStrictUtf8Length>(json, ref array));
-        LuminPackSerializer.DeserializeJson<ReuseNode[], TestStrictUtf8Length>("[{\"Number\":51}]", ref array);
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<TestStrictUtf8Length>(json, ref array));
+LuminPackSerializer.DeserializeJson<TestStrictUtf8Length>("[{\"Number\":51}]", ref array);
         Assert.Equal(51, array[0].Number);
     }
 }

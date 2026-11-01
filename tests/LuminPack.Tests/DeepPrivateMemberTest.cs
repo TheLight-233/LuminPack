@@ -98,7 +98,7 @@ namespace LuminPackUnitTest
                 _ = LuminPackSerializer.Serialize(original.Level1.Level2.Level3);
 
                 var buffer = LuminPackSerializer.Serialize(original);
-                var restored = LuminPackSerializer.Deserialize<DeepRoot>(buffer);
+                var restored = global::LuminPackUnitTest.ConcreteReads.Read<DeepRoot>(buffer, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref DeepRoot concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 bool binaryOk = restored.RootValue == 1
                     && restored.Level1.Value1 == 2
@@ -107,7 +107,7 @@ namespace LuminPackUnitTest
                     && restored.Level1.Level2.Level3.Secret == 5;
 
                 string json = LuminPackSerializer.SerializeJson(original);
-                var fromJson = LuminPackSerializer.DeserializeJson<DeepRoot>(json);
+                var fromJson = global::LuminPackUnitTest.ConcreteReads.ReadJson<DeepRoot>(json, static (string concreteReadInput, ref DeepRoot concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 bool jsonOk = fromJson.RootValue == 1
                     && fromJson.Level1.Value1 == 2

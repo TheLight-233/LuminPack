@@ -56,6 +56,7 @@ public static partial class LuminPackSerializerGenerator
             sb.AppendLine("        /// <typeparam name=\"T\">The serialized payload type.</typeparam>");
             sb.AppendLine("        /// <param name=\"state\">The existing operation state, including its cursor and reference tracking.</param>");
             sb.AppendLine("        /// <param name=\"value\">The payload storage.</param>");
+            sb.AppendLine("        /// <remarks>Requires an explicit or Custom formatter registration for the requested operation. Concrete overloads call generated roots directly.</remarks>");
             sb.AppendLine("        [MethodImpl(MethodImplOptions.AggressiveInlining)]");
             // The exact-width evaluator only serves generated direct records, so its entry stays inside the assembly.
             sb.Append(operation == "Sizeof" ? "        internal static void " : "        public static void ").Append(operation).Append("<T>(ref global::LuminPack.Core.LuminPack").Append(state)

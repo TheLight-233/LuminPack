@@ -306,7 +306,7 @@ namespace LuminPackUnitTest
                 original.B = "Test";
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<HierarchicalBase>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<HierarchicalBase>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref HierarchicalBase concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.B == deserialized.B)
                     results.Add("✓ Test_HierarchicalBase - PASSED");
@@ -325,7 +325,7 @@ namespace LuminPackUnitTest
                 original.B = "Test";
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<HierarchicalBase>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<HierarchicalBase>(json, static (string concreteReadInput, ref HierarchicalBase concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.B == deserialized.B)
                     results.Add("✓ Test_HierarchicalBase [JSON] - PASSED");
@@ -349,7 +349,7 @@ namespace LuminPackUnitTest
                 original.D = 1.23f;
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<HierarchicalSub1>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<HierarchicalSub1>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref HierarchicalSub1 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.B == deserialized.B && original.D == deserialized.D)
                     results.Add("✓ Test_HierarchicalSub1 - PASSED");
@@ -369,7 +369,7 @@ namespace LuminPackUnitTest
                 original.D = 1.23f;
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<HierarchicalSub1>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<HierarchicalSub1>(json, static (string concreteReadInput, ref HierarchicalSub1 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.B == deserialized.B && original.D == deserialized.D)
                     results.Add("✓ Test_HierarchicalSub1 [JSON] - PASSED");
@@ -394,7 +394,7 @@ namespace LuminPackUnitTest
                 original.F = new List<int> { 1, 2, 3 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<HierarchicalSub2>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<HierarchicalSub2>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref HierarchicalSub2 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.B == deserialized.B && original.D == deserialized.D &&
                     ListsEqual(original.F, deserialized.F))
@@ -416,7 +416,7 @@ namespace LuminPackUnitTest
                 original.F = new List<int> { 1, 2, 3 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<HierarchicalSub2>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<HierarchicalSub2>(json, static (string concreteReadInput, ref HierarchicalSub2 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.B == deserialized.B && original.D == deserialized.D &&
                     ListsEqual(original.F, deserialized.F))
@@ -440,7 +440,7 @@ namespace LuminPackUnitTest
                 original.Id = 123;
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SomeNestedPrivateEnum>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SomeNestedPrivateEnum>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SomeNestedPrivateEnum concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id)
                     results.Add("✓ Test_SomeNestedPrivateEnum - PASSED");
@@ -459,7 +459,7 @@ namespace LuminPackUnitTest
                 original.Id = 123;
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SomeNestedPrivateEnum>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SomeNestedPrivateEnum>(json, static (string concreteReadInput, ref SomeNestedPrivateEnum concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id)
                     results.Add("✓ Test_SomeNestedPrivateEnum [JSON] - PASSED");
@@ -481,7 +481,7 @@ namespace LuminPackUnitTest
                 var original = Move.Create(100, 200);
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<Move>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<Move>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Move concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.ClientX == deserialized.ClientX && original.ClientY == deserialized.ClientY)
                     results.Add("✓ Test_Move - PASSED");
@@ -499,7 +499,7 @@ namespace LuminPackUnitTest
                 var original = Move.Create(100, 200);
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<Move>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<Move>(json, static (string concreteReadInput, ref Move concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.ClientX == deserialized.ClientX && original.ClientY == deserialized.ClientY)
                     results.Add("✓ Test_Move [JSON] - PASSED");
@@ -521,7 +521,7 @@ namespace LuminPackUnitTest
                 var original = TestMethodCtor.Create(123, "test");
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<TestMethodCtor>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<TestMethodCtor>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TestMethodCtor concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A)
                     results.Add("✓ Test_TestMethodCtor - PASSED");
@@ -539,7 +539,7 @@ namespace LuminPackUnitTest
                 var original = TestMethodCtor.Create(123, "test");
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<TestMethodCtor>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<TestMethodCtor>(json, static (string concreteReadInput, ref TestMethodCtor concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A)
                     results.Add("✓ Test_TestMethodCtor [JSON] - PASSED");
@@ -561,7 +561,7 @@ namespace LuminPackUnitTest
                 var original = new TestA<int>(42);
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<TestA<int>>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<TestA<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TestA<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.MValue == deserialized.MValue)
                     results.Add("✓ Test_TestA - PASSED");
@@ -579,7 +579,7 @@ namespace LuminPackUnitTest
                 var original = new TestA<int>(42);
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<TestA<int>>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<TestA<int>>(json, static (string concreteReadInput, ref TestA<int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.MValue == deserialized.MValue)
                     results.Add("✓ Test_TestA [JSON] - PASSED");
@@ -601,7 +601,7 @@ namespace LuminPackUnitTest
                 var original = new TestB<string>("hello");
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<TestB<string>>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<TestB<string>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TestB<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.MValue == deserialized.MValue)
                     results.Add("✓ Test_TestB - PASSED");
@@ -619,7 +619,7 @@ namespace LuminPackUnitTest
                 var original = new TestB<string>("hello");
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<TestB<string>>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<TestB<string>>(json, static (string concreteReadInput, ref TestB<string> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.MValue == deserialized.MValue)
                     results.Add("✓ Test_TestB [JSON] - PASSED");
@@ -643,7 +643,7 @@ namespace LuminPackUnitTest
                 original.field.TryAdd("test", new[] { 1, 2, 3 });
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<CursedGeneric<int>>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<CursedGeneric<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CursedGeneric<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (ArraysEqual(original.field["test"], deserialized.field["test"]))
                     results.Add("✓ Test_CursedGeneric - PASSED");
@@ -663,7 +663,7 @@ namespace LuminPackUnitTest
                 original.field.TryAdd("test", new[] { 1, 2, 3 });
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<CursedGeneric<int>>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<CursedGeneric<int>>(json, static (string concreteReadInput, ref CursedGeneric<int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (ArraysEqual(original.field["test"], deserialized.field["test"]))
                     results.Add("✓ Test_CursedGeneric [JSON] - PASSED");
@@ -685,7 +685,7 @@ namespace LuminPackUnitTest
                 var original = new PrivateNestedCollection();
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<PrivateNestedCollection>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<PrivateNestedCollection>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PrivateNestedCollection concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (deserialized != null)
                     results.Add("✓ Test_PrivateNestedCollection - PASSED");
@@ -703,7 +703,7 @@ namespace LuminPackUnitTest
                 var original = new PrivateNestedCollection();
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<PrivateNestedCollection>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<PrivateNestedCollection>(json, static (string concreteReadInput, ref PrivateNestedCollection concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (deserialized != null)
                     results.Add("✓ Test_PrivateNestedCollection [JSON] - PASSED");
@@ -731,7 +731,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<ListElementClass>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<ListElementClass>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ListElementClass concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.Extra == deserialized.Extra)
@@ -756,7 +756,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<ListElementClass>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<ListElementClass>(json, static (string concreteReadInput, ref ListElementClass concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.Extra == deserialized.Extra)
@@ -785,7 +785,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<ListElementClass2Renamed>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<ListElementClass2Renamed>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ListElementClass2Renamed concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.Extra == deserialized.Extra)
@@ -810,7 +810,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<ListElementClass2Renamed>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<ListElementClass2Renamed>(json, static (string concreteReadInput, ref ListElementClass2Renamed concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.Extra == deserialized.Extra)
@@ -834,7 +834,7 @@ namespace LuminPackUnitTest
                 original.Id = 123;
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<ProtectedShouldInclude>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<ProtectedShouldInclude>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ProtectedShouldInclude concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id)
                     results.Add("✓ Test_ProtectedShouldInclude - PASSED");
@@ -853,7 +853,7 @@ namespace LuminPackUnitTest
                 original.Id = 123;
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<ProtectedShouldInclude>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<ProtectedShouldInclude>(json, static (string concreteReadInput, ref ProtectedShouldInclude concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id)
                     results.Add("✓ Test_ProtectedShouldInclude [JSON] - PASSED");
@@ -878,7 +878,7 @@ namespace LuminPackUnitTest
                 original.CreateTime = DateTime.Now;
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<ShouldIgnorePrivate>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<ShouldIgnorePrivate>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ShouldIgnorePrivate concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
@@ -900,7 +900,7 @@ namespace LuminPackUnitTest
                 original.CreateTime = DateTime.Now;
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<ShouldIgnorePrivate>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<ShouldIgnorePrivate>(json, static (string concreteReadInput, ref ShouldIgnorePrivate concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
@@ -923,7 +923,7 @@ namespace LuminPackUnitTest
                 var original = new Bindable<int>(42);
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<Bindable<int>>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<Bindable<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Bindable<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Value == deserialized.Value)
                     results.Add("✓ Test_Bindable - PASSED");
@@ -941,7 +941,7 @@ namespace LuminPackUnitTest
                 var original = new Bindable<int>(42);
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<Bindable<int>>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<Bindable<int>>(json, static (string concreteReadInput, ref Bindable<int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Value == deserialized.Value)
                     results.Add("✓ Test_Bindable [JSON] - PASSED");
@@ -963,7 +963,7 @@ namespace LuminPackUnitTest
                 var original = new TestPrivateMemberClass();
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<TestPrivateMemberClass>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<TestPrivateMemberClass>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TestPrivateMemberClass concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (deserialized != null)
                     results.Add("✓ Test_TestPrivateMemberClass - PASSED");
@@ -981,7 +981,7 @@ namespace LuminPackUnitTest
                 var original = new TestPrivateMemberClass();
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<TestPrivateMemberClass>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<TestPrivateMemberClass>(json, static (string concreteReadInput, ref TestPrivateMemberClass concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (deserialized != null)
                     results.Add("✓ Test_TestPrivateMemberClass [JSON] - PASSED");
@@ -1003,7 +1003,7 @@ namespace LuminPackUnitTest
                 var original = new RecordWithPrivateMember("Test");
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<RecordWithPrivateMember>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<RecordWithPrivateMember>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref RecordWithPrivateMember concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Name == deserialized.Name)
                     results.Add("✓ Test_RecordWithPrivateMember - PASSED");
@@ -1021,7 +1021,7 @@ namespace LuminPackUnitTest
                 var original = new RecordWithPrivateMember("Test");
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<RecordWithPrivateMember>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<RecordWithPrivateMember>(json, static (string concreteReadInput, ref RecordWithPrivateMember concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Name == deserialized.Name)
                     results.Add("✓ Test_RecordWithPrivateMember [JSON] - PASSED");
@@ -1043,7 +1043,7 @@ namespace LuminPackUnitTest
                 var original = new RecordWithPrivateMember2("Test");
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<RecordWithPrivateMember2>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<RecordWithPrivateMember2>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref RecordWithPrivateMember2 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Name == deserialized.Name)
                     results.Add("✓ Test_RecordWithPrivateMember2 - PASSED");
@@ -1061,7 +1061,7 @@ namespace LuminPackUnitTest
                 var original = new RecordWithPrivateMember2("Test");
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<RecordWithPrivateMember2>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<RecordWithPrivateMember2>(json, static (string concreteReadInput, ref RecordWithPrivateMember2 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Name == deserialized.Name)
                     results.Add("✓ Test_RecordWithPrivateMember2 [JSON] - PASSED");
@@ -1085,7 +1085,7 @@ namespace LuminPackUnitTest
                 original.SetName("Test");
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<StructWithPrivateMember>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<StructWithPrivateMember>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref StructWithPrivateMember concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.GetName() == deserialized.GetName())
                     results.Add("✓ Test_StructWithPrivateMember - PASSED");
@@ -1105,7 +1105,7 @@ namespace LuminPackUnitTest
                 original.SetName("Test");
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<StructWithPrivateMember>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<StructWithPrivateMember>(json, static (string concreteReadInput, ref StructWithPrivateMember concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.GetName() == deserialized.GetName())
                     results.Add("✓ Test_StructWithPrivateMember [JSON] - PASSED");
@@ -1129,7 +1129,7 @@ namespace LuminPackUnitTest
                 original.List = new List<int> { 1, 2, 3 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<ClassWithPrivateMember<int>>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<ClassWithPrivateMember<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ClassWithPrivateMember<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id)
                     results.Add("✓ Test_ClassWithPrivateMember - PASSED");
@@ -1149,7 +1149,7 @@ namespace LuminPackUnitTest
                 original.List = new List<int> { 1, 2, 3 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<ClassWithPrivateMember<int>>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<ClassWithPrivateMember<int>>(json, static (string concreteReadInput, ref ClassWithPrivateMember<int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id)
                     results.Add("✓ Test_ClassWithPrivateMember [JSON] - PASSED");
@@ -1176,7 +1176,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<Struct1>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<Struct1>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Struct1 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_Struct1 - PASSED");
@@ -1199,7 +1199,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<Struct1>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<Struct1>(json, static (string concreteReadInput, ref Struct1 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_Struct1 [JSON] - PASSED");
@@ -1227,7 +1227,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<Class1>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<Class1>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Class1 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_Class1 - PASSED");
@@ -1251,7 +1251,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<Class1>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<Class1>(json, static (string concreteReadInput, ref Class1 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_Class1 [JSON] - PASSED");
@@ -1279,7 +1279,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<Struct2>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<Struct2>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Struct2 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_Struct2 - PASSED");
@@ -1303,7 +1303,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<Struct2>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<Struct2>(json, static (string concreteReadInput, ref Struct2 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_Struct2 [JSON] - PASSED");
@@ -1329,7 +1329,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<StringData>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<StringData>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref StringData concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Str == deserialized.Str && original.ShouldHaveNoEffect == deserialized.ShouldHaveNoEffect)
                     results.Add("✓ Test_StringData - PASSED");
@@ -1351,7 +1351,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<StringData>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<StringData>(json, static (string concreteReadInput, ref StringData concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Str == deserialized.Str && original.ShouldHaveNoEffect == deserialized.ShouldHaveNoEffect)
                     results.Add("✓ Test_StringData [JSON] - PASSED");
@@ -1377,7 +1377,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<StringData2>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<StringData2>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref StringData2 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Str == deserialized.Str && original.ShouldHaveNoEffect == deserialized.ShouldHaveNoEffect)
                     results.Add("✓ Test_StringData2 - PASSED");
@@ -1399,7 +1399,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<StringData2>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<StringData2>(json, static (string concreteReadInput, ref StringData2 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Str == deserialized.Str && original.ShouldHaveNoEffect == deserialized.ShouldHaveNoEffect)
                     results.Add("✓ Test_StringData2 [JSON] - PASSED");
@@ -1427,7 +1427,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SaveData>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SaveData>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SaveData concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.NewField1 == deserialized.NewField1 &&
@@ -1453,7 +1453,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SaveData>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SaveData>(json, static (string concreteReadInput, ref SaveData concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.NewField1 == deserialized.NewField1 &&
@@ -1477,7 +1477,7 @@ namespace LuminPackUnitTest
                 var original = new GenericStruct<int> { Val = 42 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<GenericStruct<int>>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<GenericStruct<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref GenericStruct<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Val == deserialized.Val)
                     results.Add("✓ Test_GenericStruct - PASSED");
@@ -1495,7 +1495,7 @@ namespace LuminPackUnitTest
                 var original = new GenericStruct<int> { Val = 42 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<GenericStruct<int>>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<GenericStruct<int>>(json, static (string concreteReadInput, ref GenericStruct<int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Val == deserialized.Val)
                     results.Add("✓ Test_GenericStruct [JSON] - PASSED");
@@ -1517,7 +1517,7 @@ namespace LuminPackUnitTest
                 var original = new Generic<string> { Val = "test" };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<Generic<string>>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<Generic<string>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Generic<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Val == deserialized.Val)
                     results.Add("✓ Test_Generic - PASSED");
@@ -1535,7 +1535,7 @@ namespace LuminPackUnitTest
                 var original = new Generic<string> { Val = "test" };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<Generic<string>>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<Generic<string>>(json, static (string concreteReadInput, ref Generic<string> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Val == deserialized.Val)
                     results.Add("✓ Test_Generic [JSON] - PASSED");
@@ -1557,7 +1557,7 @@ namespace LuminPackUnitTest
                 var original = new ComplexGeneric<List<int>> { Val = new List<int> { 1, 2, 3 } };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<ComplexGeneric<List<int>>>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<ComplexGeneric<List<int>>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ComplexGeneric<List<int>> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (ListsEqual(original.Val, deserialized.Val))
                     results.Add("✓ Test_ComplexGeneric - PASSED");
@@ -1575,7 +1575,7 @@ namespace LuminPackUnitTest
                 var original = new ComplexGeneric<List<int>> { Val = new List<int> { 1, 2, 3 } };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<ComplexGeneric<List<int>>>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<ComplexGeneric<List<int>>>(json, static (string concreteReadInput, ref ComplexGeneric<List<int>> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (ListsEqual(original.Val, deserialized.Val))
                     results.Add("✓ Test_ComplexGeneric [JSON] - PASSED");
@@ -1597,7 +1597,7 @@ namespace LuminPackUnitTest
                 var original = new ComplexGeneric2<int> { Val = new Generic<int> { Val = 42 } };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<ComplexGeneric2<int>>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<ComplexGeneric2<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ComplexGeneric2<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Val.Val == deserialized.Val.Val)
                     results.Add("✓ Test_ComplexGeneric2 - PASSED");
@@ -1615,7 +1615,7 @@ namespace LuminPackUnitTest
                 var original = new ComplexGeneric2<int> { Val = new Generic<int> { Val = 42 } };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<ComplexGeneric2<int>>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<ComplexGeneric2<int>>(json, static (string concreteReadInput, ref ComplexGeneric2<int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Val.Val == deserialized.Val.Val)
                     results.Add("✓ Test_ComplexGeneric2 [JSON] - PASSED");
@@ -1637,7 +1637,7 @@ namespace LuminPackUnitTest
                 var original = new Sub1 { A = 1, B = 2 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<Sub1>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<Sub1>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Sub1 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_Sub1 - PASSED");
@@ -1655,7 +1655,7 @@ namespace LuminPackUnitTest
                 var original = new Sub1 { A = 1, B = 2 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<Sub1>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<Sub1>(json, static (string concreteReadInput, ref Sub1 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_Sub1 [JSON] - PASSED");
@@ -1677,7 +1677,7 @@ namespace LuminPackUnitTest
                 var original = new Sub3 { A = 1, C = 3, E = 5 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<Sub3>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<Sub3>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Sub3 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.C == deserialized.C && original.E == deserialized.E)
                     results.Add("✓ Test_Sub3 - PASSED");
@@ -1695,7 +1695,7 @@ namespace LuminPackUnitTest
                 var original = new Sub3 { A = 1, C = 3, E = 5 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<Sub3>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<Sub3>(json, static (string concreteReadInput, ref Sub3 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.C == deserialized.C && original.E == deserialized.E)
                     results.Add("✓ Test_Sub3 [JSON] - PASSED");
@@ -1717,7 +1717,7 @@ namespace LuminPackUnitTest
                 var original = new TestClass { A = 1, B = "test" };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<TestClass>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<TestClass>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TestClass concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_TestClass - PASSED");
@@ -1735,7 +1735,7 @@ namespace LuminPackUnitTest
                 var original = new TestClass { A = 1, B = "test" };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<TestClass>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<TestClass>(json, static (string concreteReadInput, ref TestClass concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_TestClass [JSON] - PASSED");
@@ -1757,7 +1757,7 @@ namespace LuminPackUnitTest
                 var original = new TestClass2 { A = 1, B = "test", C = 3 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<TestClass2>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<TestClass2>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TestClass2 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_TestClass2 - PASSED");
@@ -1775,7 +1775,7 @@ namespace LuminPackUnitTest
                 var original = new TestClass2 { A = 1, B = "test", C = 3 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<TestClass2>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<TestClass2>(json, static (string concreteReadInput, ref TestClass2 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B && original.C == deserialized.C)
                     results.Add("✓ Test_TestClass2 [JSON] - PASSED");
@@ -1810,7 +1810,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<TestClass3>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<TestClass3>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TestClass3 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 bool success = original.A == deserialized.A &&
                               original.B == deserialized.B &&
@@ -1855,7 +1855,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<TestClass3>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<TestClass3>(json, static (string concreteReadInput, ref TestClass3 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 bool success = original.A == deserialized.A &&
                               original.B == deserialized.B &&
@@ -1891,7 +1891,7 @@ namespace LuminPackUnitTest
                 var original = new TestStruct { A = 1, B = "test" };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<TestStruct>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<TestStruct>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TestStruct concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_TestStruct - PASSED");
@@ -1909,7 +1909,7 @@ namespace LuminPackUnitTest
                 var original = new TestStruct { A = 1, B = "test" };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<TestStruct>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<TestStruct>(json, static (string concreteReadInput, ref TestStruct concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_TestStruct [JSON] - PASSED");
@@ -1936,7 +1936,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<TestStruct2>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<TestStruct2>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TestStruct2 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_TestStruct2 - PASSED");
@@ -1959,7 +1959,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<TestStruct2>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<TestStruct2>(json, static (string concreteReadInput, ref TestStruct2 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.A == deserialized.A && original.B == deserialized.B)
                     results.Add("✓ Test_TestStruct2 [JSON] - PASSED");
@@ -1986,7 +1986,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SimpleClass>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SimpleClass>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleClass concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
@@ -2010,7 +2010,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SimpleClass>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleClass>(json, static (string concreteReadInput, ref SimpleClass concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
@@ -2033,7 +2033,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleRecordStruct(1, "Test", DateTime.Now);
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SimpleRecordStruct>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SimpleRecordStruct>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleRecordStruct concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
@@ -2052,7 +2052,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleRecordStruct(1, "Test", DateTime.Now);
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecordStruct>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleRecordStruct>(json, static (string concreteReadInput, ref SimpleRecordStruct concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
@@ -2075,7 +2075,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleRecordStruct2(1, DateTime.Now);
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SimpleRecordStruct2>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SimpleRecordStruct2>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleRecordStruct2 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleRecordStruct2 - PASSED");
@@ -2093,7 +2093,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleRecordStruct2(1, DateTime.Now);
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecordStruct2>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleRecordStruct2>(json, static (string concreteReadInput, ref SimpleRecordStruct2 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.CreateTime == deserialized.CreateTime)
                     results.Add("✓ Test_SimpleRecordStruct2 [JSON] - PASSED");
@@ -2115,7 +2115,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleRecordStruct2<string>(1, "test data");
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SimpleRecordStruct2<string>>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SimpleRecordStruct2<string>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleRecordStruct2<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Data == deserialized.Data)
                     results.Add("✓ Test_SimpleRecordStruct2_Generic - PASSED");
@@ -2133,7 +2133,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleRecordStruct2<string>(1, "test data");
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecordStruct2<string>>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleRecordStruct2<string>>(json, static (string concreteReadInput, ref SimpleRecordStruct2<string> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Data == deserialized.Data)
                     results.Add("✓ Test_SimpleRecordStruct2_Generic [JSON] - PASSED");
@@ -2155,7 +2155,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleRecord(1, "Test");
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SimpleRecord>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SimpleRecord>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleRecord concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name)
                     results.Add("✓ Test_SimpleRecord - PASSED");
@@ -2173,7 +2173,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleRecord(1, "Test");
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecord>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleRecord>(json, static (string concreteReadInput, ref SimpleRecord concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name)
                     results.Add("✓ Test_SimpleRecord [JSON] - PASSED");
@@ -2195,7 +2195,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleRecord2(1, "Test", DateTime.Now);
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SimpleRecord2>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SimpleRecord2>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleRecord2 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
@@ -2214,7 +2214,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleRecord2(1, "Test", DateTime.Now);
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecord2>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleRecord2>(json, static (string concreteReadInput, ref SimpleRecord2 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
@@ -2241,7 +2241,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SimpleRecord3>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SimpleRecord3>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleRecord3 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.Flag == deserialized.Flag)
@@ -2264,7 +2264,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecord3>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleRecord3>(json, static (string concreteReadInput, ref SimpleRecord3 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.Flag == deserialized.Flag)
@@ -2291,7 +2291,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SimpleRecord4>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SimpleRecord4>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleRecord4 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.ShouldNotIgnore == deserialized.ShouldNotIgnore)
@@ -2314,7 +2314,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecord4>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleRecord4>(json, static (string concreteReadInput, ref SimpleRecord4 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime && original.ShouldNotIgnore == deserialized.ShouldNotIgnore)
@@ -2341,7 +2341,7 @@ namespace LuminPackUnitTest
                 };
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SimpleRecord5>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SimpleRecord5>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleRecord5 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.ShouldNotIgnore == deserialized.ShouldNotIgnore)
                     results.Add("✓ Test_SimpleRecord5 - PASSED");
@@ -2363,7 +2363,7 @@ namespace LuminPackUnitTest
                 };
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecord5>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleRecord5>(json, static (string concreteReadInput, ref SimpleRecord5 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.ShouldNotIgnore == deserialized.ShouldNotIgnore)
                     results.Add("✓ Test_SimpleRecord5 [JSON] - PASSED");
@@ -2385,7 +2385,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleRecord6<int>(1, 42);
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SimpleRecord6<int>>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SimpleRecord6<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleRecord6<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Data == deserialized.Data)
                     results.Add("✓ Test_SimpleRecord6 - PASSED");
@@ -2403,7 +2403,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleRecord6<int>(1, 42);
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SimpleRecord6<int>>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleRecord6<int>>(json, static (string concreteReadInput, ref SimpleRecord6<int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Data == deserialized.Data)
                     results.Add("✓ Test_SimpleRecord6 [JSON] - PASSED");
@@ -2425,7 +2425,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleStruct(1, "Test", DateTime.Now);
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SimpleStruct>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SimpleStruct>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleStruct concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
@@ -2444,7 +2444,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleStruct(1, "Test", DateTime.Now);
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SimpleStruct>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleStruct>(json, static (string concreteReadInput, ref SimpleStruct concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
@@ -2467,7 +2467,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleClassWithConstructor(1, "Test", DateTime.Now);
 
                 var bytes = LuminPackSerializer.Serialize(original);
-                var deserialized = LuminPackSerializer.Deserialize<SimpleClassWithConstructor>(bytes);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.Read<SimpleClassWithConstructor>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleClassWithConstructor concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)
@@ -2486,7 +2486,7 @@ namespace LuminPackUnitTest
                 var original = new SimpleClassWithConstructor(1, "Test", DateTime.Now);
 
                 var json = LuminPackSerializer.SerializeJson(original);
-                var deserialized = LuminPackSerializer.DeserializeJson<SimpleClassWithConstructor>(json);
+                var deserialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleClassWithConstructor>(json, static (string concreteReadInput, ref SimpleClassWithConstructor concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 if (original.Id == deserialized.Id && original.Name == deserialized.Name &&
                     original.CreateTime == deserialized.CreateTime)

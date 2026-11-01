@@ -43,7 +43,7 @@
     <Compile Include="RuntimeStateCollection.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' == 'Safety' Or '$(LuminPackTestArea)' == 'Simd'">
-    <Compile Include="CompiledProfileTestSupport.cs;CompiledProfileTestKernels.cs" />
+    <Compile Include="CompiledProfileTestSupport.cs;CompiledProfileTestKernels.cs;ConcreteReads.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' == 'Safety'">
     <Compile Include="BinaryStringHotPathTest.StringList.cs" />

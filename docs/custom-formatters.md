@@ -47,20 +47,20 @@ Provide exactly one of these method sets:
 
 ## Runtime registration
 
-`LuminPackSerializer.Register<T>` registers static method pointers for a type the generator did not produce, for example a type outside the selected [generation mode](generation-modes.md). It needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>`.
+`LuminPackSerializer.Register<T>` registers static method pointers for generic entry points. Registration is required even for built-in and source-generated types when the call uses a generic payload API, such as `Serialize<T>`, `Deserialize<T>` or `Serialize<T, TOptions>`. A concrete overload still calls its generated Root directly. It needs `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>`.
 
 ```csharp
 static void Write(ref LuminPackWriter writer, in LegacyModel value)
 {
-    writer.WriteValue(value.Id);
-    writer.WriteValue(value.Name);
+    writer.Write(value.Id);
+    writer.Write(value.Name);
 }
 
 static void Read(ref LuminPackReader reader, ref LegacyModel value)
 {
     value = new LegacyModel();
-    reader.ReadValue(ref value.Id);
-    reader.ReadValue(ref value.Name);
+    reader.Read(ref value.Id);
+    reader.Read(ref value.Name);
 }
 
 unsafe
@@ -75,8 +75,20 @@ unsafe
 | `Register<T>(write, read, writeJson, readJson)` | Binary and JSON |
 | `Register<T, TOptions>(...)` | The same, for one closed option profile |
 
+For an already generated model, the callbacks can call its concrete state overloads:
+
+```csharp
+static void WritePerson(ref LuminPackWriter writer, in Person value)
+    => LuminPackSerializer.Serialize(ref writer, in value);
+static void ReadPerson(ref LuminPackReader reader, ref Person value)
+    => LuminPackSerializer.Deserialize(ref reader, ref value);
+unsafe { LuminPackSerializer.Register<Person>(&WritePerson, &ReadPerson); }
+```
+
+Those callback bodies select concrete operations. Calling `Serialize<Person>` inside `WritePerson` would re-enter the same registered generic operation.
+
 - Registering the same type twice throws `ArgumentException`.
-- Concrete overloads of generated types never consult the registry. Generic entry points check explicit and `Custom` registrations first, then the generated entry of the type, created on first use per type and profile.
+- Concrete overloads of generated types never consult the registry. Generic entry points use explicit and `Custom` registrations only. An absent registration or missing operation throws `LuminPackException`; there is no automatic generated fallback. Without unsafe support, or with `LuminPackRegisterMode.Disabled`, generic payload operations cannot use Register. Generic JSON boundaries and input staging use the consuming assembly defaults or the explicit profile; the registered callback owns its representation and any declaration-specific policy.
 - Registration holds no strong references, so plugins loaded into a collectible `AssemblyLoadContext` can still unload. Keep the registered code loaded while it can be called.
 
 ## Member-level formatters

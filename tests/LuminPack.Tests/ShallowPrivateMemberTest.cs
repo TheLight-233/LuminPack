@@ -51,7 +51,7 @@ namespace LuminPackUnitTest
                 original.Level1.Value1 = 2;
                 original.Level1.SetSecret(5);
 
-                var restored = LuminPackSerializer.Deserialize<ShallowRoot>(LuminPackSerializer.Serialize(original));
+                var restored = global::LuminPackUnitTest.ConcreteReads.Read<ShallowRoot>(LuminPackSerializer.Serialize(original), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ShallowRoot concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 bool ok = restored.RootValue == 1
                     && restored.Level1.Value1 == 2

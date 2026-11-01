@@ -104,8 +104,8 @@ public class CodeGenSerializationTest
         Console.WriteLine(string.Join(", ", bufC));
         Console.WriteLine(string.Join(", ", bufD));
 
-        C c2 = LuminPackSerializer.Deserialize<C>(bufC);
-        D d2 = LuminPackSerializer.Deserialize<D>(bufD);
+        C c2 = global::LuminPackUnitTest.ConcreteReads.Read<C>(bufC, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref C concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
+        D d2 = global::LuminPackUnitTest.ConcreteReads.Read<D>(bufD, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref D concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
 
         Console.WriteLine(c2.ToString());

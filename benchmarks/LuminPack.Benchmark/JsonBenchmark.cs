@@ -97,7 +97,7 @@ public class JsonBenchmark
     [GlobalSetup]
     public void SetUp()
     {
-        _luminPackJson = LuminPackSerializer.SerializeJson<CharacterSaveData, LuminPackDefaultOptions>(_data);
+        _luminPackJson = LuminPackSerializer.SerializeJson<LuminPackDefaultOptions>(_data);
         _systemTextJson = System.Text.Json.JsonSerializer.Serialize(_data, StjOptions);
         _newtonsoftJson = JsonConvert.SerializeObject(_data, NjSettings);
         _redoxJson = REDox.Json.JsonSerializer.Serialize(_data, RedoxSettings);
@@ -114,7 +114,7 @@ public class JsonBenchmark
     [BenchmarkCategory("Serialize")]
     public void LuminPackSerializeToJson()
     {
-        LuminPackSerializer.SerializeJson<CharacterSaveData, LuminPackDefaultOptions>(_data);
+        LuminPackSerializer.SerializeJson<LuminPackDefaultOptions>(_data);
     }
 
     /// <summary>Measures system text json serialize for the configured benchmark input.</summary>
@@ -145,7 +145,7 @@ public class JsonBenchmark
     [Benchmark]
     [BenchmarkCategory("Deserialize")]
     public CharacterSaveData LuminPackDeserializeFromJson()
-        => LuminPackSerializer.DeserializeJson<CharacterSaveData, LuminPackDefaultOptions>(_luminPackJson);
+        { CharacterSaveData value = null!; LuminPackSerializer.DeserializeJson<LuminPackDefaultOptions>(_luminPackJson, ref value); return value; }
 
     /// <summary>Measures system text json deserialize for the configured benchmark input.</summary>
     /// <returns>The result of the operation.</returns>

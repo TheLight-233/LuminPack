@@ -33,7 +33,7 @@ internal static class SerializerReviewRegression
                 {
                     var value = new ReadValue { Number = 103 };
                     string json = LuminPackSerializer.SerializeJson(value);
-                    if (json != LuminPackSerializer.SerializeJson<ReadValue>(value)) throw new Exception("JSON name collision changed output.");
+                    if (json != LuminPackSerializer.SerializeJson(value)) throw new Exception("JSON name collision changed output.");
                     ReadValue restored = null!;
                     LuminPackSerializer.DeserializeJson(json, ref restored);
                     var namespaced = new GetJsonPropertyIndexUtf8.Payload { Number = 107 };

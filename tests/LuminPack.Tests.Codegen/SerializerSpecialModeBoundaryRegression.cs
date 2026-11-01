@@ -37,26 +37,26 @@ internal static class SerializerSpecialModeBoundaryRegression
                     VersionShort shortVersion = null;
                     if (LuminPackSerializer.Deserialize(versionBytes.AsSpan(), ref shortVersion) != versionBytes.Length || shortVersion.First != 17)
                         throw new Exception("VersionTolerant did not skip the complete unknown tail.");
-                    var restoredVersion = LuminPackSerializer.Deserialize<VersionLong>(LuminPackSerializer.Serialize(new VersionShort { First = 19 }));
+                    var restoredVersion = global::LuminPackUnitTest.ConcreteReads.Read<VersionLong>(LuminPackSerializer.Serialize(new VersionShort { First = 19 }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref VersionLong concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (restoredVersion.First != 19 || restoredVersion.Last != null) throw new Exception("VersionTolerant missing tail did not receive defaults.");
                     var longCircle = new CircleLong { First = 23, Last = "trailing member" };
                     byte[] circleBytes = LuminPackSerializer.Serialize(longCircle);
                     CircleShort shortCircle = null;
                     if (LuminPackSerializer.Deserialize(circleBytes.AsSpan(), ref shortCircle) != circleBytes.Length || shortCircle.First != 23)
                         throw new Exception("CircleReference did not skip the complete unknown tail.");
-                    var restoredCircle = LuminPackSerializer.Deserialize<CircleLong>(LuminPackSerializer.Serialize(new CircleShort { First = 29 }));
+                    var restoredCircle = global::LuminPackUnitTest.ConcreteReads.Read<CircleLong>(LuminPackSerializer.Serialize(new CircleShort { First = 29 }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CircleLong concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (restoredCircle.First != 29 || restoredCircle.Last != null) throw new Exception("CircleReference missing tail did not receive defaults.");
                     var versionEmpty = new VersionEmpty();
                     var circleEmpty = new CircleEmpty();
-                    if (LuminPackSerializer.Deserialize<VersionEmpty>(LuminPackSerializer.Serialize(versionEmpty)) == null ||
-                        LuminPackSerializer.Deserialize<CircleEmpty>(LuminPackSerializer.Serialize(circleEmpty)) == null)
+                    if (global::LuminPackUnitTest.ConcreteReads.Read<VersionEmpty>(LuminPackSerializer.Serialize(versionEmpty), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref VersionEmpty concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == null ||
+                        global::LuminPackUnitTest.ConcreteReads.Read<CircleEmpty>(LuminPackSerializer.Serialize(circleEmpty), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CircleEmpty concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == null)
                         throw new Exception("An empty specialized schema did not round-trip.");
                 }
             }
             """;
         var parse = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Parse,
             preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]);
-        var input = CSharpCompilation.Create("SpecialModeBoundaries", [CSharpSyntaxTree.ParseText(source, parse, "SpecialModes.cs")], references,
+        var input = TestCompilation.Create("SpecialModeBoundaries", [CSharpSyntaxTree.ParseText(source, parse, "SpecialModes.cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);

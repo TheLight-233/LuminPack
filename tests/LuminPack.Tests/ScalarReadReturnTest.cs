@@ -48,15 +48,15 @@ public class ScalarReadReturnTest
     {
         var integers = Enumerable.Range(-count, count).ToImmutableList();
         byte[] bytes = LuminPackSerializer.Serialize(integers);
-        Assert.Equal(integers.ToArray(), LuminPackSerializer.Deserialize<ImmutableList<int>>(bytes).ToArray());
+        Assert.Equal(integers.ToArray(), global::LuminPackUnitTest.ConcreteReads.Read<ImmutableList<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableList<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).ToArray());
         ImmutableList<int> destination = ImmutableList.Create(int.MaxValue);
         Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes.AsSpan(), ref destination));
         Assert.Equal(integers.ToArray(), destination.ToArray());
 
         var strings = Enumerable.Range(0, count).Select(index => index % 3 == 0 ? null : "value_" + index).ToImmutableList();
         byte[] stringBytes = LuminPackSerializer.Serialize(strings);
-        Assert.Equal(strings.ToArray(), LuminPackSerializer.Deserialize<ImmutableList<string?>>(stringBytes).ToArray());
-        Assert.Null(LuminPackSerializer.Deserialize<ImmutableList<int>?>(LuminPackSerializer.Serialize<ImmutableList<int>?>(null)));
+        Assert.Equal(strings.ToArray(), global::LuminPackUnitTest.ConcreteReads.Read<ImmutableList<string?>>(stringBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableList<string?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).ToArray());
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<ImmutableList<int>?>(LuminPackSerializer.Serialize((ImmutableList<int>?)null), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableList<int>? concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Compares a raw value return and generated scalar return at unaligned byte locations.</summary>
@@ -64,6 +64,7 @@ public class ScalarReadReturnTest
     /// <param name="expected">The complete scalar storage.</param>
     private static void CheckStorage<T>(T expected) where T : unmanaged
     {
+        LuminPackSerializer.RegisterTestProfile<T, LuminPackDefaultOptions>();
         byte[] bytes = LuminPackSerializer.Serialize(expected);
         Assert.Equal(16, Unsafe.SizeOf<T>());
         Assert.Equal(16, bytes.Length);
@@ -83,6 +84,7 @@ public class ScalarReadReturnTest
     /// <param name="expected">The nullable value.</param>
     private static void CheckNullable<T>(T? expected) where T : struct
     {
+        LuminPackSerializer.RegisterTestProfile<T?, LuminPackDefaultOptions>();
         byte[] bytes = LuminPackSerializer.Serialize(expected);
         Assert.Equal(expected, LuminPackSerializer.Deserialize<T?>(bytes));
         Assert.Equal(expected, LuminPackSerializer.Deserialize<T?, LuminPackDefaultOptions>(bytes));

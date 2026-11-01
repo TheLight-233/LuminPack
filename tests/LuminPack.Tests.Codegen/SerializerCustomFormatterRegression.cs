@@ -137,7 +137,7 @@ internal static class SerializerCustomFormatterRegression
                     int previousWrites = RawWrites;
                     var constrainedBytes = LuminPackSerializer.Serialize(constrained);
                     if (RawWrites != previousWrites + 1) throw new Exception("An unmanaged constraint bypassed its actual Custom argument.");
-                    var constrainedResult = LuminPackSerializer.Deserialize<ConstrainedOwner<CustomRaw>>(constrainedBytes);
+                    var constrainedResult = global::LuminPackUnitTest.ConcreteReads.Read<ConstrainedOwner<CustomRaw>>(constrainedBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ConstrainedOwner<CustomRaw> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (constrainedResult.Tag != 7 || constrainedResult.Value.Number != 31)
                         throw new Exception("An unmanaged-constrained Custom contract changed.");
                     var ordinary = new ConstrainedOwner<int> { Tag = 11, Value = 127 };
@@ -152,7 +152,7 @@ internal static class SerializerCustomFormatterRegression
                     previousWrites = RawWrites;
                     var customKeyBytes = LuminPackSerializer.Serialize(customKeys);
                     if (RawWrites != previousWrites + 1) throw new Exception("A mixed dictionary bypassed its unmanaged Custom key.");
-                    var customKeyResult = LuminPackSerializer.Deserialize<Dictionary<CustomRaw, string>>(customKeyBytes);
+                    var customKeyResult = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<CustomRaw, string>>(customKeyBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<CustomRaw, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (customKeyResult[raw] != "custom-key")
                         throw new Exception("An unmanaged Custom dictionary key changed its formatter contract.");
                     return 1;
@@ -173,7 +173,7 @@ internal static class SerializerCustomFormatterRegression
             preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]);
         foreach (string mode in new[] { "Full", "Light", "Minimal" })
         {
-            var input = CSharpCompilation.Create("NestedCustom" + mode,
+            var input = TestCompilation.Create("NestedCustom" + mode,
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), parse)], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
             GeneratorDriver driver = CSharpGeneratorDriver.Create(

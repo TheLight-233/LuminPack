@@ -819,7 +819,7 @@ public class PolymorphismBenchmark
     [BenchmarkCategory("Deserialize")]
     public void LuminPackDeserialize()
     {
-        var res = LuminPackSerializer.Deserialize<List<IFoo>, LuminPackUtf16LengthOptions>(luminPayloads[Next()]);
+        List<IFoo> value = null!; LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(luminPayloads[Next()], ref value);
     }
 
     /// <summary>Measures MemoryPack reading a random List of every IFoo case.</summary>

@@ -36,13 +36,13 @@ internal static class JsonReaderSafetyTest
     /// <summary>Verifies top level scalars read their first token.</summary>
     private static void TopLevelScalarsReadTheirFirstToken()
     {
-        Assert(LuminPackSerializer.DeserializeJson<int>("-12345") == -12345,
+        Assert(global::LuminPackUnitTest.ConcreteReads.ReadJson<int>("-12345", static (string concreteReadInput, ref int concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) == -12345,
             "A top-level UTF-8 integer was parsed before the first token was read.");
-        Assert(LuminPackSerializer.DeserializeJson<bool>("true"),
+        Assert(global::LuminPackUnitTest.ConcreteReads.ReadJson<bool>("true", static (string concreteReadInput, ref bool concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)),
             "A top-level UTF-8 boolean was parsed before the first token was read.");
-        Assert(LuminPackSerializer.DeserializeJson<string>("\"value\"") == "value",
+        Assert(global::LuminPackUnitTest.ConcreteReads.ReadJson<string>("\"value\"", static (string concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) == "value",
             "A top-level UTF-8 string was parsed before the first token was read.");
-        Assert(LuminPackSerializer.DeserializeJson<string?>("null") is null,
+        Assert(global::LuminPackUnitTest.ConcreteReads.ReadJson<string?>("null", static (string concreteReadInput, ref string? concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) is null,
             "A top-level UTF-8 null was not recognized.");
 
         Assert(LuminPackSerializer.DeserializeJson<int>("-54321", Utf16) == -54321,
@@ -61,7 +61,7 @@ internal static class JsonReaderSafetyTest
         const string json = "\"quote=\\\" slash=\\\\ controls=\\b\\f\\n\\r\\t unicode=\\u4F60 emoji=\\uD83D\\uDE00\"";
         const string expected = "quote=\u0022 slash=\\ controls=\b\f\n\r\t unicode=\u4F60 emoji=\uD83D\uDE00";
 
-        Assert(LuminPackSerializer.DeserializeJson<string>(json) == expected,
+        Assert(global::LuminPackUnitTest.ConcreteReads.ReadJson<string>(json, static (string concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) == expected,
             "UTF-8 JSON escapes were returned as raw backslash sequences.");
         Assert(LuminPackSerializer.DeserializeJson<string>(json, Utf16) == expected,
             "UTF-16 JSON escapes were returned as raw backslash sequences.");
@@ -71,14 +71,14 @@ internal static class JsonReaderSafetyTest
     private static void EscapedPropertyNamesAndUnknownNestedValues()
     {
         const string escapedName = "{\"V\\u0061l\":42}";
-        Assert(LuminPackSerializer.DeserializeJson<A>(escapedName)?.Val == 42,
+        Assert(global::LuminPackUnitTest.ConcreteReads.ReadJson<A>(escapedName, static (string concreteReadInput, ref A concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget))?.Val == 42,
             "An escaped UTF-8 property name did not match its generated member.");
         Assert(LuminPackSerializer.DeserializeJson<A>(escapedName, Utf16)?.Val == 42,
             "An escaped UTF-16 property name did not match its generated member.");
 
         const string unknownNested =
             "{\"Unknown\":{\"deep\":[1,{\"text\":\"brace } bracket ] escaped \\\"\"}]},\"Val\":73}";
-        Assert(LuminPackSerializer.DeserializeJson<A>(unknownNested)?.Val == 73,
+        Assert(global::LuminPackUnitTest.ConcreteReads.ReadJson<A>(unknownNested, static (string concreteReadInput, ref A concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget))?.Val == 73,
             "Skipping an unknown UTF-8 nested value consumed the following known property.");
         Assert(LuminPackSerializer.DeserializeJson<A>(unknownNested, Utf16)?.Val == 73,
             "Skipping an unknown UTF-16 nested value consumed the following known property.");
@@ -87,9 +87,9 @@ internal static class JsonReaderSafetyTest
     /// <summary>Verifies malformed strings are rejected.</summary>
     private static void MalformedStringsAreRejected()
     {
-        AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<string>("\"unterminated"));
-        AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<string>("\"\\u12\""));
-        AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<string>("\"\\uD800x\""));
+        AssertThrows<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<string>("\"unterminated", static (string concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        AssertThrows<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<string>("\"\\u12\"", static (string concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        AssertThrows<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<string>("\"\\uD800x\"", static (string concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<string>("\"\\q\"", Utf16));
     }
 
@@ -100,12 +100,12 @@ internal static class JsonReaderSafetyTest
                      "\\uD800\\uD800", "\\uD800\\u12", "literal\ncontrol", "trailing\\" })
         {
             string json = "{\"Unknown\":{\"nested\":[\"" + malformed + "\"]},\"Val\":5}";
-            AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<A>(json));
+            AssertThrows<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<A>(json, static (string concreteReadInput, ref A concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
             AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<A>(json, Utf16));
         }
 
         const string valid = "{\"Unknown\":[\"\\\\uD800\\\"\\/\\b\\f\\n\\r\\t\\u0000\\u4F60\\uD83D\\uDE00\"],\"Val\":5}";
-        Assert(LuminPackSerializer.DeserializeJson<A>(valid)?.Val == 5,
+        Assert(global::LuminPackUnitTest.ConcreteReads.ReadJson<A>(valid, static (string concreteReadInput, ref A concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget))?.Val == 5,
             "Skipping escaped UTF-8 strings consumed the next property.");
         Assert(LuminPackSerializer.DeserializeJson<A>(valid, Utf16)?.Val == 5,
             "Skipping escaped UTF-16 strings consumed the next property.");
@@ -144,10 +144,10 @@ internal static class JsonReaderSafetyTest
     /// <summary>Verifies malformed numbers and trailing data are rejected.</summary>
     private static void MalformedNumbersAndTrailingDataAreRejected()
     {
-        AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<int>("1e+"));
-        AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<double>("-."));
-        AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<byte>("256"));
-        AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<int>("1 2"));
+        AssertThrows<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<int>("1e+", static (string concreteReadInput, ref int concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        AssertThrows<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<double>("-.", static (string concreteReadInput, ref double concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        AssertThrows<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<byte>("256", static (string concreteReadInput, ref byte concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        AssertThrows<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<int>("1 2", static (string concreteReadInput, ref int concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         AssertThrows<FormatException>(() => LuminPackSerializer.DeserializeJson<int>("12x", Utf16));
     }
 
@@ -280,11 +280,11 @@ internal static class JsonReaderSafetyTest
             "A rectangular JSON array with an empty third dimension lost its outer dimensions.");
 
         AssertThrows<FormatException>(() =>
-            LuminPackSerializer.DeserializeJson<int[,]>("{\"Lengths\":[2,2],\"LowerBounds\":[0,0],\"Values\":[1,2,3]}"));
+            global::LuminPackUnitTest.ConcreteReads.ReadJson<int[,]>("{\"Lengths\":[2,2],\"LowerBounds\":[0,0],\"Values\":[1,2,3]}", static (string concreteReadInput, ref int[,] concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         AssertThrows<FormatException>(() =>
             LuminPackSerializer.DeserializeJson<int[,,]>("{\"Lengths\":[2,2,1],\"LowerBounds\":[0,0,0],\"Values\":[1,2,3]}\n", Utf16));
         AssertThrows<FormatException>(() =>
-            LuminPackSerializer.DeserializeJson<int[,,,]>("{\"Lengths\":[1,1,2,2],\"LowerBounds\":[0,0,0,0],\"Values\":[1,2,3]}"));
+            global::LuminPackUnitTest.ConcreteReads.ReadJson<int[,,,]>("{\"Lengths\":[1,1,2,2],\"LowerBounds\":[0,0,0,0],\"Values\":[1,2,3]}", static (string concreteReadInput, ref int[,,,] concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
 
         var fourDimensional = new int[1, 1, 1, 2];
         fourDimensional[0, 0, 0, 0] = 10;

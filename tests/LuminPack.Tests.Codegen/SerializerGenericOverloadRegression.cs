@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-/// <summary>Checks complete generic overload coverage when no concrete serializer entry is emitted.</summary>
+/// <summary>Checks registered generic overloads, concrete roots and independent consumers.</summary>
 internal static class SerializerGenericOverloadRegression
 {
     private static readonly CSharpParseOptions Parse = new(LanguageVersion.Preview, DocumentationMode.Parse,
@@ -15,17 +15,32 @@ internal static class SerializerGenericOverloadRegression
     /// <param name="references">Platform and runtime references.</param>
     internal static void Run(MetadataReference[] references)
     {
+        VerifyRegisteredOnly(references);
         const string models = """
             using LuminPack.Attribute;
             [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.Light)]
             [LuminPackable] public sealed class GenericPayload { public int Value; public string Text = ""; }
             [LuminPackable] public sealed class UnusedPayload { public long Value; }
+            public static class GenericRegistration
+            {
+                public static unsafe void Register<TProfile>() where TProfile : struct, LuminPack.Option.ILuminPackOptions
+                    => LuminPack.LuminPackSerializer.Register<GenericPayload, TProfile>(&Write<TProfile>, &Read<TProfile>, &WriteJson<TProfile>, &ReadJson<TProfile>);
+                private static void Write<TProfile>(ref LuminPack.Core.LuminPackWriter writer, in GenericPayload value) where TProfile : struct, LuminPack.Option.ILuminPackOptions
+                    => LuminPack.LuminPackSerializer.Serialize<TProfile>(ref writer, in value);
+                private static void Read<TProfile>(ref LuminPack.Core.LuminPackReader reader, ref GenericPayload value) where TProfile : struct, LuminPack.Option.ILuminPackOptions
+                    => LuminPack.LuminPackSerializer.Deserialize<TProfile>(ref reader, ref value);
+                private static void WriteJson<TProfile>(ref LuminPack.Core.LuminPackJsonWriter writer, in GenericPayload value) where TProfile : struct, LuminPack.Option.ILuminPackOptions
+                    => LuminPack.LuminPackSerializer.SerializeJson<TProfile>(ref writer, in value);
+                private static void ReadJson<TProfile>(ref LuminPack.Core.LuminPackJsonReader reader, ref GenericPayload value) where TProfile : struct, LuminPack.Option.ILuminPackOptions
+                    => LuminPack.LuminPackSerializer.DeserializeJson<TProfile>(ref reader, ref value);
+            }
             """;
         var input = CSharpCompilation.Create("GenericOverloadLibrary", [CSharpSyntaxTree.ParseText(models, Parse, "Models.cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         var driver = NewDriver().RunGeneratorsAndUpdateCompilation(input, out var library, out _);
         CheckAppendEntries(driver);
-        Require(ConcreteMethods(driver).Length == 0, "A library without concrete calls retained concrete serializer entries.");
+        Require(ConcreteMethods(driver).All(method => !method.ToString().Contains("global::UnusedPayload", StringComparison.Ordinal)),
+            "A registration callback retained an unrelated concrete payload API.");
         byte[] image = Emit(library);
         const string consumer = """
             using System;
@@ -49,6 +64,7 @@ internal static class SerializerGenericOverloadRegression
                 void RunProfile<TProfile>()
                     where TProfile : struct, global::LuminPack.Option.ILuminPackOptions
                 {
+                    GenericRegistration.Register<TProfile>();
                     var value = new GenericPayload
                     {
                         Value = 97,
@@ -141,6 +157,7 @@ internal static class SerializerGenericOverloadRegression
             {
                 public static string Check()
                 {
+                    GenericRegistration.Register<LuminPack.Option.LuminPackDefaultOptions>();
                     var value = new GenericPayload { Value = 103, Text = "other generator" };
                     foreach (var copy in new[] { value, OtherContext.Value })
                     {
@@ -153,11 +170,145 @@ internal static class SerializerGenericOverloadRegression
             """;
         var dependent = input.WithAssemblyName("OtherGeneratorOverloadRoots").AddSyntaxTrees(CSharpSyntaxTree.ParseText(source, Parse, "Entry.cs"));
         var otherDriver = NewDriver(new OtherContextGenerator()).RunGeneratorsAndUpdateCompilation(dependent, out var completed, out _);
-        Require(ConcreteMethods(otherDriver).Length == 0, "An unresolved contextual type retained unrelated concrete overloads.");
+        Require(ConcreteMethods(otherDriver).All(method => !method.ToString().Contains("global::UnusedPayload", StringComparison.Ordinal)),
+            "An unresolved contextual type retained unrelated concrete overloads.");
         var completedAssembly = Assembly.Load(Emit(completed));
         Require((string)completedAssembly.GetType("Entry")!.GetMethod("Check")!.Invoke(null, null)! == "from generated context",
             "A later generator's contextual type did not bind through the generic fallback.");
         Console.WriteLine("Passed complete external generic overloads, UTF-8/UTF-16 ref reads, buffer contexts, cancellation recovery, and cross-generator API pruning.");
+    }
+
+    /// <summary>Checks registered-only generic boundaries while concrete roots preserve bytes and state ownership.</summary>
+    /// <param name="references">Platform and runtime references.</param>
+    internal static void VerifyRegisteredOnly(MetadataReference[] references)
+    {
+        const string fixture = """
+            using System;
+            using System.Collections.Generic;
+            using System.Linq;
+            using LuminPack;
+            using LuminPack.Attribute;
+            using LuminPack.Core;
+            using LuminPack.Generated;
+            [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.__MODE__, __REGISTRATION__)]
+            [LuminPackable] public partial class Item { public int Id; public string Name = ""; }
+            [LuminPackable] public partial class Box<T> { public T Value = default!; }
+            [LuminPackable, LuminPackUnion(3, typeof(Case))] public abstract partial class Union { }
+            [LuminPackable] public sealed partial class Case : Union { public int Value; }
+            [LuminPackable] public partial struct OverrideValue { public int Value; }
+            #if REGISTER
+            [LuminPackable(GeneratorType.Custom)] public partial struct CustomValue
+            {
+                public int Value;
+                public static void Serialize(ref LuminPackWriter writer, in CustomValue value) => writer.Write(value.Value);
+                public static void Deserialize(ref LuminPackReader reader, ref CustomValue value) => reader.Read(ref value.Value);
+            }
+            #endif
+            public static class Entry
+            {
+                static byte[] Save<T>(T value) => LuminPackSerializer.Serialize(value);
+                static T Load<T>(ReadOnlySpan<byte> bytes) { T value = default!; LuminPackSerializer.Deserialize(bytes, ref value); return value; }
+                static string SaveJson<T>(T value) => LuminPackSerializer.SerializeJson(value);
+                static T LoadJson<T>(string json) { T value = default!; LuminPackSerializer.DeserializeJson(json, ref value); return value; }
+                static byte[] SaveProfile<T>(T value) => LuminPackSerializer.Serialize<T, LuminPack.Option.LuminPackUtf8LengthOptions>(value);
+                static T LoadProfile<T>(ReadOnlySpan<byte> bytes) { T value = default!; LuminPackSerializer.Deserialize<T, LuminPack.Option.LuminPackUtf8LengthOptions>(bytes, ref value); return value; }
+                static void ExpectMissing(Action action)
+                {
+                    try { action(); }
+                    catch (Exception exception) when (exception.Message.StartsWith("No formatter is registered", StringComparison.Ordinal)) { return; }
+                    throw new Exception("An unregistered generic operation did not report a missing formatter.");
+                }
+                static void Require(bool value, string reason) { if (!value) throw new Exception(reason); }
+                public static string Check()
+                {
+                    var digest = new List<byte>();
+                    var item = new Item { Id = 42, Name = "example" };
+                    var bytes = LuminPackSerializer.Serialize(item); Item restored = null!;
+                    LuminPackSerializer.Deserialize(bytes, ref restored); Require(restored.Id == 42 && restored.Name == "example", "Direct object"); digest.AddRange(bytes);
+                    int number = 37; var integers = LuminPackSerializer.Serialize(number); int restoredNumber = 0;
+                    LuminPackSerializer.Deserialize(integers, ref restoredNumber); Require(restoredNumber == number, "Direct int"); digest.AddRange(integers);
+                    string text = "plain"; var strings = LuminPackSerializer.Serialize(text); string restoredText = null!;
+                    LuminPackSerializer.Deserialize(strings, ref restoredText); Require(restoredText == text, "Direct string"); digest.AddRange(strings);
+                    var box = new Box<int> { Value = 51 }; var boxBytes = LuminPackSerializer.Serialize(box); Box<int> restoredBox = null!;
+                    LuminPackSerializer.Deserialize(boxBytes, ref restoredBox); Require(restoredBox.Value == 51, "Direct closed generic model"); digest.AddRange(boxBytes);
+                    var list = new List<Item> { item }; var listBytes = LuminPackSerializer.Serialize(list); List<Item> restoredList = null!;
+                    LuminPackSerializer.Deserialize(listBytes, ref restoredList); Require(restoredList[0].Name == item.Name, "Direct collection"); digest.AddRange(listBytes);
+                    var map = new Dictionary<string, Item> { ["key"] = item }; var mapBytes = LuminPackSerializer.Serialize(map); Dictionary<string, Item> restoredMap = null!;
+                    LuminPackSerializer.Deserialize(mapBytes, ref restoredMap); Require(restoredMap["key"].Id == 42, "Direct dictionary"); digest.AddRange(mapBytes);
+                    var array = new[] { 3, 5, 7 }; var arrayBytes = LuminPackSerializer.Serialize(array); int[] restoredArray = null!;
+                    LuminPackSerializer.Deserialize(arrayBytes, ref restoredArray); Require(restoredArray.SequenceEqual(array), "Direct array"); digest.AddRange(arrayBytes);
+                    Union union = new Case { Value = 97 }; var unionBytes = LuminPackSerializer.Serialize(union); Union restoredUnion = null!;
+                    LuminPackSerializer.Deserialize(unionBytes, ref restoredUnion); Require(restoredUnion is Case { Value: 97 }, "Direct Union"); digest.AddRange(unionBytes);
+                    string json = LuminPackSerializer.SerializeJson(item); Item restoredJson = null!;
+                    LuminPackSerializer.DeserializeJson(json, ref restoredJson); Require(restoredJson.Id == 42 && restoredJson.Name == "example", "Direct JSON"); digest.AddRange(System.Text.Encoding.UTF8.GetBytes(json));
+                    ExpectMissing(() => Save(item)); ExpectMissing(() => Load<Item>(bytes));
+                    ExpectMissing(() => Save(number)); ExpectMissing(() => Save(text));
+                    ExpectMissing(() => SaveJson(item)); ExpectMissing(() => LoadJson<Item>(json));
+            #if REGISTER
+                    Register();
+                    Require(Save(item).SequenceEqual(bytes) && Load<Item>(bytes).Name == "example", "Registered generic binary");
+                    Require(SaveJson(item) == json && LoadJson<Item>(json).Id == 42, "Registered generic JSON");
+                    var overridden = new OverrideValue { Value = 37 };
+                    var directOverride = LuminPackSerializer.Serialize(overridden);
+                    Require(Load<OverrideValue>(Save(overridden)).Value == 37 && !Save(overridden).SequenceEqual(directOverride), "Registration precedence");
+                    Require(LuminPackSerializer.Serialize(overridden).SequenceEqual(directOverride), "Concrete API bypasses registration");
+                    Require(LuminPackSerializer.Serialize(number).SequenceEqual(integers), "Concrete API bypasses registration");
+                    Require(LuminPackSerializer.Serialize(item).SequenceEqual(bytes), "Concrete object API after registration");
+                    var profileBytes = LuminPackSerializer.Serialize<LuminPack.Option.LuminPackUtf8LengthOptions>(item);
+                    Require(SaveProfile(item).SequenceEqual(profileBytes) && LoadProfile<Item>(profileBytes).Name == "example", "Registered explicit profile");
+                    Require(Load<CustomValue>(Save(new CustomValue { Value = 901 })).Value == 901, "Custom automatic Register");
+            #endif
+                    return Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(digest.ToArray()));
+                }
+            #if REGISTER
+                static unsafe void Register()
+                {
+                    LuminPackSerializer.Register<Item>(&Write, &Read, &WriteJson, &ReadJson);
+                    LuminPackSerializer.Register<OverrideValue>(&WriteOverride, &ReadOverride);
+                    LuminPackSerializer.Register<Item, LuminPack.Option.LuminPackUtf8LengthOptions>(&WriteProfile, &ReadProfile);
+                }
+                static void Write(ref LuminPackWriter writer, in Item value) => LuminPackSerializer.Serialize(ref writer, in value);
+                static void Read(ref LuminPackReader reader, ref Item value) => LuminPackSerializer.Deserialize(ref reader, ref value);
+                static void WriteJson(ref LuminPackJsonWriter writer, in Item value) => LuminPackSerializer.SerializeJson(ref writer, in value);
+                static void ReadJson(ref LuminPackJsonReader reader, ref Item value) => LuminPackSerializer.DeserializeJson(ref reader, ref value);
+                static void WriteOverride(ref LuminPackWriter writer, in OverrideValue value) { var changed = new OverrideValue { Value = value.Value + 1000 }; LuminPackSerializer.Serialize(ref writer, in changed); }
+                static void ReadOverride(ref LuminPackReader reader, ref OverrideValue value) { LuminPackSerializer.Deserialize(ref reader, ref value); value.Value -= 1000; }
+                static void WriteProfile(ref LuminPackWriter writer, in Item value) => LuminPackSerializer.Serialize<LuminPack.Option.LuminPackUtf8LengthOptions>(ref writer, in value);
+                static void ReadProfile(ref LuminPackReader reader, ref Item value) => LuminPackSerializer.Deserialize<LuminPack.Option.LuminPackUtf8LengthOptions>(ref reader, ref value);
+            #endif
+            }
+            """;
+        string? digest = null;
+        foreach (string mode in new[] { "Full", "Minimal" })
+        foreach (var (allowUnsafe, disabled) in new[] { (true, false), (false, false), (true, true) })
+        {
+            bool registered = allowUnsafe && !disabled;
+            var parse = Parse.WithPreprocessorSymbols("NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER", registered ? "REGISTER" : "SAFE");
+            string source = fixture.Replace("__MODE__", mode, StringComparison.Ordinal)
+                .Replace("__REGISTRATION__", disabled ? "LuminPackRegisterMode.Disabled" : "LuminPackRegisterMode.Auto", StringComparison.Ordinal);
+            var input = CSharpCompilation.Create("RegisteredDispatch" + mode + allowUnsafe + disabled,
+                [CSharpSyntaxTree.ParseText(source, parse, "Contracts.cs")], references,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: allowUnsafe, optimizationLevel: OptimizationLevel.Release));
+            GeneratorDriver Fresh() => CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
+            string Text(GeneratorDriver current) => string.Join("\n", current.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+                .OrderBy(file => file.HintName, StringComparer.Ordinal).Select(file => file.HintName + "\n" + file.SourceText.ToString()));
+            var driver = Fresh().RunGeneratorsAndUpdateCompilation(input, out var output, out _);
+            var files = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).ToArray();
+            Require(!files.Any(file => file.HintName == "LuminPack.Dispatch.Lazy.g.cs"), "The generated fallback table file remains.");
+            string dispatch = files.Single(file => file.HintName == "LuminPack.Dispatch.Formatters.g.cs").SourceText.ToString();
+            Require(!dispatch.Contains("typeof(T) == typeof(", StringComparison.Ordinal) && !dispatch.Contains("Generated<", StringComparison.Ordinal) &&
+                !dispatch.Contains("SafeSerialize", StringComparison.Ordinal), "A generated payload factory or delegate cache remains.");
+            var loaded = Assembly.Load(Emit(output));
+            string result = (string)loaded.GetType("Entry")!.GetMethod("Check")!.Invoke(null, null)!;
+            digest ??= result;
+            Require(result == digest, "Concrete binary or JSON bytes changed across generation and registration modes.");
+            var edited = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(
+                source.Replace("public int Id;", "public long Id;", StringComparison.Ordinal), parse, "Contracts.cs"));
+            var retained = driver.RunGenerators(edited);
+            Require(Text(retained) == Text(Fresh().RunGenerators(edited)) && Text(retained.RunGenerators(input)) == Text(driver),
+                "Registered dispatch or Root navigation differs after a retained/fresh edit or restoration.");
+        }
+        Console.WriteLine("Passed registered-only generic dispatch, concrete wire equality, Custom/profile registrations, missing-entry invalidation, disabled registration and retained/fresh edits.");
     }
 
     /// <summary>Creates independent serializer generators and an optional contextual source generator.</summary>

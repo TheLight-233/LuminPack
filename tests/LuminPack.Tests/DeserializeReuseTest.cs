@@ -25,16 +25,16 @@ public partial class DeserializeReuseTest
         FailureChild.Failure = failure;
         try
         {
-            Assert.Same(failure, Assert.Throws<InvalidOperationException>(() => LuminPackSerializer.Deserialize<FailureRoot>(ordinaryBytes, ref target)));
+            Assert.Same(failure, Assert.Throws<InvalidOperationException>(() => LuminPackSerializer.Deserialize(ordinaryBytes, ref target)));
             // Ordinary reuse writes the existing root storage directly, so an already read member stays published.
             Assert.Equal(7, target.Number);
-            Assert.Same(failure, Assert.Throws<InvalidOperationException>(() => LuminPackSerializer.Deserialize<VersionedFailureRoot>(versionedBytes, ref versioned)));
+            Assert.Same(failure, Assert.Throws<InvalidOperationException>(() => LuminPackSerializer.Deserialize(versionedBytes, ref versioned)));
             // Named version framing keeps its member locals staged and commits only after the complete read.
             Assert.Equal(1, versioned.Number);
         }
         finally { FailureChild.Failure = null; }
-        LuminPackSerializer.Deserialize<FailureRoot>(ordinaryBytes, ref target);
-        LuminPackSerializer.Deserialize<VersionedFailureRoot>(versionedBytes, ref versioned);
+LuminPackSerializer.Deserialize(ordinaryBytes, ref target);
+LuminPackSerializer.Deserialize(versionedBytes, ref versioned);
         Assert.Equal(7, target.Number);
         Assert.Equal(7, versioned.Number);
     }
@@ -61,7 +61,7 @@ public partial class DeserializeReuseTest
             Names = ["ascii", "\u4E2D\uD83D\uDE00"],
             Numbers = [1, 2, 3], Tail = 99
         };
-        byte[] bytes = LuminPackSerializer.Serialize<ReuseGraph, TOptions>(source);
+        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((ReuseGraph)(source));
         var target = new ReuseGraph
         {
             Child = new() { Text = new(source.Child.Text.ToCharArray()) },
@@ -81,7 +81,7 @@ public partial class DeserializeReuseTest
         var name = names[1];
         var numbers = target.Numbers;
 
-        int consumed = LuminPackSerializer.Deserialize<ReuseGraph, TOptions>(bytes, ref target);
+        int consumed = LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
         Assert.Equal(bytes.Length, consumed);
         Assert.Same(root, target);
         Assert.Same(child, target.Child);
@@ -100,10 +100,10 @@ public partial class DeserializeReuseTest
         Assert.Equal(99, target.Tail);
 
         for (int i = 0; i < 128; i++)
-            LuminPackSerializer.Deserialize<ReuseGraph, TOptions>(bytes, ref target);
+LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 1024; i++)
-            LuminPackSerializer.Deserialize<ReuseGraph, TOptions>(bytes, ref target);
+LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
         long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
         Assert.Equal(0, allocated);
     }
@@ -119,36 +119,36 @@ public partial class DeserializeReuseTest
         {
             Child = new() { Number = 14 }, Items = [new() { Number = 15 }]
         });
-        LuminPackSerializer.Deserialize<GenericGraph<ReuseNode>>(bytes, ref target);
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Same(child, target.Child);
         Assert.Same(item, target.Items[0]);
         Assert.Equal(14, child.Number);
         Assert.Equal(15, item.Number);
-        for (int i = 0; i < 128; i++) LuminPackSerializer.Deserialize<GenericGraph<ReuseNode>>(bytes, ref target);
+        for (int i = 0; i < 128; i++) LuminPackSerializer.Deserialize(bytes, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize<GenericGraph<ReuseNode>>(bytes, ref target);
+        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         bytes = LuminPackSerializer.Serialize(new GenericGraph<ReuseNode> { Items = [null!] });
-        LuminPackSerializer.Deserialize<GenericGraph<ReuseNode>>(bytes, ref target);
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Null(target.Child);
         Assert.Null(target.Items[0]);
 
         var value = new GenericValue<ReuseNode> { Child = child };
         bytes = LuminPackSerializer.Serialize(new GenericValue<ReuseNode> { Child = new() { Number = 16 } });
-        LuminPackSerializer.Deserialize<GenericValue<ReuseNode>>(bytes, ref value);
+LuminPackSerializer.Deserialize(bytes, ref value);
         Assert.Same(child, value.Child);
         Assert.Equal(16, child.Number);
         bytes = LuminPackSerializer.Serialize(new GenericValue<ReuseNode>());
-        LuminPackSerializer.Deserialize<GenericValue<ReuseNode>>(bytes, ref value);
+LuminPackSerializer.Deserialize(bytes, ref value);
         Assert.Null(value.Child);
 
         var versioned = new GenericVersioned<ReuseNode> { Child = child };
         bytes = LuminPackSerializer.Serialize(new GenericVersioned<ReuseNode>());
-        LuminPackSerializer.Deserialize<GenericVersioned<ReuseNode>>(bytes, ref versioned);
+LuminPackSerializer.Deserialize(bytes, ref versioned);
         Assert.Null(versioned.Child);
         var tracked = new GenericTracked<ReuseNode> { Child = child };
         bytes = LuminPackSerializer.Serialize(new GenericTracked<ReuseNode>());
-        LuminPackSerializer.Deserialize<GenericTracked<ReuseNode>>(bytes, ref tracked);
+LuminPackSerializer.Deserialize(bytes, ref tracked);
         Assert.Null(tracked.Child);
     }
 
@@ -158,35 +158,35 @@ public partial class DeserializeReuseTest
     {
         byte[] bytes = LuminPackSerializer.Serialize(new List<StaticCallbackNode> { null! });
         StaticCallbackNode.Reads = 0;
-        _ = LuminPackSerializer.Deserialize<List<StaticCallbackNode>>(bytes);
+        _ = global::LuminPackUnitTest.ConcreteReads.Read<List<StaticCallbackNode>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<StaticCallbackNode> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(1, StaticCallbackNode.Reads);
         StaticCallbackNode.Reads = 0;
         var list = new List<StaticCallbackNode> { new() };
-        LuminPackSerializer.Deserialize<List<StaticCallbackNode>>(bytes, ref list);
+LuminPackSerializer.Deserialize(bytes, ref list);
         Assert.Null(list[0]);
         Assert.Equal(1, StaticCallbackNode.Reads);
         bytes = LuminPackSerializer.Serialize(new StaticCallbackNode[] { null! });
         StaticCallbackNode.Reads = 0;
         var array = new StaticCallbackNode[] { new() };
-        LuminPackSerializer.Deserialize<StaticCallbackNode[]>(bytes, ref array);
+LuminPackSerializer.Deserialize(bytes, ref array);
         Assert.Null(array[0]);
         Assert.Equal(1, StaticCallbackNode.Reads);
         bytes = LuminPackSerializer.Serialize(new Dictionary<int, StaticCallbackNode> { [1] = null! });
         StaticCallbackNode.Reads = 0;
         var map = new Dictionary<int, StaticCallbackNode> { [1] = new() };
-        LuminPackSerializer.Deserialize<Dictionary<int, StaticCallbackNode>>(bytes, ref map);
+LuminPackSerializer.Deserialize(bytes, ref map);
         Assert.Null(map[1]);
         Assert.Equal(1, StaticCallbackNode.Reads);
         bytes = LuminPackSerializer.Serialize(new ExplicitCallbackMember());
         StaticCallbackNode.Reads = 0;
         var member = new ExplicitCallbackMember { Child = new() };
-        LuminPackSerializer.Deserialize<ExplicitCallbackMember>(bytes, ref member);
+LuminPackSerializer.Deserialize(bytes, ref member);
         Assert.Null(member.Child);
         Assert.Equal(1, StaticCallbackNode.Reads);
         bytes = LuminPackSerializer.Serialize(new GenericVersioned<StaticCallbackNode>());
         StaticCallbackNode.Reads = 0;
         var versioned = new GenericVersioned<StaticCallbackNode> { Child = new() };
-        LuminPackSerializer.Deserialize<GenericVersioned<StaticCallbackNode>>(bytes, ref versioned);
+LuminPackSerializer.Deserialize(bytes, ref versioned);
         Assert.Null(versioned.Child);
         Assert.Equal(1, StaticCallbackNode.Reads);
     }
@@ -200,7 +200,7 @@ public partial class DeserializeReuseTest
         var first = items[0];
         var source = new ReuseGraph { Items = [new() { Number = 1 }], Names = [], Array = [], Numbers = [] };
         byte[] bytes = LuminPackSerializer.Serialize(source);
-        LuminPackSerializer.Deserialize<ReuseGraph>(bytes, ref target);
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Same(items, target.Items);
         Assert.Same(first, target.Items[0]);
         Assert.Single(target.Items);
@@ -212,7 +212,7 @@ public partial class DeserializeReuseTest
         source.Array = null!;
         source.Names = null!;
         bytes = LuminPackSerializer.Serialize(source);
-        LuminPackSerializer.Deserialize<ReuseGraph>(bytes, ref target);
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Same(first, target.Items[0]);
         Assert.Equal(2, target.Items[0].Number);
         Assert.Equal(3, target.Items[1].Number);
@@ -232,7 +232,7 @@ public partial class DeserializeReuseTest
         var child = target.Child;
         byte[] bytes = LuminPackSerializer.Serialize(source);
         int constructions = ConstructorNode.Constructions;
-        LuminPackSerializer.Deserialize<ConstructorNode>(bytes, ref target);
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Same(root, target);
         Assert.Same(child, target.Child);
         Assert.Equal(71, target.Child.Number);
@@ -247,17 +247,17 @@ public partial class DeserializeReuseTest
         ReuseUnion target = new FirstCase { Child = new() };
         var root = target;
         var child = ((FirstCase)target).Child;
-        byte[] bytes = LuminPackSerializer.Serialize<ReuseUnion>(new FirstCase { Child = new() { Number = 29 } });
-        LuminPackSerializer.Deserialize<ReuseUnion>(bytes, ref target);
+        byte[] bytes = LuminPackSerializer.Serialize((ReuseUnion)(new FirstCase { Child = new() { Number = 29 } }));
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Same(root, target);
         Assert.Same(child, ((FirstCase)target).Child);
         Assert.Equal(29, child.Number);
-        for (int i = 0; i < 128; i++) LuminPackSerializer.Deserialize<ReuseUnion>(bytes, ref target);
+        for (int i = 0; i < 128; i++) LuminPackSerializer.Deserialize(bytes, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize<ReuseUnion>(bytes, ref target);
+        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
-        bytes = LuminPackSerializer.Serialize<ReuseUnion>(new SecondCase { Number = 5 });
-        LuminPackSerializer.Deserialize<ReuseUnion>(bytes, ref target);
+        bytes = LuminPackSerializer.Serialize((ReuseUnion)(new SecondCase { Number = 5 }));
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Equal(5, Assert.IsType<SecondCase>(target).Number);
     }
 
@@ -269,12 +269,12 @@ public partial class DeserializeReuseTest
         var versionedRoot = versioned;
         var child = versioned.Child;
         byte[] bytes = LuminPackSerializer.Serialize(new VersionedNode { Child = new() { Number = 13 } });
-        LuminPackSerializer.Deserialize<VersionedNode>(bytes, ref versioned);
+LuminPackSerializer.Deserialize(bytes, ref versioned);
         Assert.Same(versionedRoot, versioned);
         Assert.Same(child, versioned.Child);
         Assert.Equal(13, child.Number);
         bytes = LuminPackSerializer.Serialize(new VersionedNode { Child = null! });
-        LuminPackSerializer.Deserialize<VersionedNode>(bytes, ref versioned);
+LuminPackSerializer.Deserialize(bytes, ref versioned);
         Assert.Null(versioned.Child);
 
         var source = new TrackedNode { Number = 23 };
@@ -282,7 +282,7 @@ public partial class DeserializeReuseTest
         var tracked = new TrackedNode();
         var trackedRoot = tracked;
         bytes = LuminPackSerializer.Serialize(source);
-        LuminPackSerializer.Deserialize<TrackedNode>(bytes, ref tracked);
+LuminPackSerializer.Deserialize(bytes, ref tracked);
         Assert.Same(trackedRoot, tracked);
         Assert.Same(tracked, tracked.Next);
         Assert.Equal(23, tracked.Number);
@@ -297,20 +297,20 @@ public partial class DeserializeReuseTest
         var target = map;
         var source = new Dictionary<string, ReuseNode> { ["FIRST"] = new() { Number = 11 } };
         byte[] bytes = LuminPackSerializer.Serialize(source);
-        LuminPackSerializer.Deserialize<Dictionary<string, ReuseNode>>(bytes, ref target);
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Same(map, target);
         Assert.Same(StringComparer.OrdinalIgnoreCase, target.Comparer);
         Assert.Single(target);
         Assert.Same(first, target["first"]);
         Assert.Equal(11, first.Number);
-        for (int i = 0; i < 128; i++) LuminPackSerializer.Deserialize<Dictionary<string, ReuseNode>>(bytes, ref target);
+        for (int i = 0; i < 128; i++) LuminPackSerializer.Deserialize(bytes, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize<Dictionary<string, ReuseNode>>(bytes, ref target);
+        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         var value = new ReuseNode();
         var integerKeys = new Dictionary<int, ReuseNode> { [7] = value };
         bytes = LuminPackSerializer.Serialize(new Dictionary<int, ReuseNode> { [7] = new() { Number = 12 } });
-        LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode>>(bytes, ref integerKeys);
+LuminPackSerializer.Deserialize(bytes, ref integerKeys);
         Assert.Same(value, integerKeys[7]);
         Assert.Equal(12, value.Number);
     }
@@ -324,7 +324,7 @@ public partial class DeserializeReuseTest
         var child = target.Child;
         byte[] bytes = LuminPackSerializer.Serialize(new PooledNode { Child = new() { Number = 61 } });
         int rents = PooledNode.Rents;
-        LuminPackSerializer.Deserialize<PooledNode>(bytes, ref target);
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Same(root, target);
         Assert.Same(child, target.Child);
         Assert.Equal(61, child.Number);
@@ -341,7 +341,7 @@ public partial class DeserializeReuseTest
         var child = pooled.Child;
         byte[] bytes = LuminPackSerializer.Serialize(new PoolBackedNode { Child = new() { Number = 71, Text = "pooled" } });
         int rents = PoolBackedNode.Rents;
-        var root = LuminPackSerializer.Deserialize<PoolBackedNode>(bytes);
+        var root = global::LuminPackUnitTest.ConcreteReads.Read<PoolBackedNode>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PoolBackedNode concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Same(pooled, root);
         Assert.Same(child, root.Child);
         Assert.Equal(71, child.Number);
@@ -350,7 +350,7 @@ public partial class DeserializeReuseTest
 
         bytes = LuminPackSerializer.Serialize(new PoolBackedOwner { Item = new() { Child = new() { Number = 72 } } });
         rents = PoolBackedNode.Rents;
-        var owner = LuminPackSerializer.Deserialize<PoolBackedOwner>(bytes);
+        var owner = global::LuminPackUnitTest.ConcreteReads.Read<PoolBackedOwner>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PoolBackedOwner concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Same(pooled, owner.Item);
         Assert.Same(child, owner.Item.Child);
         Assert.Equal(72, child.Number);
@@ -365,7 +365,7 @@ public partial class DeserializeReuseTest
         var target = new TrackedNode();
         target.Next = target;
         byte[] bytes = LuminPackSerializer.Serialize(source);
-        LuminPackSerializer.Deserialize<TrackedNode>(bytes, ref target);
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.NotSame(target, target.Next);
         Assert.Equal(2, target.Next!.Number);
     }
@@ -383,9 +383,9 @@ public partial class DeserializeReuseTest
         }
         var identity = (TrackedNode[])target.Clone();
         byte[] bytes = LuminPackSerializer.Serialize(source);
-        for (int i = 0; i < 32; i++) LuminPackSerializer.Deserialize<TrackedNode[]>(bytes, ref target);
+        for (int i = 0; i < 32; i++) LuminPackSerializer.Deserialize(bytes, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 64; i++) LuminPackSerializer.Deserialize<TrackedNode[]>(bytes, ref target);
+        for (int i = 0; i < 64; i++) LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         for (int i = 0; i < source.Length; i++)
         {
@@ -406,7 +406,7 @@ public partial class DeserializeReuseTest
         var array = target.Arrays[0];
         var element = array[0];
         byte[] bytes = LuminPackSerializer.Serialize(source);
-        LuminPackSerializer.Deserialize<NestedCollections>(bytes, ref target);
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Same(list, target.Lists[0]);
         Assert.Same(item, target.Lists[0][0]);
         Assert.Same(array, target.Arrays[0]);
@@ -416,7 +416,7 @@ public partial class DeserializeReuseTest
         var managed = new ManagedNode { Child = new() };
         var child = managed.Child;
         bytes = LuminPackSerializer.Serialize(new ManagedNode { Child = new() { Number = 81 } });
-        LuminPackSerializer.Deserialize<ManagedNode>(bytes, ref managed);
+LuminPackSerializer.Deserialize(bytes, ref managed);
         Assert.Same(child, managed.Child);
         Assert.Equal(81, child.Number);
         var nested = new StructPair { Left = new() { Items = [new()] }, Right = new() { Items = [new()] } };
@@ -427,7 +427,7 @@ public partial class DeserializeReuseTest
             Left = new() { Items = [new() { Number = 82 }] },
             Right = new() { Items = [new() { Number = 83 }] }
         });
-        LuminPackSerializer.Deserialize<StructPair>(bytes, ref nested);
+LuminPackSerializer.Deserialize(bytes, ref nested);
         Assert.Same(left, nested.Left.Items);
         Assert.Same(right, nested.Right.Items);
         Assert.Equal(82, left[0].Number);
@@ -451,22 +451,22 @@ public partial class DeserializeReuseTest
         foreach (string text in new[] { "a", "ASCII text", "\u4E2D\u6587", "\uD83D\uDE00\uD83D\uDE80", new string('x', 400),
             new string('\u4E2D', 513) + "\uD83D\uDE00", new string('x', 255) + "\uD83D\uDE80" + new string('\u6587', 300) })
         {
-            byte[] bytes = LuminPackSerializer.Serialize<string, TOptions>(text);
+            byte[] bytes = LuminPackSerializer.Serialize<TOptions>((string)(text));
             string target = new(text.ToCharArray());
             string identity = target;
-            Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<string, TOptions>(bytes, ref target));
+            Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TOptions>(bytes, ref target));
             Assert.Same(identity, target);
             target = "changed";
-            LuminPackSerializer.Deserialize<string, TOptions>(bytes, ref target);
+LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
             Assert.Equal(text, target);
-            for (int i = 0; i < 32; i++) LuminPackSerializer.Deserialize<string, TOptions>(bytes, ref target);
+            for (int i = 0; i < 32; i++) LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
             long before = GC.GetAllocatedBytesForCurrentThread();
-            for (int i = 0; i < 128; i++) LuminPackSerializer.Deserialize<string, TOptions>(bytes, ref target);
+            for (int i = 0; i < 128; i++) LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
             Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         }
-        byte[] nullBytes = LuminPackSerializer.Serialize<string?, TOptions>(null);
+        byte[] nullBytes = LuminPackSerializer.Serialize<TOptions>((string?)null);
         string? nullable = "before";
-        LuminPackSerializer.Deserialize<string?, TOptions>(nullBytes, ref nullable);
+LuminPackSerializer.Deserialize<TOptions>(nullBytes, ref nullable);
         Assert.Equal(default(TOptions).StringRecording == LuminPackStringRecording.Token ? "" : null, nullable);
     }
 
@@ -494,7 +494,7 @@ public partial class DeserializeReuseTest
                 other[index] = (char)(0x4E00 + index + 1);
             }
 
-            byte[] record = LuminPackSerializer.Serialize<string, TOptions>(new string(distinct));
+            byte[] record = LuminPackSerializer.Serialize<TOptions>((string)(new string(distinct)));
             CompareStringRecord<TOptions>(record, new string(distinct), true);
             CompareStringRecord<TOptions>(record, new string(other));
             for (int prefix = 0; prefix < record.Length; prefix += Math.Max(1, record.Length / 7))
@@ -514,9 +514,9 @@ public partial class DeserializeReuseTest
         string? reused = candidate;
         Exception? freshError = null;
         Exception? reuseError = null;
-        try { LuminPackSerializer.Deserialize<string?, TOptions>(record, ref fresh); }
+        try { LuminPackSerializer.Deserialize<TOptions>(record, ref fresh); }
         catch (Exception exception) { freshError = exception; }
-        try { LuminPackSerializer.Deserialize<string?, TOptions>(record, ref reused); }
+        try { LuminPackSerializer.Deserialize<TOptions>(record, ref reused); }
         catch (Exception exception) { reuseError = exception; }
         Assert.Equal(freshError?.GetType(), reuseError?.GetType());
         if (freshError is null)
@@ -614,7 +614,7 @@ public partial class DeserializeReuseTest
     /// <typeparam name="TOptions">The binary string profile.</typeparam>
     private static void CheckMalformedStrings<TOptions>() where TOptions : struct, ILuminPackOptions
     {
-        byte[] bytes = LuminPackSerializer.Serialize<string, TOptions>("\u4E2D\uD83D\uDE00");
+        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((string)("\u4E2D\uD83D\uDE00"));
         for (int length = 0; length < bytes.Length; length++)
             CompareStringReads<TOptions>(bytes.AsSpan(0, length).ToArray());
         var malformed = (byte[])bytes.Clone();
@@ -632,9 +632,9 @@ public partial class DeserializeReuseTest
         string? reused = "\u4E2D\uD83D\uDE00";
         Exception? first = null;
         Exception? second = null;
-        try { LuminPackSerializer.Deserialize<string?, TOptions>(bytes, ref fresh); }
+        try { LuminPackSerializer.Deserialize<TOptions>(bytes, ref fresh); }
         catch (Exception exception) { first = exception; }
-        try { LuminPackSerializer.Deserialize<string?, TOptions>(bytes, ref reused); }
+        try { LuminPackSerializer.Deserialize<TOptions>(bytes, ref reused); }
         catch (Exception exception) { second = exception; }
         Assert.Equal(first?.GetType(), second?.GetType());
         if (first is null) Assert.Equal(fresh, reused);
@@ -652,7 +652,7 @@ public partial class DeserializeReuseTest
             Items = [new() { Number = 14 }, new() { Number = 15 }],
             Array = [new() { Number = 24 }, new() { Number = 25 }]
         });
-        LuminPackSerializer.Deserialize<NullableCollections>(bytes, ref target);
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Same(first, target.Items[0]);
         Assert.Same(element, target.Array[0]);
         Assert.Equal(15, target.Items[1]!.Number);
@@ -666,22 +666,22 @@ public partial class DeserializeReuseTest
         var array = new ReuseNode?[] { new(), new() };
         var first = array[0];
         byte[] bytes = LuminPackSerializer.Serialize(new ReuseNode?[] { new() { Number = 6 }, null });
-        LuminPackSerializer.Deserialize<ReuseNode?[]>(bytes, ref array);
+LuminPackSerializer.Deserialize(bytes, ref array);
         Assert.Same(first, array[0]);
         Assert.Null(array[1]);
         var list = new List<ReuseNode?> { new(), new() };
         first = list[0];
         bytes = LuminPackSerializer.Serialize(new List<ReuseNode?> { new() { Number = 7 }, null });
-        LuminPackSerializer.Deserialize<List<ReuseNode?>>(bytes, ref list);
+LuminPackSerializer.Deserialize(bytes, ref list);
         Assert.Same(first, list[0]);
         Assert.Null(list[1]);
         var map = new Dictionary<int, ReuseNode?> { [1] = new() };
         bytes = LuminPackSerializer.Serialize(new Dictionary<int, ReuseNode?> { [1] = null });
-        LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode?>>(bytes, ref map);
+LuminPackSerializer.Deserialize(bytes, ref map);
         Assert.Null(map[1]);
         var target = new ExplicitMember { Child = new() };
         bytes = LuminPackSerializer.Serialize(new ExplicitMember());
-        LuminPackSerializer.Deserialize<ExplicitMember>(bytes, ref target);
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Null(target.Child);
     }
 
@@ -695,12 +695,12 @@ public partial class DeserializeReuseTest
         var target = new ReuseGraph();
         var root = target;
         var child = target.Child;
-        Assert.Equal(buffer.GetSpan().Length, LuminPackSerializer.Deserialize<ReuseGraph>(buffer, ref target));
+        Assert.Equal(buffer.GetSpan().Length, LuminPackSerializer.Deserialize(buffer, ref target));
         byte[] bytes = buffer.GetSpan().ToArray();
         var first = new Segment(bytes.AsMemory(0, 2));
         var last = first.Append(bytes.AsMemory(2));
         var sequence = new ReadOnlySequence<byte>(first, 0, last, last.Memory.Length);
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<ReuseGraph>(sequence, ref target));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(sequence, ref target));
         Assert.Same(root, target);
         Assert.Same(child, target.Child);
         Assert.Equal(91, child.Number);

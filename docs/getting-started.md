@@ -56,14 +56,16 @@ var person = new Person { Age = 18, Name = "Light" };
 byte[] bytes = LuminPackSerializer.Serialize(person);
 Person copy = null!;
 LuminPackSerializer.Deserialize(bytes, ref copy);     // concrete overload, reuses copy when it exists
-Person other = LuminPackSerializer.Deserialize<Person>(bytes);
+Person other = null!;
+LuminPackSerializer.Deserialize(bytes, ref other);
 
 // JSON
 string json = LuminPackSerializer.SerializeJson(person);
-Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
+Person fromJson = null!;
+LuminPackSerializer.DeserializeJson(json, ref fromJson);
 ```
 
-Concrete overloads (`Serialize(person)`, `Deserialize(bytes, ref copy)`) call the generated code for that type directly. Generic overloads (`Deserialize<Person>(bytes)`) go through a per-type entry created on first use.
+Concrete overloads (`Serialize(person)`, `Deserialize(bytes, ref copy)`) call the generated code for that type directly. Generic overloads (`Deserialize<Person>(bytes)`, `Serialize<T, TOptions>(value)`, or calls inside `Save<T>`) require an explicit or Custom formatter [registration](custom-formatters.md#runtime-registration), even for built-in and source-generated types. Missing registrations throw `LuminPackException`. The concrete profile overload `Serialize<TOptions>(person)` still calls the generated Root directly.
 
 The XML remarks of concrete model overloads and built-in overloads with an execution root include a **Generated implementation** link to the binary or JSON `Root` method. Follow that link in your IDE to inspect the implementation without stepping through forwarding methods. Closed generic models, collections and compound values are supported when their formatter has a root. Raw unmanaged binary reads may call the runtime directly and therefore have no separate `RootRead`; Custom formatters keep their user-defined entry points. Generic type-selected fallback APIs have no single concrete root to link to. `Sizeof` describes evaluation rather than a read/write root.
 

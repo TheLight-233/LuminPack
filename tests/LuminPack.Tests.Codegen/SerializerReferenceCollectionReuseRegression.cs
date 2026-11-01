@@ -127,7 +127,7 @@ internal static class SerializerReferenceCollectionReuseRegression
             Execute(output);
             string editedText = text.Replace("[LuminPackable] public sealed class Plain", "[LuminPackable(GeneratorType.VersionTolerant)] public sealed class Plain", StringComparison.Ordinal)
                 .Replace("public int Number; public string Text { get; set; }", "[LuminPackOrder(0)]public int Number; [LuminPackOrder(1)]public string Text { get; set; }", StringComparison.Ordinal);
-            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(editedText, parse, "Shape.cs"));
+            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(editedText, parse, "Shape.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out var editedOutput, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             CheckSelection(driver, ordinary: false);
@@ -170,13 +170,13 @@ internal static class SerializerReferenceCollectionReuseRegression
                 Require(method.ToString().Contains("TryGetSortedListStorage(", StringComparison.Ordinal) == mapExpected, "Sorted-list value reuse selection differs: " + type);
             }
             if (type.Contains(".ReadOnlyMemory<", StringComparison.Ordinal))
-                Require(!method.ToString().Contains("__storage.Count == length", StringComparison.Ordinal) &&
+                Require(!method.ToString().Contains("storage.Count == length", StringComparison.Ordinal) &&
                     !method.ToString().Contains("TryGetExactArray(", StringComparison.Ordinal), "Read-only memory acquired mutable reuse.");
             if (!sequence && !view) continue;
             bool expected = type.Contains("<int>", StringComparison.Ordinal) || type.Contains("<string>", StringComparison.Ordinal) ||
                 ordinary && type.Contains("<global::Plain>", StringComparison.Ordinal);
             // Memory reuse locates its exact array slice through TryGetExactArray; ArraySegment compares its own count.
-            string marker = sequence ? "value.GetType() == typeof(" : type.Contains(".Memory<", StringComparison.Ordinal) ? "TryGetExactArray(" : "__storage.Count == length";
+            string marker = sequence ? "value.GetType() == typeof(" : type.Contains(".Memory<", StringComparison.Ordinal) ? "TryGetExactArray(" : "storage.Count == length";
             bool selected = method.ToString().Contains(marker, StringComparison.Ordinal);
             Require(expected == selected, "Reference-storage selection differs: " + type);
         }

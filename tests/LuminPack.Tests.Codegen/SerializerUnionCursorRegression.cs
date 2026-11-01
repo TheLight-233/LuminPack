@@ -46,7 +46,7 @@ internal static class SerializerUnionCursorRegression
             {
                 var graph = new Graph { Values = new Dictionary<int, Root> { [1] = new Fixed { Number = 11 }, [2] = new Text { Value = "text" }, [3] = new Guarded { Number = 29 } } };
                 byte[] bytes = LuminPackSerializer.Serialize(graph);
-                var copy = LuminPackSerializer.Deserialize<Graph>(bytes);
+                var copy = global::LuminPackUnitTest.ConcreteReads.Read<Graph>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Graph concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                 if (((Fixed)copy.Values[1]).Number != 11 || ((Text)copy.Values[2]).Value != "text" || ((Guarded)copy.Values[3]).Number != 29 ||
                     !LuminPackSerializer.Serialize(copy).AsSpan().SequenceEqual(bytes)) throw new Exception("Mixed Union wire or field data changed.");
                 _ = LuminPackSerializer.Serialize(new Dictionary<int, Wide> { [1] = new WideCase { Number = 19 } });
@@ -60,7 +60,7 @@ internal static class SerializerUnionCursorRegression
                 int initialCapacity = largeDestination.TotalLength;
                 LuminPackSerializer.Serialize(in large, largeDestination);
                 byte[] largeBytes = largeDestination.GetSpan().ToArray();
-                var largeCopy = LuminPackSerializer.Deserialize<List<BigRoot>>(largeBytes);
+                var largeCopy = global::LuminPackUnitTest.ConcreteReads.Read<List<BigRoot>>(largeBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<BigRoot> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                 if (largeDestination.TotalLength <= initialCapacity || largeBytes.Length != 40014 ||
                     ((BigCase)largeCopy[0]).Value.Marker != 31 || ((BigCase)largeCopy[0]).Tail != 32 ||
                     ((BigCase)largeCopy[1]).Value.Marker != 41 || ((BigCase)largeCopy[1]).Tail != 42 ||
@@ -198,9 +198,9 @@ internal static class SerializerUnionCursorRegression
                         if (!array.AsSpan().SequenceEqual(list) || !array.AsSpan().SequenceEqual(immutable))
                             throw new Exception("Union collection wire differs by container.");
                         var copies = new[] {
-                            LuminPackSerializer.Deserialize<CollectionRoot[]>(array),
-                            LuminPackSerializer.Deserialize<List<CollectionRoot>>(list).ToArray(),
-                            LuminPackSerializer.Deserialize<ImmutableArray<CollectionRoot>>(immutable).ToArray()
+                            global::LuminPackUnitTest.ConcreteReads.Read<CollectionRoot[]>(array, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CollectionRoot[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)),
+                            global::LuminPackUnitTest.ConcreteReads.Read<List<CollectionRoot>>(list, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<CollectionRoot> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).ToArray(),
+                            global::LuminPackUnitTest.ConcreteReads.Read<ImmutableArray<CollectionRoot>>(immutable, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableArray<CollectionRoot> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).ToArray()
                         };
                         foreach (var copy in copies)
                             if (!LuminPackSerializer.Serialize(copy).AsSpan().SequenceEqual(array))
@@ -212,7 +212,7 @@ internal static class SerializerUnionCursorRegression
         var options = new CSharpParseOptions(LanguageVersion.CSharp13, preprocessorSymbols: new[] { "NET8_0_OR_GREATER" });
         foreach (string mode in new[] { "Full", "Minimal" })
         {
-            var compilation = CSharpCompilation.Create("UnionCollections_" + mode,
+            var compilation = TestCompilation.Create("UnionCollections_" + mode,
                 new[] { CSharpSyntaxTree.ParseText(source.Replace("MODE", mode), options) }, references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
             var driver = CSharpGeneratorDriver.Create(new[] { new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator() },
@@ -261,7 +261,7 @@ internal static class SerializerUnionCursorRegression
     /// <param name="allowUnsafe">Whether manual registration is available.</param>
     /// <returns>The unchanged mixed Union fixture.</returns>
     private static CSharpCompilation Compilation(MetadataReference[] references, string mode, bool allowUnsafe)
-        => CSharpCompilation.Create("UnionCursor_" + mode + "_" + Guid.NewGuid().ToString("N"), new[]
+        => TestCompilation.Create("UnionCursor_" + mode + "_" + Guid.NewGuid().ToString("N"), new[]
         {
             CSharpSyntaxTree.ParseText(Source.Replace("MODE", mode), new CSharpParseOptions(LanguageVersion.CSharp13), "Root.cs"),
             CSharpSyntaxTree.ParseText("[LuminPack.Attribute.LuminPackable] public sealed partial class Fixed : Root { public int Number; }", new CSharpParseOptions(LanguageVersion.CSharp13), "Fixed.cs")

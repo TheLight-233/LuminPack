@@ -278,6 +278,8 @@ internal static class SerializerCoreProjection
     {
         private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<Compilation, OperationCatalog> Catalogs = new();
         private readonly SemanticModel _model;
+        private readonly Compilation _compilation;
+        private readonly IReadOnlyDictionary<string, ITypeSymbol> _formatterTypes;
         private readonly HashSet<string> _knownTypes;
         private readonly HashSet<string> _knownJsonTypes;
         private readonly HashSet<string> _knownSizeTypes;
@@ -369,10 +371,26 @@ internal static class SerializerCoreProjection
         internal CallRewriter(SemanticModel model, Compilation compilation)
         {
             _model = model;
+            _compilation = compilation;
+            _formatterTypes = CompilationTypeAnalysisCache.GetOrCreate(compilation).FormatterTypesByName;
             var catalog = Catalogs.GetValue(compilation, current => new OperationCatalog(current));
             _knownTypes = catalog.Binary;
             _knownJsonTypes = catalog.Json;
             _knownSizeTypes = catalog.Size;
+        }
+
+        /// <summary>Includes retained closed operations that usage analysis discovered after the initial compilation scan.</summary>
+        /// <param name="payload">The canonical closed payload name.</param>
+        /// <param name="operation">The normalized state operation.</param>
+        /// <param name="json">Whether the operation uses JSON state.</param>
+        /// <returns>Whether the payload owns the required concrete operation.</returns>
+        private bool IsKnownOperation(string payload, string operation, bool json)
+        {
+            var known = operation == "Sizeof" ? _knownSizeTypes : json ? _knownJsonTypes : _knownTypes;
+            if (known.Contains(payload)) return true;
+            return _formatterTypes.TryGetValue(payload, out var type) && !LuminPackExtensionGenerator.ContainsTypeParameter(type) &&
+                (operation == "Sizeof" ? LuminPackExtensionGenerator.CanRegisterCalculateFormatter(type, _compilation) :
+                    LuminPackExtensionGenerator.CanRegisterFormatter(type, _compilation, json));
         }
 
         /// <summary>Shares symbol-free operation capabilities across source contributions in one compilation.</summary>
@@ -466,19 +484,25 @@ internal static class SerializerCoreProjection
                 SyntaxFactory.Argument((ExpressionSyntax)Visit(access.Expression)).WithRefKindKeyword(SyntaxFactory.Token(SyntaxKind.RefKeyword))));
             string name = MethodName(access.Name.Identifier.ValueText, state.Contains("Json"));
             SimpleNameSyntax target = access.Name is GenericNameSyntax generic ? generic.WithIdentifier(SyntaxFactory.Identifier(name)) : SyntaxFactory.IdentifierName(name);
-            if (access.Name is not GenericNameSyntax && boundMethod is { IsGenericMethod: true } inferred)
+            if (access.Name is GenericNameSyntax explicitPayload && explicitPayload.TypeArgumentList.Arguments.Count == 1 &&
+                scalarType != null && !LuminPackExtensionGenerator.ContainsTypeParameter(scalarType) &&
+                IsKnownOperation(FormatterTypeName.Get(scalarType), name, state.Contains("Json")) &&
+                RootContainerProjection.PayloadKey(explicitPayload.TypeArgumentList.Arguments[0]) ==
+                    RootContainerProjection.PayloadKey(FormatterTypeName.Get(scalarType)))
+                target = SyntaxFactory.IdentifierName(name);
+            if (access.Name is not GenericNameSyntax && boundMethod is { IsGenericMethod: true } inferred &&
+                (scalarType == null || LuminPackExtensionGenerator.ContainsTypeParameter(scalarType) || !IsKnownOperation(FormatterTypeName.Get(scalarType), name, state.Contains("Json"))))
                 target = SyntaxFactory.GenericName(SyntaxFactory.Identifier(name), SyntaxFactory.TypeArgumentList(
                     SyntaxFactory.SeparatedList(inferred.TypeArguments.Select(type => SyntaxFactory.ParseTypeName(FormatterTypeName.Get(type))))));
             if (target is not GenericNameSyntax && node.ArgumentList.Arguments.Count > (reduced ? 0 : 1))
             {
                 var payload = scalarType;
                 string frozenPayload = node.GetAnnotations(BinaryEntryInlining.PayloadAnnotation).Select(annotation => annotation.Data).SingleOrDefault();
-                var known = name == "Sizeof" ? _knownSizeTypes : state.Contains("Json") ? _knownJsonTypes : _knownTypes;
-                if (frozenPayload != null && !known.Contains(frozenPayload))
+                if (frozenPayload != null && !IsKnownOperation(frozenPayload, name, state.Contains("Json")))
                     target = SyntaxFactory.GenericName(SyntaxFactory.Identifier(name), SyntaxFactory.TypeArgumentList(
                         SyntaxFactory.SingletonSeparatedList(SyntaxFactory.ParseTypeName(frozenPayload))));
                 else if (payload != null && (payload.TypeKind == TypeKind.TypeParameter ||
-                    !known.Contains(FormatterTypeName.Get(payload))))
+                    !IsKnownOperation(FormatterTypeName.Get(payload), name, state.Contains("Json"))))
                     target = SyntaxFactory.GenericName(SyntaxFactory.Identifier(name), SyntaxFactory.TypeArgumentList(
                         SyntaxFactory.SingletonSeparatedList(SyntaxFactory.ParseTypeName(FormatterTypeName.Get(payload)))));
             }

@@ -18,7 +18,7 @@ public class HashSetStorageLayoutTest
         foreach (int value in values) expected.Write(BitConverter.GetBytes(value));
         byte[] payload = LuminPackSerializer.Serialize(values);
         Assert.Equal(expected.ToArray(), payload);
-        var copy = LuminPackSerializer.Deserialize<HashSet<int>>(payload);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<HashSet<int>>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref HashSet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(values.Count, copy.Count);
         Assert.True(values.SetEquals(copy));
         Assert.Equal(payload, LuminPackSerializer.Serialize(copy));
@@ -42,7 +42,7 @@ public class HashSetStorageLayoutTest
         foreach (string? value in values) expected.Write(LuminPackSerializer.Serialize(value));
         byte[] payload = LuminPackSerializer.Serialize(values);
         Assert.Equal(expected.ToArray(), payload);
-        var copy = LuminPackSerializer.Deserialize<HashSet<string?>>(payload);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<HashSet<string?>>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref HashSet<string?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(values.Count, copy.Count);
         Assert.True(values.SetEquals(copy));
         Assert.Equal(payload, LuminPackSerializer.Serialize(copy));

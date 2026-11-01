@@ -24,7 +24,7 @@ namespace LuminPackUnitTest
                 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ConcurrentDictionary<int, string>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ConcurrentDictionary<int, string>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ConcurrentDictionary<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Count == result.Count && val.All(kv => result.TryGetValue(kv.Key, out var v) && v == kv.Value))
                     results.Add("✓ TestConcurrentDictionary - PASSED");
@@ -52,7 +52,7 @@ namespace LuminPackUnitTest
                 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<SortedDictionary<int, string>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<SortedDictionary<int, string>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SortedDictionary<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestSortedDictionary - PASSED");
@@ -75,7 +75,7 @@ namespace LuminPackUnitTest
                 var val = new Stack<int>(new[] { 1, 2, 3, 4, 5 });
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<Stack<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<Stack<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Stack<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestStack - PASSED");
@@ -98,7 +98,7 @@ namespace LuminPackUnitTest
                 var val = new Queue<int>(new[] { 1, 2, 3, 4, 5 });
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<Queue<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<Queue<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Queue<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestQueue - PASSED");
@@ -121,7 +121,7 @@ namespace LuminPackUnitTest
                 var val = new LinkedList<int>(new[] { 1, 2, 3, 4, 5 });
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<LinkedList<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<LinkedList<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref LinkedList<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestLinkedList - PASSED");
@@ -144,7 +144,7 @@ namespace LuminPackUnitTest
                 var val = new HashSet<int> { 1, 2, 3, 4, 5, 3, 2 }; // Ignore duplicate entries.
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<HashSet<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<HashSet<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref HashSet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SetEquals(result))
                     results.Add("✓ TestHashSet - PASSED");
@@ -167,7 +167,7 @@ namespace LuminPackUnitTest
                 var val = new SortedSet<int> { 5, 1, 3, 2, 4 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<SortedSet<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<SortedSet<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SortedSet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestSortedSet - PASSED");
@@ -195,7 +195,7 @@ namespace LuminPackUnitTest
                 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<SortedList<int, string>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<SortedList<int, string>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SortedList<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Count == result.Count && val.All(kv => result.ContainsKey(kv.Key) && result[kv.Key] == kv.Value))
                     results.Add("✓ TestSortedList - PASSED");
@@ -222,7 +222,7 @@ namespace LuminPackUnitTest
                 val.CompleteAdding();
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<BlockingCollection<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<BlockingCollection<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BlockingCollection<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 var valArray = val.ToArray();
                 var resultArray = result.ToArray();
@@ -248,7 +248,7 @@ namespace LuminPackUnitTest
                 var val = new ConcurrentBag<int> { 1, 2, 3, 4, 5 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ConcurrentBag<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ConcurrentBag<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ConcurrentBag<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 // ConcurrentBag has no ordering guarantee; compare contents without regard to order.
                 var valSorted = val.OrderBy(x => x).ToArray();
@@ -275,7 +275,7 @@ namespace LuminPackUnitTest
                 var val = new ConcurrentQueue<int>(new[] { 1, 2, 3, 4, 5 });
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ConcurrentQueue<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ConcurrentQueue<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ConcurrentQueue<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestConcurrentQueue - PASSED");
@@ -298,7 +298,7 @@ namespace LuminPackUnitTest
                 var val = new ConcurrentStack<int>(new[] { 1, 2, 3, 4, 5 });
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ConcurrentStack<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ConcurrentStack<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ConcurrentStack<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestConcurrentStack - PASSED");
@@ -321,7 +321,7 @@ namespace LuminPackUnitTest
                 var val = new Collection<int> { 1, 2, 3, 4, 5 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<Collection<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<Collection<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Collection<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestCollection - PASSED");
@@ -344,7 +344,7 @@ namespace LuminPackUnitTest
                 var val = new ObservableCollection<int> { 1, 2, 3, 4, 5 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ObservableCollection<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ObservableCollection<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ObservableCollection<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestObservableCollection - PASSED");
@@ -368,7 +368,7 @@ namespace LuminPackUnitTest
                 var val = new ReadOnlyCollection<int>(innerList);
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ReadOnlyCollection<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ReadOnlyCollection<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReadOnlyCollection<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestReadOnlyCollection - PASSED");
@@ -392,7 +392,7 @@ namespace LuminPackUnitTest
                 var val = new ReadOnlyObservableCollection<int>(innerCollection);
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ReadOnlyObservableCollection<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ReadOnlyObservableCollection<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReadOnlyObservableCollection<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestReadOnlyObservableCollection - PASSED");
@@ -418,7 +418,7 @@ namespace LuminPackUnitTest
                 val.Enqueue("Three", 2);
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<PriorityQueue<string, int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<PriorityQueue<string, int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PriorityQueue<string, int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 bool equal = true;
                 while (val.Count > 0 && result.Count > 0)
@@ -454,7 +454,7 @@ namespace LuminPackUnitTest
                 var val = ImmutableArray.Create(1, 2, 3, 4, 5);
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ImmutableArray<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ImmutableArray<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableArray<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestImmutableArray - PASSED");
@@ -477,7 +477,7 @@ namespace LuminPackUnitTest
                 var val = ImmutableList.Create(1, 2, 3, 4, 5);
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ImmutableList<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ImmutableList<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableList<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestImmutableList - PASSED");
@@ -500,7 +500,7 @@ namespace LuminPackUnitTest
                 var val = ImmutableQueue.Create(1, 2, 3, 4, 5);
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ImmutableQueue<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ImmutableQueue<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableQueue<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestImmutableQueue - PASSED");
@@ -523,7 +523,7 @@ namespace LuminPackUnitTest
                 var val = ImmutableStack.Create(1, 2, 3, 4, 5);
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ImmutableStack<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ImmutableStack<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableStack<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestImmutableStack - PASSED");
@@ -551,7 +551,7 @@ namespace LuminPackUnitTest
                 });
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ImmutableDictionary<int, string>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ImmutableDictionary<int, string>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableDictionary<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Count == result.Count && val.All(kv => result.TryGetValue(kv.Key, out var v) && v == kv.Value))
                     results.Add("✓ TestImmutableDictionary - PASSED");
@@ -574,7 +574,7 @@ namespace LuminPackUnitTest
                 var val = ImmutableHashSet.Create(1, 2, 3, 4, 5, 3, 2); // Ignore duplicate entries.
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ImmutableHashSet<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ImmutableHashSet<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableHashSet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SetEquals(result))
                     results.Add("✓ TestImmutableHashSet - PASSED");
@@ -602,7 +602,7 @@ namespace LuminPackUnitTest
                 });
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ImmutableSortedDictionary<int, string>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ImmutableSortedDictionary<int, string>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableSortedDictionary<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestImmutableSortedDictionary - PASSED");
@@ -625,7 +625,7 @@ namespace LuminPackUnitTest
                 var val = ImmutableSortedSet.Create(5, 1, 3, 2, 4);
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ImmutableSortedSet<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ImmutableSortedSet<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableSortedSet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestImmutableSortedSet - PASSED");
@@ -654,7 +654,7 @@ namespace LuminPackUnitTest
                 }.ToFrozenDictionary();
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<FrozenDictionary<int, string>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<FrozenDictionary<int, string>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FrozenDictionary<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Count == result.Count && val.All(kv => result.TryGetValue(kv.Key, out var v) && v == kv.Value))
                     results.Add("✓ TestFrozenDictionary - PASSED");
@@ -677,7 +677,7 @@ namespace LuminPackUnitTest
                 var val = new HashSet<int> { 1, 2, 3, 4, 5 }.ToFrozenSet();
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<FrozenSet<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<FrozenSet<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FrozenSet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SetEquals(result))
                     results.Add("✓ TestFrozenSet - PASSED");
@@ -704,7 +704,7 @@ namespace LuminPackUnitTest
                 IEnumerable<int> val = new List<int> { 1, 2, 3, 4, 5 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<IEnumerable<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<IEnumerable<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IEnumerable<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIEnumerable - PASSED");
@@ -727,7 +727,7 @@ namespace LuminPackUnitTest
                 ICollection<int> val = new List<int> { 1, 2, 3, 4, 5 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ICollection<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ICollection<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ICollection<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestICollection - PASSED");
@@ -750,7 +750,7 @@ namespace LuminPackUnitTest
                 IReadOnlyCollection<int> val = new List<int> { 1, 2, 3, 4, 5 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<IReadOnlyCollection<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlyCollection<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlyCollection<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIReadOnlyCollection - PASSED");
@@ -773,7 +773,7 @@ namespace LuminPackUnitTest
                 IList<int> val = new List<int> { 1, 2, 3, 4, 5 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<IList<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<IList<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IList<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIList - PASSED");
@@ -796,7 +796,7 @@ namespace LuminPackUnitTest
                 IReadOnlyList<int> val = new List<int> { 1, 2, 3, 4, 5 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<IReadOnlyList<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlyList<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlyList<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIReadOnlyList - PASSED");
@@ -824,7 +824,7 @@ namespace LuminPackUnitTest
                 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<IDictionary<int, string>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<IDictionary<int, string>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IDictionary<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Count == result.Count && val.All(kv => result.ContainsKey(kv.Key) && result[kv.Key] == kv.Value))
                     results.Add("✓ TestIDictionary - PASSED");
@@ -852,7 +852,7 @@ namespace LuminPackUnitTest
                 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<IReadOnlyDictionary<int, string>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlyDictionary<int, string>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlyDictionary<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Count == result.Count && val.All(kv => result.ContainsKey(kv.Key) && result[kv.Key] == kv.Value))
                     results.Add("✓ TestIReadOnlyDictionary - PASSED");
@@ -931,7 +931,7 @@ namespace LuminPackUnitTest
                 IGrouping<string, int> val = lookup.First();
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<IGrouping<string, int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<IGrouping<string, int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IGrouping<string, int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Key == result.Key && val.SequenceEqual(result))
                     results.Add("✓ TestIGrouping - PASSED");
@@ -954,7 +954,7 @@ namespace LuminPackUnitTest
                 ISet<int> val = new HashSet<int> { 1, 2, 3, 4, 5 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<ISet<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<ISet<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SetEquals(result))
                     results.Add("✓ TestISet - PASSED");
@@ -977,7 +977,7 @@ namespace LuminPackUnitTest
                 IReadOnlySet<int> val = new HashSet<int> { 1, 2, 3, 4, 5 };
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<IReadOnlySet<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlySet<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlySet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SetEquals(result))
                     results.Add("✓ TestIReadOnlySet - PASSED");
@@ -1002,7 +1002,7 @@ namespace LuminPackUnitTest
                 IImmutableList<int> val = ImmutableList.Create(1, 2, 3, 4, 5);
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<IImmutableList<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<IImmutableList<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IImmutableList<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIImmutableList - PASSED");
@@ -1025,7 +1025,7 @@ namespace LuminPackUnitTest
                 IImmutableQueue<int> val = ImmutableQueue.Create(1, 2, 3, 4, 5);
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<IImmutableQueue<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<IImmutableQueue<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IImmutableQueue<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIImmutableQueue - PASSED");
@@ -1048,7 +1048,7 @@ namespace LuminPackUnitTest
                 IImmutableStack<int> val = ImmutableStack.Create(1, 2, 3, 4, 5);
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<IImmutableStack<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<IImmutableStack<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IImmutableStack<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestIImmutableStack - PASSED");
@@ -1076,7 +1076,7 @@ namespace LuminPackUnitTest
                 });
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<IImmutableDictionary<int, string>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<IImmutableDictionary<int, string>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IImmutableDictionary<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Count == result.Count && val.All(kv => result.TryGetValue(kv.Key, out var v) && v == kv.Value))
                     results.Add("✓ TestIImmutableDictionary - PASSED");
@@ -1099,7 +1099,7 @@ namespace LuminPackUnitTest
                 IImmutableSet<int> val = ImmutableHashSet.Create(1, 2, 3, 4, 5);
 
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                var result = LuminPackSerializer.Deserialize<IImmutableSet<int>>(buf);
+                var result = global::LuminPackUnitTest.ConcreteReads.Read<IImmutableSet<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IImmutableSet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SetEquals(result))
                     results.Add("✓ TestIImmutableSet - PASSED");

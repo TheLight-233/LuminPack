@@ -49,7 +49,7 @@ internal static class SerializerDictionarySlotRegression
                 {
                     var bytes = LuminPackSerializer.Serialize(new Dictionary<int, Leaf> { [2] = new(), [1] = new() });
                     var map = new Dictionary<int, Leaf> { [1] = new(), [2] = new() };
-                    LuminPackSerializer.Deserialize<Dictionary<int, Leaf>>(bytes, ref map);
+                    LuminPackSerializer.Deserialize(bytes, ref map);
                     {{privateCheck}}
                     return map.First().Key;
                 }

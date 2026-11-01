@@ -27,7 +27,7 @@ internal static class SerializerCapacityTierRegression
             public static void Check()
             {
                 var bounded = new BoundedRoot { Values = new List<BoundedLeaf> { new BoundedLeaf { Id = 17 } } };
-                var copy = LuminPackSerializer.Deserialize<BoundedRoot>(LuminPackSerializer.Serialize(bounded));
+                var copy = global::LuminPackUnitTest.ConcreteReads.Read<BoundedRoot>(LuminPackSerializer.Serialize(bounded), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BoundedRoot concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                 if (copy.Values[0].Id != 17) throw new Exception("The bounded record changed.");
                 _ = LuminPackSerializer.Serialize(new List<BoundedLeaf> { new BoundedLeaf() });
                 _ = LuminPackSerializer.Serialize(new List<string> { null, "", "text" });
@@ -84,7 +84,7 @@ internal static class SerializerCapacityTierRegression
             Require(!Calls(union.Body!, "TryEnsureCapacity").Any() && Calls(union.Body!, "CheckBuffer").Any(),
                 "An unbounded virtual Union was treated as a fixed payload.");
             Execute(output);
-            var tree = input.SyntaxTrees.Single();
+            var tree = input.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs");
             var changed = input.ReplaceSyntaxTree(tree, CSharpSyntaxTree.ParseText(tree.ToString().Replace("Bounded(128)", "Bounded(192)"), Parse, "Models.cs"));
             var retained = driver.RunGeneratorsAndUpdateCompilation(changed, out var updated, out _);
             var fresh = Driver().RunGenerators(changed);
@@ -113,7 +113,7 @@ internal static class SerializerCapacityTierRegression
     /// <param name="references">Current runtime references.</param>
     /// <param name="source">The complete fixture.</param>
     /// <returns>The consumer compilation.</returns>
-    private static CSharpCompilation Compilation(MetadataReference[] references, string source) => CSharpCompilation.Create("CapacityTiers_" + Guid.NewGuid().ToString("N"),
+    private static CSharpCompilation Compilation(MetadataReference[] references, string source) => TestCompilation.Create("CapacityTiers_" + Guid.NewGuid().ToString("N"),
         [CSharpSyntaxTree.ParseText(source, Parse, "Models.cs")], references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
 
     /// <summary>Creates an independent incremental driver.</summary>

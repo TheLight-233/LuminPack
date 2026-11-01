@@ -12,7 +12,7 @@ internal static class SerializerImportedLayoutRegression
     internal static void Run(MetadataReference[] references)
     {
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]);
-        var foreign = CSharpCompilation.Create("ImportedAuditLayouts", [CSharpSyntaxTree.ParseText("""
+        var foreign = TestCompilation.Create("ImportedAuditLayouts", [CSharpSyntaxTree.ParseText("""
             using System.Runtime.InteropServices;
             using LuminPack.Attribute;
             namespace ImportedAudit;
@@ -58,21 +58,21 @@ internal static class SerializerImportedLayoutRegression
                         if (bytes.Length != 20 || bytes[0] != 5 || bytes[1] != 17 || BitConverter.ToInt64(bytes, 2) != value.Packed.GetValue() ||
                             bytes[10] != 23 || BitConverter.ToInt64(bytes, 11) != value.Explicit.GetValue() || bytes[19] != 7)
                             throw new InvalidOperationException("Imported metadata changed the portable wire.");
-                        var copy = LuminPackSerializer.Deserialize<Packet>(bytes);
+                        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Packet>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Packet concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                         if (copy.Packed.GetValue() != value.Packed.GetValue() || copy.Explicit.GetValue() != value.Explicit.GetValue())
                             throw new InvalidOperationException("Imported storage was read at the wrong field offsets.");
                         var list = new[] { value, value, value };
-                        var copies = LuminPackSerializer.Deserialize<Packet[]>(LuminPackSerializer.Serialize(list));
+                        var copies = global::LuminPackUnitTest.ConcreteReads.Read<Packet[]>(LuminPackSerializer.Serialize(list), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Packet[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                         if (copies.Length != 3 || copies[2].Packed.GetValue() != value.Packed.GetValue())
                             throw new InvalidOperationException("Imported vector offsets changed nested storage.");
-                        var packed = LuminPackSerializer.DeserializeJson<ImportedAudit.Packed>(LuminPackSerializer.SerializeJson(value.Packed));
-                        var explicitValue = LuminPackSerializer.DeserializeJson<ImportedAudit.Explicit>(LuminPackSerializer.SerializeJson(value.Explicit));
+                        var packed = global::LuminPackUnitTest.ConcreteReads.ReadJson<ImportedAudit.Packed>(LuminPackSerializer.SerializeJson(value.Packed), static (string concreteReadInput, ref ImportedAudit.Packed concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
+                        var explicitValue = global::LuminPackUnitTest.ConcreteReads.ReadJson<ImportedAudit.Explicit>(LuminPackSerializer.SerializeJson(value.Explicit), static (string concreteReadInput, ref ImportedAudit.Explicit concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
                         if (packed.GetValue() != value.Packed.GetValue() || explicitValue.GetValue() != value.Explicit.GetValue())
                             throw new InvalidOperationException("Imported Local views lost Pack, Size or FieldOffset.");
                     }
                 }
                 """;
-            var input = CSharpCompilation.Create("ImportedAuditConsumer_" + mode, [CSharpSyntaxTree.ParseText(source, parse)],
+            var input = TestCompilation.Create("ImportedAuditConsumer_" + mode, [CSharpSyntaxTree.ParseText(source, parse)],
                 references.Append(MetadataReference.CreateFromImage(foreignBytes)),
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
             GeneratorDriver driver = CSharpGeneratorDriver.Create(

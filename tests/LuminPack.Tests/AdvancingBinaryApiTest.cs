@@ -19,11 +19,11 @@ public class AdvancingBinaryApiTest
         byte[] bytes = LuminPackSerializer.Serialize(value);
         Assert.Equal(5, bytes.Length);
         Assert.Equal(1, bytes[0]);
-        Assert.Equal(42, LuminPackSerializer.Deserialize<FluentOpenStruct<int>>(bytes).Value);
+        Assert.Equal(42, global::LuminPackUnitTest.ConcreteReads.Read<FluentOpenStruct<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FluentOpenStruct<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Value);
         var result = new FluentOpenStruct<int> { Value = -1 };
         LuminPackSerializer.Deserialize(bytes, ref result);
         Assert.Equal(42, result.Value);
-        Assert.Equal(42, LuminPackSerializer.DeserializeJson<FluentOpenStruct<int>>(LuminPackSerializer.SerializeJson(value)).Value);
+        Assert.Equal(42, global::LuminPackUnitTest.ConcreteReads.ReadJson<FluentOpenStruct<int>>(LuminPackSerializer.SerializeJson(value), static (string concreteReadInput, ref FluentOpenStruct<int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).Value);
     }
 
     /// <summary>Keeps nullable reference-free collection payloads on their raw storage path.</summary>
@@ -36,7 +36,7 @@ public class AdvancingBinaryApiTest
             List = new List<DateTime?> { null, new(8128) }
         };
         byte[] bytes = LuminPackSerializer.Serialize(value);
-        var result = LuminPackSerializer.Deserialize<FluentNullableCollections>(bytes);
+        var result = global::LuminPackUnitTest.ConcreteReads.Read<FluentNullableCollections>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FluentNullableCollections concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(value.Array, result.Array);
         Assert.Equal(value.List, result.List);
         var array = result.Array;

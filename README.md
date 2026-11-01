@@ -150,11 +150,13 @@ var person = new Person { Age = 18, Name = "Light" };
 
 // Binary
 byte[] bytes = LuminPackSerializer.Serialize(person);
-Person copy = LuminPackSerializer.Deserialize<Person>(bytes);
+Person copy = null!;
+LuminPackSerializer.Deserialize(bytes, ref copy);
 
 // JSON
 string json = LuminPackSerializer.SerializeJson(person);
-Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
+Person fromJson = null!;
+LuminPackSerializer.DeserializeJson(json, ref fromJson);
 ```
 
 That's it — `LuminPackSerializer` is generated into your project with overloads for every type you serialize. See [Getting Started](docs/getting-started.md) for buffers, streams and `IBufferWriter<byte>`.
@@ -173,7 +175,8 @@ public abstract partial class Shape { }
 
 Shape shape = new Circle { Radius = 2 };
 byte[] bytes = LuminPackSerializer.Serialize(shape);
-Shape back = LuminPackSerializer.Deserialize<Shape>(bytes);   // Circle
+Shape back = null!;
+LuminPackSerializer.Deserialize(bytes, ref back);   // Circle
 ```
 
 ➡️ [Polymorphism guide](docs/polymorphism.md)

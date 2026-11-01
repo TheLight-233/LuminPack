@@ -21,8 +21,8 @@ public class StringBuilderCapacityTest
         Assert.True(buffer.TotalLength > 32 * 1024);
         byte[] bytes = LuminPackSerializer.Serialize(value);
         Assert.Equal(sizeof(int) + value.Length * sizeof(char), bytes.Length);
-        Assert.Equal(value.ToString(), LuminPackSerializer.Deserialize<StringBuilder>(bytes).ToString());
-        Assert.Equal(bytes, LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<StringBuilder>(bytes)));
+        Assert.Equal(value.ToString(), global::LuminPackUnitTest.ConcreteReads.Read<StringBuilder>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref StringBuilder concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).ToString());
+        Assert.Equal(bytes, LuminPackSerializer.Serialize(global::LuminPackUnitTest.ConcreteReads.Read<StringBuilder>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref StringBuilder concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
     }
 
     /// <summary>Rejects insufficient caller storage before writing either the header or chunk bytes.</summary>

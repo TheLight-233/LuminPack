@@ -45,7 +45,7 @@ public class MultiDimensionalArraySerializationTest
             }
 
             var buf = LuminPackSerializer.Serialize(container);
-            var deserializedContainer = LuminPackSerializer.Deserialize<ArrayContainer>(buf);
+            var deserializedContainer = global::LuminPackUnitTest.ConcreteReads.Read<ArrayContainer>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ArrayContainer concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             bool passed = true;
             if (deserializedContainer?.TwoDimensionalArray != null)
@@ -107,7 +107,7 @@ public class MultiDimensionalArraySerializationTest
             }
 
             var buf = LuminPackSerializer.Serialize(container);
-            var deserializedContainer = LuminPackSerializer.Deserialize<ArrayContainer>(buf);
+            var deserializedContainer = global::LuminPackUnitTest.ConcreteReads.Read<ArrayContainer>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ArrayContainer concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             bool passed = true;
             if (deserializedContainer?.ThreeDimensionalArray != null)
@@ -176,7 +176,7 @@ public class MultiDimensionalArraySerializationTest
             }
 
             var buf = LuminPackSerializer.Serialize(container);
-            var deserializedContainer = LuminPackSerializer.Deserialize<ArrayContainer>(buf);
+            var deserializedContainer = global::LuminPackUnitTest.ConcreteReads.Read<ArrayContainer>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ArrayContainer concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             bool passed = true;
             if (deserializedContainer?.FourDimensionalArray != null)
@@ -252,7 +252,7 @@ public class MultiDimensionalArraySerializationTest
             }
 
             var buf = LuminPackSerializer.Serialize(container);
-            var deserializedContainer = LuminPackSerializer.Deserialize<ArrayContainer>(buf);
+            var deserializedContainer = global::LuminPackUnitTest.ConcreteReads.Read<ArrayContainer>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ArrayContainer concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             bool passed = true;
             if (deserializedContainer?.FiveDimensionalArray != null)
@@ -335,7 +335,7 @@ public class MultiDimensionalArraySerializationTest
             }
 
             var buf = LuminPackSerializer.Serialize(container);
-            var deserializedContainer = LuminPackSerializer.Deserialize<ArrayContainer>(buf);
+            var deserializedContainer = global::LuminPackUnitTest.ConcreteReads.Read<ArrayContainer>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ArrayContainer concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             bool passed = true;
             if (deserializedContainer?.SixDimensionalArray != null)
@@ -425,7 +425,7 @@ public class MultiDimensionalArraySerializationTest
             }
 
             var buf = LuminPackSerializer.Serialize(container);
-            var deserializedContainer = LuminPackSerializer.Deserialize<ArrayContainer>(buf);
+            var deserializedContainer = global::LuminPackUnitTest.ConcreteReads.Read<ArrayContainer>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ArrayContainer concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             bool passed = true;
             if (deserializedContainer?.SevenDimensionalArray != null)
@@ -501,7 +501,7 @@ public class MultiDimensionalArraySerializationTest
             };
 
             var buf = LuminPackSerializer.Serialize(container);
-            var deserializedContainer = LuminPackSerializer.Deserialize<ArrayContainer>(buf);
+            var deserializedContainer = global::LuminPackUnitTest.ConcreteReads.Read<ArrayContainer>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ArrayContainer concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             bool passed = deserializedContainer?.TwoDimensionalArray != null &&
                          deserializedContainer.ThreeDimensionalArray != null &&
@@ -544,7 +544,7 @@ public class MultiDimensionalArraySerializationTest
             }
 
             var buf = LuminPackSerializer.Serialize(twoDimensionalArray);
-            var deserializedContainer = LuminPackSerializer.Deserialize<string[,]>(buf);
+            var deserializedContainer = global::LuminPackUnitTest.ConcreteReads.Read<string[,]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string[,] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             bool passed = VerifyTwoDimensionalArray(deserializedContainer, twoDimensionalArray);
 

@@ -23,16 +23,16 @@ internal static partial class SerializerCompiledOptionRegression
                     Root value = new Case();
                     var bytes = LuminPackSerializer.Serialize(value);
                     if (bytes[0] != 1) throw new Exception("Wide framing changed.");
-                    Root copy = LuminPackSerializer.Deserialize<Root>(bytes);
+                    Root copy = global::LuminPackUnitTest.ConcreteReads.Read<Root>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Root concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     var reused = copy;
                     LuminPackSerializer.Deserialize(bytes, ref copy);
                     if (!ReferenceEquals(reused, copy) || ((Case)copy).Text != "hello") throw new Exception("Wide reuse changed.");
                     var utf8 = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(value);
-                    if (utf8.Length != 14 || ((Case)LuminPackSerializer.Deserialize<Root,LuminPackUtf8LengthOptions>(utf8)).Text != "hello") throw new Exception("Union switches fixed the string profile.");
-                    if (LuminPackSerializer.Serialize<Root>(null)[0] != 255) throw new Exception("Wide null changed.");
+                    if (utf8.Length != 14 || ((Case)global::LuminPackUnitTest.ConcreteReads.Read<Root>(utf8, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Root concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(concreteReadInput, ref concreteReadTarget))).Text != "hello") throw new Exception("Union switches fixed the string profile.");
+                    if (LuminPackSerializer.Serialize((Root)null!)[0] != 255) throw new Exception("Wide null changed.");
                     INarrow narrow = new Small();
                     if (LuminPackSerializer.Serialize(narrow)[0] != 1) throw new Exception("False option enabled wide framing.");
-                    if (((Small)LuminPackSerializer.Deserialize<INarrow>(LuminPackSerializer.Serialize(narrow))).Id != 7) throw new Exception("Interface round trip changed.");
+                    if (((Small)global::LuminPackUnitTest.ConcreteReads.Read<INarrow>(LuminPackSerializer.Serialize(narrow), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref INarrow concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))).Id != 7) throw new Exception("Interface round trip changed.");
                 }
             }
             """;
@@ -50,7 +50,7 @@ internal static partial class SerializerCompiledOptionRegression
                 [LuminPackOption(SingleImplementation = false)] public int Other { get; set; }
             }
             """;
-        var input = CSharpCompilation.Create("InvalidUnionOptions", [CSharpSyntaxTree.ParseText(invalid, parse)], references,
+        var input = TestCompilation.Create("InvalidUnionOptions", [CSharpSyntaxTree.ParseText(invalid, parse)], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
         var result = driver.RunGenerators(input).GetRunResult();

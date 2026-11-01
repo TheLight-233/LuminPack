@@ -73,11 +73,10 @@ namespace LuminPackUnitTest
                 var head = new PublicFieldCircleNode { Id = 1 };
                 head.Next = new PublicFieldCircleNode { Id = 2, Next = head };
 
-                var restored = LuminPackSerializer.Deserialize<PublicFieldCircleNode>(
-                    LuminPackSerializer.Serialize(head));
+                var restored = global::LuminPackUnitTest.ConcreteReads.Read<PublicFieldCircleNode>(LuminPackSerializer.Serialize(head), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PublicFieldCircleNode concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 var json = LuminPackSerializer.SerializeJson(head);
-                var fromJson = LuminPackSerializer.DeserializeJson<PublicFieldCircleNode>(json);
+                var fromJson = global::LuminPackUnitTest.ConcreteReads.ReadJson<PublicFieldCircleNode>(json, static (string concreteReadInput, ref PublicFieldCircleNode concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 bool ok = restored.Id == 1
                     && restored.Next != null
@@ -106,11 +105,9 @@ namespace LuminPackUnitTest
             {
                 var original = new PublicFieldVersionTolerant { A = 7, Name = "vt" };
 
-                var restored = LuminPackSerializer.Deserialize<PublicFieldVersionTolerant>(
-                    LuminPackSerializer.Serialize(original));
+                var restored = global::LuminPackUnitTest.ConcreteReads.Read<PublicFieldVersionTolerant>(LuminPackSerializer.Serialize(original), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PublicFieldVersionTolerant concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
-                var fromJson = LuminPackSerializer.DeserializeJson<PublicFieldVersionTolerant>(
-                    LuminPackSerializer.SerializeJson(original));
+                var fromJson = global::LuminPackUnitTest.ConcreteReads.ReadJson<PublicFieldVersionTolerant>(LuminPackSerializer.SerializeJson(original), static (string concreteReadInput, ref PublicFieldVersionTolerant concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 bool ok = restored.A == 7 && restored.Name == "vt"
                     && fromJson.A == 7 && fromJson.Name == "vt";
@@ -134,11 +131,9 @@ namespace LuminPackUnitTest
             {
                 var original = new PublicFieldPooled { A = 9 };
 
-                var restored = LuminPackSerializer.Deserialize<PublicFieldPooled>(
-                    LuminPackSerializer.Serialize(original));
+                var restored = global::LuminPackUnitTest.ConcreteReads.Read<PublicFieldPooled>(LuminPackSerializer.Serialize(original), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PublicFieldPooled concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
-                var fromJson = LuminPackSerializer.DeserializeJson<PublicFieldPooled>(
-                    LuminPackSerializer.SerializeJson(original));
+                var fromJson = global::LuminPackUnitTest.ConcreteReads.ReadJson<PublicFieldPooled>(LuminPackSerializer.SerializeJson(original), static (string concreteReadInput, ref PublicFieldPooled concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
                 bool ok = restored.A == 9 && fromJson.A == 9;
 

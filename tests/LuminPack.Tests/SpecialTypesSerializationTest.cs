@@ -20,7 +20,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Uri result = LuminPackSerializer.Deserialize<Uri>(buf);
+                Uri result = global::LuminPackUnitTest.ConcreteReads.Read<Uri>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Uri concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.ToString() == result.ToString())
                     results.Add("✓ TestUri - PASSED");
@@ -44,7 +44,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Version result = LuminPackSerializer.Deserialize<Version>(buf);
+                Version result = global::LuminPackUnitTest.ConcreteReads.Read<Version>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Version concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Equals(result))
                     results.Add("✓ TestVersion - PASSED");
@@ -68,7 +68,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                BigInteger result = LuminPackSerializer.Deserialize<BigInteger>(buf);
+                BigInteger result = global::LuminPackUnitTest.ConcreteReads.Read<BigInteger>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BigInteger concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestBigInteger - PASSED");
@@ -92,7 +92,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                BitArray result = LuminPackSerializer.Deserialize<BitArray>(buf);
+                BitArray result = global::LuminPackUnitTest.ConcreteReads.Read<BitArray>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BitArray concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 bool equal = true;
                 for (int i = 0; i < val.Count; i++)
@@ -126,7 +126,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                CultureInfo result = LuminPackSerializer.Deserialize<CultureInfo>(buf);
+                CultureInfo result = global::LuminPackUnitTest.ConcreteReads.Read<CultureInfo>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CultureInfo concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Name == result.Name)
                     results.Add("✓ TestCultureInfo - PASSED");
@@ -150,7 +150,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                TimeZoneInfo result = LuminPackSerializer.Deserialize<TimeZoneInfo>(buf);
+                TimeZoneInfo result = global::LuminPackUnitTest.ConcreteReads.Read<TimeZoneInfo>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TimeZoneInfo concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Id == result.Id)
                     results.Add("✓ TestTimeZoneInfo - PASSED");
@@ -176,11 +176,11 @@ namespace LuminPackUnitTest
                 byte[] buf = LuminPackSerializer.Serialize(val);
                 if (!System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
                 {
-                    Xunit.Assert.Throws<PlatformNotSupportedException>(() => LuminPackSerializer.Deserialize<Type>(buf));
+                    Xunit.Assert.Throws<PlatformNotSupportedException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Type>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
                     results.Add("\u2713 TestType - PASSED");
                     return;
                 }
-                Type result = LuminPackSerializer.Deserialize<Type>(buf);
+                Type result = global::LuminPackUnitTest.ConcreteReads.Read<Type>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestType - PASSED");
@@ -204,7 +204,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                StringBuilder result = LuminPackSerializer.Deserialize<StringBuilder>(buf);
+                StringBuilder result = global::LuminPackUnitTest.ConcreteReads.Read<StringBuilder>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref StringBuilder concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.ToString() == result.ToString())
                     results.Add("✓ TestStringBuilder - PASSED");
@@ -229,7 +229,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Lazy<int> result = LuminPackSerializer.Deserialize<Lazy<int>>(buf);
+                Lazy<int> result = global::LuminPackUnitTest.ConcreteReads.Read<Lazy<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Lazy<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Value == result.Value && result.Value == 42)
                     results.Add("✓ TestLazy - PASSED");
@@ -253,7 +253,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Tuple<int, string, bool> result = LuminPackSerializer.Deserialize<Tuple<int, string, bool>>(buf);
+                Tuple<int, string, bool> result = global::LuminPackUnitTest.ConcreteReads.Read<Tuple<int, string, bool>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Tuple<int, string, bool> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Item1 == result.Item1 && val.Item2 == result.Item2 && val.Item3 == result.Item3)
                     results.Add("✓ TestTuple - PASSED");
@@ -277,7 +277,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                ValueTuple<int, string, bool> result = LuminPackSerializer.Deserialize<ValueTuple<int, string, bool>>(buf);
+                ValueTuple<int, string, bool> result = global::LuminPackUnitTest.ConcreteReads.Read<ValueTuple<int, string, bool>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ValueTuple<int, string, bool> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Item1 == result.Item1 && val.Item2 == result.Item2 && val.Item3 == result.Item3)
                     results.Add("✓ TestValueTuple - PASSED");
@@ -301,7 +301,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Complex result = LuminPackSerializer.Deserialize<Complex>(buf);
+                Complex result = global::LuminPackUnitTest.ConcreteReads.Read<Complex>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Complex concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.Real == result.Real && val.Imaginary == result.Imaginary)
                     results.Add("✓ TestComplex - PASSED");
@@ -324,7 +324,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Vector2 result = LuminPackSerializer.Deserialize<Vector2>(buf);
+                Vector2 result = global::LuminPackUnitTest.ConcreteReads.Read<Vector2>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Vector2 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestVector2 - PASSED");
@@ -347,7 +347,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Vector3 result = LuminPackSerializer.Deserialize<Vector3>(buf);
+                Vector3 result = global::LuminPackUnitTest.ConcreteReads.Read<Vector3>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Vector3 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestVector3 - PASSED");
@@ -370,7 +370,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Vector4 result = LuminPackSerializer.Deserialize<Vector4>(buf);
+                Vector4 result = global::LuminPackUnitTest.ConcreteReads.Read<Vector4>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Vector4 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestVector4 - PASSED");
@@ -393,7 +393,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Quaternion result = LuminPackSerializer.Deserialize<Quaternion>(buf);
+                Quaternion result = global::LuminPackUnitTest.ConcreteReads.Read<Quaternion>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Quaternion concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestQuaternion - PASSED");
@@ -416,7 +416,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Matrix3x2 result = LuminPackSerializer.Deserialize<Matrix3x2>(buf);
+                Matrix3x2 result = global::LuminPackUnitTest.ConcreteReads.Read<Matrix3x2>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Matrix3x2 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestMatrix3x2 - PASSED");
@@ -439,7 +439,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Matrix4x4 result = LuminPackSerializer.Deserialize<Matrix4x4>(buf);
+                Matrix4x4 result = global::LuminPackUnitTest.ConcreteReads.Read<Matrix4x4>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Matrix4x4 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestMatrix4x4 - PASSED");
@@ -462,7 +462,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Plane result = LuminPackSerializer.Deserialize<Plane>(buf);
+                Plane result = global::LuminPackUnitTest.ConcreteReads.Read<Plane>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Plane concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestPlane - PASSED");
@@ -487,7 +487,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Half result = LuminPackSerializer.Deserialize<Half>(buf);
+                Half result = global::LuminPackUnitTest.ConcreteReads.Read<Half>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Half concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestHalf - PASSED");
@@ -510,7 +510,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Int128 result = LuminPackSerializer.Deserialize<Int128>(buf);
+                Int128 result = global::LuminPackUnitTest.ConcreteReads.Read<Int128>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Int128 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestInt128 - PASSED");
@@ -533,7 +533,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                UInt128 result = LuminPackSerializer.Deserialize<UInt128>(buf);
+                UInt128 result = global::LuminPackUnitTest.ConcreteReads.Read<UInt128>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref UInt128 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestUInt128 - PASSED");
@@ -556,7 +556,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                DateOnly result = LuminPackSerializer.Deserialize<DateOnly>(buf);
+                DateOnly result = global::LuminPackUnitTest.ConcreteReads.Read<DateOnly>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref DateOnly concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestDateOnly - PASSED");
@@ -579,7 +579,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                TimeOnly result = LuminPackSerializer.Deserialize<TimeOnly>(buf);
+                TimeOnly result = global::LuminPackUnitTest.ConcreteReads.Read<TimeOnly>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TimeOnly concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestTimeOnly - PASSED");
@@ -602,7 +602,7 @@ namespace LuminPackUnitTest
 
                 // Binary test
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                System.Text.Rune result = LuminPackSerializer.Deserialize<System.Text.Rune>(buf);
+                System.Text.Rune result = global::LuminPackUnitTest.ConcreteReads.Read<System.Text.Rune>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref System.Text.Rune concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                     results.Add("✓ TestRune - PASSED");

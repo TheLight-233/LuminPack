@@ -31,7 +31,7 @@ namespace LuminPackUnitTest
             {
                 var val = new EmptyStruct();
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                EmptyStruct val2 = LuminPackSerializer.Deserialize<EmptyStruct>(buf);
+                EmptyStruct val2 = global::LuminPackUnitTest.ConcreteReads.Read<EmptyStruct>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref EmptyStruct concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 // For empty structs, we just check if deserialization succeeds
                 results.Add("✓ TestEmptyStruct - PASSED");
@@ -50,7 +50,7 @@ namespace LuminPackUnitTest
             {
                 TestEnumVal val = TestEnumVal.B;
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                TestEnumVal val2 = LuminPackSerializer.Deserialize<TestEnumVal>(buf);
+                TestEnumVal val2 = global::LuminPackUnitTest.ConcreteReads.Read<TestEnumVal>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TestEnumVal concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == val2 && val2 == TestEnumVal.B)
                     results.Add("✓ TestEnum - PASSED");
@@ -71,7 +71,7 @@ namespace LuminPackUnitTest
             {
                 string val = "test";
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                string result = LuminPackSerializer.Deserialize<string>(buf);
+                string result = global::LuminPackUnitTest.ConcreteReads.Read<string>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result && result == "test")
                     results.Add("✓ TestString - PASSED");
@@ -182,7 +182,7 @@ namespace LuminPackUnitTest
             {
                 TestEnumVal[] val = new[] { TestEnumVal.A, TestEnumVal.B };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                TestEnumVal[] result = LuminPackSerializer.Deserialize<TestEnumVal[]>(buf);
+                TestEnumVal[] result = global::LuminPackUnitTest.ConcreteReads.Read<TestEnumVal[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TestEnumVal[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { TestEnumVal.A, TestEnumVal.B }))
                     results.Add("✓ TestEnumArr - PASSED");
@@ -203,7 +203,7 @@ namespace LuminPackUnitTest
             {
                 byte[] val = new byte[] { 1, 2, 3, 4, 5 };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                byte[] result = LuminPackSerializer.Deserialize<byte[]>(buf);
+                byte[] result = global::LuminPackUnitTest.ConcreteReads.Read<byte[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref byte[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new byte[] { 1, 2, 3, 4, 5 }))
                     results.Add("✓ TestByteArr - PASSED");
@@ -224,7 +224,7 @@ namespace LuminPackUnitTest
             {
                 sbyte[] val = new sbyte[] { -1, -2, -3, -4, -5 };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                sbyte[] result = LuminPackSerializer.Deserialize<sbyte[]>(buf);
+                sbyte[] result = global::LuminPackUnitTest.ConcreteReads.Read<sbyte[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref sbyte[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new sbyte[] { -1, -2, -3, -4, -5 }))
                     results.Add("✓ TestSByteArr - PASSED");
@@ -245,7 +245,7 @@ namespace LuminPackUnitTest
             {
                 short[] val = new[] { short.MinValue, short.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                short[] result = LuminPackSerializer.Deserialize<short[]>(buf);
+                short[] result = global::LuminPackUnitTest.ConcreteReads.Read<short[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref short[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { short.MinValue, short.MaxValue }))
                     results.Add("✓ TestShortArr - PASSED");
@@ -266,7 +266,7 @@ namespace LuminPackUnitTest
             {
                 ushort[] val = new[] { ushort.MinValue, ushort.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                ushort[] result = LuminPackSerializer.Deserialize<ushort[]>(buf);
+                ushort[] result = global::LuminPackUnitTest.ConcreteReads.Read<ushort[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ushort[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { ushort.MinValue, ushort.MaxValue }))
                     results.Add("✓ TestUShortArr - PASSED");
@@ -287,7 +287,7 @@ namespace LuminPackUnitTest
             {
                 int[] val = new[] { int.MinValue, int.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                int[] result = LuminPackSerializer.Deserialize<int[]>(buf);
+                int[] result = global::LuminPackUnitTest.ConcreteReads.Read<int[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { int.MinValue, int.MaxValue }))
                     results.Add("✓ TestIntArr - PASSED");
@@ -308,7 +308,7 @@ namespace LuminPackUnitTest
             {
                 uint[] val = new[] { uint.MinValue, uint.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                uint[] result = LuminPackSerializer.Deserialize<uint[]>(buf);
+                uint[] result = global::LuminPackUnitTest.ConcreteReads.Read<uint[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref uint[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { uint.MinValue, uint.MaxValue }))
                     results.Add("✓ TestUIntArr - PASSED");
@@ -329,7 +329,7 @@ namespace LuminPackUnitTest
             {
                 long[] val = new[] { long.MinValue, long.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                long[] result = LuminPackSerializer.Deserialize<long[]>(buf);
+                long[] result = global::LuminPackUnitTest.ConcreteReads.Read<long[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref long[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { long.MinValue, long.MaxValue }))
                     results.Add("✓ TestLongArr - PASSED");
@@ -350,7 +350,7 @@ namespace LuminPackUnitTest
             {
                 ulong[] val = new[] { ulong.MinValue, ulong.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                ulong[] result = LuminPackSerializer.Deserialize<ulong[]>(buf);
+                ulong[] result = global::LuminPackUnitTest.ConcreteReads.Read<ulong[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ulong[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { ulong.MinValue, ulong.MaxValue }))
                     results.Add("✓ TestULongArr - PASSED");
@@ -371,7 +371,7 @@ namespace LuminPackUnitTest
             {
                 string[] val = new[] { "a", "b", "c", "d", "e" };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                string[] result = LuminPackSerializer.Deserialize<string[]>(buf);
+                string[] result = global::LuminPackUnitTest.ConcreteReads.Read<string[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { "a", "b", "c", "d", "e" }))
                     results.Add("✓ TestStringArr - PASSED");
@@ -392,7 +392,7 @@ namespace LuminPackUnitTest
             {
                 bool[] val = new[] { true, false };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                bool[] result = LuminPackSerializer.Deserialize<bool[]>(buf);
+                bool[] result = global::LuminPackUnitTest.ConcreteReads.Read<bool[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref bool[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { true, false }))
                     results.Add("✓ TestBoolArr - PASSED");
@@ -413,7 +413,7 @@ namespace LuminPackUnitTest
             {
                 float[] val = new[] { float.MinValue, float.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                float[] result = LuminPackSerializer.Deserialize<float[]>(buf);
+                float[] result = global::LuminPackUnitTest.ConcreteReads.Read<float[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref float[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { float.MinValue, float.MaxValue }))
                     results.Add("✓ TestFloatArr - PASSED");
@@ -434,7 +434,7 @@ namespace LuminPackUnitTest
             {
                 double[] val = new[] { double.MinValue, double.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                double[] result = LuminPackSerializer.Deserialize<double[]>(buf);
+                double[] result = global::LuminPackUnitTest.ConcreteReads.Read<double[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref double[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { double.MinValue, double.MaxValue }))
                     results.Add("✓ TestDoubleArr - PASSED");
@@ -455,7 +455,7 @@ namespace LuminPackUnitTest
             {
                 char[] val = new[] { 'a', 'b', 'c', 'd', 'e' };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                char[] result = LuminPackSerializer.Deserialize<char[]>(buf);
+                char[] result = global::LuminPackUnitTest.ConcreteReads.Read<char[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref char[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new[] { 'a', 'b', 'c', 'd', 'e' }))
                     results.Add("✓ TestCharArr - PASSED");
@@ -476,7 +476,7 @@ namespace LuminPackUnitTest
             {
                 DateTime[] val = new[] { DateTime.Today, DateTime.Today.AddDays(-1234) };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                DateTime[] result = LuminPackSerializer.Deserialize<DateTime[]>(buf);
+                DateTime[] result = global::LuminPackUnitTest.ConcreteReads.Read<DateTime[]>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref DateTime[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestDateTimeArr - PASSED");
@@ -497,7 +497,7 @@ namespace LuminPackUnitTest
             {
                 List<TestEnumVal> val = new List<TestEnumVal>() { TestEnumVal.A, TestEnumVal.B };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<TestEnumVal> result = LuminPackSerializer.Deserialize<List<TestEnumVal>>(buf);
+                List<TestEnumVal> result = global::LuminPackUnitTest.ConcreteReads.Read<List<TestEnumVal>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<TestEnumVal> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<TestEnumVal>() { TestEnumVal.A, TestEnumVal.B }))
                     results.Add("✓ TestEnumList - PASSED");
@@ -518,7 +518,7 @@ namespace LuminPackUnitTest
             {
                 List<byte> val = new List<byte> { byte.MinValue, byte.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<byte> result = LuminPackSerializer.Deserialize<List<byte>>(buf);
+                List<byte> result = global::LuminPackUnitTest.ConcreteReads.Read<List<byte>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<byte> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<byte> { byte.MinValue, byte.MaxValue }))
                     results.Add("✓ TestByteList - PASSED");
@@ -539,7 +539,7 @@ namespace LuminPackUnitTest
             {
                 List<sbyte> val = new List<sbyte> { sbyte.MinValue, sbyte.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<sbyte> result = LuminPackSerializer.Deserialize<List<sbyte>>(buf);
+                List<sbyte> result = global::LuminPackUnitTest.ConcreteReads.Read<List<sbyte>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<sbyte> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<sbyte> { sbyte.MinValue, sbyte.MaxValue }))
                     results.Add("✓ TestSByteList - PASSED");
@@ -560,7 +560,7 @@ namespace LuminPackUnitTest
             {
                 List<short> val = new List<short> { short.MinValue, short.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<short> result = LuminPackSerializer.Deserialize<List<short>>(buf);
+                List<short> result = global::LuminPackUnitTest.ConcreteReads.Read<List<short>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<short> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<short> { short.MinValue, short.MaxValue }))
                     results.Add("✓ TestShortList - PASSED");
@@ -581,7 +581,7 @@ namespace LuminPackUnitTest
             {
                 List<ushort> val = new List<ushort> { ushort.MinValue, ushort.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<ushort> result = LuminPackSerializer.Deserialize<List<ushort>>(buf);
+                List<ushort> result = global::LuminPackUnitTest.ConcreteReads.Read<List<ushort>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<ushort> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<ushort> { ushort.MinValue, ushort.MaxValue }))
                     results.Add("✓ TestUShortList - PASSED");
@@ -602,7 +602,7 @@ namespace LuminPackUnitTest
             {
                 List<int> val = new List<int> { int.MinValue, int.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<int> result = LuminPackSerializer.Deserialize<List<int>>(buf);
+                List<int> result = global::LuminPackUnitTest.ConcreteReads.Read<List<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<int> { int.MinValue, int.MaxValue }))
                     results.Add("✓ TestIntList - PASSED");
@@ -623,7 +623,7 @@ namespace LuminPackUnitTest
             {
                 List<uint> val = new List<uint> { uint.MinValue, uint.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<uint> result = LuminPackSerializer.Deserialize<List<uint>>(buf);
+                List<uint> result = global::LuminPackUnitTest.ConcreteReads.Read<List<uint>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<uint> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<uint> { uint.MinValue, uint.MaxValue }))
                     results.Add("✓ TestUIntList - PASSED");
@@ -644,7 +644,7 @@ namespace LuminPackUnitTest
             {
                 List<long> val = new List<long> { long.MinValue, long.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<long> result = LuminPackSerializer.Deserialize<List<long>>(buf);
+                List<long> result = global::LuminPackUnitTest.ConcreteReads.Read<List<long>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<long> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<long> { long.MinValue, long.MaxValue }))
                     results.Add("✓ TestLongList - PASSED");
@@ -665,7 +665,7 @@ namespace LuminPackUnitTest
             {
                 List<ulong> val = new List<ulong> { ulong.MinValue, ulong.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<ulong> result = LuminPackSerializer.Deserialize<List<ulong>>(buf);
+                List<ulong> result = global::LuminPackUnitTest.ConcreteReads.Read<List<ulong>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<ulong> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<ulong> { ulong.MinValue, ulong.MaxValue }))
                     results.Add("✓ TestULongList - PASSED");
@@ -686,7 +686,7 @@ namespace LuminPackUnitTest
             {
                 List<float> val = new List<float> { float.MinValue, float.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<float> result = LuminPackSerializer.Deserialize<List<float>>(buf);
+                List<float> result = global::LuminPackUnitTest.ConcreteReads.Read<List<float>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<float> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<float> { float.MinValue, float.MaxValue }))
                     results.Add("✓ TestFloatList - PASSED");
@@ -707,7 +707,7 @@ namespace LuminPackUnitTest
             {
                 List<double> val = new List<double> { double.MinValue, double.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<double> result = LuminPackSerializer.Deserialize<List<double>>(buf);
+                List<double> result = global::LuminPackUnitTest.ConcreteReads.Read<List<double>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<double> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<double> { double.MinValue, double.MaxValue }))
                     results.Add("✓ TestDoubleList - PASSED");
@@ -728,7 +728,7 @@ namespace LuminPackUnitTest
             {
                 List<decimal> val = new List<decimal> { decimal.MinValue, decimal.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<decimal> result = LuminPackSerializer.Deserialize<List<decimal>>(buf);
+                List<decimal> result = global::LuminPackUnitTest.ConcreteReads.Read<List<decimal>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<decimal> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<decimal> { decimal.MinValue, decimal.MaxValue }))
                     results.Add("✓ TestDecimalList - PASSED");
@@ -749,7 +749,7 @@ namespace LuminPackUnitTest
             {
                 List<char> val = new List<char> { char.MinValue, char.MaxValue };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<char> result = LuminPackSerializer.Deserialize<List<char>>(buf);
+                List<char> result = global::LuminPackUnitTest.ConcreteReads.Read<List<char>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<char> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<char> { char.MinValue, char.MaxValue }))
                     results.Add("✓ TestCharList - PASSED");
@@ -770,7 +770,7 @@ namespace LuminPackUnitTest
             {
                 List<string> val = new List<string> { "Hello", "World" };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<string> result = LuminPackSerializer.Deserialize<List<string>>(buf);
+                List<string> result = global::LuminPackUnitTest.ConcreteReads.Read<List<string>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<string> { "Hello", "World" }))
                     results.Add("✓ TestStringList - PASSED");
@@ -791,7 +791,7 @@ namespace LuminPackUnitTest
             {
                 List<bool> val = new List<bool> { true, false };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<bool> result = LuminPackSerializer.Deserialize<List<bool>>(buf);
+                List<bool> result = global::LuminPackUnitTest.ConcreteReads.Read<List<bool>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<bool> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result) && result.SequenceEqual(new List<bool> { true, false }))
                     results.Add("✓ TestBoolList - PASSED");
@@ -812,7 +812,7 @@ namespace LuminPackUnitTest
             {
                 List<DateTime> val = new List<DateTime> { DateTime.Today, DateTime.Today.AddDays(-1234) };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                List<DateTime> result = LuminPackSerializer.Deserialize<List<DateTime>>(buf);
+                List<DateTime> result = global::LuminPackUnitTest.ConcreteReads.Read<List<DateTime>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<DateTime> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestDateTimeList - PASSED");
@@ -834,7 +834,7 @@ namespace LuminPackUnitTest
                 Dictionary<byte, int> val = new Dictionary<byte, int>
                     { { byte.MinValue, int.MinValue }, { byte.MaxValue, int.MaxValue } };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Dictionary<byte, int> result = LuminPackSerializer.Deserialize<Dictionary<byte, int>>(buf);
+                Dictionary<byte, int> result = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<byte, int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<byte, int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val[byte.MinValue] == result[byte.MinValue] && val[byte.MaxValue] == result[byte.MaxValue])
                     results.Add("✓ TestByteIntDict - PASSED");
@@ -856,7 +856,7 @@ namespace LuminPackUnitTest
                 Dictionary<string, short> val = new Dictionary<string, short>
                     { { "Hello", short.MinValue }, { "World", short.MaxValue } };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Dictionary<string, short> result = LuminPackSerializer.Deserialize<Dictionary<string, short>>(buf);
+                Dictionary<string, short> result = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<string, short>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<string, short> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestStringShortDict - PASSED");
@@ -878,7 +878,7 @@ namespace LuminPackUnitTest
                 Dictionary<string, string> val = new Dictionary<string, string>
                     { { "Hello", "World" }, { "World", "Hello" } };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                Dictionary<string, string> result = LuminPackSerializer.Deserialize<Dictionary<string, string>>(buf);
+                Dictionary<string, string> result = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<string, string>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<string, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SequenceEqual(result))
                     results.Add("✓ TestStringStringDict - PASSED");
@@ -899,13 +899,13 @@ namespace LuminPackUnitTest
             {
                 int? val = 123;
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                int? result = LuminPackSerializer.Deserialize<int?>(buf);
+                int? result = global::LuminPackUnitTest.ConcreteReads.Read<int?>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int? concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val == result)
                 {
                     val = null;
                     buf = LuminPackSerializer.Serialize(val);
-                    result = LuminPackSerializer.Deserialize<int?>(buf);
+                    result = global::LuminPackUnitTest.ConcreteReads.Read<int?>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int? concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                     if (val == result)
                         results.Add("✓ TestNullable - PASSED");
@@ -931,7 +931,7 @@ namespace LuminPackUnitTest
             {
                 HashSet<int> val = new HashSet<int> { 1, 2, 3, 4, 5 };
                 byte[] buf = LuminPackSerializer.Serialize(val);
-                HashSet<int> result = LuminPackSerializer.Deserialize<HashSet<int>>(buf);
+                HashSet<int> result = global::LuminPackUnitTest.ConcreteReads.Read<HashSet<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref HashSet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 if (val.SetEquals(result) && result.SetEquals(new HashSet<int> { 1, 2, 3, 4, 5 }))
                     results.Add("✓ TestHashSet - PASSED");
@@ -949,20 +949,20 @@ namespace LuminPackUnitTest
         {
             try
             {
-                CheckScalars(new byte[] { 0, 10, byte.MaxValue }, static (byte value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<byte>(bytes));
-                CheckScalars(new sbyte[] { sbyte.MinValue, -95, sbyte.MaxValue }, static (sbyte value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<sbyte>(bytes));
-                CheckScalars(new short[] { short.MinValue, -137, short.MaxValue }, static (short value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<short>(bytes));
-                CheckScalars(new ushort[] { 0, 137, ushort.MaxValue }, static (ushort value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<ushort>(bytes));
-                CheckScalars(new int[] { int.MinValue, -137, int.MaxValue }, static (int value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<int>(bytes));
-                CheckScalars(new uint[] { 0, 137, uint.MaxValue }, static (uint value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<uint>(bytes));
-                CheckScalars(new long[] { long.MinValue, -137, long.MaxValue }, static (long value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<long>(bytes));
-                CheckScalars(new ulong[] { 0, 137, ulong.MaxValue }, static (ulong value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<ulong>(bytes));
-                CheckScalars(new[] { false, true }, static (bool value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<bool>(bytes));
-                CheckScalars(new[] { double.MinValue, -0d, double.NaN, double.PositiveInfinity, double.MaxValue }, static (double value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<double>(bytes));
-                CheckScalars(new[] { float.MinValue, -0f, float.NaN, float.PositiveInfinity, float.MaxValue }, static (float value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<float>(bytes));
-                CheckScalars(new[] { char.MinValue, 'A', '\uD800', char.MaxValue }, static (char value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<char>(bytes));
-                CheckScalars(new[] { decimal.MinValue, -1.25m, decimal.MaxValue }, static (decimal value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<decimal>(bytes));
-                CheckScalars(new[] { DateTime.MinValue, new DateTime(137, DateTimeKind.Utc), DateTime.MaxValue }, static (DateTime value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => LuminPackSerializer.Deserialize<DateTime>(bytes));
+                CheckScalars(new byte[] { 0, 10, byte.MaxValue }, static (byte value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<byte>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref byte concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                CheckScalars(new sbyte[] { sbyte.MinValue, -95, sbyte.MaxValue }, static (sbyte value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<sbyte>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref sbyte concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                CheckScalars(new short[] { short.MinValue, -137, short.MaxValue }, static (short value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<short>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref short concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                CheckScalars(new ushort[] { 0, 137, ushort.MaxValue }, static (ushort value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<ushort>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ushort concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                CheckScalars(new int[] { int.MinValue, -137, int.MaxValue }, static (int value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<int>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                CheckScalars(new uint[] { 0, 137, uint.MaxValue }, static (uint value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<uint>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref uint concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                CheckScalars(new long[] { long.MinValue, -137, long.MaxValue }, static (long value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<long>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref long concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                CheckScalars(new ulong[] { 0, 137, ulong.MaxValue }, static (ulong value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<ulong>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ulong concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                CheckScalars(new[] { false, true }, static (bool value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<bool>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref bool concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                CheckScalars(new[] { double.MinValue, -0d, double.NaN, double.PositiveInfinity, double.MaxValue }, static (double value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<double>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref double concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                CheckScalars(new[] { float.MinValue, -0f, float.NaN, float.PositiveInfinity, float.MaxValue }, static (float value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<float>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref float concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                CheckScalars(new[] { char.MinValue, 'A', '\uD800', char.MaxValue }, static (char value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<char>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref char concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                CheckScalars(new[] { decimal.MinValue, -1.25m, decimal.MaxValue }, static (decimal value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<decimal>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref decimal concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                CheckScalars(new[] { DateTime.MinValue, new DateTime(137, DateTimeKind.Utc), DateTime.MaxValue }, static (DateTime value) => LuminPackSerializer.Serialize(value), static (byte[] bytes) => global::LuminPackUnitTest.ConcreteReads.Read<DateTime>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref DateTime concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
                 results.Add("✓ Scalar boundaries - PASSED");
             }
             catch (Exception error) { results.Add("✗ Scalar boundaries - ERROR: " + error.Message); }

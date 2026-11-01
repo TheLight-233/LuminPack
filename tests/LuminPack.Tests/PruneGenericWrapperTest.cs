@@ -1,5 +1,6 @@
 using LuminPack;
 using LuminPack.Attribute;
+using LuminPack.Option;
 
 namespace LuminPackUnitTest
 {
@@ -7,8 +8,8 @@ namespace LuminPackUnitTest
     /// Verifies prune-mode reachability handles the interprocedural generic wrapper pattern
     /// <c>void Save&lt;T&gt;(T x) =&gt; Serialize(x)</c>.  The UnitTest project runs in Prune mode, so a
     /// type that is serialized only through such a wrapper is reachable only because the generator
-    /// propagates the concrete instantiation of T from the wrapper's call sites.  If propagation were
-    /// missing, deserialization would throw "no source generated formatter" at runtime.
+    /// propagates the concrete instantiation of T from the wrapper's call sites. Reachability emits
+    /// the closed roots; this fixture explicitly registers them for its actual generic wrappers.
     /// </summary>
     public static class PruneGenericWrapperTest
     {
@@ -64,6 +65,7 @@ namespace LuminPackUnitTest
             };
 
             // Void wrapper: type inference resolves T = WrapperPayload.
+            LuminPackSerializer.RegisterTestProfile<WrapperPayload, LuminPackDefaultOptions>();
             Save(original);
 
             // Round-trip through the wrapper that returns the payload.

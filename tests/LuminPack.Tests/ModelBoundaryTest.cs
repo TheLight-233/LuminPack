@@ -1,5 +1,6 @@
 using LuminPack;
 using LuminPack.Attribute;
+using LuminPack.Option;
 
 namespace LuminPackUnitTest
 {
@@ -86,6 +87,7 @@ namespace LuminPackUnitTest
         {
             try
             {
+                LuminPackSerializer.RegisterTestProfile<T, LuminPackDefaultOptions>();
                 var bytes = LuminPackSerializer.Serialize(value);
                 var back = LuminPackSerializer.Deserialize<T>(bytes);
                 results.Add(same(value, back)

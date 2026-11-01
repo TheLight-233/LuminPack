@@ -81,8 +81,9 @@ public partial class Labels
 }
 
 // 或为整次操作选择表示方式：
-byte[] bytes = LuminPackSerializer.Serialize<List<string>, LuminPackUtf16VarIntOptions>(names);
-List<string> copy = LuminPackSerializer.Deserialize<List<string>, LuminPackUtf16VarIntOptions>(bytes);
+byte[] bytes = LuminPackSerializer.Serialize<LuminPackUtf16VarIntOptions>(names);
+List<string> copy = null!;
+LuminPackSerializer.Deserialize<LuminPackUtf16VarIntOptions>(bytes, ref copy);
 ```
 
 默认仍为 `Length`：UTF-16 使用 4 字节头，UTF-8 使用 8 字节头。`VarInt` 将每个原有有符号长度头加一，再以规范的无符号 base-128 编码存储，占 1–5 字节。null 映射为零，空字符串映射为一。UTF-16 保留原始 UTF-16 或紧凑 Latin-1 负载及原有最低位标记；UTF-8 保留字节数和字符数两个字段，分别编码，null 和空字符串也保留两个字段。例如，UTF-16 的 `"a"` 为 `04 61`，UTF-8 的 `"a"` 为 `02 02 61`。

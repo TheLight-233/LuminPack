@@ -48,20 +48,20 @@ public sealed class MyVector
 <a id="runtime-registration"></a>
 ## 运行时注册
 
-`LuminPackSerializer.Register<T>` 为生成器没有生成的类型注册静态方法指针，例如处于所选[生成模式](generation-modes.cn.md)范围之外的类型。需要开启 `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>`。
+`LuminPackSerializer.Register<T>` 为泛型入口注册静态方法指针。调用 `Serialize<T>`、`Deserialize<T>` 或 `Serialize<T, TOptions>` 等泛型负载 API 时，内置类型和源生成类型也需要注册。具体类型重载仍直接调用生成的 Root。注册需要 `<AllowUnsafeBlocks>true</AllowUnsafeBlocks>`。
 
 ```csharp
 static void Write(ref LuminPackWriter writer, in LegacyModel value)
 {
-    writer.WriteValue(value.Id);
-    writer.WriteValue(value.Name);
+    writer.Write(value.Id);
+    writer.Write(value.Name);
 }
 
 static void Read(ref LuminPackReader reader, ref LegacyModel value)
 {
     value = new LegacyModel();
-    reader.ReadValue(ref value.Id);
-    reader.ReadValue(ref value.Name);
+    reader.Read(ref value.Id);
+    reader.Read(ref value.Name);
 }
 
 unsafe
@@ -76,8 +76,21 @@ unsafe
 | `Register<T>(write, read, writeJson, readJson)` | 二进制与 JSON |
 | `Register<T, TOptions>(...)` | 同上，针对某个闭合配置 |
 
+对于已经生成的模型，回调可以直接调用其具体状态重载：
+
+```csharp
+static void WritePerson(ref LuminPackWriter writer, in Person value)
+    => LuminPackSerializer.Serialize(ref writer, in value);
+static void ReadPerson(ref LuminPackReader reader, ref Person value)
+    => LuminPackSerializer.Deserialize(ref reader, ref value);
+unsafe { LuminPackSerializer.Register<Person>(&WritePerson, &ReadPerson); }
+```
+
+这些回调绑定具体操作。如果在 `WritePerson` 内调用 `Serialize<Person>`，会再次进入同一个已注册泛型操作。
+
+
 - 同一类型重复注册会抛出 `ArgumentException`。
-- 已生成类型的具体重载从不查询注册表。泛型入口先查显式注册和 `Custom` 注册，再使用该类型的生成入口（按类型和配置在首次使用时创建）。
+- 已生成类型的具体重载从不查询注册表。泛型入口仅使用显式注册和 `Custom` 注册。缺少注册或所需操作时抛出 `LuminPackException`，不存在自动生成兜底。未启用 unsafe 或设置 `LuminPackRegisterMode.Disabled` 时，泛型负载操作无法使用 Register。泛型 JSON 边界和输入暂存使用调用程序集的默认选项或显式配置；注册回调负责自身表示以及声明特有的策略。
 - 注册不持有强引用，加载在可回收 `AssemblyLoadContext` 中的插件仍然可以卸载。被注册的代码在可能被调用期间必须保持加载。
 
 ## 成员级格式化器

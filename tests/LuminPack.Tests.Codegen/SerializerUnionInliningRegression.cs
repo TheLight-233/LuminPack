@@ -47,7 +47,7 @@ internal static class SerializerUnionInliningRegression
                     foreach (Animal value in new Animal[] { null!, new Cat(), new Dog(), new Kitten(), new UnknownCat() })
                     {
                         Events.Clear();
-                        var expected = LuminPackSerializer.Serialize<Animal>(in value);
+                        var expected = LuminPackSerializer.Serialize(in value);
                         string callbacks = string.Join(",", Events);
                         Events.Clear();
                         var actual = LuminPackSerializer.Serialize(in value);
@@ -63,7 +63,7 @@ internal static class SerializerUnionInliningRegression
                     where TProfile : struct, global::LuminPack.Option.ILuminPackOptions
                 {
                     Events.Clear();
-                    string expectedJson = LuminPackSerializer.SerializeJson<Animal, TProfile>(value);
+                    string expectedJson = LuminPackSerializer.SerializeJson<TProfile>(value);
                     callbacks = string.Join(",", Events);
                     Events.Clear();
                     string actualJson = LuminPackSerializer.SerializeJson<TProfile>(value);
@@ -90,7 +90,7 @@ internal static class SerializerUnionInliningRegression
                     }
                     foreach (IShape value in new IShape[] { null!, new Point { X = 19, Y = 23 }, new Circle() })
                     {
-                        var expected = LuminPackSerializer.Serialize<IShape>(in value);
+                        var expected = LuminPackSerializer.Serialize(in value);
                         var actual = LuminPackSerializer.Serialize(in value);
                         if (!actual.AsSpan().SequenceEqual(expected)) throw new Exception("Interface union wire changed.");
                         IShape restored = null!;
@@ -100,25 +100,25 @@ internal static class SerializerUnionInliningRegression
                     }
                     EnvelopeBase<int> integer = new Envelope<int> { Item = 29, Items = new() { 31, 37 } };
                     var integerBytes = LuminPackSerializer.Serialize(in integer);
-                    if (!integerBytes.AsSpan().SequenceEqual(LuminPackSerializer.Serialize<EnvelopeBase<int>>(in integer)) || integerBytes[0] != 7)
+                    if (!integerBytes.AsSpan().SequenceEqual(LuminPackSerializer.Serialize(in integer)) || integerBytes[0] != 7)
                         throw new Exception("Closed generic registration lost precedence.");
                     EnvelopeBase<string> text = new Envelope<string> { Item = "open", Items = new() { "case" } };
                     var textBytes = LuminPackSerializer.Serialize(in text);
-                    if (!textBytes.AsSpan().SequenceEqual(LuminPackSerializer.Serialize<EnvelopeBase<string>>(in text)) || textBytes[0] != 1)
+                    if (!textBytes.AsSpan().SequenceEqual(LuminPackSerializer.Serialize(in text)) || textBytes[0] != 1)
                         throw new Exception("Open generic fallback changed.");
-                    if (LuminPackSerializer.Deserialize<EnvelopeBase<string>>(textBytes) is not Envelope<string> { Item: "open" })
+                    if (global::LuminPackUnitTest.ConcreteReads.Read<EnvelopeBase<string>>(textBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref EnvelopeBase<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is not Envelope<string> { Item: "open" })
                         throw new Exception("Generic union read changed.");
                     EnvelopeBase<int> number = new NumberEnvelope<int> { Number = 43, BaseItem = 47 };
                     var numberBytes = LuminPackSerializer.Serialize(in number);
-                    if (!numberBytes.AsSpan().SequenceEqual(LuminPackSerializer.Serialize<EnvelopeBase<int>>(in number)) || numberBytes[0] != 9)
+                    if (!numberBytes.AsSpan().SequenceEqual(LuminPackSerializer.Serialize(in number)) || numberBytes[0] != 9)
                         throw new Exception("Differently constrained union mirror families collided.");
-                    if (LuminPackSerializer.Deserialize<EnvelopeBase<int>>(numberBytes) is not NumberEnvelope<int> { Number: 43, BaseItem: 47 })
+                    if (global::LuminPackUnitTest.ConcreteReads.Read<EnvelopeBase<int>>(numberBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref EnvelopeBase<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is not NumberEnvelope<int> { Number: 43, BaseItem: 47 })
                         throw new Exception("Constrained union mirror state changed.");
                     return cases + 3;
                 }
             }
             """;
-        var input = CSharpCompilation.Create("DirectUnionEntries", [CSharpSyntaxTree.ParseText(source, parse, "Models.cs")], references,
+        var input = TestCompilation.Create("DirectUnionEntries", [CSharpSyntaxTree.ParseText(source, parse, "Models.cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
@@ -174,11 +174,36 @@ internal static class SerializerUnionInliningRegression
         }
         Require(entries == 5, "Expected two class, one interface, and two closed generic concrete write entries.");
         Require(jsonEntries != 0, "Union JSON entries were not inspected.");
+        foreach (var tree in output.SyntaxTrees)
+        {
+            var model = output.GetSemanticModel(tree);
+            foreach (var rootMethod in tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>().Where(method =>
+                         method.Identifier.ValueText.StartsWith("Root", StringComparison.Ordinal) && method.ParameterList.Parameters.Count == 2))
+            {
+                var payload = model.GetDeclaredSymbol(rootMethod)!.Parameters[1].Type;
+                if (payload is INamedTypeSymbol named && named.TypeArguments.Any(argument => argument.TypeKind == TypeKind.TypeParameter)) continue;
+                foreach (var invocation in rootMethod.DescendantNodes().OfType<InvocationExpressionSyntax>())
+                    if (model.GetSymbolInfo(invocation).Symbol is IMethodSymbol called && called.ContainingType.Name == "LuminPackSerializer" &&
+                        called.OriginalDefinition.Parameters.Length == 2 && called.OriginalDefinition.Parameters[1].Type is ITypeParameterSymbol)
+                        Require(false, "A closed Union Root still invokes registration-only generic payload dispatch: " + invocation);
+            }
+        }
         using var image = new MemoryStream();
         var emit = output.Emit(image);
         Require(emit.Success, string.Join(Environment.NewLine, emit.Diagnostics));
         var assembly = Assembly.Load(image.ToArray());
         Require((int)assembly.GetType("Entry")!.GetMethod("Check")!.Invoke(null, null)! == 11, "Union execution matrix was incomplete.");
+        var addedType = CSharpSyntaxTree.ParseText("public static class NewClosedUnion { public static byte[] Write(EnvelopeBase<decimal> value) => LuminPack.LuminPackSerializer.Serialize(value); }", parse, "Added.cs");
+        var edited = input.AddSyntaxTrees(addedType);
+        var retained = driver.RunGeneratorsAndUpdateCompilation(edited, out var editedOutput, out _);
+        GeneratorDriver fresh = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
+        fresh = fresh.RunGenerators(edited);
+        string Files(GeneratorDriver current) => string.Join("\n", current.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+            .OrderBy(file => file.HintName, StringComparer.Ordinal).Select(file => file.HintName + "\n" + file.SourceText));
+        Require(Files(retained) == Files(fresh), "Adding an observed closed generic Union case retained stale slot specializations.");
+        Require(!editedOutput.GetDiagnostics().Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error),
+            "A new closed Union specialization did not compile: " + string.Join(Environment.NewLine, editedOutput.GetDiagnostics().Where(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error)));
+        Require(Files(retained.RunGenerators(input)) == Files(driver), "Removing a closed Union specialization did not restore fresh output.");
         Console.WriteLine("Passed direct class/interface union cases, wide tags, inherited virtual fallback, closed/open generic priority, callback order, and generic wire parity.");
     }
 

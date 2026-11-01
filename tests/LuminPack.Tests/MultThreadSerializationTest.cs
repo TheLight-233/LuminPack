@@ -71,7 +71,7 @@ namespace LuminPackUnitTest
 
                 // Final verification
                 var buf2 = LuminPackSerializer.Serialize(c);
-                C c2 = LuminPackSerializer.Deserialize<C>(buf2);
+                C c2 = global::LuminPackUnitTest.ConcreteReads.Read<C>(buf2, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref C concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 Console.WriteLine($"c\u7684\u540d\u5b57: {c.Name}, c2\u7684\u540d\u5b57: {c2.Name}");
                 Console.WriteLine($"c\u7684As\u6570\u91cf: {c.As.Count}, c2\u7684As\u6570\u91cf: {c2.As.Count}");
@@ -132,7 +132,7 @@ namespace LuminPackUnitTest
                     {
                         for (int i = 0; i < tests; i++)
                         {
-                            C c2 = LuminPackSerializer.Deserialize<C>(buf);
+                            C c2 = global::LuminPackUnitTest.ConcreteReads.Read<C>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref C concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                             // Verify data in each deserialization
                             if (c.Name != c2.Name ||
@@ -247,7 +247,7 @@ namespace LuminPackUnitTest
                             {
                                 // Deserialize operation with verification
                                 byte[] serialized = LuminPackSerializer.Serialize(originalData);
-                                C deserialized = LuminPackSerializer.Deserialize<C>(serialized);
+                                C deserialized = global::LuminPackUnitTest.ConcreteReads.Read<C>(serialized, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref C concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                                 if (originalData.Name != deserialized.Name ||
                                     originalData.As.Count != deserialized.As.Count)

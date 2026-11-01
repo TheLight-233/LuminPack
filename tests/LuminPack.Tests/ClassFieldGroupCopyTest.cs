@@ -23,7 +23,7 @@ public class ClassFieldGroupCopyTest
             offset += 4;
         }
         Assert.Equal(expected, LuminPackSerializer.Serialize(primitive));
-        Assert.Equal(expected, LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<PrimitiveGroup>(expected)));
+        Assert.Equal(expected, LuminPackSerializer.Serialize(global::LuminPackUnitTest.ConcreteReads.Read<PrimitiveGroup>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PrimitiveGroup concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
 
         RawStorage first = default, second = default;
         Unsafe.InitBlockUnaligned(ref Unsafe.As<RawStorage, byte>(ref first), 0xA5, 16);
@@ -38,7 +38,7 @@ public class ClassFieldGroupCopyTest
         MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref second, 1)).CopyTo(expected.AsSpan(25));
         BitConverter.TryWriteBytes(expected.AsSpan(41), source.Tail);
         Assert.Equal(expected, LuminPackSerializer.Serialize(source));
-        var restored = LuminPackSerializer.Deserialize<StructGroup>(expected);
+        var restored = global::LuminPackUnitTest.ConcreteReads.Read<StructGroup>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref StructGroup concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(expected, LuminPackSerializer.Serialize(restored));
         var existing = new StructGroup();
         var identity = existing;
@@ -59,7 +59,7 @@ public class ClassFieldGroupCopyTest
         expected[10] = source.C;
         BitConverter.TryWriteBytes(expected.AsSpan(11), source.D);
         Assert.Equal(expected, LuminPackSerializer.Serialize(source));
-        var restored = LuminPackSerializer.Deserialize<GappedGroup>(expected);
+        var restored = global::LuminPackUnitTest.ConcreteReads.Read<GappedGroup>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref GappedGroup concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.NotNull(restored.Guard);
         Assert.Equal(expected, LuminPackSerializer.Serialize(restored));
         var existing = new GappedGroup();

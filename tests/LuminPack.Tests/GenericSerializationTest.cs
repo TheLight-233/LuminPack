@@ -130,7 +130,7 @@ public partial class GenericSerializationTest
             };
 
             var buf = LuminPackSerializer.Serialize(genericObj);
-            var deserializedObj = LuminPackSerializer.Deserialize<GenericClass<int>>(buf);
+            var deserializedObj = global::LuminPackUnitTest.ConcreteReads.Read<GenericClass<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref GenericClass<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedObj != null &&
                 deserializedObj.Value == 42 &&
@@ -182,7 +182,7 @@ public partial class GenericSerializationTest
             };
 
             var buf = LuminPackSerializer.Serialize(genericObj);
-            var deserializedObj = LuminPackSerializer.Deserialize<GenericClass<SimpleGeneric>>(buf);
+            var deserializedObj = global::LuminPackUnitTest.ConcreteReads.Read<GenericClass<SimpleGeneric>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref GenericClass<SimpleGeneric> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedObj != null &&
                 deserializedObj.Value?.Name == "Test" &&
@@ -220,7 +220,7 @@ public partial class GenericSerializationTest
             };
 
             var buf = LuminPackSerializer.Serialize(genericObj);
-            var deserializedObj = LuminPackSerializer.Deserialize<GenericClass<double>>(buf);
+            var deserializedObj = global::LuminPackUnitTest.ConcreteReads.Read<GenericClass<double>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref GenericClass<double> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedObj != null &&
                 Math.Abs(deserializedObj.Value - 3.14159) < 0.00001 &&
@@ -266,7 +266,7 @@ public partial class GenericSerializationTest
             };
 
             var buf = LuminPackSerializer.Serialize(nestedGeneric);
-            var deserializedObj = LuminPackSerializer.Deserialize<GenericClass<GenericClass<int>>>(buf);
+            var deserializedObj = global::LuminPackUnitTest.ConcreteReads.Read<GenericClass<GenericClass<int>>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref GenericClass<GenericClass<int>> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedObj != null &&
                 deserializedObj.Value?.Value == 100 &&
@@ -300,7 +300,7 @@ public partial class GenericSerializationTest
             };
 
             var buf = LuminPackSerializer.Serialize(genericObj);
-            var deserializedObj = LuminPackSerializer.Deserialize<GenericClass2<decimal>>(buf);
+            var deserializedObj = global::LuminPackUnitTest.ConcreteReads.Read<GenericClass2<decimal>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref GenericClass2<decimal> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedObj != null &&
                 deserializedObj.Value == 123.456m &&
@@ -333,7 +333,7 @@ public partial class GenericSerializationTest
             };
 
             var buf = LuminPackSerializer.Serialize(polyObj);
-            var deserializedObj = LuminPackSerializer.Deserialize<ConcreteGenericClass<string>>(buf);
+            var deserializedObj = global::LuminPackUnitTest.ConcreteReads.Read<ConcreteGenericClass<string>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ConcreteGenericClass<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedObj != null &&
                 deserializedObj.BaseValue == "BaseString" &&
@@ -369,7 +369,7 @@ public partial class GenericSerializationTest
             };
 
             var buf = LuminPackSerializer.Serialize(polyObj);
-            var deserializedObj = LuminPackSerializer.Deserialize<ConcreteGenericClass<int>>(buf);
+            var deserializedObj = global::LuminPackUnitTest.ConcreteReads.Read<ConcreteGenericClass<int>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ConcreteGenericClass<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedObj != null &&
                 deserializedObj.BaseValue == 100 &&
@@ -406,7 +406,7 @@ public partial class GenericSerializationTest
             };
 
             var buf = LuminPackSerializer.Serialize(numericObj);
-            var deserializedObj = LuminPackSerializer.Deserialize<NumericGenericClass<double>>(buf);
+            var deserializedObj = global::LuminPackUnitTest.ConcreteReads.Read<NumericGenericClass<double>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref NumericGenericClass<double> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedObj != null &&
                 Math.Abs(deserializedObj.BaseValue - 50.5) < 0.00001 &&
@@ -454,7 +454,7 @@ public partial class GenericSerializationTest
             };
 
             var buf = LuminPackSerializer.Serialize(container);
-            var deserializedObj = LuminPackSerializer.Deserialize<GenericClass<AbstractGenericBase<int>>>(buf);
+            var deserializedObj = global::LuminPackUnitTest.ConcreteReads.Read<GenericClass<AbstractGenericBase<int>>>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref GenericClass<AbstractGenericBase<int>> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedObj != null &&
                 deserializedObj.Value?.BaseValue == 999 &&

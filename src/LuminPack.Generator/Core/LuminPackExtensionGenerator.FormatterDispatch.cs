@@ -8,11 +8,12 @@ public static partial class LuminPackExtensionGenerator
     private const string Declared = "global::LuminPack.Option.LuminPackDeclaredOptions";
     private const string ProfileConstraint = "where __LuminProfile : struct, global::LuminPack.Option.ILuminPackOptions";
 
-    /// <summary>Builds generic operation boundaries with explicit registration precedence and first-use generated entries.</summary>
+    /// <summary>Builds generic operation boundaries that invoke explicitly registered method pointers.</summary>
     /// <param name="metaInfo">Current language, framework, and registration settings.</param>
     /// <param name="fallback">The consuming assembly's constants for unknown registered types.</param>
-    /// <returns>Shared generic dispatch with separate cold generated-entry factories.</returns>
-    private static string BuildFormatterDispatch(MetaInfo metaInfo, CompiledOptions fallback)
+    /// <param name="inputPolicies">Whether generic facade staging requires an assembly input limit.</param>
+    /// <returns>Shared registered dispatch without generated payload tables or factories.</returns>
+    private static string BuildFormatterDispatch(MetaInfo metaInfo, CompiledOptions fallback, bool inputPolicies)
     {
         var sb = new StringBuilder();
         string scopedIn = metaInfo.IsNet8 ? "scoped in " : "in ";
@@ -33,7 +34,7 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("        internal static partial class FormatterDispatch");
         sb.AppendLine("        {");
 
-        // Concrete overloads own ordinary calls; generic calls prefer explicit registrations over generated entries.
+        // Concrete overloads own ordinary calls; generic calls require an actual registration.
         foreach (var operation in new[]
         {
             new DispatchOperation("Serialize", "LuminPackWriter", "writer", "in", true, "WriteValue", "in", false),
@@ -59,7 +60,7 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("            /// <typeparam name=\"T\">The payload type.</typeparam>");
         sb.AppendLine("            /// <returns>The consuming assembly's compiled JSON encoding.</returns>");
         sb.AppendLine("            internal static global::LuminPack.Option.LuminPackStringEncoding __LuminPackJsonEncoding<T>()");
-        sb.AppendLine("                => GeneratedJsonEncoding<T>();");
+        sb.AppendLine("                => (global::LuminPack.Option.LuminPackStringEncoding)" + fallback.Encoding + ";");
         sb.AppendLine();
         sb.AppendLine("            /// <summary>Gets the JSON document encoding for a profile.</summary>");
         sb.AppendLine("            /// <typeparam name=\"T\">The payload type.</typeparam>");
@@ -75,7 +76,10 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("            /// <returns>Whether a token was read, or true after a successful end-of-document check.</returns>");
         sb.AppendLine("            internal static bool __LuminPackJsonReadBoundary<T>(ref global::LuminPack.Core.LuminPackJsonReader reader, bool complete)");
         sb.AppendLine("            {");
-            sb.AppendLine("                return GeneratedJsonBoundary<T>(ref reader, complete);");
+        if (fallback.Input.Enabled)
+            sb.AppendLine("                global::LuminPack.Security.LuminPackInputPolicy.CheckInput(reader.Buffer.Length, " + SafeFacadeProjection.Limit(fallback) + ");");
+        sb.AppendLine("                if (complete) { reader.EnsureEndOfDocument<" + fallback.TypeName + ">(); return true; }");
+        sb.AppendLine("                return reader.Read<" + fallback.TypeName + ">();");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            /// <summary>Reads the next JSON token or finishes the document with a compiled profile.</summary>");
@@ -95,6 +99,12 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("                return reader.Read<TOptions>();");
         sb.AppendLine("            }");
         sb.AppendLine();
+        if (inputPolicies)
+        {
+            sb.AppendLine("            [MethodImpl(MethodImplOptions.AggressiveInlining)]");
+            sb.AppendLine("            internal static int __LuminPackInputLimit<T>() => " +
+                (fallback.Input.Enabled ? SafeFacadeProjection.Limit(fallback) : int.MaxValue) + ";");
+        }
         sb.AppendLine("        }");
         sb.AppendLine("    }");
         sb.AppendLine("}");
@@ -137,7 +147,7 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("                " + operation.Name + "Registered<T, __LuminProfile>" + call + ";");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            /// <summary>Invokes the manual registration of a payload without a generated formatter.</summary>");
+        sb.AppendLine("            /// <summary>Invokes the explicit registration of a generic payload.</summary>");
         sb.AppendLine("            /// <typeparam name=\"T\">The payload type.</typeparam>");
         sb.AppendLine("            /// <typeparam name=\"__LuminProfile\">The stateless profile.</typeparam>");
         sb.AppendLine("            /// <param name=\"" + operation.Parameter + "\">The operation state.</param>");
@@ -154,16 +164,14 @@ public static partial class LuminPackExtensionGenerator
         }
         else if (!registry)
         {
-            // The cache lives in this generated module, so its delegates cannot retain an external registration owner.
-            sb.AppendLine("                Safe" + operation.Name + "<T, __LuminProfile>.Invoke" + call + ";");
+            sb.AppendLine("                " + MissingRegistration);
         }
         else
         {
-            sb.AppendLine("                if (!global::LuminPack.Code.LuminPackFormatterRegistry<" + fallbackProfile + ">." + (operation.Binary ? "TryGetCachedValue" : "TryGetCachedJsonValue") + "<T>(out var __entry))");
-            sb.AppendLine("                    __entry = Generated<T, __LuminProfile>.Entry;");
+            sb.AppendLine("                global::LuminPack.Code.LuminPackFormatterRegistry<" + fallbackProfile + ">." + (operation.Binary ? "TryGetCachedValue" : "TryGetCachedJsonValue") + "<T>(out var __entry);");
             sb.AppendLine("                if (__entry." + operation.Pointer + " == 0)");
             sb.AppendLine("                {");
-            sb.AppendLine("                    global::LuminPack.Code.LuminPackExceptionHelper.ThrowNoSourceGeneratedFormatter(typeof(T));");
+            sb.AppendLine("                    " + MissingRegistration);
             sb.AppendLine("                    return;");
             sb.AppendLine("                }");
             sb.AppendLine();
@@ -175,6 +183,8 @@ public static partial class LuminPackExtensionGenerator
         sb.AppendLine("            }");
         sb.AppendLine();
     }
+
+    private const string MissingRegistration = "global::LuminPack.Code.LuminPackExceptionHelper.ThrowMessage(\"No formatter is registered for type '\" + typeof(T) + \"' and the requested operation. Call LuminPackSerializer.Register before using generic entry points.\");";
 
     /// <summary>Describes one generic operation of the dispatch: its state and registered operation pointer.</summary>
     private sealed class DispatchOperation

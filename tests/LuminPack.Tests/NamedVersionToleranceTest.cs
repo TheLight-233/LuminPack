@@ -18,7 +18,7 @@ public class NamedVersionToleranceTest
         var target = new CallerSlot { Number = 1 };
         target.Next = target;
         CallerSlot.Completed = null;
-        LuminPackSerializer.Deserialize<CallerSlot>(bytes, ref target.Next);
+LuminPackSerializer.Deserialize(bytes, ref target.Next);
         Assert.Null(target.Next);
         Assert.Equal(83, target.Number);
         Assert.Same(target, CallerSlot.Completed);
@@ -39,19 +39,19 @@ public class NamedVersionToleranceTest
     private static void CheckFixedTable<TOptions>() where TOptions : struct, ILuminPackOptions
     {
         var source = new FixedRecord { Number = 7, Stamp = 11, Flag = FixedFlag.Enabled };
-        byte[] bytes = LuminPackSerializer.Serialize<FixedRecord, TOptions>(source);
-        var target = LuminPackSerializer.Deserialize<FixedRecord, TOptions>(bytes);
+        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((FixedRecord)(source));
+        var target = global::LuminPackUnitTest.ConcreteReads.Read<FixedRecord>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FixedRecord concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(source.Number, target.Number);
         Assert.Equal(source.Stamp, target.Stamp);
         Assert.Equal(source.Flag, target.Flag);
         var original = target;
-        LuminPackSerializer.Deserialize<FixedRecord, TOptions>(bytes, ref target);
+LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
         Assert.Same(original, target);
-        var evolved = LuminPackSerializer.Deserialize<FixedReordered, TOptions>(bytes);
+        var evolved = global::LuminPackUnitTest.ConcreteReads.Read<FixedReordered>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FixedReordered concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(source.Stamp, evolved.Stamp);
         Assert.Equal(source.Flag, evolved.Flag);
         Assert.Equal(0, evolved.Added);
-        var restored = LuminPackSerializer.Deserialize<FixedRecord, TOptions>(LuminPackSerializer.Serialize<FixedReordered, TOptions>(evolved));
+        var restored = global::LuminPackUnitTest.ConcreteReads.Read<FixedRecord>(LuminPackSerializer.Serialize<TOptions>((FixedReordered)(evolved)), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FixedRecord concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(source.Stamp, restored.Stamp);
         Assert.Equal(0, restored.Number);
     }
@@ -62,14 +62,14 @@ public class NamedVersionToleranceTest
     {
         var original = new Original { Id = 42, Removed = "skip", Name = "retained", Tail = 91 };
         byte[] bytes = LuminPackSerializer.Serialize(original);
-        var current = LuminPackSerializer.Deserialize<Current>(bytes);
+        var current = global::LuminPackUnitTest.ConcreteReads.Read<Current>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Current concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(42, current.Id);
         Assert.Equal("retained", current.DisplayName);
         Assert.Equal(91, current.Tail);
         Assert.Null(current.Added);
         current.Added = [1, 2, 3];
         bytes = LuminPackSerializer.Serialize(current);
-        var restored = LuminPackSerializer.Deserialize<Original>(bytes);
+        var restored = global::LuminPackUnitTest.ConcreteReads.Read<Original>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Original concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(original.Id, restored.Id);
         Assert.Equal(original.Name, restored.Name);
         Assert.Equal(original.Tail, restored.Tail);
@@ -82,11 +82,11 @@ public class NamedVersionToleranceTest
     [Fact]
     public void RenameHistoryIsBidirectional()
     {
-        var latest = LuminPackSerializer.Deserialize<Latest>(LuminPackSerializer.Serialize(new Intermediate { B = 17 }));
+        var latest = global::LuminPackUnitTest.ConcreteReads.Read<Latest>(LuminPackSerializer.Serialize(new Intermediate { B = 17 }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Latest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(17, latest.C);
-        Assert.Equal(17, LuminPackSerializer.Deserialize<Earliest>(LuminPackSerializer.Serialize(latest)).A);
-        Assert.Equal(19, LuminPackSerializer.Deserialize<Latest>(LuminPackSerializer.Serialize(new Earliest { A = 19 })).C);
-        var unicode = LuminPackSerializer.Deserialize<UnicodeCurrent>(LuminPackSerializer.Serialize(new UnicodeOriginal { @class = 23 }));
+        Assert.Equal(17, global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(LuminPackSerializer.Serialize(latest), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).A);
+        Assert.Equal(19, global::LuminPackUnitTest.ConcreteReads.Read<Latest>(LuminPackSerializer.Serialize(new Earliest { A = 19 }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Latest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).C);
+        var unicode = global::LuminPackUnitTest.ConcreteReads.Read<UnicodeCurrent>(LuminPackSerializer.Serialize(new UnicodeOriginal { @class = 23 }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref UnicodeCurrent concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(23, unicode.Value);
     }
 
@@ -94,8 +94,8 @@ public class NamedVersionToleranceTest
     [Fact]
     public void JsonAcceptsFormerNames()
     {
-        Assert.Equal(41, LuminPackSerializer.DeserializeJson<Latest>("{\"A\":41}").C);
-        Assert.Equal(43, LuminPackSerializer.DeserializeJson<Latest, LuminPackUtf16LengthOptions>("{\"B\":43}").C);
+        Assert.Equal(41, global::LuminPackUnitTest.ConcreteReads.ReadJson<Latest>("{\"A\":41}", static (string concreteReadInput, ref Latest concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).C);
+        Assert.Equal(43, global::LuminPackUnitTest.ConcreteReads.ReadJson<Latest>("{\"B\":43}", static (string concreteReadInput, ref Latest concreteReadTarget) => LuminPackSerializer.DeserializeJson<LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget)).C);
         Assert.Equal("{\"C\":47}", LuminPackSerializer.SerializeJson(new Latest { C = 47 }));
     }
 
@@ -129,10 +129,10 @@ public class NamedVersionToleranceTest
         var items = target.Items;
         var item = items[0];
         var text = child.Text;
-        byte[] bytes = LuminPackSerializer.Serialize<GraphBefore, TOptions>(source);
-        for (int i = 0; i < 256; i++) LuminPackSerializer.Deserialize<GraphAfter, TOptions>(bytes, ref target);
+        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((GraphBefore)(source));
+        for (int i = 0; i < 256; i++) LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize<GraphAfter, TOptions>(bytes, ref target);
+        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         Assert.Same(child, target.Child);
         Assert.Same(items, target.Items);
@@ -149,15 +149,15 @@ public class NamedVersionToleranceTest
     {
         var source = new Graph { Child = new() { Text = new string('c', 300), Number = 7 }, Items = [new() { Text = new string('i', 512), Number = 8 }] };
         var target = new Graph { Child = new() { Text = new string(source.Child.Text.ToCharArray()) }, Items = [new() { Text = new string(source.Items[0].Text.ToCharArray()) }] };
-        byte[] bytes = LuminPackSerializer.Serialize<Graph, TOptions>(source);
+        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((Graph)(source));
         var root = target;
         var child = target.Child;
         var list = target.Items;
         var item = list[0];
         var text = child.Text;
-        for (int i = 0; i < 256; i++) LuminPackSerializer.Deserialize<Graph, TOptions>(bytes, ref target);
+        for (int i = 0; i < 256; i++) LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize<Graph, TOptions>(bytes, ref target);
+        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         Assert.Same(root, target);
         Assert.Same(child, target.Child);
@@ -174,11 +174,11 @@ public class NamedVersionToleranceTest
     {
         byte[] bytes = LuminPackSerializer.Serialize(new Original { Id = 3, Name = "a", Removed = "unknown", Tail = 4 });
         var target = new Current { Added = [9] };
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<Current>(bytes, ref target));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref target));
         Assert.Null(target.Added);
         byte[] joined = [.. bytes, .. LuminPackSerializer.Serialize(new Empty())];
         Empty? empty = null;
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<Empty>(joined, ref empty));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(joined, ref empty));
         Assert.NotNull(empty);
     }
 
@@ -187,10 +187,10 @@ public class NamedVersionToleranceTest
     public void TypeChangesAreRejected()
     {
         byte[] bytes = LuminPackSerializer.Serialize(new Earliest { A = 123 });
-        Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize<ChangedType>(bytes));
+        Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<ChangedType>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ChangedType concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         // The default profile is the UTF-16 length profile, so a UTF-8 reader sees a different member contract.
-        Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize<Earliest, LuminPackUtf8LengthOptions>(bytes));
-        Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize<Latest>(LuminPackSerializer.Serialize(new TwoInts { A = 1, B = 2 })));
+        Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(concreteReadInput, ref concreteReadTarget)));
+        Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Latest>(LuminPackSerializer.Serialize(new TwoInts { A = 1, B = 2 }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Latest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks private and public volatile members retain storage access semantics and aliases.</summary>
@@ -202,11 +202,11 @@ public class NamedVersionToleranceTest
         byte[] bytes = LuminPackSerializer.Serialize(source);
         var target = new VolatileMembers();
         var original = target;
-        LuminPackSerializer.Deserialize<VolatileMembers>(bytes, ref target);
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Same(original, target);
         Assert.Equal(59, target.Number);
         Assert.Equal(61, target.ReadSecret());
-        var fresh = LuminPackSerializer.Deserialize<VolatileMembers>(bytes);
+        var fresh = global::LuminPackUnitTest.ConcreteReads.Read<VolatileMembers>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref VolatileMembers concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(61, fresh.ReadSecret());
     }
 
@@ -217,22 +217,22 @@ public class NamedVersionToleranceTest
         byte[] bytes = LuminPackSerializer.Serialize(new Earliest { A = 67 });
         Constructed.Calls = 0;
         Constructed.Completions = 0;
-        var constructed = LuminPackSerializer.Deserialize<Constructed>(bytes);
+        var constructed = global::LuminPackUnitTest.ConcreteReads.Read<Constructed>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Constructed concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(67, constructed.Value);
         Assert.Equal(1, Constructed.Calls);
-        LuminPackSerializer.Deserialize<Constructed>(bytes, ref constructed);
+LuminPackSerializer.Deserialize(bytes, ref constructed);
         Assert.Equal(1, Constructed.Calls);
         Assert.Equal(2, Constructed.Completions);
 
         Pooled.Instance = new Pooled();
         Pooled.Rents = 0;
-        var pooled = LuminPackSerializer.Deserialize<Pooled>(bytes);
+        var pooled = global::LuminPackUnitTest.ConcreteReads.Read<Pooled>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Pooled concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Same(Pooled.Instance, pooled);
         Assert.Equal(67, pooled.Value);
         Assert.Equal(1, Pooled.Rents);
-        LuminPackSerializer.Deserialize<Pooled>(bytes, ref pooled);
+LuminPackSerializer.Deserialize(bytes, ref pooled);
         Assert.Equal(1, Pooled.Rents);
-        LuminPackSerializer.Deserialize<Pooled>(LuminPackSerializer.Serialize(new Empty()), ref pooled);
+LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(new Empty()), ref pooled);
         Assert.Equal(0, pooled.Value);
         Pooled.Instance = null!;
     }
@@ -244,7 +244,7 @@ public class NamedVersionToleranceTest
         CallbackValue.Writes = 0;
         CallbackValue.Reads = 0;
         byte[] bytes = LuminPackSerializer.Serialize(new CallbackValue { Number = 71, Text = "callback" });
-        var value = LuminPackSerializer.Deserialize<CallbackValue>(bytes);
+        var value = global::LuminPackUnitTest.ConcreteReads.Read<CallbackValue>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CallbackValue concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(71, value.Number);
         Assert.Equal(2, CallbackValue.Writes);
         Assert.Equal(2, CallbackValue.Reads);
@@ -258,10 +258,10 @@ public class NamedVersionToleranceTest
         var target = new Generic<Node> { Value = new() };
         var child = target.Value;
         byte[] bytes = LuminPackSerializer.Serialize(source);
-        LuminPackSerializer.Deserialize<Generic<Node>>(bytes, ref target);
+LuminPackSerializer.Deserialize(bytes, ref target);
         Assert.Same(child, target.Value);
         Assert.Equal(31, child.Number);
-        Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize<Generic<string>>(bytes));
+        Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Generic<string>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Generic<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks new-format framing rejects the old slot marker, invalid revisions and truncation.</summary>
@@ -269,22 +269,22 @@ public class NamedVersionToleranceTest
     public void MalformedRecordsAreRejected()
     {
         byte[] bytes = LuminPackSerializer.Serialize(new Earliest { A = 5 });
-        Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize<Earliest>(new byte[] { 1, 4, 5, 0, 0, 0 }));
+        Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(new byte[] { 1, 4, 5, 0, 0, 0 }, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         var revision = bytes.ToArray();
         revision[1] = 2;
-        Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize<Earliest>(revision));
+        Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(revision, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         for (int length = 0; length < bytes.Length; length++)
         {
             byte[] truncated = bytes.AsSpan(0, length).ToArray();
-            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<Earliest>(truncated));
+            Assert.ThrowsAny<Exception>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(truncated, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         }
         int payloadLengthIndex = bytes.Length - sizeof(int) - 1;
         var shortField = bytes.ToArray();
         shortField[payloadLengthIndex] = 3;
-        Assert.Throws<FormatException>(() => LuminPackSerializer.Deserialize<Earliest>(shortField));
+        Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(shortField, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         var longField = bytes.ToArray();
         longField[payloadLengthIndex] = 5;
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Deserialize<Earliest>(longField));
+        Assert.ThrowsAny<Exception>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(longField, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks null and empty schemas have exact sizes and reset supplied reference storage.</summary>
@@ -293,9 +293,9 @@ public class NamedVersionToleranceTest
     {
         Assert.Equal(4, LuminPackSerializer.Serialize(new Empty()).Length);
         Empty? target = new();
-        byte[] bytes = LuminPackSerializer.Serialize<Empty>(null);
+        byte[] bytes = LuminPackSerializer.Serialize((Empty)null);
         Assert.Equal(new byte[] { 255 }, bytes);
-        Assert.Equal(1, LuminPackSerializer.Deserialize<Empty>(bytes, ref target));
+        Assert.Equal(1, LuminPackSerializer.Deserialize(bytes, ref target));
         Assert.Null(target);
     }
 

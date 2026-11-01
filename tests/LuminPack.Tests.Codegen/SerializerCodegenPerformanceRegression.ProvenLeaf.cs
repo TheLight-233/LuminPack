@@ -21,7 +21,7 @@ internal static partial class SerializerCodegenPerformanceRegression
             driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
             CheckProvenOutput(output, diagnostics, driver, expected: true);
             string actual = ExecuteProven(output);
-            var fallbackInput = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(
+            var fallbackInput = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(
                 source.Replace("sealed partial class Leaf", "partial class Leaf"), parse));
             driver = driver.RunGeneratorsAndUpdateCompilation(fallbackInput, out output, out diagnostics);
             CheckProvenOutput(output, diagnostics, driver, expected: false);
@@ -30,7 +30,7 @@ internal static partial class SerializerCodegenPerformanceRegression
             driver = driver.RunGeneratorsAndUpdateCompilation(input, out output, out diagnostics);
             CheckProvenOutput(output, diagnostics, driver, expected: true);
             RequireProven(CaptureProven(driver) == CaptureProven(ProvenDriver(parse).RunGenerators(input)), "Restored class eligibility differs from fresh generation.");
-            var changedInput = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(
+            var changedInput = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(
                 source.Replace("public string Text;", "public string Text { get; set; }"), parse));
             driver = driver.RunGeneratorsAndUpdateCompilation(changedInput, out output, out diagnostics);
             CheckProvenOutput(output, diagnostics, driver, expected: false);
@@ -52,7 +52,7 @@ internal static partial class SerializerCodegenPerformanceRegression
     /// <param name="references">The actual platform and runtime metadata.</param>
     /// <returns>The complete optimized consumer input.</returns>
     private static CSharpCompilation ProvenInput(string source, CSharpParseOptions parse, MetadataReference[] references)
-        => CSharpCompilation.Create("ProvenLeaf" + Guid.NewGuid().ToString("N"), [CSharpSyntaxTree.ParseText(source, parse)], references,
+        => TestCompilation.Create("ProvenLeaf" + Guid.NewGuid().ToString("N"), [CSharpSyntaxTree.ParseText(source, parse)], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
 
     /// <summary>Creates both production generators under the same consumer parse policy.</summary>
@@ -188,7 +188,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                     foreach (var value in source) expected.AddRange(LuminPackSerializer.Serialize<P>(value));
                     if (!bytes.AsSpan().SequenceEqual(expected.ToArray())) throw new Exception("Field-ordered record bytes differ.");
                     Summary.AddRange(SHA256.HashData(bytes));
-                    var fresh = LuminPackSerializer.Deserialize<Leaf[], P>(bytes);
+                    var fresh = global::LuminPackUnitTest.ConcreteReads.Read<Leaf[]>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Leaf[] concreteReadTarget) => LuminPackSerializer.Deserialize<P>(concreteReadInput, ref concreteReadTarget));
                     if (fresh.Length != count) throw new Exception("Fresh count differs.");
                     var writer = LuminBufferWriterPool.Rent();
                     try

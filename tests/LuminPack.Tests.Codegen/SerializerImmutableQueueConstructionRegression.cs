@@ -95,7 +95,7 @@ internal static class SerializerImmutableQueueConstructionRegression
             var (driver, output) = Generate(initial, modern);
             VerifySelection(driver, span: true);
             Execute(output);
-            var compatibility = initial.RemoveAllSyntaxTrees().AddSyntaxTrees(initial.SyntaxTrees.Single().WithRootAndOptions(initial.SyntaxTrees.Single().GetRoot(), legacy));
+            var compatibility = initial.RemoveAllSyntaxTrees().AddSyntaxTrees(initial.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs").WithRootAndOptions(initial.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs").GetRoot(), legacy));
             driver = driver.WithUpdatedParseOptions(legacy).RunGeneratorsAndUpdateCompilation(compatibility, out output, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             VerifySelection(driver, span: false);

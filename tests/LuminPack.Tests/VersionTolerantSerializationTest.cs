@@ -69,7 +69,7 @@ public class VersionTolerantSerializationTest
         {
             var v1 = new V1 { X = 42, Y = 43, Z = 44 };
             var buf = LuminPackSerializer.Serialize(v1);
-            var v2 = LuminPackSerializer.Deserialize<V2>(buf);
+            var v2 = global::LuminPackUnitTest.ConcreteReads.Read<V2>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref V2 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (v1.X == v2.X && v2.Z == v1.Z)
                 output.Add("✓ TestVersionTolerantSerialization - PASSED");
@@ -85,7 +85,7 @@ public class VersionTolerantSerializationTest
         {
             var oldValue = new V3WithMissingMiddleMember { X = 10, Z = 30 };
             var payload = LuminPackSerializer.Serialize(oldValue);
-            var newValue = LuminPackSerializer.Deserialize<V4WithAddedMiddleMember>(payload);
+            var newValue = global::LuminPackUnitTest.ConcreteReads.Read<V4WithAddedMiddleMember>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref V4WithAddedMiddleMember concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (newValue.X == 10 && newValue.Y == 0 && newValue.Z == 30)
                 output.Add("✓ TestVersionTolerantMissingMiddleMember - PASSED");
@@ -101,7 +101,7 @@ public class VersionTolerantSerializationTest
         {
             var v1 = new V1 { X = 42, Y = 43, Z = 44 };
             var buf = LuminPackSerializer.SerializeJson(v1);
-            var v2 = LuminPackSerializer.DeserializeJson<V2>(buf);
+            var v2 = global::LuminPackUnitTest.ConcreteReads.ReadJson<V2>(buf, static (string concreteReadInput, ref V2 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
             if (v1.X == v2.X && v2.Z == v1.Z)
                 output.Add("✓ TestVersionTolerantSerialization [JSON] - PASSED");

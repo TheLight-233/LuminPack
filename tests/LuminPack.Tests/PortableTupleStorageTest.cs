@@ -20,9 +20,9 @@ public class PortableTupleStorageTest
         Assert.Equal(expected, LuminPackSerializer.Serialize(value));
         Assert.Equal(expected, LuminPackSerializer.Serialize(renamed));
         Assert.Equal(expected, LuminPackSerializer.Serialize(unnamed));
-        Assert.Equal(value, LuminPackSerializer.Deserialize<PortableNamedTupleRecord>(expected));
-        Assert.Equal(renamed, LuminPackSerializer.Deserialize<PortableRenamedTupleRecord>(expected));
-        Assert.Equal(unnamed, LuminPackSerializer.Deserialize<PortableUnnamedTupleRecord>(expected));
+        Assert.Equal(value, global::LuminPackUnitTest.ConcreteReads.Read<PortableNamedTupleRecord>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortableNamedTupleRecord concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(renamed, global::LuminPackUnitTest.ConcreteReads.Read<PortableRenamedTupleRecord>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortableRenamedTupleRecord concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(unnamed, global::LuminPackUnitTest.ConcreteReads.Read<PortableUnnamedTupleRecord>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortableUnnamedTupleRecord concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks flattened long-tuple symbols are represented only through their actual Rest field.</summary>
@@ -40,11 +40,11 @@ public class PortableTupleStorageTest
             .Concat(new byte[] { value.Tail }).ToArray();
         Assert.Equal(62, expected.Length);
         Assert.Equal(expected, LuminPackSerializer.Serialize(value));
-        Assert.Equal(value, LuminPackSerializer.Deserialize<PortableLongTupleRecord>(expected));
+        Assert.Equal(value, global::LuminPackUnitTest.ConcreteReads.Read<PortableLongTupleRecord>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortableLongTupleRecord concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         var values = new[] { value, value, value };
         var payload = BitConverter.GetBytes(values.Length).Concat(values.SelectMany(_ => expected)).ToArray();
         Assert.Equal(payload, LuminPackSerializer.Serialize(values));
-        Assert.Equal(values, LuminPackSerializer.Deserialize<PortableLongTupleRecord[]>(payload));
+        Assert.Equal(values, global::LuminPackUnitTest.ConcreteReads.Read<PortableLongTupleRecord[]>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortableLongTupleRecord[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks tuple byte offsets used by contiguous packing and the scalar tail share the same wire.</summary>
@@ -87,7 +87,7 @@ public class PortableTupleStorageTest
             .Concat(BitConverter.GetBytes(value.Value.Inner.Value)).Concat(BitConverter.GetBytes(value.Value.Inner.Code)).ToArray();
         Assert.Equal(15, expected.Length);
         Assert.Equal(expected, LuminPackSerializer.Serialize(value));
-        Assert.Equal(value, LuminPackSerializer.Deserialize<PortableTupleEnvelope<(int Id, (long Value, short Code) Inner)>>(expected));
+        Assert.Equal(value, global::LuminPackUnitTest.ConcreteReads.Read<PortableTupleEnvelope<(int Id, (long Value, short Code) Inner)>>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortableTupleEnvelope<(int Id, (long Value, short Code) Inner)> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks tuple storage is expanded even when sequential size estimates happen to equal the wire size.</summary>
@@ -99,7 +99,7 @@ public class PortableTupleStorageTest
             .Concat(BitConverter.GetBytes(value.Pair.Code)).ToArray();
         Assert.Equal(16, expected.Length);
         Assert.Equal(expected, LuminPackSerializer.Serialize(value));
-        Assert.Equal(value, LuminPackSerializer.Deserialize<PortableCompactTupleRecord>(expected));
+        Assert.Equal(value, global::LuminPackUnitTest.ConcreteReads.Read<PortableCompactTupleRecord>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PortableCompactTupleRecord concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks an unmarked outer record whose tuple member varies between runtimes is written without padding.</summary>

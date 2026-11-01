@@ -318,32 +318,32 @@ internal static class ReaderBoundaryValidationTest
         var value = new int[255, 1];
         value[254, 0] = 42;
         var payload = LuminPackSerializer.Serialize(value);
-        var result = LuminPackSerializer.Deserialize<int[, ]>(payload);
+        var result = global::LuminPackUnitTest.ConcreteReads.Read<int[, ]>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int[, ] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(result is not null && result.GetLength(0) == 255 && result[254, 0] == 42, "A first dimension whose low byte is 0xFF was confused with the null marker.");
         var forgedLength = payload.ToArray();
         BitConverter.GetBytes(value.Length - 1).CopyTo(forgedLength, 1 + sizeof(int) * 2);
-        AssertFormatException(() => LuminPackSerializer.Deserialize<int[, ]>(forgedLength), "The multidimensional array element count does not match its dimensions.", "A multidimensional array whose element count disagreed with its dimensions was accepted.");
+        AssertFormatException(() => global::LuminPackUnitTest.ConcreteReads.Read<int[, ]>(forgedLength, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int[, ] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)), "The multidimensional array element count does not match its dimensions.", "A multidimensional array whose element count disagreed with its dimensions was accepted.");
         var negativeDimension = LuminPackSerializer.Serialize(new int[1, 1]);
         BitConverter.GetBytes(-1).CopyTo(negativeDimension, 1);
-        AssertFormatException(() => LuminPackSerializer.Deserialize<int[, ]>(negativeDimension), "A multidimensional array dimension cannot be negative.", "A negative multidimensional-array dimension was accepted.");
+        AssertFormatException(() => global::LuminPackUnitTest.ConcreteReads.Read<int[, ]>(negativeDimension, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int[, ] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)), "A multidimensional array dimension cannot be negative.", "A negative multidimensional-array dimension was accepted.");
         var overflowingDimensions = LuminPackSerializer.Serialize(new int[1, 1]);
         BitConverter.GetBytes(int.MaxValue).CopyTo(overflowingDimensions, 1);
         BitConverter.GetBytes(2).CopyTo(overflowingDimensions, 1 + sizeof(int));
         BitConverter.GetBytes(0).CopyTo(overflowingDimensions, 1 + sizeof(int) * 2);
-        AssertFormatException(() => LuminPackSerializer.Deserialize<int[, ]>(overflowingDimensions), "The multidimensional array dimensions are too large.", "Overflowing rank-2 multidimensional-array dimensions reached allocation.");
+        AssertFormatException(() => global::LuminPackUnitTest.ConcreteReads.Read<int[, ]>(overflowingDimensions, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int[, ] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)), "The multidimensional array dimensions are too large.", "Overflowing rank-2 multidimensional-array dimensions reached allocation.");
         var overflowingRankThreeDimensions = LuminPackSerializer.Serialize(new int[1, 1, 1]);
         BitConverter.GetBytes(int.MaxValue).CopyTo(overflowingRankThreeDimensions, 1);
         BitConverter.GetBytes(2).CopyTo(overflowingRankThreeDimensions, 1 + sizeof(int));
         BitConverter.GetBytes(1).CopyTo(overflowingRankThreeDimensions, 1 + sizeof(int) * 2);
         BitConverter.GetBytes(0).CopyTo(overflowingRankThreeDimensions, 1 + sizeof(int) * 3);
-        AssertFormatException(() => LuminPackSerializer.Deserialize<int[,, ]>(overflowingRankThreeDimensions), "The multidimensional array dimensions are too large.", "Overflowing rank-3 multidimensional-array dimensions reached allocation.");
+        AssertFormatException(() => global::LuminPackUnitTest.ConcreteReads.Read<int[,, ]>(overflowingRankThreeDimensions, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int[,, ] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)), "The multidimensional array dimensions are too large.", "Overflowing rank-3 multidimensional-array dimensions reached allocation.");
     }
 
     /// <summary>Verifies truncated multi dimensional array payload is rejected.</summary>
     private static void TruncatedMultiDimensionalArrayPayloadIsRejected()
     {
         var payload = LuminPackSerializer.Serialize(new int[255, 1]);
-        AssertThrows(() => LuminPackSerializer.Deserialize<int[, ]>(payload.AsSpan(0, payload.Length - 1)), "A truncated multidimensional array payload was read past the input boundary.");
+        AssertThrows(() => global::LuminPackUnitTest.ConcreteReads.Read<int[, ]>(payload.AsSpan(0, payload.Length - 1), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int[, ] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)), "A truncated multidimensional array payload was read past the input boundary.");
     }
 
     /// <summary>Verifies assert throws.</summary>

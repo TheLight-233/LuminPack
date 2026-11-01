@@ -22,7 +22,7 @@ public class DictionaryEntryProgressionTest
             };
             byte[] payload = LuminPackSerializer.Serialize(source);
             Assert.Equal(source.Count, calls);
-            var restored = LuminPackSerializer.Deserialize<Dictionary<int, ProgressionValue>>(payload);
+            var restored = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, ProgressionValue>>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, ProgressionValue> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
             Assert.Equal(source.Keys, restored.Keys);
             foreach (var item in source) Assert.Equal(item.Value.Value, restored[item.Key].Value);
 
@@ -35,7 +35,7 @@ public class DictionaryEntryProgressionTest
             };
             Assert.Throws<InvalidOperationException>(() => LuminPackSerializer.Serialize(source));
             ProgressionValue.BeforeWrite = null;
-            restored = LuminPackSerializer.Deserialize<Dictionary<int, ProgressionValue>>(LuminPackSerializer.Serialize(source));
+            restored = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, ProgressionValue>>(LuminPackSerializer.Serialize(source), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, ProgressionValue> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
             Assert.Equal(source.Count, restored.Count);
         }
         finally { ProgressionValue.BeforeWrite = null; }

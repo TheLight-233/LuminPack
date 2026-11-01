@@ -28,7 +28,7 @@ public partial class VariableCollectionCapacityTest
             for (int index = 1; index < 30000; index += 7) values.Remove(index);
         using var buffer = new LuminBufferWriter(true);
         LuminPackSerializer.Serialize(values, buffer);
-        var dictionaryCopy = LuminPackSerializer.Deserialize<Dictionary<int, Root>>(buffer.GetSpan());
+        var dictionaryCopy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, Root>>(buffer.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, Root> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(values.Keys, dictionaryCopy.Keys);
         foreach (var pair in values)
             Assert.Equal((pair.Value as Fixed)?.Second, (dictionaryCopy[pair.Key] as Fixed)?.Second);
@@ -37,12 +37,12 @@ public partial class VariableCollectionCapacityTest
             foreach (string key in strings.Keys.Where((_, index) => index % 11 == 0).ToArray()) strings.Remove(key);
         using var stringBuffer = new LuminBufferWriter(true);
         LuminPackSerializer.Serialize(strings, stringBuffer);
-        var stringCopy = LuminPackSerializer.Deserialize<Dictionary<string, Root>>(stringBuffer.GetSpan());
+        var stringCopy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<string, Root>>(stringBuffer.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<string, Root> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(strings.Keys, stringCopy.Keys);
         foreach (var pair in strings)
             Assert.Equal((pair.Value as Fixed)?.Second, (stringCopy[pair.Key] as Fixed)?.Second);
         byte[] bytes = LuminPackSerializer.Serialize(list);
-        var listCopy = LuminPackSerializer.Deserialize<List<Root>>(bytes);
+        var listCopy = global::LuminPackUnitTest.ConcreteReads.Read<List<Root>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<Root> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(list.Select(value => (value as Fixed)?.Number), listCopy.Select(value => (value as Fixed)?.Number));
         Assert.Equal(bytes, LuminPackSerializer.Serialize(listCopy));
     }

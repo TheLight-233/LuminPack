@@ -84,8 +84,7 @@ internal static class WriterReaderCorrectnessRegressionTest
             null,
             new NullHeaderProbeModel { Value = 73 }
         ];
-        List<NullHeaderProbeModel?> result = LuminPackSerializer.Deserialize<List<NullHeaderProbeModel?>>(
-            LuminPackSerializer.Serialize(values));
+        List<NullHeaderProbeModel?> result = global::LuminPackUnitTest.ConcreteReads.Read<List<NullHeaderProbeModel?>>(LuminPackSerializer.Serialize(values), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<NullHeaderProbeModel?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(result is { Count: 2 } && result[0] is null && result[1]?.Value == 73,
             "A null generated object consumed the following collection element.");
     }
@@ -114,16 +113,16 @@ internal static class WriterReaderCorrectnessRegressionTest
     private static void NullAndLargeUnmanagedArraysUseOneSafeBulkCopy()
     {
         int[]? nullArray = null;
-        var nullRoundTrip = LuminPackSerializer.Deserialize<int[]?>(LuminPackSerializer.Serialize(nullArray));
+        var nullRoundTrip = global::LuminPackUnitTest.ConcreteReads.Read<int[]?>(LuminPackSerializer.Serialize(nullArray), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int[]? concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(nullRoundTrip is null, "A null unmanaged array did not round-trip as null.");
 
         var values = Enumerable.Range(0, 200_000).ToArray();
-        var direct = LuminPackSerializer.Deserialize<int[]>(LuminPackSerializer.Serialize(values));
+        var direct = global::LuminPackUnitTest.ConcreteReads.Read<int[]>(LuminPackSerializer.Serialize(values), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(direct is not null && direct.SequenceEqual(values),
             "A large direct unmanaged array exceeded the initial writer buffer.");
 
         var model = new LargeArrayWriterModel { Prefix = 17, Values = values, Suffix = 29 };
-        var generated = LuminPackSerializer.Deserialize<LargeArrayWriterModel>(LuminPackSerializer.Serialize(model));
+        var generated = global::LuminPackUnitTest.ConcreteReads.Read<LargeArrayWriterModel>(LuminPackSerializer.Serialize(model), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref LargeArrayWriterModel concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(generated is not null && generated.Prefix == 17 && generated.Suffix == 29 &&
                generated.Values.SequenceEqual(values),
             "A generated large unmanaged array overwrote adjacent fields or exceeded writer capacity.");
@@ -159,7 +158,7 @@ internal static class WriterReaderCorrectnessRegressionTest
         var sequence = new ReadOnlySequence<int>(first, 0, third, third.Memory.Length);
 
         var payload = LuminPackSerializer.Serialize(sequence);
-        var roundTrip = LuminPackSerializer.Deserialize<ReadOnlySequence<int>>(payload);
+        var roundTrip = global::LuminPackUnitTest.ConcreteReads.Read<ReadOnlySequence<int>>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReadOnlySequence<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
         Assert(roundTrip.ToArray().SequenceEqual(Enumerable.Range(1, 9)),
             "Multi-segment unmanaged ReadOnlySequence payload contained segment gaps or overwritten bytes.");

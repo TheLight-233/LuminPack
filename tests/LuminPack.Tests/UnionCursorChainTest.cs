@@ -25,7 +25,7 @@ public class UnionCursorChainTest
         var dictionary = new Dictionary<int, ChainRoot?>(values);
         Assert.Equal(expected, LuminPackSerializer.Serialize(dictionary));
 
-        var copy = LuminPackSerializer.Deserialize<Dictionary<int, ChainRoot?>>(expected)!;
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, ChainRoot?>>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, ChainRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))!;
         Assert.IsType<ChainA>(copy[1]);
         Assert.IsType<ChainB>(copy[2]);
         Assert.IsType<ChainText>(copy[3]);

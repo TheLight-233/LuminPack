@@ -61,7 +61,7 @@ internal static class SerializerImmutableListWriteRegression
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             CheckSelection(driver, ordinary: true);
             Execute(output);
-            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(
+            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(
                 text.Replace("[LuminPackable] public sealed class Plain", "[LuminPackable(GeneratorType.VersionTolerant)] public sealed class Plain", StringComparison.Ordinal), parse, "Entry.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out var editedOutput, out diagnostics);
             CheckSelection(driver, ordinary: false);

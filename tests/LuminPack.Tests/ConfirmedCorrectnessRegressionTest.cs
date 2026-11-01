@@ -202,7 +202,7 @@ internal static class ConfirmedCorrectnessRegressionTest
             \u4e2d\u6587\u5b57\u6bb5 = "\u4E2D\u6587\u503C"
         };
 
-        var binary = LuminPackSerializer.Deserialize<GeneratorIdentifierModel>(LuminPackSerializer.Serialize(value));
+        var binary = global::LuminPackUnitTest.ConcreteReads.Read<GeneratorIdentifierModel>(LuminPackSerializer.Serialize(value), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref GeneratorIdentifierModel concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(binary is not null && binary.@event == value.@event &&
                binary.@class == value.@class && binary.\u4e2d\u6587\u5b57\u6bb5 == value.\u4e2d\u6587\u5b57\u6bb5,
             "Generated binary code did not handle escaped identifiers.");
@@ -213,7 +213,7 @@ internal static class ConfirmedCorrectnessRegressionTest
         Assert(json.Contains("\u0022\u4E2D\u6587\u5B57\u6BB5\u0022", StringComparison.Ordinal),
             "Generated UTF-8 JSON property bytes corrupted a Unicode member name.");
 
-        var jsonRoundTrip = LuminPackSerializer.DeserializeJson<GeneratorIdentifierModel, LuminPackUtf8LengthOptions>(jsonBuffer);
+        var jsonRoundTrip = global::LuminPackUnitTest.ConcreteReads.ReadJson<GeneratorIdentifierModel>(jsonBuffer, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref GeneratorIdentifierModel concreteReadTarget) => LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(concreteReadInput, ref concreteReadTarget));
         Assert(jsonRoundTrip is not null && jsonRoundTrip.@event == value.@event &&
                jsonRoundTrip.@class == value.@class && jsonRoundTrip.\u4e2d\u6587\u5b57\u6bb5 == value.\u4e2d\u6587\u5b57\u6bb5,
             "Generated JSON code did not handle escaped identifiers or Unicode names.");
@@ -225,10 +225,10 @@ internal static class ConfirmedCorrectnessRegressionTest
         const string json = "{\"Nested\":{\"Value\":17}}";
         const string scalarJson = "{\"Value\":17}";
 
-        var utf8 = LuminPackSerializer.DeserializeJson<JsonFreshSmallModel>(json);
+        var utf8 = global::LuminPackUnitTest.ConcreteReads.ReadJson<JsonFreshSmallModel>(json, static (string concreteReadInput, ref JsonFreshSmallModel concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         var utf16 = LuminPackSerializer.DeserializeJson<JsonFreshSmallModel>(json,
             new TestSerializationProfile { StringEncoding = LuminPackStringEncoding.UTF16 });
-        var scalar = LuminPackSerializer.DeserializeJson<JsonFreshScalarModel>(scalarJson);
+        var scalar = global::LuminPackUnitTest.ConcreteReads.ReadJson<JsonFreshScalarModel>(scalarJson, static (string concreteReadInput, ref JsonFreshScalarModel concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
         Assert(utf8 is not null && utf8.MissingNumber == 0 && utf8.Nested is not null &&
                utf8.Nested.Value == 17 && utf8.Nested.Name is null,
@@ -275,19 +275,19 @@ internal static class ConfirmedCorrectnessRegressionTest
     {
         const string managedJson =
             "{\"Label\":\"safe\",\"Numbers\":[1,2,3],\"Nested\":{\"Value\":17,\"Name\":\"Nested\"},\"Values\":[[\"score\",99]]}";
-        var managed = LuminPackSerializer.DeserializeJson<JsonFreshManagedDerivedModel>(managedJson);
+        var managed = global::LuminPackUnitTest.ConcreteReads.ReadJson<JsonFreshManagedDerivedModel>(managedJson, static (string concreteReadInput, ref JsonFreshManagedDerivedModel concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert(managed is not null && managed.Label == "safe" &&
                managed.Numbers is not null && managed.Numbers.SequenceEqual([1, 2, 3]) &&
                managed.Nested is not null && managed.Nested.Value == 17 && managed.Nested.Name == "Nested" &&
                managed.Values is not null && managed.Values["score"] == 99,
             "Managed-reference direct-result JSON did not preserve inherited/nested/collection fields.");
 
-        var missingManaged = LuminPackSerializer.DeserializeJson<JsonFreshManagedDerivedModel>("{}");
+        var missingManaged = global::LuminPackUnitTest.ConcreteReads.ReadJson<JsonFreshManagedDerivedModel>("{}", static (string concreteReadInput, ref JsonFreshManagedDerivedModel concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert(missingManaged is not null && missingManaged.Label is null && missingManaged.Numbers is null &&
                missingManaged.Nested is null && missingManaged.Values is null,
             "Managed-reference direct-result JSON changed missing-property defaults.");
 
-        var initialized = LuminPackSerializer.DeserializeJson<JsonFreshInitializerDerivedModel>("{}");
+        var initialized = global::LuminPackUnitTest.ConcreteReads.ReadJson<JsonFreshInitializerDerivedModel>("{}", static (string concreteReadInput, ref JsonFreshInitializerDerivedModel concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert(initialized is not null && initialized.BaseText is null && initialized.Text is null,
             "Base initializer control escaped the temp-first JSON path.");
 
@@ -310,7 +310,7 @@ internal static class ConfirmedCorrectnessRegressionTest
 
         Assert(JsonFreshExplicitConstructorModel.ConstructorCalls == 0 && explicitValue is null,
             "Explicit constructor ran before malformed JSON parsing completed.");
-        explicitValue = LuminPackSerializer.DeserializeJson<JsonFreshExplicitConstructorModel>("{}");
+        explicitValue = global::LuminPackUnitTest.ConcreteReads.ReadJson<JsonFreshExplicitConstructorModel>("{}", static (string concreteReadInput, ref JsonFreshExplicitConstructorModel concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert(JsonFreshExplicitConstructorModel.ConstructorCalls == 1 &&
                explicitValue is not null && explicitValue.Text is null,
             "Explicit-constructor temp-first JSON changed missing-property semantics.");

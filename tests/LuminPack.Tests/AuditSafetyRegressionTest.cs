@@ -1,4 +1,4 @@
-﻿using LuminPack.Option;
+using LuminPack.Option;
 using LuminPack;
 using LuminPack.Core;
 using LuminPack.Attribute;
@@ -80,17 +80,17 @@ public class AuditSafetyRegressionTest
         Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref target));
         string json = LuminPackSerializer.SerializeJson(source);
         Assert.Contains("\"$luminpack\":2", json);
-        var restored = LuminPackSerializer.DeserializeJson<AuditExternalMessage>(json);
+        var restored = global::LuminPackUnitTest.ConcreteReads.ReadJson<AuditExternalMessage>(json, static (string concreteReadInput, ref AuditExternalMessage concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(source.Name, restored.Name);
         Assert.Equal(source.Values, restored.Values);
         byte[] overCount = LuminPackSerializer.Serialize(new AuditExternalMessage { Values = new int[5] });
-        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize<AuditExternalMessage>(overCount));
-        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.DeserializeJson<AuditExternalMessage>(json.Replace("\"Id\":17", "\"Id\":17,\"Id\":19")));
-        Assert.Equal(source.Id, LuminPackSerializer.DeserializeJson<AuditExternalMessage>(json.Replace("\"Id\"", "\"\\u0049d\"")).Id);
-        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.DeserializeJson<AuditExternalMessage>(json.Replace("\"Id\":17", "\"Id\":17,\"\\u0049d\":19")));
-        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.DeserializeJson<AuditExternalMessage>(json.Replace("\"Id\"", "\"Unknown\"")));
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<AuditExternalMessage>(json.Replace("\"Id\":17", "\"Id\":01")));
-        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.DeserializeJson<AuditExternalMessage>(new string(' ', 5 * 1024 * 1024)));
+        Assert.Throws<System.IO.InvalidDataException>(() => global::LuminPackUnitTest.ConcreteReads.Read<AuditExternalMessage>(overCount, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AuditExternalMessage concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+        Assert.Throws<System.IO.InvalidDataException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<AuditExternalMessage>(json.Replace("\"Id\":17", "\"Id\":17,\"Id\":19"), static (string concreteReadInput, ref AuditExternalMessage concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(source.Id, global::LuminPackUnitTest.ConcreteReads.ReadJson<AuditExternalMessage>(json.Replace("\"Id\"", "\"\\u0049d\""), static (string concreteReadInput, ref AuditExternalMessage concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).Id);
+        Assert.Throws<System.IO.InvalidDataException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<AuditExternalMessage>(json.Replace("\"Id\":17", "\"Id\":17,\"\\u0049d\":19"), static (string concreteReadInput, ref AuditExternalMessage concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Throws<System.IO.InvalidDataException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<AuditExternalMessage>(json.Replace("\"Id\"", "\"Unknown\""), static (string concreteReadInput, ref AuditExternalMessage concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.ThrowsAny<Exception>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<AuditExternalMessage>(json.Replace("\"Id\":17", "\"Id\":01"), static (string concreteReadInput, ref AuditExternalMessage concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Throws<System.IO.InvalidDataException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<AuditExternalMessage>(new string(' ', 5 * 1024 * 1024), static (string concreteReadInput, ref AuditExternalMessage concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         foreach (int length in Enumerable.Range(0, bytes.Length))
         {
             var shortened = bytes.AsSpan(0, length).ToArray();
@@ -101,25 +101,25 @@ public class AuditSafetyRegressionTest
         var packed = new AuditExternalPacked { Tag = 7, Count = 123456 };
         byte[] packedBytes = LuminPackSerializer.Serialize(packed);
         Assert.Equal(61, packedBytes.Length);
-        Assert.Equal(packed.Count, LuminPackSerializer.Deserialize<AuditExternalPacked>(packedBytes).Count);
+        Assert.Equal(packed.Count, global::LuminPackUnitTest.ConcreteReads.Read<AuditExternalPacked>(packedBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AuditExternalPacked concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Count);
         var collections = new AuditExternalCollections { Numbers = new[] { 1, 2 }, Map = new Dictionary<int, string> { [3] = "three", [4] = "four" }, Set = new HashSet<int> { 7, 11 } };
         byte[] collectionBytes = LuminPackSerializer.Serialize(collections);
-        Assert.Equal(2, LuminPackSerializer.Deserialize<AuditExternalCollections>(collectionBytes).Map.Count);
+        Assert.Equal(2, global::LuminPackUnitTest.ConcreteReads.Read<AuditExternalCollections>(collectionBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AuditExternalCollections concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Map.Count);
         string collectionJson = LuminPackSerializer.SerializeJson(collections);
-        Assert.Equal(2, LuminPackSerializer.DeserializeJson<AuditExternalCollections>(collectionJson).Set.Count);
+        Assert.Equal(2, global::LuminPackUnitTest.ConcreteReads.ReadJson<AuditExternalCollections>(collectionJson, static (string concreteReadInput, ref AuditExternalCollections concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).Set.Count);
         foreach (string entry in new[] { "[]", "[3]", "[3,\"three\",5]", "null", "{}" })
         {
             string invalid = collectionJson.Replace("[3,\"three\"]", entry);
             Assert.NotEqual(collectionJson, invalid);
-            Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.DeserializeJson<AuditExternalCollections>(invalid));
+            Assert.Throws<System.IO.InvalidDataException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<AuditExternalCollections>(invalid, static (string concreteReadInput, ref AuditExternalCollections concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         }
         var node = new AuditExternalNode { Value = 1, Next = new AuditExternalNode { Value = 2 } };
         byte[] nodeBytes = LuminPackSerializer.Serialize(node);
-        Assert.Equal(2, LuminPackSerializer.Deserialize<AuditExternalNode>(nodeBytes).Next.Value);
+        Assert.Equal(2, global::LuminPackUnitTest.ConcreteReads.Read<AuditExternalNode>(nodeBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AuditExternalNode concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Next.Value);
         Assert.Throws<NotSupportedException>(() => LuminPackSerializer.Serialize(new AuditExternalDangerous { Type = typeof(int) }));
         var parent = new AuditExternalParent { Before = 8, Child = source, After = 13 };
-        Assert.Equal(13, LuminPackSerializer.Deserialize<AuditExternalParent>(LuminPackSerializer.Serialize(parent)).After);
-        Assert.Equal(13, LuminPackSerializer.DeserializeJson<AuditExternalParent>(LuminPackSerializer.SerializeJson(parent)).After);
+        Assert.Equal(13, global::LuminPackUnitTest.ConcreteReads.Read<AuditExternalParent>(LuminPackSerializer.Serialize(parent), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AuditExternalParent concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).After);
+        Assert.Equal(13, global::LuminPackUnitTest.ConcreteReads.ReadJson<AuditExternalParent>(LuminPackSerializer.SerializeJson(parent), static (string concreteReadInput, ref AuditExternalParent concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).After);
         target.Id = 91;
         Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.DeserializeJson(json + "x", ref target));
         Assert.Equal(source.Id, target.Id);
@@ -137,19 +137,19 @@ public class AuditSafetyRegressionTest
         compressed.CopyTo(compressedFrame, 56);
         BitConverter.GetBytes(1).CopyTo(compressedFrame, 8);
         BitConverter.GetBytes(compressed.Length).CopyTo(compressedFrame, 12);
-        Assert.Equal(source.Name, LuminPackSerializer.Deserialize<AuditExternalMessage>(compressedFrame).Name);
+        Assert.Equal(source.Name, global::LuminPackUnitTest.ConcreteReads.Read<AuditExternalMessage>(compressedFrame, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AuditExternalMessage concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Name);
         BitConverter.GetBytes(int.MaxValue).CopyTo(compressedFrame, 16);
         Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(compressedFrame, ref target));
         byte[] overDepth = LuminPackSerializer.Serialize(new AuditExternalNode { Next = new AuditExternalNode { Next = new AuditExternalNode { Next = new AuditExternalNode() } } });
-        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize<AuditExternalNode>(overDepth));
+        Assert.Throws<System.IO.InvalidDataException>(() => global::LuminPackUnitTest.ConcreteReads.Read<AuditExternalNode>(overDepth, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AuditExternalNode concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         var plain = new AuditExternalGraph { Node = new AuditPlainNode { Next = new AuditPlainNode { Next = new AuditPlainNode { Next = new AuditPlainNode() } } } };
-        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize<AuditExternalGraph>(LuminPackSerializer.Serialize(plain)));
+        Assert.Throws<System.IO.InvalidDataException>(() => global::LuminPackUnitTest.ConcreteReads.Read<AuditExternalGraph>(LuminPackSerializer.Serialize(plain), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AuditExternalGraph concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         byte[] overText = LuminPackSerializer.Serialize(new AuditExternalMessage { Name = new string('x', 129) });
-        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize<AuditExternalMessage>(overText));
-        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.DeserializeJson<AuditExternalMessage>(LuminPackSerializer.SerializeJson(new AuditExternalMessage { Name = new string('x', 129) })));
+        Assert.Throws<System.IO.InvalidDataException>(() => global::LuminPackUnitTest.ConcreteReads.Read<AuditExternalMessage>(overText, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AuditExternalMessage concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+        Assert.Throws<System.IO.InvalidDataException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<AuditExternalMessage>(LuminPackSerializer.SerializeJson(new AuditExternalMessage { Name = new string('x', 129) }), static (string concreteReadInput, ref AuditExternalMessage concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         string repeatedSet = collectionJson.Replace("[7,11]", "[7,7]");
         Assert.NotEqual(collectionJson, repeatedSet);
-        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.DeserializeJson<AuditExternalCollections>(repeatedSet));
+        Assert.Throws<System.IO.InvalidDataException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<AuditExternalCollections>(repeatedSet, static (string concreteReadInput, ref AuditExternalCollections concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
 
         var domains = new AuditExternalDomains { Id = 7, Name = null, Flag = true, Choice = AuditChoice.One, Bits = new[] { true, false } };
         byte[] domainBytes = LuminPackSerializer.Serialize(domains);
@@ -189,10 +189,10 @@ public class AuditSafetyRegressionTest
     public async Task CompiledInputOptionBoundsIngestion()
     {
         using var stream = new System.IO.MemoryStream(new byte[5 * 1024 * 1024]);
-        await Assert.ThrowsAsync<System.IO.InvalidDataException>(async () => await LuminPackSerializer.DeserializeAsync<AuditExternalMessage>(stream));
+        await Assert.ThrowsAsync<System.IO.InvalidDataException>(async () => await LuminPackSerializer.DeserializeAsync(stream, (AuditExternalMessage)null!));
         Assert.InRange(stream.Position, 1, 4L * 1024 * 1024 + 1);
         var sequence = new System.Buffers.ReadOnlySequence<byte>(new byte[5 * 1024 * 1024]);
-        Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize<AuditExternalMessage>(sequence));
+        Assert.Throws<System.IO.InvalidDataException>(() => global::LuminPackUnitTest.ConcreteReads.Read<AuditExternalMessage>(sequence, static (global::System.Buffers.ReadOnlySequence<byte> concreteReadInput, ref AuditExternalMessage concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Rejects compressed frames whose output width disagrees with the collection before touching reusable storage.</summary>

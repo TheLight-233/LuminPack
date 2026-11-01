@@ -186,7 +186,7 @@ namespace LuminPackUnitTest
             var value = new CustomBinaryType { Id = 42, Name = "custom" };
 
             byte[] buffer = LuminPackSerializer.Serialize(value);
-            var result = LuminPackSerializer.Deserialize<CustomBinaryType>(buffer);
+            var result = global::LuminPackUnitTest.ConcreteReads.Read<CustomBinaryType>(buffer, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CustomBinaryType concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             Assert.NotNull(result);
             Assert.Equal(42, result.Id);
@@ -200,7 +200,7 @@ namespace LuminPackUnitTest
             var value = new CustomJsonType { Number = 99, Text = "json" };
 
             string json = LuminPackSerializer.SerializeJson(value);
-            var result = LuminPackSerializer.DeserializeJson<CustomJsonType>(json);
+            var result = global::LuminPackUnitTest.ConcreteReads.ReadJson<CustomJsonType>(json, static (string concreteReadInput, ref CustomJsonType concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
             Assert.NotNull(result);
             Assert.Equal(99, result.Number);
@@ -214,11 +214,11 @@ namespace LuminPackUnitTest
             var value = new CustomFullType { A = 1234567890123L };
 
             byte[] buffer = LuminPackSerializer.Serialize(value);
-            var result = LuminPackSerializer.Deserialize<CustomFullType>(buffer);
+            var result = global::LuminPackUnitTest.ConcreteReads.Read<CustomFullType>(buffer, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CustomFullType concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
             Assert.Equal(1234567890123L, result.A);
 
             string json = LuminPackSerializer.SerializeJson(value);
-            var jsonResult = LuminPackSerializer.DeserializeJson<CustomFullType>(json);
+            var jsonResult = global::LuminPackUnitTest.ConcreteReads.ReadJson<CustomFullType>(json, static (string concreteReadInput, ref CustomFullType concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
             Assert.Equal(1234567890123L, jsonResult.A);
         }
 
@@ -231,7 +231,7 @@ namespace LuminPackUnitTest
             var owner = new CustomOwner { Payload = new CustomBinaryType { Id = 5, Name = "nested" } };
 
             byte[] buffer = LuminPackSerializer.Serialize(owner);
-            var result = LuminPackSerializer.Deserialize<CustomOwner>(buffer);
+            var result = global::LuminPackUnitTest.ConcreteReads.Read<CustomOwner>(buffer, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CustomOwner concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             Assert.NotNull(result.Payload);
             Assert.Equal(5, result.Payload.Id);

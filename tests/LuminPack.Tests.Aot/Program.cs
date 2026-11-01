@@ -1,4 +1,4 @@
-﻿using System.Security.Cryptography;
+using System.Security.Cryptography;
 using LuminPack;
 using LuminPack.Attribute;
 
@@ -41,7 +41,7 @@ internal static class Program
             Portable = new List<Portable> { new Portable { Tag = 9, Value = 123456789012345 } }
         };
         byte[] payload = LuminPackSerializer.Serialize(source);
-        Message copy = LuminPackSerializer.Deserialize<Message>(payload);
+        Message copy = global::LuminPackUnitTest.ConcreteReads.Read<Message>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Message concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         var nodes = copy.Nodes;
         var child = copy.Nodes[0];
         var values = copy.Values;
@@ -51,7 +51,7 @@ internal static class Program
         Check(ReferenceEquals(nodes, copy.Nodes) && ReferenceEquals(child, copy.Nodes[0]) && ReferenceEquals(values, copy.Values) && ReferenceEquals(name, copy.Name), "Existing storage was replaced.");
         Check(copy.Portable[0].Value == source.Portable[0].Value && LuminPackSerializer.Serialize(source.Portable).Length == 13, "Portable list used native padding.");
         string json = LuminPackSerializer.SerializeJson(source);
-        Check(LuminPackSerializer.DeserializeJson<Message>(json).Name == source.Name, "JSON read failed.");
+        Check(global::LuminPackUnitTest.ConcreteReads.ReadJson<Message>(json, static (string concreteReadInput, ref Message concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).Name == source.Name, "JSON read failed.");
         using (var stream = new MemoryStream())
         {
             LuminPackSerializer.SerializeAsync(stream, source).GetAwaiter().GetResult();
@@ -66,15 +66,15 @@ internal static class Program
         Check(profileCopy.Name == source.Name, "Concrete compiled profile read failed.");
 
         byte[] versioned = LuminPackSerializer.Serialize(new VersionOne { Id = 13, Name = "player", Removed = 17 });
-        var evolved = LuminPackSerializer.Deserialize<VersionTwo>(versioned);
+        var evolved = global::LuminPackUnitTest.ConcreteReads.Read<VersionTwo>(versioned, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref VersionTwo concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Check(evolved.Id == 13 && evolved.DisplayName == "player" && evolved.Added == 0, "Named version matching failed.");
         var tracked = new Tracked { Value = 19 };
         tracked.Next = tracked;
         byte[] trackedBytes = LuminPackSerializer.Serialize(tracked);
-        var trackedCopy = LuminPackSerializer.Deserialize<Tracked>(trackedBytes);
+        var trackedCopy = global::LuminPackUnitTest.ConcreteReads.Read<Tracked>(trackedBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Tracked concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Check(ReferenceEquals(trackedCopy, trackedCopy.Next), "Tracked identity was lost.");
         byte[] privateBytes = LuminPackSerializer.Serialize(new PrivateModel(29));
-        Check(LuminPackSerializer.Deserialize<PrivateModel>(privateBytes).GetValue() == 29, "Private Local/As storage failed.");
+        Check(global::LuminPackUnitTest.ConcreteReads.Read<PrivateModel>(privateBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref PrivateModel concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).GetValue() == 29, "Private Local/As storage failed.");
 
         byte[] portable = LuminPackSerializer.Serialize(new Portable { Tag = 9, Value = 123456789012345 });
         Check(portable.Length == 9 && BitConverter.ToInt64(portable, 1) == 123456789012345, "Portable wire width changed.");
@@ -98,19 +98,19 @@ internal static class Program
         string json = LuminPackSerializer.SerializeJson(value);
         if (System.Runtime.CompilerServices.RuntimeFeature.IsDynamicCodeSupported)
         {
-            Check(LuminPackSerializer.Deserialize<Type>(bytes) == value, "JIT Type binary parsing changed.");
-            Check(LuminPackSerializer.DeserializeJson<Type>(json) == value, "JIT Type JSON parsing changed.");
+            Check(global::LuminPackUnitTest.ConcreteReads.Read<Type>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == value, "JIT Type binary parsing changed.");
+            Check(global::LuminPackUnitTest.ConcreteReads.ReadJson<Type>(json, static (string concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) == value, "JIT Type JSON parsing changed.");
         }
         else
         {
             bool binaryRejected = false, jsonRejected = false;
-            try { _ = LuminPackSerializer.Deserialize<Type>(bytes); } catch (PlatformNotSupportedException) { binaryRejected = true; }
-            try { _ = LuminPackSerializer.DeserializeJson<Type>(json); } catch (PlatformNotSupportedException) { jsonRejected = true; }
+            try { _ = global::LuminPackUnitTest.ConcreteReads.Read<Type>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)); } catch (PlatformNotSupportedException) { binaryRejected = true; }
+            try { _ = global::LuminPackUnitTest.ConcreteReads.ReadJson<Type>(json, static (string concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)); } catch (PlatformNotSupportedException) { jsonRejected = true; }
             Check(binaryRejected && jsonRejected, "Dynamic Type reads must reject unsupported native execution.");
         }
         Type missing = null!;
-        Check(LuminPackSerializer.Deserialize<Type>(LuminPackSerializer.Serialize(missing)) is null, "Null Type binary parsing changed.");
-        Check(LuminPackSerializer.DeserializeJson<Type>("null") is null, "Null Type JSON parsing changed.");
+        Check(global::LuminPackUnitTest.ConcreteReads.Read<Type>(LuminPackSerializer.Serialize(missing), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is null, "Null Type binary parsing changed.");
+        Check(global::LuminPackUnitTest.ConcreteReads.ReadJson<Type>("null", static (string concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) is null, "Null Type JSON parsing changed.");
         Console.WriteLine("Type capability checks passed.");
     }
 #endif
@@ -121,7 +121,7 @@ internal static class Program
         var packed = Enumerable.Range(0, 101).Select(value => new Portable { Tag = (byte)value, Value = value * 123456789L }).ToArray();
         byte[] bytes = LuminPackSerializer.Serialize(packed);
         Check(bytes.Length == 4 + packed.Length * 9, "Packed array acquired padding or a layout tag.");
-        var restored = LuminPackSerializer.Deserialize<Portable[]>(bytes);
+        var restored = global::LuminPackUnitTest.ConcreteReads.Read<Portable[]>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Portable[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Check(restored[^1].Value == packed[^1].Value, "Published packed shuffle lost its tail.");
         byte[] foreign = new byte[5 + 101 * 12];
         BitConverter.GetBytes(101).CopyTo(foreign, 0);
@@ -131,11 +131,11 @@ internal static class Program
             foreign[5 + i * 12] = (byte)i;
             BitConverter.GetBytes(i * 123456789L).CopyTo(foreign, 9 + i * 12);
         }
-        var converted = LuminPackSerializer.Deserialize<AotTagged[]>(foreign);
+        var converted = global::LuminPackUnitTest.ConcreteReads.Read<AotTagged[]>(foreign, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AotTagged[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Check(converted[^1].Tag == 100 && converted[^1].Value == packed[^1].Value, "Published foreign-layout conversion lost data.");
         AotSizeNode? node = null;
         for (int i = 0; i < 128; i++) node = new AotSizeNode { Value = i, Next = node };
-        Check(LuminPackSerializer.Deserialize<AotSizeNode>(LuminPackSerializer.Serialize<AotSizeNode>(node!))?.Value == 127, "Published recursive generic fallback failed.");
+        Check(global::LuminPackUnitTest.ConcreteReads.Read<AotSizeNode>(LuminPackSerializer.Serialize(node!), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AotSizeNode concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))?.Value == 127, "Published recursive generic fallback failed.");
     }
 
     /// <summary>Verifies the requested process architecture and CPU vendor before testing serialization.</summary>
@@ -190,22 +190,22 @@ internal static class Program
     private static void CheckBclJsonShapes()
     {
         var lazy = new Lazy<string?>(() => null);
-        var restored = LuminPackSerializer.DeserializeJson<Lazy<string?>>(LuminPackSerializer.SerializeJson(lazy));
+        var restored = global::LuminPackUnitTest.ConcreteReads.ReadJson<Lazy<string?>>(LuminPackSerializer.SerializeJson(lazy), static (string concreteReadInput, ref Lazy<string?> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Check(restored is not null && restored.Value is null, "Lazy JSON presence was lost.");
-        var array = LuminPackSerializer.DeserializeJson<int[,]>("{\"Lengths\":[1,2],\"LowerBounds\":[0,0],\"Values\":[7,9]}");
+        int[,] array = null!; LuminPackSerializer.DeserializeJson("{\"Lengths\":[1,2],\"LowerBounds\":[0,0],\"Values\":[7,9]}", ref array);
         Check(array[0, 1] == 9, "Flat JSON elements were lost.");
         const string bounded = "{\"Lengths\":[1,2],\"LowerBounds\":[-2,4],\"Values\":[7,9]}";
 #if LUMINPACK_NATIVE_AOT
             bool rejected = false;
-            try { _ = LuminPackSerializer.DeserializeJson<int[,]>(bounded); }
+            try { _ = global::LuminPackUnitTest.ConcreteReads.ReadJson<int[,]>(bounded, static (string concreteReadInput, ref int[,] concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)); }
             catch (PlatformNotSupportedException) { rejected = true; }
             Check(rejected, "NativeAOT must retain the runtime's rejection of nonzero array bounds.");
 #else
-        array = LuminPackSerializer.DeserializeJson<int[,]>(bounded);
+        array = global::LuminPackUnitTest.ConcreteReads.ReadJson<int[,]>(bounded, static (string concreteReadInput, ref int[,] concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Check(array.GetLowerBound(0) == -2 && array[-2, 5] == 9, "Nonzero JSON bounds were lost.");
 #endif
         var empty = new int[0, 3];
-        var copy = LuminPackSerializer.DeserializeJson<int[,]>(LuminPackSerializer.SerializeJson(empty));
+        var copy = global::LuminPackUnitTest.ConcreteReads.ReadJson<int[,]>(LuminPackSerializer.SerializeJson(empty), static (string concreteReadInput, ref int[,] concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Check(copy.GetLength(0) == 0 && copy.GetLength(1) == 3, "Empty JSON dimensions were lost.");
     }
 
@@ -218,13 +218,13 @@ internal static class Program
         var original = target;
         LuminPackSerializer.Deserialize(bytes, ref target);
         Check(ReferenceEquals(original, target) && target.Id == 17, "External decoding lost ordinary reuse.");
-        Check(LuminPackSerializer.DeserializeJson<AotExternal>(LuminPackSerializer.SerializeJson(source)).Text == source.Text, "External JSON failed.");
+        Check(global::LuminPackUnitTest.ConcreteReads.ReadJson<AotExternal>(LuminPackSerializer.SerializeJson(source), static (string concreteReadInput, ref AotExternal concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).Text == source.Text, "External JSON failed.");
         bytes[24] ^= 1;
         bool rejected = false;
         try { LuminPackSerializer.Deserialize(bytes, ref target); } catch (InvalidDataException) { rejected = true; }
         Check(rejected && target.Id == 17, "External schema validation changed its destination.");
         rejected = false;
-        try { _ = LuminPackSerializer.Deserialize<AotExternal>(LuminPackSerializer.Serialize(new AotExternal { Values = new int[5] })); } catch (InvalidDataException) { rejected = true; }
+        try { _ = global::LuminPackUnitTest.ConcreteReads.Read<AotExternal>(LuminPackSerializer.Serialize(new AotExternal { Values = new int[5] }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AotExternal concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)); } catch (InvalidDataException) { rejected = true; }
         Check(rejected, "External collection quota was bypassed.");
     }
 

@@ -18,10 +18,10 @@ public class SetInterfaceBulkReadTest
     {
         var expected = Enumerable.Range(0, count).Select(i => i * 7919 % 100003 - 50000).ToHashSet();
         byte[] bytes = LuminPackSerializer.Serialize(expected);
-        Assert.Equal(bytes, LuminPackSerializer.Serialize<ISet<int>>(expected));
-        Assert.Equal(bytes, LuminPackSerializer.Serialize<IReadOnlySet<int>>(expected));
-        var mutable = LuminPackSerializer.Deserialize<ISet<int>>(bytes);
-        var readOnly = LuminPackSerializer.Deserialize<IReadOnlySet<int>>(bytes);
+        Assert.Equal(bytes, LuminPackSerializer.Serialize((ISet<int>)(expected)));
+        Assert.Equal(bytes, LuminPackSerializer.Serialize((IReadOnlySet<int>)(expected)));
+        var mutable = global::LuminPackUnitTest.ConcreteReads.Read<ISet<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
+        var readOnly = global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlySet<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlySet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.True(expected.SetEquals(mutable));
         Assert.True(expected.SetEquals(readOnly));
         Assert.True(mutable.Add(int.MaxValue));
@@ -38,8 +38,8 @@ public class SetInterfaceBulkReadTest
     {
         ISet<int> source = null!;
         byte[] bytes = LuminPackSerializer.Serialize(source);
-        Assert.Null(LuminPackSerializer.Deserialize<ISet<int>>(bytes));
-        Assert.Null(LuminPackSerializer.Deserialize<IReadOnlySet<int>>(bytes));
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<ISet<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlySet<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlySet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         source = new SortedSet<int> { 3, 7 };
         bytes = LuminPackSerializer.Serialize(source);
         ISet<int> result = new SortedSet<int> { 99 };
@@ -58,22 +58,22 @@ public class SetInterfaceBulkReadTest
         var input = new[] { new SetCollisionValue { Value = 1 }, new SetCollisionValue { Value = 2 } };
         byte[] bytes = LuminPackSerializer.Serialize(input);
         SetCollisionValue.Comparisons = 0;
-        var values = LuminPackSerializer.Deserialize<ISet<SetCollisionValue>>(bytes);
+        var values = global::LuminPackUnitTest.ConcreteReads.Read<ISet<SetCollisionValue>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISet<SetCollisionValue> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(0, SetCollisionValue.Comparisons);
         Assert.Equal(new[] { 1, 2 }, values.Select(value => value.Value));
         SetCollisionValue.Comparisons = 0;
-        var readOnly = LuminPackSerializer.Deserialize<IReadOnlySet<SetCollisionValue>>(bytes);
+        var readOnly = global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlySet<SetCollisionValue>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlySet<SetCollisionValue> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(0, SetCollisionValue.Comparisons);
         Assert.Equal(new[] { 1, 2 }, readOnly.Select(value => value.Value));
 
         bytes = LuminPackSerializer.Serialize(new[] { 7, 7 });
-        Assert.Equal(2, LuminPackSerializer.Deserialize<ISet<int>>(bytes).Count);
-        Assert.Equal(2, LuminPackSerializer.Deserialize<IReadOnlySet<int>>(bytes).Count);
+        Assert.Equal(2, global::LuminPackUnitTest.ConcreteReads.Read<ISet<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Count);
+        Assert.Equal(2, global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlySet<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlySet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Count);
 
         ISet<string?> strings = new HashSet<string?> { null, "ascii", "\u00e9", "\u4e2d" };
         bytes = LuminPackSerializer.Serialize(strings);
-        Assert.True(strings.SetEquals(LuminPackSerializer.Deserialize<ISet<string?>>(bytes)));
-        Assert.True(strings.SetEquals(LuminPackSerializer.Deserialize<IReadOnlySet<string?>>(bytes)));
+        Assert.True(strings.SetEquals(global::LuminPackUnitTest.ConcreteReads.Read<ISet<string?>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISet<string?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
+        Assert.True(strings.SetEquals(global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlySet<string?>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlySet<string?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
     }
 
     /// <summary>Checks portable elements retain their field-wise formatter and fixed-width boundary validation.</summary>
@@ -87,8 +87,8 @@ public class SetInterfaceBulkReadTest
         };
         byte[] bytes = LuminPackSerializer.Serialize(expected);
         Assert.Equal(22, bytes.Length);
-        Assert.True(expected.SetEquals(LuminPackSerializer.Deserialize<ISet<SetPortableValue>>(bytes)));
-        Assert.True(expected.SetEquals(LuminPackSerializer.Deserialize<IReadOnlySet<SetPortableValue>>(bytes)));
+        Assert.True(expected.SetEquals(global::LuminPackUnitTest.ConcreteReads.Read<ISet<SetPortableValue>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISet<SetPortableValue> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
+        Assert.True(expected.SetEquals(global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlySet<SetPortableValue>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlySet<SetPortableValue> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
 
         ISet<int> result = new HashSet<int> { 99 };
         var previous = result;
@@ -104,8 +104,8 @@ public class SetInterfaceBulkReadTest
     {
         var expected = new HashSet<SetVersionedValue> { new() { Value = 17 }, new() { Value = 31 } };
         byte[] bytes = LuminPackSerializer.Serialize(expected);
-        Assert.True(expected.SetEquals(LuminPackSerializer.Deserialize<ISet<SetVersionedValue>>(bytes)));
-        Assert.True(expected.SetEquals(LuminPackSerializer.Deserialize<IReadOnlySet<SetVersionedValue>>(bytes)));
+        Assert.True(expected.SetEquals(global::LuminPackUnitTest.ConcreteReads.Read<ISet<SetVersionedValue>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISet<SetVersionedValue> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
+        Assert.True(expected.SetEquals(global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlySet<SetVersionedValue>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlySet<SetVersionedValue> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
     }
 
     /// <summary>Checks exact allocation uses live Count rather than the occupied entry range.</summary>
@@ -116,8 +116,8 @@ public class SetInterfaceBulkReadTest
         expected.RemoveWhere(value => (value & 1) == 0);
         byte[] bytes = LuminPackSerializer.Serialize(expected);
         Assert.Equal(4 + expected.Count * 4, bytes.Length);
-        Assert.True(expected.SetEquals(LuminPackSerializer.Deserialize<HashSet<int>>(bytes)));
-        Assert.True(expected.SetEquals(LuminPackSerializer.Deserialize<ISet<int>>(bytes)));
+        Assert.True(expected.SetEquals(global::LuminPackUnitTest.ConcreteReads.Read<HashSet<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref HashSet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
+        Assert.True(expected.SetEquals(global::LuminPackUnitTest.ConcreteReads.Read<ISet<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISet<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
     }
 }
 

@@ -43,7 +43,7 @@
 
 ## 注意事项
 
-- 在 `Light` 和 `Minimal` 下，生成器无法证明的序列化（反射、`typeof` 驱动的代码、来自其他程序集的调用）会在运行时像没有格式化器的类型一样失败。这类项目请使用 `Full` 或 `Medium`。
+- `Light` 和 `Minimal` 只保留静态分析能够证明的具体 API 形态。需要为外部调用保留更多具体 API 时，使用 `Full` 或 `Medium`；绑定到泛型负载 API 的调用仍然需要注册。
 - `Minimal` 假定所有序列化都通过本程序集里的静态 `LuminPackSerializer` 调用完成，否则请使用 `Light`。
 - 裁剪不会改变数据格式或类型所用的格式化器，只决定哪些代码存在。
-- 对生成范围之外的类型进行泛型 `LuminPackSerializer` 调用需要[注册](custom-formatters.cn.md#runtime-registration)。
+- 每个泛型负载 `LuminPackSerializer` 调用都需要[注册](custom-formatters.cn.md#runtime-registration)，包括包装方法内的调用及已在生成范围内的类型。类型可达并不等于格式化器已注册。`Full` 和 `Medium` 保留更多具体 API，但不会提供自动泛型兜底。

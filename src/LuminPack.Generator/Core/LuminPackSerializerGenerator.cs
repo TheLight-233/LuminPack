@@ -352,7 +352,7 @@ public static partial class LuminPackSerializerGenerator
     /// <param name="sb">The builder receiving generated source code.</param>
     private static void AppendRegister(StringBuilder sb)
     {
-        sb.AppendLine("        /// <summary>Manually registers write/read method pointers for a type the source generator did not cover.</summary>");
+        sb.AppendLine("        /// <summary>Registers binary method pointers for generic payload entry points.</summary>");
         sb.AppendLine("        /// <typeparam name=\"T\">The runtime type to register.</typeparam>");
         sb.AppendLine("        /// <param name=\"writeValue\">Static binary writer, e.g. <c>&amp;MyType.Write</c>.</param>");
         sb.AppendLine("        /// <param name=\"readValue\">Static binary reader, e.g. <c>&amp;MyType.Read</c>.</param>");
@@ -362,7 +362,7 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            delegate*<ref global::LuminPack.Core.LuminPackReader, ref T, void> readValue)");
         sb.AppendLine("            => global::LuminPack.Code.LuminPackFormatterRegistry.Register(typeof(T), (nint)writeValue, (nint)readValue);");
         sb.AppendLine();
-        sb.AppendLine("        /// <summary>Manually registers write/read + JSON method pointers for a type the source generator did not cover.</summary>");
+        sb.AppendLine("        /// <summary>Registers binary and JSON method pointers for generic payload entry points.</summary>");
         sb.AppendLine("        /// <typeparam name=\"T\">The runtime type to register.</typeparam>");
         sb.AppendLine("        /// <param name=\"writeValue\">Static binary writer, e.g. <c>&amp;MyType.Write</c>.</param>");
         sb.AppendLine("        /// <param name=\"readValue\">Static binary reader, e.g. <c>&amp;MyType.Read</c>.</param>");

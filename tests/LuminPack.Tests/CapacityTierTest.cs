@@ -34,7 +34,7 @@ public partial class CapacityTierTest
     {
         var list = Enumerable.Range(0, 12000).Select(index => new SmallGuaranteed { Id = index, Text = "value" }).ToList();
         byte[] bytes = LuminPackSerializer.Serialize(list);
-        var copy = LuminPackSerializer.Deserialize<List<SmallGuaranteed>>(bytes);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<List<SmallGuaranteed>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<SmallGuaranteed> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(list.Select(item => item.Id), copy.Select(item => item.Id));
         Assert.Equal(bytes, LuminPackSerializer.Serialize(copy));
         var array = list.ToArray();
@@ -42,10 +42,10 @@ public partial class CapacityTierTest
         var dictionary = list.ToDictionary(item => item.Id, item => item);
         foreach (int key in dictionary.Keys.Where(key => key % 11 == 0).ToArray()) dictionary.Remove(key);
         byte[] map = LuminPackSerializer.Serialize(dictionary);
-        var mapCopy = LuminPackSerializer.Deserialize<Dictionary<int, SmallGuaranteed>>(map);
+        var mapCopy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, SmallGuaranteed>>(map, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, SmallGuaranteed> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(dictionary.Select(pair => pair.Value.Id), mapCopy.Select(pair => pair.Value.Id));
         var set = list.ToHashSet();
-        var setCopy = LuminPackSerializer.Deserialize<HashSet<SmallGuaranteed>>(LuminPackSerializer.Serialize(set));
+        var setCopy = global::LuminPackUnitTest.ConcreteReads.Read<HashSet<SmallGuaranteed>>(LuminPackSerializer.Serialize(set), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref HashSet<SmallGuaranteed> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(set.Select(item => item.Id).Order(), setCopy.Select(item => item.Id).Order());
     }
 
@@ -142,7 +142,7 @@ public partial class CapacityTierTest
         var circle = new CircleGuaranteed { Values = values, Text = new string('c', 18000) };
         circle.Self = circle;
         byte[] cyclic = LuminPackSerializer.Serialize(circle);
-        var cyclicCopy = LuminPackSerializer.Deserialize<CircleGuaranteed>(cyclic);
+        var cyclicCopy = global::LuminPackUnitTest.ConcreteReads.Read<CircleGuaranteed>(cyclic, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CircleGuaranteed concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Same(cyclicCopy, cyclicCopy.Self);
         Assert.Equal(values.Select(value => value.Id), cyclicCopy.Values.Select(value => value.Id));
         Assert.Equal(circle.Text, cyclicCopy.Text);
@@ -185,7 +185,7 @@ public partial class CapacityTierTest
         Assert.InRange(buffer.TotalLength, buffer.CurrentIndex, 2_000_000);
         var ordinary = Enumerable.Range(0, count).Select(index => new FixedOrdinary { Id = index }).ToList();
         Assert.Equal(LuminPackSerializer.Serialize(ordinary), buffer.GetSpan().ToArray());
-        var copy = LuminPackSerializer.Deserialize<List<LooseGuaranteed>>(buffer.GetSpan());
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<List<LooseGuaranteed>>(buffer.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<LooseGuaranteed> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(values.Select(value => value.Id), copy.Select(value => value.Id));
     }
 

@@ -24,7 +24,7 @@ public class BitArrayStorageCompatibilityTest
             }
 
             Assert.Equal(expected, LuminPackSerializer.Serialize(source));
-            AssertBits(source, LuminPackSerializer.Deserialize<BitArray>(expected)!);
+            AssertBits(source, global::LuminPackUnitTest.ConcreteReads.Read<BitArray>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BitArray concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))!);
             var reused = new BitArray(length, true);
             var original = reused;
             LuminPackSerializer.Deserialize(expected, ref reused);
@@ -43,7 +43,7 @@ public class BitArrayStorageCompatibilityTest
             byte[] record = new byte[4 + ((length + 31) / 32) * 4];
             record.AsSpan(4).Fill(0xFF);
             BinaryPrimitives.WriteInt32LittleEndian(record, length);
-            var result = LuminPackSerializer.Deserialize<BitArray>(record)!;
+            var result = global::LuminPackUnitTest.ConcreteReads.Read<BitArray>(record, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BitArray concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))!;
             Assert.Equal(length, result.Length);
             for (int index = 0; index < length; index++) Assert.True(result[index]);
 
@@ -72,9 +72,9 @@ public class BitArrayStorageCompatibilityTest
     [Fact]
     public void NullAndEmptyRemainDistinct()
     {
-        Assert.Equal(new byte[] { 255, 255, 255, 255 }, LuminPackSerializer.Serialize<BitArray>(null!));
-        Assert.Null(LuminPackSerializer.Deserialize<BitArray>(new byte[] { 255, 255, 255, 255 }));
-        Assert.NotNull(LuminPackSerializer.Deserialize<BitArray>(new byte[4]));
+        Assert.Equal(new byte[] { 255, 255, 255, 255 }, LuminPackSerializer.Serialize((BitArray)null!));
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<BitArray>(new byte[] { 255, 255, 255, 255 }, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BitArray concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+        Assert.NotNull(global::LuminPackUnitTest.ConcreteReads.Read<BitArray>(new byte[4], static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BitArray concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Compares logical bit values without relying on either backing array representation.</summary>

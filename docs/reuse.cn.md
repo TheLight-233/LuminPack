@@ -71,7 +71,7 @@ public partial class Bullet
 }
 ```
 
-对普通（`Object` 模式）类型，二进制和 JSON 读取只要需要一个实例，都会先调用标记了 `[LuminPackPoolRent]` 的 Rent 方法租借，再进入与 `ref` 读取相同的 Reuse 路径。**不传 `ref` 的 API 也默认如此**，包括 `Deserialize<T>(payload)`、`DeserializeJson<T>(json)`，以及缺失的子对象。租到的对象原本持有的 List、子对象和字符串也会继续复用，因此池已预热且存储匹配时，不显式传入 `ref` 目标同样可以零分配。
+对普通（`Object` 模式）类型，二进制和 JSON 读取只要需要一个实例，都会先调用标记了 `[LuminPackPoolRent]` 的 Rent 方法租借，再进入与 `ref` 读取相同的 Reuse 路径。**不传 `ref` 的 API 也默认如此**，包括已完成显式或 Custom 注册的 `Deserialize<T>(payload)`、`DeserializeJson<T>(json)`，以及缺失的子对象。租到的对象原本持有的 List、子对象和字符串也会继续复用，因此池已预热且存储匹配时，不显式传入 `ref` 目标同样可以零分配。
 
 LuminPack 只负责租用，归还实例由应用负责。把已经租到的实例用 `ref` 传入时会直接复用，不会再租一个。
 

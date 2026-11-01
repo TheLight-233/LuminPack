@@ -5,10 +5,9 @@ using LuminPack.Generated;
 namespace LuminPackUnitTest
 {
     /// <summary>
-    /// Verifies the manual registration fallback: a type the source generator does NOT cover
-    /// (no [LuminPackable], not referenced by any generated formatter) has no generated TypeId, so
-    /// the generic dispatch's default branch consults <see cref="LuminPack.Code.LuminPackFormatterRegistry"/>
-    /// and calls the registered static method pointer directly (typed signature, no boxing).
+    /// Verifies explicit registration for a payload without generated operations. Generic dispatch
+    /// consults <see cref="LuminPack.Code.LuminPackFormatterRegistry"/> and calls the registered
+    /// static method pointer directly with its typed signature and no boxing.
     /// </summary>
     public static class ManualRegistrationTest
     {

@@ -150,11 +150,13 @@ var person = new Person { Age = 18, Name = "Light" };
 
 // 二进制
 byte[] bytes = LuminPackSerializer.Serialize(person);
-Person copy = LuminPackSerializer.Deserialize<Person>(bytes);
+Person copy = null!;
+LuminPackSerializer.Deserialize(bytes, ref copy);
 
 // JSON
 string json = LuminPackSerializer.SerializeJson(person);
-Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
+Person fromJson = null!;
+LuminPackSerializer.DeserializeJson(json, ref fromJson);
 ```
 
 就这么简单——`LuminPackSerializer` 会生成到你的项目里，为你序列化的每个类型提供重载。缓冲区、流和 `IBufferWriter<byte>` 的用法见[快速开始](getting-started.cn.md)。
@@ -173,7 +175,8 @@ public abstract partial class Shape { }
 
 Shape shape = new Circle { Radius = 2 };
 byte[] bytes = LuminPackSerializer.Serialize(shape);
-Shape back = LuminPackSerializer.Deserialize<Shape>(bytes);   // Circle
+Shape back = null!;
+LuminPackSerializer.Deserialize(bytes, ref back);   // Circle
 ```
 
 ➡️ [多态指南](polymorphism.cn.md)

@@ -19,8 +19,7 @@ internal static class InterfaceCollectionReadRegressionTest
     private static void IListReferenceElementsRoundTrip()
     {
         IList<string> source = new List<string> { "alpha", null!, "gamma", "delta" };
-        IList<string> value = LuminPackSerializer.Deserialize<IList<string>>(
-            LuminPackSerializer.Serialize(source));
+        IList<string> value = global::LuminPackUnitTest.ConcreteReads.Read<IList<string>>(LuminPackSerializer.Serialize(source), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IList<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
         Assert(value is List<string>, "IList<T> no longer materialized as the established List<T> implementation.");
         Assert(value.SequenceEqual(source), "IList<string> lost a reference element during direct backing-array fill.");
@@ -37,8 +36,7 @@ internal static class InterfaceCollectionReadRegressionTest
     private static void IListValueElementsRoundTrip()
     {
         IList<int> source = new List<int> { 1, 2, 3, 5, 8, 13 };
-        IList<int> value = LuminPackSerializer.Deserialize<IList<int>>(
-            LuminPackSerializer.Serialize(source));
+        IList<int> value = global::LuminPackUnitTest.ConcreteReads.Read<IList<int>>(LuminPackSerializer.Serialize(source), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IList<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
         Assert(value.SequenceEqual(source), "IList<int> lost a value element during direct backing-array fill.");
     }
@@ -47,13 +45,11 @@ internal static class InterfaceCollectionReadRegressionTest
     private static void IListNullAndEmptyStayDistinct()
     {
         IList<string> empty = new List<string>();
-        IList<string> emptyRoundTrip = LuminPackSerializer.Deserialize<IList<string>>(
-            LuminPackSerializer.Serialize(empty));
+        IList<string> emptyRoundTrip = global::LuminPackUnitTest.ConcreteReads.Read<IList<string>>(LuminPackSerializer.Serialize(empty), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IList<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(emptyRoundTrip is List<string> { Count: 0 }, "An empty IList<T> was decoded as null or a different implementation.");
 
         IList<string>? source = null;
-        IList<string>? nullRoundTrip = LuminPackSerializer.Deserialize<IList<string>?>(
-            LuminPackSerializer.Serialize(source));
+        IList<string>? nullRoundTrip = global::LuminPackUnitTest.ConcreteReads.Read<IList<string>?>(LuminPackSerializer.Serialize(source), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IList<string>? concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(nullRoundTrip is null, "A null IList<T> was decoded as an empty collection.");
     }
 
@@ -67,25 +63,21 @@ internal static class InterfaceCollectionReadRegressionTest
             ["gamma"] = 3,
             ["delta"] = 4
         };
-        IDictionary<string, int> dictionary = LuminPackSerializer.Deserialize<IDictionary<string, int>>(
-            LuminPackSerializer.Serialize(source));
+        IDictionary<string, int> dictionary = global::LuminPackUnitTest.ConcreteReads.Read<IDictionary<string, int>>(LuminPackSerializer.Serialize(source), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IDictionary<string, int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(dictionary.Count == source.Count && source.All(pair => dictionary[pair.Key] == pair.Value),
             "IDictionary<TKey,TValue> changed values while using header-sized preallocation.");
 
         IReadOnlyDictionary<string, int> readOnlySource = new Dictionary<string, int>(source);
-        IReadOnlyDictionary<string, int> readOnly = LuminPackSerializer.Deserialize<IReadOnlyDictionary<string, int>>(
-            LuminPackSerializer.Serialize(readOnlySource));
+        IReadOnlyDictionary<string, int> readOnly = global::LuminPackUnitTest.ConcreteReads.Read<IReadOnlyDictionary<string, int>>(LuminPackSerializer.Serialize(readOnlySource), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IReadOnlyDictionary<string, int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(readOnly.Count == readOnlySource.Count && readOnlySource.All(pair => readOnly[pair.Key] == pair.Value),
             "IReadOnlyDictionary<TKey,TValue> changed values while using header-sized preallocation.");
 
         IDictionary<string, int> empty = new Dictionary<string, int>();
-        IDictionary<string, int> emptyRoundTrip = LuminPackSerializer.Deserialize<IDictionary<string, int>>(
-            LuminPackSerializer.Serialize(empty));
+        IDictionary<string, int> emptyRoundTrip = global::LuminPackUnitTest.ConcreteReads.Read<IDictionary<string, int>>(LuminPackSerializer.Serialize(empty), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IDictionary<string, int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(emptyRoundTrip.Count == 0, "An empty IDictionary<TKey,TValue> did not remain empty.");
 
         IDictionary<string, int>? nullSource = null;
-        IDictionary<string, int>? nullRoundTrip = LuminPackSerializer.Deserialize<IDictionary<string, int>?>(
-            LuminPackSerializer.Serialize(nullSource));
+        IDictionary<string, int>? nullRoundTrip = global::LuminPackUnitTest.ConcreteReads.Read<IDictionary<string, int>?>(LuminPackSerializer.Serialize(nullSource), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IDictionary<string, int>? concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(nullRoundTrip is null, "A null IDictionary<TKey,TValue> was decoded as an empty dictionary.");
     }
 

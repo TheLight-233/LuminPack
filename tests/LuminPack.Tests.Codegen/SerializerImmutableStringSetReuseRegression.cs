@@ -60,7 +60,7 @@ internal static class SerializerImmutableStringSetReuseRegression
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             CheckSelection(driver, scalar: true);
             Assembly.Load(Emit(output)).GetType("ImmutableSetEntry")!.GetMethod("Check")!.Invoke(null, null);
-            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(
+            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(
                 text.Replace("using Element = System.String;", "using Element = Portable;", StringComparison.Ordinal), parse, "Entry.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out output, out diagnostics);
             CheckSelection(driver, scalar: false);

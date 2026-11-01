@@ -7,21 +7,22 @@ using Xunit;
 
 namespace LuminPackUnitTest;
 
-/// <summary>Checks first-use generic entries and later explicit overrides without eager registration.</summary>
+/// <summary>Checks concrete declaration profiles and explicit registration after missing generic lookups.</summary>
 public class LazyFormatterRegressionTest
 {
-    /// <summary>Generated entries preserve a type's declaration-owned JSON profile and recursive size evaluation.</summary>
+    /// <summary>Concrete entries preserve declaration profiles while generic payload APIs require registration.</summary>
     [Fact]
     public void GenericEntriesPreserveDeclaredProfiles()
     {
         var value = new LazyProfileNode { Text = "\u00E9\u4E2D\uD83D\uDE00", Next = new LazyProfileNode { Text = "tail" } };
-        byte[] bytes = LuminPackSerializer.Serialize<LazyProfileNode>(value);
-        Assert.Equal(bytes, LuminPackSerializer.Serialize(value));
-        var copy = LuminPackSerializer.Deserialize<LazyProfileNode>(bytes);
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Serialize<LazyProfileNode>(value));
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.SerializeJson<LazyProfileNode>(value));
+        byte[] bytes = LuminPackSerializer.Serialize(value);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<LazyProfileNode>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref LazyProfileNode concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(value.Text, copy.Text);
         Assert.Equal(value.Next.Text, copy.Next!.Text);
-        string json = LuminPackSerializer.SerializeJson<LazyProfileNode>(value);
-        Assert.Equal(value.Text, LuminPackSerializer.DeserializeJson<LazyProfileNode>(json).Text);
+        string json = LuminPackSerializer.SerializeJson(value);
+        Assert.Equal(value.Text, global::LuminPackUnitTest.ConcreteReads.ReadJson<LazyProfileNode>(json, static (string concreteReadInput, ref LazyProfileNode concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).Text);
         Assert.Equal(json, LuminPackSerializer.SerializeJson(value));
     }
 
@@ -30,17 +31,18 @@ public class LazyFormatterRegressionTest
     public void StrictUnknownStringsAreValidated()
     {
         byte[] bytes = System.Text.Encoding.UTF8.GetBytes("{\"Unknown\":\"?\",\"Text\":\"valid\"}");
-        Assert.Equal("valid", LuminPackSerializer.DeserializeJson<LazyProfileNode>(bytes).Text);
+        Assert.Equal("valid", global::LuminPackUnitTest.ConcreteReads.ReadJson<LazyProfileNode>(bytes, static (ReadOnlySpan<byte> concreteReadInput, ref LazyProfileNode concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).Text);
         bytes[Array.IndexOf(bytes, (byte)'?')] = 255;
-        Assert.Throws<FormatException>(() => LuminPackSerializer.DeserializeJson<LazyProfileNode>(bytes));
+        Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<LazyProfileNode>(bytes, static (ReadOnlySpan<byte> concreteReadInput, ref LazyProfileNode concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
     }
 
-    /// <summary>Manual registrations remain authoritative after a local generated entry has been warmed.</summary>
+    /// <summary>Manual registration invalidates an earlier missing lookup and leaves concrete roots unchanged.</summary>
     [Fact]
     public unsafe void ManualRegistrationOverridesAWarmedGeneratedEntry()
     {
         var value = new LazyOverridePayload { Value = 17 };
-        Assert.NotEmpty(LuminPackSerializer.Serialize<LazyOverridePayload>(value));
+        byte[] direct = LuminPackSerializer.Serialize(value);
+        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.Serialize<LazyOverridePayload>(value));
         nint key = LuminPackMarshal.GetMethodTable(typeof(LazyOverridePayload));
         Assert.False(LuminPackFormatterRegistry.TryGetValue(in key, out _));
         LuminPackFormatterRegistry.Register(typeof(LazyOverridePayload),
@@ -49,6 +51,7 @@ public class LazyFormatterRegressionTest
         byte[] bytes = LuminPackSerializer.Serialize<LazyOverridePayload>(value);
         Assert.Equal(BitConverter.GetBytes(99), bytes);
         Assert.Equal(99, LuminPackSerializer.Deserialize<LazyOverridePayload>(bytes).Value);
+        Assert.Equal(direct, LuminPackSerializer.Serialize(value));
         Assert.ThrowsAny<Exception>(() => LuminPackSerializer.SerializeJson<LazyOverridePayload>(value));
     }
 

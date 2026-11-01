@@ -29,7 +29,7 @@ internal static class SerializerPortableStructRegression
     {
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: modern
             ? ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"] : ["UNITY_2022_3_OR_NEWER"]);
-        var foreign = CSharpCompilation.Create("ForeignPortableScope", [CSharpSyntaxTree.ParseText(
+        var foreign = TestCompilation.Create("ForeignPortableScope", [CSharpSyntaxTree.ParseText(
             "using LuminPack.Attribute; namespace Foreign; [LuminPackable] public struct Raw { public byte Tag; public long Value; }", parse)], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         using var foreignImage = new MemoryStream();
@@ -60,9 +60,9 @@ internal static class SerializerPortableStructRegression
                     var bytes = LuminPackSerializer.Serialize(value);
                     if (bytes.Length != 9 || bytes[0] != 7 || BitConverter.ToInt64(bytes, 1) != value.Value)
                         throw new InvalidOperationException("Assembly opt-in did not pack storage.");
-                    var list = LuminPackSerializer.Deserialize<List<Padded>>(LuminPackSerializer.Serialize(new List<Padded> { value }));
-                    var generic = LuminPackSerializer.Deserialize<Generic<long>>(LuminPackSerializer.Serialize(new Generic<long> { Tag = 7, Value = value.Value }));
-                    var managed = LuminPackSerializer.Deserialize<Managed>(LuminPackSerializer.Serialize(new Managed { Text = "abc" }));
+                    var list = global::LuminPackUnitTest.ConcreteReads.Read<List<Padded>>(LuminPackSerializer.Serialize(new List<Padded> { value }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<Padded> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
+                    var generic = global::LuminPackUnitTest.ConcreteReads.Read<Generic<long>>(LuminPackSerializer.Serialize(new Generic<long> { Tag = 7, Value = value.Value }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Generic<long> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
+                    var managed = global::LuminPackUnitTest.ConcreteReads.Read<Managed>(LuminPackSerializer.Serialize(new Managed { Text = "abc" }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Managed concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     var foreign = LuminPackSerializer.Serialize(new Foreign.Raw { Tag = 7, Value = value.Value });
                     var compact = LuminPackSerializer.Serialize(new Compact());
                     if (list[0].Value != value.Value || generic.Value != value.Value || managed.Text != "abc" || compact.Length != 9)
@@ -71,7 +71,7 @@ internal static class SerializerPortableStructRegression
                 }
             }
             """, parse, "Models.cs");
-        var input = CSharpCompilation.Create("AssemblyPortable_" + mode + "_" + modern, [settings, models],
+        var input = TestCompilation.Create("AssemblyPortable_" + mode + "_" + modern, [settings, models],
             references.Append(MetadataReference.CreateFromImage(foreignImage.ToArray())),
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
@@ -105,7 +105,7 @@ internal static class SerializerPortableStructRegression
             Text(retained).Contains("LuminStorageTag<global::AssemblyPortableModels.Padded, ", StringComparison.Ordinal),
             "An assembly-only marker edit retained stale packed operations.");
 
-        var foreignTree = foreign.SyntaxTrees.Single();
+        var foreignTree = foreign.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs");
         var markedForeign = foreign.ReplaceSyntaxTree(foreignTree, CSharpSyntaxTree.ParseText(
             foreignTree.ToString().Replace("namespace Foreign;", "[assembly: LuminPackOption(StructLayout = global::LuminPack.Attribute.LuminPackStructLayout.Packed)] namespace Foreign;", StringComparison.Ordinal), parse));
         using var markedForeignImage = new MemoryStream();
@@ -167,14 +167,14 @@ internal static class SerializerPortableStructRegression
                 {
                     var values = new[] { new Padded { Tag = 7, Value = 123456789012345 } };
                     var bytes = LuminPackSerializer.Serialize(values);
-                    var copy = LuminPackSerializer.Deserialize<Padded[]>(bytes);
+                    var copy = global::LuminPackUnitTest.ConcreteReads.Read<Padded[]>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Padded[] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     var listBytes = LuminPackSerializer.Serialize(new List<Padded>(values));
-                    var list = LuminPackSerializer.Deserialize<List<Padded>>(listBytes);
+                    var list = global::LuminPackUnitTest.ConcreteReads.Read<List<Padded>>(listBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<Padded> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     var rawBytes = LuminPackSerializer.Serialize(new Raw[2]);
                     var compactBytes = LuminPackSerializer.Serialize(new Compact[2]);
                     var interleaved = new Interleaved { First = 123456789012345, Tag = 7, Last = 123456789, Tail = 13 };
                     var interleavedBytes = LuminPackSerializer.Serialize(interleaved);
-                    var interleavedCopy = LuminPackSerializer.Deserialize<Interleaved>(interleavedBytes);
+                    var interleavedCopy = global::LuminPackUnitTest.ConcreteReads.Read<Interleaved>(interleavedBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Interleaved concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (interleavedBytes.Length != 15 || BitConverter.ToInt64(interleavedBytes, 0) != interleaved.First ||
                         interleavedBytes[8] != interleaved.Tag || BitConverter.ToInt32(interleavedBytes, 9) != interleaved.Last ||
                         BitConverter.ToInt16(interleavedBytes, 13) != interleaved.Tail || interleavedCopy.First != interleaved.First ||
@@ -189,7 +189,7 @@ internal static class SerializerPortableStructRegression
         string[] symbols = modern ? ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"] : ["UNITY_2022_3_OR_NEWER"];
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: symbols);
         var tree = CSharpSyntaxTree.ParseText(source, parse, "Portable.cs");
-        var input = CSharpCompilation.Create("Portable_" + Guid.NewGuid().ToString("N"), [tree], references,
+        var input = TestCompilation.Create("Portable_" + Guid.NewGuid().ToString("N"), [tree], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(
             [new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);

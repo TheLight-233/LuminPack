@@ -49,15 +49,15 @@ internal static class SerializerPortableTupleRegression
                     if (bytes.Length != 13 || bytes[0] != value.Tag || BitConverter.ToInt32(bytes, 1) != value.Pair.Id ||
                         BitConverter.ToInt64(bytes, 5) != value.Pair.Count)
                         throw new InvalidOperationException("Tuple aliases changed physical storage width or order.");
-                    var copy = LuminPackSerializer.Deserialize<Packet>(bytes);
+                    var copy = global::LuminPackUnitTest.ConcreteReads.Read<Packet>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Packet concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (copy.Tag != value.Tag || copy.Pair != value.Pair) throw new InvalidOperationException("Tuple read failed.");
-                    var list = LuminPackSerializer.Deserialize<List<Packet>>(LuminPackSerializer.Serialize(new List<Packet> { value, value, value }));
+                    var list = global::LuminPackUnitTest.ConcreteReads.Read<List<Packet>>(LuminPackSerializer.Serialize(new List<Packet> { value, value, value }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<Packet> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (list.Count != 3 || list[2].Pair != value.Pair) throw new InvalidOperationException("Tuple collection read failed.");
                     var compact = new Compact { Pair = (long.MinValue + 1, 123456789, -23) };
                     var compactBytes = LuminPackSerializer.Serialize(compact);
                     if (compactBytes.Length != 16 || BitConverter.ToInt64(compactBytes, 0) != compact.Pair.Value ||
                         BitConverter.ToInt32(compactBytes, 8) != compact.Pair.Id || BitConverter.ToInt32(compactBytes, 12) != compact.Pair.Code ||
-                        LuminPackSerializer.Deserialize<Compact>(compactBytes).Pair != compact.Pair)
+                        global::LuminPackUnitTest.ConcreteReads.Read<Compact>(compactBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Compact concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Pair != compact.Pair)
                         throw new InvalidOperationException("A compact tuple retained layout-dependent storage.");
                     var longValue = new LongPacket { Tag = 19, Items = (1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15) };
                     var longBytes = LuminPackSerializer.Serialize(longValue);
@@ -66,14 +66,14 @@ internal static class SerializerPortableTupleRegression
                     for (int index = 0; index < 15; index++)
                         if (BitConverter.ToInt32(longBytes, 1 + index * 4) != index + 1)
                             throw new InvalidOperationException("Long tuple position order changed.");
-                    if (LuminPackSerializer.Deserialize<LongPacket>(longBytes).Items != longValue.Items)
+                    if (global::LuminPackUnitTest.ConcreteReads.Read<LongPacket>(longBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref LongPacket concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Items != longValue.Items)
                         throw new InvalidOperationException("Recursive Rest read failed.");
                     return bytes.Length + compactBytes.Length + longBytes.Length;
                 }
             }
             """;
         var tree = CSharpSyntaxTree.ParseText(source, parse, "PortableTupleModels.cs");
-        var input = CSharpCompilation.Create("PortableTuples_" + mode + "_" + modern, [tree], references,
+        var input = TestCompilation.Create("PortableTuples_" + mode + "_" + modern, [tree], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
         GeneratorDriver driver = CreateDriver(parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);

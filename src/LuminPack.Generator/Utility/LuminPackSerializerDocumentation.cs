@@ -137,7 +137,7 @@ internal static class LuminPackSerializerDocumentation
             else if (method.TypeParameterList != null)
             {
                 remarks.Add(new XElement("para", "Generic overload. The closed type argument ", new XElement("typeparamref", new XAttribute("name", "T")),
-                    " selects the generated or registered formatter. Its member contract is determined by that formatter; no concrete field layout is assumed by this overload."));
+                    " selects an explicitly registered formatter. Register the required operations before calling this overload, including for built-in and source-generated types. Its member contract is determined by that registration; no concrete field layout is assumed by this overload."));
             }
 
             AddOverloadUsage(remarks, method);

@@ -81,8 +81,9 @@ public partial class Labels
 }
 
 // Or select the representation for the complete operation:
-byte[] bytes = LuminPackSerializer.Serialize<List<string>, LuminPackUtf16VarIntOptions>(names);
-List<string> copy = LuminPackSerializer.Deserialize<List<string>, LuminPackUtf16VarIntOptions>(bytes);
+byte[] bytes = LuminPackSerializer.Serialize<LuminPackUtf16VarIntOptions>(names);
+List<string> copy = null!;
+LuminPackSerializer.Deserialize<LuminPackUtf16VarIntOptions>(bytes, ref copy);
 ```
 
 The default remains `Length`: four header bytes for UTF-16 and eight for UTF-8. `VarInt` encodes each existing signed length header plus one as canonical unsigned base-128 (one to five bytes). Null maps to zero and empty maps to one. UTF-16 retains the raw UTF-16 or compact Latin-1 payload and its existing low-bit discriminator; UTF-8 retains both its byte and character counts, each encoded separately, including for null and empty strings. For example, UTF-16 `"a"` is `04 61`; UTF-8 `"a"` is `02 02 61`.

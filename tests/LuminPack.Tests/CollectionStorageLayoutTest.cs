@@ -2,13 +2,14 @@ using System.Collections.Immutable;
 using LuminPack;
 using LuminPack.Attribute;
 using LuminPack.Code;
+using LuminPack.Option;
 using LuminPack.Utility;
 using Xunit;
 
 namespace LuminPackUnitTest;
 
 /// <summary>Checks the run-time probed collection storage and the tree-backed collection paths built on it.</summary>
-/// <remarks>Every serializer call names its concrete type, so it binds the generated concrete overload.</remarks>
+/// <remarks>Concrete cases bind generated overloads; shared generic checks explicitly register their fixture roots.</remarks>
 public class CollectionStorageLayoutTest
 {
     /// <summary>Checks that records crossing the reusable buffer's growth points keep the bytes of the allocating entry.</summary>
@@ -310,6 +311,7 @@ public class CollectionStorageLayoutTest
     /// <param name="ordinal">The position of the item.</param>
     private static void Check<T>(SortedSet<T> value, bool ordinal = false)
     {
+        LuminPackSerializer.RegisterTestProfile<SortedSet<T>, LuminPackDefaultOptions>();
         byte[] bytes = LuminPackSerializer.Serialize(value);
         Assert.Equal(EnumerationRecord(value), bytes.Length);
         SortedSet<T>? copy = null;
@@ -341,6 +343,7 @@ public class CollectionStorageLayoutTest
     /// <param name="value">The value.</param>
     private static void Check<T>(ImmutableHashSet<T> value) where T : notnull
     {
+        LuminPackSerializer.RegisterTestProfile<ImmutableHashSet<T>, LuminPackDefaultOptions>();
         byte[] bytes = LuminPackSerializer.Serialize(value);
         ImmutableHashSet<T>? copy = null;
         Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes.AsSpan(), ref copy));
@@ -414,7 +417,11 @@ public class CollectionStorageLayoutTest
     /// <param name="value">The value.</param>
     /// <returns>The result.</returns>
     private static int EnumerationRecord<T>(SortedSet<T> value)
-        => typeof(T) == typeof(int) ? 4 + value.Count * 4 : LuminPackSerializer.Serialize(value.ToList()).Length;
+    {
+        if (typeof(T) == typeof(int)) return 4 + value.Count * 4;
+        LuminPackSerializer.RegisterTestProfile<List<T>, LuminPackDefaultOptions>();
+        return LuminPackSerializer.Serialize(value.ToList()).Length;
+    }
 
     /// <summary>Writes a dictionary record whose key repeats.</summary>
     private sealed class ImmutableSortedDictionaryDuplicateSource

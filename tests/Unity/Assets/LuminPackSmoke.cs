@@ -24,7 +24,8 @@ public static class LuminPackSmoke
             Items = new List<UnityPortable> { new UnityPortable { Tag = 3, Value = 123456789012345 } }
         };
         byte[] bytes = LuminPackSerializer.Serialize(value);
-        UnityMessage copy = LuminPackSerializer.Deserialize<UnityMessage>(bytes);
+        UnityMessage copy = null;
+        LuminPackSerializer.Deserialize(bytes, ref copy);
         UnityLeaf child = copy.Child;
         List<UnityPortable> items = copy.Items;
         LuminPackSerializer.Deserialize(bytes, ref copy);
@@ -34,15 +35,16 @@ public static class LuminPackSmoke
             !(copy.Choice is UnitySelected selected) || selected.Value != 17)
             throw new InvalidOperationException("Unity ordinary reuse or portable storage failed.");
         string json = LuminPackSerializer.SerializeJson(value);
-        if (LuminPackSerializer.DeserializeJson<UnityMessage>(json).Name != value.Name)
+        UnityMessage jsonCopy = null; LuminPackSerializer.DeserializeJson(json, ref jsonCopy);
+        if (jsonCopy.Name != value.Name)
             throw new InvalidOperationException("Unity JSON read failed.");
         var original = new UnityVersionOne { Id = 11, Name = "name" };
-        UnityVersionTwo evolved = LuminPackSerializer.Deserialize<UnityVersionTwo>(LuminPackSerializer.Serialize(original));
+        UnityVersionTwo evolved = null; LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(original), ref evolved);
         if (evolved.Id != 11 || evolved.DisplayName != "name")
             throw new InvalidOperationException("Unity named version matching failed.");
         var tracked = new UnityTracked();
         tracked.Next = tracked;
-        UnityTracked trackedCopy = LuminPackSerializer.Deserialize<UnityTracked>(LuminPackSerializer.Serialize(tracked));
+        UnityTracked trackedCopy = null; LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(tracked), ref trackedCopy);
         if (!ReferenceEquals(trackedCopy, trackedCopy.Next))
             throw new InvalidOperationException("Unity reference tracking failed.");
     }
@@ -51,16 +53,18 @@ public static class LuminPackSmoke
     private static void VerifyLayouts()
     {
         string text = "\u00E9\u4E2D\uD83D\uDE00";
-        byte[] utf8 = LuminPackSerializer.Serialize<string, LuminPackUtf8LengthOptions>(text);
-        if (LuminPackSerializer.Deserialize<string, LuminPackUtf8LengthOptions>(utf8) != text)
+        byte[] utf8 = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(text);
+        string restoredText = null; LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(utf8, ref restoredText);
+        if (restoredText != text)
             throw new InvalidOperationException("The compatibility UTF-8 decoder lost Unicode scalars.");
         bool rejected = false;
-        try { LuminPackSerializer.Deserialize<string, LuminPackUtf8LengthOptions>(new byte[] { 1, 0, 0, 0, 2, 0, 0, 0, 65 }); }
+        try { LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(new byte[] { 1, 0, 0, 0, 2, 0, 0, 0, 65 }, ref restoredText); }
         catch (Exception) { rejected = true; }
         if (!rejected) throw new InvalidOperationException("The compatibility decoder accepted an inconsistent character count.");
         const long expected = 123456789012345;
         var tuples = new[] { (Tag: (byte)7, Value: expected, Tail: 9) };
-        var tupleCopy = LuminPackSerializer.Deserialize<(byte Tag, long Value, int Tail)[]>(LuminPackSerializer.Serialize(tuples));
+        (byte Tag, long Value, int Tail)[] tupleCopy = null;
+        LuminPackSerializer.Deserialize(LuminPackSerializer.Serialize(tuples), ref tupleCopy);
         if (tupleCopy.Length != 1 || tupleCopy[0].Tag != 7 || tupleCopy[0].Value != expected || tupleCopy[0].Tail != 9)
             throw new InvalidOperationException("Automatic ValueTuple layouts did not round trip.");
         for (byte tag = 1; tag <= 2; tag++)
@@ -71,7 +75,7 @@ public static class LuminPackSmoke
             wire[4] = tag;
             wire[5] = 7;
             Array.Copy(BitConverter.GetBytes(expected), 0, wire, 5 + (tag == 1 ? 8 : 4), 8);
-            var copy = LuminPackSerializer.Deserialize<UnityTagged[]>(wire);
+            UnityTagged[] copy = null; LuminPackSerializer.Deserialize(wire, ref copy);
             if (copy.Length != 1 || copy[0].Tag != 7 || copy[0].Value != expected)
                 throw new InvalidOperationException("Tagged 32/64-bit input was not converted correctly.");
         }
@@ -83,7 +87,8 @@ public static class LuminPackSmoke
             throw new InvalidOperationException("Native storage acquired layout framing.");
         var guid = new UnityPackedGuid { Tag = 7, Id = new Guid("00112233-4455-6677-8899-aabbccddeeff") };
         byte[] bytes = LuminPackSerializer.Serialize(guid);
-        if (bytes.Length != 17 || LuminPackSerializer.Deserialize<UnityPackedGuid>(bytes).Id != guid.Id)
+        UnityPackedGuid guidCopy = default; LuminPackSerializer.Deserialize(bytes, ref guidCopy);
+        if (bytes.Length != 17 || guidCopy.Id != guid.Id)
             throw new InvalidOperationException("Packed framework storage lost data.");
     }
 

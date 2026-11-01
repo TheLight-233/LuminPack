@@ -18,12 +18,13 @@ internal static partial class SerializerCodegenPerformanceRegression
             var input = ProvenInput(source, parse, references);
             var driver = ProvenDriver(parse).RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
             CheckProvenObjectOutput(output, diagnostics, driver, expected: true);
-            const string original = "16059:6C4C154FDD72024226C580221E88B0C7858267D1B1EBC4C358CB0FB924837E0A";
+            // The original generator produces this digest with the same concrete callers used by this fixture.
+            const string original = "16059:8F2E211D28E46C0B6798096564E47FD79417C14CD1610F46622D0B8059E70639";
             RequireProven(ExecuteProven(output) == original, "Complete object/Union wire, failure-prefix, cursor, append or profile observations changed from the original generator.");
             string changedSource = source.Replace("public string Text;", "public string Text { get; set; }")
                 .Replace("public string Value; }", "public string Value { get; set; } }")
                 .Replace("public string OtherText;", "public string OtherText { get; set; }");
-            var changed = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(changedSource, parse));
+            var changed = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(changedSource, parse));
             driver = driver.RunGeneratorsAndUpdateCompilation(changed, out output, out diagnostics);
             CheckProvenObjectOutput(output, diagnostics, driver, expected: false);
             RequireProven(CaptureProven(driver) == CaptureProven(ProvenDriver(parse).RunGenerators(changed)), "An object field-to-property edit retained stale proof selection.");
@@ -152,7 +153,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                     foreach (var value in source) expected.AddRange(LuminPackSerializer.Serialize<P>(value));
                     if (!bytes.AsSpan().SequenceEqual(expected.ToArray())) throw new Exception("Field-ordered record bytes differ.");
                     Summary.AddRange(SHA256.HashData(bytes));
-                    var fresh = LuminPackSerializer.Deserialize<Leaf[], P>(bytes);
+                    var fresh = global::LuminPackUnitTest.ConcreteReads.Read<Leaf[]>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Leaf[] concreteReadTarget) => LuminPackSerializer.Deserialize<P>(concreteReadInput, ref concreteReadTarget));
                     if (fresh.Length != count) throw new Exception("Fresh count differs.");
                     var writer = LuminBufferWriterPool.Rent();
                     try
@@ -198,7 +199,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                     Parent source = present ? new Child { Identity = length, Name = new string('a', length), Raw = RawBits(length), Number = long.MinValue + length, OtherText = "\u4E2D_tail" } : null;
                     byte[] bytes = LuminPackSerializer.Serialize<P>(source);
                     Summary.AddRange(SHA256.HashData(bytes));
-                    var restored = LuminPackSerializer.Deserialize<Parent, P>(bytes);
+                    var restored = global::LuminPackUnitTest.ConcreteReads.Read<Parent>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Parent concreteReadTarget) => LuminPackSerializer.Deserialize<P>(concreteReadInput, ref concreteReadTarget));
                     if ((source is null) != (restored is null) || restored is Child actual && (actual.Identity != length || actual.Name != ((Child)source).Name || actual.OtherText != ((Child)source).OtherText))
                         throw new Exception("Union field round trip differs.");
                     var writer = LuminBufferWriterPool.Rent();

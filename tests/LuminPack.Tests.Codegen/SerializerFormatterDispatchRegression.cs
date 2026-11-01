@@ -74,8 +74,10 @@ internal static class SerializerFormatterDispatchRegression
                 byte[] closed = (byte[])entry.GetMethod("Closed")!.Invoke(null, null)!;
                 var payloadList = typeof(List<>).MakeGenericType(assembly.GetType("Payload")!);
                 Require((int)entry.GetMethod("ClosedBack")!.Invoke(null, [closed])! == 1, mode + ": the concrete collection read failed.");
-                var genericCopy = (System.Collections.IList)entry.GetMethod("GenericBack")!.MakeGenericMethod(payloadList).Invoke(null, [closed])!;
-                Require(genericCopy.Count == 1, mode + ": the lazy generic collection entry failed.");
+                bool missing = false;
+                try { entry.GetMethod("GenericBack")!.MakeGenericMethod(payloadList).Invoke(null, [closed]); }
+                catch (System.Reflection.TargetInvocationException exception) when (exception.InnerException?.Message.Contains("No formatter is registered", StringComparison.Ordinal) == true) { missing = true; }
+                Require(missing, mode + ": an unregistered collection resolved a generated fallback.");
             }
             finally { context.Unload(); }
         }
@@ -86,11 +88,11 @@ internal static class SerializerFormatterDispatchRegression
             GC.WaitForPendingFinalizers();
             GC.Collect();
         }
-        Require(!weak.IsAlive, "A module-local safe generic cache retained its collectible assembly.");
-        Console.WriteLine("Passed explicit registration precedence, typed entries and lazy generic collection dispatch.");
+        Require(!weak.IsAlive, "A failed generic lookup retained its collectible assembly.");
+        Console.WriteLine("Passed concrete scalar/collection entries and missing generic registrations, including collectible safe consumers.");
     }
 
-    /// <summary>Warms a no-unsafe delegate cache for a noncollectible framework payload before unloading its owner.</summary>
+    /// <summary>Checks no-unsafe generic failure before unloading the consuming assembly.</summary>
     /// <param name="references">Platform and runtime references.</param>
     /// <returns>A weak reference to the unloaded owner.</returns>
     [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
@@ -104,9 +106,10 @@ internal static class SerializerFormatterDispatchRegression
         var weak = new WeakReference(context);
         var assembly = context.LoadFromStream(new MemoryStream(Emit(output)));
         var entry = assembly.GetType("Entry")!;
-        var bytes = (byte[])entry.GetMethod("Generic")!.MakeGenericMethod(typeof(int)).Invoke(null, [42])!;
-        Require((int)entry.GetMethod("GenericBack")!.MakeGenericMethod(typeof(int)).Invoke(null, [bytes])! == 42,
-            "The no-unsafe first-use generic entry failed.");
+        bool missing = false;
+        try { entry.GetMethod("Generic")!.MakeGenericMethod(typeof(int)).Invoke(null, [42]); }
+        catch (System.Reflection.TargetInvocationException exception) when (exception.InnerException?.Message.Contains("No formatter is registered", StringComparison.Ordinal) == true) { missing = true; }
+        Require(missing, "The no-unsafe generic API resolved an automatic fallback.");
         context.Unload();
         return weak;
     }

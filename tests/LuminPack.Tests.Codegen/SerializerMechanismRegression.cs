@@ -98,7 +98,7 @@ internal static class SerializerMechanismRegression
                     var results = new List<string>();
                     var storage = new Storage();
                     var bytes = LuminPackSerializer.Serialize(storage);
-                    var restored = LuminPackSerializer.Deserialize<Storage>(bytes);
+                    var restored = global::LuminPackUnitTest.ConcreteReads.Read<Storage>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Storage concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (restored.Secret() != 17 || restored.HiddenValue() != 23 || restored.Text != "property" || restored.Tail != 31)
                         throw new Exception("Private mirror storage was not restored.");
                     Add(storage, results);
@@ -109,17 +109,17 @@ internal static class SerializerMechanismRegression
                     if (LuminPackSerializer.Serialize(integer)[0] != 7 || LuminPackSerializer.Serialize(text)[0] != 9)
                         throw new Exception("Closed generic tags changed.");
                     var full = new VersionFull { First = 53, Middle = "skip middle", Last = 59 };
-                    var gap = LuminPackSerializer.Deserialize<VersionGap>(LuminPackSerializer.Serialize(full));
+                    var gap = global::LuminPackUnitTest.ConcreteReads.Read<VersionGap>(LuminPackSerializer.Serialize(full), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref VersionGap concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (gap.First != 53 || gap.Last != 59) throw new Exception("Version field-length skipping changed.");
-                    var added = LuminPackSerializer.Deserialize<VersionFull>(LuminPackSerializer.Serialize(gap));
+                    var added = global::LuminPackUnitTest.ConcreteReads.Read<VersionFull>(LuminPackSerializer.Serialize(gap), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref VersionFull concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (added.Middle != null || added.Last != 59) throw new Exception("Version absent-slot defaults changed.");
                     Add(full, results, recordBinary: false); Add(gap, results, recordBinary: false);
                     var node = new Node { Name = "root" };
                     node.Next = new Node { Name = "child", Next = node }; node.Alias = node.Next;
-                    var cycle = LuminPackSerializer.Deserialize<Node>(LuminPackSerializer.Serialize(node));
+                    var cycle = global::LuminPackUnitTest.ConcreteReads.Read<Node>(LuminPackSerializer.Serialize(node), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Node concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (!ReferenceEquals(cycle.Next.Next, cycle) || !ReferenceEquals(cycle.Next, cycle.Alias))
                         throw new Exception("Binary cycle or shared-reference identity changed.");
-                    var jsonCycle = LuminPackSerializer.DeserializeJson<Node>(LuminPackSerializer.SerializeJson(node));
+                    var jsonCycle = global::LuminPackUnitTest.ConcreteReads.ReadJson<Node>(LuminPackSerializer.SerializeJson(node), static (string concreteReadInput, ref Node concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
                     if (!ReferenceEquals(jsonCycle.Next.Next, jsonCycle) || !ReferenceEquals(jsonCycle.Next, jsonCycle.Alias))
                         throw new Exception("JSON cycle or shared-reference identity changed.");
                     Add(node, results);
@@ -127,7 +127,7 @@ internal static class SerializerMechanismRegression
                         Constrained = new ConstrainedValue<int> { Tag = 7, Item = 103 },
                         Optional = new ManagedValue { Number = 73, Text = "nullable" }, Enum = WideEnum.High, Missing = null, Present = 79,
                         Queue = new Queue<int>(new[] { 83, 89 }), Stack = new Stack<int>(new[] { 97, 101 }) };
-                    var valueCopy = LuminPackSerializer.Deserialize<ValueGraph>(LuminPackSerializer.Serialize(values));
+                    var valueCopy = global::LuminPackUnitTest.ConcreteReads.Read<ValueGraph>(LuminPackSerializer.Serialize(values), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ValueGraph concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (valueCopy.Raw.Number != 67 || valueCopy.Managed.Text != "managed" || valueCopy.Optional.Value.Number != 73 ||
                         valueCopy.Enum != WideEnum.High || valueCopy.Missing != null || valueCopy.Present != 79 || valueCopy.Queue.Dequeue() != 83 || valueCopy.Stack.Pop() != 101)
                         throw new Exception("Value, nullable, enum, or collection ordering changed.");
@@ -155,20 +155,25 @@ internal static class SerializerMechanismRegression
             AddJson<LuminPack.Option.LuminPackUtf16LengthOptions>();
             void AddJson<TProfile>() where TProfile : struct, LuminPack.Option.ILuminPackOptions
             {
-                string json = LuminPackSerializer.SerializeJson<T, TProfile>(value);
-                var restored = LuminPackSerializer.DeserializeJson<T, TProfile>(json);
-                results.Add(LuminPackSerializer.SerializeJson<T, TProfile>(restored));
+                string json = LuminPackSerializer.SerializeJson<TProfile>(value);
+                T restored = default!; LuminPackSerializer.DeserializeJson<TProfile>(json, ref restored);
+                results.Add(LuminPackSerializer.SerializeJson<TProfile>(restored));
             }
             """;
         // Compare the same explicit binary profile after the approved default-encoding change.
         string binaryRecord = """
-            byte[] bytes = LuminPackSerializer.Serialize<T, LuminPack.Option.LuminPackUtf8LengthOptions>(value);
+            byte[] bytes = LuminPackSerializer.Serialize<LuminPack.Option.LuminPackUtf8LengthOptions>(value);
             """;
+        string addTemplate = source.Substring(source.IndexOf("private static void Add<T>", StringComparison.Ordinal));
+        addTemplate = addTemplate.Substring(0, addTemplate.IndexOf("\n}", StringComparison.Ordinal));
+        source = source.Replace(addTemplate, string.Join("\n", new[] { "Storage", "Root", "GenericRoot<int>", "GenericRoot<string>", "VersionFull", "VersionGap", "Node", "ValueGraph", "RawValue", "ManagedValue", "WideEnum", "Queue<int>", "Stack<int>", "ConstrainedValue<int>" }
+            .Select(type => addTemplate.Replace("Add<T>(T value", "Add(" + type + " value", StringComparison.Ordinal)
+                .Replace("JSON_PROFILE_LOOP", profileLoop.Replace("T restored", type + " restored", StringComparison.Ordinal), StringComparison.Ordinal))), StringComparison.Ordinal);
         source = source.Replace("BINARY_PROFILE_RECORD", binaryRecord, StringComparison.Ordinal)
             .Replace("JSON_PROFILE_LOOP", profileLoop, StringComparison.Ordinal);
         var parse = new CSharpParseOptions(LanguageVersion.Preview, DocumentationMode.Parse,
             preprocessorSymbols: ["NET5_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER"]);
-        var input = CSharpCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, parse, "Mechanisms.cs")], references,
+        var input = TestCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, parse, "Mechanisms.cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         GeneratorDriver driver = CSharpGeneratorDriver.Create(generators, parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);

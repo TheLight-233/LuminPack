@@ -163,14 +163,14 @@ public class JsonEnumBackingTypeTest
         Assert.Equal("9223372036854775807", LuminPackSerializer.SerializeJson(BackingLong.Max));
         Assert.Equal("18446744073709551615", LuminPackSerializer.SerializeJson(BackingULong.Max));
 
-        Assert.Equal(BackingByte.Max, LuminPackSerializer.DeserializeJson<BackingByte>("255"));
-        Assert.Equal(BackingSByte.Min, LuminPackSerializer.DeserializeJson<BackingSByte>("-128"));
-        Assert.Equal(BackingShort.Min, LuminPackSerializer.DeserializeJson<BackingShort>("-32768"));
-        Assert.Equal(BackingUShort.Max, LuminPackSerializer.DeserializeJson<BackingUShort>("65535"));
-        Assert.Equal(BackingInt.Min, LuminPackSerializer.DeserializeJson<BackingInt>("-2147483648"));
-        Assert.Equal(BackingUInt.Max, LuminPackSerializer.DeserializeJson<BackingUInt>("4294967295"));
-        Assert.Equal(BackingLong.Max, LuminPackSerializer.DeserializeJson<BackingLong>("9223372036854775807"));
-        Assert.Equal(BackingULong.Max, LuminPackSerializer.DeserializeJson<BackingULong>("18446744073709551615"));
+        Assert.Equal(BackingByte.Max, global::LuminPackUnitTest.ConcreteReads.ReadJson<BackingByte>("255", static (string concreteReadInput, ref BackingByte concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(BackingSByte.Min, global::LuminPackUnitTest.ConcreteReads.ReadJson<BackingSByte>("-128", static (string concreteReadInput, ref BackingSByte concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(BackingShort.Min, global::LuminPackUnitTest.ConcreteReads.ReadJson<BackingShort>("-32768", static (string concreteReadInput, ref BackingShort concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(BackingUShort.Max, global::LuminPackUnitTest.ConcreteReads.ReadJson<BackingUShort>("65535", static (string concreteReadInput, ref BackingUShort concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(BackingInt.Min, global::LuminPackUnitTest.ConcreteReads.ReadJson<BackingInt>("-2147483648", static (string concreteReadInput, ref BackingInt concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(BackingUInt.Max, global::LuminPackUnitTest.ConcreteReads.ReadJson<BackingUInt>("4294967295", static (string concreteReadInput, ref BackingUInt concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(BackingLong.Max, global::LuminPackUnitTest.ConcreteReads.ReadJson<BackingLong>("9223372036854775807", static (string concreteReadInput, ref BackingLong concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(BackingULong.Max, global::LuminPackUnitTest.ConcreteReads.ReadJson<BackingULong>("18446744073709551615", static (string concreteReadInput, ref BackingULong concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Verifies enum collections preserve64 bit backing widths.</summary>
@@ -185,8 +185,8 @@ public class JsonEnumBackingTypeTest
 
         Assert.Equal("[-9223372036854775808,0,9223372036854775807]", longJson);
         Assert.Equal("[0,1,18446744073709551615]", ulongJson);
-        Assert.Equal(longs, LuminPackSerializer.DeserializeJson<List<BackingLong>>(longJson));
-        Assert.Equal(ulongs, LuminPackSerializer.DeserializeJson<BackingULong[]>(ulongJson));
+        Assert.Equal(longs, global::LuminPackUnitTest.ConcreteReads.ReadJson<List<BackingLong>>(longJson, static (string concreteReadInput, ref List<BackingLong> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(ulongs, global::LuminPackUnitTest.ConcreteReads.ReadJson<BackingULong[]>(ulongJson, static (string concreteReadInput, ref BackingULong[] concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Verifies round trip.</summary>
@@ -200,6 +200,6 @@ public class JsonEnumBackingTypeTest
         root = document.RootElement;
         Assert.Equal(JsonValueKind.Object, root.ValueKind);
         Assert.Equal(8, root.EnumerateObject().Count());
-        return LuminPackSerializer.DeserializeJson<EnumHolder>(json);
+        return global::LuminPackUnitTest.ConcreteReads.ReadJson<EnumHolder>(json, static (string concreteReadInput, ref EnumHolder concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
     }
 }

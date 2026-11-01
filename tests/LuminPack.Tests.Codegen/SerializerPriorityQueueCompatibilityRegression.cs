@@ -118,7 +118,7 @@ internal static class SerializerPriorityQueueCompatibilityRegression
             var emitted = output.Emit(image);
             Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
             Assembly.Load(image.ToArray()).GetType("PriorityCases")!.GetMethod("Check")!.Invoke(null, null);
-            var changed = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(text.Replace("sealed class VariableElement { public string Text; }", "struct VariableElement { public int Text; }", StringComparison.Ordinal), parse, "Queues.cs"));
+            var changed = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(text.Replace("sealed class VariableElement { public string Text; }", "struct VariableElement { public int Text; }", StringComparison.Ordinal), parse, "Queues.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(changed, out _, out _);
             var changedMethods = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
                 .SelectMany(item => item.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>()).ToArray();

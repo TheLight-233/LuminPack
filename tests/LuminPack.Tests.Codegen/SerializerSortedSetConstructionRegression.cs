@@ -61,7 +61,7 @@ internal static class SerializerSortedSetConstructionRegression
                 Require(Trees(driver).SequenceEqual(Trees(restored), StringComparer.Ordinal), "Restoring " + capability + " retained stale fallback code.");
             }
 
-            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(Source(mode).Replace("SortedSet<UserElement> User", "SortedSet<int> User", StringComparison.Ordinal), parse, "SortedSetCases.cs"));
+            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(Source(mode).Replace("SortedSet<UserElement> User", "SortedSet<int> User", StringComparison.Ordinal), parse, "SortedSetCases.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out var editedOutput, out diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             var (editedFresh, _) = Generate(edited, parse);
@@ -181,7 +181,8 @@ internal static class SerializerSortedSetConstructionRegression
         {
             string body = method.Body!.ToString();
             Require(body.Contains(".Shared.Rent(", StringComparison.Ordinal) && body.Contains("finally", StringComparison.Ordinal) &&
-                body.Contains("catch", StringComparison.Ordinal) && body.Contains("__completed", StringComparison.Ordinal), "Shared staging lost cleanup or failure-prefix recovery.");
+                body.Contains("catch", StringComparison.Ordinal) && method.DescendantNodes().OfType<VariableDeclaratorSyntax>().Any(variable =>
+                    variable.Identifier.ValueText.Contains("completed", StringComparison.OrdinalIgnoreCase)), "Shared staging lost cleanup or failure-prefix recovery.");
         }
         var lists = methods.Where(method => method.Body?.ToString().Contains("LuminPackCollectionAccess.TryAppendSortedListOrdered(", StringComparison.Ordinal) == true).ToArray();
         Require(listExpected ? lists.Length > 0 : lists.Length == 0, "Ordered string-key list helper selection changed.");

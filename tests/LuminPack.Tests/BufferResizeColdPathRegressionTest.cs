@@ -221,7 +221,7 @@ internal static class BufferResizeColdPathRegressionTest
         Assert(buffer.CurrentIndex > 1_000_000 && buffer.TotalLength > 1_000_000,
             "The generated binary payload did not cross the expected growth boundaries.");
         // The buffer holds the default profile's records, so it is read with that same profile.
-        var result = LuminPackSerializer.Deserialize<MultiGrowthPayload>(buffer.GetSpan());
+        var result = global::LuminPackUnitTest.ConcreteReads.Read<MultiGrowthPayload>(buffer.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref MultiGrowthPayload concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(result is not null && result.Prefix == value.Prefix && result.Suffix == value.Suffix &&
                result.Values.SequenceEqual(value.Values),
             "A generated payload containing both a large string and a large array failed after growth.");

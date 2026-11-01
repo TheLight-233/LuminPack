@@ -36,7 +36,7 @@ public class Utf8StringKernelTest
             Assert.Equal(expected.Length, BitConverter.ToInt32(record, 0));
             Assert.Equal(text.Length, BitConverter.ToInt32(record, 4));
             Assert.Equal(expected, record.AsSpan(8).ToArray());
-            Assert.Equal(text, LuminPackSerializer.Deserialize<string, LuminPackUtf8LengthOptions>(record));
+            Assert.Equal(text, global::LuminPackUnitTest.ConcreteReads.Read<string>(record, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(concreteReadInput, ref concreteReadTarget)));
         }
     }
 

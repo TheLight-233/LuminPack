@@ -42,7 +42,7 @@ internal static class SerializerNamedVersionRegression
                 }});
                 public static string Read(byte[] bytes)
                 {
-                    var value = LuminPackSerializer.Deserialize<Envelope<Root>>(bytes).Value;
+                    var value = global::LuminPackUnitTest.ConcreteReads.Read<Envelope<Root>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Envelope<Root> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Value;
                     return value.Id + ":" + value.Child.Number + ":" + value.Child.TEXT + ":" + value.Children[0].Number + ":" + value.Children[0].TEXT;
                 }
             }
@@ -75,7 +75,7 @@ internal static class SerializerNamedVersionRegression
         })
         {
             string source = "using LuminPack.Attribute; [LuminPackable(GeneratorType.VersionTolerant)] public class Invalid { " + members + " }";
-            var input = CSharpCompilation.Create("InvalidNames", [CSharpSyntaxTree.ParseText(source, Parse)], references,
+            var input = TestCompilation.Create("InvalidNames", [CSharpSyntaxTree.ParseText(source, Parse)], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
             var result = NewDriver().RunGenerators(input).GetRunResult();
             Require(result.Results.All(item => item.Exception == null) && result.Diagnostics.Any(item => item.Id == "LuminPack062"),
@@ -135,7 +135,7 @@ internal static class SerializerNamedVersionRegression
     /// <returns>The independently loaded model assembly.</returns>
     private static Assembly Compile(string source, string name, MetadataReference[] references)
     {
-        var input = CSharpCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, Parse, name + ".cs")], references,
+        var input = TestCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, Parse, name + ".cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         var driver = NewDriver().RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
         var errors = output.GetDiagnostics().Concat(diagnostics).Where(item => item.Severity == DiagnosticSeverity.Error).ToArray();

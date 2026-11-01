@@ -71,7 +71,7 @@ public partial class Bullet
 }
 ```
 
-For ordinary (`Object` mode) types, both binary and JSON reads rent an instance whenever a new one is needed, then enter the same reuse path used by `ref` reads. This includes the APIs without `ref`, such as `Deserialize<T>(payload)` and `DeserializeJson<T>(json)`, as well as missing child objects. Anything the rented object still holds (lists, children, strings) is reused, so a warm pool with matching storage can give allocation-free reads without an explicit `ref` target too.
+For ordinary (`Object` mode) types, both binary and JSON reads rent an instance whenever a new one is needed, then enter the same reuse path used by `ref` reads. This includes the APIs without `ref`, such as `Deserialize<T>(payload)` and `DeserializeJson<T>(json)` after explicit/Custom registration, as well as missing child objects. Anything the rented object still holds (lists, children, strings) is reused, so a warm pool with matching storage can give allocation-free reads without an explicit `ref` target too.
 
 LuminPack only rents. Returning instances is your application's job. Passing an already rented instance by `ref` reuses it without renting another one.
 

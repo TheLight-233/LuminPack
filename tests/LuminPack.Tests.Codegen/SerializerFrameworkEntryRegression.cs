@@ -59,7 +59,7 @@ internal static class SerializerFrameworkEntryRegression
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             CheckEntries(driver);
             Execute(output);
-            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(text.Replace("WireEnum : short", "WireEnum : long", StringComparison.Ordinal), parse, "Entry.cs"));
+            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(text.Replace("WireEnum : short", "WireEnum : long", StringComparison.Ordinal), parse, "Entry.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out var editedOutput, out diagnostics);
             Require(Trees(driver).SequenceEqual(Trees(Create(parse).RunGenerators(edited))), "An enum width edit retained stale generated code.");
             CheckEntries(driver);

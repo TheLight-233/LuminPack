@@ -27,9 +27,9 @@ public class SpecialEmitterRegressionTest
     {
         int? expected = number;
         byte[] bytes = LuminPackSerializer.Serialize(expected);
-        Assert.Equal(expected, LuminPackSerializer.Deserialize<int?>(bytes));
+        Assert.Equal(expected, global::LuminPackUnitTest.ConcreteReads.Read<int?>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int? concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         int? absent = null;
-        Assert.Null(LuminPackSerializer.Deserialize<int?>(LuminPackSerializer.Serialize(absent)));
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<int?>(LuminPackSerializer.Serialize(absent), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int? concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks a present Lazy wrapper is distinct from both null and a null child.</summary>
@@ -37,13 +37,13 @@ public class SpecialEmitterRegressionTest
     public void LazyPresenceDoesNotDependOnItsChild()
     {
         var number = new Lazy<int>(255);
-        Assert.Equal(255, LuminPackSerializer.Deserialize<Lazy<int>>(LuminPackSerializer.Serialize(number)).Value);
+        Assert.Equal(255, global::LuminPackUnitTest.ConcreteReads.Read<Lazy<int>>(LuminPackSerializer.Serialize(number), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Lazy<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Value);
         var text = new Lazy<string?>(() => null);
-        var copy = LuminPackSerializer.Deserialize<Lazy<string?>>(LuminPackSerializer.Serialize(text));
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Lazy<string?>>(LuminPackSerializer.Serialize(text), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Lazy<string?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.NotNull(copy);
         Assert.Null(copy.Value);
         Lazy<int>? absent = null;
-        Assert.Null(LuminPackSerializer.Deserialize<Lazy<int>?>(LuminPackSerializer.Serialize(absent)));
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<Lazy<int>?>(LuminPackSerializer.Serialize(absent), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Lazy<int>? concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks reference tuples preserve a marker-like first component.</summary>
@@ -52,7 +52,7 @@ public class SpecialEmitterRegressionTest
     {
         var expected = Tuple.Create(255, "tail");
         byte[] bytes = LuminPackSerializer.Serialize(expected);
-        Assert.Equal(expected, LuminPackSerializer.Deserialize<Tuple<int, string>>(bytes));
+        Assert.Equal(expected, global::LuminPackUnitTest.ConcreteReads.Read<Tuple<int, string>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Tuple<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks every Version constructor form consumes the entire record before a following scalar.</summary>
@@ -78,7 +78,7 @@ public class SpecialEmitterRegressionTest
     {
         var expected = new Uri("https://example.com/" + new string('a', 235));
         byte[] bytes = LuminPackSerializer.Serialize(expected);
-        Assert.Equal(expected, LuminPackSerializer.Deserialize<Uri>(bytes));
+        Assert.Equal(expected, global::LuminPackUnitTest.ConcreteReads.Read<Uri>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Uri concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks empty culture names preserve the nonnull invariant culture.</summary>
@@ -87,8 +87,8 @@ public class SpecialEmitterRegressionTest
     {
         var expected = CultureInfo.InvariantCulture;
         byte[] bytes = LuminPackSerializer.Serialize(expected);
-        Assert.Equal(expected.Name, LuminPackSerializer.Deserialize<CultureInfo>(bytes)?.Name);
-        Assert.Equal(expected.Name, LuminPackSerializer.DeserializeJson<CultureInfo>(LuminPackSerializer.SerializeJson(expected))?.Name);
+        Assert.Equal(expected.Name, global::LuminPackUnitTest.ConcreteReads.Read<CultureInfo>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CultureInfo concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))?.Name);
+        Assert.Equal(expected.Name, global::LuminPackUnitTest.ConcreteReads.ReadJson<CultureInfo>(LuminPackSerializer.SerializeJson(expected), static (string concreteReadInput, ref CultureInfo concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget))?.Name);
     }
 
     /// <summary>Checks a custom time-zone record and a following scalar are consumed independently.</summary>
@@ -126,13 +126,13 @@ public class SpecialEmitterRegressionTest
         var collection = new Collection<AuditPortableElement>(new List<AuditPortableElement> { element });
         byte[] bytes = LuminPackSerializer.Serialize(collection);
         Assert.Equal(13, bytes.Length);
-        Assert.Equal(element, Assert.Single(LuminPackSerializer.Deserialize<Collection<AuditPortableElement>>(bytes)));
+        Assert.Equal(element, Assert.Single(global::LuminPackUnitTest.ConcreteReads.Read<Collection<AuditPortableElement>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Collection<AuditPortableElement> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
         var observable = new ObservableCollection<AuditPortableElement> { element };
-        Assert.Equal(element, Assert.Single(LuminPackSerializer.Deserialize<ObservableCollection<AuditPortableElement>>(LuminPackSerializer.Serialize(observable))));
+        Assert.Equal(element, Assert.Single(global::LuminPackUnitTest.ConcreteReads.Read<ObservableCollection<AuditPortableElement>>(LuminPackSerializer.Serialize(observable), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ObservableCollection<AuditPortableElement> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
         var readOnly = new ReadOnlyCollection<AuditPortableElement>(new[] { element });
-        Assert.Equal(element, Assert.Single(LuminPackSerializer.Deserialize<ReadOnlyCollection<AuditPortableElement>>(LuminPackSerializer.Serialize(readOnly))));
+        Assert.Equal(element, Assert.Single(global::LuminPackUnitTest.ConcreteReads.Read<ReadOnlyCollection<AuditPortableElement>>(LuminPackSerializer.Serialize(readOnly), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReadOnlyCollection<AuditPortableElement> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
         var readOnlyObservable = new ReadOnlyObservableCollection<AuditPortableElement>(observable);
-        Assert.Equal(element, Assert.Single(LuminPackSerializer.Deserialize<ReadOnlyObservableCollection<AuditPortableElement>>(LuminPackSerializer.Serialize(readOnlyObservable))));
+        Assert.Equal(element, Assert.Single(global::LuminPackUnitTest.ConcreteReads.Read<ReadOnlyObservableCollection<AuditPortableElement>>(LuminPackSerializer.Serialize(readOnlyObservable), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReadOnlyObservableCollection<AuditPortableElement> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
     }
 
     /// <summary>Checks reference-free Custom elements retain their two-byte formatter inside every wrapper family.</summary>
@@ -143,13 +143,13 @@ public class SpecialEmitterRegressionTest
         var collection = new Collection<AuditCustomElement>(new List<AuditCustomElement> { element });
         byte[] bytes = LuminPackSerializer.Serialize(collection);
         Assert.Equal(6, bytes.Length);
-        Assert.Equal(element, Assert.Single(LuminPackSerializer.Deserialize<Collection<AuditCustomElement>>(bytes)));
+        Assert.Equal(element, Assert.Single(global::LuminPackUnitTest.ConcreteReads.Read<Collection<AuditCustomElement>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Collection<AuditCustomElement> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
         var observable = new ObservableCollection<AuditCustomElement> { element };
-        Assert.Equal(element, Assert.Single(LuminPackSerializer.Deserialize<ObservableCollection<AuditCustomElement>>(LuminPackSerializer.Serialize(observable))));
+        Assert.Equal(element, Assert.Single(global::LuminPackUnitTest.ConcreteReads.Read<ObservableCollection<AuditCustomElement>>(LuminPackSerializer.Serialize(observable), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ObservableCollection<AuditCustomElement> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
         var readOnly = new ReadOnlyCollection<AuditCustomElement>(new[] { element });
-        Assert.Equal(element, Assert.Single(LuminPackSerializer.Deserialize<ReadOnlyCollection<AuditCustomElement>>(LuminPackSerializer.Serialize(readOnly))));
+        Assert.Equal(element, Assert.Single(global::LuminPackUnitTest.ConcreteReads.Read<ReadOnlyCollection<AuditCustomElement>>(LuminPackSerializer.Serialize(readOnly), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReadOnlyCollection<AuditCustomElement> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
         var readOnlyObservable = new ReadOnlyObservableCollection<AuditCustomElement>(observable);
-        Assert.Equal(element, Assert.Single(LuminPackSerializer.Deserialize<ReadOnlyObservableCollection<AuditCustomElement>>(LuminPackSerializer.Serialize(readOnlyObservable))));
+        Assert.Equal(element, Assert.Single(global::LuminPackUnitTest.ConcreteReads.Read<ReadOnlyObservableCollection<AuditCustomElement>>(LuminPackSerializer.Serialize(readOnlyObservable), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReadOnlyObservableCollection<AuditCustomElement> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
     }
 
     /// <summary>Checks private storage mirrors retain an explicitly declared packing boundary.</summary>
@@ -157,10 +157,10 @@ public class SpecialEmitterRegressionTest
     public void PrivatePackedStorageKeepsItsOffsets()
     {
         var expected = AuditPackedPrivate.Create();
-        var copy = LuminPackSerializer.Deserialize<AuditPackedPrivate>(LuminPackSerializer.Serialize(expected));
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<AuditPackedPrivate>(LuminPackSerializer.Serialize(expected), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AuditPackedPrivate concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(expected.Tag, copy.Tag);
         Assert.Equal(expected.Value, copy.Value);
-        var json = LuminPackSerializer.DeserializeJson<AuditPackedPrivate>(LuminPackSerializer.SerializeJson(expected));
+        var json = global::LuminPackUnitTest.ConcreteReads.ReadJson<AuditPackedPrivate>(LuminPackSerializer.SerializeJson(expected), static (string concreteReadInput, ref AuditPackedPrivate concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(expected.Tag, json.Tag);
         Assert.Equal(expected.Value, json.Value);
     }
@@ -179,7 +179,7 @@ public class SpecialEmitterRegressionTest
             string text = LuminPackSerializer.SerializeJson(expected);
             Assert.Equal("\"" + expected.ToString(CultureInfo.InvariantCulture) + "\"", text);
             CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
-            Assert.Equal(expected, LuminPackSerializer.DeserializeJson<Int128>(text));
+            Assert.Equal(expected, global::LuminPackUnitTest.ConcreteReads.ReadJson<Int128>(text, static (string concreteReadInput, ref Int128 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         }
         finally
         {
@@ -206,17 +206,17 @@ public class SpecialEmitterRegressionTest
             string json = LuminPackSerializer.SerializeJson(expected);
             if (RuntimeFeature.IsDynamicCodeSupported)
             {
-                Assert.Equal(expected, LuminPackSerializer.Deserialize<Type>(bytes));
-                Assert.Equal(expected, LuminPackSerializer.DeserializeJson<Type>(json));
+                Assert.Equal(expected, global::LuminPackUnitTest.ConcreteReads.Read<Type>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                Assert.Equal(expected, global::LuminPackUnitTest.ConcreteReads.ReadJson<Type>(json, static (string concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
             }
             else
             {
-                Assert.Throws<PlatformNotSupportedException>(() => LuminPackSerializer.Deserialize<Type>(bytes));
-                Assert.Throws<PlatformNotSupportedException>(() => LuminPackSerializer.DeserializeJson<Type>(json));
+                Assert.Throws<PlatformNotSupportedException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Type>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+                Assert.Throws<PlatformNotSupportedException>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<Type>(json, static (string concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
             }
         }
-        Assert.Null(LuminPackSerializer.Deserialize<Type>(LuminPackSerializer.Serialize((Type)null!)));
-        Assert.Null(LuminPackSerializer.DeserializeJson<Type>("null"));
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<Type>(LuminPackSerializer.Serialize((Type)null!), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.ReadJson<Type>("null", static (string concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks an empty managed stack remains distinct from a null stack.</summary>
@@ -225,7 +225,7 @@ public class SpecialEmitterRegressionTest
     {
         var expected = new Stack<string>();
         byte[] bytes = LuminPackSerializer.Serialize(expected);
-        var copy = LuminPackSerializer.Deserialize<Stack<string>>(bytes);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Stack<string>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Stack<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.NotNull(copy);
         Assert.Empty(copy);
         Assert.Equal(0, BitConverter.ToInt32(bytes));
@@ -237,16 +237,16 @@ public class SpecialEmitterRegressionTest
     {
         var expected = new ReadOnlyCollectionBuilder<int> { 255, -1, 42 };
         byte[] bytes = LuminPackSerializer.Serialize(expected);
-        Assert.Equal(new[] { 255, -1, 42 }, LuminPackSerializer.Deserialize<ReadOnlyCollectionBuilder<int>>(bytes));
+        Assert.Equal(new[] { 255, -1, 42 }, global::LuminPackUnitTest.ConcreteReads.Read<ReadOnlyCollectionBuilder<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReadOnlyCollectionBuilder<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         var reused = new ReadOnlyCollectionBuilder<int>(32) { 9, 8, 7, 6, 5 };
         var original = reused;
         LuminPackSerializer.Deserialize(bytes, ref reused);
         Assert.Same(original, reused);
         Assert.Equal(expected, reused);
         Assert.Equal(32, reused.Capacity);
-        Assert.Equal(expected, LuminPackSerializer.DeserializeJson<ReadOnlyCollectionBuilder<int>>(LuminPackSerializer.SerializeJson(expected)));
+        Assert.Equal(expected, global::LuminPackUnitTest.ConcreteReads.ReadJson<ReadOnlyCollectionBuilder<int>>(LuminPackSerializer.SerializeJson(expected), static (string concreteReadInput, ref ReadOnlyCollectionBuilder<int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         var portable = new ReadOnlyCollectionBuilder<AuditPortableElement> { new() { Tag = 17, Value = -1 } };
-        Assert.Equal(portable, LuminPackSerializer.Deserialize<ReadOnlyCollectionBuilder<AuditPortableElement>>(LuminPackSerializer.Serialize(portable)));
+        Assert.Equal(portable, global::LuminPackUnitTest.ConcreteReads.Read<ReadOnlyCollectionBuilder<AuditPortableElement>>(LuminPackSerializer.Serialize(portable), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReadOnlyCollectionBuilder<AuditPortableElement> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks thread-invariant settings do not suppress cultures supported by the actual runtime.</summary>
@@ -262,8 +262,8 @@ public class SpecialEmitterRegressionTest
         {
             CultureInfo.CurrentCulture = CultureInfo.InvariantCulture;
             CultureInfo.CurrentUICulture = CultureInfo.InvariantCulture;
-            Assert.Equal(expected.Name, LuminPackSerializer.Deserialize<CultureInfo>(LuminPackSerializer.Serialize(expected)).Name);
-            Assert.Equal(expected.Name, LuminPackSerializer.DeserializeJson<CultureInfo>(LuminPackSerializer.SerializeJson(expected)).Name);
+            Assert.Equal(expected.Name, global::LuminPackUnitTest.ConcreteReads.Read<CultureInfo>(LuminPackSerializer.Serialize(expected), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CultureInfo concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Name);
+            Assert.Equal(expected.Name, global::LuminPackUnitTest.ConcreteReads.ReadJson<CultureInfo>(LuminPackSerializer.SerializeJson(expected), static (string concreteReadInput, ref CultureInfo concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).Name);
         }
         finally
         {
@@ -299,7 +299,7 @@ public class SpecialEmitterRegressionTest
             finally { ArrayPool<AuditPooledItem>.Shared.Return(returned, clearArray: true); }
             AuditPooledItem.FailWrite = false;
             AuditPooledItem.ReadsUntilFailure = 2;
-            Assert.Same(AuditPooledItem.Failure, Assert.Throws<InvalidOperationException>(() => LuminPackSerializer.Deserialize<SortedSet<AuditPooledItem>>(bytes)));
+            Assert.Same(AuditPooledItem.Failure, Assert.Throws<InvalidOperationException>(() => global::LuminPackUnitTest.ConcreteReads.Read<SortedSet<AuditPooledItem>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SortedSet<AuditPooledItem> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
             returned = ArrayPool<AuditPooledItem>.Shared.Rent(2);
             try { Assert.Same(rental, returned); Assert.All(returned, Assert.Null); }
             finally { ArrayPool<AuditPooledItem>.Shared.Return(returned, clearArray: true); }
@@ -316,21 +316,21 @@ public class SpecialEmitterRegressionTest
     private static void CheckWrapperProfile<TOptions>() where TOptions : struct, ILuminPackOptions
     {
         CultureInfo culture = CultureInfo.InvariantCulture;
-        byte[] bytes = LuminPackSerializer.Serialize<CultureInfo, TOptions>(culture);
-        Assert.Equal(culture.Name, LuminPackSerializer.Deserialize<CultureInfo, TOptions>(bytes).Name);
+        byte[] bytes = LuminPackSerializer.Serialize<TOptions>((CultureInfo)(culture));
+        Assert.Equal(culture.Name, global::LuminPackUnitTest.ConcreteReads.Read<CultureInfo>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CultureInfo concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)).Name);
         Uri uri = new("https://example.com/" + new string('a', 235));
-        bytes = LuminPackSerializer.Serialize<Uri, TOptions>(uri);
-        Assert.Equal(uri, LuminPackSerializer.Deserialize<Uri, TOptions>(bytes));
+        bytes = LuminPackSerializer.Serialize<TOptions>((Uri)(uri));
+        Assert.Equal(uri, global::LuminPackUnitTest.ConcreteReads.Read<Uri>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Uri concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)));
         Type type = typeof(Dictionary<string, int[]>);
-        bytes = LuminPackSerializer.Serialize<Type, TOptions>(type);
+        bytes = LuminPackSerializer.Serialize<TOptions>((Type)(type));
         if (RuntimeFeature.IsDynamicCodeSupported)
-            Assert.Equal(type, LuminPackSerializer.Deserialize<Type, TOptions>(bytes));
+            Assert.Equal(type, global::LuminPackUnitTest.ConcreteReads.Read<Type>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)));
         else
-            Assert.Throws<PlatformNotSupportedException>(() => LuminPackSerializer.Deserialize<Type, TOptions>(bytes));
-        Assert.Null(LuminPackSerializer.Deserialize<Type, TOptions>(LuminPackSerializer.Serialize<Type, TOptions>(null!)));
+            Assert.Throws<PlatformNotSupportedException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Type>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)));
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<Type>(LuminPackSerializer.Serialize<TOptions>((Type)null!), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Type concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)));
         Uri? absent = null;
-        bytes = LuminPackSerializer.Serialize<Uri?, TOptions>(absent);
-        Assert.Null(LuminPackSerializer.Deserialize<Uri?, TOptions>(bytes));
+        bytes = LuminPackSerializer.Serialize<TOptions>((Uri?)(absent));
+        Assert.Null(global::LuminPackUnitTest.ConcreteReads.Read<Uri?>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Uri? concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget)));
         Assert.Single(bytes);
     }
 

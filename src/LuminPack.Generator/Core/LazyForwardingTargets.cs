@@ -10,10 +10,9 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace LuminPack.Code.Core;
 
 /// <summary>Reads the execution roots that one contribution's state forwarders call.</summary>
-/// <remarks>Lazy formatter entries call the declaration-default and explicit-profile state forwarders by name, which makes
-/// C# overload resolution examine every payload's overloads. When the payload's contribution shows that a forwarder is
-/// a single call to its nested root container, the entry calls that root directly: the same operation the forwarder
-/// would run, bound against one payload. Entries of other payloads keep calling the forwarders.</remarks>
+/// <remarks>Completed forwarders supply symbol-free method identities for concrete API documentation.
+/// Capturing these facts before discarding projected syntax avoids reparsing the contribution.
+/// This metadata does not generate a runtime type table or formatter fallback.</remarks>
 internal sealed class LazyForwardingTargets
 {
     private static readonly ConditionalWeakTable<string, LazyForwardingTargets> Cache = new();

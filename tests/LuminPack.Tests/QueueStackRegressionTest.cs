@@ -29,7 +29,7 @@ internal static class QueueStackRegressionTest
         value.Enqueue(9);
 
         var expected = value.ToArray();
-        var roundTrip = LuminPackSerializer.Deserialize<Queue<int>>(LuminPackSerializer.Serialize(value));
+        var roundTrip = global::LuminPackUnitTest.ConcreteReads.Read<Queue<int>>(LuminPackSerializer.Serialize(value), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Queue<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
         Assert(roundTrip is not null && roundTrip.SequenceEqual(expected),
             "A wrapped unmanaged Queue lost FIFO order during binary round-trip.");
@@ -52,7 +52,7 @@ internal static class QueueStackRegressionTest
         value.Enqueue("f");
 
         var expected = value.ToArray();
-        var roundTrip = LuminPackSerializer.Deserialize<Queue<string>>(LuminPackSerializer.Serialize(value));
+        var roundTrip = global::LuminPackUnitTest.ConcreteReads.Read<Queue<string>>(LuminPackSerializer.Serialize(value), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Queue<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(roundTrip is not null && roundTrip.SequenceEqual(expected),
             "A wrapped reference Queue lost FIFO order during binary round-trip.");
     }
@@ -60,13 +60,12 @@ internal static class QueueStackRegressionTest
     /// <summary>Verifies empty and null queues stay distinct.</summary>
     private static void EmptyAndNullQueuesStayDistinct()
     {
-        var empty = LuminPackSerializer.Deserialize<Queue<int>>(
-            LuminPackSerializer.Serialize(new Queue<int>()));
+        var empty = global::LuminPackUnitTest.ConcreteReads.Read<Queue<int>>(LuminPackSerializer.Serialize(new Queue<int>()), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Queue<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(empty is not null && empty.Count == 0,
             "An empty Queue was decoded as null or attempted to read missing metadata.");
 
         Queue<int>? value = null;
-        var nullQueue = LuminPackSerializer.Deserialize<Queue<int>?>(LuminPackSerializer.Serialize(value));
+        var nullQueue = global::LuminPackUnitTest.ConcreteReads.Read<Queue<int>?>(LuminPackSerializer.Serialize(value), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Queue<int>? concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(nullQueue is null, "A null Queue was decoded as an empty Queue.");
     }
 

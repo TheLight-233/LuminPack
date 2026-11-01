@@ -56,14 +56,16 @@ var person = new Person { Age = 18, Name = "Light" };
 byte[] bytes = LuminPackSerializer.Serialize(person);
 Person copy = null!;
 LuminPackSerializer.Deserialize(bytes, ref copy);     // 具体类型重载；copy 已存在时会被复用
-Person other = LuminPackSerializer.Deserialize<Person>(bytes);
+Person other = null!;
+LuminPackSerializer.Deserialize(bytes, ref other);
 
 // JSON
 string json = LuminPackSerializer.SerializeJson(person);
-Person fromJson = LuminPackSerializer.DeserializeJson<Person>(json);
+Person fromJson = null!;
+LuminPackSerializer.DeserializeJson(json, ref fromJson);
 ```
 
-具体类型重载（`Serialize(person)`、`Deserialize(bytes, ref copy)`）直接调用为该类型生成的代码。泛型重载（`Deserialize<Person>(bytes)`）经过一个按类型在首次使用时创建的入口。
+具体类型重载（`Serialize(person)`、`Deserialize(bytes, ref copy)`）直接调用为该类型生成的代码。泛型重载（`Deserialize<Person>(bytes)`、`Serialize<T, TOptions>(value)` 或 `Save<T>` 内部的调用）必须先进行显式或 Custom 格式化器[注册](custom-formatters.cn.md#runtime-registration)，内置类型和源生成类型也不例外。缺少注册时抛出 `LuminPackException`。具体类型的配置重载 `Serialize<TOptions>(person)` 仍直接调用生成的 Root。
 
 具体模型重载，以及具有执行根方法的内置重载，其 XML 说明中提供 **Generated implementation** 链接，可在 IDE 中直接跳转到二进制或 JSON 的 `Root` 方法，不必逐层经过转发方法。闭合泛型模型、集合与复合值在格式器具有根方法时都支持此导航。原始非托管二进制读取可能直接调用运行时，因此没有独立的 `RootRead`；Custom 格式化器保留用户定义的入口。根据泛型实参选择格式器的回退 API 没有唯一具体 Root 可供链接。`Sizeof` 描述的是大小计算，不属于读写 Root。
 

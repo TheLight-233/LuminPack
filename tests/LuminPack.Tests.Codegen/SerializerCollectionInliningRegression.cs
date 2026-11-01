@@ -90,7 +90,7 @@ internal static class SerializerCollectionInliningRegression
         for (int index = 0; index < shapes.Length; index++) AppendCase(source, index, shapes[index].Type, shapes[index].Value);
         source.Append("return ").Append(shapes.Length).AppendLine("; } }");
 
-        var input = CSharpCompilation.Create("RepeatedCollectionOperations", [CSharpSyntaxTree.ParseText(source.ToString(), Parse, "Models.cs")], references,
+        var input = TestCompilation.Create("RepeatedCollectionOperations", [CSharpSyntaxTree.ParseText(source.ToString(), Parse, "Models.cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: Parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
@@ -144,17 +144,17 @@ internal static class SerializerCollectionInliningRegression
     {
         string name = "Model" + index;
         source.AppendLine("try {").Append("var value = new ").Append(name).Append(" { First = ").Append(initializer).Append(", Second = ").Append(initializer).AppendLine(" };");
-        source.Append("var expected = LuminPackSerializer.Serialize<").Append(name).AppendLine(">(in value);");
+        source.Append("var expected = LuminPackSerializer.Serialize(in value);");
         source.AppendLine("var actual = LuminPackSerializer.Serialize(in value);");
         source.Append("if (!actual.AsSpan().SequenceEqual(expected)) throw new Exception(\"Binary write: ").Append(name).AppendLine("\");");
         source.Append(name).Append(" generic = null!, direct = null!;").AppendLine();
-        source.Append("LuminPackSerializer.Deserialize<").Append(name).AppendLine(">(expected.AsSpan(), ref generic);");
+        source.Append("LuminPackSerializer.Deserialize(expected.AsSpan(), ref generic);");
         source.AppendLine("LuminPackSerializer.Deserialize(expected.AsSpan(), ref direct);");
         AppendRestoredComparison(source, name, "Binary read");
-        source.Append("var expectedJson = LuminPackSerializer.SerializeJson<").Append(name).AppendLine(">(value);");
+        source.Append("var expectedJson = LuminPackSerializer.SerializeJson(value);");
         source.Append("if (LuminPackSerializer.SerializeJson(value) != expectedJson) throw new Exception(\"JSON write: ").Append(name).AppendLine("\");");
         source.AppendLine("var json = Encoding.Unicode.GetBytes(expectedJson);");
-        source.Append("generic = LuminPackSerializer.DeserializeJson<").Append(name).AppendLine(">(json.AsSpan());");
+        source.Append("generic = global::LuminPackUnitTest.ConcreteReads.ReadJson<").Append(name).AppendLine(">(json.AsSpan(), static (global::System.ReadOnlySpan<byte> input, ref ").Append(name).AppendLine(" value) => LuminPackSerializer.DeserializeJson(input, ref value));");
         source.AppendLine("int directConsumed = LuminPackSerializer.DeserializeJson(json.AsSpan(), ref direct);");
         source.Append("if (directConsumed != json.Length) throw new Exception(\"JSON consumed bytes: ").Append(name).AppendLine("\");");
         AppendRestoredComparison(source, name, "JSON read");
@@ -166,8 +166,7 @@ internal static class SerializerCollectionInliningRegression
     /// <param name="name">The concrete model type.</param>
     /// <param name="operation">The operation named in a failure.</param>
     private static void AppendRestoredComparison(StringBuilder source, string name, string operation)
-        => source.Append("if (!LuminPackSerializer.Serialize<").Append(name).Append(">(in generic).AsSpan().SequenceEqual(LuminPackSerializer.Serialize<")
-            .Append(name).Append(">(in direct))) throw new Exception(\"").Append(operation).Append(": ").Append(name).AppendLine("\");");
+        => source.Append("if (!LuminPackSerializer.Serialize(in generic).AsSpan().SequenceEqual(LuminPackSerializer.Serialize(in direct))) throw new Exception(\"").Append(operation).Append(": ").Append(name).AppendLine("\");");
 
     /// <summary>Reports a concrete operation contract failure.</summary>
     /// <param name="condition">The invariant required by this regression.</param>

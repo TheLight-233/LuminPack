@@ -48,7 +48,7 @@ internal static class SerializerSequenceRawWriteRegression
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
             CheckSelection(driver, scalar: true);
             Execute(output);
-            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(
+            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(
                 text.Replace("using Element = System.Int32;", "using Element = Portable;", StringComparison.Ordinal), parse, "Entry.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out output, out diagnostics);
             CheckSelection(driver, scalar: false);

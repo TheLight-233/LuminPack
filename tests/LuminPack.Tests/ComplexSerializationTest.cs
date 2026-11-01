@@ -172,7 +172,7 @@ namespace LuminPackUnitTest
 
                 // Serialize and deserialize
                 byte[] bytes = LuminPackSerializer.Serialize(original);
-                ComplexData deserialized = LuminPackSerializer.Deserialize<ComplexData>(bytes);
+                ComplexData deserialized = global::LuminPackUnitTest.ConcreteReads.Read<ComplexData>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ComplexData concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 // Verify all data
                 bool success = CompareComplexData(original, deserialized);
@@ -209,7 +209,7 @@ namespace LuminPackUnitTest
 
                 // Serialize and deserialize
                 byte[] bytes = LuminPackSerializer.Serialize(original);
-                NestedData deserialized = LuminPackSerializer.Deserialize<NestedData>(bytes);
+                NestedData deserialized = global::LuminPackUnitTest.ConcreteReads.Read<NestedData>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref NestedData concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 // Verify data
                 bool success = original.Name == deserialized.Name &&
@@ -262,7 +262,7 @@ namespace LuminPackUnitTest
 
                 // Serialize and deserialize
                 byte[] bytes = LuminPackSerializer.Serialize(original);
-                ComplexData deserialized = LuminPackSerializer.Deserialize<ComplexData>(bytes);
+                ComplexData deserialized = global::LuminPackUnitTest.ConcreteReads.Read<ComplexData>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ComplexData concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 // Verify all null values are preserved
                 bool success = deserialized.A == null &&
@@ -311,7 +311,7 @@ namespace LuminPackUnitTest
 
                 // Serialize and deserialize
                 byte[] bytes = LuminPackSerializer.Serialize(original);
-                ComplexData deserialized = LuminPackSerializer.Deserialize<ComplexData>(bytes);
+                ComplexData deserialized = global::LuminPackUnitTest.ConcreteReads.Read<ComplexData>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ComplexData concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 // Verify empty collections are preserved
                 bool success = deserialized.A != null && deserialized.A.Length == 0 &&

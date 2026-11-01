@@ -125,7 +125,7 @@ public class GeneratedFixedFieldWriteTest
         expected.Write(child);
         byte[] payload = expected.ToArray();
         Assert.Equal(payload, LuminPackSerializer.Serialize(value));
-        Assert.Equal(payload, LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<FixedPrimitiveWriteContainer>(payload)));
+        Assert.Equal(payload, LuminPackSerializer.Serialize(global::LuminPackUnitTest.ConcreteReads.Read<FixedPrimitiveWriteContainer>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FixedPrimitiveWriteContainer concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
     }
 
     /// <summary>Verifies large structs and properties keep existing in parameter behavior.</summary>
@@ -152,7 +152,7 @@ public class GeneratedFixedFieldWriteTest
         writer.Advance(__fixed0Length);
         byte[] expected = writer.GetSpan().ToArray();
         Assert.Equal(expected, LuminPackSerializer.Serialize(value));
-        Assert.Equal(expected, LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<FixedPrimitiveWriteFallback>(expected)));
+        Assert.Equal(expected, LuminPackSerializer.Serialize(global::LuminPackUnitTest.ConcreteReads.Read<FixedPrimitiveWriteFallback>(expected, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FixedPrimitiveWriteFallback concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
     }
 
     /// <summary>Verifies nested fallback blocks advance the collection offset.</summary>
@@ -212,7 +212,7 @@ public class GeneratedFixedFieldWriteTest
 
         byte[] payload = expected.ToArray();
         Assert.Equal(payload, LuminPackSerializer.Serialize(value));
-        Assert.Equal(payload, LuminPackSerializer.Serialize(LuminPackSerializer.Deserialize<FixedPrimitiveFallbackCollection>(payload)));
+        Assert.Equal(payload, LuminPackSerializer.Serialize(global::LuminPackUnitTest.ConcreteReads.Read<FixedPrimitiveFallbackCollection>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FixedPrimitiveFallbackCollection concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))));
     }
 
     /// <summary>Verifies reference write.</summary>

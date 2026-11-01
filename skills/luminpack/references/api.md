@@ -33,7 +33,7 @@ byte[] Serialize<LuminPackUtf8LengthOptions>(in T value);
 int    Deserialize<LuminPackUtf8LengthOptions>(ReadOnlySpan<byte> buffer, ref T value);
 ```
 
-Concrete overloads call the type's generated code directly. Generic overloads use explicit/Custom registrations first, then a per-type entry created on first use. Under `Light`/`Minimal` only the overload shapes actually called are generated; others fall back to the generic forms.
+Concrete overloads call the type's generated code directly. Generic payload overloads require explicit/Custom registrations, including for built-in and source-generated types. No generated fallback factory or type table exists. Under `Light`/`Minimal` only the overload shapes actually called are generated; an ungenerated shape can bind the registration-only generic form and fail if unregistered. Use concrete `Deserialize(bytes, ref value)` and `Serialize<TOptions>(concreteValue)` when registration is unnecessary.
 
 Binary and JSON `ref` overloads fill compatible existing storage. JSON reuses object graphs, lists, exact same-length arrays, dictionary values matched by key, mutable array slices, exact Union cases and tracked identities; unchanged decoded strings retain their references. JSON `null` clears a reference and omitted members reset to `default` on an existing object. Reuse is not transactional. Immutable collection formatters retain their existing construction behavior.
 
@@ -89,8 +89,8 @@ output.ResetForReuse();                             // clear content + reference
 Requires `AllowUnsafeBlocks`. Generated only when unsafe code is enabled; disable with `[assembly: LuminPackGeneratorOptions(mode, LuminPackRegisterMode.Disabled)]`.
 
 ```csharp
-static void Write(ref LuminPackWriter writer, in Legacy value) { writer.WriteValue(value.Id); }
-static void Read(ref LuminPackReader reader, ref Legacy value) { value = new Legacy(); reader.ReadValue(ref value.Id); }
+static void Write(ref LuminPackWriter writer, in Legacy value) { writer.Write(value.Id); }
+static void Read(ref LuminPackReader reader, ref Legacy value) { value = new Legacy(); reader.Read(ref value.Id); }
 
 unsafe { LuminPackSerializer.Register<Legacy>(&Write, &Read); }
 ```

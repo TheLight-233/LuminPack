@@ -43,7 +43,7 @@ namespace LuminPackUnitTest
 
             byte[] buffer = Payload(42, "new", 1, 2, 3);
             ReadOnlySpan<byte> span = buffer;
-            LuminPackSerializer.Deserialize<MergeTarget>(span, ref existing);
+LuminPackSerializer.Deserialize(span, ref existing);
 
             Assert.Same(identity, existing); // reuse, not replace
             Assert.Equal(42, existing.A);
@@ -59,7 +59,7 @@ namespace LuminPackUnitTest
 
             byte[] buffer = Payload(7, "created");
             ReadOnlySpan<byte> span = buffer;
-            LuminPackSerializer.Deserialize<MergeTarget>(span, ref existing);
+LuminPackSerializer.Deserialize(span, ref existing);
 
             Assert.NotNull(existing);
             Assert.Equal(7, existing.A);
@@ -73,9 +73,9 @@ namespace LuminPackUnitTest
             var existing = new MergeTarget { A = 5, Name = "keep" };
             var identity = existing;
 
-            byte[] buffer = LuminPackSerializer.Serialize<MergeTarget?>(null);
+            byte[] buffer = LuminPackSerializer.Serialize((MergeTarget?)null);
             ReadOnlySpan<byte> span = buffer;
-            LuminPackSerializer.Deserialize<MergeTarget>(span, ref existing);
+LuminPackSerializer.Deserialize(span, ref existing);
 
             Assert.Same(identity, existing);
             Assert.Equal(5, existing.A);

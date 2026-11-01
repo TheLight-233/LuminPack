@@ -32,7 +32,7 @@ namespace LuminPackUnitTest
             {
                 var writer = new ArrayBufferWriter<byte>();
                 LuminPackSerializer.Serialize(value, writer);
-                var back = LuminPackSerializer.Deserialize<IBufferModel>(writer.WrittenSpan);
+                var back = global::LuminPackUnitTest.ConcreteReads.Read<IBufferModel>(writer.WrittenSpan, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IBufferModel concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                 results.Add(EqualsModel(value, back)
                     ? "✓ IBufferWriter ArrayBufferWriter - PASSED"
                     : "✗ IBufferWriter ArrayBufferWriter - FAILED");
@@ -49,7 +49,7 @@ namespace LuminPackUnitTest
                 LuminPackSerializer.Serialize(value, pipe.Writer);
                 pipe.Writer.Complete();
                 var readResult = pipe.Reader.ReadAsync().AsTask().GetAwaiter().GetResult();
-                var back2 = LuminPackSerializer.Deserialize<IBufferModel>(readResult.Buffer);
+                var back2 = global::LuminPackUnitTest.ConcreteReads.Read<IBufferModel>(readResult.Buffer, static (global::System.Buffers.ReadOnlySequence<byte> concreteReadInput, ref IBufferModel concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                 results.Add(EqualsModel(value, back2)
                     ? "✓ IBufferWriter PipeWriter - PASSED"
                     : "✗ IBufferWriter PipeWriter - FAILED");
@@ -66,7 +66,7 @@ namespace LuminPackUnitTest
                 var writer = new ArrayBufferWriter<byte>();
                 LuminPackSerializer.SerializeJson(value, writer);
                 var json = Encoding.Unicode.GetString(writer.WrittenSpan);
-                var back3 = LuminPackSerializer.DeserializeJson<IBufferModel>(json);
+                var back3 = global::LuminPackUnitTest.ConcreteReads.ReadJson<IBufferModel>(json, static (string concreteReadInput, ref IBufferModel concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
                 results.Add(EqualsModel(value, back3)
                     ? "✓ IBufferWriter SerializeJson - PASSED"
                     : "✗ IBufferWriter SerializeJson - FAILED");

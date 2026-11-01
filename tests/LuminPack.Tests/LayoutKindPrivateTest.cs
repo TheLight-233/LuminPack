@@ -116,8 +116,7 @@ namespace LuminPackUnitTest
                 var original = new ExplicitLayoutClassRoot { A = 1 };
                 original.SetB(2);
 
-                var restored = LuminPackSerializer.Deserialize<ExplicitLayoutClassRoot>(
-                    LuminPackSerializer.Serialize(original));
+                var restored = global::LuminPackUnitTest.ConcreteReads.Read<ExplicitLayoutClassRoot>(LuminPackSerializer.Serialize(original), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ExplicitLayoutClassRoot concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 results.Add(restored.A == 1 && restored.GetB() == 2
                     ? "✓ LayoutKindPrivateTest ExplicitClass - PASSED"
@@ -138,8 +137,7 @@ namespace LuminPackUnitTest
                 var original = new SequentialLayoutClassRoot { A = 3 };
                 original.SetName("seq");
 
-                var restored = LuminPackSerializer.Deserialize<SequentialLayoutClassRoot>(
-                    LuminPackSerializer.Serialize(original));
+                var restored = global::LuminPackUnitTest.ConcreteReads.Read<SequentialLayoutClassRoot>(LuminPackSerializer.Serialize(original), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SequentialLayoutClassRoot concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 results.Add(restored.A == 3 && restored.GetName() == "seq"
                     ? "✓ LayoutKindPrivateTest SequentialClass - PASSED"
@@ -160,8 +158,7 @@ namespace LuminPackUnitTest
                 var original = new ExplicitLayoutStructRoot { A = 4, Name = "explicit" };
                 original.SetB(5);
 
-                var restored = LuminPackSerializer.Deserialize<ExplicitLayoutStructRoot>(
-                    LuminPackSerializer.Serialize(original));
+                var restored = global::LuminPackUnitTest.ConcreteReads.Read<ExplicitLayoutStructRoot>(LuminPackSerializer.Serialize(original), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ExplicitLayoutStructRoot concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 results.Add(restored.A == 4 && restored.Name == "explicit" && restored.GetB() == 5
                     ? "✓ LayoutKindPrivateTest ExplicitStruct - PASSED"
@@ -187,8 +184,7 @@ namespace LuminPackUnitTest
                 original.Inner.A = 7;
                 original.Inner.SetB(8);
 
-                var restored = LuminPackSerializer.Deserialize<NestedExplicitHolder>(
-                    LuminPackSerializer.Serialize(original));
+                var restored = global::LuminPackUnitTest.ConcreteReads.Read<NestedExplicitHolder>(LuminPackSerializer.Serialize(original), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref NestedExplicitHolder concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
                 results.Add(restored.Outer == 6 && restored.Inner.A == 7 && restored.Inner.GetB() == 8
                     ? "✓ LayoutKindPrivateTest NestedExplicit - PASSED"

@@ -23,7 +23,7 @@ public partial class DeserializeReuseTest
             target.Items = [];
             target.VolatileChild = new();
         };
-        try { LuminPackSerializer.Deserialize<StoreCommitGraph>(bytes, ref target); }
+        try { LuminPackSerializer.Deserialize(bytes, ref target); }
         finally { StoreCommitCallback.Reading = null; }
         // Ordinary reuse reads directly into existing storage, so the callback replacement is not restored.
         Assert.NotSame(items, target.Items);
@@ -53,12 +53,12 @@ public partial class DeserializeReuseTest
         var target = new ReuseGraph { Items = [item], Array = [element] };
         foreach (string? text in new[] { "changed", "\u4E2D\uD83D\uDE00", "", null, "after null" })
         {
-            byte[] bytes = LuminPackSerializer.Serialize<ReuseGraph, TOptions>(new()
+            byte[] bytes = LuminPackSerializer.Serialize<TOptions>((ReuseGraph)new()
             {
                 Items = [new() { Text = text! }], Array = [new() { Text = text! }]
             });
-            int consumed = LuminPackSerializer.Deserialize<ReuseGraph, TOptions>(bytes, ref target);
-            var fresh = LuminPackSerializer.Deserialize<ReuseGraph, TOptions>(bytes);
+            int consumed = LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
+            var fresh = global::LuminPackUnitTest.ConcreteReads.Read<ReuseGraph>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ReuseGraph concreteReadTarget) => LuminPackSerializer.Deserialize<TOptions>(concreteReadInput, ref concreteReadTarget));
             Assert.Equal(bytes.Length, consumed);
             Assert.Same(item, target.Items[0]);
             Assert.Same(element, target.Array[0]);

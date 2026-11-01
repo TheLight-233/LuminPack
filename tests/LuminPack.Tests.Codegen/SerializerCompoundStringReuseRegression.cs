@@ -67,7 +67,7 @@ internal static class SerializerCompoundStringReuseRegression
                 .Replace(" || !ReferenceEquals(candidate,target.Value)", "", StringComparison.Ordinal)
                 .Replace(" || !ReferenceEquals(candidate,value.Item2)", "", StringComparison.Ordinal)
                 .Replace(" || !ReferenceEquals(candidate,receiver.Item2)", "", StringComparison.Ordinal);
-            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(changed, parse, "Entry.cs"));
+            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(changed, parse, "Entry.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out var editedOutput, out diagnostics);
             CheckSelection(driver, selected: false);
             Require(Trees(driver).SequenceEqual(Trees(Create(parse).RunGenerators(edited))), "A scalar-to-portable edit retained stale compound reuse.");

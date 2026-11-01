@@ -26,7 +26,7 @@ internal static partial class SerializerDictionaryScalarSlotRegression
             GeneratorDriver retained = StableDriver(parse);
             retained = retained.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
             CheckStableOutput(output, diagnostics, retained, expected: true, execute: true);
-            var changed = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(source.Replace("using Element = System.Int64;", "using Element = UserScalar;"), parse, "Fixture.cs"));
+            var changed = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(source.Replace("using Element = System.Int64;", "using Element = UserScalar;"), parse, "Fixture.cs"));
             retained = retained.RunGeneratorsAndUpdateCompilation(changed, out output, out diagnostics);
             CheckStableOutput(output, diagnostics, retained, expected: false, execute: false);
             Require(StableCapture(StableDriver(parse).RunGenerators(changed)) == StableCapture(retained), "Retained element exclusion differs from fresh output.");
@@ -61,7 +61,7 @@ internal static partial class SerializerDictionaryScalarSlotRegression
     /// <param name="references">The actual platform and runtime metadata.</param>
     /// <returns>The optimized executable consumer compilation.</returns>
     private static CSharpCompilation StableInput(string name, string source, CSharpParseOptions parse, MetadataReference[] references)
-        => CSharpCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, parse, "Fixture.cs")], references,
+        => TestCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, parse, "Fixture.cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
 
     /// <summary>Creates a fresh complete generator pair.</summary>
@@ -150,13 +150,13 @@ internal static partial class SerializerDictionaryScalarSlotRegression
                 var source = new Message { Values = keys.ToDictionary(key => key, key => default(Element)), Tail = 53 };
                 var target = new Message { Values = keys.ToDictionary(key => key, key => default(Element)) };
                 var original = target.Values;
-                byte[] bytes = LuminPackSerializer.Serialize<Message, P>(source);
-                var fresh = LuminPackSerializer.Deserialize<Message, P>(bytes);
+                byte[] bytes = LuminPackSerializer.Serialize<P>(source);
+                var fresh = global::LuminPackUnitTest.ConcreteReads.Read<Message>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Message concreteReadTarget) => LuminPackSerializer.Deserialize<P>(concreteReadInput, ref concreteReadTarget));
                 if (!fresh.Values.Keys.SequenceEqual(keys) || fresh.Tail != 53) throw new Exception("Fresh graph differs.");
                 for (int iteration = 0; iteration < 4; iteration++)
                 {
                     var enumerator = target.Values.GetEnumerator(); enumerator.MoveNext();
-                    if (LuminPackSerializer.Deserialize<Message, P>(bytes, ref target) != bytes.Length ||
+                    if (LuminPackSerializer.Deserialize<P>(bytes, ref target) != bytes.Length ||
                         !ReferenceEquals(target.Values, original) || !target.Values.Keys.SequenceEqual(keys) || target.Tail != 53)
                         throw new Exception("Stable-key generated root differs.");
                     bool invalidated = false;
@@ -167,16 +167,16 @@ internal static partial class SerializerDictionaryScalarSlotRegression
                 for (int iteration = 0; iteration < 4; iteration++)
                 {
                     source.Values = keys.Select(key => key + iteration).ToDictionary(key => key, key => default(Element));
-                    bytes = LuminPackSerializer.Serialize<Message, P>(source);
-                    LuminPackSerializer.Deserialize<Message, P>(bytes, ref target);
+                    bytes = LuminPackSerializer.Serialize<P>(source);
+                    LuminPackSerializer.Deserialize<P>(bytes, ref target);
                     if (!target.Values.Keys.SequenceEqual(source.Values.Keys)) throw new Exception("Changed generated keys differ.");
                 }
                 var fixedSource = new FixedMessage { Values = keys.ToDictionary(key => key, key => default(Element)), Tail = 71 };
                 var fixedTarget = new FixedMessage { Values = keys.ToDictionary(key => key, key => default(Element)) };
-                byte[] fixedBytes = LuminPackSerializer.Serialize<FixedMessage, P>(fixedSource);
-                LuminPackSerializer.Deserialize<FixedMessage, P>(fixedBytes, ref fixedTarget);
+                byte[] fixedBytes = LuminPackSerializer.Serialize<P>(fixedSource);
+                LuminPackSerializer.Deserialize<P>(fixedBytes, ref fixedTarget);
                 if (!fixedTarget.Values.Keys.SequenceEqual(keys) || fixedTarget.Tail != 71) throw new Exception("A fixed member profile was lost.");
-                byte[] mapBytes = LuminPackSerializer.Serialize<Dictionary<string, Element>, P>(source.Values);
+                byte[] mapBytes = LuminPackSerializer.Serialize<P>(source.Values);
                 for (int width = 8; width < mapBytes.Length; width++)
                 {
                     ReadOnlySpan<byte> input = mapBytes.AsSpan(0, width);
@@ -184,13 +184,13 @@ internal static partial class SerializerDictionaryScalarSlotRegression
                     var map = source.Values.ToDictionary();
                     int version = LuminPack.Code.LuminPackMarshal.GetDictionaryView(map)._version;
                     bool failed = false;
-                    try { LuminPackSerializer.Deserialize<Dictionary<string, Element>, P>(ref reader, ref map); }
+                    try { LuminPackSerializer.Deserialize<P>(ref reader, ref map); }
                     catch { failed = true; }
                     if (!failed || reader.Position != 0 || LuminPack.Code.LuminPackMarshal.GetDictionaryView(map)._version != version ||
                         !map.Keys.SequenceEqual(source.Values.Keys)) throw new Exception("Generated dictionary failure published cursor or staging.");
                 }
                 string json = LuminPackSerializer.SerializeJson(source);
-                if (!LuminPackSerializer.DeserializeJson<Message>(json).Values.Keys.SequenceEqual(source.Values.Keys)) throw new Exception("JSON changed.");
+                if (!global::LuminPackUnitTest.ConcreteReads.ReadJson<Message>(json, static (string concreteReadInput, ref Message concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).Values.Keys.SequenceEqual(source.Values.Keys)) throw new Exception("JSON changed.");
             }
         
             public readonly struct OtherProfile : ILuminPackOptions

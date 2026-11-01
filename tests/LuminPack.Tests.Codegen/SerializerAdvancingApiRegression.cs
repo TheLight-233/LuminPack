@@ -90,7 +90,7 @@ internal static class SerializerAdvancingApiRegression
         {
             const string header = "using System; using System.Collections.Generic; using System.Runtime.InteropServices; using LuminPack; using LuminPack.Core; using LuminPack.Attribute; [assembly:LuminPackGeneratorOptions(LuminPackGenerationMode.Minimal)] ";
             var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET10_0_OR_GREATER"]);
-            var input = CSharpCompilation.Create("AdvancingConsumer" + Guid.NewGuid().ToString("N"),
+            var input = TestCompilation.Create("AdvancingConsumer" + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(header + members, parse)], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
             GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
@@ -124,20 +124,34 @@ internal static class SerializerAdvancingApiRegression
                     Check(new Versioned { Id = 19, Text = "versioned" });
                     Check(new Tracked { Id = 23, Text = "tracked" });
                     foreach (int? value in new int?[] { 42, null })
-                        if (LuminPackSerializer.Deserialize<int?>(LuminPackSerializer.Serialize<int?>(value)) != value)
+                        if (global::LuminPackUnitTest.ConcreteReads.Read<int?>(LuminPackSerializer.Serialize(value), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int? concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) != value)
                             throw new Exception("Generic nullable dispatch bypassed its formatter contract.");
                 }
-                private static void Check<T>(T value)
+                private static void Check(Ordinary value)
                 {
                     var bytes = LuminPackSerializer.Serialize(value);
-                    var result = LuminPackSerializer.Deserialize<T>(bytes);
+                    Ordinary result = null!; LuminPackSerializer.Deserialize(bytes, ref result);
+                    if (LuminPackSerializer.SerializeJson(value) != LuminPackSerializer.SerializeJson(result))
+                        throw new Exception("Direct field access changed a serialization contract.");
+                }
+                private static void Check(Versioned value)
+                {
+                    var bytes = LuminPackSerializer.Serialize(value);
+                    Versioned result = null!; LuminPackSerializer.Deserialize(bytes, ref result);
+                    if (LuminPackSerializer.SerializeJson(value) != LuminPackSerializer.SerializeJson(result))
+                        throw new Exception("Direct field access changed a serialization contract.");
+                }
+                private static void Check(Tracked value)
+                {
+                    var bytes = LuminPackSerializer.Serialize(value);
+                    Tracked result = null!; LuminPackSerializer.Deserialize(bytes, ref result);
                     if (LuminPackSerializer.SerializeJson(value) != LuminPackSerializer.SerializeJson(result))
                         throw new Exception("Direct field access changed a serialization contract.");
                 }
             }
             """;
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET10_0_OR_GREATER"]);
-        var input = CSharpCompilation.Create("DirectFields", [CSharpSyntaxTree.ParseText(source, parse)], references,
+        var input = TestCompilation.Create("DirectFields", [CSharpSyntaxTree.ParseText(source, parse)], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out _);
@@ -183,7 +197,7 @@ internal static class SerializerAdvancingApiRegression
         foreach (string tier in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET10_0_OR_GREATER"]);
-            var input = CSharpCompilation.Create("JsonRoot" + tier,
+            var input = TestCompilation.Create("JsonRoot" + tier,
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", tier, StringComparison.Ordinal), parse)], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
             GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);

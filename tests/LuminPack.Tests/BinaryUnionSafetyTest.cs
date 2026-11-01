@@ -138,7 +138,7 @@ internal static class BinaryUnionSafetyTest
         var payload = LuminPackSerializer.Serialize(value);
         Assert(payload[0] == 1, "The class union fast path wrote the wrong constant tag.");
 
-        var result = LuminPackSerializer.Deserialize<DynamicUnionBase>(payload);
+        var result = global::LuminPackUnitTest.ConcreteReads.Read<DynamicUnionBase>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref DynamicUnionBase concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(result is StaticDynamicUnionMember { Value: 123 },
             "The class union fast path did not round-trip through the static tag switch.");
     }
@@ -150,9 +150,9 @@ internal static class BinaryUnionSafetyTest
         var payload = LuminPackSerializer.Serialize(value);
         var json = LuminPackSerializer.SerializeJson(value);
         Assert(payload[0] == 7, "The interface union fast path wrote the wrong constant tag.");
-        Assert(LuminPackSerializer.Deserialize<IFastInterfaceUnion>(payload) is FastInterfaceUnionMember { Value: 456 },
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<IFastInterfaceUnion>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IFastInterfaceUnion concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is FastInterfaceUnionMember { Value: 456 },
             "The interface union binary fast path did not round-trip.");
-        Assert(LuminPackSerializer.DeserializeJson<IFastInterfaceUnion>(json) is FastInterfaceUnionMember { Value: 456 },
+        Assert(global::LuminPackUnitTest.ConcreteReads.ReadJson<IFastInterfaceUnion>(json, static (string concreteReadInput, ref IFastInterfaceUnion concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) is FastInterfaceUnionMember { Value: 456 },
             "The interface union JSON fast path did not round-trip.");
     }
 
@@ -162,7 +162,7 @@ internal static class BinaryUnionSafetyTest
         IFastInterfaceUnion value = new FastInterfaceUnionMember { Value = 789 };
         var payload = LuminPackSerializer.Serialize(value);
 
-        Assert(LuminPackSerializer.Deserialize<IFastInterfaceUnion>(payload) is FastInterfaceUnionMember { Value: 789 },
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<IFastInterfaceUnion>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IFastInterfaceUnion concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is FastInterfaceUnionMember { Value: 789 },
             "A known local tag did not deserialize through the generated switch.");
     }
 
@@ -181,19 +181,19 @@ internal static class BinaryUnionSafetyTest
     {
         IFastInterfaceUnion? nullValue = null;
         var nullPayload = LuminPackSerializer.Serialize(nullValue);
-        Assert(LuminPackSerializer.Deserialize<IFastInterfaceUnion>(nullPayload) is null,
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<IFastInterfaceUnion>(nullPayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IFastInterfaceUnion concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is null,
             "A null interface union did not round-trip.");
 
         IWideUnion wide = new WideUnionMember { Value = 42 };
         var widePayload = LuminPackSerializer.Serialize(wide);
         Assert(widePayload[0] == LuminPack.Code.LuminPackCode.WideTag,
             "The wide-tag virtual path did not preserve the wide union header.");
-        Assert(LuminPackSerializer.Deserialize<IWideUnion>(widePayload) is WideUnionMember { Value: 42 },
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<IWideUnion>(widePayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IWideUnion concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is WideUnionMember { Value: 42 },
             "A wide-tag union did not round-trip.");
 
         IGenericFastUnion<int> generic = new GenericFastUnionMember<int> { Value = 73 };
         var genericPayload = LuminPackSerializer.Serialize(generic);
-        Assert(LuminPackSerializer.Deserialize<IGenericFastUnion<int>>(genericPayload) is GenericFastUnionMember<int> { Value: 73 },
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<IGenericFastUnion<int>>(genericPayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IGenericFastUnion<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is GenericFastUnionMember<int> { Value: 73 },
             "A generic interface union did not round-trip.");
 
         var member = new MultipleClassUnionMember { Value = 88 };
@@ -201,9 +201,9 @@ internal static class BinaryUnionSafetyTest
         SecondClassUnionRoot second = member;
         var firstPayload = LuminPackSerializer.Serialize(first);
         var secondPayload = LuminPackSerializer.Serialize(second);
-        Assert(LuminPackSerializer.Deserialize<FirstClassUnionRoot>(firstPayload) is MultipleClassUnionMember { Value: 88 },
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<FirstClassUnionRoot>(firstPayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref FirstClassUnionRoot concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is MultipleClassUnionMember { Value: 88 },
             "The first independent class-union virtual slot failed.");
-        Assert(LuminPackSerializer.Deserialize<SecondClassUnionRoot>(secondPayload) is MultipleClassUnionMember { Value: 88 },
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<SecondClassUnionRoot>(secondPayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SecondClassUnionRoot concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is MultipleClassUnionMember { Value: 88 },
             "The second independent class-union virtual slot failed.");
     }
 
@@ -222,10 +222,10 @@ internal static class BinaryUnionSafetyTest
         IFastInterfaceUnion value = new RegisteredInterfaceUnionMember { Value = 321 };
         var payload = LuminPackSerializer.Serialize(value);
         Assert(payload[0] == 100, "The registered union member wrote the wrong wire tag.");
-        Assert(LuminPackSerializer.Deserialize<IFastInterfaceUnion>(payload) is RegisteredInterfaceUnionMember { Value: 321 },
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<IFastInterfaceUnion>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IFastInterfaceUnion concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is RegisteredInterfaceUnionMember { Value: 321 },
             "The registered union member did not round-trip.");
         var json = LuminPackSerializer.SerializeJson(value);
-        Assert(LuminPackSerializer.DeserializeJson<IFastInterfaceUnion>(json) is RegisteredInterfaceUnionMember { Value: 321 },
+        Assert(global::LuminPackUnitTest.ConcreteReads.ReadJson<IFastInterfaceUnion>(json, static (string concreteReadInput, ref IFastInterfaceUnion concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) is RegisteredInterfaceUnionMember { Value: 321 },
             "The registered union member did not round-trip through JSON.");
     }
 
@@ -290,10 +290,10 @@ internal static class BinaryUnionSafetyTest
             "The first explicit closed-generic union member wrote the wrong wire tag.");
         Assert(secondPayload[0] == 12,
             "The second explicit closed-generic union member wrote the wrong wire tag.");
-        Assert(LuminPackSerializer.Deserialize<IMixedGenericUnion<int>>(closedPayload) is
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<IMixedGenericUnion<int>>(closedPayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IMixedGenericUnion<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is
                 MixedGenericUnionMember<int> { Value: 91 },
             "The first explicit closed-generic union member did not round-trip.");
-        Assert(LuminPackSerializer.Deserialize<IMixedGenericUnion<string>>(secondPayload) is
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<IMixedGenericUnion<string>>(secondPayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IMixedGenericUnion<string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is
                 MixedGenericUnionMember<string> { Value: "second" },
             "The second explicit closed-generic union member did not round-trip.");
     }
@@ -309,7 +309,7 @@ internal static class BinaryUnionSafetyTest
         };
 
         var payload = LuminPackSerializer.Serialize(value);
-        var result = LuminPackSerializer.Deserialize<ISerializable>(payload);
+        var result = global::LuminPackUnitTest.ConcreteReads.Read<ISerializable>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ISerializable concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
         Assert(result is Struct1 actual &&
                actual.A == 123456789 &&
@@ -322,7 +322,7 @@ internal static class BinaryUnionSafetyTest
     private static void DynamicUnionRegistrationIsNotAvailable()
     {
         DynamicUnionBase value = new StaticDynamicUnionMember { Value = 1 };
-        Assert(LuminPackSerializer.Deserialize<DynamicUnionBase>(LuminPackSerializer.Serialize(value)) is StaticDynamicUnionMember,
+        Assert(global::LuminPackUnitTest.ConcreteReads.Read<DynamicUnionBase>(LuminPackSerializer.Serialize(value), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref DynamicUnionBase concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is StaticDynamicUnionMember,
             "A statically declared union tag did not round-trip without registration.");
     }
 

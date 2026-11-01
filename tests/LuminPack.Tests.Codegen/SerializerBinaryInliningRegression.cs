@@ -82,7 +82,7 @@ internal static class SerializerBinaryInliningRegression
                             }
                             if (sparse && count > 0) { value.Left.Remove("1"); value.Right.Remove("1"); }
                         }
-                        byte[] expected = LuminPackSerializer.Serialize<Payload>(in value);
+                        byte[] expected = LuminPackSerializer.Serialize(in value);
                         byte[] actual = LuminPackSerializer.Serialize(in value);
                         if (!actual.AsSpan().SequenceEqual(expected)) throw new Exception("Concrete write changed the binary contract.");
                         var buffer = LuminBufferWriterPool.Rent();
@@ -113,7 +113,7 @@ internal static class SerializerBinaryInliningRegression
                         if (!stream.ToArray().AsSpan().SequenceEqual(expected)) throw new Exception("Async write changed the binary contract.");
                         stream.Position = 0;
                         Validate(value, LuminPackSerializer.DeserializeAsync(stream, new Payload()).GetAwaiter().GetResult());
-                        Validate(value, LuminPackSerializer.Deserialize<Payload>(actual));
+                        Validate(value, global::LuminPackUnitTest.ConcreteReads.Read<Payload>(actual, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Payload concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
                         foreach (var encoding in new[] { LuminPackStringEncoding.UTF8, LuminPackStringEncoding.UTF16 })
             {
                 if (encoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8)
@@ -123,7 +123,7 @@ internal static class SerializerBinaryInliningRegression
                 void RunProfile<TProfile>()
                     where TProfile : struct, global::LuminPack.Option.ILuminPackOptions
                 {
-                    string expectedJson = LuminPackSerializer.SerializeJson<Payload, TProfile>(value);
+                    string expectedJson = LuminPackSerializer.SerializeJson<TProfile>(value);
                     string actualJson = LuminPackSerializer.SerializeJson<TProfile>(value);
                     if (actualJson != expectedJson)
                         throw new Exception("Concrete JSON output changed.");
@@ -176,9 +176,9 @@ internal static class SerializerBinaryInliningRegression
                 {
                     var value = new GenericValue<int> { Item = 37, Items = new() { 3, 5 } };
                     var bytes = LuminPackSerializer.Serialize(in value);
-                    if (!bytes.AsSpan().SequenceEqual(LuminPackSerializer.Serialize<GenericValue<int>>(in value)))
+                    if (!bytes.AsSpan().SequenceEqual(LuminPackSerializer.Serialize(in value)))
                         throw new Exception("Closing a generic struct changed its original wire decisions.");
-                    var restored = LuminPackSerializer.Deserialize<GenericValue<int>>(bytes);
+                    var restored = global::LuminPackUnitTest.ConcreteReads.Read<GenericValue<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref GenericValue<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (restored.Item != 37 || restored.Items[1] != 5) throw new Exception("Generic struct fallback read changed.");
                     LuminPackSerializer.Deserialize(bytes.AsSpan(), ref restored);
                     if (restored.Item != 37 || restored.Items[0] != 3) throw new Exception("Generic struct concrete read changed.");
@@ -188,12 +188,12 @@ internal static class SerializerBinaryInliningRegression
                         Items = new() { new() { Item = 31, Items = new() { 41, 43 } } }
                     };
                     bytes = LuminPackSerializer.Serialize(in nested);
-                    if (!bytes.AsSpan().SequenceEqual(LuminPackSerializer.Serialize<GenericBox<GenericBox<int>>>(in nested)))
+                    if (!bytes.AsSpan().SequenceEqual(LuminPackSerializer.Serialize(in nested)))
                         throw new Exception("Closing a nested generic class changed its original wire decisions.");
                     GenericBox<GenericBox<int>> nestedRead = null!;
                     LuminPackSerializer.Deserialize(bytes.AsSpan(), ref nestedRead);
                     if (nestedRead.Item.Item != 19 || nestedRead.Items[0].Items[1] != 43) throw new Exception("Nested generic concrete read changed.");
-                    nestedRead = LuminPackSerializer.Deserialize<GenericBox<GenericBox<int>>>(bytes);
+                    nestedRead = global::LuminPackUnitTest.ConcreteReads.Read<GenericBox<GenericBox<int>>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref GenericBox<GenericBox<int>> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (nestedRead.Item.Items[1] != 29 || nestedRead.Items[0].Item != 31) throw new Exception("Nested generic fallback read changed.");
                 }
                 private static void Validate(Payload source, Payload value)
@@ -226,7 +226,7 @@ internal static class SerializerBinaryInliningRegression
             }
             """;
         // Extension syntax in the fixture intentionally shares the same using scope as normal consumers.
-        var input = CSharpCompilation.Create("RepeatedInlineOperations", [CSharpSyntaxTree.ParseText("using System.Linq;\n" + source, Parse, "Models.cs")], references,
+        var input = TestCompilation.Create("RepeatedInlineOperations", [CSharpSyntaxTree.ParseText("using System.Linq;\n" + source, Parse, "Models.cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: Parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);

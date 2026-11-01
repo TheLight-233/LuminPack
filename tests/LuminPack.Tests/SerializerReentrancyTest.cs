@@ -46,7 +46,7 @@ internal static class SerializerReentrancyTest
     private static void ExplicitProfilesDoNotChangeImplicitDefaults()
     {
         var expected = LuminPackSerializer.Serialize("stable-default");
-        var alternate = LuminPackSerializer.Serialize<string, LuminPackUtf16TokenOptions>("stable-default");
+        var alternate = LuminPackSerializer.Serialize<LuminPackUtf16TokenOptions>((string)("stable-default"));
         Assert(!alternate.AsSpan().SequenceEqual(expected), "The explicit profile did not select its own wire representation.");
         var actual = LuminPackSerializer.Serialize("stable-default");
         Assert(actual.AsSpan().SequenceEqual(expected), "An explicit profile changed implicit serialization defaults.");
@@ -99,6 +99,6 @@ public sealed class ReentrantSerializerModel
     [LuminPackOnDeserializing]
     public static void OnDeserializing()
     {
-        _ = LuminPackSerializer.Deserialize<string>(NestedPayload);
+        _ = global::LuminPackUnitTest.ConcreteReads.Read<string>(NestedPayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
     }
 }

@@ -38,7 +38,7 @@ internal static class AsyncSerializerRegressionTest
         Assert(bytes.Length == 65_536, $"Boundary fixture was {bytes.Length} bytes instead of 65,536.");
 
         using var stream = new ChunkedReadStream(bytes, bytes.Length);
-        var roundTrip = LuminPackSerializer.DeserializeAsync<byte[]>(stream).AsTask().GetAwaiter().GetResult();
+        var roundTrip = LuminPackSerializer.DeserializeAsync(stream, (byte[])null!).AsTask().GetAwaiter().GetResult();
         Assert(roundTrip is not null && roundTrip.AsSpan().SequenceEqual(value),
             "DeserializeAsync failed at the exact initial-buffer boundary.");
     }
@@ -51,7 +51,7 @@ internal static class AsyncSerializerRegressionTest
         var bytes = LuminPackSerializer.Serialize(value);
 
         using var stream = new ChunkedReadStream(bytes, 997);
-        var roundTrip = LuminPackSerializer.DeserializeAsync<byte[]>(stream).AsTask().GetAwaiter().GetResult();
+        var roundTrip = LuminPackSerializer.DeserializeAsync(stream, (byte[])null!).AsTask().GetAwaiter().GetResult();
         Assert(roundTrip is not null && roundTrip.AsSpan().SequenceEqual(value),
             "DeserializeAsync corrupted a multi-segment, short-read stream.");
     }
@@ -67,7 +67,7 @@ internal static class AsyncSerializerRegressionTest
             var threw = false;
             try
             {
-                LuminPackSerializer.DeserializeAsync<int[]>(failing).AsTask().GetAwaiter().GetResult();
+                LuminPackSerializer.DeserializeAsync(failing, (int[])null!).AsTask().GetAwaiter().GetResult();
             }
             catch (IOException)
             {
@@ -77,7 +77,7 @@ internal static class AsyncSerializerRegressionTest
         }
 
         using var valid = new ChunkedReadStream(bytes, 73);
-        var roundTrip = LuminPackSerializer.DeserializeAsync<int[]>(valid).AsTask().GetAwaiter().GetResult();
+        var roundTrip = LuminPackSerializer.DeserializeAsync(valid, (int[])null!).AsTask().GetAwaiter().GetResult();
         Assert(roundTrip is not null && roundTrip.SequenceEqual(value),
             "A failed async read poisoned the pooled sequence builder.");
     }

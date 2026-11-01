@@ -16,6 +16,205 @@ internal static class WireFixtures
     private const bool Utf8Length = false;
     private const bool Utf16Length = true;
 
+    /// <summary>Registers the closed binary fixture operations used by the generic wire harness.</summary>
+    [ModuleInitializer]
+    internal static unsafe void RegisterFixtures()
+    {
+        LuminPackSerializer.Register<int, LuminPackUtf8LengthOptions>(&WriteFixture0<LuminPackUtf8LengthOptions>, &ReadFixture0<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<int, LuminPackUtf16LengthOptions>(&WriteFixture0<LuminPackUtf16LengthOptions>, &ReadFixture0<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<string, LuminPackUtf8LengthOptions>(&WriteFixture1<LuminPackUtf8LengthOptions>, &ReadFixture1<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<string, LuminPackUtf16LengthOptions>(&WriteFixture1<LuminPackUtf16LengthOptions>, &ReadFixture1<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<int[], LuminPackUtf8LengthOptions>(&WriteFixture2<LuminPackUtf8LengthOptions>, &ReadFixture2<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<int[], LuminPackUtf16LengthOptions>(&WriteFixture2<LuminPackUtf16LengthOptions>, &ReadFixture2<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<List<string>, LuminPackUtf8LengthOptions>(&WriteFixture3<LuminPackUtf8LengthOptions>, &ReadFixture3<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<List<string>, LuminPackUtf16LengthOptions>(&WriteFixture3<LuminPackUtf16LengthOptions>, &ReadFixture3<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<string[], LuminPackUtf8LengthOptions>(&WriteFixture4<LuminPackUtf8LengthOptions>, &ReadFixture4<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<string[], LuminPackUtf16LengthOptions>(&WriteFixture4<LuminPackUtf16LengthOptions>, &ReadFixture4<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<Dictionary<string, int>, LuminPackUtf8LengthOptions>(&WriteFixture5<LuminPackUtf8LengthOptions>, &ReadFixture5<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<Dictionary<string, int>, LuminPackUtf16LengthOptions>(&WriteFixture5<LuminPackUtf16LengthOptions>, &ReadFixture5<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<Queue<int>, LuminPackUtf8LengthOptions>(&WriteFixture6<LuminPackUtf8LengthOptions>, &ReadFixture6<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<Queue<int>, LuminPackUtf16LengthOptions>(&WriteFixture6<LuminPackUtf16LengthOptions>, &ReadFixture6<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<Stack<int>, LuminPackUtf8LengthOptions>(&WriteFixture7<LuminPackUtf8LengthOptions>, &ReadFixture7<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<Stack<int>, LuminPackUtf16LengthOptions>(&WriteFixture7<LuminPackUtf16LengthOptions>, &ReadFixture7<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<BitArray, LuminPackUtf8LengthOptions>(&WriteFixture8<LuminPackUtf8LengthOptions>, &ReadFixture8<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<BitArray, LuminPackUtf16LengthOptions>(&WriteFixture8<LuminPackUtf16LengthOptions>, &ReadFixture8<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<StringBuilder, LuminPackUtf8LengthOptions>(&WriteFixture9<LuminPackUtf8LengthOptions>, &ReadFixture9<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<StringBuilder, LuminPackUtf16LengthOptions>(&WriteFixture9<LuminPackUtf16LengthOptions>, &ReadFixture9<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<int[,], LuminPackUtf8LengthOptions>(&WriteFixture10<LuminPackUtf8LengthOptions>, &ReadFixture10<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<int[,], LuminPackUtf16LengthOptions>(&WriteFixture10<LuminPackUtf16LengthOptions>, &ReadFixture10<LuminPackUtf16LengthOptions>);
+        LuminPackSerializer.Register<WireModel, LuminPackUtf8LengthOptions>(&WriteFixture11<LuminPackUtf8LengthOptions>, &ReadFixture11<LuminPackUtf8LengthOptions>);
+        LuminPackSerializer.Register<WireModel, LuminPackUtf16LengthOptions>(&WriteFixture11<LuminPackUtf16LengthOptions>, &ReadFixture11<LuminPackUtf16LengthOptions>);
+    }
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void WriteFixture0<TOptions>(ref LuminPackWriter state, in int value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Serialize<TOptions>(ref state, in value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void ReadFixture0<TOptions>(ref LuminPackReader state, ref int value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Deserialize<TOptions>(ref state, ref value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void WriteFixture1<TOptions>(ref LuminPackWriter state, in string value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Serialize<TOptions>(ref state, in value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void ReadFixture1<TOptions>(ref LuminPackReader state, ref string value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Deserialize<TOptions>(ref state, ref value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void WriteFixture2<TOptions>(ref LuminPackWriter state, in int[] value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Serialize<TOptions>(ref state, in value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void ReadFixture2<TOptions>(ref LuminPackReader state, ref int[] value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Deserialize<TOptions>(ref state, ref value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void WriteFixture3<TOptions>(ref LuminPackWriter state, in List<string> value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Serialize<TOptions>(ref state, in value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void ReadFixture3<TOptions>(ref LuminPackReader state, ref List<string> value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Deserialize<TOptions>(ref state, ref value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void WriteFixture4<TOptions>(ref LuminPackWriter state, in string[] value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Serialize<TOptions>(ref state, in value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void ReadFixture4<TOptions>(ref LuminPackReader state, ref string[] value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Deserialize<TOptions>(ref state, ref value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void WriteFixture5<TOptions>(ref LuminPackWriter state, in Dictionary<string, int> value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Serialize<TOptions>(ref state, in value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void ReadFixture5<TOptions>(ref LuminPackReader state, ref Dictionary<string, int> value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Deserialize<TOptions>(ref state, ref value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void WriteFixture6<TOptions>(ref LuminPackWriter state, in Queue<int> value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Serialize<TOptions>(ref state, in value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void ReadFixture6<TOptions>(ref LuminPackReader state, ref Queue<int> value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Deserialize<TOptions>(ref state, ref value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void WriteFixture7<TOptions>(ref LuminPackWriter state, in Stack<int> value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Serialize<TOptions>(ref state, in value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void ReadFixture7<TOptions>(ref LuminPackReader state, ref Stack<int> value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Deserialize<TOptions>(ref state, ref value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void WriteFixture8<TOptions>(ref LuminPackWriter state, in BitArray value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Serialize<TOptions>(ref state, in value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void ReadFixture8<TOptions>(ref LuminPackReader state, ref BitArray value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Deserialize<TOptions>(ref state, ref value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void WriteFixture9<TOptions>(ref LuminPackWriter state, in StringBuilder value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Serialize<TOptions>(ref state, in value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void ReadFixture9<TOptions>(ref LuminPackReader state, ref StringBuilder value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Deserialize<TOptions>(ref state, ref value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void WriteFixture10<TOptions>(ref LuminPackWriter state, in int[,] value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Serialize<TOptions>(ref state, in value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void ReadFixture10<TOptions>(ref LuminPackReader state, ref int[,] value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Deserialize<TOptions>(ref state, ref value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void WriteFixture11<TOptions>(ref LuminPackWriter state, in WireModel value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Serialize<TOptions>(ref state, in value);
+
+    /// <summary>Invokes the concrete fixture operation for one closed profile.</summary>
+    /// <typeparam name="TOptions">The fixture encoding profile.</typeparam>
+    /// <param name="state">The original operation state.</param>
+    /// <param name="value">The fixture payload.</param>
+    private static void ReadFixture11<TOptions>(ref LuminPackReader state, ref WireModel value) where TOptions : struct, ILuminPackOptions
+        => LuminPackSerializer.Deserialize<TOptions>(ref state, ref value);
+
+
     /// <summary>Writes  to the current output.</summary>
     /// <param name="directory">The directory used by this operation.</param>
     internal static void Write(string directory)
@@ -53,8 +252,8 @@ internal static class WireFixtures
         Check(strings.Count == 4 && strings[0] == "alpha" && strings[1] == "\u4E2D\u6587" && strings[2] == "\uD83D\uDE00" && strings[3] == "", "string-list");
         var nullEmpty = Get<List<string>>(directory, "string-null-empty");
         Check(nullEmpty.Count == 3 && nullEmpty[0] == null && nullEmpty[1] == "" && nullEmpty[2] == "x", "string-null-empty");
-        Check(LuminPackSerializer.Deserialize<List<string?>, LuminPackUtf16VarIntOptions>(File.ReadAllBytes(Path.Combine(directory, "string-varint-utf16.bin"))).SequenceEqual(VarIntStrings()), "string-varint-utf16");
-        Check(LuminPackSerializer.Deserialize<List<string?>, LuminPackUtf8VarIntOptions>(File.ReadAllBytes(Path.Combine(directory, "string-varint-utf8.bin"))).SequenceEqual(VarIntStrings()), "string-varint-utf8");
+        Check(ReadVarIntList<LuminPackUtf16VarIntOptions>(File.ReadAllBytes(Path.Combine(directory, "string-varint-utf16.bin"))).SequenceEqual(VarIntStrings()), "string-varint-utf16");
+        Check(ReadVarIntList<LuminPackUtf8VarIntOptions>(File.ReadAllBytes(Path.Combine(directory, "string-varint-utf8.bin"))).SequenceEqual(VarIntStrings()), "string-varint-utf8");
         Check(Get<string[]>(directory, "short-ascii", Utf8Length)
             .SequenceEqual(Enumerable.Range(4, 13).Select(n => new string('x', n))), "short-ascii");
         Check(Get<string[]>(directory, "medium-ascii", Utf8Length)
@@ -97,7 +296,18 @@ internal static class WireFixtures
     /// <param name="directory">The fixture destination.</param>
     /// <param name="name">The fixture name.</param>
     private static void PutVarIntList<TOptions>(string directory, string name) where TOptions : struct, ILuminPackOptions
-        => File.WriteAllBytes(Path.Combine(directory, name + ".bin"), LuminPackSerializer.Serialize<List<string?>, TOptions>(VarIntStrings()));
+        => File.WriteAllBytes(Path.Combine(directory, name + ".bin"), LuminPackSerializer.Serialize<TOptions>(VarIntStrings()));
+    /// <summary>Reads the concrete list fixture using its statically selected VarInt profile.</summary>
+    /// <typeparam name="TOptions">The VarInt encoding profile.</typeparam>
+    /// <param name="bytes">The fixture bytes.</param>
+    /// <returns>The decoded list.</returns>
+    private static List<string?> ReadVarIntList<TOptions>(byte[] bytes) where TOptions : struct, ILuminPackOptions
+    {
+        List<string?> value = null!;
+        LuminPackSerializer.Deserialize<TOptions>(bytes, ref value);
+        return value;
+    }
+
     /// <summary>Creates queue from the supplied input.</summary>
     /// <returns>The result of the operation.</returns>
     private static Queue<int> CreateQueue()

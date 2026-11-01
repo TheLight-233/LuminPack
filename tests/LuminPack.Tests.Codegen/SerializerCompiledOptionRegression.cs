@@ -25,9 +25,9 @@ internal static partial class SerializerCompiledOptionRegression
                 {
                     var value = new Owner.Value<decimal> { Item = 17, Other = 19 };
                     byte[] bytes = LuminPackSerializer.Serialize(value);
-                    if (LuminPackSerializer.Deserialize<Owner.Value<decimal>>(bytes).Other != 19) throw new System.Exception("Generic default changed.");
+                    if (global::LuminPackUnitTest.ConcreteReads.Read<Owner.Value<decimal>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Owner.Value<decimal> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Other != 19) throw new System.Exception("Generic default changed.");
                     bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(value);
-                    if (LuminPackSerializer.Deserialize<Owner.Value<decimal>, LuminPackUtf16LengthOptions>(bytes).Item != 17) throw new System.Exception("Generic profile changed.");
+                    if (global::LuminPackUnitTest.ConcreteReads.Read<Owner.Value<decimal>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Owner.Value<decimal> concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget)).Item != 17) throw new System.Exception("Generic profile changed.");
                     _ = LuminPackSerializer.Serialize(new Owner.Value<int> { Item = 23 });
                 }
             }
@@ -85,29 +85,29 @@ internal static partial class SerializerCompiledOptionRegression
                     if(!ReferenceEquals(original,copy[0]))throw new Exception("List string reuse.");
                     bytes=LuminPackSerializer.Serialize<LuminPackUtf8VarIntOptions>(list);
                     if(bytes.Length!=52)throw new Exception("UTF-8 variable list size.");
-                    if(!LuminPackSerializer.Deserialize<List<string>,LuminPackUtf8VarIntOptions>(bytes).SequenceEqual(list))throw new Exception("UTF-8 variable list read.");
+                    if(!global::LuminPackUnitTest.ConcreteReads.Read<List<string>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<string> concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf8VarIntOptions>(concreteReadInput, ref concreteReadTarget)).SequenceEqual(list))throw new Exception("UTF-8 variable list read.");
                     bytes=LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(list);
                     if(bytes.Length!=84)throw new Exception("Fixed profile changed.");
                     var model=new Model{Names=list};bytes=LuminPackSerializer.Serialize(model);
-                    if(LuminPackSerializer.Deserialize<Model>(bytes).Utf8!=model.Utf8)throw new Exception("Member profile.");
+                    if(global::LuminPackUnitTest.ConcreteReads.Read<Model>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Model concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Utf8!=model.Utf8)throw new Exception("Member profile.");
                     Root root=new Case{Name="root",Names=list};bytes=LuminPackSerializer.Serialize(root);
-                    if(((Case)LuminPackSerializer.Deserialize<Root>(bytes)).Names.Count!=16)throw new Exception("Union profile.");
+                    if(((Case)global::LuminPackUnitTest.ConcreteReads.Read<Root>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Root concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))).Names.Count!=16)throw new Exception("Union profile.");
                     bytes=LuminPackSerializer.Serialize<LuminPackUtf8VarIntOptions>(root);
-                    if(((Case)LuminPackSerializer.Deserialize<Root,LuminPackUtf8VarIntOptions>(bytes)).Name!="root")throw new Exception("UTF-8 Union profile.");
+                    if(((Case)global::LuminPackUnitTest.ConcreteReads.Read<Root>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Root concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf8VarIntOptions>(concreteReadInput, ref concreteReadTarget))).Name!="root")throw new Exception("UTF-8 Union profile.");
                     var named=new Named{Names=list};bytes=LuminPackSerializer.Serialize(named);
-                    if(bytes[2]!=5 || LuminPackSerializer.Deserialize<Named>(bytes).Names.Count!=16)throw new Exception("Named profile.");
+                    if(bytes[2]!=5 || global::LuminPackUnitTest.ConcreteReads.Read<Named>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Named concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Names.Count!=16)throw new Exception("Named profile.");
                     bytes=LuminPackSerializer.Serialize<LuminPackUtf8VarIntOptions>(named);
-                    if(bytes[2]!=4 || LuminPackSerializer.Deserialize<Named,LuminPackUtf8VarIntOptions>(bytes).Names.Count!=16)throw new Exception("Named UTF-8 profile.");
-                    var circle=new Circle{Text="circle"};circle.Next=circle;bytes=LuminPackSerializer.Serialize(circle);var restored=LuminPackSerializer.Deserialize<Circle>(bytes);
+                    if(bytes[2]!=4 || global::LuminPackUnitTest.ConcreteReads.Read<Named>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Named concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf8VarIntOptions>(concreteReadInput, ref concreteReadTarget)).Names.Count!=16)throw new Exception("Named UTF-8 profile.");
+                    var circle=new Circle{Text="circle"};circle.Next=circle;bytes=LuminPackSerializer.Serialize(circle);var restored=global::LuminPackUnitTest.ConcreteReads.Read<Circle>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Circle concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if(!ReferenceEquals(restored,restored.Next)||restored.Text!="circle")throw new Exception("Reference profile.");
                     var bounded=new Bounded{Names=list,Map=new Dictionary<string,string>{{"a","b"}}};bytes=LuminPackSerializer.Serialize(bounded);
-                    if(LuminPackSerializer.Deserialize<Bounded>(bytes).Map["a"]!="b")throw new Exception("Bounded profile.");
+                    if(global::LuminPackUnitTest.ConcreteReads.Read<Bounded>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Bounded concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Map["a"]!="b")throw new Exception("Bounded profile.");
                     var boundedUtf8=new BoundedUtf8{Names=new List<string>{null,"","\u4E2D","\uD83D\uDE00"},Map=new Dictionary<string,string>{{"\u4E2D","\u00E9"}}};bytes=LuminPackSerializer.Serialize(boundedUtf8);
-                    if(LuminPackSerializer.Deserialize<BoundedUtf8>(bytes).Map["\u4E2D"]!="\u00E9")throw new Exception("Bounded UTF-8 profile.");
-                    boundedUtf8.Names.Add(new string('a',33));bytes=LuminPackSerializer.Serialize(boundedUtf8);bool rejected=false;try{LuminPackSerializer.Deserialize<BoundedUtf8>(bytes);}catch(Exception){rejected=true;}if(!rejected)throw new Exception("Variable string budget bypassed.");
+                    if(global::LuminPackUnitTest.ConcreteReads.Read<BoundedUtf8>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BoundedUtf8 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)).Map["\u4E2D"]!="\u00E9")throw new Exception("Bounded UTF-8 profile.");
+                    boundedUtf8.Names.Add(new string('a',33));bytes=LuminPackSerializer.Serialize(boundedUtf8);bool rejected=false;try{global::LuminPackUnitTest.ConcreteReads.Read<BoundedUtf8>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BoundedUtf8 concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));}catch(Exception){rejected=true;}if(!rejected)throw new Exception("Variable string budget bypassed.");
                     var immutable = new BoundedImmutable { Names = ImmutableArray.Create("a", "\u4E2D", new string('a', 32)) };
                     bytes = LuminPackSerializer.Serialize(immutable);
-                    var immutableCopy = LuminPackSerializer.Deserialize<BoundedImmutable>(bytes);
+                    var immutableCopy = global::LuminPackUnitTest.ConcreteReads.Read<BoundedImmutable>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BoundedImmutable concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                     if (!immutableCopy.Names.SequenceEqual(immutable.Names)) throw new Exception("Bounded immutable strings changed.");
                     string retainedImmutable = immutableCopy.Names[1];
                     LuminPackSerializer.Deserialize(bytes, ref immutableCopy);
@@ -115,36 +115,36 @@ internal static partial class SerializerCompiledOptionRegression
                     immutable.Names = ImmutableArray.Create(new string('a', 33));
                     bytes = LuminPackSerializer.Serialize(immutable);
                     rejected = false;
-                    try { LuminPackSerializer.Deserialize<BoundedImmutable>(bytes); } catch (System.IO.InvalidDataException) { rejected = true; }
+                    try { global::LuminPackUnitTest.ConcreteReads.Read<BoundedImmutable>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BoundedImmutable concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)); } catch (System.IO.InvalidDataException) { rejected = true; }
                     if (!rejected) throw new Exception("Immutable string budget bypassed.");
                     string invalidUtf8Json = LuminPackSerializer.SerializeJson(boundedUtf8);
                     rejected = false;
-                    try { LuminPackSerializer.DeserializeJson<BoundedUtf8>(invalidUtf8Json); }
+                    try { global::LuminPackUnitTest.ConcreteReads.ReadJson<BoundedUtf8>(invalidUtf8Json, static (string concreteReadInput, ref BoundedUtf8 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)); }
                     catch (System.IO.InvalidDataException) { rejected = true; }
                     if (!rejected) throw new Exception("UTF-8 JSON string budget bypassed.");
                     bounded.Names = new List<string> { new string('a', 33) };
                     string invalidUtf16Json = LuminPackSerializer.SerializeJson(bounded);
                     rejected = false;
-                    try { LuminPackSerializer.DeserializeJson<Bounded>(invalidUtf16Json); }
+                    try { global::LuminPackUnitTest.ConcreteReads.ReadJson<Bounded>(invalidUtf16Json, static (string concreteReadInput, ref Bounded concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)); }
                     catch (System.IO.InvalidDataException) { rejected = true; }
                     if (!rejected) throw new Exception("UTF-16 JSON string budget bypassed.");
                     foreach (string text in new[] { new string('a', 32), new string('\n', 32), string.Concat(Enumerable.Repeat("\uD83D\uDE00", 16)) })
                     {
                         bounded.Names = new List<string> { text };
                         string boundedJson = LuminPackSerializer.SerializeJson(bounded);
-                        var boundedCopy = LuminPackSerializer.DeserializeJson<Bounded>(boundedJson);
+                        var boundedCopy = global::LuminPackUnitTest.ConcreteReads.ReadJson<Bounded>(boundedJson, static (string concreteReadInput, ref Bounded concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
                         string retainedText = boundedCopy.Names[0];
                         LuminPackSerializer.DeserializeJson(boundedJson, ref boundedCopy);
                         if (!ReferenceEquals(retainedText, boundedCopy.Names[0])) throw new Exception("Bounded UTF-16 JSON string reuse changed.");
                         boundedUtf8.Names = new List<string> { text };
                         string utf8Json = LuminPackSerializer.SerializeJson(boundedUtf8);
-                        var utf8Copy = LuminPackSerializer.DeserializeJson<BoundedUtf8>(utf8Json);
+                        var utf8Copy = global::LuminPackUnitTest.ConcreteReads.ReadJson<BoundedUtf8>(utf8Json, static (string concreteReadInput, ref BoundedUtf8 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
                         retainedText = utf8Copy.Names[0];
                         LuminPackSerializer.DeserializeJson(utf8Json, ref utf8Copy);
                         if (!ReferenceEquals(retainedText, utf8Copy.Names[0])) throw new Exception("Bounded UTF-8 JSON string reuse changed.");
                     }
                     string json=LuminPackSerializer.SerializeJson(model);
-                    if(LuminPackSerializer.DeserializeJson<Model>(json).Names.Count!=16)throw new Exception("JSON profile.");
+                    if(global::LuminPackUnitTest.ConcreteReads.ReadJson<Model>(json, static (string concreteReadInput, ref Model concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).Names.Count!=16)throw new Exception("JSON profile.");
                 }
             }
             """;
@@ -164,7 +164,7 @@ internal static partial class SerializerCompiledOptionRegression
             public static class Entry { public static byte[] Write() => LuminPackSerializer.Serialize(new Item()); }
             """;
         var tree = CSharpSyntaxTree.ParseText(source, parse);
-        var input = CSharpCompilation.Create("VarIntIncremental", [tree], references,
+        var input = TestCompilation.Create("VarIntIncremental", [tree], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         GeneratorDriver retained = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
         retained = retained.RunGenerators(input);
@@ -193,7 +193,7 @@ internal static partial class SerializerCompiledOptionRegression
                 StringRecording = (LuminPack.Option.LuminPackStringRecording)42,
                 StandardFormat = "G100")]
             """;
-        var input = CSharpCompilation.Create("CompiledOptionInvalid", [CSharpSyntaxTree.ParseText(invalid, parse)], references,
+        var input = TestCompilation.Create("CompiledOptionInvalid", [CSharpSyntaxTree.ParseText(invalid, parse)], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         var driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse)
             .RunGenerators(input);
@@ -231,7 +231,7 @@ internal static partial class SerializerCompiledOptionRegression
                     LuminPackSerializer.Register<Opaque, AssemblyProfile>(&Write<AssemblyProfile>, &Read<AssemblyProfile>, &WriteJson<AssemblyProfile>, &ReadJson<AssemblyProfile>);
                     LuminPackSerializer.Register<Opaque, LuminPackDefaultOptions>(&Write<LuminPackDefaultOptions>, &Read<LuminPackDefaultOptions>, &WriteJson<LuminPackDefaultOptions>, &ReadJson<LuminPackDefaultOptions>);
                     var value = new Opaque { Text = "\u4E2D\uD83D\uDE00" };
-                    byte[] expected = LuminPackSerializer.Serialize<string, AssemblyProfile>(value.Text);
+                    byte[] expected = LuminPackSerializer.Serialize<AssemblyProfile>(value.Text);
                     byte[] bytes = LuminPackSerializer.Serialize<Opaque>(value);
                     if (!System.Linq.Enumerable.SequenceEqual(expected, bytes)) throw new System.Exception("Registered assembly encoding changed.");
                     if (LuminPackSerializer.Deserialize<Opaque>(bytes).Text != value.Text) throw new System.Exception("Registered assembly read changed.");
@@ -243,19 +243,19 @@ internal static partial class SerializerCompiledOptionRegression
                     if (LuminPackSerializer.DeserializeJson<Opaque, LuminPackDefaultOptions>(json).Text != value.Text) throw new System.Exception("Explicit registered JSON changed.");
                 }
                 public static void Write<TOptions>(ref LuminPackWriter writer, in Opaque value) where TOptions : struct, ILuminPackOptions
-                    => LuminPackSerializer.Serialize<string, TOptions>(ref writer, value.Text);
+                    => LuminPackSerializer.Serialize<TOptions>(ref writer, value.Text);
                 public static void Read<TOptions>(ref LuminPackReader reader, ref Opaque value) where TOptions : struct, ILuminPackOptions
                 {
                     string text = "";
-                    LuminPackSerializer.Deserialize<string, TOptions>(ref reader, ref text);
+                    LuminPackSerializer.Deserialize<TOptions>(ref reader, ref text);
                     value = new() { Text = text };
                 }
                 public static void WriteJson<TOptions>(ref LuminPackJsonWriter writer, in Opaque value) where TOptions : struct, ILuminPackOptions
-                    => LuminPackSerializer.SerializeJson<string, TOptions>(ref writer, value.Text);
+                    => LuminPackSerializer.SerializeJson<TOptions>(ref writer, value.Text);
                 public static void ReadJson<TOptions>(ref LuminPackJsonReader reader, ref Opaque value) where TOptions : struct, ILuminPackOptions
                 {
                     string text = "";
-                    LuminPackSerializer.DeserializeJson<string, TOptions>(ref reader, ref text);
+                    LuminPackSerializer.DeserializeJson<TOptions>(ref reader, ref text);
                     value = new() { Text = text };
                 }
             }
@@ -271,7 +271,7 @@ internal static partial class SerializerCompiledOptionRegression
     /// <param name="execute">Whether the fixture also contains an executable Entry.Check assertion.</param>
     private static void Execute(string name, string source, CSharpParseOptions parse, MetadataReference[] references, bool execute = true)
     {
-        var input = CSharpCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, parse)], references,
+        var input = TestCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, parse)], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);

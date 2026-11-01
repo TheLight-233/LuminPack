@@ -85,7 +85,7 @@ public class DictionaryRawSideTest
 
         byte[] keyBytes = LuminPackSerializer.Serialize(keys);
         Assert.Equal(storage.AsSpan(0, writer.Position).ToArray(), keyBytes);
-        var keyCopy = LuminPackSerializer.Deserialize<Dictionary<RawSideStorage, string>>(keyBytes);
+        var keyCopy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<RawSideStorage, string>>(keyBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<RawSideStorage, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(keys.ToArray(), keyCopy.ToArray());
         Assert.Equal(keyBytes, LuminPackSerializer.Serialize(keyCopy));
         writer = new LuminPackWriter(ref span, state);
@@ -99,7 +99,7 @@ public class DictionaryRawSideTest
 
         byte[] valueBytes = LuminPackSerializer.Serialize(values);
         Assert.Equal(storage.AsSpan(0, writer.Position).ToArray(), valueBytes);
-        var valueCopy = LuminPackSerializer.Deserialize<Dictionary<string, RawSideStorage>>(valueBytes);
+        var valueCopy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<string, RawSideStorage>>(valueBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<string, RawSideStorage> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(values.ToArray(), valueCopy.ToArray());
         Assert.Equal(valueBytes, LuminPackSerializer.Serialize(valueCopy));
     }
@@ -129,7 +129,7 @@ public class DictionaryRawSideTest
         writer.Write("versioned-key");
         byte[] keyBytes = LuminPackSerializer.Serialize(keys);
         Assert.Equal(storage.AsSpan(0, writer.Position).ToArray(), keyBytes);
-        Assert.Equal("versioned-key", LuminPackSerializer.Deserialize<Dictionary<VersionedStorage, string>>(keyBytes)[raw]);
+        Assert.Equal("versioned-key", global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<VersionedStorage, string>>(keyBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<VersionedStorage, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))[raw]);
         writer = new LuminPackWriter(ref span);
         offset = 0;
         writer.WriteCollectionHeader(1);
@@ -137,7 +137,7 @@ public class DictionaryRawSideTest
         LuminPackSerializer.Serialize(ref writer, in raw);
         byte[] valueBytes = LuminPackSerializer.Serialize(values);
         Assert.Equal(storage.AsSpan(0, writer.Position).ToArray(), valueBytes);
-        Assert.Equal(107, LuminPackSerializer.Deserialize<Dictionary<string, VersionedStorage>>(valueBytes)["versioned-value"].Value);
+        Assert.Equal(107, global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<string, VersionedStorage>>(valueBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<string, VersionedStorage> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))["versioned-value"].Value);
     }
 
     /// <summary>Uses versioned slot framing despite having unmanaged CLR storage.</summary>

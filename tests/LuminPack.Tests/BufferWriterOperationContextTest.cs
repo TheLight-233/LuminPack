@@ -61,7 +61,7 @@ internal static class BufferWriterOperationContextTest
             Assert(!reused.WriterState.GetOrAddReference(marker).existsReference, "Return retained writer references.");
             AssertThrows(() => reused.ReaderState.GetObjectReference(999), "Return retained reader references.");
             LuminPackSerializer.Serialize("default", reused);
-            Assert(LuminPackSerializer.Deserialize<string>(reused) == "default", "A reused buffer inherited a compiled profile.");
+            Assert(global::LuminPackUnitTest.ConcreteReads.Read<string>(reused, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == "default", "A reused buffer inherited a compiled profile.");
         }
         finally { LuminBufferWriterPool.Return(reused); }
     }
@@ -77,7 +77,7 @@ internal static class BufferWriterOperationContextTest
             LuminPackSerializer.Serialize(42, buffer);
             Assert(buffer.WriterState.GetOrAddReference(marker).existsReference, "Serialize cleared caller references.");
             buffer.ReaderState.AddObjectReference(123, marker);
-            Assert(LuminPackSerializer.Deserialize<int>(buffer) == 42, "Buffer round trip failed.");
+            Assert(global::LuminPackUnitTest.ConcreteReads.Read<int>(buffer, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref int concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) == 42, "Buffer round trip failed.");
             AssertThrows(() => buffer.ReaderState.GetObjectReference(123), "Deserialize retained references.");
         }
         finally { LuminBufferWriterPool.Return(buffer); }
@@ -94,7 +94,7 @@ internal static class BufferWriterOperationContextTest
             "UTF-16 document round trip failed.");
         buffer.ResetCore();
         LuminPackSerializer.SerializeJson(expected, buffer);
-        Assert(LuminPackSerializer.DeserializeJson<string>(buffer) == expected, "The default document inherited UTF-16.");
+        Assert(global::LuminPackUnitTest.ConcreteReads.ReadJson<string>(buffer, static (global::LuminPack.Utility.LuminBufferWriter concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) == expected, "The default document inherited UTF-16.");
     }
 
     /// <summary>Checks that an active nested operation cannot replace its parent's data or compiled policy.</summary>
@@ -158,7 +158,7 @@ internal static class BufferWriterOperationContextTest
     private static void Write<TOptions>(LuminBufferWriter buffer, string value) where TOptions : struct, ILuminPackOptions
     {
         var writer = new LuminPackWriter(buffer, buffer.WriterState);
-        try { LuminPackSerializer.Serialize<string, TOptions>(ref writer, in value); buffer.CompleteWrite(writer.CurrentIndex); }
+        try { LuminPackSerializer.Serialize<TOptions>(ref writer, in value); buffer.CompleteWrite(writer.CurrentIndex); }
         finally { buffer.WriterState.ResetOperationState(); }
     }
 
@@ -171,7 +171,7 @@ internal static class BufferWriterOperationContextTest
         ReadOnlySpan<byte> bytes = buffer.GetSpan();
         var reader = new LuminPackReader(ref bytes, buffer.ReaderState);
         string value = null!;
-        try { LuminPackSerializer.Deserialize<string, TOptions>(ref reader, ref value); return value; }
+        try { LuminPackSerializer.Deserialize<TOptions>(ref reader, ref value); return value; }
         finally { buffer.ReaderState.ResetOperationState(); }
     }
 

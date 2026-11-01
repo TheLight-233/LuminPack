@@ -22,11 +22,11 @@ public class BigIntegerPrecisionTest
                 byte[] record = LuminPackSerializer.Serialize(value);
                 Assert.Equal(payload.Length, BinaryPrimitives.ReadInt32LittleEndian(record));
                 Assert.Equal(payload, record.AsSpan(4).ToArray());
-                Assert.Equal(value, LuminPackSerializer.Deserialize<BigInteger>(record));
+                Assert.Equal(value, global::LuminPackUnitTest.ConcreteReads.Read<BigInteger>(record, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BigInteger concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
 
                 string json = LuminPackSerializer.SerializeJson(value);
                 Assert.Equal("\"" + value.ToString(CultureInfo.InvariantCulture) + "\"", json);
-                Assert.Equal(value, LuminPackSerializer.DeserializeJson<BigInteger>(json));
+                Assert.Equal(value, global::LuminPackUnitTest.ConcreteReads.ReadJson<BigInteger>(json, static (string concreteReadInput, ref BigInteger concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
             }
         }
     }
@@ -44,7 +44,7 @@ public class BigIntegerPrecisionTest
         {
             CultureInfo.CurrentCulture = custom;
             Assert.Equal(expected, LuminPackSerializer.SerializeJson(value));
-            Assert.Equal(value, LuminPackSerializer.DeserializeJson<BigInteger>(expected));
+            Assert.Equal(value, global::LuminPackUnitTest.ConcreteReads.ReadJson<BigInteger>(expected, static (string concreteReadInput, ref BigInteger concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         }
         finally
         {

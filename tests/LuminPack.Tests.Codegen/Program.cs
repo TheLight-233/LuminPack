@@ -11,6 +11,11 @@ try
         SerializerJsonReuseRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-registered-dispatch"])
+    {
+        SerializerGenericOverloadRegression.VerifyRegisteredOnly(references);
+        return 0;
+    }
     if (args is ["--verify-immutable-scalar-set-reuse"])
     {
         SerializerImmutableScalarSetReuseRegression.Run(references);
@@ -268,4 +273,36 @@ catch (Exception exception)
 {
     Console.Error.WriteLine(exception);
     return 1;
+}
+
+/// <summary>Supplies concrete value-returning read helpers to fixtures that use them.</summary>
+internal static class TestCompilation
+{
+    private static readonly string ConcreteReadsSource = ReadSource();
+
+    /// <summary>Creates a fixture with source helpers compiled against its own framework references.</summary>
+    /// <param name="assemblyName">The fixture assembly identity.</param>
+    /// <param name="syntaxTrees">The original fixture sources.</param>
+    /// <param name="references">The fixture's runtime and framework references.</param>
+    /// <param name="options">The original compilation settings.</param>
+    /// <returns>The fixture, with a helper tree only when its sources require one.</returns>
+    internal static Microsoft.CodeAnalysis.CSharp.CSharpCompilation Create(string? assemblyName,
+        IEnumerable<SyntaxTree>? syntaxTrees = null, IEnumerable<MetadataReference>? references = null,
+        Microsoft.CodeAnalysis.CSharp.CSharpCompilationOptions? options = null)
+    {
+        var trees = syntaxTrees?.ToArray() ?? [];
+        if (trees.Any(tree => tree.GetText().ToString().Contains("global::LuminPackUnitTest.ConcreteReads.", StringComparison.Ordinal)))
+            trees = [.. trees, Microsoft.CodeAnalysis.CSharp.CSharpSyntaxTree.ParseText(ConcreteReadsSource,
+                (Microsoft.CodeAnalysis.CSharp.CSharpParseOptions)trees[0].Options, "ConcreteReads.cs")];
+        return Microsoft.CodeAnalysis.CSharp.CSharpCompilation.Create(assemblyName, trees, references, options);
+    }
+
+    /// <summary>Reads the shared helper text without depending on a working directory.</summary>
+    /// <returns>The independently compiled helper declarations.</returns>
+    private static string ReadSource()
+    {
+        using var stream = typeof(TestCompilation).Assembly.GetManifestResourceStream("TestSupport.ConcreteReads.cs")!;
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
+    }
 }

@@ -1,4 +1,6 @@
 using System.Buffers;
+using System.Reflection;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using LuminPack.Attribute;
@@ -30,6 +32,53 @@ namespace LuminPack
     /// <summary>Selects closed generic profiles for the existing test matrix; production APIs have no runtime options.</summary>
     public static partial class LuminPackSerializer
     {
+        private static readonly MethodInfo[] TestStateMethods = typeof(LuminPackSerializer)
+            .GetMethods(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Static);
+
+        /// <summary>Registers generated roots for the managed test harness's legacy profile adapter.</summary>
+        /// <typeparam name="T">The fixture payload.</typeparam>
+        /// <typeparam name="TOptions">The statically closed matrix profile.</typeparam>
+        internal static void RegisterTestProfile<T, TOptions>() where TOptions : struct, ILuminPackOptions
+            => _ = TestProfileRegistration<T, TOptions>.Ready;
+
+        /// <summary>Keeps test fixture registrations separate from production generic dispatch.</summary>
+        /// <typeparam name="T">The fixture payload.</typeparam>
+        /// <typeparam name="TOptions">The statically closed matrix profile.</typeparam>
+        private static class TestProfileRegistration<T, TOptions> where TOptions : struct, ILuminPackOptions
+        {
+            internal static readonly bool Ready = Register();
+
+            /// <summary>Publishes actual generated pointers once for this managed fixture and profile.</summary>
+            /// <returns>True after an existing or newly published registration is available.</returns>
+            private static bool Register()
+            {
+                if (Code.LuminPackFormatterRegistry<TOptions>.TryGetCachedValue<T>(out _)) return true;
+                nint write = Find("Serialize", typeof(LuminPackWriter));
+                nint read = Find("Deserialize", typeof(LuminPackReader));
+                if (write == 0 || read == 0)
+                    throw new InvalidOperationException("The profile fixture has no complete concrete binary roots: " + typeof(T));
+                Code.LuminPackFormatterRegistry<TOptions>.Register(typeof(T), write, read,
+                    Find("SerializeJson", typeof(LuminPackJsonWriter)), Find("DeserializeJson", typeof(LuminPackJsonReader)));
+                return true;
+            }
+
+            /// <summary>Finds the concrete generated operation with this exact state and payload signature.</summary>
+            /// <param name="name">The root operation.</param>
+            /// <param name="state">Its advancing state type.</param>
+            /// <returns>The closed method pointer, or zero when the operation is absent.</returns>
+            private static nint Find(string name, Type state)
+            {
+                foreach (var method in TestStateMethods.Where(method => method.Name == name && method.IsGenericMethodDefinition && method.GetGenericArguments().Length == 1))
+                {
+                    var parameters = method.GetParameters();
+                    if (parameters.Length == 2 && parameters[0].ParameterType == state.MakeByRefType() &&
+                        parameters[1].ParameterType == typeof(T).MakeByRefType())
+                        return method.MakeGenericMethod(typeof(TOptions)).MethodHandle.GetFunctionPointer();
+                }
+                return 0;
+            }
+        }
+
         /// <summary>Runs one test action with a statically closed profile selected by its matrix row.</summary>
         /// <typeparam name="TResult">The action result.</typeparam>
         /// <typeparam name="TAction">The value-type test action.</typeparam>
@@ -195,7 +244,7 @@ namespace LuminPack
             internal T Value;
             /// <inheritdoc/>
             public int Run<TOptions>() where TOptions : struct, ILuminPackOptions
-                => Deserialize<T, TOptions>(Input, ref Value);
+                { RegisterTestProfile<T, TOptions>(); return Deserialize<T, TOptions>(Input, ref Value); }
         }
 
         /// <summary>Invokes the original streaming-output facade with a closed profile.</summary>
@@ -206,7 +255,7 @@ namespace LuminPack
             internal IBufferWriter<byte> Output;
             /// <inheritdoc/>
             public int Run<TOptions>() where TOptions : struct, ILuminPackOptions
-            { SerializeJson<T, TOptions>(Value, Output); return 0; }
+            { RegisterTestProfile<T, TOptions>(); SerializeJson<T, TOptions>(Value, Output); return 0; }
         }
 
         /// <summary>Preserves raw UTF-16 input when selecting a closed JSON reader profile.</summary>
@@ -224,7 +273,7 @@ namespace LuminPack
             internal LuminBufferWriter? Buffer;
             /// <inheritdoc/>
             public byte[] Run<TOptions>() where TOptions : struct, ILuminPackOptions
-{ if (Buffer == null) return Serialize<T, TOptions>(in Value); Serialize<T, TOptions>(in Value, Buffer); return Array.Empty<byte>(); }        }
+{ RegisterTestProfile<T, TOptions>(); if (Buffer == null) return Serialize<T, TOptions>(in Value); Serialize<T, TOptions>(in Value, Buffer); return Array.Empty<byte>(); }        }
 
         /// <summary>Preserves the original binary reader and merge storage.</summary>
         /// <typeparam name="T">The payload type.</typeparam>
@@ -234,7 +283,7 @@ namespace LuminPack
             internal T Value;
             /// <inheritdoc/>
             public int Run<TOptions>() where TOptions : struct, ILuminPackOptions
-{ return Deserialize<T, TOptions>(Input.AsSpan(), ref Value); }        }
+{ RegisterTestProfile<T, TOptions>(); return Deserialize<T, TOptions>(Input.AsSpan(), ref Value); }        }
 
         /// <summary>Preserves the original JSON writer algorithm and actual encoded-byte units.</summary>
         /// <typeparam name="T">The payload type.</typeparam>
@@ -244,7 +293,7 @@ namespace LuminPack
             internal LuminBufferWriter? Buffer;
             /// <inheritdoc/>
             public string Run<TOptions>() where TOptions : struct, ILuminPackOptions
-{ if (Buffer == null) return SerializeJson<T, TOptions>(Value); SerializeJson<T, TOptions>(Value, Buffer); return string.Empty; }        }
+{ RegisterTestProfile<T, TOptions>(); if (Buffer == null) return SerializeJson<T, TOptions>(Value); SerializeJson<T, TOptions>(Value, Buffer); return string.Empty; }        }
 
         /// <summary>Preserves tokenizer initialization, root reads and complete-document validation.</summary>
         /// <typeparam name="T">The payload type.</typeparam>
@@ -254,7 +303,7 @@ namespace LuminPack
             internal T Value;
             /// <inheritdoc/>
             public int Run<TOptions>() where TOptions : struct, ILuminPackOptions
-{ return DeserializeJson<T, TOptions>(Input.AsSpan(), ref Value); }        }
+{ RegisterTestProfile<T, TOptions>(); return DeserializeJson<T, TOptions>(Input.AsSpan(), ref Value); }        }
     }
 }
 

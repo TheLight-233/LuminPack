@@ -56,26 +56,26 @@ internal static class SerializerJsonReuseRegression
                     LuminPackSerializer.DeserializeJson("{\"Child\":{\"Number\":8}}", ref bound);
                     Require(ReferenceEquals(child, bound.Child) && child.Number == 8, "Constructor storage");
                     var managed = new Managed { Child = child };
-                    LuminPackSerializer.DeserializeJson<Managed>("{\"Child\":{\"Number\":9}}", ref managed);
+                    LuminPackSerializer.DeserializeJson("{\"Child\":{\"Number\":9}}", ref managed);
                     Require(ReferenceEquals(child, managed.Child) && child.Number == 9, "Managed value storage");
                     child = Pooled.Shared.Child;
-                    var pooled = LuminPackSerializer.DeserializeJson<Pooled>("{\"Child\":{\"Number\":13}}");
+                    Pooled pooled = null!; LuminPackSerializer.DeserializeJson("{\"Child\":{\"Number\":13}}", ref pooled);
                     Require(ReferenceEquals(pooled, Pooled.Shared) && ReferenceEquals(child, pooled.Child) && child.Number == 13, "Fresh pooled reuse");
                     var storage = new[] { new Node(), new Node() };
                     Memory<Node> memory = storage.AsMemory(1, 1);
-                    LuminPackSerializer.DeserializeJson<Memory<Node>>("[{\"Number\":14}]", ref memory);
+                    LuminPackSerializer.DeserializeJson("[{\"Number\":14}]", ref memory);
                     Require(ReferenceEquals(storage[1], memory.Span[0]) && storage[1].Number == 14, "Mutable slice");
                     Root root = new Case();
                     object original = root;
-                    LuminPackSerializer.DeserializeJson<Root>("{\"$type\":0,\"$value\":{\"Child\":{\"Number\":10}}}", ref root);
+                    LuminPackSerializer.DeserializeJson("{\"$type\":0,\"$value\":{\"Child\":{\"Number\":10}}}", ref root);
                     Require(ReferenceEquals(root, original) && ((Case)root).Child.Number == 10, "Union case");
                     var tracked = new Tracked();
                     original = tracked;
-                    LuminPackSerializer.DeserializeJson<Tracked>("{\"$id\":0,\"Number\":11,\"Next\":{\"$ref\":0}}", ref tracked);
+                    LuminPackSerializer.DeserializeJson("{\"$id\":0,\"Number\":11,\"Next\":{\"$ref\":0}}", ref tracked);
                     Require(ReferenceEquals(original, tracked) && ReferenceEquals(tracked, tracked.Next), "Tracked cycle");
                     IEnumerable<Node> sequence = new List<Node> { child };
                     original = sequence;
-                    LuminPackSerializer.DeserializeJson<IEnumerable<Node>>("[{\"Number\":12}]", ref sequence);
+                    LuminPackSerializer.DeserializeJson("[{\"Number\":12}]", ref sequence);
                     Require(ReferenceEquals(original, sequence) && ReferenceEquals(child, ((List<Node>)sequence)[0]), "Interface storage");
                 }
                 private static void CheckProfile<TOptions>() where TOptions : struct, ILuminPackOptions
@@ -83,11 +83,11 @@ internal static class SerializerJsonReuseRegression
                     var node = new Node { Number = 7, Text = "same\u00E9" };
                     var target = new Graph { Child = node, Items = new List<Node> { new Node() }, Array = new[] { new Node() } };
                     target.Map["key"] = new Node();
-                    string json = LuminPackSerializer.SerializeJson<Graph, TOptions>(target);
+                    string json = LuminPackSerializer.SerializeJson<TOptions>(target);
                     byte[] bytes = (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8 : Encoding.Unicode).GetBytes(json);
                     var root = target; var child = target.Child; var text = child.Text;
                     var list = target.Items; var item = list[0]; var array = target.Array; var element = array[0]; var map = target.Map; var mapped = map["key"];
-                    int consumed = LuminPackSerializer.DeserializeJson<Graph, TOptions>(bytes, ref target);
+                    int consumed = LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref target);
                     Require(consumed == bytes.Length && ReferenceEquals(root, target) && ReferenceEquals(child, target.Child), "Object graph");
                     Require(ReferenceEquals(text, child.Text) && ReferenceEquals(list, target.Items) && ReferenceEquals(item, list[0]), "List and string");
                     Require(ReferenceEquals(array, target.Array) && ReferenceEquals(element, array[0]), "Array");
@@ -107,7 +107,7 @@ internal static class SerializerJsonReuseRegression
             driver = driver.RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
             if (diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error)) throw new InvalidOperationException(string.Join(Environment.NewLine, diagnostics));
             Execute(output);
-            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(
+            var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(
                 source.Replace("MODE", mode, StringComparison.Ordinal).Replace("public int Number;", "public long Number;", StringComparison.Ordinal), parse, "Shape.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out output, out diagnostics);
             Execute(output);

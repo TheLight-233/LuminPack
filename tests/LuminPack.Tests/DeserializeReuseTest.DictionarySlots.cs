@@ -28,12 +28,12 @@ public partial class DeserializeReuseTest
         var versionedMap = new Dictionary<int, SlotVersionedLeaf> { [1] = versionedNode };
         var text = node.Text;
         var versionedText = versionedNode.Text;
-        byte[] bytes = LuminPackSerializer.Serialize<Dictionary<int, ReuseNode>, TOptions>(
-            new() { [1] = new() { Number = 17, Text = "leaf" } });
-        byte[] versionedBytes = LuminPackSerializer.Serialize<Dictionary<int, SlotVersionedLeaf>, TOptions>(
-            new() { [1] = new() { Number = 19, Text = "named" } });
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode>, TOptions>(bytes, ref map));
-        Assert.Equal(versionedBytes.Length, LuminPackSerializer.Deserialize<Dictionary<int, SlotVersionedLeaf>, TOptions>(versionedBytes, ref versionedMap));
+        byte[] bytes = LuminPackSerializer.Serialize<TOptions>(
+(Dictionary<int, ReuseNode>)            new() { [1] = new() { Number = 17, Text = "leaf" } });
+        byte[] versionedBytes = LuminPackSerializer.Serialize<TOptions>(
+(Dictionary<int, SlotVersionedLeaf>)            new() { [1] = new() { Number = 19, Text = "named" } });
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<TOptions>(bytes, ref map));
+        Assert.Equal(versionedBytes.Length, LuminPackSerializer.Deserialize<TOptions>(versionedBytes, ref versionedMap));
         Assert.Same(node, map[1]);
         Assert.Same(versionedNode, versionedMap[1]);
         Assert.Same(text, node.Text);
@@ -42,14 +42,14 @@ public partial class DeserializeReuseTest
         Assert.Equal(19, versionedNode.Number);
         for (int i = 0; i < 128; i++)
         {
-            LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode>, TOptions>(bytes, ref map);
-            LuminPackSerializer.Deserialize<Dictionary<int, SlotVersionedLeaf>, TOptions>(versionedBytes, ref versionedMap);
+LuminPackSerializer.Deserialize<TOptions>(bytes, ref map);
+LuminPackSerializer.Deserialize<TOptions>(versionedBytes, ref versionedMap);
         }
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 1024; i++)
         {
-            LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode>, TOptions>(bytes, ref map);
-            LuminPackSerializer.Deserialize<Dictionary<int, SlotVersionedLeaf>, TOptions>(versionedBytes, ref versionedMap);
+LuminPackSerializer.Deserialize<TOptions>(bytes, ref map);
+LuminPackSerializer.Deserialize<TOptions>(versionedBytes, ref versionedMap);
         }
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
     }
@@ -65,7 +65,7 @@ public partial class DeserializeReuseTest
         {
             [2] = new() { Number = 22 }, [1] = new() { Number = 11 }
         });
-        LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode>>(bytes, ref map);
+LuminPackSerializer.Deserialize(bytes, ref map);
         Assert.Equal(new[] { 1, 2 }, map.Keys);
         Assert.Same(first, map[1]);
         Assert.Same(second, map[2]);
@@ -73,7 +73,7 @@ public partial class DeserializeReuseTest
         Assert.Equal(22, second.Number);
         var enumerator = map.GetEnumerator();
         Assert.True(enumerator.MoveNext());
-        LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode>>(bytes, ref map);
+LuminPackSerializer.Deserialize(bytes, ref map);
         Assert.True(enumerator.MoveNext());
     }
 
@@ -88,9 +88,9 @@ public partial class DeserializeReuseTest
         int secondKey = sizeof(int) * 2 + LuminPackSerializer.Serialize(first).Length;
         BinaryPrimitives.WriteInt32LittleEndian(duplicate.AsSpan(secondKey), 1);
         var map = new Dictionary<int, ReuseNode> { [1] = new(), [9] = new() };
-        Assert.Throws<ArgumentException>(() => LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode>>(duplicate, ref map));
+        Assert.Throws<ArgumentException>(() => LuminPackSerializer.Deserialize(duplicate, ref map));
         Assert.Equal(2, map.Count);
-        LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode>>(valid, ref map);
+LuminPackSerializer.Deserialize(valid, ref map);
         Assert.Equal(new[] { 1, 2 }, map.Keys);
         Assert.Equal(11, map[1].Number);
         Assert.Equal(22, map[2].Number);
@@ -112,7 +112,7 @@ public partial class DeserializeReuseTest
             map.Clear();
             for (int i = 100; i < 2048; i++) map.Add(i, first);
         };
-        try { LuminPackSerializer.Deserialize<Dictionary<int, SlotConstructorLeaf?>>(bytes, ref map); }
+        try { LuminPackSerializer.Deserialize(bytes, ref map); }
         finally { SlotConstructorLeaf.Constructed = null; }
         Assert.Equal(new[] { 1, 2, 3 }, map.Keys);
         Assert.Same(first, map[1]);
@@ -130,7 +130,7 @@ public partial class DeserializeReuseTest
         {
             [1] = null, [2] = new() { Number = 12 }
         });
-        LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode?>>(bytes, ref map);
+LuminPackSerializer.Deserialize(bytes, ref map);
         Assert.Equal(new[] { 1, 2 }, map.Keys);
         Assert.Null(map[1]);
         Assert.Equal(12, map[2]!.Number);
@@ -148,13 +148,13 @@ public partial class DeserializeReuseTest
         });
         SlotPooledLeaf.Rents = 0;
         SlotPooledLeaf.Renting = () => { map.Clear(); map.EnsureCapacity(2048); };
-        try { LuminPackSerializer.Deserialize<Dictionary<int, SlotPooledLeaf>>(bytes, ref map); }
+        try { LuminPackSerializer.Deserialize(bytes, ref map); }
         finally { SlotPooledLeaf.Renting = null; }
         Assert.Equal(1, SlotPooledLeaf.Rents);
         Assert.Same(first, map[1]);
         Assert.Equal(11, first.Number);
         Assert.Equal(22, map[2].Number);
-        LuminPackSerializer.Deserialize<Dictionary<int, SlotPooledLeaf>>(bytes, ref map);
+LuminPackSerializer.Deserialize(bytes, ref map);
         Assert.Equal(1, SlotPooledLeaf.Rents);
     }
 
@@ -166,7 +166,7 @@ public partial class DeserializeReuseTest
         var map = new Dictionary<int, ReuseNode>(comparer) { [1] = new(), [2] = new() };
         byte[] bytes = LuminPackSerializer.Serialize(new Dictionary<int, ReuseNode> { [2] = new(), [1] = new() });
         var enumerator = map.GetEnumerator();
-        LuminPackSerializer.Deserialize<Dictionary<int, ReuseNode>>(bytes, ref map);
+LuminPackSerializer.Deserialize(bytes, ref map);
         Assert.Same(comparer, map.Comparer);
         Assert.Equal(new[] { 2, 1 }, map.Keys);
         Assert.Throws<InvalidOperationException>(() => enumerator.MoveNext());
@@ -184,7 +184,7 @@ public partial class DeserializeReuseTest
         });
         int callbacks = 0;
         SlotCallbackLeaf.Reading = () => { callbacks++; map.EnsureCapacity(2048); };
-        try { LuminPackSerializer.Deserialize<Dictionary<int, SlotCallbackLeaf>>(bytes, ref map); }
+        try { LuminPackSerializer.Deserialize(bytes, ref map); }
         finally { SlotCallbackLeaf.Reading = null; }
         Assert.Equal(2, callbacks);
         Assert.Equal(new[] { 2, 1 }, map.Keys);

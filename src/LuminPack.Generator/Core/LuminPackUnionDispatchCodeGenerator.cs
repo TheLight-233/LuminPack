@@ -15,8 +15,9 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
     /// <param name="data">The metadata describing the serializable type.</param>
     /// <param name="compilation">The compilation whose symbols and referenced types are analyzed.</param>
     /// <param name="metaInfo">The language, framework, and generation settings.</param>
+    /// <param name="emittedTypes">The closed operations retained by the current generation tier, or null for Full.</param>
     /// <returns>The generated members, or an empty string when union dispatch cannot be emitted.</returns>
-    public static string Generate(LuminDataInfo data, Compilation compilation, MetaInfo metaInfo)
+    public static string Generate(LuminDataInfo data, Compilation compilation, MetaInfo metaInfo, IEnumerable<ITypeSymbol> emittedTypes = null)
     {
         if (!data.isUnion || !data.CanGenerateUnionDispatch || data.TypeSymbol == null)
             return string.Empty;
@@ -41,6 +42,16 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         {
             var members = group.ToList();
             var definition = members[0].Type.OriginalDefinition;
+            var openMember = members.FirstOrDefault(member => !IsConstructedMember(definition, member));
+            if (openMember.Type != null && definition.IsGenericType)
+            {
+                foreach (var closed in (emittedTypes ?? CompilationTypeAnalysisCache.GetOrCreate(compilation).FormatterTypesByName.Values)
+                    .OfType<INamedTypeSymbol>().Where(type => !LuminPackExtensionGenerator.ContainsTypeParameter(type) &&
+                        SymbolEqualityComparer.Default.Equals(type.OriginalDefinition, definition))
+                    .OrderBy(FormatterTypeName.Get, StringComparer.Ordinal))
+                    if (!members.Any(member => SymbolEqualityComparer.Default.Equals(member.Type, closed)))
+                        members.Add(new LuminUnionMemberInfo(openMember.Id, closed, openMember.CanGenerateDispatch));
+            }
             var matchedRoot = FindMatchedRoot(definition, root);
             if (matchedRoot == null)
                 continue;
@@ -272,7 +283,7 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         sb.AppendLine($"{padding}{{");
         foreach (var member in members)
         {
-            sb.AppendLine($"{padding}    case {GetDispatchSlot(data, member)}:");
+            sb.AppendLine($"{padding}    case {GetDispatchSlot(data, members, member)}:");
             sb.AppendLine($"{padding}    {{");
             AppendConcreteOperation(sb, padding + "        ", data, member, operation, extensionType);
             sb.AppendLine($"{padding}        return;");
@@ -330,12 +341,12 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
         // instantiation happens to describe the same runtime type.
         foreach (var member in members.Where(member => IsConstructedMember(definition, member)))
         {
-            AppendResolverCase(sb, padding + "    ", data, definition, member);
+            AppendResolverCase(sb, padding + "    ", data, members, definition, member);
         }
 
         foreach (var member in members.Where(member => !IsConstructedMember(definition, member)))
         {
-            AppendResolverCase(sb, padding + "    ", data, definition, member);
+            AppendResolverCase(sb, padding + "    ", data, members, definition, member);
         }
 
         sb.AppendLine($"{padding}        default:");
@@ -348,12 +359,14 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="padding">The padding used by this operation.</param>
     /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="members">The declared cases and observed closed specializations sharing this cache.</param>
     /// <param name="definition">The definition used by this operation.</param>
     /// <param name="member">The member used by this operation.</param>
     private static void AppendResolverCase(
         StringBuilder sb,
         string padding,
         LuminDataInfo data,
+        IReadOnlyList<LuminUnionMemberInfo> members,
         INamedTypeSymbol definition,
         LuminUnionMemberInfo member)
     {
@@ -364,14 +377,15 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
             ? member.Type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)
             : definition.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat);
         sb.AppendLine($"{padding}    case var __runtimeType when __runtimeType == typeof({memberType}):");
-        sb.AppendLine($"{padding}        return {GetDispatchSlot(data, member)};");
+        sb.AppendLine($"{padding}        return {GetDispatchSlot(data, members, member)};");
     }
 
     /// <summary>Obtains the dispatch slot for the supplied input.</summary>
     /// <param name="data">The metadata describing the serializable type.</param>
+    /// <param name="members">The cases sharing the current generic cache.</param>
     /// <param name="member">The member used by this operation.</param>
     /// <returns>The result of the operation.</returns>
-    private static int GetDispatchSlot(LuminDataInfo data, LuminUnionMemberInfo member)
+    private static int GetDispatchSlot(LuminDataInfo data, IReadOnlyList<LuminUnionMemberInfo> members, LuminUnionMemberInfo member)
     {
         for (var index = 0; index < data.UnionMembers.Count; index++)
         {
@@ -383,6 +397,8 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
             }
         }
 
+        for (int index = 0; index < members.Count; index++)
+            if (SymbolEqualityComparer.Default.Equals(members[index].Type, member.Type)) return data.UnionMembers.Count + index;
         return -1;
     }
 

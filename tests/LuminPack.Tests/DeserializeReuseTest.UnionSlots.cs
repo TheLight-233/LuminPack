@@ -20,16 +20,16 @@ public partial class DeserializeReuseTest
         });
         var enumerator = map.GetEnumerator();
         Assert.True(enumerator.MoveNext());
-        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize<Dictionary<int, SlotUnion>>(bytes, ref map));
+        Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref map));
         Assert.True(enumerator.MoveNext());
         Assert.Same(first, map[1]);
         Assert.Same(second, map[2]);
         Assert.Equal((7, 1.5f), (first.Id, first.X));
         Assert.Equal((8, 2.5f, 3.5f), (second.Id, second.X, second.Y));
         Assert.Equal(bytes, LuminPackSerializer.Serialize(map));
-        for (int i = 0; i < 128; i++) LuminPackSerializer.Deserialize<Dictionary<int, SlotUnion>>(bytes, ref map);
+        for (int i = 0; i < 128; i++) LuminPackSerializer.Deserialize(bytes, ref map);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize<Dictionary<int, SlotUnion>>(bytes, ref map);
+        for (int i = 0; i < 1024; i++) LuminPackSerializer.Deserialize(bytes, ref map);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
     }
 
@@ -44,7 +44,7 @@ public partial class DeserializeReuseTest
         {
             [2] = new SlotUnionVector { Id = 22 }, [1] = new SlotUnionPoint { Id = 11 }
         });
-        LuminPackSerializer.Deserialize<Dictionary<int, SlotUnion>>(bytes, ref map);
+LuminPackSerializer.Deserialize(bytes, ref map);
         Assert.Equal(new[] { 1, 2 }, map.Keys);
         Assert.Same(first, map[1]);
         Assert.Same(second, map[2]);
@@ -69,7 +69,7 @@ public partial class DeserializeReuseTest
             map.Clear();
             for (int i = 100; i < 2048; i++) map.Add(i, first);
         };
-        try { LuminPackSerializer.Deserialize<Dictionary<int, SlotUnion>>(bytes, ref map); }
+        try { LuminPackSerializer.Deserialize(bytes, ref map); }
         finally { SlotUnionVector.Constructed = null; }
         Assert.Equal(1, constructed);
         Assert.Equal(new[] { 1, 2, 3 }, map.Keys);
@@ -92,7 +92,7 @@ public partial class DeserializeReuseTest
         });
         int callbacks = 0;
         SlotUnionCallback.Reading = () => callbacks++;
-        try { LuminPackSerializer.Deserialize<Dictionary<int, SlotUnion?>>(bytes, ref map); }
+        try { LuminPackSerializer.Deserialize(bytes, ref map); }
         finally { SlotUnionCallback.Reading = null; }
         Assert.Equal(1, callbacks);
         Assert.Equal(new[] { 1, 2, 3, 4 }, map.Keys);
@@ -111,12 +111,12 @@ public partial class DeserializeReuseTest
         var source = new Dictionary<int, SlotUnion> { [1] = new SlotUnionPoint { Id = 11 }, [2] = new SlotUnionPoint { Id = 22 } };
         byte[] valid = LuminPackSerializer.Serialize(source);
         byte[] duplicate = (byte[])valid.Clone();
-        int secondKey = sizeof(int) * 2 + LuminPackSerializer.Serialize<SlotUnion>(source[1]).Length;
+        int secondKey = sizeof(int) * 2 + LuminPackSerializer.Serialize((SlotUnion)(source[1])).Length;
         Assert.Equal(2, BinaryPrimitives.ReadInt32LittleEndian(duplicate.AsSpan(secondKey)));
         BinaryPrimitives.WriteInt32LittleEndian(duplicate.AsSpan(secondKey), 1);
         var map = new Dictionary<int, SlotUnion> { [1] = new SlotUnionPoint(), [2] = new SlotUnionPoint() };
-        Assert.Throws<ArgumentException>(() => LuminPackSerializer.Deserialize<Dictionary<int, SlotUnion>>(duplicate, ref map));
-        LuminPackSerializer.Deserialize<Dictionary<int, SlotUnion>>(valid, ref map);
+        Assert.Throws<ArgumentException>(() => LuminPackSerializer.Deserialize(duplicate, ref map));
+LuminPackSerializer.Deserialize(valid, ref map);
         Assert.Equal(new[] { 1, 2 }, map.Keys);
         Assert.Equal(11, map[1].Id);
         Assert.Equal(22, map[2].Id);
@@ -131,7 +131,7 @@ public partial class DeserializeReuseTest
         var map = new Dictionary<int, SlotUnion>(comparer) { [1] = first, [2] = new SlotUnionPoint() };
         byte[] bytes = LuminPackSerializer.Serialize(new Dictionary<int, SlotUnion> { [2] = new SlotUnionPoint(), [1] = new SlotUnionPoint { Id = 5 } });
         var enumerator = map.GetEnumerator();
-        LuminPackSerializer.Deserialize<Dictionary<int, SlotUnion>>(bytes, ref map);
+LuminPackSerializer.Deserialize(bytes, ref map);
         Assert.Same(comparer, map.Comparer);
         Assert.Equal(new[] { 2, 1 }, map.Keys);
         Assert.Same(first, map[1]);

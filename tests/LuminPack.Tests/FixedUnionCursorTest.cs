@@ -24,7 +24,7 @@ public class FixedUnionCursorTest
         byte[] listBytes = listDestination.GetSpan().ToArray();
         Assert.True(listDestination.TotalLength > initial);
         Assert.Equal(40014, listBytes.Length);
-        var copy = LuminPackSerializer.Deserialize<List<CapacityRoot>>(listBytes);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<List<CapacityRoot>>(listBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<CapacityRoot> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(31, Assert.IsType<CapacityCase>(copy[0]).Value.Marker);
         Assert.Equal(42, Assert.IsType<CapacityCase>(copy[1]).Tail);
         Assert.Equal(listBytes, LuminPackSerializer.Serialize(copy));
@@ -39,7 +39,7 @@ public class FixedUnionCursorTest
         byte[] denseBytes = denseDestination.GetSpan().ToArray();
         Assert.Equal(40022, denseBytes.Length);
         Assert.Equal(denseBytes, sparseDestination.GetSpan().ToArray());
-        var dictionaryCopy = LuminPackSerializer.Deserialize<Dictionary<int, CapacityRoot>>(denseBytes);
+        var dictionaryCopy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CapacityRoot>>(denseBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CapacityRoot> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(31, Assert.IsType<CapacityCase>(dictionaryCopy[1]).Value.Marker);
         Assert.Equal(42, Assert.IsType<CapacityCase>(dictionaryCopy[2]).Tail);
     }
@@ -61,7 +61,7 @@ public class FixedUnionCursorTest
         byte[] bytes = destination.GetSpan().ToArray();
         Assert.Equal(32769, bytes.Length);
         Assert.True(destination.TotalLength > initial);
-        var copy = LuminPackSerializer.Deserialize<List<WideCapacityRoot>>(bytes);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<List<WideCapacityRoot>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<WideCapacityRoot> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(51, Assert.IsType<WideCapacityPrefix>(copy[0]).Value.Marker);
         Assert.Equal(61, Assert.IsType<WideCapacityTail>(copy[1]).Value.Marker);
         Assert.Equal(bytes, LuminPackSerializer.Serialize(copy));
@@ -99,7 +99,7 @@ public class FixedUnionCursorTest
             else value.__LuminPackUnionSerialize_globalLuminPackUnitTestFixedUnionCursorsCursorRoot_90246b56(ref writer);
         }
         Assert.Equal(actual, reference.DangerousGetBuffer()[..writer.Position].ToArray());
-        var copy = LuminPackSerializer.Deserialize<List<CursorRoot?>>(actual);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<List<CursorRoot?>>(actual, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref List<CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(11, Assert.IsType<FixedCase>(copy[0]).Number);
         Assert.Equal(22, Assert.IsType<FixedCase>(copy[1]).Number);
         Assert.Equal(44, Assert.IsType<FixedCase>(copy[2]).Number);
@@ -145,7 +145,7 @@ public class FixedUnionCursorTest
         sparse.Remove(4);
         byte[] actual = LuminPackSerializer.Serialize<TProfile>(dense);
         Assert.Equal(LuminPackSerializer.Serialize<TProfile>(sparse), actual);
-        var copy = LuminPackSerializer.Deserialize<Dictionary<int, Utf8CursorRoot?>, TProfile>(actual);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, Utf8CursorRoot?>>(actual, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, Utf8CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize<TProfile>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(11, Assert.IsType<Utf8FixedCase>(copy[1]).Number);
         Assert.Equal(text, Assert.IsType<Utf8VariableCase>(copy[2]).Text);
         Assert.Null(copy[3]);
@@ -161,7 +161,7 @@ public class FixedUnionCursorTest
         sparse.Remove(3);
         byte[] actual = LuminPackSerializer.Serialize<TProfile>(new CursorProfileContainer { Values = dense });
         Assert.Equal(LuminPackSerializer.Serialize<TProfile>(new CursorProfileContainer { Values = sparse }), actual);
-        var copy = LuminPackSerializer.Deserialize<CursorProfileContainer, TProfile>(actual);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<CursorProfileContainer>(actual, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref CursorProfileContainer concreteReadTarget) => LuminPackSerializer.Deserialize<TProfile>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(11, Assert.IsType<FixedCase>(copy.Values[1]).Number);
         Assert.Equal(text, Assert.IsType<VariableCase>(copy.Values[2]).Text);
     }
@@ -183,7 +183,7 @@ public class FixedUnionCursorTest
         byte[] expected = LuminPackSerializer.Serialize<TProfile>(sparse);
         byte[] actual = LuminPackSerializer.Serialize<TProfile>(dense);
         Assert.Equal(expected, actual);
-        var copy = LuminPackSerializer.Deserialize<Dictionary<int, CursorRoot?>, TProfile>(actual);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CursorRoot?>>(actual, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize<TProfile>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(11, Assert.IsType<FixedCase>(copy[1]).Number);
         Assert.Equal(text, Assert.IsType<VariableCase>(copy[2]).Text);
         Assert.Null(copy[3]);
@@ -239,14 +239,14 @@ public class FixedUnionCursorTest
         }
 
         Assert.Equal(actual, destination.DangerousGetBuffer()[..writer.Position].ToArray());
-        var copy = LuminPackSerializer.Deserialize<Dictionary<int, CursorRoot?>>(actual);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CursorRoot?>>(actual, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(11, Assert.IsType<FixedCase>(copy[1]).Number);
         Assert.Equal(22, Assert.IsType<FixedCase>(copy[2]).Number);
         Assert.Equal(33, Assert.IsType<CallbackCase>(copy[3]).Number);
         Assert.Equal(new string ('a', 40_000), Assert.IsType<VariableCase>(copy[4]).Text);
         Assert.Null(copy[5]);
         source.Remove(1);
-        copy = LuminPackSerializer.Deserialize<Dictionary<int, CursorRoot?>>(LuminPackSerializer.Serialize(source));
+        copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CursorRoot?>>(LuminPackSerializer.Serialize(source), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(source.Keys, copy.Keys);
         Assert.Equal(22, Assert.IsType<FixedCase>(copy[2]).Number);
     }
@@ -281,7 +281,7 @@ public class FixedUnionCursorTest
 
         destination.ResetForReuse();
         LuminPackSerializer.Serialize(in source, destination);
-        var copy = LuminPackSerializer.Deserialize<Dictionary<int, CursorRoot?>>(destination.GetSpan());
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CursorRoot?>>(destination.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(22, Assert.IsType<FixedCase>(copy[2]).Number);
     }
 
@@ -303,7 +303,7 @@ public class FixedUnionCursorTest
         };
         byte[] payload = LuminPackSerializer.Serialize(source);
         Assert.Equal(17, RegisteredCase.Position);
-        var copy = LuminPackSerializer.Deserialize<Dictionary<int, CursorRoot?>>(payload);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CursorRoot?>>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(71, Assert.IsType<RegisteredCase>(copy[2]).Number);
         Assert.Equal(payload, LuminPackSerializer.Serialize(copy));
         CheckRegisteredProfile<LuminPackUtf8LengthOptions>();
@@ -320,7 +320,7 @@ public class FixedUnionCursorTest
         byte[] actual = LuminPackSerializer.Serialize<TProfile>(dense);
         Assert.Equal(17, RegisteredCase.Position);
         Assert.Equal(LuminPackSerializer.Serialize<TProfile>(sparse), actual);
-        var copy = LuminPackSerializer.Deserialize<Dictionary<int, CursorRoot?>, TProfile>(actual);
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CursorRoot?>>(actual, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize<TProfile>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(71, Assert.IsType<RegisteredCase>(copy[2]).Number);
     }
 
@@ -345,7 +345,7 @@ public class FixedUnionCursorTest
         };
         destination.ResetForReuse();
         LuminPackSerializer.Serialize(in source, destination);
-        var copy = LuminPackSerializer.Deserialize<Dictionary<int, CursorRoot?>>(destination.GetSpan());
+        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, CursorRoot?>>(destination.GetSpan(), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, CursorRoot?> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(73, Assert.IsType<FixedCase>(copy[2]).Number);
     }
 

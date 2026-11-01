@@ -134,7 +134,7 @@ internal static class BinaryDirectResultRegressionTest
         };
 
         var payload = LuminPackSerializer.Serialize(value);
-        var result = LuminPackSerializer.Deserialize<BinaryDirectRootModel>(payload);
+        var result = global::LuminPackUnitTest.ConcreteReads.Read<BinaryDirectRootModel>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BinaryDirectRootModel concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
         Assert(result is not null && result.Id == 42 && result.Tail == "complete",
             "Small direct-result DTO did not round-trip scalar fields.");
@@ -194,7 +194,7 @@ internal static class BinaryDirectResultRegressionTest
         };
 
         var payload = LuminPackSerializer.Serialize(value);
-        var result = LuminPackSerializer.Deserialize<BinaryDirectReferenceCollectionRoot>(payload);
+        var result = global::LuminPackUnitTest.ConcreteReads.Read<BinaryDirectReferenceCollectionRoot>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BinaryDirectReferenceCollectionRoot concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
         Assert(result?.Items is { Count: 3 } && result.Items[0]?.Value == 11 &&
                result.Items[1] is null && result.Items[2]?.Value == 13,
@@ -209,14 +209,14 @@ internal static class BinaryDirectResultRegressionTest
     {
         var byteLong = new Dictionary<byte, long> { [7] = 0x0102030405060708L };
         var byteLongPayload = LuminPackSerializer.Serialize(byteLong);
-        var byteLongResult = LuminPackSerializer.Deserialize<Dictionary<byte, long>>(byteLongPayload);
+        var byteLongResult = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<byte, long>>(byteLongPayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<byte, long> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(byteLongPayload.Length == sizeof(int) + sizeof(byte) + sizeof(long) &&
                byteLongResult is { Count: 1 } && byteLongResult[7] == 0x0102030405060708L,
             "Dictionary<byte, long> introduced padding between an unmanaged key/value pair.");
 
         var longByte = new Dictionary<long, byte> { [0x0102030405060708L] = 9 };
         var longBytePayload = LuminPackSerializer.Serialize(longByte);
-        var longByteResult = LuminPackSerializer.Deserialize<Dictionary<long, byte>>(longBytePayload);
+        var longByteResult = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<long, byte>>(longBytePayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<long, byte> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(longBytePayload.Length == sizeof(int) + sizeof(long) + sizeof(byte) &&
                longByteResult is { Count: 1 } && longByteResult[0x0102030405060708L] == 9,
             "Dictionary<long, byte> introduced trailing padding in an unmanaged key/value pair.");
@@ -233,7 +233,7 @@ internal static class BinaryDirectResultRegressionTest
         };
 
         var payload = LuminPackSerializer.Serialize(value);
-        var binaryResult = LuminPackSerializer.Deserialize<Dictionary<int, long>>(payload);
+        var binaryResult = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, long>>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, long> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(binaryResult is { Count: 3 } && binaryResult[7] == long.MinValue &&
                binaryResult[11] == 42 && binaryResult[97] == long.MaxValue,
             "The architecture-safe binary Dictionary path did not round-trip.");
@@ -253,13 +253,13 @@ internal static class BinaryDirectResultRegressionTest
         Assert(managedSparse.Remove("removed"),
             "The managed sparse Dictionary fixture did not create a free entry.");
         var managedSparsePayload = LuminPackSerializer.Serialize(managedSparse);
-        var managedSparseResult = LuminPackSerializer.Deserialize<Dictionary<string, long>>(managedSparsePayload);
+        var managedSparseResult = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<string, long>>(managedSparsePayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<string, long> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(managedSparseResult is { Count: 2 } && managedSparseResult["alpha"] == 1 &&
                managedSparseResult["omega"] == 3 && !managedSparseResult.ContainsKey("removed"),
             "The managed Dictionary NoInlining sparse fallback did not preserve its wire values.");
 
         var json = LuminPackSerializer.SerializeJson(value);
-        var jsonResult = LuminPackSerializer.DeserializeJson<Dictionary<int, long>>(json);
+        var jsonResult = global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<int, long>>(json, static (string concreteReadInput, ref Dictionary<int, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert(jsonResult is { Count: 3 } && jsonResult[7] == long.MinValue &&
                jsonResult[11] == 42 && jsonResult[97] == long.MaxValue,
             "The architecture-safe JSON Dictionary path did not round-trip.");
@@ -332,7 +332,7 @@ internal static class BinaryDirectResultRegressionTest
         }
 
         var payload = LuminPackSerializer.Serialize(value);
-        var result = LuminPackSerializer.Deserialize<Dictionary<int, string>>(payload);
+        var result = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, string>>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(result is { Count: 256 } && result.All(pair => value[pair.Key] == pair.Value),
             "The fresh Dictionary bucket builder lost colliding entries.");
 
@@ -350,7 +350,7 @@ internal static class BinaryDirectResultRegressionTest
             "A freshly rebuilt Dictionary could not remove an existing entry.");
 
         var sparsePayload = LuminPackSerializer.Serialize(result);
-        var sparseResult = LuminPackSerializer.Deserialize<Dictionary<int, string>>(sparsePayload);
+        var sparseResult = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, string>>(sparsePayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, string> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert(sparseResult is { Count: 255 } && !sparseResult.ContainsKey(257) &&
                sparseResult.All(pair => result[pair.Key] == pair.Value),
             "The managed Dictionary sparse serialization fallback lost or reordered entries.");
@@ -386,7 +386,7 @@ internal static class BinaryDirectResultRegressionTest
         var duplicateThrew = false;
         try
         {
-            _ = LuminPackSerializer.Deserialize<Dictionary<int, int>>(duplicatePayload);
+            _ = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<int, int>>(duplicatePayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<int, int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         }
         catch (ArgumentException)
         {

@@ -92,7 +92,7 @@ internal static class PhaseOneRegressionTest
     /// <summary>Verifies json overflow number is rejected.</summary>
     private static void JsonOverflowNumberIsRejected()
     {
-        AssertThrows(() => LuminPackSerializer.DeserializeJson<double>("1e999"),
+        AssertThrows(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<double>("1e999", static (string concreteReadInput, ref double concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)),
             "An overflowing JSON number was accepted.");
     }
 

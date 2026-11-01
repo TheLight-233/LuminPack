@@ -29,7 +29,7 @@ public class CircleReferenceSerializationTest
             node2.Parent = node1;
 
             var buf = LuminPackSerializer.Serialize(node1);
-            var deserializedNode1 = LuminPackSerializer.Deserialize<SimpleNode>(buf);
+            var deserializedNode1 = global::LuminPackUnitTest.ConcreteReads.Read<SimpleNode>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleNode concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedNode1?.Parent?.Parent != null &&
                 ReferenceEquals(deserializedNode1.Parent.Parent, deserializedNode1))
@@ -55,7 +55,7 @@ public class CircleReferenceSerializationTest
             node2.Parent = node1;
 
             var buf = LuminPackSerializer.SerializeJson(node1);
-            var deserializedNode1 = LuminPackSerializer.DeserializeJson<SimpleNode>(buf);
+            var deserializedNode1 = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleNode>(buf, static (string concreteReadInput, ref SimpleNode concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedNode1?.Parent?.Parent != null &&
                 ReferenceEquals(deserializedNode1.Parent.Parent, deserializedNode1))
@@ -83,7 +83,7 @@ public class CircleReferenceSerializationTest
             var child = new SimpleNode { Name = "Child", Parent = parent };
 
             var buf = LuminPackSerializer.Serialize(child);
-            var deserializedChild = LuminPackSerializer.Deserialize<SimpleNode>(buf);
+            var deserializedChild = global::LuminPackUnitTest.ConcreteReads.Read<SimpleNode>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref SimpleNode concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedChild?.Parent != null && deserializedChild.Parent.Name == "Parent")
             {
@@ -105,7 +105,7 @@ public class CircleReferenceSerializationTest
             var child = new SimpleNode { Name = "Child", Parent = parent };
 
             var buf = LuminPackSerializer.SerializeJson(child);
-            var deserializedChild = LuminPackSerializer.DeserializeJson<SimpleNode>(buf);
+            var deserializedChild = global::LuminPackUnitTest.ConcreteReads.ReadJson<SimpleNode>(buf, static (string concreteReadInput, ref SimpleNode concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedChild?.Parent != null && deserializedChild.Parent.Name == "Parent")
             {
@@ -155,7 +155,7 @@ public class CircleReferenceSerializationTest
             child2.Sibling = child1;
 
             var buf = LuminPackSerializer.Serialize(root);
-            var deserializedRoot = LuminPackSerializer.Deserialize<TreeNode>(buf);
+            var deserializedRoot = global::LuminPackUnitTest.ConcreteReads.Read<TreeNode>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TreeNode concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             var deserializedChild1 = deserializedRoot?.FirstChild;
             var deserializedChild2 = deserializedRoot?.FirstChild?.Sibling;
@@ -195,7 +195,7 @@ public class CircleReferenceSerializationTest
             child2.Sibling = child1;
 
             var buf = LuminPackSerializer.SerializeJson(root);
-            var deserializedRoot = LuminPackSerializer.DeserializeJson<TreeNode>(buf);
+            var deserializedRoot = global::LuminPackUnitTest.ConcreteReads.ReadJson<TreeNode>(buf, static (string concreteReadInput, ref TreeNode concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
             var deserializedChild1 = deserializedRoot?.FirstChild;
             var deserializedChild2 = deserializedRoot?.FirstChild?.Sibling;
@@ -236,7 +236,7 @@ public class CircleReferenceSerializationTest
             node3.Sibling = node1;
 
             var buf = LuminPackSerializer.Serialize(node1);
-            var deserializedNode1 = LuminPackSerializer.Deserialize<TreeNode>(buf);
+            var deserializedNode1 = global::LuminPackUnitTest.ConcreteReads.Read<TreeNode>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TreeNode concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             // Traverse circular references safely.
             if (deserializedNode1?.Sibling?.Sibling?.Sibling != null &&
@@ -268,7 +268,7 @@ public class CircleReferenceSerializationTest
             node3.Sibling = node1;
 
             var buf = LuminPackSerializer.SerializeJson(node1);
-            var deserializedNode1 = LuminPackSerializer.DeserializeJson<TreeNode>(buf);
+            var deserializedNode1 = global::LuminPackUnitTest.ConcreteReads.ReadJson<TreeNode>(buf, static (string concreteReadInput, ref TreeNode concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
             // Traverse circular references safely.
             if (deserializedNode1?.Sibling?.Sibling?.Sibling != null &&
@@ -305,7 +305,7 @@ public class CircleReferenceSerializationTest
 
             var buf = LuminPackSerializer.Serialize(root);
 
-            var deserializedRoot = LuminPackSerializer.Deserialize<TreeNode>(buf);
+            var deserializedRoot = global::LuminPackUnitTest.ConcreteReads.Read<TreeNode>(buf, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref TreeNode concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedRoot?.FirstChild?.Parent != null &&
                 ReferenceEquals(deserializedRoot.FirstChild.Parent, deserializedRoot))
@@ -332,7 +332,7 @@ public class CircleReferenceSerializationTest
 
             var buf = LuminPackSerializer.SerializeJson(root);
 
-            var deserializedRoot = LuminPackSerializer.DeserializeJson<TreeNode>(buf);
+            var deserializedRoot = global::LuminPackUnitTest.ConcreteReads.ReadJson<TreeNode>(buf, static (string concreteReadInput, ref TreeNode concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
 
             if (deserializedRoot?.FirstChild?.Parent != null &&
                 ReferenceEquals(deserializedRoot.FirstChild.Parent, deserializedRoot))

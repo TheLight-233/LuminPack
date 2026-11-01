@@ -88,15 +88,18 @@ internal static class SerializerOperationCacheRegression
             (Generator: "LuminPack.Code.Core.LuminPackSerializerGenerator", Method: "GenerateSerializerFiles", Cache: "LuminPack.SourceGenerator.SerializerFacadeCache")
         })
         {
-            var method = assembly.GetType(item.Generator, throwOnError: true)!.GetMethod(item.Method, BindingFlags.Static | BindingFlags.NonPublic)!;
+            var method = assembly.GetType(item.Generator, throwOnError: true)!.GetMethods(BindingFlags.Static | BindingFlags.NonPublic)
+                .Single(candidate => candidate.Name == item.Method && candidate.GetParameters().All(parameter => !parameter.IsOut));
             var cacheType = assembly.GetType(item.Cache, throwOnError: true)!;
             var cache = Activator.CreateInstance(cacheType, nonPublic: true)!;
+            object?[] Arguments(object currentCache, CancellationToken token) => new object?[] { input, metadata, null, currentCache, token }
+                .Concat(Enumerable.Repeat<object?>(Type.Missing, method.GetParameters().Length - 5)).ToArray();
             bool cancelled = false;
-            try { method.Invoke(null, [input, metadata, null, cache, cancellation.Token]); }
+            try { method.Invoke(null, Arguments(cache, cancellation.Token)); }
             catch (TargetInvocationException exception) when (exception.InnerException is OperationCanceledException) { cancelled = true; }
             Require(cancelled, item.Method + " ignored a cancelled generation request.");
-            string actual = FragmentFiles(method.Invoke(null, [input, metadata, null, cache, CancellationToken.None])!);
-            string expected = FragmentFiles(method.Invoke(null, [input, metadata, null, Activator.CreateInstance(cacheType, nonPublic: true)!, CancellationToken.None])!);
+            string actual = FragmentFiles(method.Invoke(null, Arguments(cache, CancellationToken.None))!);
+            string expected = FragmentFiles(method.Invoke(null, Arguments(Activator.CreateInstance(cacheType, nonPublic: true)!, CancellationToken.None))!);
             Require(actual == expected && actual.Length != 0, item.Method + " retained invalid partial output after cancellation.");
         }
     }
@@ -195,7 +198,7 @@ internal static class SerializerOperationCacheRegression
             (int)type.GetField("Encoding", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(field)! == 1 &&
             (int)type.GetField("Recording", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(field)! == 2,
             "Resolved options lost assembly inheritance or an explicit default-valued member override.");
-        var edited = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(), CSharpSyntaxTree.ParseText(source.Replace(
+        var edited = input.ReplaceSyntaxTree(input.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(source.Replace(
             "StringEncoding.UTF8", "StringEncoding.UTF16", StringComparison.Ordinal), Parse));
         var changed = resolve.Invoke(null, [edited.GetTypeByMetadataName("Owner")!, edited, true])!;
         Require(!ReferenceEquals(original, changed) && (int)type.GetField("Encoding", BindingFlags.Instance | BindingFlags.NonPublic)!.GetValue(changed)! == 1,

@@ -21,20 +21,20 @@ public class JsonFusedCollectionTest
         for (int length = 0; length <= Strings.Length; length++)
         {
             var strings = Strings.Take(length).ToList();
-            string expected = LuminPackSerializer.SerializeJson<IEnumerable<string?>>(strings);
+            string expected = LuminPackSerializer.SerializeJson((IEnumerable<string?>)(strings));
             Assert.Equal(expected, LuminPackSerializer.SerializeJson(strings));
             Assert.Equal(expected, LuminPackSerializer.SerializeJson(strings.ToArray()));
-            Assert.Equal(strings, LuminPackSerializer.DeserializeJson<List<string?>>(expected));
+            Assert.Equal(strings, global::LuminPackUnitTest.ConcreteReads.ReadJson<List<string?>>(expected, static (string concreteReadInput, ref List<string?> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         }
 
         int[] ints = { 0, 1, -1, 9, 10, 9999, 10000, -10000, int.MaxValue, int.MinValue, 123456789 };
         long[] longs = { 0, 7, -7, 99999, 100000, long.MaxValue, long.MinValue, 1234567890123L };
-        Assert.Equal(LuminPackSerializer.SerializeJson<IEnumerable<int>>(ints), LuminPackSerializer.SerializeJson(ints));
-        Assert.Equal(LuminPackSerializer.SerializeJson<IEnumerable<int>>(ints), LuminPackSerializer.SerializeJson(ints.ToList()));
-        Assert.Equal(LuminPackSerializer.SerializeJson<IEnumerable<long>>(longs), LuminPackSerializer.SerializeJson(longs));
-        Assert.Equal(LuminPackSerializer.SerializeJson<IEnumerable<long>>(longs), LuminPackSerializer.SerializeJson(longs.ToList()));
-        Assert.Equal(ints, LuminPackSerializer.DeserializeJson<int[]>(LuminPackSerializer.SerializeJson(ints)));
-        Assert.Equal(longs, LuminPackSerializer.DeserializeJson<List<long>>(LuminPackSerializer.SerializeJson(longs)));
+        Assert.Equal(LuminPackSerializer.SerializeJson((IEnumerable<int>)(ints)), LuminPackSerializer.SerializeJson(ints));
+        Assert.Equal(LuminPackSerializer.SerializeJson((IEnumerable<int>)(ints)), LuminPackSerializer.SerializeJson(ints.ToList()));
+        Assert.Equal(LuminPackSerializer.SerializeJson((IEnumerable<long>)(longs)), LuminPackSerializer.SerializeJson(longs));
+        Assert.Equal(LuminPackSerializer.SerializeJson((IEnumerable<long>)(longs)), LuminPackSerializer.SerializeJson(longs.ToList()));
+        Assert.Equal(ints, global::LuminPackUnitTest.ConcreteReads.ReadJson<int[]>(LuminPackSerializer.SerializeJson(ints), static (string concreteReadInput, ref int[] concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(longs, global::LuminPackUnitTest.ConcreteReads.ReadJson<List<long>>(LuminPackSerializer.SerializeJson(longs), static (string concreteReadInput, ref List<long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks fused dictionary entries are the established pair arrays and read back through either reader path.</summary>
@@ -54,16 +54,16 @@ public class JsonFusedCollectionTest
         var byIntText = byInt.ToDictionary(pair => pair.Key, pair => Strings[Math.Abs(pair.Key) % Strings.Length]);
 
         Check(byString, LuminPackSerializer.SerializeJson(byString), Text, value => Number(value));
-        Assert.Equal(byString, LuminPackSerializer.DeserializeJson<Dictionary<string, long>>(LuminPackSerializer.SerializeJson(byString)));
-        Assert.Equal(byString, LuminPackSerializer.DeserializeJson<IDictionary<string, long>>(LuminPackSerializer.SerializeJson(byString)));
+        Assert.Equal(byString, global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<string, long>>(LuminPackSerializer.SerializeJson(byString), static (string concreteReadInput, ref Dictionary<string, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(byString, global::LuminPackUnitTest.ConcreteReads.ReadJson<IDictionary<string, long>>(LuminPackSerializer.SerializeJson(byString), static (string concreteReadInput, ref IDictionary<string, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Check(byText, LuminPackSerializer.SerializeJson(byText), Text, Text);
-        Assert.Equal(byText, LuminPackSerializer.DeserializeJson<Dictionary<string, string?>>(LuminPackSerializer.SerializeJson(byText)));
+        Assert.Equal(byText, global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<string, string?>>(LuminPackSerializer.SerializeJson(byText), static (string concreteReadInput, ref Dictionary<string, string?> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Check(byInt, LuminPackSerializer.SerializeJson(byInt), key => Number(key), value => Number(value));
-        Assert.Equal(byInt, LuminPackSerializer.DeserializeJson<Dictionary<int, int>>(LuminPackSerializer.SerializeJson(byInt)));
+        Assert.Equal(byInt, global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<int, int>>(LuminPackSerializer.SerializeJson(byInt), static (string concreteReadInput, ref Dictionary<int, int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Check(byIntLong, LuminPackSerializer.SerializeJson(byIntLong), key => Number(key), value => Number(value));
-        Assert.Equal(byIntLong, LuminPackSerializer.DeserializeJson<Dictionary<int, long>>(LuminPackSerializer.SerializeJson(byIntLong)));
+        Assert.Equal(byIntLong, global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<int, long>>(LuminPackSerializer.SerializeJson(byIntLong), static (string concreteReadInput, ref Dictionary<int, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Check(byIntText, LuminPackSerializer.SerializeJson(byIntText), key => Number(key), Text);
-        Assert.Equal(byIntText, LuminPackSerializer.DeserializeJson<Dictionary<int, string?>>(LuminPackSerializer.SerializeJson(byIntText)));
+        Assert.Equal(byIntText, global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<int, string?>>(LuminPackSerializer.SerializeJson(byIntText), static (string concreteReadInput, ref Dictionary<int, string?> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Assert.Equal("[]", LuminPackSerializer.SerializeJson(new Dictionary<string, int>()));
 
         // <summary>Compares fused output with pair arrays built from single-value token writes.</summary>
@@ -73,14 +73,14 @@ public class JsonFusedCollectionTest
         // <summary>Writes one string through the unfused enumerable path and removes its array brackets.</summary>
         static string Text(string? value)
         {
-            string array = LuminPackSerializer.SerializeJson<IEnumerable<string?>>(new[] { value });
+            string array = LuminPackSerializer.SerializeJson((IEnumerable<string?>)(new[] { value }));
             return array.Substring(1, array.Length - 2);
         }
 
         // <summary>Writes one integer through the unfused enumerable path and removes its array brackets.</summary>
         static string Number(long value)
         {
-            string array = LuminPackSerializer.SerializeJson<IEnumerable<long>>(new[] { value });
+            string array = LuminPackSerializer.SerializeJson((IEnumerable<long>)(new[] { value }));
             return array.Substring(1, array.Length - 2);
         }
     }
@@ -90,22 +90,22 @@ public class JsonFusedCollectionTest
     public void EntryReaderFallsBackForOtherShapes()
     {
         Assert.Equal(new Dictionary<string, long> { ["k"] = 1, ["x"] = -2 },
-            LuminPackSerializer.DeserializeJson<Dictionary<string, long>>(" [ [ \"k\" , 1 ] ,\n\t[\"x\",-2]\r\n ] "));
+            global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<string, long>>(" [ [ \"k\" , 1 ] ,\n\t[\"x\",-2]\r\n ] ", static (string concreteReadInput, ref Dictionary<string, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Assert.Equal(new Dictionary<string, string?> { ["k"] = null },
-            LuminPackSerializer.DeserializeJson<Dictionary<string, string?>>("[[\"k\",null]]"));
+            global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<string, string?>>("[[\"k\",null]]", static (string concreteReadInput, ref Dictionary<string, string?> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Assert.Equal(new Dictionary<string, long> { ["a\"b\u00E9"] = 5 },
-            LuminPackSerializer.DeserializeJson<Dictionary<string, long>>("[[\"a\\\"b\\u00e9\",5]]"));
+            global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<string, long>>("[[\"a\\\"b\\u00e9\",5]]", static (string concreteReadInput, ref Dictionary<string, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Assert.Equal(new Dictionary<string, long> { ["k"] = 0 },
-            LuminPackSerializer.DeserializeJson<Dictionary<string, long>>("[[\"k\"]]"));
+            global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<string, long>>("[[\"k\"]]", static (string concreteReadInput, ref Dictionary<string, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         Assert.Equal(new Dictionary<string, long> { ["k"] = 3 },
-            LuminPackSerializer.DeserializeJson<Dictionary<string, long>>("[[\"k\",3,4]]"));
+            global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<string, long>>("[[\"k\",3,4]]", static (string concreteReadInput, ref Dictionary<string, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
         // Extra entry elements were classified without being consumed; each drain now skips them.
         Assert.Equal(new Dictionary<string, long> { ["k"] = 3, ["m"] = 5 },
-            LuminPackSerializer.DeserializeJson<Dictionary<string, long>>("[[\"k\",3,\"x\",[1,{\"a\":2}]],[\"m\",5]]"));
-        Assert.Equal(3, LuminPackSerializer.DeserializeJson<System.Collections.Immutable.ImmutableDictionary<string, long>>("[[\"k\",3,4]]")["k"]);
-        Assert.Equal(3, LuminPackSerializer.DeserializeJson<System.Collections.ObjectModel.ReadOnlyDictionary<string, long>>("[[\"k\",3,4]]")["k"]);
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<Dictionary<int, int>>("[[1,3000000000]]"));
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<Dictionary<int, int>>("[[3000000000,1]]"));
+            global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<string, long>>("[[\"k\",3,\"x\",[1,{\"a\":2}]],[\"m\",5]]", static (string concreteReadInput, ref Dictionary<string, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.Equal(3, global::LuminPackUnitTest.ConcreteReads.ReadJson<System.Collections.Immutable.ImmutableDictionary<string, long>>("[[\"k\",3,4]]", static (string concreteReadInput, ref System.Collections.Immutable.ImmutableDictionary<string, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget))["k"]);
+        Assert.Equal(3, global::LuminPackUnitTest.ConcreteReads.ReadJson<System.Collections.ObjectModel.ReadOnlyDictionary<string, long>>("[[\"k\",3,4]]", static (string concreteReadInput, ref System.Collections.ObjectModel.ReadOnlyDictionary<string, long> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget))["k"]);
+        Assert.ThrowsAny<Exception>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<int, int>>("[[1,3000000000]]", static (string concreteReadInput, ref Dictionary<int, int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
+        Assert.ThrowsAny<Exception>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<Dictionary<int, int>>("[[3000000000,1]]", static (string concreteReadInput, ref Dictionary<int, int> concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Checks UTF-16 and strict documents keep their own token paths through the fused API.</summary>
@@ -119,20 +119,20 @@ public class JsonFusedCollectionTest
             Map = new Dictionary<string, long> { ["first"] = 1, ["second"] = long.MinValue }
         };
         string utf8 = LuminPackSerializer.SerializeJson(value);
-        var utf8Copy = LuminPackSerializer.DeserializeJson<FusedJsonHolder>(utf8);
+        var utf8Copy = global::LuminPackUnitTest.ConcreteReads.ReadJson<FusedJsonHolder>(utf8, static (string concreteReadInput, ref FusedJsonHolder concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(value.Names, utf8Copy.Names);
         Assert.Equal(value.Counts, utf8Copy.Counts);
         Assert.Equal(value.Map, utf8Copy.Map);
 
-        string utf16 = LuminPackSerializer.SerializeJson<FusedJsonHolder, LuminPackUtf16LengthOptions>(value);
+        string utf16 = LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>((FusedJsonHolder)(value));
         Assert.Equal(utf8, utf16);
-        var utf16Copy = LuminPackSerializer.DeserializeJson<FusedJsonHolder, LuminPackUtf16LengthOptions>(utf16);
+        var utf16Copy = global::LuminPackUnitTest.ConcreteReads.ReadJson<FusedJsonHolder>(utf16, static (string concreteReadInput, ref FusedJsonHolder concreteReadTarget) => LuminPackSerializer.DeserializeJson<LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(value.Map, utf16Copy.Map);
 
         var strict = new StrictFusedJsonHolder { Map = value.Map };
-        var strictCopy = LuminPackSerializer.DeserializeJson<StrictFusedJsonHolder>(LuminPackSerializer.SerializeJson(strict));
+        var strictCopy = global::LuminPackUnitTest.ConcreteReads.ReadJson<StrictFusedJsonHolder>(LuminPackSerializer.SerializeJson(strict), static (string concreteReadInput, ref StrictFusedJsonHolder concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
         Assert.Equal(value.Map, strictCopy.Map);
-        Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<StrictFusedJsonHolder>("{\"Map\":[[\"k\" 1]]}"));
+        Assert.ThrowsAny<Exception>(() => global::LuminPackUnitTest.ConcreteReads.ReadJson<StrictFusedJsonHolder>("{\"Map\":[[\"k\" 1]]}", static (string concreteReadInput, ref StrictFusedJsonHolder concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)));
     }
 }
 

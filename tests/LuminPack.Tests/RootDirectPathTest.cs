@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using System.Numerics;
 using System.Runtime.InteropServices;
 using LuminPack;
+using LuminPack.Option;
 using LuminPack.Utility;
 using Xunit;
 
@@ -75,10 +76,10 @@ public class RootDirectPathTest
         var payload = MemoryMarshal.AsBytes(MemoryMarshal.CreateReadOnlySpan(ref matrix[0, 0], matrix.Length));
         Assert.Equal(1 + 2 * 4 + 4 + payload.Length, bytes.Length);
         Assert.True(bytes.AsSpan(bytes.Length - payload.Length).SequenceEqual(payload));
-        Assert.Equal(matrix, LuminPackSerializer.Deserialize<int[,]>(bytes));
+        Assert.Equal(matrix, global::LuminPackUnitTest.ConcreteReads.Read<int[,]>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int[,] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
 
         var cube = new double[2, 0, 3];
-        Assert.Equal(cube.GetLength(2), LuminPackSerializer.Deserialize<double[,,]>(LuminPackSerializer.Serialize(cube))!.GetLength(2));
+        Assert.Equal(cube.GetLength(2), global::LuminPackUnitTest.ConcreteReads.Read<double[,,]>(LuminPackSerializer.Serialize(cube), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref double[,,] concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))!.GetLength(2));
     }
 
     /// <summary>Checks the immutable stack read keeps the top element first and the raw immutable list keeps the list record.</summary>
@@ -86,13 +87,13 @@ public class RootDirectPathTest
     public void ImmutableStackAndListKeepTheirOrder()
     {
         var stack = ImmutableStack.CreateRange(Enumerable.Range(0, 50));
-        var stackCopy = LuminPackSerializer.Deserialize<ImmutableStack<int>>(LuminPackSerializer.Serialize(stack))!;
+        var stackCopy = global::LuminPackUnitTest.ConcreteReads.Read<ImmutableStack<int>>(LuminPackSerializer.Serialize(stack), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableStack<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))!;
         Assert.Equal(stack.ToArray(), stackCopy.ToArray());
         var list = Enumerable.Range(0, 60).ToImmutableList();
         byte[] bytes = LuminPackSerializer.Serialize(list);
         Assert.Equal(LuminPackSerializer.Serialize(list.ToList()), bytes);
-        Assert.Equal(list, LuminPackSerializer.Deserialize<ImmutableList<int>>(bytes));
-        Assert.Empty(LuminPackSerializer.Deserialize<ImmutableList<int>>(LuminPackSerializer.Serialize(ImmutableList<int>.Empty))!);
+        Assert.Equal(list, global::LuminPackUnitTest.ConcreteReads.Read<ImmutableList<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableList<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
+        Assert.Empty(global::LuminPackUnitTest.ConcreteReads.Read<ImmutableList<int>>(LuminPackSerializer.Serialize(ImmutableList<int>.Empty), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref ImmutableList<int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget))!);
     }
 
     /// <summary>Serializes through the allocating generic entry and the reusable-buffer entry, then reads both ways.</summary>
@@ -100,6 +101,7 @@ public class RootDirectPathTest
     /// <param name="value">The value to check.</param>
     private static void Check<T>(T value)
     {
+        LuminPackSerializer.RegisterTestProfile<T, LuminPackDefaultOptions>();
         byte[] direct = LuminPackSerializer.Serialize(value);
         var buffer = LuminBufferWriterPool.Rent();
         try

@@ -59,7 +59,7 @@ public class NestedReferenceStateTest
             payload = json ? Encoding.Unicode.GetBytes(LuminPackSerializer.SerializeJson(value)) : LuminPackSerializer.Serialize(value);
         }
         finally { NestedReferenceLeaf.WriteNested = false; }
-        var copy = json ? LuminPackSerializer.DeserializeJson<NestedReferenceRoot>(payload) : LuminPackSerializer.Deserialize<NestedReferenceRoot>(payload);
+        var copy = json ? global::LuminPackUnitTest.ConcreteReads.ReadJson<NestedReferenceRoot>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref NestedReferenceRoot concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) : global::LuminPackUnitTest.ConcreteReads.Read<NestedReferenceRoot>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref NestedReferenceRoot concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         Assert.Same(copy.First, copy.Second);
         Assert.Same(copy, copy.Self);
     }
@@ -74,7 +74,7 @@ public class NestedReferenceStateTest
         NestedReferenceRoot copy;
         try
         {
-            copy = json ? LuminPackSerializer.DeserializeJson<NestedReferenceRoot>(payload) : LuminPackSerializer.Deserialize<NestedReferenceRoot>(payload);
+            copy = json ? global::LuminPackUnitTest.ConcreteReads.ReadJson<NestedReferenceRoot>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref NestedReferenceRoot concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) : global::LuminPackUnitTest.ConcreteReads.Read<NestedReferenceRoot>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref NestedReferenceRoot concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
         }
         finally { NestedReferenceLeaf.ReadNested = false; }
         Assert.Same(copy.First, copy.Second);
@@ -147,7 +147,7 @@ public sealed class NestedReferenceLeaf
     {
         if (!ReadNested) return;
         ReadNested = false;
-        _ = LuminPackSerializer.Deserialize<string>(NestedPayload);
-        _ = LuminPackSerializer.DeserializeJson<string>("\"nested\"");
+        _ = global::LuminPackUnitTest.ConcreteReads.Read<string>(NestedPayload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
+        _ = global::LuminPackUnitTest.ConcreteReads.ReadJson<string>("\"nested\"", static (string concreteReadInput, ref string concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget));
     }
 }

@@ -995,12 +995,12 @@ static void VerifyLightMode(MetadataReference[] platformReferences)
             "Light mode emitted a formatter for a type that is not reachable from any serializer call site.");
     }
 
-    // The compact-id registration must contain the emitted set (owned + reachable no-owner).
-    const string dispatchType = "global::System.Collections.Generic.Dictionary<string, global::System.Collections.Generic.List<int>>";
-    if (!generated.Contains("typeof(T) == typeof(" + dispatchType + ")", StringComparison.Ordinal))
+    // Generic dispatch requires actual Register entries and never duplicates the reachable formatter graph.
+    if (generated.Contains("CreateGenerated<", StringComparison.Ordinal) ||
+        generated.Contains("if (typeof(T) == typeof(", StringComparison.Ordinal))
     {
         throw new InvalidOperationException(
-            "The light-mode generic dispatch case for the wrapper-reached type was not registered.");
+            "The light-mode generic dispatch retained an automatic generated formatter table.");
     }
     if (generated.Contains("typeof(global::NeverMentionedPayload)", StringComparison.Ordinal))
     {

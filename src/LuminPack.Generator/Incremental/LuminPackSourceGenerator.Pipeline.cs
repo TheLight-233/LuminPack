@@ -104,9 +104,14 @@ public sealed partial class LuminPackSourceGenerator
         string union = string.Empty;
         try
         {
+            var emittedTypes = tier == LuminPackGenerationTier.Full ? null : ReachabilityAnalysisCache.GetOrCreate(compilation, tier);
+            if (emittedTypes != null)
+                CompilationTypeAnalysisCache.GetOrCreate(compilation).IndexReachableTypes(emittedTypes.EmittedTypes
+                    .Where(type => !LuminPackExtensionGenerator.ContainsTypeParameter(type)));
             extension = LuminPackExtensionGenerator.CodeGenerator(data, metadata, compilation);
             extension = SerializerCoreProjection.Project(extension, compilation, metadata, operations);
-            union = data.isUnion && !data.isValueType ? LuminPackUnionDispatchCodeGenerator.Generate(data, compilation, metadata) : string.Empty;
+            union = data.isUnion && !data.isValueType ? LuminPackUnionDispatchCodeGenerator.Generate(data, compilation, metadata,
+                emittedTypes?.EmittedTypes) : string.Empty;
             if (!string.IsNullOrEmpty(union)) union = SerializerCoreProjection.RewriteCalls(union, compilation, metadata);
             if (!string.IsNullOrEmpty(extension))
             {

@@ -118,9 +118,8 @@ internal static class LuminPackGenerationTierResolver
 /// Owned types (the member graphs of <c>[LuminPackable]</c> types) are always emitted by the
 /// per-type generator, so this analysis only produces the no-owner complement.  Types which cannot
 /// be statically proven reachable from this compilation (reflection, cross-assembly, dynamic call
-/// sites) are intentionally excluded; the generic dispatch then throws the normal
-/// "no source generated formatter" exception for them, which is the same contract full mode exposes
-/// for types that are not formatter candidates.
+/// sites) are intentionally excluded. Reachability emits concrete operations but never registers
+/// generic payload entry points: those require explicit or Custom registration in every tier.
 /// </remarks>
 public sealed class ReachabilityAnalysis
 {

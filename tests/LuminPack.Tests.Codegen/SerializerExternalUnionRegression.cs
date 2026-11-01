@@ -66,11 +66,11 @@ internal static class SerializerExternalUnionRegression
                 {
                     Root local = new LocalCase();
                     var bytes = LuminPackSerializer.Serialize(local);
-                    if (LuminPackSerializer.Deserialize<Root>(bytes) is not LocalCase restored || restored.Secret() != 37 || restored.Value != "private auto-property" ||
+                    if (global::LuminPackUnitTest.ConcreteReads.Read<Root>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Root concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is not LocalCase restored || restored.Secret() != 37 || restored.Value != "private auto-property" ||
                         restored.BaseNumber != 59 || restored.RootPadding() != "foreign root storage")
                         throw new Exception("External root did not discover its local private-storage case.");
                     string json = LuminPackSerializer.SerializeJson(local);
-                    if (LuminPackSerializer.DeserializeJson<Root>(json) is not LocalCase { Value: "private auto-property" })
+                    if (global::LuminPackUnitTest.ConcreteReads.ReadJson<Root>(json, static (string concreteReadInput, ref Root concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) is not LocalCase { Value: "private auto-property" })
                         throw new Exception("External root JSON dispatch changed.");
                     GenericRoot<int> localInt = new LocalGeneric<int> { Value = 43 };
                     GenericRoot<string> localString = new LocalGeneric<string> { Value = "closed generic" };
@@ -81,8 +81,8 @@ internal static class SerializerExternalUnionRegression
                         throw new Exception("Imported closed/open generic priority changed.");
                     IRoot boxed = new StructCase { Value = 53 };
                     byte[] structBytes = LuminPackSerializer.Serialize(boxed);
-                    if (LuminPackSerializer.Deserialize<IRoot>(structBytes) is not StructCase { Value: 53 } ||
-                        LuminPackSerializer.DeserializeJson<IRoot>(LuminPackSerializer.SerializeJson(boxed)) is not StructCase { Value: 53 })
+                    if (global::LuminPackUnitTest.ConcreteReads.Read<IRoot>(structBytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref IRoot concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)) is not StructCase { Value: 53 } ||
+                        global::LuminPackUnitTest.ConcreteReads.ReadJson<IRoot>(LuminPackSerializer.SerializeJson(boxed), static (string concreteReadInput, ref IRoot concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)) is not StructCase { Value: 53 })
                         throw new Exception("An imported interface lost its value-type case.");
                     IUnmarked unmarked = new UnmarkedCase { Value = 654 };
                     bool rejected = false;
@@ -91,13 +91,24 @@ internal static class SerializerExternalUnionRegression
                     if (!rejected) throw new Exception("An external interface without an assembly mark accepted a case that has no contract tag.");
                     return 6;
                 }
-                private static void CheckGeneric<T>(GenericRoot<T> value)
+                private static void CheckGeneric(GenericRoot<int> value)
                 {
                     var bytes = LuminPackSerializer.Serialize(value);
-                    var restored = LuminPackSerializer.Deserialize<GenericRoot<T>>(bytes);
+                    GenericRoot<int> restored = null!; LuminPackSerializer.Deserialize(bytes, ref restored);
                     if (restored.GetType() != value.GetType()) throw new Exception("External generic Union type changed.");
                     string json = LuminPackSerializer.SerializeJson(value);
-                    if (LuminPackSerializer.DeserializeJson<GenericRoot<T>>(json).GetType() != value.GetType())
+                    GenericRoot<int> jsonRestored = null!; LuminPackSerializer.DeserializeJson(json, ref jsonRestored);
+                    if (jsonRestored.GetType() != value.GetType())
+                        throw new Exception("External generic Union JSON type changed.");
+                }
+                private static void CheckGeneric(GenericRoot<string> value)
+                {
+                    var bytes = LuminPackSerializer.Serialize(value);
+                    GenericRoot<string> restored = null!; LuminPackSerializer.Deserialize(bytes, ref restored);
+                    if (restored.GetType() != value.GetType()) throw new Exception("External generic Union type changed.");
+                    string json = LuminPackSerializer.SerializeJson(value);
+                    GenericRoot<string> jsonRestored = null!; LuminPackSerializer.DeserializeJson(json, ref jsonRestored);
+                    if (jsonRestored.GetType() != value.GetType())
                         throw new Exception("External generic Union JSON type changed.");
                 }
             }
@@ -152,7 +163,7 @@ internal static class SerializerExternalUnionRegression
     /// <returns>The generated compilation.</returns>
     private static Compilation Generate(string name, string source, MetadataReference[] references)
     {
-        var input = CSharpCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, Parse, name + ".cs")], references,
+        var input = TestCompilation.Create(name, [CSharpSyntaxTree.ParseText(source, Parse, name + ".cs")], references,
             new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: Parse);
         driver = driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);

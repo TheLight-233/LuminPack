@@ -50,7 +50,7 @@ internal static partial class SerializerDictionaryScalarSlotRegression
                     {{value}} a = {{first}}, b = {{second}};
                     var bytes = LuminPackSerializer.Serialize(new Dictionary<{{key}}, {{value}}> { [2] = b, [1] = a });
                     var map = new Dictionary<{{key}}, {{value}}> { [1] = {{existing}}, [2] = {{existing}} };
-                    LuminPackSerializer.Deserialize<Dictionary<{{key}}, {{value}}>>(bytes, ref map);
+                    LuminPackSerializer.Deserialize(bytes, ref map);
                     if (map.Count != 2 || !map.TryGetValue(1, out var one) || !Equals(one, a) || !map.TryGetValue(2, out var two) || !Equals(two, b))
                         throw new System.InvalidOperationException("Refilled values changed: " + string.Join(",", map) + " from " + System.Convert.ToHexString(bytes));
                     return (int)map.First().Key;

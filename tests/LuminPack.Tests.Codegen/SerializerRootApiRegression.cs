@@ -95,7 +95,7 @@ internal static class SerializerRootApiRegression
         VerifyUnmarkedConsumer(references);
         VerifyBclProfiles(references);
         VerifyConcreteScalarPaths(references);
-        Console.WriteLine("Passed 15 first-build overload selections, Full/Light/Minimal roots, generic forwarding, method groups, API edits, and external generic fallback.");
+        Console.WriteLine("Passed 15 first-build overload selections, Full/Light/Minimal roots, generic forwarding, method groups, API edits, and missing external registrations.");
     }
 
     /// <summary>Requires statically typed scalar facades to use the same stateless raw core as the generic fast path.</summary>
@@ -152,11 +152,11 @@ internal static class SerializerRootApiRegression
                 public static int Check()
                 {
                     var bytes = LuminPackSerializer.Serialize(42);
-                    return LuminPackSerializer.Deserialize<int>(bytes);
+                    return global::LuminPackUnitTest.ConcreteReads.Read<int>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
                 }
             }
             """;
-        var input = CSharpCompilation.Create("UnmarkedConsumer", [CSharpSyntaxTree.ParseText(source, Parse, "Entry.cs")],
+        var input = TestCompilation.Create("UnmarkedConsumer", [CSharpSyntaxTree.ParseText(source, Parse, "Entry.cs")],
             references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
         var driver = Run(input, out var output);
         using var image = new MemoryStream();
@@ -169,8 +169,9 @@ internal static class SerializerRootApiRegression
                 "Primitive-only consumer did not round-trip.");
         }
         finally { context.Unload(); }
-        var tree = input.SyntaxTrees.Single();
+        var tree = input.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs");
         var unrelated = input.ReplaceSyntaxTree(tree, CSharpSyntaxTree.ParseText("public static class Entry { public static int Check() => 42; }", Parse, "Entry.cs"));
+        unrelated = unrelated.RemoveSyntaxTrees(unrelated.SyntaxTrees.Where(source => source.FilePath == "ConcreteReads.cs"));
         driver = driver.RunGeneratorsAndUpdateCompilation(unrelated, out _, out _);
         Require(!driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources).Any(), "An unrelated consumer acquired serializer output.");
         Require(Sources(driver).SequenceEqual(Sources(Run(unrelated, out _))), "Removing the last API call changed retained/fresh output.");
@@ -193,23 +194,23 @@ internal static class SerializerRootApiRegression
                     public static int Check()
                     {
                         var value = new Lazy<int>(17);
-                        var bytes = LuminPackSerializer.Serialize<Lazy<int>, LuminPackUtf16LengthOptions>(value);
-                        var copy = LuminPackSerializer.Deserialize<Lazy<int>, LuminPackUtf16LengthOptions>(bytes);
+                        var bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(value);
+                        var copy = global::LuminPackUnitTest.ConcreteReads.Read<Lazy<int>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Lazy<int> concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget));
                         if (copy.Value != 17)
                             throw new Exception("Lazy primitive profile failed.");
                         int? number = 255;
-                        bytes = LuminPackSerializer.Serialize<int?, LuminPackUtf16LengthOptions>(number);
-                        if (LuminPackSerializer.Deserialize<int?, LuminPackUtf16LengthOptions>(bytes) != number)
+                        bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(number);
+                        if (global::LuminPackUnitTest.ConcreteReads.Read<int?>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref int? concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget)) != number)
                             throw new Exception("Nullable primitive profile failed.");
                         var tuple = Tuple.Create(13, 19L);
-                        bytes = LuminPackSerializer.Serialize<Tuple<int, long>, LuminPackUtf16LengthOptions>(tuple);
-                        if (!tuple.Equals(LuminPackSerializer.Deserialize<Tuple<int, long>, LuminPackUtf16LengthOptions>(bytes)))
+                        bytes = LuminPackSerializer.Serialize<LuminPackUtf16LengthOptions>(tuple);
+                        if (!tuple.Equals(global::LuminPackUnitTest.ConcreteReads.Read<Tuple<int, long>>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Tuple<int, long> concreteReadTarget) => LuminPackSerializer.Deserialize<LuminPackUtf16LengthOptions>(concreteReadInput, ref concreteReadTarget))))
                             throw new Exception("Tuple primitive profile failed.");
                         return 17;
                     }
                 }
                 """;
-            var input = CSharpCompilation.Create("BclProfiles" + mode, [CSharpSyntaxTree.ParseText(source, Parse, "Entry.cs")],
+            var input = TestCompilation.Create("BclProfiles" + mode, [CSharpSyntaxTree.ParseText(source, Parse, "Entry.cs")],
                 references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
             Run(input, out var output);
             using var image = new MemoryStream();
@@ -266,12 +267,12 @@ internal static class SerializerRootApiRegression
                 void RunProfile<TProfile>()
                     where TProfile : struct, global::LuminPack.Option.ILuminPackOptions
                 {
-                    string json = S.SerializeJson<Parent, TProfile>(value);
+                    string json = S.SerializeJson<TProfile>(value);
                     Parent fromJson = null!;
-                    S.DeserializeJson<Parent, TProfile>(json, ref fromJson);
+                    S.DeserializeJson<TProfile>(json, ref fromJson);
                     if (fromJson.Child.Value != 913)
                         throw new Exception("Selected JSON string/ref or nested formatter parity failed.");
-                    S.DeserializeJson<Parent, TProfile>(json.AsSpan(), ref fromJson);
+                    S.DeserializeJson<TProfile>(json.AsSpan(), ref fromJson);
                     if (fromJson.Child.Value != 913)
                         throw new Exception("Selected JSON character/ref parity failed.");
                 }
@@ -314,7 +315,7 @@ internal static class SerializerRootApiRegression
         Require(Sources(retained).SequenceEqual(Sources(fresh)), "Retained call-edit output differs from fresh generation.");
     }
 
-    /// <summary>Emits a library with no concrete facade roots and executes an independent consumer through generic fallback.</summary>
+    /// <summary>Rejects unregistered generic calls from an independent consumer of a library without concrete facade roots.</summary>
     /// <param name="references">The common platform and runtime references.</param>
     private static void VerifyExternalFallback(MetadataReference[] references)
     {
@@ -323,20 +324,21 @@ internal static class SerializerRootApiRegression
         var libraryResult = library.Emit(libraryImage);
         Require(libraryResult.Success, string.Join(Environment.NewLine, libraryResult.Diagnostics));
         const string consumerSource = """
+            using System;
             public static class Consumer
             {
                 public static int Check()
                 {
-                    var value = new Payload { Value = 731 };
-                    byte[] bytes = LuminPack.LuminPackSerializer.Serialize(in value);
-                    var restored = LuminPack.LuminPackSerializer.Deserialize<Payload>(bytes);
-                    string json = LuminPack.LuminPackSerializer.SerializeJson(value);
-                    var jsonRestored = LuminPack.LuminPackSerializer.DeserializeJson<Payload>(json);
-                    return restored.Value + jsonRestored.Value;
+                    int missing = 0;
+                    try { _ = LuminPack.LuminPackSerializer.Serialize(new Payload { Value = 731 }); }
+                    catch (Exception exception) when (exception.Message.Contains("No formatter is registered", StringComparison.Ordinal)) { missing++; }
+                    try { _ = LuminPack.LuminPackSerializer.Deserialize<Payload>(new byte[0]); }
+                    catch (Exception exception) when (exception.Message.Contains("No formatter is registered", StringComparison.Ordinal)) { missing++; }
+                    return missing;
                 }
             }
             """;
-        var consumer = CSharpCompilation.Create("RootApiConsumer", [CSharpSyntaxTree.ParseText(consumerSource, Parse)],
+        var consumer = TestCompilation.Create("RootApiConsumer", [CSharpSyntaxTree.ParseText(consumerSource, Parse)],
             references.Append(MetadataReference.CreateFromImage(libraryImage.ToArray())), new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary));
         CheckErrors(consumer);
         using var consumerImage = new MemoryStream();
@@ -348,7 +350,7 @@ internal static class SerializerRootApiRegression
             context.LoadFromStream(libraryImage);
             consumerImage.Position = 0;
             var assembly = context.LoadFromStream(consumerImage);
-            Require((int)assembly.GetType("Consumer")!.GetMethod("Check")!.Invoke(null, null)! == 1462, "External generic binary/JSON fallback lost annotated formatter dependencies.");
+            Require((int)assembly.GetType("Consumer")!.GetMethod("Check")!.Invoke(null, null)! == 2, "An external consumer unexpectedly resolved an unregistered generated formatter.");
         }
         finally { context.Unload(); }
     }
@@ -359,7 +361,7 @@ internal static class SerializerRootApiRegression
     /// <param name="entry">Source containing actual project calls.</param>
     /// <returns>A compilation whose facade calls initially have no declaration to bind.</returns>
     private static CSharpCompilation Create(MetadataReference[] references, string mode, string entry)
-        => CSharpCompilation.Create("RootApiLibrary", [CSharpSyntaxTree.ParseText(Models.Replace("MODE", mode, StringComparison.Ordinal), Parse, "Models.cs"),
+        => TestCompilation.Create("RootApiLibrary", [CSharpSyntaxTree.ParseText(Models.Replace("MODE", mode, StringComparison.Ordinal), Parse, "Models.cs"),
             CSharpSyntaxTree.ParseText("using System; using System.Buffers; using System.IO; using LuminPack.Utility; using S = LuminPack.LuminPackSerializer; using static LuminPack.LuminPackSerializer; " + entry, Parse, "Entry.cs")],
             references, new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true));
 

@@ -21,7 +21,7 @@ public class DictionaryFreshBucketRebuildTest
         try
         {
             CollisionKey.BeforeHash = CompactHeap;
-            var copy = LuminPackSerializer.Deserialize<Dictionary<CollisionKey, int>>(payload);
+            var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<CollisionKey, int>>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<CollisionKey, int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
             CollisionKey.BeforeHash = null;
             Assert.Equal(source.ToArray(), copy.ToArray());
             foreach (var pair in source) Assert.Equal(pair.Value, copy[pair.Key]);
@@ -45,7 +45,7 @@ public class DictionaryFreshBucketRebuildTest
         byte[] payload = LuminPackSerializer.Serialize(source);
         Assert.Equal(20, payload.Length);
         payload.AsSpan(4, 4).CopyTo(payload.AsSpan(12, 4));
-        Assert.Throws<ArgumentException>(() => LuminPackSerializer.Deserialize<Dictionary<CollisionKey, int>>(payload));
+        Assert.Throws<ArgumentException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<CollisionKey, int>>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<CollisionKey, int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Retains reference-key equality and managed entry roots during hash callbacks.</summary>
@@ -57,7 +57,7 @@ public class DictionaryFreshBucketRebuildTest
         try
         {
             ReferenceKey.BeforeHash = CompactHeap;
-            var copy = LuminPackSerializer.Deserialize<Dictionary<ReferenceKey, int>>(payload);
+            var copy = global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<ReferenceKey, int>>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<ReferenceKey, int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget));
             ReferenceKey.BeforeHash = null;
             Assert.Equal(source.Select(pair => (pair.Key.Value, pair.Value)), copy.Select(pair => (pair.Key.Value, pair.Value)));
             foreach (var pair in source) Assert.Equal(pair.Value, copy[new ReferenceKey { Value = pair.Key.Value }]);
@@ -71,7 +71,7 @@ public class DictionaryFreshBucketRebuildTest
     public void NullReferenceKeyStillFails()
     {
         byte[] payload = [1, 0, 0, 0, 255, 17, 0, 0, 0];
-        Assert.Throws<ArgumentNullException>(() => LuminPackSerializer.Deserialize<Dictionary<ReferenceKey, int>>(payload));
+        Assert.Throws<ArgumentNullException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Dictionary<ReferenceKey, int>>(payload, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Dictionary<ReferenceKey, int> concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
     }
 
     /// <summary>Collects while the bucket builder holds managed interior references into its entry array.</summary>

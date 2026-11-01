@@ -48,12 +48,12 @@ internal static class SerializerDictionaryUnionSlotRegression
                 {
                     var bytes = LuminPackSerializer.Serialize(new Dictionary<int, Root> { [2] = new Text { Value = "b" }, [1] = new Text { Value = "a" } });
                     var map = new Dictionary<int, Root> { [1] = new Text(), [2] = new Text() };
-                    LuminPackSerializer.Deserialize<Dictionary<int, Root>>(bytes, ref map);
+                    LuminPackSerializer.Deserialize(bytes, ref map);
                     if (((Text)map[1]).Value != "a" || ((Text)map[2]).Value != "b") throw new System.InvalidOperationException("Staged Text values changed.");
                     var fixedBytes = LuminPackSerializer.Serialize(new Dictionary<int, Root> { [2] = Create(22), [1] = Create(11) });
                     var first = Create(0);
                     var fixedMap = new Dictionary<int, Root> { [1] = first, [2] = Create(0) };
-                    LuminPackSerializer.Deserialize<Dictionary<int, Root>>(fixedBytes, ref fixedMap);
+                    LuminPackSerializer.Deserialize(fixedBytes, ref fixedMap);
                     if (!ReferenceEquals(first, fixedMap[1]) && fixedMap[1] is not Fixed) throw new System.InvalidOperationException("Fixed case was not restored.");
                     if (Number(fixedMap[1]) != 11 || Number(fixedMap[2]) != 22) throw new System.InvalidOperationException("Fixed values changed.");
                     return fixedMap.First().Key;
