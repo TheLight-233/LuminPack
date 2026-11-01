@@ -83,6 +83,8 @@ Main components:
 
 Closed external-input descriptors include generated fixed-width/domain facts and a finite depth bound. The binary validator specializes proven and runtime-checked depth paths while retaining cumulative work charges; descriptors from earlier generators keep interpreted validation. Boolean domains use bounded framework scans or portable four-byte groups and scalar tails; already budgeted domains bypass repeated schema interpretation. Fixed version writers reuse the original cached prefix and stamp the compiled profile. Int32/UInt32 reference lengths and ids keep their positive one-byte path small, with the original tagged conversions in outlined helpers.
 
+Generated binary class guards use compact restoration tokens containing only their parent's binary accounting state, borrowed by readonly reference on exit. JSON retains its grammar and duplicate-name snapshots. Both paths preserve root ownership, nested quotas, reuse and exception-safe cleanup; generators referencing older runtimes retain the original token API.
+
 ### Incremental boundaries
 
 Generation separates current semantic analysis from frozen output values. Each root's source, layout and diagnostics are compared before source production; unchanged values cause no output callback. Cross-compilation caches keep descriptions, syntax tree identities, copied settings and generated strings, never a `Compilation`, `SemanticModel` or symbol. Invalidation covers project-level facts (references, language settings, aliases, extension signatures) and source closures (observed types, members, attributes, partial declarations). `IncrementalGenerationMetrics` exposes internal counters for the incremental tests.

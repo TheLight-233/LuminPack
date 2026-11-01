@@ -15,13 +15,19 @@ internal sealed class SafeReadProjection
     private readonly ITypeSymbol _type;
     private readonly CompiledOptions _options;
     private readonly SemanticModel _model;
+    private readonly bool _objectScope;
 
     /// <summary>Captures the original template's semantic identities only during this uncached projection.</summary>
     /// <param name="type">The operation type.</param><param name="compilation">The consumer compilation.</param>
     /// <param name="metadata">Generation settings.</param><param name="options">The declaration profile.</param>
     /// <param name="model">The temporary original-template semantic model.</param>
     internal SafeReadProjection(ITypeSymbol type, Compilation compilation, MetaInfo metadata, CompiledOptions options, SemanticModel model)
-    { _type = type; _options = options; _model = model; }
+    {
+        _type = type; _options = options; _model = model;
+        _objectScope = type.IsReferenceType && type is INamedTypeSymbol named &&
+            CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named) &&
+            compilation.GetTypeByMetadataName("LuminPack.Security.LuminPackInputPolicy")?.GetMembers("EnterObject").Length > 0;
+    }
 
     /// <summary>Finds external declarations through serialized members, closing recursive paths once.</summary>
     /// <param name="type">The concrete root.</param><param name="compilation">The consumer compilation.</param>
@@ -59,7 +65,10 @@ internal sealed class SafeReadProjection
             return body.WithStatements(body.Statements.Add(SyntaxFactory.ParseStatement(done)));
         }
         body = (BlockSyntax)new SuccessfulReturns().Visit(body);
-        string completion = Policy + ".CompleteValue(ref " + state + ", ref __inputValueScope);";
+        bool compact = !json && _objectScope;
+        string enter = compact ? ".EnterObject(ref " : ".EnterValue(ref ";
+        string exit = compact ? ".ExitObject(in __inputValueScope);" : ".ExitValue(__inputValueScope);";
+        string completion = Policy + (compact ? ".CompleteObject(ref " : ".CompleteValue(ref ") + state + ", ref __inputValueScope);";
         if (_type is INamedTypeSymbol named && named.TypeArguments.Length > 0)
         {
             string simple = named.OriginalDefinition.MetadataName;
@@ -69,8 +78,8 @@ internal sealed class SafeReadProjection
             else if (simple is "HashSet`1" or "SortedSet`1" or "ISet`1" or "IReadOnlySet`1" or "ImmutableHashSet`1" or "ImmutableSortedSet`1" or "FrozenSet`1")
                 completion += Policy + ".CompleteSet<" + args + ">(" + value + ", __inputValueScope);";
         }
-        return (BlockSyntax)SyntaxFactory.ParseStatement("{ var __inputValueScope = " + Policy + ".EnterValue(ref " + state + ", " + SafeOperationProjection.Schema + "); bool __inputValueDone = false; try { " +
-            string.Join("\n", body.Statements) + " __inputValueDone = true; } finally { try { if (__inputValueDone) { " + completion + " } } finally { " + Policy + ".ExitValue(__inputValueScope); } } }");
+        return (BlockSyntax)SyntaxFactory.ParseStatement("{ var __inputValueScope = " + Policy + enter + state + ", " + SafeOperationProjection.Schema + "); bool __inputValueDone = false; try { " +
+            string.Join("\n", body.Statements) + " __inputValueDone = true; } finally { try { if (__inputValueDone) { " + completion + " } } finally { " + Policy + exit + " } } }");
     }
 
     /// <summary>Identifies scalars whose every storage bit pattern is already a valid value.</summary>
