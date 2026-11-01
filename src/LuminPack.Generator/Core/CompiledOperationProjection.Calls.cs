@@ -133,7 +133,13 @@ internal sealed partial class CompiledOperationProjection
             {
                 string root = node.GetAnnotations(UnionRootAnnotation).Select(annotation => annotation.Data).SingleOrDefault();
                 if (root != null)
-                    return SyntaxFactory.ParseExpression(root + "." + name + "_Compiled<" + _profile + ">(" + node.ArgumentList.Arguments[0] + ", " + access.Expression + ")").WithTriviaFrom(node);
+                    return result.WithExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
+                        SyntaxFactory.ParseExpression(root), SyntaxFactory.GenericName(SyntaxFactory.Identifier(name + "_Compiled"),
+                            SyntaxFactory.TypeArgumentList(SyntaxFactory.SingletonSeparatedList<TypeSyntax>(SyntaxFactory.ParseTypeName(_profile))))))
+                        .WithArgumentList(SyntaxFactory.ArgumentList(SyntaxFactory.SeparatedList(new[]
+                        {
+                            result.ArgumentList.Arguments[0], SyntaxFactory.Argument(access.Expression)
+                        })));
             }
             if (formatter && arguments.Count == 0 && _payload != null) arguments = arguments.Add(SyntaxFactory.ParseTypeName(_payload));
             if (kernel && access.Name is GenericNameSyntax) arguments = arguments.RemoveAt(0);

@@ -92,7 +92,7 @@ internal static class SerializerCompoundStringReuseRegression
         {
             string type = method.ParameterList.Parameters[1].Type!.ToString();
             if (!type.Contains("KeyValuePair<", StringComparison.Ordinal) && !type.Contains("ValueTuple<", StringComparison.Ordinal) && !type.Contains("System.Tuple<", StringComparison.Ordinal)) continue;
-            Require(method.ToString().Contains("__readCompoundString", StringComparison.Ordinal) == selected,
+            Require(method.ToString().Contains("ReadCompoundString", StringComparison.Ordinal) == selected,
                 "Compound string helper qualification differs: " + type);
             if (selected)
             {

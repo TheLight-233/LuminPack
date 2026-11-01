@@ -40,7 +40,22 @@ internal static class SerializerSourcePresentationRegression
                 public int Id;
                 public string Name = "";
                 public string objectRecordBound = "";
+                public string WriteOriginalObject = "";
             }
+            [LuminPackable]
+            public partial class PresentationCollections
+            {
+                public System.Collections.Generic.KeyValuePair<int, string> Pair;
+                public System.Collections.Generic.KeyValuePair<long, string> WidePair;
+                public System.Collections.Generic.List<System.Collections.Generic.KeyValuePair<int, string>> Pairs = new();
+                public System.Collections.Generic.Dictionary<string, int> Map = new();
+                public int[] Items = System.Array.Empty<int>();
+                public PresentationUnion Choice = null!;
+            }
+            [LuminPackable, LuminPackUnion(0, typeof(PresentationCase))]
+            public abstract partial class PresentationUnion { }
+            [LuminPackable]
+            public sealed partial class PresentationCase : PresentationUnion { public int Code; }
             """;
         var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER"]);
         var compilation = CSharpCompilation.Create("PresentationRoots", [CSharpSyntaxTree.ParseText(source, parse)], references,
@@ -67,6 +82,25 @@ internal static class SerializerSourcePresentationRegression
         var proofNames = provenWrite.DescendantNodes().OfType<VariableDeclaratorSyntax>().Select(variable => variable.Identifier.ValueText).ToArray();
         Require(proofNames.Contains("objectRecordBound2") && proofNames.All(name => !name.StartsWith("__", StringComparison.Ordinal)),
             "A late record-bound local retained its internal spelling or collided with the user's field.");
+        Require(provenWrite.DescendantNodes().OfType<LocalFunctionStatementSyntax>()
+                .Any(function => function.Identifier.ValueText == "WriteOriginalObject2"),
+            "The fallback local function did not reserve the user's member identity.");
+        foreach (var root in roots)
+        {
+            var locals = root.DescendantNodes().OfType<VariableDeclaratorSyntax>().Select(variable => variable.Identifier.ValueText)
+                .Concat(root.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Select(function => function.Identifier.ValueText));
+            Require(locals.All(name => !name.StartsWith("__", StringComparison.Ordinal)),
+                "An object, collection or Union root retained an internal local identity: " + root.Identifier + " " +
+                string.Join(", ", locals.Where(name => name.StartsWith("__", StringComparison.Ordinal))));
+        }
+        Require(roots.Any(root => root.DescendantNodes().OfType<VariableDeclaratorSyntax>()
+                .Any(variable => variable.Identifier.ValueText.StartsWith("scalarReadSource", StringComparison.Ordinal))),
+            "The presentation fixture omitted lowered pair scalar reads.");
+        Require(roots.Any(root => root.DescendantNodes().OfType<LocalFunctionStatementSyntax>()
+                .Any(function => function.Identifier.ValueText == "ReadCompoundString")) &&
+            roots.Any(root => root.DescendantNodes().OfType<LocalFunctionStatementSyntax>()
+                .Any(function => function.Identifier.ValueText == "ReadPairElement")),
+            "The presentation fixture omitted outlined collection helpers.");
         using var image = new MemoryStream();
         var emitted = output.Emit(image);
         Require(emitted.Success, string.Join(Environment.NewLine, emitted.Diagnostics));

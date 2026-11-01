@@ -23,7 +23,7 @@ internal static partial class SerializerCodegenPerformanceRegression
             var errors = diagnostics.Concat(output.GetDiagnostics()).Where(item => item.Severity == DiagnosticSeverity.Error).ToArray();
             RequireProven(errors.Length == 0, string.Join("\n", errors.Select(item => item.ToString())));
             string generated = CaptureProven(driver);
-            RequireProven(!generated.Contains("__writeOriginalLeaf", StringComparison.Ordinal) && !generated.Contains("__writeOriginalObject", StringComparison.Ordinal),
+            RequireProven(!generated.Contains("WriteOriginalLeaf", StringComparison.Ordinal) && !generated.Contains("WriteOriginalObject", StringComparison.Ordinal),
                 "A consumer-defined profile entered a built-in complete-record proof.");
             RequireProven(ExecuteProven(output) == "Passed shadowed profile bytes, getter counts, checked record bounds and failed cursor/prefix observations.",
                 "A shadowed built-in profile differs from the equivalent original custom profile.");

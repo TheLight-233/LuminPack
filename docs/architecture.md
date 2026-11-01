@@ -101,6 +101,8 @@ Roslyn cancellation is checked before changed-type analysis and between aggregat
 
 Concrete model API remarks link directly to the appropriate nested binary or JSON Root method through a compiler-bound `cref`. Raw unmanaged binary readers without a separate Root, Custom entries and size evaluation do not acquire fictitious read/write links. Final presentation removes internal prefixes from proven local roles, gives captured record members descriptive snapshot names and labels cursor record groups with field comments. These changes preserve user member names and executable statements.
 
+Local helper functions use PascalCase with collision-safe numeric suffixes. Scalar and Union call projections retain their original operand syntax and annotations so the presentation pass can still prove which identifiers belong to generated locals; names observed through `nameof` remain unchanged.
+
 Final contract documentation is rendered as text changes limited to method-leading trivia. This avoids constructing XML syntax trees that would immediately be converted back to text, while preserving the exact comments, directives, indentation and executable source.
 
 ## Tests

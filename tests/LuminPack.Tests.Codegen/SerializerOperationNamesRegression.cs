@@ -31,6 +31,10 @@ internal static class SerializerOperationNamesRegression
                     int cursor = 41;
                     int __lpCursor = 43;
                     var item = new Item();
+                    int Compute = 2;
+                    static int __lpCompute(int number) => number + 2;
+                    static string __lpObserved() => nameof(__lpObserved);
+                    if (__lpCompute(0) != Compute || __lpObserved() != "__lpObserved") throw new System.InvalidOperationException();
                     ref int __lpAlias = ref __lpResult;
                     __lpAlias += item.offset;
                     if (Calls != 0) goto __lpExit;
@@ -50,7 +54,8 @@ internal static class SerializerOperationNamesRegression
         {
             ["__lpOffset"] = "offset", ["__lpResult"] = "result", ["__lpCollision"] = "collision",
             ["__lpKeyword"] = "class", ["__lpFixed"] = "__luminFixedBlock", ["__lpNamed"] = "named",
-            ["__lpPartial"] = "partial", ["__lpAlias"] = "result", ["__lpExit"] = "end", ["__LuminLayout0"] = "cache", ["__lpCursor"] = "__cursor"
+            ["__lpPartial"] = "partial", ["__lpAlias"] = "result", ["__lpExit"] = "end", ["__LuminLayout0"] = "cache", ["__lpCursor"] = "__cursor",
+            ["__lpCompute"] = "compute", ["__lpObserved"] = "observed"
         };
         var marked = tree.GetRoot().ReplaceTokens(tree.GetRoot().DescendantTokens().Where(token => token.IsKind(SyntaxKind.IdentifierToken)), (token, _) =>
         {
@@ -58,10 +63,11 @@ internal static class SerializerOperationNamesRegression
             {
                 VariableDeclaratorSyntax declaration => model.GetDeclaredSymbol(declaration),
                 LabeledStatementSyntax label => model.GetDeclaredSymbol(label),
+                LocalFunctionStatementSyntax function => model.GetDeclaredSymbol(function),
                 IdentifierNameSyntax identifier => model.GetSymbolInfo(identifier).Symbol,
                 _ => null
             };
-            if (symbol is not (ILocalSymbol or ILabelSymbol) && symbol?.Name != "__LuminLayout0" ||
+            if (symbol is not (ILocalSymbol or ILabelSymbol or IMethodSymbol { MethodKind: MethodKind.LocalFunction }) && symbol?.Name != "__LuminLayout0" ||
                 !roles.TryGetValue(token.ValueText, out string? role) || token.ValueText == "__lpPartial" && token.Parent is not VariableDeclaratorSyntax)
                 return token;
             return token.WithAdditionalAnnotations(new SyntaxAnnotation("LuminPack.GeneratedLocalRole", role));
@@ -83,6 +89,9 @@ internal static class SerializerOperationNamesRegression
             "A user-name collision, nameof observation or incomplete compiler identity was renamed.");
         Require(method.DescendantNodes().OfType<LabeledStatementSyntax>().Single().Identifier.ValueText == "end0",
             "A generated exit label did not acquire a short readable name.");
+        var functions = method.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Select(function => function.Identifier.ValueText).ToArray();
+        Require(functions.Contains("Compute2") && functions.Contains("__lpObserved"),
+            "A local function lost its PascalCase role, collision suffix or nameof identity.");
         Require(rewritten.DescendantNodes().OfType<FieldDeclarationSyntax>().SelectMany(field => field.Declaration.Variables).Any(field => field.Identifier.ValueText == "__LuminLayout0"),
             "A support field was renamed by a local presentation pass.");
         var changed = CSharpSyntaxTree.Create((CSharpSyntaxNode)rewritten, parse);
@@ -96,7 +105,9 @@ internal static class SerializerOperationNamesRegression
                 "Readable local names changed a field API or support identity.");
             foreach (var originalMethod in type.GetMethods(members))
             {
-                var renamedMethod = renamedType.GetMethod(originalMethod.Name, members)!;
+                var renamedMethod = (MethodInfo)candidate.ManifestModule.ResolveMethod(originalMethod.MetadataToken)!;
+                Require(originalMethod.Name.StartsWith("<Check>g__", StringComparison.Ordinal) || renamedMethod.Name == originalMethod.Name,
+                    "Local naming changed a member method identity.");
                 Require(originalMethod.GetMethodBody()!.GetILAsByteArray()!.SequenceEqual(renamedMethod.GetMethodBody()!.GetILAsByteArray()!),
                     "Readable local names changed Release IL for " + originalMethod.Name + ".");
             }

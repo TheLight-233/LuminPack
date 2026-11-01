@@ -285,6 +285,7 @@ internal static class SerializerCoreProjection
         private const string ScalarReadAnnotation = "LuminPack.RawScalarRead";
         private const string SmallScalarReadAnnotation = "LuminPack.SmallScalarRead";
         private bool _lowerScalarReads;
+        private HashSet<string> _scalarReadNames;
 
         /// <summary>Isolates fixed-read expansion to pair formatter bodies whose callers exhaust their native inlining budget.</summary>
         /// <param name="node">The generated operation declaration.</param>
@@ -292,11 +293,14 @@ internal static class SerializerCoreProjection
         public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
         {
             bool previous = _lowerScalarReads;
+            var previousNames = _scalarReadNames;
             _lowerScalarReads = node.ParameterList.Parameters.Count == 2 &&
                 node.ParameterList.Parameters[0].Type.ToString().EndsWith("LuminPackReader", StringComparison.Ordinal) &&
                 node.ParameterList.Parameters[1].Type.ToString().StartsWith("global::System.Collections.Generic.KeyValuePair<", StringComparison.Ordinal);
+            _scalarReadNames = _lowerScalarReads ? new HashSet<string>(node.DescendantTokens()
+                .Where(token => token.IsKind(SyntaxKind.IdentifierToken)).Select(token => token.ValueText), StringComparer.Ordinal) : null;
             try { return base.VisitMethodDeclaration(node); }
-            finally { _lowerScalarReads = previous; }
+            finally { _lowerScalarReads = previous; _scalarReadNames = previousNames; }
         }
 
         /// <summary>Spells fixed scalar reads directly so large callers need no helper inlining budget.</summary>
@@ -309,25 +313,55 @@ internal static class SerializerCoreProjection
                 call.GetAnnotations(ScalarReadAnnotation).SingleOrDefault()?.Data is not { } type ||
                 call.Expression is not MemberAccessExpressionSyntax access || access.Expression is not IdentifierNameSyntax)
                 return result;
-            string identity = "__luminScalarRead" + _scalarReadIndex++;
-            string target = identity + "Target", source = identity + "Source";
+            string identity, target, source, valueBinding, stateBinding;
+            do
+            {
+                identity = "__luminScalarRead" + _scalarReadIndex++;
+                target = identity + "Target";
+                source = identity + "Source";
+                valueBinding = identity + "Value";
+                stateBinding = identity + "State";
+            }
+            while (_scalarReadNames.Contains(target) || _scalarReadNames.Contains(source) ||
+                _scalarReadNames.Contains(valueBinding) || _scalarReadNames.Contains(stateBinding));
+            _scalarReadNames.Add(target);
+            _scalarReadNames.Add(source);
             const string memory = "global::System.Runtime.CompilerServices.Unsafe";
             string size = memory + ".SizeOf<" + type + ">()";
             // The checked Advance validates the value's range before the cursor moves; the load reads the captured position.
-            string capture = "ref byte " + source + " = ref " + access.Expression + ".GetCurrentSpanReference(); " + access.Expression + ".Advance(" + size + "); ";
+            string capture = "ref byte " + source + " = ref " + stateBinding + ".GetCurrentSpanReference(); " + stateBinding + ".Advance(" + size + "); ";
             if (call.HasAnnotations(SmallScalarReadAnnotation))
             {
                 bool simpleTarget = call.ArgumentList.Arguments[0].Expression is IdentifierNameSyntax;
-                string destination = simpleTarget ? call.ArgumentList.Arguments[0].Expression.ToString() : target;
-                string declaration = simpleTarget ? string.Empty : "ref " + type + " " + target + " = ref " + call.ArgumentList.Arguments[0].Expression + "; ";
-                return SyntaxFactory.ParseStatement("{ " + declaration + capture + destination + " = " + memory + ".ReadUnaligned<" + type + ">(ref " +
+                string destination = simpleTarget ? valueBinding : target;
+                string declaration = simpleTarget ? string.Empty : "ref " + type + " " + target + " = ref " + valueBinding + "; ";
+                var statement = SyntaxFactory.ParseStatement("{ " + declaration + capture + destination + " = " + memory + ".ReadUnaligned<" + type + ">(ref " +
                     source + "); }").WithTriviaFrom(node);
+                statement = RestoreScalarBindings(statement, valueBinding, stateBinding, call.ArgumentList.Arguments[0].Expression, access.Expression);
+                return GeneratedOperationNames.MarkLocal(GeneratedOperationNames.MarkLocal(statement,
+                    source, "scalarReadSource"), target, "scalarReadTarget");
             }
-            return SyntaxFactory.ParseStatement("{ ref " + type + " " + target + " = ref " + call.ArgumentList.Arguments[0].Expression +
+            var wide = SyntaxFactory.ParseStatement("{ ref " + type + " " + target + " = ref " + valueBinding +
                 "; " + capture +
                 "if (" + memory + ".SizeOf<global::System.IntPtr>() == 8 || " + size + " <= 4) " + target + " = " + memory + ".ReadUnaligned<" + type + ">(ref " + source + "); " +
                 "else global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref " + memory + ".As<" + type + ", byte>(ref " + target + "), ref " + source + ", (uint)" + size + "); }").WithTriviaFrom(node);
+            wide = RestoreScalarBindings(wide, valueBinding, stateBinding, call.ArgumentList.Arguments[0].Expression, access.Expression);
+            return GeneratedOperationNames.MarkLocal(GeneratedOperationNames.MarkLocal(wide,
+                source, "scalarReadSource"), target, "scalarReadTarget");
         }
+
+        /// <summary>Retains bound operand annotations while introducing a scalar read's private storage.</summary>
+        /// <param name="statement">The parsed scalar read with uniquely reserved operand placeholders.</param>
+        /// <param name="valueBinding">The destination placeholder.</param>
+        /// <param name="stateBinding">The reader placeholder.</param>
+        /// <param name="value">The original destination expression.</param>
+        /// <param name="state">The original reader expression.</param>
+        /// <returns>The scalar read with original operand identities and lifetime annotations.</returns>
+        private static StatementSyntax RestoreScalarBindings(StatementSyntax statement, string valueBinding, string stateBinding,
+            ExpressionSyntax value, ExpressionSyntax state)
+            => statement.ReplaceNodes(statement.DescendantNodes().OfType<IdentifierNameSyntax>()
+                    .Where(identifier => identifier.Identifier.ValueText == valueBinding || identifier.Identifier.ValueText == stateBinding),
+                (identifier, _) => (identifier.Identifier.ValueText == valueBinding ? value : state).WithTriviaFrom(identifier));
 
         /// <summary>Captures the temporary model without retaining it in generated results.</summary>
         /// <param name="model">The current projected file binding.</param>

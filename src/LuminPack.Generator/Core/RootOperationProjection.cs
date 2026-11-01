@@ -181,8 +181,9 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
         if (!element.ToString().StartsWith("global::System.Collections.Generic.KeyValuePair<", StringComparison.Ordinal)) return method;
         var pair = element.DescendantNodesAndSelf().OfType<GenericNameSyntax>().First();
         if (!pair.TypeArgumentList.Arguments.Any(argument => argument is PredefinedTypeSyntax predefined && predefined.Keyword.IsKind(SyntaxKind.StringKeyword) || argument.ToString() == "global::System.String")) return method;
-        string helper = "__readPairElement";
-        while (method.DescendantTokens().Any(token => token.ValueText == helper)) helper += "_";
+        string helper = "ReadPairElement";
+        int suffix = 2;
+        while (method.DescendantTokens().Any(token => token.ValueText == helper)) helper = "ReadPairElement" + suffix++;
         string profile = method.TypeParameterList.Parameters[0].Identifier.ValueText;
         var readers = new HashSet<string>(StringComparer.Ordinal) { method.ParameterList.Parameters[0].Identifier.ValueText };
         foreach (var variable in method.Body.DescendantNodes().OfType<VariableDeclaratorSyntax>())
@@ -238,8 +239,9 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
             call.ArgumentList.Arguments[0].Expression is IdentifierNameSyntax value &&
             strings.Contains(value.Identifier.ValueText)).ToArray();
         if (calls.Length == 0) return method;
-        string helper = "__readCompoundString";
-        while (method.DescendantTokens().Any(token => token.ValueText == helper)) helper += "_";
+        string helper = "ReadCompoundString";
+        int suffix = 2;
+        while (method.DescendantTokens().Any(token => token.ValueText == helper)) helper = "ReadCompoundString" + suffix++;
         var statements = calls.Select(call => (ExpressionStatementSyntax)call.Parent).ToArray();
         var body = method.Body.ReplaceNodes(statements, (original, statement) =>
         {

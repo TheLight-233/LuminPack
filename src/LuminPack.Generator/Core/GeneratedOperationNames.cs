@@ -63,9 +63,10 @@ internal static class GeneratedOperationNames
                 if (role.StartsWith("__lumin", StringComparison.Ordinal) && role.Length > 7)
                     role = char.ToLowerInvariant(role[7]) + role.Substring(8);
                 role = role.TrimStart('_');
-                if (role.Length != 0) role = char.ToLowerInvariant(role[0]) + role.Substring(1);
+                bool localFunction = declaration.Parent is LocalFunctionStatementSyntax;
+                if (role.Length != 0) role = (localFunction ? char.ToUpperInvariant(role[0]) : char.ToLowerInvariant(role[0])) + role.Substring(1);
                 if (!SyntaxFacts.IsValidIdentifier(role) || SyntaxFacts.GetKeywordKind(role) != SyntaxKind.None ||
-                    SyntaxFacts.GetContextualKeywordKind(role) != SyntaxKind.None) role = "local";
+                    SyntaxFacts.GetContextualKeywordKind(role) != SyntaxKind.None) role = localFunction ? "Local" : "local";
                 string name = role;
                 int suffix = declaration.Parent is LabeledStatementSyntax ? 0 : 2;
                 if (declaration.Parent is LabeledStatementSyntax) name += suffix++;
@@ -76,7 +77,7 @@ internal static class GeneratedOperationNames
             return node.WithBody((BlockSyntax)new LocalNames(replacements).Visit(node.Body));
         }
 
-        /// <summary>Recognizes local declaration tokens while excluding support types, fields and method signatures.</summary>
+        /// <summary>Recognizes local declarations while excluding support types, fields and member signatures.</summary>
         /// <param name="token">A marked token from a method body.</param>
         /// <returns>Whether the token declares method-local storage or a control-flow label.</returns>
         private static bool IsLocalDeclaration(SyntaxToken token) => token.Parent switch
@@ -87,6 +88,7 @@ internal static class GeneratedOperationNames
             CatchDeclarationSyntax exception => exception.Identifier == token,
             ParameterSyntax parameter => parameter.Identifier == token,
             LabeledStatementSyntax label => label.Identifier == token,
+            LocalFunctionStatementSyntax function => function.Identifier == token,
             _ => false
         };
     }

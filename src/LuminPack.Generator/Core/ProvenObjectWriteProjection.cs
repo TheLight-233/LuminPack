@@ -123,10 +123,12 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
         }
         string Name(string basis)
         {
-            while (method.DescendantTokens().Any(token => token.ValueText == basis)) basis += "_";
-            return basis;
+            string name = basis;
+            int suffix = 2;
+            while (method.DescendantTokens().Any(token => token.ValueText == name)) name = basis + suffix++;
+            return name;
         }
-        string helperName = Name("__writeOriginalObject"), boundName = Name("__objectRecordBound");
+        string helperName = Name("WriteOriginalObject"), boundName = Name("__objectRecordBound");
         var boundExpression = reserves[0].ArgumentList.Arguments[1].Expression.ReplaceNodes(bounds, (old, _) => replacements[old]);
         boundExpression = (ExpressionSyntax)new WideBound().Visit(boundExpression);
         var removed = new HashSet<SyntaxNode> { snapshot, reserveStatement };

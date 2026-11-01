@@ -72,7 +72,7 @@ internal static partial class SerializerCodegenPerformanceRegression
         RequireProven(errors.Length == 0, string.Join("\n", errors.Select(item => item.ToString())));
         var selected = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
             .SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
-            .Where(method => method.Body?.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Any(helper => helper.Identifier.ValueText.StartsWith("__writeOriginalLeaf", StringComparison.Ordinal)) == true).ToArray();
+            .Where(method => method.Body?.DescendantNodes().OfType<LocalFunctionStatementSyntax>().Any(helper => helper.Identifier.ValueText.StartsWith("WriteOriginalLeaf", StringComparison.Ordinal)) == true).ToArray();
         RequireProven(expected ? selected.Length == 1 && selected[0].Identifier.ValueText == "RootWrite" && selected[0].ParameterList.Parameters[1].Type!.ToString().Contains("Leaf[]") : selected.Length == 0,
             "Incorrect pure/excluded operation selection: " + string.Join(",", selected.Select(method => method.ParameterList.ToString())));
     }

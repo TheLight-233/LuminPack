@@ -93,8 +93,10 @@ internal sealed class ProvenLeafWriteProjection : CSharpSyntaxRewriter
         if (((MemberAccessExpressionSyntax)check[0].Expression).Expression.ToString() != state) return null;
         string Name(string basis)
         {
-            while (method.DescendantTokens().Any(token => token.ValueText == basis)) basis += "_";
-            return basis;
+            string name = basis;
+            int suffix = 2;
+            while (method.DescendantTokens().Any(token => token.ValueText == name)) name = basis + suffix++;
+            return name;
         }
         var declarations = original.DescendantNodes().OfType<LocalDeclarationStatementSyntax>().ToArray();
         var alias = declarations.SingleOrDefault(declaration => declaration.Declaration.Type is RefTypeSyntax &&
@@ -144,7 +146,7 @@ internal sealed class ProvenLeafWriteProjection : CSharpSyntaxRewriter
             if (receiver is "LuminPackWriter" or "global::LuminPack.Core.LuminPackWriter" && name is "WriteReserved" or "WriteReservedBlock") continue;
             return null;
         }
-        string helperName = Name("__writeOriginalLeaf"), boundName = Name("__leafRecordBound");
+        string helperName = Name("WriteOriginalLeaf"), boundName = Name("__leafRecordBound");
         string Profile(string profile) => "(typeof(" + profile + ") == typeof(global::LuminPack.Option.LuminPackUtf16LengthOptions) || " +
             "typeof(" + profile + ") == typeof(global::LuminPack.Option.LuminPackDefaultOptions) || " +
             "typeof(" + profile + ") == typeof(global::LuminPack.Option.LuminPackFixedOptions<global::LuminPack.Option.LuminPackUtf16LengthOptions>) || " +
