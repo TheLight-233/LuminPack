@@ -42,7 +42,7 @@ Physical placement never changes namespaces or representations.
 
 - **Cursors.** Each reader and writer advances a single cursor: `ref byte` on modern targets, `byte*` on `netstandard2.1`. The retained `Buffer` window supplies lengths and back-patching.
 - **Two registers.** Beside the cursor, each state caches the end of its window (`_end`, or the writer's `_recordLimit` growth threshold). Range checks are one subtraction and one signed comparison. Setting `Buffer`, `BufferCheckLimit` or `Owner` (internal setters) refreshes the cache.
-- **Cursor-local generated writes.** Generated object writers keep the cursor in a `ref byte __cursor` local, which the JIT keeps in a register, and call `ref`-returning writer operations. Consecutive bounded members share one `ReserveRecord` check and are then stored unchecked. The cursor is published with `CommitRecords` before any operation that uses the writer itself.
+- **Cursor-local generated writes.** Generated object writers keep the cursor in a `ref byte cursor` local, which the JIT keeps in a register, and call `ref`-returning writer operations. Consecutive bounded members share one `ReserveRecord` check and are then stored unchecked. The cursor is published with `CommitRecords` before any operation that uses the writer itself.
 - **Reader checks.** `EnsureReadable(count)` compares against the cached end before every unsafe load; it is active in Debug and Release.
 - **Options** are stateless value-type profiles (`ILuminPackOptions`) passed as generic arguments, so profile decisions fold to constants.
 - **Buffers.** `LuminBufferWriter` is an `IBufferWriter<byte>` over one `ArrayPool<byte>.Shared` array, together with the binary/JSON reference states of an append session. Its usable range starts on a 64-byte boundary observed at rent time. Logical capacity and growth thresholds remain independent of pool bucket sizes; a growth that fits the rented array extends the range in place. Writers take a `ref byte` when they bind to the storage or refresh it after growth; on netstandard2.1 they take a `byte*`, and the buffer keeps the rented array pinned with a `GCHandle` from rent until return.
@@ -94,6 +94,8 @@ Roslyn cancellation is checked before changed-type analysis and between aggregat
 ### Generated files
 
 `LuminPackSerializer.g.cs` holds shared generic APIs; concrete type overloads live in hash-named partial files, stable when other types change. Every generated assembly owns a public `LuminPackSerializer`; generated files suppress CS0436 so a referenced assembly's copy is shadowed. Roots of each payload live in a `__LuminRoots_<hash>` container so overload resolution examines one payload per call.
+
+Private shared facade helpers and adapters retain all 128 bits of their existing identity in a 26-character, identifier-safe base-32 suffix. This shortens generated source and metadata names without truncating identities or changing API signatures, operation bodies, file identities or dispatch.
 
 ### Documentation of generated code
 

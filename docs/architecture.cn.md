@@ -42,7 +42,7 @@
 
 - **游标。** 每个读写器只前进一个游标：新版 .NET 上是 `ref byte`，`netstandard2.1` 上是 `byte*`。保留的 `Buffer` 窗口提供长度信息和回填位置。
 - **双寄存器。** 每个状态在游标旁缓存窗口的结束位置（`_end`，写入器为扩容阈值 `_recordLimit`）。范围检查只需一次减法和一次有符号比较。设置 `Buffer`、`BufferCheckLimit` 或 `Owner`（internal setter）会刷新缓存。
-- **生成代码的局部游标写入。** 生成的对象写入代码把游标放在局部变量 `ref byte __cursor` 中（JIT 会把它放在寄存器里），并调用返回 `ref` 的写入操作。连续的有界成员共享一次 `ReserveRecord` 检查，之后不再检查。在任何需要使用写入器本身的操作之前，用 `CommitRecords` 发布游标。
+- **生成代码的局部游标写入。** 生成的对象写入代码把游标放在局部变量 `ref byte cursor` 中（JIT 会把它放在寄存器里），并调用返回 `ref` 的写入操作。连续的有界成员共享一次 `ReserveRecord` 检查，之后不再检查。在任何需要使用写入器本身的操作之前，用 `CommitRecords` 发布游标。
 - **Reader 检查。** `EnsureReadable(count)` 在每次 unsafe 加载前与缓存的结束位置比较；Debug 和 Release 下都启用。
 - **选项**是无状态的值类型配置（`ILuminPackOptions`），作为泛型参数传递，配置判断会折叠为常量。
 - **缓冲区。** `LuminBufferWriter` 是基于一个 `ArrayPool<byte>.Shared` 数组的 `IBufferWriter<byte>`，同时持有一个追加会话的二进制/JSON 引用状态。可用区间从租用时观察到的 64 字节边界开始。逻辑容量和扩容阈值不受数组池桶大小影响；扩容仍能放进已租数组时原地扩展。writer 绑定存储或扩容后刷新时取得 `ref byte`；netstandard2.1 上取得 `byte*`，缓冲区用 `GCHandle` 从租用到归还一直固定该数组。
@@ -94,6 +94,8 @@
 ### 生成的文件
 
 `LuminPackSerializer.g.cs` 存放共享泛型 API；每个类型的具体重载放在以哈希命名的 partial 文件中，其他类型变化时保持稳定。每个生成的程序集都拥有一个 public 的 `LuminPackSerializer`；生成的文件屏蔽 CS0436，使引用程序集中的同名类型被遮蔽。每个负载的根方法放在 `__LuminRoots_<hash>` 容器中，这样每次调用的重载解析只需考察一个负载。
+
+私有共享门面辅助方法和适配器使用符合标识符规则的 26 字符 base-32 后缀，保留原有身份的全部 128 位。这样可以缩短生成源码及元数据中的名称，而不截断身份，也不改变 API 签名、操作方法体、文件标识或派发方式。
 
 ### 生成代码的文档
 

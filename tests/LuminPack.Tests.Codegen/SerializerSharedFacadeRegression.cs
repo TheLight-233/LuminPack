@@ -1,4 +1,6 @@
 using System.Runtime.Loader;
+using System.Numerics;
+using System.Reflection;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -11,8 +13,45 @@ internal static class SerializerSharedFacadeRegression
     /// <param name="references">The current platform and runtime references.</param>
     internal static void Run(MetadataReference[] references)
     {
+        VerifyPrivateIdentities();
         foreach (bool modern in new[] { true, false }) Verify(references, modern);
         Console.WriteLine("Passed shared facade signatures, direct adapters, scalar results, async/profile behavior, raw sequences and retained/fresh selection.");
+    }
+
+    /// <summary>Preserves every existing identity bit while shortening private generated metadata names.</summary>
+    private static void VerifyPrivateIdentities()
+    {
+        var encode = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.SharedFacadeProjection", throwOnError: true)!
+            .GetMethod("EncodeIdentity", BindingFlags.NonPublic | BindingFlags.Static)!;
+        var vectors = new List<byte[]> { new byte[16], Enumerable.Repeat((byte)255, 16).ToArray() };
+        for (int bit = 0; bit < 128; bit++)
+        {
+            var value = new byte[16];
+            value[bit / 8] = (byte)(1 << (bit % 8));
+            vectors.Add(value);
+        }
+        var random = new Random(21473);
+        for (int index = 0; index < 1024; index++)
+        {
+            var value = new byte[16];
+            random.NextBytes(value);
+            vectors.Add(value);
+        }
+        foreach (var bytes in vectors)
+        {
+            var value = new BigInteger(bytes, isUnsigned: true, isBigEndian: true) << 2;
+            var expected = new char[26];
+            const string alphabet = "abcdefghijklmnopqrstuvwxyz234567";
+            for (int index = expected.Length - 1; index >= 0; index--)
+            {
+                value = BigInteger.DivRem(value, 32, out var digit);
+                expected[index] = alphabet[(int)digit];
+            }
+            string hexadecimal = Convert.ToHexString(bytes);
+            string actual = (string)encode.Invoke(null, [hexadecimal])!;
+            Require(value.IsZero && actual == new string(expected) && actual == (string)encode.Invoke(null, [hexadecimal.ToLowerInvariant()])!,
+                "A private facade identity lost bits, canonical padding or hexadecimal-case independence.");
+        }
     }
 
     /// <summary>Exercises one target's complete and pruned facade generation.</summary>

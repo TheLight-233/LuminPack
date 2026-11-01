@@ -141,7 +141,28 @@ internal sealed class SharedFacadeProjection
     /// <param name="key">The complete normalized identity.</param>
     /// <returns>A valid member name with a 128-bit identity suffix.</returns>
     private static string Identity(string prefix, string key)
-        => prefix + "_" + PartitionedSourceCache.CreateHintName("id", key).Substring(3, 32);
+        => prefix + "_" + EncodeIdentity(PartitionedSourceCache.CreateHintName("id", key).Substring(3, 32));
+
+    /// <summary>Encodes every bit of the existing private identity using identifier-safe base-32 characters.</summary>
+    /// <param name="hexadecimal">The existing 128-bit hexadecimal identity.</param>
+    /// <returns>A canonical 26-character encoding without truncating the identity.</returns>
+    private static string EncodeIdentity(string hexadecimal)
+    {
+        const string alphabet = "abcdefghijklmnopqrstuvwxyz234567";
+        var result = new char[26];
+        int value = 0, bits = 0, index = 0;
+        foreach (char character in hexadecimal)
+        {
+            int digit = character <= '9' ? character - '0' : (character | 32) - 'a' + 10;
+            value = (value << 4) | digit;
+            bits += 4;
+            if (bits < 5) continue;
+            bits -= 5;
+            result[index++] = alphabet[(value >> bits) & 31];
+        }
+        if (bits != 0) result[index] = alphabet[(value << (5 - bits)) & 31];
+        return new string(result);
+    }
 
     /// <summary>Formats the private shared operation without generating caller-facing XML.</summary>
     /// <param name="method">The normalized generic helper.</param>
