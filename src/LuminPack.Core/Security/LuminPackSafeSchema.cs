@@ -224,21 +224,29 @@ public sealed class LuminPackSafeSchema
             Nodes[0].Children.Length > 249) return;
         FixedNullAllowed = FixedCostsFit(1, 0, 0, false);
         int width = 1;
-        int strings = 0;
+        int strings = 0, arrays = 0;
         var booleans = new System.Collections.Generic.List<int>();
         foreach (int child in Nodes[0].Children)
         {
             var node = Nodes[child];
             if (node.Kind == LuminPackSafeKind.String) { strings++; continue; }
+            if (node.Kind == LuminPackSafeKind.Sequence && node.Rank == 1 && node.Children.Length == 1)
+            {
+                var element = Nodes[node.Children[0]];
+                if (element.FixedWidth <= 0 || element.Storage != element.FixedWidth || element.FixedDepth != 1 ||
+                    !(element.Kind is >= LuminPackSafeKind.Boolean and <= LuminPackSafeKind.Char ||
+                    element.Kind is LuminPackSafeKind.Guid or LuminPackSafeKind.TimeSpan)) return;
+                arrays++; continue;
+            }
             if (node.FixedWidth < 0 || !(node.Kind is >= LuminPackSafeKind.Boolean and <= LuminPackSafeKind.Char ||
                 node.Kind is LuminPackSafeKind.Guid or LuminPackSafeKind.TimeSpan)) return;
             if (node.Kind == LuminPackSafeKind.Boolean) booleans.Add(width);
             width = checked(width + node.FixedWidth);
         }
         ProvenObjectMembers = Nodes[0].Children.Length;
-        if (strings != 0)
+        if (strings != 0 || arrays != 0)
         {
-            ProvenPayloadLimit = StringCostsLimit(strings);
+            ProvenPayloadLimit = VariableCostsLimit(strings, arrays);
             return;
         }
         FixedObjectWidth = width;
@@ -262,21 +270,23 @@ public sealed class LuminPackSafeSchema
         return prefix;
     }
 
-    /// <summary>Bounds every original charge of a flat scalar/string object by its validated payload length.</summary>
+    /// <summary>Bounds original scalar, string and primitive-array charges by the complete validated payload length.</summary>
     /// <param name="strings">The number of declared string slots, including possibly null or empty values.</param>
+    /// <param name="arrays">The number of declared primitive-array slots.</param>
     /// <returns>The largest payload for which all original quotas are proven, or zero for the guarded path.</returns>
-    private int StringCostsLimit(int strings)
+    private int VariableCostsLimit(int strings, int arrays)
     {
         int fields = Nodes[0].Children.Length;
-        if (Limits.MaxObjects < strings + 1 || Limits.MaxDepth < 2) return 0;
-        long allocationBase = 4096L + 4L * LuminPackInputPolicy.HeaderSize + Nodes[0].Storage + 64L + 128L * strings;
-        long workBase = LuminPackInputPolicy.HeaderSize + 1L + fields + (fields == 0 ? 0 : 1);
+        if (Limits.MaxObjects < strings + arrays + 1 || Limits.MaxDepth < (arrays == 0 ? 2 : 3)) return 0;
+        long allocationBase = 4096L + 4L * LuminPackInputPolicy.HeaderSize + Nodes[0].Storage + 64L + 128L * strings + 256L * arrays;
+        long workBase = LuminPackInputPolicy.HeaderSize + 1L + fields + (fields == 0 ? 0 : 1) + arrays;
         if (Limits.MaxAllocationBytes < allocationBase || Limits.MaxWork < workBase) return 0;
         long limit = Math.Min((long)Limits.MaxInputBytes - LuminPackInputPolicy.HeaderSize, Limits.MaxDecompressedBytes);
-        limit = Math.Min(limit, Limits.MaxStringLength);
-        // Input framing charges four bytes of allocation per byte; decoded text adds at most another four.
-        limit = Math.Min(limit, (Limits.MaxAllocationBytes - allocationBase) / 8);
-        limit = Math.Min(limit, (Limits.MaxWork - workBase) / 2);
+        if (strings != 0) limit = Math.Min(limit, Limits.MaxStringLength);
+        if (arrays != 0) limit = Math.Min(limit, Limits.MaxCollectionLength);
+        // Framing charges four per byte; the smallest array element charges another 4 + 128.
+        limit = Math.Min(limit, (Limits.MaxAllocationBytes - allocationBase) / (arrays == 0 ? 8 : 136));
+        limit = Math.Min(limit, (Limits.MaxWork - workBase) / (arrays == 0 ? 2 : 4));
         return (int)Math.Max(0, limit);
     }
 

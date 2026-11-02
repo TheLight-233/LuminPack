@@ -27,6 +27,7 @@ internal sealed class BinaryEntryInlining
     private readonly bool _streaming;
     private int _reservedExpansionDepth;
     private int _inputExpansionDepth;
+    private int _provenInputExpansionDepth;
     private readonly Dictionary<string, ITypeSymbol> _types = new Dictionary<string, ITypeSymbol>(StringComparer.Ordinal);
     private readonly Dictionary<string, BinaryOperationPlan> _plans = new Dictionary<string, BinaryOperationPlan>(StringComparer.Ordinal);
     private readonly Dictionary<string, MemberDeclarationSyntax> _layouts = new Dictionary<string, MemberDeclarationSyntax>(StringComparer.Ordinal);
@@ -143,7 +144,8 @@ internal sealed class BinaryEntryInlining
         if (operation.Parameters.Length == arguments.Count + 1 &&
             operation.Parameters[operation.Parameters.Length - 1].OriginalName == SafeOperationProjection.FixedProofParameter)
         {
-            arguments = arguments.Concat(new[] { SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression) }).ToArray();
+            arguments = arguments.Concat(new[] { SyntaxFactory.LiteralExpression(_provenInputExpansionDepth > 0
+                ? SyntaxKind.TrueLiteralExpression : SyntaxKind.FalseLiteralExpression) }).ToArray();
             aliases = aliases.Concat(new[] { false }).ToArray();
         }
         if (arguments.Count != operation.Parameters.Length)
@@ -176,6 +178,7 @@ internal sealed class BinaryEntryInlining
         var statements = new List<StatementSyntax>();
         var rootBindings = new Dictionary<string, ExpressionSyntax>(StringComparer.Ordinal);
         bool provenBinding = false;
+        bool provenInput = false;
         for (int index = 0; index < arguments.Count; index++)
         {
             var parameter = operation.Parameters[index];
@@ -185,6 +188,7 @@ internal sealed class BinaryEntryInlining
             {
                 rootBindings.Add(parameter.Name, literal);
                 provenBinding = true;
+                provenInput = literal.IsKind(SyntaxKind.TrueLiteralExpression);
                 continue;
             }
             if (root)
@@ -232,8 +236,9 @@ internal sealed class BinaryEntryInlining
         if (guaranteed) _reservedExpansionDepth++;
         bool inputBoundary = plan.Options.Input.Enabled;
         if (inputBoundary) _inputExpansionDepth++;
+        if (provenInput) _provenInputExpansionDepth++;
         try { body = (BlockSyntax)new OperationExpansion(this, plan, operation, prefix, exit, path, arguments[0], rootBindings).Visit(template); }
-        finally { if (guaranteed) _reservedExpansionDepth--; if (inputBoundary) _inputExpansionDepth--; }
+        finally { if (guaranteed) _reservedExpansionDepth--; if (inputBoundary) _inputExpansionDepth--; if (provenInput) _provenInputExpansionDepth--; }
         if (provenBinding) body = (BlockSyntax)new ProvenInputConstants().Visit(body);
         // An element record inlined into a sequence entry already owns one compact loop body, so its raw
         // collection fields take the exact inline stores; outlined keyed entries keep the shared call.

@@ -244,6 +244,27 @@ internal static class Program
         textBytes[^1] = 2; rejected = false;
         try { LuminPackSerializer.Deserialize(textBytes, ref textCopy); } catch (InvalidDataException) { rejected = true; }
         Check(rejected, "The proven text read missed a trailing Boolean domain.");
+        CheckProvenArrays();
+    }
+
+    /// <summary>Checks bounded primitive-array proofs, reuse and invalid Boolean lanes in native consumers.</summary>
+    private static void CheckProvenArrays()
+    {
+        var source = new AotExternalArrays { Flags = Enumerable.Range(0, 65).Select(i => (i & 1) != 0).ToArray(), Values = new[] { 3, 7 } };
+        byte[] bytes = LuminPackSerializer.Serialize(source);
+        AotExternalArrays? copy = null;
+        LuminPackSerializer.Deserialize(bytes, ref copy);
+        var original = copy; var flags = copy!.Flags; var values = copy.Values;
+        LuminPackSerializer.Deserialize(bytes, ref copy);
+        Check(ReferenceEquals(original, copy) && ReferenceEquals(flags, copy!.Flags) && ReferenceEquals(values, copy.Values) &&
+            copy.Flags.SequenceEqual(source.Flags) && copy.Values.SequenceEqual(source.Values), "The proven array read changed data or reuse.");
+        foreach (int lane in new[] { 0, 15, 16, 31, 32, 63, 64 })
+        {
+            var forged = (byte[])bytes.Clone(); forged[61 + lane] = 2;
+            bool rejected = false;
+            try { LuminPackSerializer.Deserialize(forged, ref copy); } catch (InvalidDataException) { rejected = true; }
+            Check(rejected && copy!.Flags.SequenceEqual(source.Flags), "The proven array read accepted or published invalid Boolean storage.");
+        }
     }
 
     /// <summary>Fails the executable if an observable generated operation changed.</summary>
@@ -271,6 +292,14 @@ public class AotExternalText
     public int Id;
     public string Text = "";
     public bool Flag;
+}
+
+/// <summary>Checks generated primitive-array validation in native consumers.</summary>
+[LuminPackable, LuminPackOption(UntrustedData = true)]
+public class AotExternalArrays
+{
+    public bool[] Flags = Array.Empty<bool>();
+    public int[] Values = Array.Empty<int>();
 }
 
 /// <summary>Checks the same external policy in JIT, package, trimming and NativeAOT executables.</summary>

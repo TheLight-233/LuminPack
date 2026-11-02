@@ -198,7 +198,10 @@ internal sealed class BinaryOperationPlan
         var operations = ImmutableDictionary.CreateBuilder<string, BinaryOperation>(StringComparer.Ordinal);
         foreach (var method in container.Members.OfType<MethodDeclarationSyntax>().Where(method => IsOperation(method.Identifier.ValueText)))
         {
-            if (method.Body == null || method.ParameterList.Parameters.Count != 2) continue;
+            var parameters = method.ParameterList.Parameters;
+            if (method.Body == null || parameters.Count != 2 &&
+                !(parameters.Count == 3 && parameters[2].Identifier.ValueText == SafeOperationProjection.FixedProofParameter &&
+                    parameters[2].Type is PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.BoolKeyword })) continue;
             var symbol = model.GetDeclaredSymbol(method);
             string stateType = symbol?.Parameters[0].Type.ToDisplayString();
             if (stateType is not ("LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" or "LuminPack.Core.LuminPackEvaluator" or

@@ -63,6 +63,7 @@ internal sealed class SafeReadProjection
         if (!json && IsFlatSequence(_type) && !method.Body.ToString().Contains(".CopyTo(ref"))
         {
             string done = Policy + ".CompleteDetachedCollection(ref " + state + ", " + SafeOperationProjection.Schema + ");";
+            if (fixedProof != null) done = "if (!" + fixedProof + ") { " + done + " }";
             body = (BlockSyntax)new DetachedReturns(done).Visit(body);
             return body.WithStatements(body.Statements.Add(SyntaxFactory.ParseStatement(done)));
         }
@@ -81,7 +82,7 @@ internal sealed class SafeReadProjection
                 completion += Policy + ".CompleteSet<" + args + ">(" + value + ", __inputValueScope);";
         }
         string scope = Policy + enter + state + ", " + SafeOperationProjection.Schema + ")";
-        if (fixedProof != null) scope = fixedProof + " ? default(global::LuminPack.Security.LuminPackInputPolicy.ObjectScope) : " + scope;
+        if (fixedProof != null) scope = fixedProof + " ? default(global::LuminPack.Security.LuminPackInputPolicy." + (compact ? "ObjectScope" : "ValueScope") + ") : " + scope;
         return (BlockSyntax)SyntaxFactory.ParseStatement("{ var __inputValueScope = " + scope + "; bool __inputValueDone = false; try { " +
             string.Join("\n", body.Statements) + " __inputValueDone = true; } finally { " + (fixedProof == null ? "" : "if (!" + fixedProof + ") ") +
             "{ try { if (__inputValueDone) { " + completion + " } } finally { " + Policy + exit + " } } } }");

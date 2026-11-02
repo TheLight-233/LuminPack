@@ -12,6 +12,99 @@ namespace LuminPackUnitTest;
 /// <summary>Checks occupied reference slots and malformed string records.</summary>
 public class AuditSafetyRegressionTest
 {
+    /// <summary>Compares array resource admission against original streaming charges, including tight fallback limits.</summary>
+    [Fact]
+    public void ProvenPrimitiveArraysPreserveStreamingResourceLimits()
+    {
+        foreach (int count in new[] { 0, 1, 31, 32, 64, 127, 512 })
+        {
+            byte[] payload = new byte[13 + count]; payload[0] = 2;
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(payload.AsSpan(1), count);
+            for (int lane = 0; lane < count; lane++) payload[5 + lane] = (byte)(lane & 1);
+            LuminPackSafeSchema Policy(int encoded = 8192, int decoded = 8192, long allocation = 1048576,
+                int collection = 8192, int objects = 8, int depth = 8, long work = 1048576) => new("ArrayInputQuota", new[]
+                {
+                    new LuminPackSafeNode(LuminPackSafeKind.Object, 32, children: [1, 3]),
+                    new LuminPackSafeNode(LuminPackSafeKind.Sequence, 8, rank: 1, children: [2]),
+                    new LuminPackSafeNode(LuminPackSafeKind.Boolean, 1, 1, 1, true),
+                    new LuminPackSafeNode(LuminPackSafeKind.Int64, 8, 8, 1, false)
+                }, 1, null, encoded, decoded, allocation, collection, 0, objects, depth, work, 64, 3);
+            var sequence = new LuminPackSafeSchema("ArrayInputQuota.Sequence", new[]
+            {
+                new LuminPackSafeNode(LuminPackSafeKind.Sequence, 8, rank: 1, children: [1]),
+                new LuminPackSafeNode(LuminPackSafeKind.Boolean, 1, 1, 1, true)
+            }, 1);
+            byte[] frame = LuminPackInputPolicy.Pack(payload, Policy(), false);
+            Assert.True(LuminPackInputPolicy.TryOpenProvenFrame(frame, Policy(), 2, out _, out _));
+            foreach (var schema in new[]
+            {
+                Policy(), Policy(encoded: frame.Length), Policy(encoded: frame.Length - 1),
+                Policy(decoded: payload.Length), Policy(decoded: payload.Length - 1),
+                Policy(allocation: 4724L + 136L * count), Policy(allocation: 4724L + 136L * count - 1),
+                Policy(collection: count), Policy(collection: Math.Max(0, count - 1)),
+                Policy(objects: 2), Policy(objects: 1), Policy(depth: 3), Policy(depth: 2),
+                Policy(work: 73L + 2L * count), Policy(work: 72L + 2L * count)
+            })
+            {
+                bool admitted = LuminPackInputPolicy.TryOpenProvenFrame(frame, schema, 2, out _, out _);
+                bool completed = false;
+                var operation = LuminPackInputPolicy.BeginOperation(new object(), schema, true);
+                try
+                {
+                    ReadOnlySpan<byte> input = LuminPackInputPolicy.OpenStreaming(frame, schema, out _, out _);
+                    var reader = new LuminPackReader(ref input);
+                    var scope = LuminPackInputPolicy.EnterObject(ref reader, schema);
+                    try
+                    {
+                        Assert.Equal(2, LuminPackInputPolicy.ReadMarker(ref reader));
+                        Assert.Equal(count, LuminPackInputPolicy.ReadLength(ref reader, 1, sequence));
+                        reader.Advance(count);
+                        LuminPackInputPolicy.CompleteDetachedCollection(ref reader, sequence);
+                        reader.Read<long>();
+                        LuminPackInputPolicy.CompleteObject(ref reader, ref scope);
+                        Assert.Equal(input.Length, reader.Position); completed = true;
+                    }
+                    finally { LuminPackInputPolicy.ExitObject(in scope); }
+                }
+                catch (System.IO.InvalidDataException) { }
+                finally { LuminPackInputPolicy.EndOperation(operation); }
+                Assert.True(!admitted || completed, "An array proof admitted data exceeding an original streaming quota.");
+            }
+        }
+    }
+
+    /// <summary>Rejects negative, overflowing and truncated array records before publishing a checked cursor.</summary>
+    [Fact]
+    public void ProvenPrimitiveArrayHeadersRetainBoundsAndDomains()
+    {
+        foreach (int width in new[] { 1, 2, 4, 8, 16 })
+        foreach (int count in new[] { -2, int.MinValue, int.MaxValue, 100 })
+        {
+            byte[] bytes = new byte[8];
+            System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(bytes, count);
+            int position = 0;
+            Assert.False(LuminPackInputPolicy.TrySkipProvenArray(bytes, ref position, width, false));
+            Assert.Equal(0, position);
+        }
+        byte[] values = [3, 0, 0, 0, 0, 1, 0];
+        int cursor = 0;
+        Assert.True(LuminPackInputPolicy.TrySkipProvenArray(values, ref cursor, 1, true));
+        Assert.Equal(values.Length, cursor);
+        foreach (byte invalid in new byte[] { 2, 4, 8, 16, 32, 64, 128, 255 })
+        {
+            values[5] = invalid; cursor = 0;
+            Assert.False(LuminPackInputPolicy.TrySkipProvenArray(values, ref cursor, 1, true));
+            Assert.Equal(0, cursor);
+        }
+        foreach (int width in new[] { 0, -1 })
+        {
+            cursor = 0;
+            Assert.False(LuminPackInputPolicy.TrySkipProvenArray(values, ref cursor, width, false));
+        }
+        cursor = -1; Assert.False(LuminPackInputPolicy.TrySkipProvenArray(values, ref cursor, 1, true));
+        cursor = 0; Assert.False(LuminPackInputPolicy.TrySkipProvenArray(values, ref cursor, 2, true));
+    }
+
     /// <summary>Does not truncate a descriptor member count into an otherwise matching object marker.</summary>
     [Fact]
     public void FixedPrefixProofRejectsUnrepresentableMemberCounts()
@@ -293,9 +386,14 @@ public class AuditSafetyRegressionTest
     [InlineData(7)]
     [InlineData(8)]
     [InlineData(9)]
+    [InlineData(14)]
+    [InlineData(15)]
+    [InlineData(16)]
+    [InlineData(17)]
     [InlineData(31)]
     [InlineData(32)]
     [InlineData(33)]
+    [InlineData(63)]
     [InlineData(64)]
     [InlineData(65)]
     [InlineData(127)]
@@ -304,6 +402,9 @@ public class AuditSafetyRegressionTest
     [InlineData(255)]
     [InlineData(256)]
     [InlineData(257)]
+    [InlineData(511)]
+    [InlineData(512)]
+    [InlineData(513)]
     public void CompiledInputBooleanGroupsRejectEveryInvalidLane(int count)
     {
         var source = new AuditExternalArrays
@@ -317,7 +418,7 @@ public class AuditSafetyRegressionTest
         Assert.Equal(source.Flags, target.Flags);
         var original = target.Flags;
         for (int index = 0; index < count; index++)
-        foreach (byte invalid in new byte[] { 2, 3, 127, 128, 254, 255 })
+        foreach (byte invalid in new byte[] { 2, 3, 4, 8, 16, 32, 64, 127, 128, 254, 255 })
         {
             byte[] forged = (byte[])bytes.Clone();
             forged[LuminPackInputPolicy.HeaderSize + 1 + sizeof(int) + index] = invalid;
@@ -326,6 +427,31 @@ public class AuditSafetyRegressionTest
             Assert.Equal(source.Flags, target.Flags);
         }
         Assert.Equal(bytes.Length, LuminPackSerializer.Deserialize(bytes, ref target));
+    }
+
+    /// <summary>Checks misaligned vector windows and tails while keeping the caller's readable slice exact.</summary>
+    [Fact]
+    public void CompiledBooleanValidationHonorsEveryInputAlignment()
+    {
+        var source = new AuditExternalArrays { Flags = Enumerable.Range(0, 65).Select(index => (index & 1) == 0).ToArray() };
+        byte[] frame = LuminPackSerializer.Serialize(source);
+        for (int padding = 0; padding < 64; padding++)
+        {
+            byte[] window = new byte[padding + frame.Length + 64];
+            window.AsSpan().Fill(0xFF); frame.CopyTo(window, padding);
+            AuditExternalArrays target = null!;
+            Assert.Equal(frame.Length, LuminPackSerializer.Deserialize(window.AsSpan(padding, frame.Length), ref target));
+            Assert.Equal(source.Flags, target.Flags);
+            var original = target.Flags;
+            foreach (int lane in new[] { 0, 15, 16, 31, 32, 63, 64 })
+            {
+                int position = padding + LuminPackInputPolicy.HeaderSize + 1 + sizeof(int) + lane;
+                byte previous = window[position]; window[position] = 0x80;
+                Assert.Throws<System.IO.InvalidDataException>(() => LuminPackSerializer.Deserialize(window.AsSpan(padding, frame.Length), ref target));
+                Assert.Same(original, target.Flags); Assert.Equal(source.Flags, target.Flags);
+                window[position] = previous;
+            }
+        }
     }
 
     /// <summary>Preserves exact work budgets and data-dependent depth acceptance with either descriptor generation.</summary>

@@ -17,12 +17,13 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
     private readonly bool _boundary;
     private readonly SafeReadProjection _reads;
     private readonly FixedInput _fixed;
+    private readonly bool _provenArray;
 
-    /// <summary>Holds symbol-free scalar and string facts for one supported positional operation.</summary>
+    /// <summary>Holds symbol-free scalar, string and primitive-array facts for one positional operation.</summary>
     private sealed class FixedInput
     {
         internal int Width = 1, Members;
-        internal bool HasStrings;
+        internal bool HasVariableFields;
         internal readonly System.Collections.Generic.List<int> Booleans = new System.Collections.Generic.List<int>();
         internal readonly System.Collections.Generic.List<string> Guards = new System.Collections.Generic.List<string>();
     }
@@ -31,8 +32,9 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
     /// <param name="profile">The declared profile.</param><param name="boundary">Whether framing is enabled.</param>
     /// <param name="reads">The typed instrumentation.</param>
     /// <param name="fixedInput">The callback-free scalar plan, or null when the original accounting path is required.</param>
-    private SafeOperationProjection(string profile, bool boundary, SafeReadProjection reads, FixedInput fixedInput)
-    { _profile = profile; _boundary = boundary; _reads = reads; _fixed = fixedInput; }
+    /// <param name="provenArray">Whether a primitive array can inherit its enclosing root's complete proof.</param>
+    private SafeOperationProjection(string profile, bool boundary, SafeReadProjection reads, FixedInput fixedInput, bool provenArray)
+    { _profile = profile; _boundary = boundary; _reads = reads; _fixed = fixedInput; _provenArray = provenArray; }
 
     /// <summary>Preserves disabled templates and adds guards to selected streaming plans.</summary>
     /// <param name="source">The formatter template.</param><param name="type">The closed type.</param>
@@ -49,12 +51,13 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
         if (container == null) return source;
         var reads = new SafeReadProjection(type, compilation, metadata, options, compilation.AddSyntaxTrees(root.SyntaxTree).GetSemanticModel(root.SyntaxTree));
         var rewritten = (ClassDeclarationSyntax)new SafeOperationProjection(options.TypeName, options.Input.Enabled, reads,
-            CreateFixedInput(type, compilation, metadata, options)).Visit(container);
+            CreateFixedInput(type, compilation, metadata, options), HasArrayProof(compilation) &&
+            type is IArrayTypeSymbol { Rank: 1 } array && ScalarWidth(array.ElementType) > 0).Visit(container);
         var field = SyntaxFactory.ParseMemberDeclaration("private static readonly global::LuminPack.Security.LuminPackSafeSchema " + Schema + " = " + SafeSchemaBuilder.Build(type, compilation, metadata, options) + ";");
         return root.ReplaceNode(container, rewritten.AddMembers(field)).NormalizeWhitespace().ToFullString();
     }
 
-    /// <summary>Selects callback-free scalar/string classes without changing nested, pooled or specialized contracts.</summary>
+    /// <summary>Selects callback-free scalar/string/primitive-array classes while preserving other contracts.</summary>
     /// <param name="type">The current operation type.</param>
     /// <param name="compilation">The actual consumer references.</param>
     /// <param name="metadata">The current generation settings.</param>
@@ -68,45 +71,62 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
                 .Any(method => method.IsStatic && method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 6 &&
                     method.ReturnType.SpecialType == SpecialType.System_Boolean) != true) return null;
         var data = LuminPackSourceGenerator.GetSerializationMetadata(named, compilation, metadata);
+        bool arrays = HasArrayProof(compilation);
         bool supported = !data.isUnion && data.generatorType == LuminPack.Code.GeneratorType.Object && data.RentPoolMethod == null &&
             data.callBackMethods.Count == 0 && data.fields.All(field => !field.IsCompress && !field.IsVolatile &&
-                (field.TypeSymbol?.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte or
-                    SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32 or SpecialType.System_UInt32 or
-                    SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Single or SpecialType.System_Double or SpecialType.System_Char or SpecialType.System_String ||
-                    field.TypeSymbol?.ToDisplayString() is "System.Guid" or "System.TimeSpan"));
+                (field.TypeSymbol?.SpecialType == SpecialType.System_String || ScalarWidth(field.TypeSymbol) > 0 ||
+                    arrays && field.TypeSymbol is IArrayTypeSymbol { Rank: 1 } array && ScalarWidth(array.ElementType) > 0));
         if (!supported) return null;
         var result = new FixedInput { Members = data.fields.Count };
         foreach (var field in data.fields)
         {
             if (field.TypeSymbol.SpecialType == SpecialType.System_String)
             {
-                result.HasStrings = true;
+                result.HasVariableFields = true;
                 result.Guards.Add("if (!" + Policy + ".TrySkipProvenString(__proofData, ref __proofPosition, " +
                     (field.Options ?? options).Mode.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")) return false;");
                 continue;
             }
-            if (field.TypeSymbol.SpecialType == SpecialType.System_Boolean) result.Booleans.Add(result.Width);
-            int width = field.TypeSymbol.SpecialType switch
+            if (field.TypeSymbol is IArrayTypeSymbol array)
             {
-                SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte => 1,
-                SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Char => 2,
-                SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Single => 4,
-                SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Double => 8,
-                _ => field.TypeSymbol.ToDisplayString() == "System.Guid" ? 16 : 8
-            };
+                result.HasVariableFields = true;
+                result.Guards.Add("if (!" + Policy + ".TrySkipProvenArray(__proofData, ref __proofPosition, " +
+                    ScalarWidth(array.ElementType).ToString(System.Globalization.CultureInfo.InvariantCulture) + ", " +
+                    (array.ElementType.SpecialType == SpecialType.System_Boolean ? "true" : "false") + ")) return false;");
+                continue;
+            }
+            if (field.TypeSymbol.SpecialType == SpecialType.System_Boolean) result.Booleans.Add(result.Width);
+            int width = ScalarWidth(field.TypeSymbol);
             result.Guards.Add("if (__proofData.Length - __proofPosition < " + width.ToString(System.Globalization.CultureInfo.InvariantCulture) + ") return false;");
             if (field.TypeSymbol.SpecialType == SpecialType.System_Boolean)
                 result.Guards.Add("if (__proofData[__proofPosition] > 1) return false;");
             result.Guards.Add("__proofPosition += " + width.ToString(System.Globalization.CultureInfo.InvariantCulture) + ";");
             result.Width += width;
         }
-        if (result.HasStrings && (data.SelectedConstructor?.Parameters.Count > 0 ||
+        if (result.HasVariableFields && (data.SelectedConstructor?.Parameters.Count > 0 ||
             compilation.GetTypeByMetadataName("LuminPack.Security.LuminPackInputPolicy")?.GetMembers("TryOpenProvenFrame").Any() != true ||
             compilation.GetTypeByMetadataName("LuminPack.Security.LuminPackInputPolicy")?.GetMembers("TrySkipProvenString").Any() != true)) return null;
         return result;
     }
 
-    /// <summary>Identifies roots whose original scalar/string decoder never consumes leased reference identities.</summary>
+    /// <summary>Requires the actual runtime's complete nonallocating primitive-array checker.</summary>
+    /// <param name="compilation">The current runtime metadata.</param><returns>Whether array proof emission is supported.</returns>
+    private static bool HasArrayProof(Compilation compilation) => compilation.GetTypeByMetadataName("LuminPack.Security.LuminPackInputPolicy")?
+        .GetMembers("TrySkipProvenArray").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.DeclaredAccessibility == Accessibility.Public &&
+            method.Parameters.Length == 4 && method.ReturnType.SpecialType == SpecialType.System_Boolean) == true;
+
+    /// <summary>Maps only scalar contracts whose wire consists of their complete primitive storage.</summary>
+    /// <param name="type">The exact field or element type.</param><returns>The original byte width, or zero for unsupported types.</returns>
+    private static int ScalarWidth(ITypeSymbol type) => type?.SpecialType switch
+    {
+        SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte => 1,
+        SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Char => 2,
+        SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Single => 4,
+        SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Double => 8,
+        _ => type?.ToDisplayString() == "System.Guid" ? 16 : type?.ToDisplayString() == "System.TimeSpan" ? 8 : 0
+    };
+
+    /// <summary>Identifies proven roots whose original decoder never consumes leased reference identities.</summary>
     /// <param name="type">The exact closed root.</param>
     /// <param name="compilation">The consumer's runtime capabilities.</param>
     /// <param name="metadata">The complete generation settings.</param>
@@ -126,27 +146,35 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
         bool json = stateType.Contains("Json"), read = stateType.Contains("Reader"), write = stateType.Contains("Writer");
         // The evaluator state no longer owns option or policy state, so internal width operations keep their original body.
         if (!read && !write) return node;
-        if (!_boundary) return read ? node.WithBody(_reads.Rewrite(node, json)) : node;
+        bool arrayProof = _provenArray && read && !json && node.Identifier.ValueText == "ReadValue";
+        if (!_boundary)
+        {
+            var rewritten = read ? node.WithBody(_reads.Rewrite(node, json, arrayProof ? FixedProofParameter : null)) : node;
+            return arrayProof ? rewritten.AddParameterListParameters(SyntaxFactory.Parameter(SyntaxFactory.Identifier(FixedProofParameter))
+                .WithType(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.BoolKeyword)))
+                .WithDefault(SyntaxFactory.EqualsValueClause(SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression)))) : rewritten;
+        }
         if (node.Identifier.ValueText is "ReadValueWithCompress" or "WriteValueWithCompress")
             return node.WithBody((BlockSyntax)SyntaxFactory.ParseStatement("{ " + Policy + ".RejectLegacyInputCompression(); }"));
         string helperParameters = string.Join(", ", parameters.Select(p => p.WithModifiers(SyntaxFactory.TokenList(p.Modifiers.Where(m => !m.IsKind(SyntaxKind.ThisKeyword)))).ToString()));
         string payload = (parameters[1].Modifiers.Any(SyntaxKind.InKeyword) ? "in " : parameters[1].Modifiers.Any(SyntaxKind.RefKeyword) ? "ref " : "") + parameters[1].Identifier.Text;
         bool fixedInput = _fixed != null && read && !json && node.Identifier.ValueText == "ReadValue";
+        bool proofAware = fixedInput || arrayProof;
         string original = "static void __safeOriginalOperation(" + helperParameters +
-            (fixedInput ? ", bool " + FixedProofParameter + " = false" : "") + ") " +
-            (read ? _reads.Rewrite(node, json, fixedInput ? FixedProofParameter : null, fixedInput ? _fixed.Members : -1) : node.Body);
+            (proofAware ? ", bool " + FixedProofParameter + " = false" : "") + ") " +
+            (read ? _reads.Rewrite(node, json, proofAware ? FixedProofParameter : null, fixedInput ? _fixed.Members : -1) : node.Body);
         string check = Policy + ".CheckInputProfile<" + _profile + ", " + _profile + ">();";
         string text = "{ ";
-        string admission = _fixed?.HasStrings == true
+        string admission = _fixed?.HasVariableFields == true
             ? "__safeTryOpenPayload(" + state + ".Buffer.Slice(" + state + ".Position), out var __fixedPayload, out int __fixedConsumed)"
             : Policy + ".TryOpenFixedFrame(" + state + ".Buffer.Slice(" + state + ".Position), " + Schema + ", " +
                 (_fixed?.Width ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture) + ", " +
                 (_fixed?.Members ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture) + ", out var __fixedPayload, out int __fixedConsumed)";
         if (fixedInput)
-            text += check + "if (" + admission + (_fixed.HasStrings || _fixed.Booleans.Count == 0 ? "" : " && (__fixedPayload[0] == 255 || (" +
+            text += check + "if (" + admission + (_fixed.HasVariableFields || _fixed.Booleans.Count == 0 ? "" : " && (__fixedPayload[0] == 255 || (" +
                     string.Join(" && ", _fixed.Booleans.Select(offset => "__fixedPayload[" + offset.ToString(System.Globalization.CultureInfo.InvariantCulture) + "] <= 1")) + "))") +
                 ") { if (__fixedPayload[0] != 255) { __fixedPayload = __fixedPayload.Slice(1" +
-                (_fixed.HasStrings ? "" : ", " + (_fixed.Width - 1).ToString(System.Globalization.CultureInfo.InvariantCulture)) + "); var __fixedReader = new " + stateType +
+                (_fixed.HasVariableFields ? "" : ", " + (_fixed.Width - 1).ToString(System.Globalization.CultureInfo.InvariantCulture)) + "); var __fixedReader = new " + stateType +
                 "(ref __fixedPayload); __safeOriginalOperation(ref __fixedReader, " + payload + ", true);" +
                 "if (__fixedReader.Position != __fixedPayload.Length) " + Policy + ".RejectIncompleteValue(); } " + state + ".Advance(__fixedConsumed); return; }" +
                 "__safeFixedFallback(ref " + state + ", " + payload + ");" +
@@ -177,7 +205,7 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
         else text += "try { " + check + "var __safeStart = " + Policy + (json ? ".BeginWriteJson(" : ".BeginWrite(") + "ref " + state + ", " + Schema + ");" +
             "__safeOriginalOperation(ref " + state + ", " + payload + "); " + Policy + (json ? ".EndWriteJson(" : ".EndWrite(") + "ref " + state + ", " + Schema + ", __safeStart);" +
             "} finally { " + Policy + ".EndOperation(__safeOperation); }";
-        string validation = fixedInput && _fixed.HasStrings
+        string validation = fixedInput && _fixed.HasVariableFields
             ? "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] " +
               "static bool __safeTryOpenPayload(global::System.ReadOnlySpan<byte> __proofInput, out global::System.ReadOnlySpan<byte> __proofPayload, out int __proofConsumed) { " +
               "return " + Policy + ".TryOpenProvenFrame(__proofInput, " + Schema + ", " + _fixed.Members.ToString(System.Globalization.CultureInfo.InvariantCulture) +

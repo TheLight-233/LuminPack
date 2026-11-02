@@ -7,7 +7,27 @@ namespace LuminPack.Security;
 
 public static partial class LuminPackInputPolicy
 {
-    /// <summary>Opens the unchanged frame within a proven scalar/string resource bound before generated validation.</summary>
+    /// <summary>Checks one reference-free array's count, byte range and Boolean domain without allocating.</summary>
+    /// <param name="input">The complete bounded object payload.</param>
+    /// <param name="position">The current array header, advanced only after a complete valid record.</param>
+    /// <param name="width">The compiler-proven positive element wire width.</param>
+    /// <param name="booleans">Whether each element must have canonical zero/one storage.</param>
+    /// <returns>Whether the complete original array record is valid.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    public static bool TrySkipProvenArray(ReadOnlySpan<byte> input, ref int position, int width, bool booleans)
+    {
+        if ((uint)position > (uint)input.Length || input.Length - position < 4 || width <= 0 || booleans && width != 1) return false;
+        int count = BinaryPrimitives.ReadInt32LittleEndian(input.Slice(position, 4));
+        int start = position + 4;
+        if (count == -1) { position = start; return true; }
+        if (count < 0 || count > (input.Length - start) / width) return false;
+        int bytes = count * width;
+        if (booleans && !SafeBinaryValidator.AreCanonicalBooleans(input.Slice(start, bytes))) return false;
+        position = start + bytes;
+        return true;
+    }
+
+    /// <summary>Opens the unchanged frame within a proven scalar/string/primitive-array resource bound before generated validation.</summary>
     /// <param name="input">The stable original input window.</param>
     /// <param name="schema">The immutable contract and quota proof.</param>
     /// <param name="members">The compiler's exact member count.</param>

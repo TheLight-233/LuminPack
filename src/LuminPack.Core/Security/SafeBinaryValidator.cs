@@ -1,5 +1,11 @@
 using System.Buffers.Binary;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
+#if NET8_0_OR_GREATER
+using System.Runtime.Intrinsics;
+using System.Runtime.Intrinsics.Arm;
+using System.Runtime.Intrinsics.X86;
+#endif
 using System.Text;
 using LuminPack.Core;
 using LuminPack.Option;
@@ -31,21 +37,48 @@ internal static unsafe class SafeBinaryValidator
         }
     }
 
-    /// <summary>Checks canonical Boolean storage with bounded framework scans or the portable four-byte fallback.</summary>
+    /// <summary>Checks canonical Boolean storage with bounded vector loads and a portable four-byte fallback.</summary>
     /// <param name="bytes">The complete validated Boolean payload.</param>
     internal static void ValidateBooleans(ReadOnlySpan<byte> bytes)
     {
-#if NET8_0_OR_GREATER
-        if (bytes.IndexOfAnyExcept((byte)0, (byte)1) >= 0)
+        if (!AreCanonicalBooleans(bytes))
             LuminPackInputPolicy.Invalid("A Boolean has a noncanonical storage value.");
-#else
+    }
+
+    /// <summary>Rejects any Boolean storage bit except the low bit without reading outside the validated span.</summary>
+    /// <param name="bytes">The complete bounded Boolean payload.</param>
+    /// <returns>Whether every byte is zero or one.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool AreCanonicalBooleans(ReadOnlySpan<byte> bytes)
+    {
         int index = 0;
+#if NET8_0_OR_GREATER
+        ref byte first = ref MemoryMarshal.GetReference(bytes);
+        if (Avx512F.IsSupported && Avx512BW.IsSupported)
+        {
+            var mask = Vector512.Create((byte)0xFE);
+            for (; index <= bytes.Length - 64; index += 64)
+                if (!Vector512.EqualsAll(Vector512.BitwiseAnd(Vector512.LoadUnsafe(ref first, (nuint)(uint)index), mask), Vector512<byte>.Zero)) return false;
+        }
+        if (Avx2.IsSupported)
+        {
+            var mask = Vector256.Create((byte)0xFE);
+            for (; index <= bytes.Length - 32; index += 32)
+                if (!Vector256.EqualsAll(Vector256.BitwiseAnd(Vector256.LoadUnsafe(ref first, (nuint)(uint)index), mask), Vector256<byte>.Zero)) return false;
+        }
+        if (Sse2.IsSupported || AdvSimd.IsSupported)
+        {
+            var mask = Vector128.Create((byte)0xFE);
+            for (; index <= bytes.Length - 16; index += 16)
+                if (!Vector128.EqualsAll(Vector128.BitwiseAnd(Vector128.LoadUnsafe(ref first, (nuint)(uint)index), mask), Vector128<byte>.Zero)) return false;
+        }
+#endif
         for (; index <= bytes.Length - 4; index += 4)
             if ((BinaryPrimitives.ReadUInt32LittleEndian(bytes.Slice(index, 4)) & 0xFEFEFEFEu) != 0)
-                LuminPackInputPolicy.Invalid("A Boolean has a noncanonical storage value.");
+                return false;
         for (; index < bytes.Length; index++)
-            if (bytes[index] > 1) LuminPackInputPolicy.Invalid("A Boolean has a noncanonical storage value.");
-#endif
+            if (bytes[index] > 1) return false;
+        return true;
     }
     /// <summary>Selects a closed graph whose depth cannot exceed the active quota.</summary>
     private struct ProvenDepth { }
