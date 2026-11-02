@@ -114,6 +114,7 @@ namespace LuminPack.SourceGenerator
                 return type.SpecialType switch
                 {
                     SpecialType.System_Byte => LuminGenericsType.Byte,
+                    SpecialType.System_SByte => LuminGenericsType.SByte,
                     SpecialType.System_Int16 => LuminGenericsType.Short,
                     SpecialType.System_UInt16 => LuminGenericsType.UShort,
                     SpecialType.System_Int32 => LuminGenericsType.Int,

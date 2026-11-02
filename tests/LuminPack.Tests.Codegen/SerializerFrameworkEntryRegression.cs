@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-/// <summary>Protects equivalent enum and BitArray facades and their original checked roots.</summary>
+/// <summary>Protects enum, signed-byte array and BitArray facades and their original checked roots.</summary>
 internal static class SerializerFrameworkEntryRegression
 {
     /// <summary>Compiles all tiers, executes exact bytes and checks retained enum-width edits.</summary>
@@ -20,6 +20,8 @@ internal static class SerializerFrameworkEntryRegression
             using LuminPack.Attribute;
             [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
             public enum WireEnum : short { Value = 17 }
+            [LuminPackable]
+            public class SignedArrayHolder { public sbyte[] Values = Array.Empty<sbyte>(); }
             public static class FrameworkEntry
             {
                 public static byte[] Write(WireEnum value) => LuminPackSerializer.Serialize(value);
@@ -45,6 +47,14 @@ internal static class SerializerFrameworkEntryRegression
                     if (bytes.Length != 12) throw new Exception("BitArray word padding changed.");
                     var original = bits;
                     if (ReadBits(bytes,ref bits) != bytes.Length || !ReferenceEquals(bits,original) || !bits[32]) throw new Exception("BitArray read changed.");
+                    var signed = new SignedArrayHolder { Values = new sbyte[] { sbyte.MinValue, -1, 0, sbyte.MaxValue } };
+                    byte[] signedBytes = LuminPackSerializer.Serialize(signed);
+                    SignedArrayHolder signedCopy = null;
+                    LuminPackSerializer.Deserialize(signedBytes, ref signedCopy);
+                    var signedValues = signedCopy.Values;
+                    LuminPackSerializer.Deserialize(signedBytes, ref signedCopy);
+                    if (!signedCopy.Values.AsSpan().SequenceEqual(signed.Values) || !ReferenceEquals(signedValues, signedCopy.Values))
+                        throw new Exception("Signed-byte array metadata changed its payload or reuse.");
                 }
             }
             """;
