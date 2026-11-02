@@ -1,0 +1,102 @@
+name: Fuzz
+
+on:
+  push:
+    branches: [main, refactor]
+  pull_request:
+  schedule:
+    - cron: '23 3 * * 1'
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: Coverage-guided fuzzing seconds per target (1-86400)
+        type: number
+        default: 300
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: Smoke (${{ matrix.name }})
+    if: github.event_name != 'schedule'
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux-release, os: ubuntu-latest, configuration: Release, intrinsics: '1' }
+          - { name: linux-debug, os: ubuntu-latest, configuration: Debug, intrinsics: '1' }
+          - { name: linux-scalar, os: ubuntu-latest, configuration: Release, intrinsics: '0' }
+          - { name: windows-release, os: windows-latest, configuration: Release, intrinsics: '1' }
+          - { name: macos-release, os: macos-latest, configuration: Release, intrinsics: '1' }
+    env:
+      DOTNET_EnableHWIntrinsic: ${{ matrix.intrinsics }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Replay seeds, truncations and deterministic mutations
+        shell: pwsh
+        run: ./.github/scripts/fuzz.ps1 -Configuration ${{ matrix.configuration }} -Iterations 1000
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fuzz-smoke-${{ matrix.name }}
+          path: |
+            .tmp/fuzz/repro
+            .tmp/fuzz/corpus
+          if-no-files-found: warn
+
+  coverage:
+    name: libFuzzer (${{ matrix.target }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [binary, binary-utf8-varint, json-utf8, json-utf16]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - uses: actions/cache@v4
+        with:
+          path: .tmp/fuzz/corpus/${{ matrix.target }}
+          key: fuzz-corpus-${{ runner.os }}-${{ matrix.target }}-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: fuzz-corpus-${{ runner.os }}-${{ matrix.target }}-
+      - name: Install the pinned native bridge
+        shell: bash
+        run: |
+          mkdir -p .tmp/fuzz
+          curl --fail --location --retry 3 https://github.com/Metalnem/libfuzzer-dotnet/releases/download/v2025.05.02.0904/libfuzzer-dotnet-ubuntu --output .tmp/fuzz/libfuzzer-dotnet
+          echo 'c2c2a90d94c409a4af339a0d4f244e0442c5a5d249be0f1252ba07871f285958  .tmp/fuzz/libfuzzer-dotnet' | sha256sum --check
+          chmod +x .tmp/fuzz/libfuzzer-dotnet
+      - name: Instrument Core and generated readers, then fuzz within the budget
+        shell: pwsh
+        env:
+          FUZZ_SECONDS: ${{ github.event_name == 'workflow_dispatch' && inputs.seconds || github.event_name == 'schedule' && 300 || 30 }}
+        run: ./.github/scripts/fuzz.ps1 -Mode Coverage -Target ${{ matrix.target }} -Seconds ([int]$env:FUZZ_SECONDS) -LibFuzzer .tmp/fuzz/libfuzzer-dotnet
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: fuzz-coverage-${{ matrix.target }}
+          path: |
+            .tmp/fuzz/failures
+            .tmp/fuzz/corpus
+          if-no-files-found: warn

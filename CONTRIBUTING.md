@@ -52,6 +52,8 @@ dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlat
 
 ## Continuous integration
 
+- [Fuzzing](docs/fuzzing.md): `pwsh -File .github/scripts/fuzz.ps1` runs deterministic malformed-input smoke tests. `fuzz.yml` also runs bounded SharpFuzz/libFuzzer campaigns on push/PR, weekly and manually, retaining corpora and reproducers.
+
 - `ci.yml` runs repository checks, the build, the codegen and generator contracts, incremental verification, the runtime suite, the hook area, wire fixtures and an installation test from freshly packed NuGet packages.
 - `test-areas.yml` runs the Safety area in Debug and Release on Windows, Linux and macOS. It executes AspNetCore, Avalonia, Maui, MonoGame and SkiaSharp adapter contracts on all three systems, plus Drawing and Wpf on Windows. Core is built before adapters because they consume its existing binary.
 - Pushes to `main` and `refactor`, and pull requests, trigger the hosted checks. Unity execution requires configured license secrets; the checked-in `.github/scripts` helpers are part of those workflows.

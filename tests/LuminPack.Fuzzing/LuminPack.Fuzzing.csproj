@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <LangVersion>13</LangVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <IsPackable>false</IsPackable>
+    <LuminPackGenerationMode>Minimal</LuminPackGenerationMode>
+  </PropertyGroup>
+  <ItemGroup>
+    <CompilerVisibleProperty Include="LuminPackGenerationMode" />
+    <ProjectReference Include="../../src/LuminPack.Core/LuminPack.Core.csproj" />
+    <ProjectReference Include="../../src/LuminPack.Generator/LuminPack.Generator.csproj" OutputItemType="Analyzer" ReferenceOutputAssembly="false" />
+    <PackageReference Include="SharpFuzz" Version="2.3.0" />
+  </ItemGroup>
+</Project>
