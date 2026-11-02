@@ -100,7 +100,8 @@ python benchmarks/make-charts.py .tmp/benchmark-artifacts .tmp/benchmark-charts 
 - 每条提交标题使用 `type(scope): description`。类型和组件范围用小写，描述用简洁的英文祈使句，末尾不加句号。
 - 类型：`feat`（新功能）、`fix`（修复）、`perf`（性能优化）、`refactor`（结构调整）、`test`（测试）、`docs`（文档）、`ci`（工作流）、`build`（构建工具）、`chore`（维护）。性能前缀是 `perf`，不能写成 `pref`。
 - 范围选择受影响的组件，例如 `core`、`generator`、`benchmarks`、`unity`、`burst` 或 `repo`。基准夹具改动按目的分类：`fix(benchmarks)` 修正夹具，`ci(benchmarks)` 修改其 CI 执行或采集方式。
-- 独立改动分别提交。正文可说明原因和相关验证。破坏性变更在范围后加 `!`，并通过 `BREAKING CHANGE:` 页脚说明。
+- 每次提交都必须包含有实质内容的英文正文，与标题之间空一行。说明为什么需要修改、具体改了什么，以及相关验证及其结果。有重要限制、检查失败或未验证项时也必须说明。正文详略与改动规模相称；只有标题、重复标题或通用套话均不符合要求。
+- 独立改动分别提交。破坏性变更在范围后加 `!`，并通过 `BREAKING CHANGE:` 页脚说明。
 - 示例：`perf(core): reduce fixed record cursor writes`、`fix(generator): reserve large union payloads`、`ci(benchmarks): capture polymorphism JIT assembly on all hosts`。
 - 完成一个功能或修复并进行相应验证后，默认按本规范提交本任务的改动，无需逐次询问提交权限。排除无关或未完成的改动。提交后询问是否推送；所有者已授权该次推送时直接执行。打标签和重写已发布历史仍需明确授权。重写获准的远端分支时，使用明确指定预期版本的 `--force-with-lease`，防止覆盖并发改动。
 - 代表所有者创建的每个提交，author 与 committer 均使用 `TheLight-233 <2802799687@qq.com>`，不得添加 `Co-Authored-By` 或任何 AI 署名 trailer。环境会注入 `GIT_COMMITTER_NAME=trae-solo-agent` 和 `GIT_COMMITTER_EMAIL=solo-agent@trae.ai`；每次 `git commit` 都要在同一 shell 内覆盖这两个变量，并用 `git log -1 --format='%an <%ae> | %cn <%ce>'` 校验署名。

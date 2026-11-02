@@ -19,7 +19,7 @@ LuminPack 是面向 .NET 和 Unity、基于源代码生成的二进制与 JSON �
 7. **文档。** README 是封面页；功能文档放在 `docs`。每篇文档都有英文 `name.md` 和中文 `name.cn.md`，两个版本一起更新。所有中文版统一放在 `docs` 下：根目录页面的译文直接放在 `docs`，模块 README 译文放在 `docs/modules/<模块名>.cn.md`。英文文档保留原有位置。README 和 `docs` 中不放发布说明、版本历史或实验报告。
 8. **不要**仅凭调用点搜索就删除存储占位或外部可用、生成代码使用的成员。
 9. **默认提交已完成的工作。** 完成一个功能或修复并进行相应验证后，按下述提交规范直接提交本任务的改动，无需逐次询问是否允许 commit。不要包含无关或未完成的改动。提交后询问是否推送；所有者已授权该次推送时直接执行。打标签和重写已发布历史仍需明确授权。
-10. **提交标题。** 使用 `type(scope): description`，类型和范围用小写，描述用简洁的英文祈使句。新功能用 `feat`，修复用 `fix`，性能优化用 `perf`，结构调整用 `refactor`，测试用 `test`，文档用 `docs`，工作流用 `ci`，构建工具用 `build`，维护用 `chore`。范围选择受影响的组件，例如 `core`、`generator` 或 `benchmarks`；性能前缀是 `perf`，不能写成 `pref`。独立改动分别提交。详见[贡献指南](CONTRIBUTING.cn.md#提交规范)。
+10. **提交信息。** 标题使用 `type(scope): description`，类型和范围用小写，描述用简洁的英文祈使句。新功能用 `feat`，修复用 `fix`，性能优化用 `perf`，结构调整用 `refactor`，测试用 `test`，文档用 `docs`，工作流用 `ci`，构建工具用 `build`，维护用 `chore`。范围选择受影响的组件，例如 `core`、`generator` 或 `benchmarks`；性能前缀是 `perf`，不能写成 `pref`。每次提交还必须包含有实质内容的英文正文，与标题之间空一行，说明为什么需要修改、具体改了什么，以及相关验证及其结果。有重要限制、检查失败或未验证项时也必须说明。正文详略与改动规模相称；重复标题、通用套话或只有标题的提交均不符合要求。独立改动分别提交。详见[贡献指南](CONTRIBUTING.cn.md#提交规范)。
 11. **提交身份。** 代表所有者创建的每个提交，author 与 committer 均使用 `TheLight-233 <2802799687@qq.com>`，禁止添加 `Co-Authored-By` 或任何 AI 署名 trailer。环境会注入 `GIT_COMMITTER_NAME=trae-solo-agent` 和 `GIT_COMMITTER_EMAIL=solo-agent@trae.ai`，因此每次 `git commit` 都要在同一 shell 内覆盖这两个变量，并用 `git log -1 --format='%an <%ae> | %cn <%ce>'` 自检。
 
 ## 工作方式
