@@ -1,0 +1,77 @@
+name: Release validation (build only)
+
+on:
+  pull_request:
+    paths: ['src/**', 'eng/**', 'tools/LuminPack.RepositoryChecks/**', '.github/scripts/release.ps1', '.github/workflows/release.yml']
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Candidate SemVer (blank uses the development version and commit)
+        type: string
+        default: ''
+      baseline_version:
+        description: Previously published Core version for PackageValidation (blank uses Versions.props)
+        type: string
+        default: ''
+      api_base_ref:
+        description: Commit or tag to compare public APIs against
+        type: string
+        default: HEAD^
+      require_unchanged_api:
+        description: Fail on any public API inventory change
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-validation-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
+            10.0.x
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 11.0.x
+          dotnet-quality: preview
+      - name: Build packages, validate compatibility and SourceLink, and report public APIs
+        shell: pwsh
+        env:
+          CANDIDATE_VERSION: ${{ inputs.version }}
+          BASELINE_VERSION: ${{ inputs.baseline_version }}
+          API_BASE_REF: ${{ github.event.pull_request.base.sha || inputs.api_base_ref || 'HEAD^' }}
+          REQUIRE_UNCHANGED_API: ${{ inputs.require_unchanged_api }}
+        run: |
+          $version = $env:CANDIDATE_VERSION
+          if ($env:GITHUB_REF_TYPE -eq 'tag') { $version = $env:GITHUB_REF_NAME -replace '^v', '' }
+          $strict = $env:REQUIRE_UNCHANGED_API -eq 'true'
+          ./.github/scripts/release.ps1 -Version $version -BaselineVersion $env:BASELINE_VERSION -ApiBaseRef $env:API_BASE_REF -RequireUnchangedApi:$strict
+      - name: Retain candidate packages and governance evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-validation-${{ github.run_id }}
+          path: |
+            .tmp/release-validation/run-*/packages
+            .tmp/release-validation/run-*/api
+            .tmp/release-validation/run-*/api-base
+            .tmp/release-validation/run-*/public-api.diff
+            .tmp/release-validation/run-*/CHANGELOG.md
+            .tmp/release-validation/run-*/SHA256SUMS
+            .tmp/release-validation/run-*/release-manifest.json
+          if-no-files-found: warn

@@ -1,0 +1,7 @@
+<Project>
+  <PropertyGroup>
+    <LuminPackReleaseVersion>2.0.0</LuminPackReleaseVersion>
+    <LuminPackReleaseBaselineVersion></LuminPackReleaseBaselineVersion>
+    <LuminPackPublishingEnabled>false</LuminPackPublishingEnabled>
+  </PropertyGroup>
+</Project>

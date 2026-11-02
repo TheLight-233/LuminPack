@@ -1,5 +1,15 @@
 <Project>
+  <Import Project="../eng/Versions.props" />
   <PropertyGroup>
-    <Version>2.0.0</Version>
+    <Version>$(LuminPackReleaseVersion)</Version>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <DebugType>portable</DebugType>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(GITHUB_ACTIONS)' == 'true'">true</ContinuousIntegrationBuild>
+    <EnablePackageValidation Condition="'$(LuminPackReleaseBuild)' == 'true' And '$(MSBuildProjectName)' == 'LuminPack.Core'">true</EnablePackageValidation>
   </PropertyGroup>
+  <ItemGroup Condition="'$(LuminPackReleaseBuild)' == 'true' And '$(MSBuildProjectName)' == 'LuminPack.Core'">
+    <ApiCompatSuppressionFile Include="$(MSBuildThisFileDirectory)../eng/CompatibilitySuppressions.xml" />
+  </ItemGroup>
 </Project>

@@ -52,6 +52,8 @@ dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlat
 
 ## 持续集成
 
+- [发布验证与 API 治理](releasing.cn.md)：`pwsh -File .github/scripts/release.ps1 -ApiBaseRef HEAD` 构建未发布候选包、验证包及 SourceLink 元数据、比较公共 API 并检查安装。`release.yml` 不上传包，也不创建标签或 Release。
+
 - [Fuzz 测试](fuzzing.cn.md)：`pwsh -File .github/scripts/fuzz.ps1` 执行确定性的畸形输入冒烟测试。`fuzz.yml` 还在推送/PR、每周及手动触发时执行有限预算的 SharpFuzz/libFuzzer 测试，并保留语料和重现样本。
 
 - `ci.yml`：仓库检查、构建、生成代码与生成器契约、增量验证、运行时测试、Hook 测试区、数据格式夹具，以及从新打包的 NuGet 包安装的测试。

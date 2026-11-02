@@ -36,8 +36,10 @@
     <ItemGroup>
       <None Include="$(TargetPath)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
       <None Include="$(TargetDir)$(AssemblyName).xml" Condition="Exists('$(TargetDir)$(AssemblyName).xml')" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+      <None Include="$(TargetDir)$(AssemblyName).pdb" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
       <None Include="@(_LuminPackCodeFixAssembly)" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
       <None Include="@(_LuminPackCodeFixAssembly->'%(RootDir)%(Directory)%(Filename).xml')" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
+      <None Include="@(_LuminPackCodeFixAssembly->'%(RootDir)%(Directory)%(Filename).pdb')" Pack="true" PackagePath="analyzers/dotnet/cs" Visible="false" />
     </ItemGroup>
   </Target>
 </Project>

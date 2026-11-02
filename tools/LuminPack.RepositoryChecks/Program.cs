@@ -5,7 +5,10 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-return RepositoryStandards.Verify(args.Length == 0 ? Directory.GetCurrentDirectory() : args[0]);
+return args is ["--package-api", var packages, var output] ? ReleaseChecks.WriteApi(packages, output) :
+    args is ["--verify-release", var feed, var version, var revision] ? ReleaseChecks.Verify(feed, version, revision) :
+    args is ["--verify-release-checks"] ? ReleaseChecks.SelfTest() :
+    RepositoryStandards.Verify(args.Length == 0 ? Directory.GetCurrentDirectory() : args[0]);
 
 /// <summary>Checks source documentation, implementation language, and centralized exception handling.</summary>
 internal static class RepositoryStandards

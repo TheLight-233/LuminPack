@@ -5,13 +5,18 @@ using LuminPack.Attribute;
 [assembly: LuminPackOption(StructLayout = global::LuminPack.Attribute.LuminPackStructLayout.Packed)]
 
 /// <summary>Executes real generated operations in JIT, trimmed and native executables without reflection.</summary>
-internal static class Program
+internal static partial class Program
 {
     /// <summary>Checks ordinary reuse, private storage, Union, versioning, cycles, portable batches and JSON.</summary>
-    /// <param name="args">Optional retained wire fixture operation and directory.</param>
+    /// <param name="args">An optional package-installation selector or retained wire fixture operation and directory.</param>
     /// <returns>Zero after all invariants hold; otherwise an exception terminates the executable.</returns>
     private static int Main(string[] args)
     {
+        if (args is ["--verify-installation"])
+        {
+            CheckPackageInstallation();
+            return 0;
+        }
         if (args.Length != 0)
         {
             if (args is not ["--wire", "write" or "verify", var directory])

@@ -52,6 +52,8 @@ dotnet run --project tests/LuminPack.Tests.Platforms -c Release -p:LuminPackPlat
 
 ## Continuous integration
 
+- [Release validation and API governance](docs/releasing.md): `pwsh -File .github/scripts/release.ps1 -ApiBaseRef HEAD` builds unpublished candidates, validates package/SourceLink metadata, compares public APIs and verifies installation. `release.yml` never publishes packages or creates tags/releases.
+
 - [Fuzzing](docs/fuzzing.md): `pwsh -File .github/scripts/fuzz.ps1` runs deterministic malformed-input smoke tests. `fuzz.yml` also runs bounded SharpFuzz/libFuzzer campaigns on push/PR, weekly and manually, retaining corpora and reproducers.
 
 - `ci.yml` runs repository checks, the build, the codegen and generator contracts, incremental verification, the runtime suite, the hook area, wire fixtures and an installation test from freshly packed NuGet packages.

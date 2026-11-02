@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- https://learn.microsoft.com/dotnet/fundamentals/package-validation/diagnostic-ids -->
+<Suppressions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:xsd="http://www.w3.org/2001/XMLSchema">
+  <!-- Existing target-specific contracts, not permission to remove APIs from a released version.
+       Burst hooks and pointer cursors exist only on netstandard2.1. Modern cursors are managed references.
+       BitArray changes its private CLR storage in .NET 10, so its established layout view changes with it.
+       The existing ObjectPool uses an instance policy on Standard and a static policy constraint on modern .NET.
+       Keep every diagnostic, target and left/right asset exact; never replace these with wildcard suppressions. -->
+  <Suppression>
+    <DiagnosticId>CP0001</DiagnosticId>
+    <Target>T:LuminPack.Core.LuminPackBurst</Target>
+    <Left>lib/netstandard2.1/LuminPack.Core.dll</Left>
+    <Right>lib/net8.0/LuminPack.Core.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:LuminPack.Code.BitArrayView.get_m_array</Target>
+    <Left>lib/net9.0/LuminPack.Core.dll</Left>
+    <Right>lib/net10.0/LuminPack.Core.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>F:LuminPack.Core.LuminPackJsonReader.Cursor</Target>
+    <Left>lib/netstandard2.1/LuminPack.Core.dll</Left>
+    <Right>lib/net8.0/LuminPack.Core.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>F:LuminPack.Core.LuminPackJsonWriter.Cursor</Target>
+    <Left>lib/netstandard2.1/LuminPack.Core.dll</Left>
+    <Right>lib/net8.0/LuminPack.Core.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>F:LuminPack.Core.LuminPackReader.Cursor</Target>
+    <Left>lib/netstandard2.1/LuminPack.Core.dll</Left>
+    <Right>lib/net8.0/LuminPack.Core.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>F:LuminPack.Core.LuminPackWriter.Cursor</Target>
+    <Left>lib/netstandard2.1/LuminPack.Core.dll</Left>
+    <Right>lib/net8.0/LuminPack.Core.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0002</DiagnosticId>
+    <Target>M:LuminPack.Utility.ObjectPool`1.#ctor(LuminPack.Utility.IPooledObjectPolicy{`0},System.Int32)</Target>
+    <Left>lib/netstandard2.1/LuminPack.Core.dll</Left>
+    <Right>lib/net8.0/LuminPack.Core.dll</Right>
+  </Suppression>
+  <Suppression>
+    <DiagnosticId>CP0021</DiagnosticId>
+    <Target>T:LuminPack.Utility.ObjectPool`1``0:T:LuminPack.Utility.IPooledObjectPolicy{`0}</Target>
+    <Left>lib/netstandard2.1/LuminPack.Core.dll</Left>
+    <Right>lib/net8.0/LuminPack.Core.dll</Right>
+  </Suppression>
+</Suppressions>
