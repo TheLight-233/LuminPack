@@ -98,9 +98,9 @@ internal sealed class LuminPackInputFormatter : InputFormatter
     /// <inheritdoc/>
     public override async Task<InputFormatterResult> ReadRequestBodyAsync(InputFormatterContext context)
     {
-        byte[] body = await LuminPackHttp.ReadBodyAsync(context.HttpContext.Request, _maximumBodyBytes, context.HttpContext.RequestAborted).ConfigureAwait(false);
+        using var body = await LuminPackHttp.ReadBodyAsync(context.HttpContext.Request, _maximumBodyBytes, context.HttpContext.RequestAborted).ConfigureAwait(false);
         var codec = _codecs[context.ModelType];
-        try { return await InputFormatterResult.SuccessAsync(codec.Read(body)).ConfigureAwait(false); }
+        try { return await InputFormatterResult.SuccessAsync(codec.Read(body.Memory)).ConfigureAwait(false); }
         catch (Exception error) when (codec.IsMalformed(error))
         {
             context.ModelState.TryAddModelError(context.ModelName, "Invalid LuminPack request body.");

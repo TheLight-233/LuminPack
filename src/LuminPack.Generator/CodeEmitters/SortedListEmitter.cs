@@ -106,8 +106,13 @@ public static class SortedListEmitter
         sb.AppendLine("                    }");
         // Keys already in order are stored directly; other input uses the bulk construction, which sorts and rejects duplicates.
         sb.AppendLine("                    value = new global::System.Collections.Generic.SortedList<" + keyType + ", " + valueType + ">(length);");
+        // Unordered keys are sorted in the pooled storage first, so only duplicates or unknown storage reach the bulk construction.
         sb.AppendLine("                    if (!global::LuminPack.Code.LuminPackCollectionAccess.TryFillSortedList(value, keys, values, length))");
-        sb.AppendLine("                        value = new global::System.Collections.Generic.SortedList<" + keyType + ", " + valueType + ">(new global::LuminPack.Code.LuminSortedListSource<" + keyType + ", " + valueType + ">(keys, values, length));");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        global::System.Array.Sort(keys, values, 0, length);");
+        sb.AppendLine("                        if (!global::LuminPack.Code.LuminPackCollectionAccess.TryFillSortedList(value, keys, values, length))");
+        sb.AppendLine("                            value = new global::System.Collections.Generic.SortedList<" + keyType + ", " + valueType + ">(new global::LuminPack.Code.LuminSortedListSource<" + keyType + ", " + valueType + ">(keys, values, length));");
+        sb.AppendLine("                    }");
         sb.AppendLine("                }");
         sb.AppendLine("                finally");
         sb.AppendLine("                {");

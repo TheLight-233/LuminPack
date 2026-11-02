@@ -104,27 +104,14 @@ public static class BitArrayEmitter
         sb.AppendLine();
         sb.AppendLine("            reader.TryConsumeArrayStart();");
         sb.AppendLine();
-        sb.AppendLine("            var tempList = new global::System.Collections.Generic.List<bool>();");
-        sb.AppendLine();
-        sb.AppendLine("            while (reader.Read())");
+        // The element count sizes the bit array directly; no temporary list is staged.
+        sb.AppendLine("            int count = reader.CountArrayElements();");
+        sb.AppendLine("            value = new global::System.Collections.BitArray(count);");
+        sb.AppendLine("            for (int i = 0; i < count; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
-        sb.AppendLine("                    break;");
-        sb.AppendLine();
-        sb.AppendLine("                tempList.Add(reader.GetBoolean());");
+        sb.AppendLine("                reader.Read();");
+        sb.AppendLine("                value[i] = reader.GetBoolean();");
         sb.AppendLine("            }");
-        sb.AppendLine();
-        sb.AppendLine("            if (tempList.Count > 0)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                value = new global::System.Collections.BitArray(tempList.Count);");
-        sb.AppendLine("                for (int i = 0; i < tempList.Count; i++)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    value[i] = tempList[i];");
-        sb.AppendLine("                }");
-        sb.AppendLine("            }");
-        sb.AppendLine("            else");
-        sb.AppendLine("            {");
-        sb.AppendLine("                value = new global::System.Collections.BitArray(0);");
-        sb.AppendLine("            }");
+        sb.AppendLine("            reader.ConsumeArrayEnd();");
     }
 }

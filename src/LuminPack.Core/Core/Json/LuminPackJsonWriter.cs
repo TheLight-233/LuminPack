@@ -1009,10 +1009,33 @@ namespace LuminPack.Core
             if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
                 WriteStringContentUtf8Raw<TOptions>(utf8PropertyName);
             else
-                WriteStringContentUtf16<TOptions>(Encoding.UTF8.GetString(utf8PropertyName).AsSpan());
+                WriteUtf8NameAsUtf16<TOptions>(utf8PropertyName);
             WriteByteRaw<TOptions>(Quote);
             WriteByteRaw<TOptions>(Colon);
             IsFirstElement = true;
+        }
+
+        /// <summary>Transcodes a UTF-8 property name for a UTF-16 document in stack or pooled storage.</summary>
+        /// <param name = "utf8PropertyName">The UTF-8 name.</param>
+        /// <typeparam name = "TOptions">The stateless serialization profile.</typeparam>
+        /// <remarks>A UTF-8 sequence never decodes to more UTF-16 code units than it has bytes, so no intermediate string is needed.</remarks>
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        private void WriteUtf8NameAsUtf16<TOptions>(ReadOnlySpan<byte> utf8PropertyName)
+            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+        {
+            char[]? rented = null;
+            Span<char> chars = utf8PropertyName.Length <= 256
+                ? stackalloc char[256]
+                : (rented = System.Buffers.ArrayPool<char>.Shared.Rent(utf8PropertyName.Length));
+            try
+            {
+                int length = Encoding.UTF8.GetChars(utf8PropertyName, chars);
+                WriteStringContentUtf16<TOptions>(chars.Slice(0, length));
+            }
+            finally
+            {
+                if (rented is not null) System.Buffers.ArrayPool<char>.Shared.Return(rented);
+            }
         }
 
         /// <summary>Writes property name to the current output.</summary>

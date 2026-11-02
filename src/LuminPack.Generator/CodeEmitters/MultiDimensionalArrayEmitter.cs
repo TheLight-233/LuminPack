@@ -227,7 +227,9 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("            reader.TryConsumeObjectStart();");
         sb.AppendLine("            int[] lengths = null, lowerBounds = null;");
         sb.AppendLine("            bool hasValues = false;");
-        sb.AppendLine("            var items = new global::System.Collections.Generic.List<" + elementType + ">();");
+        // Values may precede the shape, so they are staged in pooled storage sized by their counted elements.
+        sb.AppendLine("            " + elementType + "[] items = global::System.Array.Empty<" + elementType + ">();");
+        sb.AppendLine("            int itemCount = 0;");
         sb.AppendLine("            while (reader.Read())");
         sb.AppendLine("            {");
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd) break;");
@@ -244,14 +246,21 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("                else if (property == 3)");
         sb.AppendLine("                {");
         sb.AppendLine("                    hasValues = true;");
-        sb.AppendLine("                    items.Clear();");
         sb.AppendLine("                    reader.TryConsumeArrayStart();");
+        sb.AppendLine("                    int counted = reader.CountArrayElements();");
+        sb.AppendLine("                    if (items.Length < counted)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        if (items.Length != 0) global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(items, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">());");
+        sb.AppendLine("                        items = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(counted);");
+        sb.AppendLine("                    }");
+        sb.AppendLine("                    itemCount = 0;");
         sb.AppendLine("                    while (reader.Read())");
         sb.AppendLine("                    {");
         sb.AppendLine("                        if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd) break;");
         sb.AppendLine("                        " + elementType + " item = default!;");
         sb.AppendLine("                        reader.ReadValue(ref item);");
-        sb.AppendLine("                        items.Add(item);");
+        sb.AppendLine("                        if (itemCount == items.Length) global::LuminPack.Code.LuminPackExceptionHelper.ThrowMultiDimensionalArrayLengthMismatch();");
+        sb.AppendLine("                        items[itemCount++] = item;");
         sb.AppendLine("                    }");
         sb.AppendLine("                }");
         sb.AppendLine("                else reader.Skip();");
@@ -264,17 +273,18 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("                expectedLength *= lengths[i];");
         sb.AppendLine("                if (expectedLength > int.MaxValue) global::LuminPack.Code.LuminPackExceptionHelper.ThrowMultiDimensionalArrayDimensionsTooLarge();");
         sb.AppendLine("            }");
-        sb.AppendLine("            if (expectedLength != items.Count) global::LuminPack.Code.LuminPackExceptionHelper.ThrowMultiDimensionalArrayLengthMismatch();");
+        sb.AppendLine("            if (expectedLength != itemCount) global::LuminPack.Code.LuminPackExceptionHelper.ThrowMultiDimensionalArrayLengthMismatch();");
         sb.AppendLine("#if NET9_0_OR_GREATER");
         sb.AppendLine("            value = (" + fieldData.TypeName + ")global::System.Array.CreateInstanceFromArrayType(typeof(" + fieldData.TypeName + "), lengths, lowerBounds);");
         sb.AppendLine("#else");
         sb.AppendLine("            value = (" + fieldData.TypeName + ")global::System.Array.CreateInstance(typeof(" + elementType + "), lengths, lowerBounds);");
         sb.AppendLine("#endif");
         sb.AppendLine("            ref var first = ref global::System.Runtime.CompilerServices.Unsafe.As<byte, " + elementType + ">(ref global::LuminPack.Code.LuminPackMarshal.DangerousGetArrayDataReference<" + elementType + ">(value));");
-        sb.AppendLine("            for (nint i = 0; i < items.Count; i++)");
+        sb.AppendLine("            for (nint i = 0; i < itemCount; i++)");
         sb.AppendLine("            {");
         sb.AppendLine("                global::System.Runtime.CompilerServices.Unsafe.Add(ref first, (nint)(uint)i) = items[(int)i];");
         sb.AppendLine("            }");
+        sb.AppendLine("            if (items.Length != 0) global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(items, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">());");
     }
 
     /// <summary>Evaluates the existing zero-based binary shape and flat element payload.</summary>

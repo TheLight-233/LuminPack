@@ -57,8 +57,24 @@ public static partial class ListEmitter
         sb.AppendLine("            reader.TryConsumeArrayStart();");
         sb.AppendLine();
 
-        if (stack || readOnly || interfaceType || setInterface)
+        if (stack)
         {
+            // Stack elements arrive top first; a pooled staging array restores their push order without a list.
+            sb.AppendLine("            int count = reader.CountArrayElements();");
+            sb.AppendLine("            var staged = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(count);");
+            sb.AppendLine("            int stagedCount = 0;");
+        }
+        else if (baseType == "global::System.Collections.ObjectModel.ReadOnlyObservableCollection")
+        {
+            sb.AppendLine("            var observable = new global::System.Collections.ObjectModel.ObservableCollection<" + elementType + ">();");
+        }
+        else if (setInterface)
+        {
+            sb.AppendLine("            var set = new global::System.Collections.Generic.HashSet<" + elementType + ">();");
+        }
+        else if (readOnly || interfaceType)
+        {
+            // The list becomes the result or its only backing store.
             sb.AppendLine("            var tempList = new global::System.Collections.Generic.List<" + elementType + ">();");
         }
         else if (baseType == "global::System.Collections.Concurrent.BlockingCollection")
@@ -87,7 +103,20 @@ public static partial class ListEmitter
         sb.AppendLine();
         sb.AppendLine("                " + elementType + " item = default!;");
         sb.AppendLine("                reader.ReadValue(ref item);");
-        if (stack || readOnly || interfaceType || setInterface)
+        if (stack)
+        {
+            sb.AppendLine("                if (stagedCount == staged.Length) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"A JSON stack has more elements than it counted.\");");
+            sb.AppendLine("                staged[stagedCount++] = item;");
+        }
+        else if (baseType == "global::System.Collections.ObjectModel.ReadOnlyObservableCollection")
+        {
+            sb.AppendLine("                observable.Add(item);");
+        }
+        else if (setInterface)
+        {
+            sb.AppendLine("                set.Add(item);");
+        }
+        else if (readOnly || interfaceType)
         {
             sb.AppendLine("                tempList.Add(item);");
         }
@@ -112,11 +141,12 @@ public static partial class ListEmitter
 
         if (stack)
         {
-            sb.AppendLine("            value = new " + type + "();");
-            sb.AppendLine("            for (int i = tempList.Count - 1; i >= 0; i--)");
+            sb.AppendLine("            value = new " + type + "(stagedCount);");
+            sb.AppendLine("            for (int i = stagedCount - 1; i >= 0; i--)");
             sb.AppendLine("            {");
-            sb.AppendLine("                value.Push(tempList[i]);");
+            sb.AppendLine("                value.Push(staged[i]);");
             sb.AppendLine("            }");
+            sb.AppendLine("            global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(staged, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">());");
         }
         else if (readOnly)
         {
@@ -126,7 +156,7 @@ public static partial class ListEmitter
             }
             else
             {
-                sb.AppendLine("            value = new global::System.Collections.ObjectModel.ReadOnlyObservableCollection<" + elementType + ">(new global::System.Collections.ObjectModel.ObservableCollection<" + elementType + ">(tempList));");
+                sb.AppendLine("            value = new global::System.Collections.ObjectModel.ReadOnlyObservableCollection<" + elementType + ">(observable);");
             }
         }
         else if (interfaceType)
@@ -135,7 +165,7 @@ public static partial class ListEmitter
         }
         else if (setInterface)
         {
-            sb.AppendLine("            value = new global::System.Collections.Generic.HashSet<" + elementType + ">(tempList);");
+            sb.AppendLine("            value = set;");
         }
     }
 

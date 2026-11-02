@@ -70,13 +70,12 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("        /// <param name=\"options\">The configuration for this operation, or <see langword=\"null\"/> for defaults.</param>");
         sb.AppendLine("        /// <param name=\"cancellationToken\">A token that can cancel stream reads.</param>");
         sb.AppendLine("        /// <returns>A task-like value containing the deserialized value.</returns>");
-        sb.AppendLine("        /// <remarks>This overload buffers the complete stream in a temporary MemoryStream before deserialization. The caller owns the input stream.</remarks>");
+        sb.AppendLine("        /// <remarks>This overload buffers the complete stream in pooled storage before deserialization. The caller owns the input stream.</remarks>");
         sb.AppendLine("        " + _currentAccess + " static async ValueTask<" + typeName + "> DeserializeAsync(");
         sb.AppendLine("            Stream stream, " + typeName + " value, LuminPackSerializerOption? options = null,");
         sb.AppendLine("            CancellationToken cancellationToken = default)");
         sb.AppendLine("        {");
-        sb.AppendLine("            using var data = new MemoryStream();");
-        sb.AppendLine("            await stream.CopyToAsync(data, cancellationToken).ConfigureAwait(false);");
+        sb.AppendLine("            using var data = await global::LuminPack.Utility.LuminPackStreamInput.ReadAsync(stream, int.MaxValue, cancellationToken).ConfigureAwait(false);");
         if (metadata.IsNet9_OR_GREATER)
         {
             sb.AppendLine("            value = default!;");
@@ -84,12 +83,12 @@ public static partial class LuminPackSerializerGenerator
         }
         else
         {
-            sb.AppendLine("            static " + typeName + " ReadValue(MemoryStream data, LuminPackSerializerOption? options)");
+            sb.AppendLine("            static " + typeName + " ReadValue(in global::LuminPack.Utility.LuminPackStreamInput data, LuminPackSerializerOption? options)");
             sb.AppendLine("            {");
             sb.AppendLine("                " + typeName + " value = default!;");
             AppendAsyncReadBody(sb, indent: 16);
             sb.AppendLine("            }");
-            sb.AppendLine("            return ReadValue(data, options);");
+            sb.AppendLine("            return ReadValue(in data, options);");
         }
         sb.AppendLine("        }");
         sb.AppendLine();
@@ -103,7 +102,7 @@ public static partial class LuminPackSerializerGenerator
         string padding = new string(' ', indent);
         builder.Append(padding).AppendLine("var state = _threadStaticReaderOptionalState ??= new LuminPackReaderOptionalState();");
         builder.Append(padding).AppendLine("state.Init(options);");
-        builder.Append(padding).AppendLine("ReadOnlySpan<byte> buffer = data.GetBuffer().AsSpan(0, checked((int)data.Length));");
+        builder.Append(padding).AppendLine("ReadOnlySpan<byte> buffer = data.Span;");
         builder.Append(padding).AppendLine("var reader = new LuminPackReader(ref buffer, state);");
         builder.Append(padding).AppendLine("try");
         builder.Append(padding).AppendLine("{");
@@ -127,9 +126,8 @@ public static partial class LuminPackSerializerGenerator
         sb.AppendLine("            Stream stream, LuminPackSerializerOption? options = null,");
         sb.AppendLine("            CancellationToken cancellationToken = default)");
         sb.AppendLine("        {");
-        sb.AppendLine("            using var data = new MemoryStream();");
-        sb.AppendLine("            await stream.CopyToAsync(data, cancellationToken).ConfigureAwait(false);");
-        sb.AppendLine("            return Deserialize<T>(data.GetBuffer().AsSpan(0, checked((int)data.Length)), options);");
+        sb.AppendLine("            using var data = await global::LuminPack.Utility.LuminPackStreamInput.ReadAsync(stream, int.MaxValue, cancellationToken).ConfigureAwait(false);");
+        sb.AppendLine("            return Deserialize<T>(data.Span, options);");
         sb.AppendLine("        }");
         sb.AppendLine();
     }

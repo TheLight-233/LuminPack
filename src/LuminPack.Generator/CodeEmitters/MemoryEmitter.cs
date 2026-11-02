@@ -200,18 +200,15 @@ public static class MemoryEmitter
             sb.AppendLine("            if (!reused) value = new " + baseType + "<" + elementType + ">(array, start, length);");
             return;
         }
-        sb.AppendLine("            var items = new global::System.Collections.Generic.List<" + elementType + ">();");
-        sb.AppendLine("            while (reader.Read())");
+        // The element count sizes the result directly; no temporary list is staged.
+        sb.AppendLine("            int count = reader.CountArrayElements();");
+        sb.AppendLine("            var array = global::LuminPack.Code.LuminPackMarshal.AllocateUninitializedArray<" + elementType + ">(count);");
+        sb.AppendLine("            for (int i = 0; i < count; i++)");
         sb.AppendLine("            {");
-        sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
-        sb.AppendLine("                    break;");
-        sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd)");
-        sb.AppendLine("                    continue;");
-        sb.AppendLine("                " + elementType + " item = default!;");
-        sb.AppendLine("                reader.ReadValue(ref item);");
-        sb.AppendLine("                items.Add(item);");
+        sb.AppendLine("                reader.Read();");
+        sb.AppendLine("                reader.ReadValue(ref array[i]);");
         sb.AppendLine("            }");
-        sb.AppendLine("            var array = items.ToArray();");
+        sb.AppendLine("            reader.ConsumeArrayEnd();");
         AppendArrayAssignment(sb, baseType, elementType);
     }
 

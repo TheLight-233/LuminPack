@@ -29,8 +29,8 @@ public static class LuminPackHttp
             !string.Equals(mediaType.MediaType.Value, ContentType, StringComparison.OrdinalIgnoreCase))
             Errors.Rethrow(LuminPackHttpExceptionHelper.UnsupportedMediaType());
         using var linked = CancellationTokenSource.CreateLinkedTokenSource(request.HttpContext.RequestAborted, cancellationToken);
-        byte[] bytes = await ReadBodyAsync(request, maximumBodyBytes, linked.Token).ConfigureAwait(false);
-        try { return codec.Deserialize(bytes); }
+        using var body = await ReadBodyAsync(request, maximumBodyBytes, linked.Token).ConfigureAwait(false);
+        try { return codec.Deserialize(body.Memory); }
         catch (Exception error) when (codec.IsMalformedInput(error))
         {
             Errors.Rethrow(LuminPackHttpExceptionHelper.InvalidPayload(error));
@@ -45,27 +45,66 @@ public static class LuminPackHttp
 
     /// <summary>Copies at most the configured body limit plus one detection byte, without trusting Content-Length.</summary>
     /// <param name="request">The request stream owner.</param><param name="maximumBodyBytes">The application limit.</param>
-    /// <param name="cancellationToken">The combined cancellation signal.</param><returns>The bounded complete body.</returns>
-    internal static async Task<byte[]> ReadBodyAsync(HttpRequest request, int maximumBodyBytes, CancellationToken cancellationToken)
+    /// <param name="cancellationToken">The combined cancellation signal.</param><returns>The bounded complete body in pooled storage, which the caller disposes.</returns>
+    /// <remarks>The body is read straight into rented storage that grows by doubling, so no staging stream or final copy is allocated.</remarks>
+    internal static async Task<PooledBody> ReadBodyAsync(HttpRequest request, int maximumBodyBytes, CancellationToken cancellationToken)
     {
         if (maximumBodyBytes <= 0) Errors.ThrowArgumentOutOfRangeException(nameof(maximumBodyBytes));
         if (request.ContentLength > maximumBodyBytes) Errors.Rethrow(LuminPackHttpExceptionHelper.TooLarge());
-        int capacity = (int)Math.Min(request.ContentLength ?? 0, maximumBodyBytes);
-        using var body = new MemoryStream(capacity);
-        byte[] buffer = ArrayPool<byte>.Shared.Rent(Math.Min(maximumBodyBytes, 16_384));
+        // One byte beyond the limit detects an oversized body whose length was not declared.
+        long ceiling = (long)maximumBodyBytes + 1;
+        byte[] buffer = ArrayPool<byte>.Shared.Rent((int)Math.Min(Math.Max(request.ContentLength ?? 0, 16_384), ceiling));
+        int length = 0;
         try
         {
             while (true)
             {
-                int readLength = (int)Math.Min(buffer.Length, (long)maximumBodyBytes - body.Length + 1);
-                int count = await request.Body.ReadAsync(buffer.AsMemory(0, readLength), cancellationToken).ConfigureAwait(false);
+                if (length == buffer.Length)
+                {
+                    byte[] grown = ArrayPool<byte>.Shared.Rent((int)Math.Min((long)length * 2, ceiling));
+                    Buffer.BlockCopy(buffer, 0, grown, 0, length);
+                    ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+                    buffer = grown;
+                }
+                int readLength = (int)Math.Min(buffer.Length - length, ceiling - length);
+                int count = await request.Body.ReadAsync(buffer.AsMemory(length, readLength), cancellationToken).ConfigureAwait(false);
                 if (count == 0) break;
-                if (body.Length + count > maximumBodyBytes) Errors.Rethrow(LuminPackHttpExceptionHelper.TooLarge());
-                body.Write(buffer, 0, count);
+                length += count;
+                if (length > maximumBodyBytes) Errors.Rethrow(LuminPackHttpExceptionHelper.TooLarge());
             }
-            return body.ToArray();
+            return new PooledBody(buffer, length);
         }
-        finally { ArrayPool<byte>.Shared.Return(buffer, clearArray: true); }
+        catch
+        {
+            ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+            throw;
+        }
+    }
+
+    /// <summary>Owns a request body in rented storage until the request has been decoded.</summary>
+    internal struct PooledBody : IDisposable
+    {
+        private byte[]? _buffer;
+        private readonly int _length;
+
+        /// <summary>Wraps rented storage.</summary>
+        /// <param name="buffer">The rented array.</param><param name="length">The body length.</param>
+        internal PooledBody(byte[] buffer, int length)
+        {
+            _buffer = buffer;
+            _length = length;
+        }
+
+        /// <summary>Gets the body.</summary>
+        internal readonly ReadOnlyMemory<byte> Memory => _buffer is null ? default : new ReadOnlyMemory<byte>(_buffer, 0, _length);
+
+        /// <summary>Clears and returns the storage, which may hold request data.</summary>
+        public void Dispose()
+        {
+            var buffer = _buffer;
+            _buffer = null;
+            if (buffer is not null) ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
+        }
     }
 }
 

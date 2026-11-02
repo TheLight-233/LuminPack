@@ -81,13 +81,15 @@ internal sealed class SafeFacadeProjection : CSharpSyntaxRewriter
                 node.Arguments.GetSeparators()));
     }
 
-    /// <summary>Bounds stream reads before the temporary stream can grow beyond the declaration's cap.</summary>
-    /// <param name="node">An existing asynchronous stream copy.</param>
-    /// <returns>A bounded copy for selected contracts.</returns>
-    public override SyntaxNode VisitExpressionStatement(ExpressionStatementSyntax node)
+    /// <summary>Bounds pooled stream buffering with the declaration's cap, reading at most one byte beyond it.</summary>
+    /// <param name="node">An existing call.</param>
+    /// <returns>The bounded stream read for selected contracts.</returns>
+    public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
     {
-        if (_limit != null && node.Expression is AwaitExpressionSyntax && node.ToString().Contains("stream.CopyToAsync(data, cancellationToken)"))
-            return SyntaxFactory.ParseStatement("if (" + _limit + " == int.MaxValue) { " + node + " } else { await global::LuminPack.Security.LuminPackInputPolicy.CopyInputAsync(stream, data, " + _limit + ", cancellationToken).ConfigureAwait(false); }");
-        return base.VisitExpressionStatement(node);
+        var result = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
+        if (_limit != null && node.Expression.ToString().EndsWith("LuminPackStreamInput.ReadAsync", StringComparison.Ordinal) && result.ArgumentList.Arguments.Count == 3)
+            return result.WithArgumentList(result.ArgumentList.WithArguments(result.ArgumentList.Arguments.Replace(result.ArgumentList.Arguments[1],
+                SyntaxFactory.Argument(SyntaxFactory.ParseExpression(_limit)))));
+        return result;
     }
 }
