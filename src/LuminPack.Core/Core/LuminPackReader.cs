@@ -171,7 +171,7 @@ namespace LuminPack.Core
             long room = (long)(_end - Cursor);
 #endif
             if (room < (long)(uint)count || count < 0)
-                LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(Position + count));
+                LuminPackExceptionHelper.ThrowSpanOutOfRange((long)Position + count);
         }
 
         /// <summary>Validates that a range of the readable window exists.</summary>
@@ -181,7 +181,7 @@ namespace LuminPack.Core
         public void EnsureReadable(int index, int count)
         {
             if (IsOutOfRange(index, count, Buffer.Length))
-                LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(index + count));
+                LuminPackExceptionHelper.ThrowSpanOutOfRange((long)index + count);
         }
 
         /// <summary>Returns whether <paramref name="count"/> bytes from <paramref name="index"/> leave a buffer of <paramref name="length"/> bytes.</summary>

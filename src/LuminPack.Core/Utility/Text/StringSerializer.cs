@@ -448,7 +448,7 @@ public static unsafe partial class StringSerializer
             LuminPackExceptionHelper.ThrowInvalidStringLength(header);
         int bytes = Utf16RecordPayload(header);
         if ((uint)bytes > (uint)(available - sizeof(int)))
-            LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(bytes + sizeof(int)));
+            LuminPackExceptionHelper.ThrowSpanOutOfRange((long)bytes + sizeof(int));
         consumed += bytes;
         if (bytes == 0)
             return string.Empty;

@@ -1,3 +1,4 @@
+using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using LuminPack;
 using LuminPack.Attribute;
@@ -9,6 +10,71 @@ namespace LuminPackUnitTest;
 /// <summary>Checks that advancing fixed reads reject short windows before accessing or changing storage.</summary>
 public sealed class ReaderPreaccessBoundsTest
 {
+    /// <summary>Out-of-range end positions use wide diagnostics without changing the cursor or exception family.</summary>
+    [Fact]
+    public void ReadableRangeDiagnosticsDoNotOverflow()
+    {
+        ReadOnlySpan<byte> bytes = new byte[8];
+        var reader = new LuminPackReader(ref bytes);
+        reader.Advance(1);
+        Exception? ordinary = null;
+        try { reader.EnsureReadable(16); }
+        catch (Exception failure) { ordinary = failure; }
+        Assert.NotNull(ordinary);
+        Exception? advancing = null;
+        try { reader.EnsureReadable(int.MaxValue); }
+        catch (Exception failure) { advancing = failure; }
+        Assert.NotNull(advancing);
+        Assert.Equal(ordinary.GetType(), advancing.GetType());
+        Assert.Contains(((long)int.MaxValue + 1).ToString(), advancing.Message);
+        Exception? indexed = null;
+        try { reader.EnsureReadable(int.MaxValue, int.MaxValue); }
+        catch (Exception failure) { indexed = failure; }
+        Assert.NotNull(indexed);
+        Assert.Equal(ordinary.GetType(), indexed.GetType());
+        Assert.Contains(((long)int.MaxValue * 2).ToString(), indexed.Message);
+        Assert.Equal(1, reader.Position);
+    }
+
+    /// <summary>Forged dictionary string lengths preserve ordinary bounds rejection without overflowing diagnostic arithmetic.</summary>
+    /// <param name="header">The forged fixed-width UTF-16 or compact Latin-1 length header.</param>
+    [Theory]
+    [InlineData(int.MaxValue - 1)]
+    [InlineData(int.MaxValue - 3)]
+    [InlineData(int.MaxValue - 5)]
+    [InlineData(int.MaxValue)]
+    public void DictionaryStringLengthsRejectWithoutDiagnosticOverflow(int header)
+    {
+        byte[] bytes = LuminPackSerializer.Serialize(new DictionaryStringReadBoundary { Values = new() { [7] = "ok" } });
+        // Locate the known string record without depending on an enclosing safe-frame layout.
+        int stringHeaderOffset = bytes.AsSpan().LastIndexOf(new byte[] { 5, 0, 0, 0, (byte)'o', (byte)'k' });
+        Assert.True(stringHeaderOffset >= 0);
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(stringHeaderOffset), 32);
+        DictionaryStringReadBoundary target = null!;
+        Exception? ordinary = Record.Exception(() => LuminPackSerializer.Deserialize(bytes, ref target));
+        Assert.NotNull(ordinary);
+        Assert.IsNotType<OverflowException>(ordinary);
+        BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(stringHeaderOffset), header);
+        foreach (var existing in new DictionaryStringReadBoundary?[]
+        {
+            null,
+            new() { Values = new() { [7] = "existing" } },
+            new() { Values = new() { [8] = "other" } }
+        })
+        {
+            target = existing!;
+            Exception? failure = Record.Exception(() => LuminPackSerializer.Deserialize(bytes, ref target));
+            Assert.NotNull(failure);
+            Assert.True(failure.GetType() == ordinary.GetType(), failure.ToString());
+            if (existing is not null)
+            {
+                Assert.Same(existing, target);
+                Assert.Single(existing.Values);
+                Assert.Equal(existing.Values.ContainsKey(7) ? "existing" : "other", existing.Values.Values.Single());
+            }
+        }
+    }
+
     /// <summary>Checks a packed struct rejects every short logical window before changing caller storage.</summary>
     [Fact]
     public void PackedStructRejectsEveryPrefixBeforeDestinationPublication()
@@ -162,6 +228,14 @@ public sealed class ReaderPreaccessBoundsTest
             Assert.Equal(981, retained.Count);
         }
     }
+}
+
+/// <summary>Exercises fresh, matched-slot and staged dictionary string reads under the untrusted-input policy.</summary>
+[LuminPackable]
+[LuminPackOption(UntrustedData = true, MaxInputBytes = 1024, MaxCollectionLength = 4, MaxStringLength = 16)]
+public partial class DictionaryStringReadBoundary
+{
+    public Dictionary<int, string?> Values = new();
 }
 
 /// <summary>Provides one fixed field whose read cannot be protected by another member's header.</summary>
