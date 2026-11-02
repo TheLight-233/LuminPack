@@ -64,7 +64,7 @@ public partial class Message
 | `ValidateJsonSyntax` | false | Enable for external JSON. |
 | `StandardFormat` | `"G"` | Constant for Custom/formatted kernels. |
 | `StructLayout` | `Tagged` | Assembly or struct only: `Tagged`, `Packed`, `Native`. |
-| `UntrustedData` | false | Bounded protocol; limits `MaxInputBytes`, `MaxDecompressedBytes`, `MaxAllocationBytes`, `MaxCollectionLength`, `MaxStringLength`, `MaxObjectCount`, `MaxDepth` (1..64), `MaxReadWork`. Both ends must enable it. Unions, reference tracking, version tolerance, Custom and some other shapes are rejected under it. |
+| `UntrustedData` | true | Checked binary reads on the ordinary wire format (no envelope; only the reader changes), for objects, version tolerance, reference tracking and Unions. `false` restores trusted reads. Limits are unbounded unless declared: `MaxInputBytes`, `MaxCollectionLength`, `MaxStringLength`, `MaxDepth` (≥ 1, recursive values and JSON depth); `UntrustedData = true` or any declared limit also makes JSON strict. `MaxDecompressedBytes`, `MaxAllocationBytes`, `MaxObjectCount`, `MaxReadWork` are obsolete. Input-selected types (`object`, `System.Type`) fail closed. |
 
 Only explicitly set properties override the enclosing scope. Built-in profiles: `LuminPackDefaultOptions` (UTF-16 length), `LuminPackUtf8LengthOptions`, `LuminPackUtf8TokenOptions`, `LuminPackUtf16LengthOptions`, `LuminPackUtf16TokenOptions`. A custom profile is a `struct` implementing `ILuminPackOptions`.
 
@@ -160,6 +160,6 @@ Readers and writers advance a cursor (`ref byte`, or `byte*` on netstandard2.1).
 ## Formats
 
 - Binary object: `(byte memberCount 0..249, values...)`, `255` = null. Collection: `(int count, values...)`, `-1` = null. Union: `(byte tag, value)` or `(250, ushort tag, value)`, `255` = null.
-- Version-tolerant: `(251, 1, profile, count, metadata..., lengths..., payloads...)`. Reference tracking: slot lengths + reference id; `250` refers back.
+- Version-tolerant: `(251, 2, profile, count, metadata..., widths..., payloads...)`; later records of the same model in one write operation are `(251, 3, profile, count, u64 fingerprint, payloads...)`. Reference tracking: `(slotCount, width byte per slot, VarInt id, values...)`, width `255` means an `int` length precedes the value; `250` refers back.
 - UTF-16 strings: `(int header, payload)`; `-1` null, `0` empty, odd header = compact Latin-1. UTF-8: `(int byteCount, int utf16Length, bytes)`.
 - JSON: objects by member name; arrays for sequences and tuples; dictionaries as `[[k, v], ...]`; Unions `{"$type":tag,"$value":{...}}`; references `$id` / `$ref`; multidimensional arrays `{"Lengths":[..],"LowerBounds":[..],"Values":[..]}`.

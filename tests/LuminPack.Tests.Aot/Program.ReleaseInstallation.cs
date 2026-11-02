@@ -33,7 +33,7 @@ internal static partial class Program
     }
 }
 
-/// <summary>A small package-consumer contract independent of historical safe-frame fixtures.</summary>
+/// <summary>A small package-consumer contract independent of the retained wire fixtures.</summary>
 [LuminPackable]
 [LuminPackOption(UntrustedData = true, MaxInputBytes = 1024, MaxCollectionLength = 4, MaxStringLength = 16, MaxDepth = 4)]
 public partial class PackageInstallationRecord

@@ -65,7 +65,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        target: [binary, binary-utf8-varint, json-utf8, json-utf16]
+        target: [binary, binary-utf8-varint, json-utf8, json-utf16, binary-graph]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4

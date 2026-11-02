@@ -144,7 +144,6 @@ internal static class SerializerCoreProjection
             if (state == "LuminPack.Core.LuminPackReader" && name is "Deserialize" or "DeserializeUnion")
                 method = method.WithBody(BinaryEntryCursorAliases.RewriteReader(method.Body));
             if (name == "SerializeUnion" && state == "LuminPack.Core.LuminPackWriter" && method.TypeParameterList == null &&
-                !CompiledOptions.Resolve(type, compilation).Input.Enabled &&
                 FixedUnionCursorPlan.CanUsePayload(type, compilation, metadata))
             {
                 FixedUnionCursorProjection.Append(method, core);
@@ -463,8 +462,10 @@ internal static class SerializerCoreProjection
             var arguments = (ArgumentListSyntax)Visit(node.ArgumentList);
             var scalarArgument = node.ArgumentList.Arguments.ElementAtOrDefault(reduced ? 0 : 1);
             var scalarType = scalarArgument == null ? null : _model.GetTypeInfo(scalarArgument.Expression).Type;
+            // An untrusted Boolean read keeps its checked formatter; every other raw scalar has no invalid storage.
             bool rawScalar = !state.Contains("Json") && scalarType != null &&
-                !CompiledOptions.Resolve(scalarType, _model.Compilation).Input.Enabled &&
+                !(scalarType.SpecialType == SpecialType.System_Boolean && access.Name.Identifier.ValueText == "ReadValue" &&
+                    CompiledOptions.Resolve(scalarType, _model.Compilation).Input.Enabled) &&
                 global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.CanUseUnmanagedSerialization(scalarType) &&
                 (scalarType.TypeKind == TypeKind.Enum || CodeEmitterRegistry.KnownValueTypes.Contains(FormatterTypeName.Get(scalarType)));
             if (rawScalar && access.Name.Identifier.ValueText is "WriteValue" or "ReadValue" or "CalculateOffset")

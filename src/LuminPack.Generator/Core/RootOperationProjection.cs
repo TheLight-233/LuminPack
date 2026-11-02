@@ -189,7 +189,14 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
         foreach (var variable in method.Body.DescendantNodes().OfType<VariableDeclaratorSyntax>())
             if (variable.Parent is VariableDeclarationSyntax declaration && declaration.Type.ToString().EndsWith("LuminPackReader", StringComparison.Ordinal))
                 readers.Add(variable.Identifier.ValueText);
+        // An expanded pair reads its own members into locals of their member types; only whole-pair reads take the helper.
+        var locals = method.Body.DescendantNodes().OfType<VariableDeclaratorSyntax>().Where(variable => variable.Parent is VariableDeclarationSyntax)
+            .GroupBy(variable => variable.Identifier.ValueText, StringComparer.Ordinal)
+            .ToDictionary(group => group.Key, group => ((VariableDeclarationSyntax)group.First().Parent).Type.ToString().TrimEnd('?'), StringComparer.Ordinal);
+        string elementType = element.ToString();
         var calls = method.Body.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(call =>
+            !(call.ArgumentList.Arguments.FirstOrDefault()?.Expression is IdentifierNameSyntax local &&
+                locals.TryGetValue(local.Identifier.ValueText, out string localType) && localType != elementType && localType != "var") &&
             call.Expression is MemberAccessExpressionSyntax { Expression: IdentifierNameSyntax receiver, Name: GenericNameSyntax name } && readers.Contains(receiver.Identifier.ValueText) &&
             name.Identifier.ValueText == "Read" && name.TypeArgumentList.Arguments.Count == 1 && name.TypeArgumentList.Arguments[0].ToString() == profile &&
             call.ArgumentList.Arguments.Count == 1 && call.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword) &&

@@ -58,7 +58,8 @@ internal static partial class LuminPackUnionDispatchCodeGenerator
 
             var canSeal = root.TypeKind == TypeKind.Class && !HasDerivedUnionMember(data, definition);
             var fixedCursor = members.Count == 1 && cursorPlan?.Contains(members[0].Type) == true;
-            var fuseFixedWrite = fixedCursor && !CompiledOptions.Resolve(members[0].Type, compilation).Input.Enabled;
+            // Writers are trusted code; the shared fixed write body is independent of input checks.
+            var fuseFixedWrite = fixedCursor;
 
             AppendPartialType(sb, definition, (builder, indent) =>
                 AppendMemberMethods(builder, indent, data, root, matchedRoot, members, suffix, extensionType, canSeal,

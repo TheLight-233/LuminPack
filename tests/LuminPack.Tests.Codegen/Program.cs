@@ -218,7 +218,7 @@ try
     if (args is ["--verify-input-facts"])
     {
         SerializerCompiledOptionRegression.VerifyInputFacts(references);
-        Console.WriteLine("Passed bounded input proofs and reader ownership contracts.");
+        Console.WriteLine("Passed untrusted-input read-site check contracts.");
         return 0;
     }
     if (args is ["--verify-documentation"])

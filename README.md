@@ -99,7 +99,7 @@ Runs on Unity Mono and IL2CPP, NativeAOT and full trimming. Optional packages ad
 <td valign="top">
 
 ### 🔧 Configured at compile time
-Choose string encodings, JSON limits, portable 32/64-bit struct layouts or a hardened mode for untrusted input. Whatever you don't turn on costs nothing.
+Choose string encodings, JSON limits, portable 32/64-bit struct layouts. Untrusted reads are checked by default; declared limits bound hostile input, and unbounded limits are compiled away.
 
 </td>
 </tr>
@@ -113,7 +113,7 @@ Generation modes trim the generated code down to the types you really serialize,
 <td valign="top">
 
 ### 🌐 Modern I/O
-`Span<T>`, `ReadOnlySequence<byte>`, `IBufferWriter<byte>`, pipes and async streams are all first-class.
+`Span<T>`, `ReadOnlySequence<byte>`, `IBufferWriter<byte>`, streams and async entry points are supported.
 
 </td>
 </tr>

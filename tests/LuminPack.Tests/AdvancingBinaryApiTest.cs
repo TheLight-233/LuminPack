@@ -175,6 +175,8 @@ public class AdvancingBinaryApiTest
     [Fact]
     public void GenericPayloadUsesFluentOperations()
     {
+        // The open member T goes through the generic payload API, which requires a registered formatter.
+        LuminPackSerializer.RegisterTestProfile<int, LuminPackUtf16LengthOptions>();
         Span<byte> bytes = new byte[256];
         var writer = new LuminPackWriter(ref bytes);
         var value = new FluentGenericValue<int> { Value = 1729, Text = "generic" };

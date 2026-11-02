@@ -1,5 +1,4 @@
 using System.Buffers.Binary;
-using System.Text;
 using LuminPack.Fuzzing;
 
 namespace Fuzzing;
@@ -36,25 +35,16 @@ internal static class Corpus
     /// <param name="root">The corpus root directory.</param>
     internal static void Write(string root)
     {
-        foreach (var target in FuzzTarget.All)
+        foreach (var target in Targets.All)
         {
             string directory = Path.Combine(root, target.Name);
             Directory.CreateDirectory(directory);
-            foreach (var (name, value) in Values())
-            {
-                byte[] bytes = target.Seed(value);
+            foreach (var (name, bytes) in target.Seeds())
                 File.WriteAllBytes(Path.Combine(directory, name + ".bin"), bytes);
-            }
-            byte[] invalid = target.Json
-                ? (target.Name == "json-utf16" ? Encoding.Unicode : Encoding.UTF8).GetBytes("{\"Bits\":[true,],\"Text\":\"\\uZZZZ\"}")
-                : [250, 255, 255, 255, 127];
-            FuzzTarget.Require(!target.Run(invalid), $"Malformed seed was accepted by {target.Name}.");
-            File.WriteAllBytes(Path.Combine(directory, "invalid.bin"), invalid);
-            if (target.Json)
+            foreach (var (name, bytes) in target.Malformed())
             {
-                byte[] wrongType = (target.Name == "json-utf16" ? Encoding.Unicode : Encoding.UTF8).GetBytes("{\"Text\":17}");
-                FuzzTarget.Require(!target.Run(wrongType), $"A wrong-typed string was accepted by {target.Name}.");
-                File.WriteAllBytes(Path.Combine(directory, "wrong-type.bin"), wrongType);
+                FuzzTarget.Require(!target.Run(bytes), $"Malformed seed {name} was accepted by {target.Name}.");
+                File.WriteAllBytes(Path.Combine(directory, name + ".bin"), bytes);
             }
         }
     }

@@ -35,7 +35,7 @@ public partial class Message
 | `WideTag` | `false` | Wide Union reader support on this class or interface; does not inherit enclosing options. |
 | `SingleImplementation` | `false` | This class or interface promises one implementation everywhere; retains existing Union framing and virtual dispatch. |
 | `StructLayout` | `Tagged` | Storage of unmanaged structs; see below. Only valid on assemblies and structs. |
-| `UntrustedData` and limits | off | Bounded protocol for hostile input; see [Security](security.md). |
+| `UntrustedData` and limits | on, limits unbounded | Checked reads for untrusted input; declare limits for hostile input; see [Security](security.md). |
 
 Binary data may mix encodings member by member, but the writer and reader must use the same declarations. JSON encoding, depth and syntax checking always apply to a complete document.
 

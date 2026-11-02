@@ -25,9 +25,10 @@ internal sealed class BinaryEntryInlining
     private readonly BinaryOperationPlanCache _cache;
     private readonly ITypeSymbol _root;
     private readonly bool _streaming;
+    private readonly CompiledInputPolicy _rootInput;
+    private CompiledInputPolicy _activeInput;
     private int _reservedExpansionDepth;
     private int _inputExpansionDepth;
-    private int _provenInputExpansionDepth;
     private readonly Dictionary<string, ITypeSymbol> _types = new Dictionary<string, ITypeSymbol>(StringComparer.Ordinal);
     private readonly Dictionary<string, BinaryOperationPlan> _plans = new Dictionary<string, BinaryOperationPlan>(StringComparer.Ordinal);
     private readonly Dictionary<string, MemberDeclarationSyntax> _layouts = new Dictionary<string, MemberDeclarationSyntax>(StringComparer.Ordinal);
@@ -43,7 +44,9 @@ internal sealed class BinaryEntryInlining
     internal BinaryEntryInlining(ITypeSymbol root, Compilation compilation, MetaInfo metadata, BinaryOperationPlanCache cache)
     {
         _root = root; _compilation = compilation; _metadata = metadata; _cache = cache;
-        _streaming = CompiledOptions.Resolve(root, compilation).Input.Enabled;
+        var input = CompiledOptions.Resolve(root, compilation).Input;
+        _streaming = input.Enabled;
+        _rootInput = input.Enabled ? input : null;
         _types.Add(FormatterTypeName.Get(root), root);
         using (var hash = SHA256.Create())
             _layoutPrefix = "__LuminLayout_" + string.Concat(hash.ComputeHash(Encoding.UTF8.GetBytes(FormatterTypeName.Get(root)))
@@ -73,10 +76,11 @@ internal sealed class BinaryEntryInlining
     /// <returns>The dependency-guarded plan shared by all entries for this root.</returns>
     private BinaryOperationPlan GetPlan(ITypeSymbol type)
     {
-        bool streaming = _streaming || _inputExpansionDepth > 0;
-        string name = FormatterTypeName.Get(type) + (streaming ? "|input" : "|trusted");
+        // Nested values inherit the outermost untrusted boundary's frozen limits.
+        var input = _rootInput ?? (_inputExpansionDepth > 0 ? _activeInput : null);
+        string name = FormatterTypeName.Get(type) + (input == null ? "|trusted" : "|input" + input.Identity);
         if (!_plans.TryGetValue(name, out var plan))
-            _plans.Add(name, plan = _cache.Get(type, _compilation, _metadata, streaming));
+            _plans.Add(name, plan = _cache.Get(type, _compilation, _metadata, input));
         return plan;
     }
 
@@ -93,12 +97,6 @@ internal sealed class BinaryEntryInlining
         string name = "__InputRead_" + _layoutPrefix.Substring(14, 16) + "_" + _inputReaders.Count;
         _inputReaders.Add(key, name);
         string selected = operationName;
-        if (plan.Options.Input.Enabled)
-        {
-            var inner = plan.Operations.Where(pair => pair.Key.StartsWith(operationName + ":local:", StringComparison.Ordinal))
-                .OrderBy(pair => int.Parse(pair.Key.Substring(pair.Key.LastIndexOf(':') + 1), System.Globalization.CultureInfo.InvariantCulture)).FirstOrDefault();
-            if (inner.Value != null) selected = inner.Key;
-        }
         var operation = plan.Operations[selected];
         var body = Expand(plan, selected, new ExpressionSyntax[] { SyntaxFactory.IdentifierName("reader"), SyntaxFactory.IdentifierName("value") },
             new[] { true, true }, new HashSet<string>(StringComparer.Ordinal), root: true);
@@ -125,14 +123,17 @@ internal sealed class BinaryEntryInlining
     {
         string key = plan.TypeName + "|" + operationName;
         if (stack.Contains(key) || !plan.Operations.TryGetValue(operationName, out var operation)) return null;
-        if (!root && _inputExpansionDepth > 0 && plan.Options.Input.Enabled && !operationName.Contains(":local:"))
-        {
-            var inner = plan.Operations.Where(pair => pair.Key.StartsWith(operationName + ":local:", StringComparison.Ordinal))
-                .OrderBy(pair => int.Parse(pair.Key.Substring(pair.Key.LastIndexOf(':') + 1), System.Globalization.CultureInfo.InvariantCulture)).FirstOrDefault();
-            if (inner.Value != null) operation = inner.Value;
-        }
-        if (!_streaming && _inputExpansionDepth == 0 && !root && (GeneratedExecutionPolicy.Reuse(operationName, operation) ||
-            _reservedExpansionDepth == 0 && !operationName.Contains(":local:") &&
+        // Raw primitive arrays and lists keep their runtime kernel; the expansion site checks its count and domain.
+        if (!root && (_streaming || _inputExpansionDepth > 0) && operationName == "ReadValue" && CheckedRawElement(plan.TypeName) != null &&
+            CodeEmitterRegistry.GetEmitter(plan.TypeName).Read != null) return null;
+        // Untrusted binary reads expand nested reads whose checks differ from their own entries; writes and JSON keep the trusted reuse decisions.
+        bool expanded = (_streaming || _inputExpansionDepth > 0) && operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackReader" &&
+            !IsRawScalar(plan.TypeName) && !OwnsActiveChecks(plan, operation);
+        // Binary writes expand nested framework writers as well: a shared collection writer behind a call boundary costs more than
+        // its copied body. A parent therefore regenerates when a nested record's writer changes. Raw scalars keep their lowered call.
+        bool binaryWrite = operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackWriter" && !IsRawScalar(plan.TypeName);
+        if (!expanded && !root && (GeneratedExecutionPolicy.Reuse(operationName, operation) ||
+            !binaryWrite && _reservedExpansionDepth == 0 && !operationName.Contains(":local:") &&
             CodeEmitterRegistry.GetEmitter(plan.TypeName).Read != null)) return null;
         // A nested user-type write would copy its complete record body into every element site. Where the
         // containing plan writes another value beside each element, that body pushes the root past the JIT's
@@ -141,13 +142,6 @@ internal sealed class BinaryEntryInlining
         if (outlineNestedUserWrite && !root && operationName == "WriteValue" &&
             !plan.TypeName.StartsWith("global::System.", StringComparison.Ordinal) &&
             operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackWriter") return null;
-        if (operation.Parameters.Length == arguments.Count + 1 &&
-            operation.Parameters[operation.Parameters.Length - 1].OriginalName == SafeOperationProjection.FixedProofParameter)
-        {
-            arguments = arguments.Concat(new[] { SyntaxFactory.LiteralExpression(_provenInputExpansionDepth > 0
-                ? SyntaxKind.TrueLiteralExpression : SyntaxKind.FalseLiteralExpression) }).ToArray();
-            aliases = aliases.Concat(new[] { false }).ToArray();
-        }
         if (arguments.Count != operation.Parameters.Length)
             return LuminPackExceptionHelper.ThrowInvalidOperationException<BlockSyntax>("Inline operation parameter mismatch: " + key);
         var requiredSupport = new HashSet<string>(operation.Body.DescendantTokens().Where(token => token.GetAnnotations(BinaryOperationPlan.NameAnnotation).Any())
@@ -177,20 +171,9 @@ internal sealed class BinaryEntryInlining
         string exit = root && !guaranteed ? null : prefix + "exit";
         var statements = new List<StatementSyntax>();
         var rootBindings = new Dictionary<string, ExpressionSyntax>(StringComparer.Ordinal);
-        bool provenBinding = false;
-        bool provenInput = false;
         for (int index = 0; index < arguments.Count; index++)
         {
             var parameter = operation.Parameters[index];
-            if (parameter.OriginalName == SafeOperationProjection.FixedProofParameter &&
-                arguments[index] is LiteralExpressionSyntax literal &&
-                literal.Kind() is SyntaxKind.TrueLiteralExpression or SyntaxKind.FalseLiteralExpression)
-            {
-                rootBindings.Add(parameter.Name, literal);
-                provenBinding = true;
-                provenInput = literal.IsKind(SyntaxKind.TrueLiteralExpression);
-                continue;
-            }
             if (root)
             {
                 rootBindings.Add(parameter.Name, arguments[index]);
@@ -234,12 +217,12 @@ internal sealed class BinaryEntryInlining
         }
         BlockSyntax body;
         if (guaranteed) _reservedExpansionDepth++;
-        bool inputBoundary = plan.Options.Input.Enabled;
-        if (inputBoundary) _inputExpansionDepth++;
-        if (provenInput) _provenInputExpansionDepth++;
+        // Only binary reads carry input checks; writes and JSON keep their ordinary reuse decisions.
+        bool inputBoundary = plan.Options.Input.Enabled && operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackReader";
+        var previousInput = _activeInput;
+        if (inputBoundary && _inputExpansionDepth++ == 0) _activeInput = plan.Options.Input;
         try { body = (BlockSyntax)new OperationExpansion(this, plan, operation, prefix, exit, path, arguments[0], rootBindings).Visit(template); }
-        finally { if (guaranteed) _reservedExpansionDepth--; if (inputBoundary) _inputExpansionDepth--; if (provenInput) _provenInputExpansionDepth--; }
-        if (provenBinding) body = (BlockSyntax)new ProvenInputConstants().Visit(body);
+        finally { if (guaranteed) _reservedExpansionDepth--; if (inputBoundary) { _inputExpansionDepth--; _activeInput = previousInput; } }
         // An element record inlined into a sequence entry already owns one compact loop body, so its raw
         // collection fields take the exact inline stores; outlined keyed entries keep the shared call.
         if (!root && !plan.TypeName.StartsWith("global::System.", StringComparison.Ordinal))
@@ -277,45 +260,35 @@ internal sealed class BinaryEntryInlining
         return optionProfile == null ? result : result.WithAdditionalAnnotations(new SyntaxAnnotation(OptionScopeAnnotation, optionProfile));
     }
 
-    /// <summary>Folds the compiler-bound input proof before emitting its single selected decoder body.</summary>
-    private sealed class ProvenInputConstants : CSharpSyntaxRewriter
+    /// <summary>Gets the untrusted limits active at the current expansion.</summary>
+    private CompiledInputPolicy ActiveInput => _rootInput ?? (_inputExpansionDepth > 0 ? _activeInput : null);
+
+    /// <summary>Reports whether a nested binary read's own entry applies exactly the active checks.</summary>
+    /// <param name="plan">The nested type's plan.</param><param name="operation">The nested operation.</param>
+    /// <returns>Whether calling the type's own entry is equivalent to expanding it under the active limits.</returns>
+    /// <remarks>Such a read keeps the trusted reuse decision; its own generated entry is checked with the same frozen limits.</remarks>
+    private bool OwnsActiveChecks(BinaryOperationPlan plan, BinaryOperation operation)
+        => operation.Parameters[0].Type == "global::LuminPack.Core.LuminPackReader" && ActiveInput is { } active &&
+            plan.Options.Input.Enabled && plan.Options.Input.Identity == active.Identity;
+
+    /// <summary>Identifies a raw framework scalar, whose every storage value except a Boolean's is valid.</summary>
+    /// <param name="typeName">The closed formatter type name.</param>
+    /// <returns>Whether an untrusted read keeps the trusted call, which is later lowered to a direct load.</returns>
+    private static bool IsRawScalar(string typeName)
+        => CodeEmitterRegistry.KnownValueTypes.Contains(typeName) && typeName.IndexOf("bool", StringComparison.OrdinalIgnoreCase) < 0;
+
+    /// <summary>Identifies a raw array or list of reviewed primitives whose runtime read kernel needs only count and domain checks.</summary>
+    /// <param name="typeName">The closed formatter type name.</param>
+    /// <returns>The element type name, or null for other types.</returns>
+    private static string CheckedRawElement(string typeName)
     {
-        /// <summary>Selects the original or guarded kernel using the proven literal.</summary>
-        /// <param name="node">A compiler-created conditional.</param><returns>The selected expression or unchanged conditional.</returns>
-        public override SyntaxNode VisitConditionalExpression(ConditionalExpressionSyntax node)
-        {
-            var result = (ConditionalExpressionSyntax)base.VisitConditionalExpression(node);
-            return result.Condition.IsKind(SyntaxKind.TrueLiteralExpression) ? result.WhenTrue :
-                result.Condition.IsKind(SyntaxKind.FalseLiteralExpression) ? result.WhenFalse : result;
-        }
-
-        /// <summary>Folds negated proof literals before selecting cleanup statements.</summary>
-        /// <param name="node">A compiler-created unary operation.</param><returns>The literal result or original operation.</returns>
-        public override SyntaxNode VisitPrefixUnaryExpression(PrefixUnaryExpressionSyntax node)
-        {
-            var result = (PrefixUnaryExpressionSyntax)base.VisitPrefixUnaryExpression(node);
-            if (!result.IsKind(SyntaxKind.LogicalNotExpression)) return result;
-            return result.Operand.IsKind(SyntaxKind.TrueLiteralExpression) ? SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression) :
-                result.Operand.IsKind(SyntaxKind.FalseLiteralExpression) ? SyntaxFactory.LiteralExpression(SyntaxKind.TrueLiteralExpression) : result;
-        }
-
-        /// <summary>Omits accounting cleanup only in the branch whose complete costs were already proven.</summary>
-        /// <param name="node">The generated accounting condition.</param><returns>The selected statement.</returns>
-        public override SyntaxNode VisitIfStatement(IfStatementSyntax node)
-        {
-            var result = (IfStatementSyntax)base.VisitIfStatement(node);
-            return result.Condition.IsKind(SyntaxKind.TrueLiteralExpression) ? result.Statement :
-                result.Condition.IsKind(SyntaxKind.FalseLiteralExpression) ? result.Else?.Statement ?? SyntaxFactory.Block() : result;
-        }
-
-        /// <summary>Removes an empty proven cleanup region while retaining every live finally and catch.</summary>
-        /// <param name="node">The generated object scope.</param><returns>The original decoder block or its retained cleanup region.</returns>
-        public override SyntaxNode VisitTryStatement(TryStatementSyntax node)
-        {
-            var result = (TryStatementSyntax)base.VisitTryStatement(node);
-            return result.Catches.Count == 0 && result.Finally != null &&
-                result.Finally.Block.DescendantNodes().All(child => child is BlockSyntax) ? result.Block : result;
-        }
+        const string list = "global::System.Collections.Generic.List<";
+        string element = typeName.EndsWith("[]", StringComparison.Ordinal) ? typeName.Substring(0, typeName.Length - 2) :
+            typeName.StartsWith(list, StringComparison.Ordinal) && typeName.EndsWith(">", StringComparison.Ordinal) ? typeName.Substring(list.Length, typeName.Length - list.Length - 1) : null;
+        return element is "bool" or "byte" or "sbyte" or "short" or "ushort" or "int" or "uint" or "long" or "ulong" or "float" or "double" or "char" or
+            "global::System.Boolean" or "global::System.Byte" or "global::System.SByte" or "global::System.Int16" or "global::System.UInt16" or
+            "global::System.Int32" or "global::System.UInt32" or "global::System.Int64" or "global::System.UInt64" or "global::System.Single" or
+            "global::System.Double" or "global::System.Char" or "global::System.Guid" or "global::System.TimeSpan" ? element : null;
     }
 
     /// <summary>Returns whether a containing plan writes another value beside every user-type element.</summary>
@@ -452,10 +425,45 @@ internal sealed class BinaryEntryInlining
             var arguments = call.ArgumentList.Arguments.Select(argument => (ExpressionSyntax)Visit(argument.Expression)).ToList();
             if (slot.Reduced) arguments.Insert(0, (ExpressionSyntax)Visit(((MemberAccessExpressionSyntax)call.Expression).Expression));
             var plan = slot.Local ? _plan : _owner.GetPlan(_owner.Resolve(slot.TypeName));
-            var expanded = _owner.Expand(plan, slot.Operation, arguments, slot.Aliases, _stack, slot.OptionProfile, false,
+            // In an untrusted graph, a user record's nested user record keeps its own checked helper, so each body
+            // stays within the JIT's inlining budget; collection elements keep their inlined loop body.
+            // Only binary reads carry input checks; JSON reads keep their ordinary expansion and reuse.
+            bool checkedRead = (_owner._streaming || _owner._inputExpansionDepth > 0) && !slot.Local && !slot.Operation.EndsWith(":json", StringComparison.Ordinal) &&
+                !IsRawScalar(plan.TypeName);
+            bool outline = checkedRead && slot.Operation == "ReadValue" &&
+                !_plan.TypeName.StartsWith("global::System.", StringComparison.Ordinal) && _plan.TypeName.IndexOf('[') < 0 &&
+                !plan.TypeName.StartsWith("global::System.", StringComparison.Ordinal) && _owner.Resolve(slot.TypeName) is INamedTypeSymbol { TypeKind: TypeKind.Class } nested &&
+                CompilationTypeAnalysisCache.GetOrCreate(_owner._compilation).IsPackable(nested) && !RecursiveTypeAnalysis.IsRecursive(nested, _owner._compilation) &&
+                // A nested entry with the same checks takes the trusted expansion instead.
+                !(plan.Operations.TryGetValue(slot.Operation, out var sameChecks) && _owner.OwnsActiveChecks(plan, sameChecks));
+            var expanded = outline ? null : _owner.Expand(plan, slot.Operation, arguments, slot.Aliases, _stack, slot.OptionProfile, false,
                 OutlinesNestedUserWrites(_plan.TypeName));
             if (expanded != null) return expanded.WithTriviaFrom(node);
-            if ((_owner._streaming || _owner._inputExpansionDepth > 0) && !slot.Local && slot.Operation.StartsWith("Read", StringComparison.Ordinal) && plan.Operations.ContainsKey(slot.Operation))
+            if (checkedRead && slot.Operation == "ReadValue" && CheckedRawElement(plan.TypeName) is string element && arguments.Count == 2)
+            {
+                var input = _owner.ActiveInput;
+                var kernel = (ExpressionStatementSyntax)base.VisitExpressionStatement(node);
+                // A Boolean array copies and validates its storage in one pass.
+                bool booleans = element is "bool" or "global::System.Boolean", fused = booleans && plan.TypeName.EndsWith("[]", StringComparison.Ordinal);
+                if (fused)
+                    kernel = SyntaxFactory.ExpressionStatement(SyntaxFactory.ParseExpression(SafeOperationProjection.Policy + ".ReadBooleans(ref " +
+                        arguments[0].WithoutTrivia() + ", ref " + arguments[1].WithoutTrivia() + ")"));
+                else
+                {
+                    kernel = kernel.WithExpression(kernel.Expression.WithAdditionalAnnotations(new SyntaxAnnotation(PayloadAnnotation, slot.TypeName)));
+                    if (slot.OptionProfile != null) kernel = kernel.WithAdditionalAnnotations(new SyntaxAnnotation(OptionScopeAnnotation, slot.OptionProfile));
+                }
+                var checks = new List<StatementSyntax> { kernel };
+                // An unbounded limit needs no statement: the kernel already bounds the count by the input.
+                if (input.Collection != int.MaxValue)
+                    checks.Add(SyntaxFactory.ParseStatement(SafeOperationProjection.Policy + ".CheckLength(" + arguments[1].WithoutTrivia() + ", " +
+                        input.Collection.ToString(System.Globalization.CultureInfo.InvariantCulture) + ");"));
+                if (booleans && !fused)
+                    checks.Add(SyntaxFactory.ParseStatement(SafeOperationProjection.Policy + ".CheckBooleans(" + arguments[1].WithoutTrivia() + ");"));
+                return checks.Count == 1 ? kernel.WithTriviaFrom(node) : SyntaxFactory.Block(checks).WithTriviaFrom(node);
+            }
+            if (checkedRead && slot.Operation.StartsWith("Read", StringComparison.Ordinal) && plan.Operations.TryGetValue(slot.Operation, out var nestedOperation) &&
+                !_owner.OwnsActiveChecks(plan, nestedOperation))
             {
                 string helper = _owner.InputReader(plan, slot.Operation);
                 var guarded = SyntaxFactory.ExpressionStatement(SyntaxFactory.InvocationExpression(SyntaxFactory.IdentifierName(helper),

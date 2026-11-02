@@ -227,10 +227,11 @@ public static partial class LuminPackSerializerGenerator
         bool previousRecord = _currentDirectRecord;
         bool previousFixed = _currentFixedRecord;
         var options = CompiledOptions.Resolve(type, compilation);
-        _currentContainsReferences = options.Input.Enabled || !global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.CanUseUnmanagedSerialization(type);
+        // Untrusted reads use the ordinary wire and state, so their facades match trusted ones; only the input cap differs.
+        _currentContainsReferences = !global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.CanUseUnmanagedSerialization(type);
         bool stationaryInput = RequiresStationaryInput(compilation, metadata);
-        bool managedInput = !options.Input.Enabled && !stationaryInput;
-        bool statelessInput = !stationaryInput && SafeOperationProjection.CanUseStatelessFacade(type, compilation, metadata, options);
+        bool managedInput = !stationaryInput;
+        bool statelessInput = false;
         _currentRawScalar = managedInput && CodeEmitterRegistry.KnownValueTypes.Contains(typeName) && !_currentContainsReferences.Value;
         _currentFixedRecord = managedInput && !_currentRawScalar &&
             (global::LuminPack.SourceGenerator.CodeEmitters.EmitterTypeTraits.IsFixedRecord(type) ||

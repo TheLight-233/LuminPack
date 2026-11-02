@@ -37,7 +37,7 @@ public partial class PlayerV2
 
 These two models read each other's data in both directions.
 
-Fixed primitive schemas reuse their cached header, name/type metadata and length table in one prefix copy, with the selected compiled binary profile stamped into the header. Runtime-dependent widths and evolved-schema mapping retain their original paths.
+Each model caches its complete record prefix (header, name/type metadata and member widths) and writes it in one copy, with the selected compiled binary profile stamped into the header. Records are written in one pass; a record of fixed-width members has a constant size and is written straight into the result array. A reader whose model matches compares the prefix once and reads the members in order; other readers map the members by name.
 
 - Members are identified by their exact, case-sensitive names. `LuminPackOrder` is optional and only sets the write order.
 - Unknown members are skipped by their recorded length. Missing members are set to `default`, also when reading into an existing object.
@@ -58,9 +58,13 @@ Reading into an existing object reuses it and its children like an ordinary bina
 
 ### Binary framing
 
-`null` is the single byte `255`. A record starts with four bytes: marker `251`, format revision `1`, the binary string profile and the member count (0 to 249). The profile stores the string encoding in bit 1 and the recording mode in bit 0, and it must match the reader's profile.
+`null` is the single byte `255`. A record starts with four bytes: marker `251`, format revision `2`, the binary string profile and the member count (0 to 249). The profile stores the string encoding in bit 1 and the recording mode in bit 0, and it must match the reader's profile.
 
-A metadata block follows, one entry per member with its UTF-8 name and UTF-8 type contract, each prefixed by an unsigned base-128 length. Then come all payload lengths (LuminPack VarInt) and then all payloads, in the same order. Metadata is compared byte for byte, so hash collisions cannot alias members. Generated code caches the metadata per model and compares it directly against the input; it never decodes names into strings or uses reflection.
+A metadata block follows, one entry per member with its UTF-8 name and UTF-8 type contract, each prefixed by an unsigned base-128 length. Then comes one width byte per member: the exact width of a raw member below 255, or 255 for a payload that starts with its four-byte length. The payloads follow in the same order. Metadata is compared byte for byte, so hash collisions cannot alias members. Generated code caches the metadata per model and compares it directly against the input; it never decodes names into strings or uses reflection.
+
+Within one write operation, only the first record of a model carries the metadata and width table. Later records of the same model use revision `3`: the same four-byte header followed by the 64-bit fingerprint of the table, then the payloads. Readers resolve a fingerprint only to a table read earlier in the same operation and reject any other. A record read alone is therefore always a full record.
+
+Readers also accept revision `1`, written by earlier releases, which stores every payload length (LuminPack VarInt) before the payloads. Earlier releases cannot read revisions `2` and `3`.
 
 ## Reference tracking
 
@@ -73,7 +77,8 @@ public partial class Node
 }
 ```
 
-- Every serialized member needs a `[LuminPackOrder]`. The numbers form a slot table with lengths; when adding or removing members, keep the existing numbers.
+- Every serialized member needs a `[LuminPackOrder]`. The numbers form a slot table of one width byte per slot; when adding or removing members, keep the existing numbers. A variable-size value records its length in front of the value, so a record is written in one pass. A reader skips trailing slots it does not know and leaves its own extra members at their defaults.
+- Records written by earlier releases, which stored variable slot lengths in the table, are not readable.
 - Only objects of `CircleReference` types are tracked. Wrap any other object you need to track in such a type.
 - Records written into the same `LuminBufferWriter` share one reference table; read them back in order with one reader and one reader state (see [Getting started](getting-started.md#reusing-a-buffer)).
 - JSON uses `$id` for the first occurrence of an object and `$ref` for later references. These names are reserved.

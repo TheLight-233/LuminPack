@@ -35,7 +35,7 @@ public partial class Message
 | `WideTag` | `false` | 当前类或接口接受宽 Union 标签；不继承外层选项。 |
 | `SingleImplementation` | `false` | 当前类或接口保证所有程序集中只有一个实现；保留既有 Union 帧和虚方法派发。 |
 | `StructLayout` | `Tagged` | 非托管结构体的存储方式，见下文。只能用于程序集和结构体。 |
-| `UntrustedData` 及各项限额 | 关闭 | 面向不可信输入的受限协议，见[安全](security.cn.md)。 |
+| `UntrustedData` 及各项限额 | 开启，限额不设上限 | 面向不可信输入的带检查读取；面对恶意输入时请声明限额，见[安全](security.cn.md)。 |
 
 二进制数据可以按成员混用不同编码，但写入方和读取方必须使用相同的声明。JSON 的编码、深度和语法校验总是作用于整份文档。
 

@@ -311,8 +311,8 @@ internal static class EmitterTypeTraits
     /// <returns>Whether every instance field and property of the type and its source-declared bases is a primitive or enum, so the
     /// generated evaluator and writer are constant-width, touch no reference-tracking state and contain no dispatch.</returns>
     /// <remarks>The test does not depend on member selection: when no instance member of any other type exists, every selected
-    /// member is fixed-width. Version-tolerant, circle-reference, custom, surrogate, union, compressed and wide-tag
-    /// declarations, and bases that are not declared in this compilation, are excluded.</remarks>
+    /// member is fixed-width. A version-tolerant record adds only its constant revision-2 prefix. Circle-reference, custom,
+    /// surrogate, union, compressed and wide-tag declarations, and bases that are not declared in this compilation, are excluded.</remarks>
     internal static bool IsFixedRecord(ITypeSymbol type)
     {
         if (type is not INamedTypeSymbol named || named.TypeKind is not (TypeKind.Class or TypeKind.Struct) ||
@@ -320,8 +320,9 @@ internal static class EmitterTypeTraits
             return false;
         var packable = named.GetAttributes().FirstOrDefault(attribute =>
             attribute.AttributeClass?.ToDisplayString() == LuminPackSourceGenerator.LUMIN_PACKABLE_ATTRIBUTE);
+        // Object records and named version records of fixed-width members have a constant width.
         if (packable is null || packable.ConstructorArguments.Length == 1 &&
-            !(packable.ConstructorArguments[0].Kind == TypedConstantKind.Enum && System.Convert.ToInt32(packable.ConstructorArguments[0].Value) == 0))
+            !(packable.ConstructorArguments[0].Kind == TypedConstantKind.Enum && System.Convert.ToInt32(packable.ConstructorArguments[0].Value) is 0 or 1))
             return false;
         for (var current = named; current is not null && current.SpecialType is not (SpecialType.System_Object or SpecialType.System_ValueType);
              current = current.BaseType)

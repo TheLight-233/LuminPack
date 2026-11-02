@@ -52,7 +52,9 @@ public partial class GenericSerializationTest
     // Include this type in discovery.
     /// <summary>Provides concrete generic class functionality.</summary>
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
-    [LuminPackable]
+    // The polymorphism tests read the Union frame through this concrete entry, whose header the tag replaces; only a
+    // trusted read ignores that header byte, an untrusted one checks it against the member count.
+    [LuminPackable, LuminPackOption(UntrustedData = false)]
     public partial class ConcreteGenericClass<T> : AbstractGenericBase<T>
     {
         /// <summary>Gets or sets the additional value.</summary>
@@ -92,7 +94,9 @@ public partial class GenericSerializationTest
     // Exclude this type from discovery.
     /// <summary>Provides numeric generic class functionality.</summary>
     /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
-    [LuminPackable]
+    // The polymorphism tests read the Union frame through this concrete entry, whose header the tag replaces; only a
+    // trusted read ignores that header byte, an untrusted one checks it against the member count.
+    [LuminPackable, LuminPackOption(UntrustedData = false)]
     public partial class NumericGenericClass<T> : AbstractGenericBase<T> where T : struct
     {
         /// <summary>Gets or sets the min value.</summary>

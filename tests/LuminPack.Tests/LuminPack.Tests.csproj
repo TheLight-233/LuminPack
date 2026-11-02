@@ -47,7 +47,7 @@
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' == 'Safety'">
     <Compile Include="BinaryStringHotPathTest.StringList.cs" />
-    <Compile Include="TestSuites.cs;AuditSafetyRegressionTest.cs;ReaderBoundaryValidationTest.cs;ReaderFixedBoundsPolicyTest.cs;ReaderPreaccessBoundsTest.cs;RawScalarSpanSafetyTest.cs;TruncatedFixedHeaderTest.cs;CompressionSafetyPerfTest.cs;PrimitivesSerializationTest.cs" />
+    <Compile Include="TestSuites.cs;AuditSafetyRegressionTest.cs;UntrustedInputTest.cs;ReaderBoundaryValidationTest.cs;ReaderFixedBoundsPolicyTest.cs;ReaderPreaccessBoundsTest.cs;RawScalarSpanSafetyTest.cs;TruncatedFixedHeaderTest.cs;CompressionSafetyPerfTest.cs;PrimitivesSerializationTest.cs" />
   </ItemGroup>
   <ItemGroup Condition="'$(LuminPackTestArea)' == 'Simd'">
     <Compile Include="MarshalCopyBlockTest.cs;KernelPolicyTest.cs;LuminLayoutConverterTest.cs;LuminStorageTagTest.cs;PortableTransferTest.cs;ShortAsciiTranscoderTest.cs;Utf8StringKernelTest.cs;Utf8BmpTranscoderTest.cs;Utf8TwoByteReuseTest.cs;Latin1VectorTranscoderTest.cs;Latin1KernelFallbackTest.cs;ChaCha20Poly1305Test.cs;CompactStringRecordTest.cs;StringRunWriteTest.cs;JsonReaderDifferentialTest.cs;JsonNumberSyntaxTest.cs;JsonFusedStringScannerTest.cs;JsonStreamingWriterTest.cs;IBufferWriterInteropTest.cs" />

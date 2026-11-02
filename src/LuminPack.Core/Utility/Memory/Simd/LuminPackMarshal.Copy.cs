@@ -109,6 +109,18 @@ public static partial class LuminPackMarshal
             return;
         }
 
+        CopyShortVectorBlock(ref destination, ref source, count);
+    }
+
+    /// <summary>Copies seventeen through 256 bytes with exact vector lanes.</summary>
+    /// <param name="destination">The valid writable byte range.</param>
+    /// <param name="source">The valid readable non-overlapping byte range.</param>
+    /// <param name="count">A byte count from seventeen through 256.</param>
+    /// <remarks>Kept out of line: its epilogue clears the upper vector state. Inlined into a large caller, the dirty 256-bit
+    /// state reached the caller's next runtime helper (an allocation or block copy) and cost about a hundred nanoseconds.</remarks>
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    private static void CopyShortVectorBlock(ref byte destination, ref byte source, uint count)
+    {
         if (count >= 64 && Vector512.IsHardwareAccelerated)
         {
             CopyVector512Block(ref destination, ref source, count);

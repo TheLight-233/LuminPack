@@ -17,7 +17,7 @@ internal delegate int ReadRecord(ReadOnlySpan<byte> input, ref FuzzRecord value)
 internal delegate byte[] WriteRecord(FuzzRecord? value);
 
 /// <summary>Defines a parser target and the invariants checked after successful parsing.</summary>
-internal sealed record FuzzTarget(string Name, ReadRecord Read, WriteRecord Write, bool Json = false, Func<FuzzRecord>? Create = null)
+internal sealed record FuzzTarget(string Name, ReadRecord Read, WriteRecord Write, bool Json = false, Func<FuzzRecord>? Create = null) : IFuzzTarget
 {
     internal const int MaxInputBytes = 16384;
 
@@ -45,10 +45,23 @@ internal sealed record FuzzTarget(string Name, ReadRecord Read, WriteRecord Writ
         return bytes;
     }
 
-    /// <summary>Runs one input, accepting only known malformed-input exceptions from the first read.</summary>
-    /// <param name="input">The original encoded bytes.</param>
-    /// <returns>Whether the initial read succeeded and all invariants passed.</returns>
-    internal bool Run(ReadOnlySpan<byte> input)
+    /// <inheritdoc/>
+    public IEnumerable<(string Name, byte[] Bytes)> Seeds()
+    {
+        foreach (var (name, value) in Corpus.Values())
+            yield return (name, Seed(value));
+    }
+
+    /// <inheritdoc/>
+    public IEnumerable<(string Name, byte[] Bytes)> Malformed()
+    {
+        var encoding = Name == "json-utf16" ? System.Text.Encoding.Unicode : System.Text.Encoding.UTF8;
+        yield return ("invalid", Json ? encoding.GetBytes("{\"Bits\":[true,],\"Text\":\"\\uZZZZ\"}") : [250, 255, 255, 255, 127]);
+        if (Json) yield return ("wrong-type", encoding.GetBytes("{\"Text\":17}"));
+    }
+
+    /// <inheritdoc/>
+    public bool Run(ReadOnlySpan<byte> input)
     {
         if (input.Length > MaxInputBytes) return false;
         FuzzRecord fresh = null!;
@@ -131,7 +144,8 @@ internal sealed record FuzzTarget(string Name, ReadRecord Read, WriteRecord Writ
     /// <returns>Whether the input is an ordinary malformed record.</returns>
     internal static bool IsRejection(Exception exception, bool json)
     {
-        if (exception is InvalidDataException or FormatException or DecoderFallbackException or EndOfStreamException)
+        // A tagged integer outside its declared range keeps the checked conversion's OverflowException.
+        if (exception is InvalidDataException or FormatException or DecoderFallbackException or EndOfStreamException or OverflowException)
             return true;
         if (exception.GetType().FullName == "LuminPack.Code.LuminPackExceptionHelper+LuminPackException")
             return true;

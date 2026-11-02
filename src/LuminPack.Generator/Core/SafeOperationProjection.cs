@@ -7,212 +7,55 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.SourceGenerator;
 
-/// <summary>Frames external roots around their original formatters and selects streaming read guards.</summary>
+/// <summary>Adds untrusted-input checks to the original binary read templates of an untrusted graph.</summary>
+/// <remarks>
+/// Untrusted records use the ordinary wire format and the ordinary writers. Reads keep their original bodies; checks are
+/// inserted at the actual read sites with the root's limits frozen as constants. Unsupported shapes fail closed.
+/// </remarks>
 internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
 {
     internal const string Policy = "global::LuminPack.Security.LuminPackInputPolicy";
-    internal const string Schema = "__inputSchema";
-    internal const string FixedProofParameter = "__inputProven";
-    private readonly string _profile;
-    private readonly bool _boundary;
     private readonly SafeReadProjection _reads;
-    private readonly FixedInput _fixed;
-    private readonly bool _provenArray;
+    private readonly string _rejection;
 
-    /// <summary>Holds symbol-free scalar, string and primitive-array facts for one positional operation.</summary>
-    private sealed class FixedInput
-    {
-        internal int Width = 1, Members;
-        internal bool HasVariableFields;
-        internal readonly System.Collections.Generic.List<int> Booleans = new System.Collections.Generic.List<int>();
-        internal readonly System.Collections.Generic.List<string> Guards = new System.Collections.Generic.List<string>();
-    }
+    /// <summary>Captures the typed read projection and the graph's support decision.</summary>
+    /// <param name="reads">The typed read instrumentation.</param>
+    /// <param name="rejection">The first unsupported shape, or null when the graph is accepted.</param>
+    private SafeOperationProjection(SafeReadProjection reads, string rejection) { _reads = reads; _rejection = rejection; }
 
-    /// <summary>Captures the fixed profile and typed read projection.</summary>
-    /// <param name="profile">The declared profile.</param><param name="boundary">Whether framing is enabled.</param>
-    /// <param name="reads">The typed instrumentation.</param>
-    /// <param name="fixedInput">The callback-free scalar plan, or null when the original accounting path is required.</param>
-    /// <param name="provenArray">Whether a primitive array can inherit its enclosing root's complete proof.</param>
-    private SafeOperationProjection(string profile, bool boundary, SafeReadProjection reads, FixedInput fixedInput, bool provenArray)
-    { _profile = profile; _boundary = boundary; _reads = reads; _fixed = fixedInput; _provenArray = provenArray; }
-
-    /// <summary>Preserves disabled templates and adds guards to selected streaming plans.</summary>
+    /// <summary>Adds checks to the binary reads of one type's templates.</summary>
     /// <param name="source">The formatter template.</param><param name="type">The closed type.</param>
     /// <param name="compilation">The consumer compilation.</param><param name="metadata">Generation settings.</param>
-    /// <param name="streaming">Whether an enclosing external root requires nested guards.</param>
-    /// <returns>The original or guarded operation source.</returns>
-    internal static string Rewrite(string source, ITypeSymbol type, Compilation compilation, MetaInfo metadata, bool streaming = false)
+    /// <param name="input">The enclosing untrusted root's frozen limits.</param>
+    /// <returns>The checked operation source.</returns>
+    internal static string Rewrite(string source, ITypeSymbol type, Compilation compilation, MetaInfo metadata, CompiledInputPolicy input)
     {
-        var options = CompiledOptions.Resolve(type, compilation);
-        if (!options.Input.Enabled && !streaming) return source;
         var active = new ActiveOperationSyntax().Visit(CSharpSyntaxTree.ParseText(source, metadata.ParseOptions).GetRoot());
         var root = CSharpSyntaxTree.Create((CompilationUnitSyntax)active, metadata.ParseOptions).GetRoot();
         var container = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
         if (container == null) return source;
-        var reads = new SafeReadProjection(type, compilation, metadata, options, compilation.AddSyntaxTrees(root.SyntaxTree).GetSemanticModel(root.SyntaxTree));
-        var rewritten = (ClassDeclarationSyntax)new SafeOperationProjection(options.TypeName, options.Input.Enabled, reads,
-            CreateFixedInput(type, compilation, metadata, options), HasArrayProof(compilation) &&
-            type is IArrayTypeSymbol { Rank: 1 } array && ScalarWidth(array.ElementType) > 0).Visit(container);
-        var field = SyntaxFactory.ParseMemberDeclaration("private static readonly global::LuminPack.Security.LuminPackSafeSchema " + Schema + " = " + SafeSchemaBuilder.Build(type, compilation, metadata, options) + ";");
-        return root.ReplaceNode(container, rewritten.AddMembers(field)).NormalizeWhitespace().ToFullString();
+        var reads = new SafeReadProjection(type, compilation, metadata, input, compilation.AddSyntaxTrees(root.SyntaxTree).GetSemanticModel(root.SyntaxTree));
+        // Input-selected shapes fail closed in both directions only under an explicit hostile-input declaration; the implicit
+        // default keeps them working with checked reads.
+        string rejection = input.Explicit ? SafeContract.Rejection(type, compilation, metadata) : null;
+        var rewritten = (ClassDeclarationSyntax)new SafeOperationProjection(reads, rejection).Visit(container);
+        return root.ReplaceNode(container, rewritten).NormalizeWhitespace().ToFullString();
     }
-
-    /// <summary>Selects callback-free scalar/string/primitive-array classes while preserving other contracts.</summary>
-    /// <param name="type">The current operation type.</param>
-    /// <param name="compilation">The actual consumer references.</param>
-    /// <param name="metadata">The current generation settings.</param>
-    /// <param name="options">The root's compiled profile.</param>
-    /// <returns>The scalar plan, or null for an unsupported runtime or object contract.</returns>
-    private static FixedInput CreateFixedInput(ITypeSymbol type, Compilation compilation, MetaInfo metadata, CompiledOptions options)
-    {
-        if (type is not INamedTypeSymbol { TypeKind: TypeKind.Class, IsGenericType: false } named ||
-            !CompilationTypeAnalysisCache.GetOrCreate(compilation).IsPackable(named) ||
-            compilation.GetTypeByMetadataName("LuminPack.Security.LuminPackInputPolicy")?.GetMembers("TryOpenFixedFrame").OfType<IMethodSymbol>()
-                .Any(method => method.IsStatic && method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 6 &&
-                    method.ReturnType.SpecialType == SpecialType.System_Boolean) != true) return null;
-        var data = LuminPackSourceGenerator.GetSerializationMetadata(named, compilation, metadata);
-        bool arrays = HasArrayProof(compilation);
-        bool supported = !data.isUnion && data.generatorType == LuminPack.Code.GeneratorType.Object && data.RentPoolMethod == null &&
-            data.callBackMethods.Count == 0 && data.fields.All(field => !field.IsCompress && !field.IsVolatile &&
-                (field.TypeSymbol?.SpecialType == SpecialType.System_String || ScalarWidth(field.TypeSymbol) > 0 ||
-                    arrays && field.TypeSymbol is IArrayTypeSymbol { Rank: 1 } array && ScalarWidth(array.ElementType) > 0));
-        if (!supported) return null;
-        var result = new FixedInput { Members = data.fields.Count };
-        foreach (var field in data.fields)
-        {
-            if (field.TypeSymbol.SpecialType == SpecialType.System_String)
-            {
-                result.HasVariableFields = true;
-                result.Guards.Add("if (!" + Policy + ".TrySkipProvenString(__proofData, ref __proofPosition, " +
-                    (field.Options ?? options).Mode.ToString(System.Globalization.CultureInfo.InvariantCulture) + ")) return false;");
-                continue;
-            }
-            if (field.TypeSymbol is IArrayTypeSymbol array)
-            {
-                result.HasVariableFields = true;
-                result.Guards.Add("if (!" + Policy + ".TrySkipProvenArray(__proofData, ref __proofPosition, " +
-                    ScalarWidth(array.ElementType).ToString(System.Globalization.CultureInfo.InvariantCulture) + ", " +
-                    (array.ElementType.SpecialType == SpecialType.System_Boolean ? "true" : "false") + ")) return false;");
-                continue;
-            }
-            if (field.TypeSymbol.SpecialType == SpecialType.System_Boolean) result.Booleans.Add(result.Width);
-            int width = ScalarWidth(field.TypeSymbol);
-            result.Guards.Add("if (__proofData.Length - __proofPosition < " + width.ToString(System.Globalization.CultureInfo.InvariantCulture) + ") return false;");
-            if (field.TypeSymbol.SpecialType == SpecialType.System_Boolean)
-                result.Guards.Add("if (__proofData[__proofPosition] > 1) return false;");
-            result.Guards.Add("__proofPosition += " + width.ToString(System.Globalization.CultureInfo.InvariantCulture) + ";");
-            result.Width += width;
-        }
-        if (result.HasVariableFields && (data.SelectedConstructor?.Parameters.Count > 0 ||
-            compilation.GetTypeByMetadataName("LuminPack.Security.LuminPackInputPolicy")?.GetMembers("TryOpenProvenFrame").Any() != true ||
-            compilation.GetTypeByMetadataName("LuminPack.Security.LuminPackInputPolicy")?.GetMembers("TrySkipProvenString").Any() != true)) return null;
-        return result;
-    }
-
-    /// <summary>Requires the actual runtime's complete nonallocating primitive-array checker.</summary>
-    /// <param name="compilation">The current runtime metadata.</param><returns>Whether array proof emission is supported.</returns>
-    private static bool HasArrayProof(Compilation compilation) => compilation.GetTypeByMetadataName("LuminPack.Security.LuminPackInputPolicy")?
-        .GetMembers("TrySkipProvenArray").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.DeclaredAccessibility == Accessibility.Public &&
-            method.Parameters.Length == 4 && method.ReturnType.SpecialType == SpecialType.System_Boolean) == true;
-
-    /// <summary>Maps only scalar contracts whose wire consists of their complete primitive storage.</summary>
-    /// <param name="type">The exact field or element type.</param><returns>The original byte width, or zero for unsupported types.</returns>
-    private static int ScalarWidth(ITypeSymbol type) => type?.SpecialType switch
-    {
-        SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte => 1,
-        SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Char => 2,
-        SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Single => 4,
-        SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Double => 8,
-        _ => type?.ToDisplayString() == "System.Guid" ? 16 : type?.ToDisplayString() == "System.TimeSpan" ? 8 : 0
-    };
-
-    /// <summary>Identifies proven roots whose original decoder never consumes leased reference identities.</summary>
-    /// <param name="type">The exact closed root.</param>
-    /// <param name="compilation">The consumer's runtime capabilities.</param>
-    /// <param name="metadata">The complete generation settings.</param>
-    /// <param name="options">The root's immutable profile.</param>
-    /// <returns>Whether a managed span facade can use an independent lazy reader state.</returns>
-    internal static bool CanUseStatelessFacade(ITypeSymbol type, Compilation compilation, MetaInfo metadata, CompiledOptions options)
-        => options.Input.Enabled && CreateFixedInput(type, compilation, metadata, options) != null;
 
     /// <summary>Retains one formatter body with its existing state, callbacks, construction and reuse.</summary>
     /// <param name="node">The original operation.</param>
-    /// <returns>The same operation with selected framing and checks.</returns>
+    /// <returns>The same operation with checked reads, or a fail-closed body.</returns>
     public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
     {
         if (node.Body == null || node.ParameterList.Parameters.Count != 2 || !BinaryOperationPlan.IsOperation(node.Identifier.ValueText)) return node;
-        var parameters = node.ParameterList.Parameters;
-        string state = parameters[0].Identifier.Text, stateType = parameters[0].Type.ToString();
+        string stateType = node.ParameterList.Parameters[0].Type.ToString();
         bool json = stateType.Contains("Json"), read = stateType.Contains("Reader"), write = stateType.Contains("Writer");
-        // The evaluator state no longer owns option or policy state, so internal width operations keep their original body.
+        // Size evaluation reads no input.
         if (!read && !write) return node;
-        bool arrayProof = _provenArray && read && !json && node.Identifier.ValueText == "ReadValue";
-        if (!_boundary)
-        {
-            var rewritten = read ? node.WithBody(_reads.Rewrite(node, json, arrayProof ? FixedProofParameter : null)) : node;
-            return arrayProof ? rewritten.AddParameterListParameters(SyntaxFactory.Parameter(SyntaxFactory.Identifier(FixedProofParameter))
-                .WithType(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.BoolKeyword)))
-                .WithDefault(SyntaxFactory.EqualsValueClause(SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression)))) : rewritten;
-        }
-        if (node.Identifier.ValueText is "ReadValueWithCompress" or "WriteValueWithCompress")
-            return node.WithBody((BlockSyntax)SyntaxFactory.ParseStatement("{ " + Policy + ".RejectLegacyInputCompression(); }"));
-        string helperParameters = string.Join(", ", parameters.Select(p => p.WithModifiers(SyntaxFactory.TokenList(p.Modifiers.Where(m => !m.IsKind(SyntaxKind.ThisKeyword)))).ToString()));
-        string payload = (parameters[1].Modifiers.Any(SyntaxKind.InKeyword) ? "in " : parameters[1].Modifiers.Any(SyntaxKind.RefKeyword) ? "ref " : "") + parameters[1].Identifier.Text;
-        bool fixedInput = _fixed != null && read && !json && node.Identifier.ValueText == "ReadValue";
-        bool proofAware = fixedInput || arrayProof;
-        string original = "static void __safeOriginalOperation(" + helperParameters +
-            (proofAware ? ", bool " + FixedProofParameter + " = false" : "") + ") " +
-            (read ? _reads.Rewrite(node, json, proofAware ? FixedProofParameter : null, fixedInput ? _fixed.Members : -1) : node.Body);
-        string check = Policy + ".CheckInputProfile<" + _profile + ", " + _profile + ">();";
-        string text = "{ ";
-        string admission = _fixed?.HasVariableFields == true
-            ? "__safeTryOpenPayload(" + state + ".Buffer.Slice(" + state + ".Position), out var __fixedPayload, out int __fixedConsumed)"
-            : Policy + ".TryOpenFixedFrame(" + state + ".Buffer.Slice(" + state + ".Position), " + Schema + ", " +
-                (_fixed?.Width ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture) + ", " +
-                (_fixed?.Members ?? 0).ToString(System.Globalization.CultureInfo.InvariantCulture) + ", out var __fixedPayload, out int __fixedConsumed)";
-        if (fixedInput)
-            text += check + "if (" + admission + (_fixed.HasVariableFields || _fixed.Booleans.Count == 0 ? "" : " && (__fixedPayload[0] == 255 || (" +
-                    string.Join(" && ", _fixed.Booleans.Select(offset => "__fixedPayload[" + offset.ToString(System.Globalization.CultureInfo.InvariantCulture) + "] <= 1")) + "))") +
-                ") { if (__fixedPayload[0] != 255) { __fixedPayload = __fixedPayload.Slice(1" +
-                (_fixed.HasVariableFields ? "" : ", " + (_fixed.Width - 1).ToString(System.Globalization.CultureInfo.InvariantCulture)) + "); var __fixedReader = new " + stateType +
-                "(ref __fixedPayload); __safeOriginalOperation(ref __fixedReader, " + payload + ", true);" +
-                "if (__fixedReader.Position != __fixedPayload.Length) " + Policy + ".RejectIncompleteValue(); } " + state + ".Advance(__fixedConsumed); return; }" +
-                "__safeFixedFallback(ref " + state + ", " + payload + ");" +
-                "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] " +
-                "static void __safeFixedFallback(" + helperParameters + ") { ";
-        text += "var __safeState = " + state + ".OptionState; var __safeOperation = " + Policy + ".BeginOperation(__safeState, " + Schema + ", " + (read ? "true" : "false") + ");" +
-            "if (!__safeOperation.OwnsBoundary) { __safeOriginalOperation(ref " + state + ", " + payload + "); return; }";
-        if (read)
-        {
-            text += "bool __safeDone = false; global::System.Runtime.InteropServices.GCHandle __safePin = default; int __safeConsumed = 0;";
-            if (json) text += "int __safeJsonStart = " + state + ".Position - (" + Schema + ".DocumentEncoding == 0 ? 1 : 2); int __safeJsonDepth = " + state + ".Depth - 1;";
-            text += "try { " + check;
-            if (json) text += "global::System.ReadOnlySpan<byte> __safePayload = " + Policy + ".OpenStreamingJson(" + state + ".Buffer.Slice(__safeJsonStart), " + Schema + ");";
-            else text += "global::System.ReadOnlySpan<byte> __safePayload = " + Policy + ".OpenStreaming(" + state + ".Buffer.Slice(" + state + ".Position), " + Schema + ", out __safeConsumed, out byte[] __safeDecoded);" +
-                "if (__safeDecoded != null) __safePin = global::System.Runtime.InteropServices.GCHandle.Alloc(__safeDecoded, global::System.Runtime.InteropServices.GCHandleType.Pinned);";
-            text += "var __safeValueState = new " + stateType + "(ref __safePayload, __safeState);";
-            if (json) text += Policy + ".PrimeJson(ref __safeValueState, " + Schema + ");";
-            text += "__safeOriginalOperation(ref __safeValueState, " + payload + ");";
-            if (json) text += "__safeConsumed = " + Policy + ".CompleteStreamingJson(__safeValueState.Buffer, __safeValueState.Position, " + Schema + ");" +
-                "if (__safeJsonDepth == 0) " + Policy + ".EnsureJsonFrameEnd(" + state + ".Buffer.Slice(__safeJsonStart + __safeConsumed), " + Schema + ");";
-            else text += "if (__safeValueState.Position != __safePayload.Length) " + Policy + ".RejectIncompleteValue();";
-            text += "__safeDone = true; } finally { try { if (__safeDone) { ";
-            text += json ? state + ".Advance(__safeJsonStart + __safeConsumed - " + state + ".Position); " + state + ".Depth = __safeJsonDepth; " + state +
-                ".GrammarState = global::LuminPack.Core.LuminPackJsonReader.JsonStateAfterValue; if (__safeJsonDepth < 64) " + state +
-                ".ObjectContainerBits &= __safeJsonDepth == 0 ? 0UL : ulong.MaxValue >> (64 - __safeJsonDepth); " + state + ".CompleteValue();" : state + ".Advance(__safeConsumed);";
-            text += "} } finally { if (__safePin.IsAllocated) __safePin.Free(); " + Policy + ".EndOperation(__safeOperation); } }";
-        }
-        else text += "try { " + check + "var __safeStart = " + Policy + (json ? ".BeginWriteJson(" : ".BeginWrite(") + "ref " + state + ", " + Schema + ");" +
-            "__safeOriginalOperation(ref " + state + ", " + payload + "); " + Policy + (json ? ".EndWriteJson(" : ".EndWrite(") + "ref " + state + ", " + Schema + ", __safeStart);" +
-            "} finally { " + Policy + ".EndOperation(__safeOperation); }";
-        string validation = fixedInput && _fixed.HasVariableFields
-            ? "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)] " +
-              "static bool __safeTryOpenPayload(global::System.ReadOnlySpan<byte> __proofInput, out global::System.ReadOnlySpan<byte> __proofPayload, out int __proofConsumed) { " +
-              "return " + Policy + ".TryOpenProvenFrame(__proofInput, " + Schema + ", " + _fixed.Members.ToString(System.Globalization.CultureInfo.InvariantCulture) +
-              ", out __proofPayload, out __proofConsumed) && __safeValidatePayload(__proofPayload); } " +
-              "[global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)] " +
-              "static bool __safeValidatePayload(global::System.ReadOnlySpan<byte> __proofData) { if (__proofData[0] == 255) return true; int __proofPosition = 1; " +
-              string.Join(" ", _fixed.Guards) + " return __proofPosition == __proofData.Length; }" : "";
-        return node.WithBody((BlockSyntax)SyntaxFactory.ParseStatement(text + (fixedInput ? "}" : "") + original + validation + "}"));
+        if (_rejection != null)
+            return node.WithBody((BlockSyntax)SyntaxFactory.ParseStatement("{ " + Policy + ".RejectUnsupported(" +
+                SymbolDisplay.FormatLiteral(_rejection, true) + "); }"));
+        // Writers are trusted code, and the strict JSON profile bounds documents; only binary reads need checks.
+        return read && !json ? node.WithBody(_reads.Rewrite(node)) : node;
     }
 }

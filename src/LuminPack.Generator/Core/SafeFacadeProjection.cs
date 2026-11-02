@@ -30,10 +30,10 @@ internal sealed class SafeFacadeProjection : CSharpSyntaxRewriter
         return false;
     }
 
-    /// <summary>Derives an input cap that also bounds facade-owned staging allocations.</summary>
-    /// <param name="options">The root's resource constants.</param>
-    /// <returns>A conservative encoded byte cap.</returns>
-    internal static int Limit(CompiledOptions options) => (int)Math.Min(options.Input.Input, Math.Min(int.MaxValue, Math.Max(0L, options.Input.Allocation - 4096) / 16));
+    /// <summary>Gets the encoded input cap, which also bounds facade-owned staging allocations.</summary>
+    /// <param name="options">The root's frozen limits.</param>
+    /// <returns>The encoded byte cap.</returns>
+    internal static int Limit(CompiledOptions options) => options.Input.Input;
 
     /// <summary>Adds checks only to existing input operations selected by a concrete type or generic selector.</summary>
     /// <param name="node">The existing facade method.</param>
@@ -45,7 +45,11 @@ internal sealed class SafeFacadeProjection : CSharpSyntaxRewriter
         _limit = _generic && node.TypeParameterList?.Parameters.Any(p => p.Identifier.ValueText == "T") == true ?
             "global::LuminPack.LuminPackSerializer.FormatterDispatch.__LuminPackInputLimit<T>()" : Limit(_options).ToString(System.Globalization.CultureInfo.InvariantCulture);
         string guard = "";
-        foreach (var parameter in node.ParameterList.Parameters)
+        // A forwarding overload leaves the check to the overload that reads.
+        bool forwarding = node.ExpressionBody?.Expression is InvocationExpressionSyntax ||
+            node.Body?.Statements.Count == 1 && node.Body.Statements[0] is ReturnStatementSyntax { Expression: InvocationExpressionSyntax forward } &&
+            forward.Expression.ToString().Contains("Deserialize");
+        foreach (var parameter in forwarding ? Enumerable.Empty<ParameterSyntax>() : node.ParameterList.Parameters)
         {
             string name = parameter.Identifier.Text, type = parameter.Type?.ToString() ?? "";
             if (type == "string" || type.Contains("Span<char>"))
@@ -57,9 +61,24 @@ internal sealed class SafeFacadeProjection : CSharpSyntaxRewriter
                 guard += "global::LuminPack.Security.LuminPackInputPolicy.CheckInput(" + name + ".GetSpan().Length, " + _limit + ");";
         }
         var rewritten = (MethodDeclarationSyntax)base.VisitMethodDeclaration(node);
+        if (!_generic && node.Identifier.ValueText.StartsWith("DeserializeJson", StringComparison.Ordinal) && !ReferenceEquals(_options.JsonInput, _options))
+            rewritten = (MethodDeclarationSyntax)new JsonProfile(_options.TypeName, _options.JsonInput.TypeName).Visit(rewritten);
         if (guard.Length != 0) rewritten = rewritten.WithBody(rewritten.Body.WithStatements(rewritten.Body.Statements.InsertRange(0, SyntaxFactory.ParseStatement("{" + guard + "}") is BlockSyntax block ? block.Statements : default)));
         _limit = previous;
         return rewritten;
+    }
+
+    /// <summary>Selects the strict untrusted JSON profile for a concrete facade's document reads.</summary>
+    private sealed class JsonProfile : CSharpSyntaxRewriter
+    {
+        private readonly string _declared, _strict;
+        /// <summary>Captures both profile spellings.</summary><param name="declared">The binary profile.</param><param name="strict">The JSON profile.</param>
+        internal JsonProfile(string declared, string strict) { _declared = declared; _strict = strict; }
+        /// <summary>Replaces the declared profile argument.</summary><param name="node">A type argument list.</param><returns>The selected list.</returns>
+        public override SyntaxNode VisitTypeArgumentList(TypeArgumentListSyntax node)
+            => node.WithArguments(SyntaxFactory.SeparatedList(node.Arguments.Select(argument =>
+                argument.ToString() == _declared ? SyntaxFactory.ParseTypeName(_strict).WithTriviaFrom(argument) : (TypeSyntax)Visit(argument)),
+                node.Arguments.GetSeparators()));
     }
 
     /// <summary>Bounds stream reads before the temporary stream can grow beyond the declaration's cap.</summary>

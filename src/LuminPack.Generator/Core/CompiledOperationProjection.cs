@@ -108,6 +108,8 @@ internal sealed partial class CompiledOperationProjection : CSharpSyntaxRewriter
          access.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal" && access.Name.Identifier.ValueText == "TryReadStableStringKeys" ||
          access.Name.Identifier.ValueText.StartsWith("__LuminPackUnionCalculateOffset_", StringComparison.Ordinal) ||
          access.Name.Identifier.ValueText is "Serialize" or "Deserialize" or "Sizeof" ||
+         // A version prefix stamps and compares the binary profile even when every member is raw.
+         access.Name.Identifier.ValueText is "TryReadPrefix" or "WritePrefix" or "StorePrefix" ||
          access.Expression.ToString() == "global::LuminPack.Code.LuminPackFormatterRegistry" ||
          (CompiledOptionProjection.WriterMethods.Contains(access.Name.Identifier.ValueText) || CompiledOptionProjection.ReaderMethods.Contains(access.Name.Identifier.ValueText) ||
           CompiledOptionProjection.EvaluatorMethods.Contains(access.Name.Identifier.ValueText)) &&

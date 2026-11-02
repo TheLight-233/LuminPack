@@ -75,7 +75,7 @@ LuminPackSerializer.Deserialize<TOptions>(bytes, ref target);
         Assert.Equal(original.Tail, restored.Tail);
         Assert.Null(restored.Removed);
         Assert.Equal(251, bytes[0]);
-        Assert.Equal(1, bytes[1]);
+        Assert.Equal(2, bytes[1]);
     }
 
     /// <summary>Checks aliases from multiple intermediate names and stable oldest-name writes.</summary>
@@ -271,13 +271,14 @@ LuminPackSerializer.Deserialize(bytes, ref target);
         byte[] bytes = LuminPackSerializer.Serialize(new Earliest { A = 5 });
         Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(new byte[] { 1, 4, 5, 0, 0, 0 }, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         var revision = bytes.ToArray();
-        revision[1] = 2;
+        revision[1] = 3;
         Assert.Throws<FormatException>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(revision, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         for (int length = 0; length < bytes.Length; length++)
         {
             byte[] truncated = bytes.AsSpan(0, length).ToArray();
             Assert.ThrowsAny<Exception>(() => global::LuminPackUnitTest.ConcreteReads.Read<Earliest>(truncated, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref Earliest concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)));
         }
+        // Revision 2 stores the raw member's width byte just before its payload.
         int payloadLengthIndex = bytes.Length - sizeof(int) - 1;
         var shortField = bytes.ToArray();
         shortField[payloadLengthIndex] = 3;

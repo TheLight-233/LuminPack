@@ -416,7 +416,8 @@ internal static class SerializerDocumentationRegression
             var actual = ReadDocumentation(method).Descendants("see").Select(element => (string?)element.Attribute("cref"))
                 .Where(target => target?.StartsWith("__LuminRoots_", StringComparison.Ordinal) == true).ToArray();
             Require(expected == null ? actual.Length == 0 : actual.Length == 1 && actual[0] == expected,
-                "A concrete built-in API has missing or fictitious Root navigation: " + payload + " " + name);
+                "A concrete built-in API has missing or fictitious Root navigation: " + payload + " " + name + " (expected " + (expected ?? "none") +
+                ", found " + string.Join(", ", actual) + ")");
             links += actual.Length;
         }
         Require(observed.SetEquals(payloads) && links >= 30, "Built-in Root navigation was not exercised across the selected collection shapes.");

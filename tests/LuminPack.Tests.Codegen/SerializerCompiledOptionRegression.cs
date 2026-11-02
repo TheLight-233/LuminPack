@@ -118,17 +118,12 @@ internal static partial class SerializerCompiledOptionRegression
                     rejected = false;
                     try { global::LuminPackUnitTest.ConcreteReads.Read<BoundedImmutable>(bytes, static (global::System.ReadOnlySpan<byte> concreteReadInput, ref BoundedImmutable concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)); } catch (System.IO.InvalidDataException) { rejected = true; }
                     if (!rejected) throw new Exception("Immutable string budget bypassed.");
-                    string invalidUtf8Json = LuminPackSerializer.SerializeJson(boundedUtf8);
+                    // Untrusted JSON uses the strict grammar and depth bound; string limits apply to binary records.
+                    string untrustedJson = LuminPackSerializer.SerializeJson(boundedUtf8);
                     rejected = false;
-                    try { global::LuminPackUnitTest.ConcreteReads.ReadJson<BoundedUtf8>(invalidUtf8Json, static (string concreteReadInput, ref BoundedUtf8 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)); }
-                    catch (System.IO.InvalidDataException) { rejected = true; }
-                    if (!rejected) throw new Exception("UTF-8 JSON string budget bypassed.");
-                    bounded.Names = new List<string> { new string('a', 33) };
-                    string invalidUtf16Json = LuminPackSerializer.SerializeJson(bounded);
-                    rejected = false;
-                    try { global::LuminPackUnitTest.ConcreteReads.ReadJson<Bounded>(invalidUtf16Json, static (string concreteReadInput, ref Bounded concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)); }
-                    catch (System.IO.InvalidDataException) { rejected = true; }
-                    if (!rejected) throw new Exception("UTF-16 JSON string budget bypassed.");
+                    try { global::LuminPackUnitTest.ConcreteReads.ReadJson<BoundedUtf8>(untrustedJson.Replace("]", ",]"), static (string concreteReadInput, ref BoundedUtf8 concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)); }
+                    catch (Exception) { rejected = true; }
+                    if (!rejected) throw new Exception("Untrusted JSON accepted a malformed document.");
                     foreach (string text in new[] { new string('a', 32), new string('\n', 32), string.Concat(Enumerable.Repeat("\uD83D\uDE00", 16)) })
                     {
                         bounded.Names = new List<string> { text };

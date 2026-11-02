@@ -295,7 +295,7 @@ internal static class SerializerAssemblyPackableRegression
         var type = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.BinaryOperationPlanCache", throwOnError: true)!;
         object cache = Activator.CreateInstance(type, nonPublic: true)!;
         type.GetMethod("Get", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(cache,
-            [input.GetTypeByMetadataName("ExternalLibrary.ExternalNote")!, input, new MetaInfo(Parse, Parse.LanguageVersion, true, true, true), false]);
+            [input.GetTypeByMetadataName("ExternalLibrary.ExternalNote")!, input, new MetaInfo(Parse, Parse.LanguageVersion, true, true, true), null]);
         return (cache, new WeakReference(input));
     }
 

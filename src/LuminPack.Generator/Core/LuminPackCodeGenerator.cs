@@ -291,7 +291,7 @@ public static partial class LuminPackCodeGenerator
     /// <summary>Performs the can deserialize directly into constructed object step for the current operation.</summary>
     /// <param name="field">The metadata describing the field being processed.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
-    private static bool CanDeserializeDirectlyIntoConstructedObject(LuminDataField field)
+    internal static bool CanDeserializeDirectlyIntoConstructedObject(LuminDataField field)
     {
         return !field.IsPrivate && !field.isProperty;
     }

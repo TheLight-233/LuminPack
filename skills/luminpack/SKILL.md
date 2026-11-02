@@ -72,7 +72,8 @@ IDE quick actions are bundled in `LuminPack.Generator`, which comes automaticall
 | Shared objects or cycles | `[LuminPackable(GeneratorType.CircleReference)]` + `[LuminPackOrder]` on every member |
 | Same bytes on 32-bit and 64-bit | `[LuminPackOption(StructLayout = LuminPackStructLayout.Packed)]` on the struct or assembly |
 | UTF-8 strings | `[LuminPackOption(StringEncoding = LuminPackStringEncoding.UTF8)]` or the `LuminPackUtf8LengthOptions` profile |
-| Hostile input | `[LuminPackOption(UntrustedData = true, MaxInputBytes = ..., ...)]` on the root type or assembly |
+| Hostile input | Checked reads are the default; add `[LuminPackOption(MaxInputBytes = ..., MaxCollectionLength = ..., MaxDepth = ...)]` limits on the root type or assembly |
+| Trusted data only | `[LuminPackOption(UntrustedData = false)]` restores unchecked reads |
 | Hand-written format | `[LuminPackable(GeneratorType.Custom)]` with static `Serialize`/`Deserialize` |
 | Smaller generated code | `<LuminPackGenerationMode>Light</LuminPackGenerationMode>` + `<CompilerVisibleProperty Include="LuminPackGenerationMode" />` |
 | Pool instances | `[LuminPackPoolRent] static T Rent()` |

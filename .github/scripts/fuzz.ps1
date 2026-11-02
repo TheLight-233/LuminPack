@@ -1,7 +1,7 @@
 param(
     [ValidateSet('Smoke', 'Coverage')]
     [string]$Mode = 'Smoke',
-    [ValidateSet('binary', 'binary-utf8-varint', 'json-utf8', 'json-utf16')]
+    [ValidateSet('binary', 'binary-utf8-varint', 'json-utf8', 'json-utf16', 'binary-graph')]
     [string]$Target = 'binary',
     [ValidateSet('Debug', 'Release')]
     [string]$Configuration = 'Release',

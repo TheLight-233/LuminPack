@@ -17,7 +17,7 @@ internal sealed class CompiledOptionProjection : CSharpSyntaxRewriter
     private readonly bool _replaceExisting;
     private readonly string _profileType;
     internal static readonly HashSet<string> WriterMethods = Names("GetStringLength GetStringWriteLength GetStringCapacityScale StringRecordLength WriteNullStringHeader WriteReservedNullStringHeader WriteReservedString WriteString WriteStringRecordTokenHeader WriteUtf16WithToken WriteUtf8WithToken WriteVersionHeader WriteVersionPrefix WriteStringRecord WriteStrings WriteStringPairs UsesUtf16LengthRecords WriteRecordString RecordBound WriteReservedRecordString WriteTimeZoneText");
-    internal static readonly HashSet<string> ReaderMethods = Names("PeekIsNullString ReadString ReadStrings ReadStringAndAdvance ReadStringLength ReadStringListAndAdvance StringRecordLength TryReadStringHead ReadVersionHeader TryReadVersionSchema ReadStringRecord ReadStringListRecord GetTimeZoneCandidate TryReadTimeZoneInfo");
+    internal static readonly HashSet<string> ReaderMethods = Names("PeekIsNullString ReadString ReadStrings ReadStringAndAdvance ReadStringLength ReadStringListAndAdvance StringRecordLength TryReadStringHead ReadVersionHeader TryReadVersionSchema TryReadVersionPrefix ReadStringRecord ReadStringListRecord GetTimeZoneCandidate TryReadTimeZoneInfo");
     internal static readonly HashSet<string> EvaluatorMethods = Names("GetStringLength StringRecordLength");
     internal static readonly HashSet<string> JsonWriterMethods = Names("ReserveGeneratedIntegerPrefix WriteArrayEnd WriteArrayStart WriteElement WriteEntryKey WriteEntryValue WriteBool WriteByte WriteByteRaw WriteChar WriteCommaIfNeeded WriteDateTime WriteDateTimeOffset WriteDecimal WriteDouble WriteFloat WriteFormattedValue WriteGeneratedInteger WriteGuid WriteInt WriteLong WriteNull WriteObjectEnd WriteObjectStart WritePropertyName WriteSByte WriteShort WriteString WriteTimeSpan WriteUInt WriteULong WriteUShort");
     internal static readonly HashSet<string> JsonReaderMethods = Names("ConsumeArrayEnd CountArrayElements EnsureEndOfDocument Read TryReadEntry ReadBoolean ReadByte ReadChar ReadDecimal ReadDouble ReadFloat ReadInt ReadLong ReadNextFloatValue ReadNull ReadSByte ReadShort ReadString ReadStringChoice ReadStringUtf8 ReadStringUtf16 ReadUInt ReadULong ReadUShort Skip SkipWhitespace TryConsumeArrayStart TryConsumeObjectStart TryReadPropertyName");
@@ -72,6 +72,11 @@ internal sealed class CompiledOptionProjection : CSharpSyntaxRewriter
             return node.WithExpression(inputAccess.WithName(inputKernel.WithTypeArgumentList(inputKernel.TypeArgumentList.WithArguments(
                 inputArguments.Replace(inputArguments.Last(), SyntaxFactory.ParseTypeName(_profileType))))));
         }
+        if (node.Expression is MemberAccessExpressionSyntax prefixAccess && prefixAccess.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: 1 } prefixKernel &&
+            (_methods == ReaderMethods && prefixKernel.Identifier.ValueText == "TryReadPrefix" || _methods == WriterMethods && prefixKernel.Identifier.ValueText is "WritePrefix" or "StorePrefix") &&
+            node.ArgumentList.Arguments.Count is 1 or 2 && IsReceiver(node.ArgumentList.Arguments[0].Expression))
+            return node.WithExpression(prefixAccess.WithName(prefixKernel.WithTypeArgumentList(prefixKernel.TypeArgumentList.WithArguments(
+                SyntaxFactory.SingletonSeparatedList(SyntaxFactory.ParseTypeName(_profileType))))));
         if (node.Expression is not MemberAccessExpressionSyntax access || !IsReceiver(access.Expression) ||
             !_methods.Contains(access.Name.Identifier.ValueText)) return base.VisitInvocationExpression(node);
         if (access.Name is GenericNameSyntax && !_replaceExisting) return base.VisitInvocationExpression(node);

@@ -46,7 +46,7 @@ public sealed class ReaderPreaccessBoundsTest
     public void DictionaryStringLengthsRejectWithoutDiagnosticOverflow(int header)
     {
         byte[] bytes = LuminPackSerializer.Serialize(new DictionaryStringReadBoundary { Values = new() { [7] = "ok" } });
-        // Locate the known string record without depending on an enclosing safe-frame layout.
+        // Locate the known string record without depending on the enclosing ordinary object layout.
         int stringHeaderOffset = bytes.AsSpan().LastIndexOf(new byte[] { 5, 0, 0, 0, (byte)'o', (byte)'k' });
         Assert.True(stringHeaderOffset >= 0);
         BinaryPrimitives.WriteInt32LittleEndian(bytes.AsSpan(stringHeaderOffset), 32);

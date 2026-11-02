@@ -102,7 +102,6 @@ internal static partial class SerializerCodegenPerformanceRegression
         [LuminPackable(GeneratorType.VersionTolerant)] public sealed partial class Evolving { public string Value; }
         [LuminPackable] public sealed partial class Nested { public string Value; public Leaf Child; }
         [LuminPackable] public sealed partial class NullableField { public string Value; public int? Optional; }
-        [LuminPackable, LuminPackOption(UntrustedData = true)] public sealed partial class Guarded { public string Value; }
         [LuminPackable] public partial class Unsealed { public string Value; }
         [LuminPackable] public sealed partial class Holder { public Leaf[] Values; public int Tail; }
         public readonly struct OtherProfile : ILuminPackOptions
@@ -130,7 +129,7 @@ internal static partial class SerializerCodegenPerformanceRegression
                 LuminPackSerializer.Serialize(new Properties[1]); LuminPackSerializer.Serialize(new VolatileField[1]);
                 LuminPackSerializer.Serialize(new PrivateField[1]); LuminPackSerializer.Serialize(new Callback[1]);
                 LuminPackSerializer.Serialize(new Evolving[1]); LuminPackSerializer.Serialize(new Nested[1]); LuminPackSerializer.Serialize(new Unsealed[1]);
-                LuminPackSerializer.Serialize(new NullableField[1]); LuminPackSerializer.Serialize(new Guarded[1]);
+                LuminPackSerializer.Serialize(new NullableField[1]);
                 ObjectProfile<LuminPackUtf16LengthOptions>(); ObjectProfile<LuminPackUtf8LengthOptions>();
                 ObjectProfile<LuminPackUtf16TokenOptions>(); ObjectProfile<LuminPackUtf8TokenOptions>();
                 ObjectProfile<LuminPackFixedOptions<LuminPackUtf16LengthOptions>>(); ObjectProfile<LuminPackDefaultOptions>();

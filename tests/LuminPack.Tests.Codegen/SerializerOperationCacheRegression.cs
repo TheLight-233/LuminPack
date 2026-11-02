@@ -35,7 +35,9 @@ internal static class SerializerOperationCacheRegression
         string parent = PayloadFile(initial, "global::Parent");
         string independent = PayloadFile(initial, "global::Independent");
         string collection = CollectionFile(initial);
-        Require(initial[parent] == changed[parent], "A child edit unnecessarily changed its parent's closed collection calls.");
+        // Binary writes expand nested collection writers, so a parent rebuilds its write when an embedded child changes.
+        Require(initial[parent] != changed[parent] && changed[parent].Contains("Renamed", StringComparison.Ordinal),
+            "A parent kept a stale expanded write of its changed child.");
         Require(initial[collection] != changed[collection] && changed[collection].Contains("Renamed", StringComparison.Ordinal), "The closed collection did not rebuild its embedded child operations.");
         Require(initial[independent] == changed[independent], "A child edit changed an independent facade partition.");
 
@@ -126,15 +128,18 @@ internal static class SerializerOperationCacheRegression
             .GetField("BinaryOperationPlanBuilds", BindingFlags.Static | BindingFlags.NonPublic)!;
         long before = (long)metric.GetValue(null)!;
         Parallel.For(0, plans.Length, index => plans[index] = get.Invoke(Activator.CreateInstance(type, nonPublic: true),
-            [payload, input, metadata, false])!);
+            [payload, input, metadata, null])!);
         Require(plans.All(plan => ReferenceEquals(plan, plans[0])) && (long)metric.GetValue(null)! - before == 1,
             "Independent pipeline caches rebuilt the same current-compilation operation plan.");
         var cache = Activator.CreateInstance(type, nonPublic: true)!;
-        Require(!ReferenceEquals(plans[0], get.Invoke(cache, [payload, input, metadata, true])), "Streaming and trusted plans were merged.");
+        var policyType = assembly.GetType("LuminPack.SourceGenerator.CompiledInputPolicy", throwOnError: true)!;
+        var policy = Activator.CreateInstance(policyType, nonPublic: true)!;
+        policyType.GetField("Enabled", BindingFlags.Instance | BindingFlags.NonPublic)!.SetValue(policy, true);
+        Require(!ReferenceEquals(plans[0], get.Invoke(cache, [payload, input, metadata, policy])), "Untrusted and trusted plans were merged.");
         metadata.IsForUnity = true;
-        Require(!ReferenceEquals(plans[0], get.Invoke(cache, [payload, input, metadata, false])), "Unity and modern plan settings were merged.");
+        Require(!ReferenceEquals(plans[0], get.Invoke(cache, [payload, input, metadata, null])), "Unity and modern plan settings were merged.");
         metadata.IsForUnity = false;
-        Require(ReferenceEquals(plans[0], get.Invoke(cache, [payload, input, metadata, false])), "A copied settings guard changed after caller mutation.");
+        Require(ReferenceEquals(plans[0], get.Invoke(cache, [payload, input, metadata, null])), "A copied settings guard changed after caller mutation.");
         var unused = CreateUnusedPlan(references);
         for (int attempt = 0; attempt < 8 && unused.Plan.IsAlive; attempt++)
         {
@@ -156,7 +161,7 @@ internal static class SerializerOperationCacheRegression
         var type = typeof(LuminPackSourceGenerator).Assembly.GetType("LuminPack.SourceGenerator.BinaryOperationPlanCache", throwOnError: true)!;
         var cache = Activator.CreateInstance(type, nonPublic: true)!;
         var plan = type.GetMethod("Get", BindingFlags.Instance | BindingFlags.NonPublic)!.Invoke(cache,
-            [input.GetTypeByMetadataName("Independent")!, input, new MetaInfo(Parse, Parse.LanguageVersion, true, true, true), false])!;
+            [input.GetTypeByMetadataName("Independent")!, input, new MetaInfo(Parse, Parse.LanguageVersion, true, true, true), null])!;
         return (input, new WeakReference(plan));
     }
 
@@ -300,8 +305,8 @@ internal static class SerializerOperationCacheRegression
         var cache = Activator.CreateInstance(type, nonPublic: true)!;
         var get = type.GetMethod("Get", BindingFlags.Instance | BindingFlags.NonPublic)!;
         var metadata = new MetaInfo(Parse, Parse.LanguageVersion, true, true, true);
-        get.Invoke(cache, [input.GetTypeByMetadataName("Parent")!, input, metadata, false]);
-        get.Invoke(cache, [input.GetTypeByMetadataName("Child")!, input, metadata, false]);
+        get.Invoke(cache, [input.GetTypeByMetadataName("Parent")!, input, metadata, null]);
+        get.Invoke(cache, [input.GetTypeByMetadataName("Child")!, input, metadata, null]);
         return (cache, new WeakReference(input));
     }
 

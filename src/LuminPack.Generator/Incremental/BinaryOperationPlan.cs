@@ -17,17 +17,24 @@ internal sealed class BinaryOperationPlanCache
 {
     private static readonly ConditionalWeakTable<Compilation, CurrentPlans> Current = new();
     private readonly TypeEmissionCache _values = new TypeEmissionCache();
-    private readonly TypeEmissionCache _streamingValues = new TypeEmissionCache();
+    private readonly Dictionary<string, TypeEmissionCache> _inputValues = new Dictionary<string, TypeEmissionCache>(StringComparer.Ordinal);
 
     /// <summary>Obtains a symbol-free template under the existing source and semantic dependency guards.</summary>
     /// <param name="type">The current closed operation type.</param>
     /// <param name="compilation">The current consumer compilation.</param>
     /// <param name="metadata">Current emission settings.</param>
-    /// <param name="streaming">Whether the original body needs external read guards.</param>
+    /// <param name="input">The enclosing untrusted root's frozen limits, or null for a trusted operation.</param>
     /// <returns>Typed call slots, local identities, and layout declarations without retained semantic objects.</returns>
-    internal BinaryOperationPlan Get(ITypeSymbol type, Compilation compilation, MetaInfo metadata, bool streaming = false)
-        => (streaming ? _streamingValues : _values).GetOrBuildValue(type, compilation, metadata, LuminPackGenerationTier.Full,
-            () => Current.GetValue(compilation, static _ => new CurrentPlans()).Get(type, compilation, metadata, streaming));
+    internal BinaryOperationPlan Get(ITypeSymbol type, Compilation compilation, MetaInfo metadata, CompiledInputPolicy input = null)
+    {
+        TypeEmissionCache values = _values;
+        if (input != null)
+            lock (_inputValues)
+                if (!_inputValues.TryGetValue(input.Identity, out values))
+                    _inputValues.Add(input.Identity, values = new TypeEmissionCache());
+        return values.GetOrBuildValue(type, compilation, metadata, LuminPackGenerationTier.Full,
+            () => Current.GetValue(compilation, static _ => new CurrentPlans()).Get(type, compilation, metadata, input));
+    }
 
     /// <summary>Shares frozen plans between the type and aggregate pipelines of one compilation.</summary>
     private sealed class CurrentPlans
@@ -39,24 +46,24 @@ internal sealed class BinaryOperationPlanCache
         /// <param name="type">The current operation payload.</param>
         /// <param name="compilation">The compilation owning this short-lived context.</param>
         /// <param name="metadata">All settings that affect the frozen plan.</param>
-        /// <param name="streaming">Whether enclosing input policy requires streaming guards.</param>
+        /// <param name="input">The enclosing untrusted root's frozen limits, or null for a trusted operation.</param>
         /// <returns>A shared symbol-free plan after its semantic factory completes.</returns>
-        internal BinaryOperationPlan Get(ITypeSymbol type, Compilation compilation, MetaInfo metadata, bool streaming)
+        internal BinaryOperationPlan Get(ITypeSymbol type, Compilation compilation, MetaInfo metadata, CompiledInputPolicy input)
         {
             PlanSlot slot;
             Lazy<BinaryOperationPlan> pending;
             lock (_gate)
             {
-                var configuration = _configurations.FirstOrDefault(value => value.Streaming == streaming &&
+                var configuration = _configurations.FirstOrDefault(value => value.Input == (input?.Identity ?? "") &&
                     MetaInfoValueComparer.Instance.Equals(value.Metadata, metadata));
-                if (configuration == null) _configurations.Add(configuration = new Configuration(metadata, streaming));
+                if (configuration == null) _configurations.Add(configuration = new Configuration(metadata, input?.Identity ?? ""));
                 if (!configuration.Plans.TryGetValue(type, out slot))
                     configuration.Plans.Add(type, slot = new PlanSlot());
                 if (slot.Completed != null && slot.Completed.TryGetTarget(out var completed)) return completed;
                 if (slot.Pending == null)
                 {
                     var settings = configuration.Metadata;
-                    slot.Pending = new Lazy<BinaryOperationPlan>(() => BinaryOperationPlan.Build(type, compilation, settings, streaming),
+                    slot.Pending = new Lazy<BinaryOperationPlan>(() => BinaryOperationPlan.Build(type, compilation, settings, input),
                         LazyThreadSafetyMode.ExecutionAndPublication);
                 }
                 pending = slot.Pending;
@@ -94,17 +101,17 @@ internal sealed class BinaryOperationPlanCache
     private sealed class Configuration
     {
         internal readonly MetaInfo Metadata;
-        internal readonly bool Streaming;
+        internal readonly string Input;
         internal readonly Dictionary<ITypeSymbol, PlanSlot> Plans = new(SymbolEqualityComparer.Default);
 
         /// <summary>Copies settings so later caller changes cannot relabel a published plan.</summary>
         /// <param name="metadata">The settings captured by this plan family.</param>
-        /// <param name="streaming">The original input-policy selection.</param>
-        internal Configuration(MetaInfo metadata, bool streaming)
+        /// <param name="input">The untrusted-input limit identity, or empty for trusted plans.</param>
+        internal Configuration(MetaInfo metadata, string input)
         {
             Metadata = new MetaInfo(metadata.ParseOptions, metadata.CSharpVersion, metadata.IsNet8,
                 metadata.IsNet9_OR_GREATER, metadata.AllowUnsafe, metadata.RegisterMode) { IsForUnity = metadata.IsForUnity };
-            Streaming = streaming;
+            Input = input;
         }
     }
 }
@@ -136,9 +143,9 @@ internal sealed class BinaryOperationPlan
     /// <param name="type">The current operation type.</param>
     /// <param name="compilation">The input compilation.</param>
     /// <param name="metadata">Current language and framework settings.</param>
-    /// <param name="streaming">Whether the original body needs external read guards.</param>
+    /// <param name="input">The enclosing untrusted root's frozen limits, or null for a trusted operation.</param>
     /// <returns>A reusable operation plan.</returns>
-    internal static BinaryOperationPlan Build(ITypeSymbol type, Compilation compilation, MetaInfo metadata, bool streaming = false)
+    internal static BinaryOperationPlan Build(ITypeSymbol type, Compilation compilation, MetaInfo metadata, CompiledInputPolicy input = null)
     {
         Interlocked.Increment(ref IncrementalGenerationMetrics.BinaryOperationPlanBuilds);
         string name = FormatterTypeName.Get(type);
@@ -149,14 +156,15 @@ internal sealed class BinaryOperationPlan
             !CompilationTypeAnalysisCache.GetOrCreate(compilation).IsAssemblyPackable(type))
             return new BinaryOperationPlan(name, empty, ImmutableArray<MemberDeclarationSyntax>.Empty);
 
-        string source = LuminPackExtensionGenerator.GenerateOperationTemplates(type, compilation, metadata, streaming);
+        string source = LuminPackExtensionGenerator.GenerateOperationTemplates(type, compilation, metadata, input != null);
         // Plans bind executable syntax. Caller-facing XML is completed after the final projection.
         var templateOptions = metadata.ParseOptions.WithDocumentationMode(DocumentationMode.None);
         var tree = CSharpSyntaxTree.ParseText(source, templateOptions);
         tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(new ContiguousMemoryProjection().Visit(new SequentialFixedProjection().Visit(new BinaryMemoryProjection().Visit(tree.GetRoot())))), templateOptions);
-        if (streaming || CompiledOptions.Resolve(type, compilation).Input.Enabled)
+        input ??= CompiledOptions.Resolve(type, compilation).Input is { Enabled: true } own ? own : null;
+        if (input != null)
         {
-            source = SafeOperationProjection.Rewrite(tree.GetRoot().NormalizeWhitespace().ToFullString(), type, compilation, metadata, streaming);
+            source = SafeOperationProjection.Rewrite(tree.GetRoot().NormalizeWhitespace().ToFullString(), type, compilation, metadata, input);
             tree = CSharpSyntaxTree.ParseText(source, templateOptions);
             tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(tree.GetRoot()), templateOptions);
         }
@@ -199,9 +207,7 @@ internal sealed class BinaryOperationPlan
         foreach (var method in container.Members.OfType<MethodDeclarationSyntax>().Where(method => IsOperation(method.Identifier.ValueText)))
         {
             var parameters = method.ParameterList.Parameters;
-            if (method.Body == null || parameters.Count != 2 &&
-                !(parameters.Count == 3 && parameters[2].Identifier.ValueText == SafeOperationProjection.FixedProofParameter &&
-                    parameters[2].Type is PredefinedTypeSyntax { Keyword.RawKind: (int)SyntaxKind.BoolKeyword })) continue;
+            if (method.Body == null || parameters.Count != 2) continue;
             var symbol = model.GetDeclaredSymbol(method);
             string stateType = symbol?.Parameters[0].Type.ToDisplayString();
             if (stateType is not ("LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" or "LuminPack.Core.LuminPackEvaluator" or

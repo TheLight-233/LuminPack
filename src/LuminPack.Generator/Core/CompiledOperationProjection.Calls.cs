@@ -86,6 +86,11 @@ internal sealed partial class CompiledOperationProjection
                 return result.WithExpression(access.WithName(inputKernel.WithTypeArgumentList(inputKernel.TypeArgumentList.WithArguments(
                     inputArguments.Replace(inputArguments.Last(), SyntaxFactory.ParseTypeName(_profile))))));
             }
+            // A version schema's prefix test reads with the operation's binary profile.
+            if ((name == "TryReadPrefix" && !_writer || name is "WritePrefix" or "StorePrefix" && _writer) && !_stateType.Contains("Json") &&
+                access.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: 1 } prefixKernel)
+                return result.WithExpression(access.WithName(prefixKernel.WithTypeArgumentList(prefixKernel.TypeArgumentList.WithArguments(
+                    SyntaxFactory.SingletonSeparatedList(SyntaxFactory.ParseTypeName(_profile))))));
             if (name == "CheckInputProfile" && access.Expression.ToString() == "global::LuminPack.Security.LuminPackInputPolicy" && access.Name is GenericNameSyntax profileCheck)
                 return result.WithExpression(access.WithName(profileCheck.WithTypeArgumentList(profileCheck.TypeArgumentList.WithArguments(
                     profileCheck.TypeArgumentList.Arguments.Replace(profileCheck.TypeArgumentList.Arguments[0], SyntaxFactory.ParseTypeName(_profile))))));

@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Buffers.Binary;
 using LuminPack.Core;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -56,6 +57,10 @@ namespace LuminPack.Core
         /// <summary>Gets the optional growable output owner.</summary>
         public LuminBufferWriter? Owner {[MethodImpl(MethodImplOptions.AggressiveInlining)] readonly get; internal set; }
         private LuminPackWriterOptionalState? _options;
+        /// <summary>Identifies this operation to version schemas, which write their member table once per operation; zero until first needed.</summary>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public int SchemaOperation;
+        [ThreadStatic] private static int t_schemaOperations;
         /// <summary>The explicit or materialized reference context, or null before an implicit scope requests state.</summary>
         /// <remarks>An explicit context wins over the owning buffer's context. Writers constructed from a buffer
         /// resolve the buffer's own context without storing it, so construction leaves this unset.</remarks>
@@ -156,6 +161,7 @@ namespace LuminPack.Core
         public readonly void CopyTo(ref LuminPackWriter destination)
         {
             destination._options = _options;
+            destination.SchemaOperation = SchemaOperation;
 #if NET8_0_OR_GREATER
             destination.Cursor = ref Cursor;
 #else
@@ -610,6 +616,41 @@ namespace LuminPack.Core
         public void WriteNullUnionHeader()
         {
             WriteNullObjectHeader();
+        }
+
+        /// <summary>Stores a variable-length unsigned integer into reserved room of at least five bytes.</summary>
+        /// <param name = "cursor">The caller's current position in reserved room.</param>
+        /// <param name = "value">The value.</param>
+        /// <returns>The position after the encoded value.</returns>
+        /// <remarks>The encoding equals <see cref="WriteVarInt(uint)"/>; each store stays within four bytes for 32-bit targets.</remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ref byte StoreVarInt(ref byte cursor, uint value)
+        {
+            if (value <= VarIntCodes.MaxSingleValue)
+            {
+                cursor = (byte)value;
+                return ref Unsafe.Add(ref cursor, 1);
+            }
+            return ref StoreExtendedVarInt(ref cursor, value);
+        }
+
+        /// <summary>Stores a variable-length unsigned integer wider than one byte.</summary>
+        /// <param name = "cursor">The caller's current position in reserved room.</param>
+        /// <param name = "value">The value, above the single-byte range.</param>
+        /// <returns>The position after the encoded value.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static ref byte StoreExtendedVarInt(ref byte cursor, uint value)
+        {
+            if (value <= ushort.MaxValue)
+            {
+                cursor = unchecked((byte)VarIntCodes.UInt16);
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref cursor, 1), (ushort)value);
+                return ref Unsafe.Add(ref cursor, 3);
+            }
+            cursor = unchecked((byte)VarIntCodes.UInt32);
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref cursor, 1), value);
+            return ref Unsafe.Add(ref cursor, 5);
         }
 
         /// <summary>Writes a reference marker and its variable-length object identifier.</summary>
@@ -1937,8 +1978,9 @@ namespace LuminPack.Core
         /// <summary>Returns the binary profile tag without changing the four established tags.</summary>
         /// <typeparam name="TOptions">The stateless string profile.</typeparam>
         /// <returns>The distinct binary profile tag.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        internal static byte BinaryProfile<TOptions>() where TOptions : struct, ILuminPackOptions
+        public static byte BinaryProfile<TOptions>() where TOptions : struct, ILuminPackOptions
         {
             var encoding = default(TOptions).StringEncoding;
             var recording = default(TOptions).StringRecording;
@@ -2407,9 +2449,118 @@ namespace LuminPack.Core
         {
             if (prefix.Length < 4) LuminPackExceptionHelper.ThrowArgumentException("A version prefix must contain a complete header.", nameof(prefix));
             EnsureAdditionalCapacity(prefix.Length);
-            prefix.CopyTo(Buffer.Slice(Position, prefix.Length));
-            Unsafe.Add(ref Current, 2) = BinaryProfile<TOptions>();
+            // The header with the stamped profile is one store, and the rest is copied in disjoint word stores. A
+            // vectorized block copy writes overlapping halves, and a record's next wide load over those stores (for
+            // example the allocating facade's copy) stalls on store forwarding for about a hundred nanoseconds.
+            uint header = BinaryPrimitives.ReadUInt32LittleEndian(prefix);
+            BinaryPrimitives.WriteUInt32LittleEndian(Buffer.Slice(Position, 4), (header & 0xFF00FFFFu) | (uint)BinaryProfile<TOptions>() << 16);
+            CopyDisjoint(ref Unsafe.Add(ref Current, 4), ref Unsafe.Add(ref MemoryMarshal.GetReference(prefix), 4), prefix.Length - 4);
             Advance(prefix.Length);
+        }
+
+        /// <summary>Returns this operation's schema identity, assigning a new nonzero one on first use.</summary>
+        /// <returns>The identity version schemas compare with their last written operation on this thread.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int GetSchemaOperation() => SchemaOperation != 0 ? SchemaOperation : SchemaOperation = NextSchemaOperation();
+
+        /// <summary>Draws a new nonzero operation identity on this thread.</summary>
+        /// <returns>The identity.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int NextSchemaOperation()
+        {
+            int next = unchecked(++t_schemaOperations);
+            return next != 0 ? next : ++t_schemaOperations;
+        }
+
+        /// <summary>Stores a short version header: the member count and the fingerprint of a table written earlier in this operation.</summary>
+        /// <typeparam name="TOptions">The selected stateless binary profile.</typeparam>
+        /// <param name="target">The first reserved byte.</param>
+        /// <param name="count">The member count.</param>
+        /// <param name="fingerprint">The table fingerprint.</param>
+        /// <returns>The byte after the twelve-byte header.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ref byte StoreVersionShort<TOptions>(ref byte target, byte count, ulong fingerprint) where TOptions : struct, ILuminPackOptions
+        {
+            Unsafe.WriteUnaligned(ref target, 251u | 3u << 8 | (uint)BinaryProfile<TOptions>() << 16 | (uint)count << 24);
+            // 32-bit targets keep typed unaligned access within four bytes.
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref target, 4), (uint)fingerprint);
+            Unsafe.WriteUnaligned(ref Unsafe.Add(ref target, 8), (uint)(fingerprint >> 32));
+            return ref Unsafe.Add(ref target, 12);
+        }
+
+        /// <summary>Stores a cached version prefix into reserved room and stamps the compiled profile.</summary>
+        /// <typeparam name="TOptions">The selected stateless binary profile.</typeparam>
+        /// <param name="target">The first reserved byte.</param>
+        /// <param name="prefix">The complete cached prefix.</param>
+        /// <returns>The byte after the stored prefix.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ref byte StoreVersionPrefix<TOptions>(ref byte target, scoped ReadOnlySpan<byte> prefix) where TOptions : struct, ILuminPackOptions
+        {
+            if (prefix.Length < 4) LuminPackExceptionHelper.ThrowArgumentException("A version prefix must contain a complete header.", nameof(prefix));
+            uint header = BinaryPrimitives.ReadUInt32LittleEndian(prefix);
+            Unsafe.WriteUnaligned(ref target, (header & 0xFF00FFFFu) | (uint)BinaryProfile<TOptions>() << 16);
+            CopyDisjoint(ref Unsafe.Add(ref target, 4), ref Unsafe.Add(ref MemoryMarshal.GetReference(prefix), 4), prefix.Length - 4);
+            return ref Unsafe.Add(ref target, prefix.Length);
+        }
+
+        /// <summary>Reserves the bytes of a generated constant prefix and returns their first byte.</summary>
+        /// <param name="length">The prefix length.</param>
+        /// <returns>The first reserved byte; the caller stores exactly <paramref name="length"/> bytes there.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref byte ReservePrefix(int length)
+        {
+            EnsureAdditionalCapacity(length);
+            ref byte target = ref Current;
+            Advance(length);
+            return ref target;
+        }
+
+        /// <summary>Reserves the four-byte payload length of a variable revision-2 version member.</summary>
+        /// <returns>The absolute length position, stable across owner growth.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int ReserveVersionLength()
+        {
+            int position = Position;
+            EnsureAdditionalCapacity(sizeof(int));
+            Advance(sizeof(int));
+            return position;
+        }
+
+        /// <summary>Patches a reserved member length after its payload has been written.</summary>
+        /// <param name="position">The position returned by <see cref="ReserveVersionLength"/>.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void CompleteVersionLength(int position)
+            => BinaryPrimitives.WriteInt32LittleEndian(Buffer.Slice(position, sizeof(int)), Position - position - sizeof(int));
+
+        /// <summary>Writes the payload length of a member whose width is known before it is written.</summary>
+        /// <param name="length">The exact payload length.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteVersionLength(int length)
+        {
+            EnsureAdditionalCapacity(sizeof(int));
+            BinaryPrimitives.WriteInt32LittleEndian(Buffer.Slice(Position, sizeof(int)), length);
+            Advance(sizeof(int));
+        }
+
+        /// <summary>Copies a small cached block with disjoint stores of at most one machine word.</summary>
+        /// <param name="target">The reserved destination.</param>
+        /// <param name="source">The cached source.</param>
+        /// <param name="length">The byte count.</param>
+        /// <remarks>32-bit targets use four-byte values, the widest typed unaligned access they permit.</remarks>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void CopyDisjoint(ref byte target, ref byte source, int length)
+        {
+            int index = 0;
+            if (Unsafe.SizeOf<IntPtr>() == 8)
+                for (; index + sizeof(ulong) <= length; index += sizeof(ulong))
+                    Unsafe.WriteUnaligned(ref Unsafe.Add(ref target, index), Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, index)));
+            for (; index + sizeof(uint) <= length; index += sizeof(uint))
+                Unsafe.WriteUnaligned(ref Unsafe.Add(ref target, index), Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, index)));
+            for (; index < length; index++) Unsafe.Add(ref target, index) = Unsafe.Add(ref source, index);
         }
 
         /// <summary>Copies the complete cached name and type table at its dynamic framing boundary.</summary>
@@ -2418,7 +2569,7 @@ namespace LuminPack.Core
         public void WriteVersionMetadata(scoped ReadOnlySpan<byte> metadata, int count)
         {
             EnsureAdditionalCapacity(checked(metadata.Length + count * 5));
-            metadata.CopyTo(Buffer.Slice(Position));
+            CopyDisjoint(ref Current, ref MemoryMarshal.GetReference(metadata), metadata.Length);
             Advance(metadata.Length);
         }
 

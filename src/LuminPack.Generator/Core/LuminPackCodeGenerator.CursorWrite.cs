@@ -158,7 +158,7 @@ public static partial class LuminPackCodeGenerator
     /// <param name="field">The member captured once for reservation and storage.</param>
     /// <param name="index">Its unique position in the serialized member list.</param>
     /// <returns>A source-valid snapshot identifier with the member's role when available.</returns>
-    private static string RecordSnapshotName(LuminDataField field, int index)
+    internal static string RecordSnapshotName(LuminDataField field, int index)
     {
         string name = "__" + field.Name + "Snapshot" + index;
         return SyntaxFacts.IsValidIdentifier(name) ? name : "__memberSnapshot" + index;
@@ -173,7 +173,7 @@ public static partial class LuminPackCodeGenerator
     /// <param name="indent">The statement indentation.</param>
     /// <remarks>The block copy requires the actual field addresses to match the packed offsets on a 64-bit target; otherwise
     /// each field is stored at its packed offset through the architecture-aware fixed store.</remarks>
-    private static void AppendReservedFixedGroup(StringBuilder builder, List<LuminDataField> fields, int first, int last, Func<LuminDataField, string> Storage, string indent)
+    internal static void AppendReservedFixedGroup(StringBuilder builder, List<LuminDataField> fields, int first, int last, Func<LuminDataField, string> Storage, string indent)
     {
         const string unsafeType = "global::System.Runtime.CompilerServices.Unsafe";
         const string writerType = "global::LuminPack.Core.LuminPackWriter";
@@ -280,7 +280,7 @@ public static partial class LuminPackCodeGenerator
     /// <summary>Classifies a member whose complete record has an upper bound computable from one read of its storage.</summary>
     /// <param name="field">The wire field.</param>
     /// <returns>0 when unbounded, 1 for fixed raw storage, 2 for a string, 3 for a raw array and 4 for a raw list.</returns>
-    private static int ReservedKind(LuminDataField field)
+    internal static int ReservedKind(LuminDataField field)
     {
         if (field.IsCompress || field.IsVolatile || field.TypeSymbol == null ||
             PortableStructPlan.TryCreate(field.TypeSymbol) != null || PortableStructPlan.RequiresClosedDispatch(field.TypeSymbol)) return 0;

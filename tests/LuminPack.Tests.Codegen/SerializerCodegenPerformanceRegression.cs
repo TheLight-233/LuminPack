@@ -402,7 +402,8 @@ internal static partial class SerializerCodegenPerformanceRegression
         int checkedLoads = 0;
         foreach (var method in pairs)
         foreach (var call in method.DescendantNodes().OfType<InvocationExpressionSyntax>().Where(call =>
-                     call.Expression is MemberAccessExpressionSyntax access && access.Name.Identifier.ValueText is "ReadUnaligned" or "CopyBlockUnaligned"))
+                     // Untrusted reads load Boolean storage through the checked adapter.
+                     call.Expression is MemberAccessExpressionSyntax access && access.Name.Identifier.ValueText is "ReadUnaligned" or "CopyBlockUnaligned" or "ReadBoolean"))
         {
             if (((MemberAccessExpressionSyntax)call.Expression).Name.Identifier.ValueText == "CopyBlockUnaligned")
                 Require(call.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned",

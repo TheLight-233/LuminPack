@@ -306,9 +306,26 @@ namespace LuminPack.Code
         /// in a few kilobytes, and an unbounded recursion would end the process with a stack overflow that cannot be caught.
         /// </remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public static void EnsureSufficientStack()
+        public static unsafe void EnsureSufficientStack()
+        {
+            // The stack grows downward: a frame at or above an address the runtime already accepted on this thread has at least
+            // as much room, so only frames deeper than every accepted one consult the runtime.
+            byte probe = 0;
+            if ((nuint)Unsafe.AsPointer(ref probe) < ~s_acceptedStackFloorComplement) EnsureSufficientStackSlow();
+        }
+
+        /// <summary>The complement of the lowest stack address on this thread at which the runtime reported sufficient stack.</summary>
+        /// <remarks>The default zero stands for no accepted frame, so the first check always consults the runtime. Each thread
+        /// owns one fixed stack, so the floor stays valid for the thread's lifetime.</remarks>
+        [ThreadStatic] private static nuint s_acceptedStackFloorComplement;
+
+        /// <summary>Asks the runtime about a frame deeper than every accepted one, and records it when accepted.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static unsafe void EnsureSufficientStackSlow()
         {
             if (!RuntimeHelpers.TryEnsureSufficientExecutionStack()) ThrowNestingTooDeep();
+            byte probe = 0;
+            s_acceptedStackFloorComplement = ~(nuint)Unsafe.AsPointer(ref probe);
         }
 
         /// <summary>Raises the exception for a record or object graph nested deeper than the stack allows.</summary>

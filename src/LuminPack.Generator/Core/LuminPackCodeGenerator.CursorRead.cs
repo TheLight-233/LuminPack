@@ -1,4 +1,5 @@
 using System.Linq;
+using Microsoft.CodeAnalysis;
 using System.Text;
 using LuminPack.SourceGenerator;
 using LuminPack.SourceGenerator.CodeEmitters;
@@ -23,6 +24,19 @@ public static partial class LuminPackCodeGenerator
         builder.AppendLine(indent + "}");
     }
 
+    /// <summary>Resolves whether a nested type reads untrusted input under its own declarations.</summary>
+    /// <param name="type">The nested field type.</param>
+    /// <returns>Whether the type, its containing types or its assembly select untrusted input, which is the default.</returns>
+    private static bool DeclaresUntrustedInput(ITypeSymbol type)
+    {
+        for (ISymbol current = type; current != null; current = current is ITypeSymbol { ContainingType: { } outer } ? outer : current is ITypeSymbol ? current.ContainingAssembly : null)
+            foreach (var attribute in current.GetAttributes())
+                if (attribute.AttributeClass?.ToDisplayString() == global::LuminPack.SourceGenerator.CompiledOptions.AttributeName)
+                    foreach (var argument in attribute.NamedArguments)
+                        if (argument.Key == "UntrustedData" && argument.Value.Value is bool untrusted) return untrusted;
+        return true;
+    }
+
     /// <summary>Reads one complete field while preserving its selected inline or formatter contract.</summary>
     /// <param name="builder">The operation receiving the field statements.</param>
     /// <param name="field">The analyzed field contract.</param>
@@ -32,7 +46,7 @@ public static partial class LuminPackCodeGenerator
     /// <param name="fresh">Whether the destination has no reusable storage.</param>
     /// <param name="allowBulkCopy">Whether nested fixed groups may use the address-proven storage copy; Union payloads keep their cursor-offset form.</param>
     /// <param name="guardNestedReads">Whether a typed boundary must account for each nested object.</param>
-    private static void AppendCursorFieldRead(StringBuilder builder, LuminDataField field, string target, string indent, int depth, bool fresh,
+    internal static void AppendCursorFieldRead(StringBuilder builder, LuminDataField field, string target, string indent, int depth, bool fresh,
         bool allowBulkCopy = true, bool guardNestedReads = false)
     {
         using var scope = new CompiledOptionFieldScope(builder, field.Options,
@@ -75,7 +89,9 @@ public static partial class LuminPackCodeGenerator
         }
         if (field.Type is LuminFiledType.Class or LuminFiledType.Struct && field.ClassFields.Count != 0)
         {
-            if (guardNestedReads)
+            // An untrusted child keeps its own checked operation inside a trusted parent.
+            // An untrusted parent keeps a recursive child on its outlined checked read, which counts nesting depth.
+            if (!guardNestedReads && DeclaresUntrustedInput(field.TypeSymbol) || guardNestedReads && RecursiveTypeAnalysis.IsRecursive(field.TypeSymbol))
             {
                 builder.AppendLine(indent + "{");
                 if (field.Type == LuminFiledType.Class)
@@ -90,12 +106,15 @@ public static partial class LuminPackCodeGenerator
                 return;
             }
             builder.AppendLine(indent + "{");
+            // An untrusted parent expands the child like a trusted one; its member marker is checked in the same branch.
+            const string policy = "global::LuminPack.Security.LuminPackInputPolicy.";
+            string memberCount = field.ClassFields.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
             if (field.Type == LuminFiledType.Class)
             {
-                builder.AppendLine(indent + "    if (reader.Read<byte>() == 255) " + target + " = default!;");
+                builder.AppendLine(indent + (guardNestedReads ? "    if (" + policy + "ReadNullMarker(ref reader, " + memberCount + ")) " : "    if (reader.Read<byte>() == 255) ") + target + " = default!;");
                 builder.AppendLine(indent + "    else");
             }
-            else builder.AppendLine(indent + "    reader.Advance(1);");
+            else builder.AppendLine(indent + (guardNestedReads ? "    " + policy + "ReadStructMarker(ref reader, " + memberCount + ");" : "    reader.Advance(1);"));
             builder.AppendLine(indent + "    {");
             string spaces = indent + "        ";
             string name = "inlineRead" + depth;
@@ -120,7 +139,7 @@ public static partial class LuminPackCodeGenerator
                         while (last + 1 < members.Count && !members[last + 1].IsCompress && IsMergeableField(members[last + 1])) last++;
                     if (TryGenerateCursorFixedGroup(builder, members, index, last, Storage, spaces, write: false, allowBulkCopy))
                         index = last;
-                    else AppendCursorFieldRead(builder, members[index], Storage(members[index]), spaces, depth + 1, fresh, allowBulkCopy);
+                    else AppendCursorFieldRead(builder, members[index], Storage(members[index]), spaces, depth + 1, fresh, allowBulkCopy, guardNestedReads);
                 }
                 builder.AppendLine(spaces + target + " = " + name + ";");
             }
@@ -133,7 +152,7 @@ public static partial class LuminPackCodeGenerator
                     builder.AppendLine(spaces + GetFieldLocalVariableType(member) + (member.FieldType == LuminDataType.Reference ? "?" : "") + " " + name + field.Name + member.Name + "Temp" + suffix + " = " + initial + ";");
                 }
                 foreach (var member in field.ClassFields)
-                    AppendCursorFieldRead(builder, member, name + field.Name + member.Name + "Temp" + suffix, spaces, depth + 1, fresh, allowBulkCopy);
+                    AppendCursorFieldRead(builder, member, name + field.Name + member.Name + "Temp" + suffix, spaces, depth + 1, fresh, allowBulkCopy, guardNestedReads);
                 AppendReusableNestedCommit(builder, field, target, name, suffix, spaces);
             }
             builder.AppendLine(indent + "    }");

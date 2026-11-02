@@ -341,7 +341,8 @@ namespace LuminPack.SourceGenerator
                 CheckNestedClassAccessibility(namedTypeArg);
             }
 
-            if (ProcessedTypes.Contains(namedTypeArg))
+            // Version-tolerant, reference-tracked and custom records keep their own formatter and wire format.
+            if (ProcessedTypes.Contains(namedTypeArg) || IsSeparateRecord(namedTypeArg))
             {
                 field.Type = LuminFiledType.Other;
                 return;
@@ -772,8 +773,9 @@ namespace LuminPack.SourceGenerator
                 field.ClassName = namedType.Name;
                 field.ClassGenericType = string.Join(", ", namedType.TypeArguments.Select(t => t.Name));
 
-                // Use Other only when the type requires an external formatter.
-                if (namedType.IsRecord || namedType.IsAbstract)
+                // Use Other only when the type requires an external formatter. Version-tolerant, reference-tracked and
+                // custom records keep their own wire format and are never expanded into the parent.
+                if (namedType.IsRecord || namedType.IsAbstract || IsSeparateRecord(namedType))
                 {
                     field.Type = LuminFiledType.Other;
                     TypeMetaChecker.CheckFieldIsLuminPackable(namedType, _currentSymbol.Locations.FirstOrDefault());
@@ -813,6 +815,12 @@ namespace LuminPack.SourceGenerator
             }
         }
 
+        /// <summary>Identifies a packable record whose generator owns a wire format other than the ordinary object record.</summary>
+        /// <param name="type">The nested member type.</param>
+        /// <returns>Whether the member must call the type's own formatter.</returns>
+        private static bool IsSeparateRecord(INamedTypeSymbol type)
+            => TypeMetaChecker.TryCheckPackableAttribute(type) && TypeMetaChecker.CheckGeneratorType(type) != GeneratorType.Object;
+
         /// <summary>Records non generic class or struct in the current field metadata.</summary>
         /// <param name="namedType">The named type used by this operation.</param>
         /// <param name="field">The metadata describing the field being processed.</param>
@@ -833,8 +841,9 @@ namespace LuminPack.SourceGenerator
                 field.Type = namedType.TypeKind == TypeKind.Class ? LuminFiledType.Class : LuminFiledType.Struct;
                 field.ClassName = namedType.Name;
 
-                // Use Other only when the type requires an external formatter.
-                if (namedType.IsRecord || namedType.IsAbstract)
+                // Use Other only when the type requires an external formatter. Version-tolerant, reference-tracked and
+                // custom records keep their own wire format and are never expanded into the parent.
+                if (namedType.IsRecord || namedType.IsAbstract || IsSeparateRecord(namedType))
                 {
                     field.Type = LuminFiledType.Other;
                     TypeMetaChecker.CheckFieldIsLuminPackable(namedType, _currentSymbol.Locations.FirstOrDefault());

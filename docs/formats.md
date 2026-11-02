@@ -20,16 +20,22 @@ The member count is 0 to 249. `255` means `null`. Values follow in member order.
 
 ### Version-tolerant object
 
-`(251, 1, byte profile, byte memberCount, [UTF-8 name/type metadata...], [VarInt payload lengths...], [payloads...])`
+`(251, 2, byte profile, byte memberCount, [UTF-8 name/type metadata...], [byte widths...], [payloads...])`
+
+A width below 255 is a raw member's exact width; 255 marks a payload preceded by its `int` length. Readers also accept revision `1`, which stores every payload length before the payloads.
+
+`(251, 3, byte profile, byte memberCount, ulong fingerprint, [payloads...])`
+
+After the first full record of a model in one write operation, later records of that model are short: the 64-bit FNV-1a fingerprint of the metadata and width table replaces them. A reader resolves the fingerprint to a table read earlier in the same operation.
 
 `255` means `null`. See [Version tolerance](versioning.md#binary-framing).
 
 ### Reference-tracked object
 
-`(byte memberCount, [VarInt slot lengths...], VarInt referenceId, [values...])`
+`(byte slotCount, [byte slot widths...], VarInt referenceId, [values...])`
 `(250, VarInt referenceId)`
 
-A new object writes its slot length table and then its reference id. `250` refers back to an object already read.
+A new object writes its slot table and then its reference id. A slot width is a raw member's width, `0` for an empty slot, or `255` for a value preceded by its `int` length (raw values of 255 bytes or more included). `250` refers back to an object already read, and `255` is `null`. The slot count is below 250.
 
 ### String
 

@@ -140,6 +140,34 @@ public sealed class LuminPackVersionField
         return prefix;
     }
 
+    /// <summary>Builds a revision-2 prefix whose member widths depend on runtime layout.</summary>
+    /// <param name="metadata">The complete name and type table.</param>
+    /// <param name="count">The member count.</param>
+    /// <param name="widths">Each raw member's storage width, or minus one for a length-prefixed member.</param>
+    /// <returns>The header with a zero profile byte, the metadata and the width table.</returns>
+    public static byte[] CreatePrefix(ReadOnlySpan<byte> metadata, byte count, int[] widths)
+    {
+        var prefix = new byte[checked(4 + metadata.Length + widths.Length)];
+        prefix[0] = 251;
+        prefix[1] = 2;
+        prefix[3] = count;
+        metadata.CopyTo(prefix.AsSpan(4));
+        for (int i = 0; i < widths.Length; i++)
+            prefix[4 + metadata.Length + i] = (byte)(widths[i] is >= 0 and < 255 ? widths[i] : 255);
+        return prefix;
+    }
+
+    /// <summary>Computes the 64-bit fingerprint of a member table: names, type contracts and widths.</summary>
+    /// <param name="table">The prefix bytes after the four-byte header.</param>
+    /// <returns>The FNV-1a fingerprint that short records carry instead of the table.</returns>
+    /// <remarks>The generator computes the same value at compile time for constant tables.</remarks>
+    public static ulong Fingerprint(ReadOnlySpan<byte> table)
+    {
+        ulong hash = 14695981039346656037UL;
+        foreach (byte value in table) hash = (hash ^ value) * 1099511628211UL;
+        return hash;
+    }
+
     /// <summary>Finds a member using full UTF-8 names, checking the expected position first.</summary>
     /// <param name="fields">The generated receiver schema.</param>
     /// <param name="name">The name from the input table.</param>

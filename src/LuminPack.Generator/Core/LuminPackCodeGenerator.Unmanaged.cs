@@ -99,7 +99,7 @@ public static partial class LuminPackCodeGenerator
     /// <param name="write">Whether the storage is the source rather than the destination.</param>
     /// <param name="allowBulkCopy">Whether an address-proven constructed-storage copy belongs to this operation.</param>
     /// <returns>Whether the complete group was emitted.</returns>
-    private static bool TryGenerateCursorFixedGroup(StringBuilder builder, List<LuminDataField> fields,
+    internal static bool TryGenerateCursorFixedGroup(StringBuilder builder, List<LuminDataField> fields,
         int first, int last, Func<LuminDataField, string> storage, string indent, bool write, bool allowBulkCopy = true)
     {
         if (last <= first) return false;
@@ -181,7 +181,7 @@ public static partial class LuminPackCodeGenerator
     /// <summary>Builds a constant or JIT-specializable byte width without inferring a struct's layout.</summary>
     /// <param name="field">An already validated raw unmanaged field.</param>
     /// <returns>The field's complete storage width, including its own padding.</returns>
-    private static string GetUnmanagedFieldSize(LuminDataField field) => IsFixedLengthType(field.Type)
+    internal static string GetUnmanagedFieldSize(LuminDataField field) => IsFixedLengthType(field.Type)
         ? GetFixedFieldLength(field) : "Unsafe.SizeOf<" + GetGeneratedTypeName(field) + ">()";
 
     /// <summary>Folds known byte widths while retaining every runtime-sized storage term in its original order.</summary>

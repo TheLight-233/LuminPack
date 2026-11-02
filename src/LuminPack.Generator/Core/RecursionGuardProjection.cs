@@ -31,6 +31,12 @@ internal static class RecursiveTypeAnalysis
         return recursive;
     }
 
+    /// <summary>Reports recursion from the declarations alone, for emitters that have no compilation at hand.</summary>
+    /// <param name="type">The formatter type.</param>
+    /// <returns>Whether a serialized path leads back to the type.</returns>
+    internal static bool IsRecursive(ITypeSymbol type)
+        => type is not null && Successors(type).Any(next => Reaches(next, type, new HashSet<ITypeSymbol>(SymbolEqualityComparer.Default)));
+
     /// <summary>Searches the member graph depth-first for a target type.</summary>
     /// <param name="current">The type being expanded.</param>
     /// <param name="target">The type that closes a cycle.</param>

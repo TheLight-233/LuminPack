@@ -66,7 +66,6 @@ internal sealed class ProvenObjectWriteProjection : CSharpSyntaxRewriter
         var data = LuminPackSourceGenerator.GetSerializationMetadata(element, _compilation, _metadata);
         return data.generatorType == GeneratorType.Object && !data.isUnion && data.callBackMethods.Count == 0 &&
             !data.Diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error) &&
-            !CompiledOptions.Resolve(element, _compilation).Input.Enabled &&
             data.fields.Any(field => field.TypeSymbol.SpecialType == SpecialType.System_String) &&
             data.fields.All(field => !field.IsPrivate && !field.isProperty && !field.IsVolatile && !field.IsCompress &&
                 (field.TypeSymbol.SpecialType == SpecialType.System_String ||

@@ -33,7 +33,12 @@ internal sealed class CompiledOptions
         (Format == 'G' && Precision == byte.MaxValue ? "global::LuminPack.Option.LuminPackGeneralFormat" : "global::LuminPack.Generated." + FormatIdentity) + ", " +
         (Depth == 1024 ? "global::LuminPack.Option.LuminPackDefaultDepth" : "global::LuminPack.Generated." + DepthIdentity) + ", " +
         (Strict ? "global::LuminPack.Option.LuminPackStrictJson" : "global::LuminPack.Option.LuminPackTrustedJson") + ">";
-    internal bool IsDefault => Encoding == 1 && Recording == 0 && Format == 'G' && Precision == byte.MaxValue && Depth == 1024 && !Strict;
+    /// <summary>Gets the profile of JSON documents declared hostile: the strict grammar and the untrusted depth bound.</summary>
+    /// <remarks>An implicit untrusted default keeps the declared JSON profile; an explicit untrusted declaration or limit selects strict JSON.</remarks>
+    /// <remarks>Binary operations keep the declared profile, so untrusted binary reads share the trusted profile's kernels.</remarks>
+    internal CompiledOptions JsonInput => !Input.Enabled || !Input.Explicit || Strict && Depth > 0 && Depth <= Input.Depth ? this :
+        new CompiledOptions(Encoding, Recording, Format, Precision, Depth > 0 && Depth <= Input.Depth ? Depth : Input.Depth, true, IsDeclared, Input);
+    internal bool IsDefault => Encoding == 1 && Recording == 0 && Format == 'G' && Precision == byte.MaxValue && Depth == 1024 && !Strict && !Input.Enabled;
     internal static readonly CompiledOptions Default = new CompiledOptions(1, 0, 'G', byte.MaxValue, 1024, false);
 
     /// <summary>Provides the finite wire profiles needed by ordinary Union write and size slots.</summary>
@@ -43,17 +48,17 @@ internal sealed class CompiledOptions
     {
         for (int encoding = 0; encoding != 2; encoding++)
             for (int recording = 0; recording != (json ? 1 : 2); recording++)
-                yield return new CompiledOptions(encoding, recording, 'G', byte.MaxValue, 1024, false);
+                yield return new CompiledOptions(encoding, recording, 'G', byte.MaxValue, 1024, false, input: CompiledInputPolicy.Trusted);
         if (!json)
             for (int encoding = 0; encoding != 2; encoding++)
-                yield return new CompiledOptions(encoding, 2, 'G', byte.MaxValue, 1024, false);
+                yield return new CompiledOptions(encoding, 2, 'G', byte.MaxValue, 1024, false, input: CompiledInputPolicy.Trusted);
     }
 
     /// <summary>Discards read-only validation and formatting constants from a Union write-slot identity.</summary>
     /// <param name="json">Whether string recording is irrelevant to JSON output.</param>
     /// <returns>The stable wire-profile identity shared across assemblies.</returns>
     internal CompiledOptions UnionProfile(bool json)
-        => new CompiledOptions(Encoding, json ? 0 : Recording, 'G', byte.MaxValue, 1024, false);
+        => new CompiledOptions(Encoding, json ? 0 : Recording, 'G', byte.MaxValue, 1024, false, input: CompiledInputPolicy.Trusted);
 
     /// <summary>Captures one immutable option combination.</summary>
     /// <param name="encoding">Zero for UTF-8 or one for UTF-16.</param>
@@ -131,8 +136,8 @@ internal sealed class CompiledOptions
                     "MaxCollectionLength" or "MaxStringLength" or "MaxObjectCount" or "MaxReadWork" or "MaxDepth";
                 if (inputLimit && Convert.ToInt64(argument.Value.Value, CultureInfo.InvariantCulture) < 0)
                     error = "input resource limits must be nonnegative.";
-                if (argument.Key == "MaxDepth" && Convert.ToInt64(argument.Value.Value, CultureInfo.InvariantCulture) is < 1 or > 64)
-                    error = "external-input nesting depth must be between one and 64.";
+                if (argument.Key == "MaxDepth" && Convert.ToInt64(argument.Value.Value, CultureInfo.InvariantCulture) < 1)
+                    error = "external-input nesting depth must be at least one.";
                 if ((inputLimit || argument.Key == "UntrustedData") && symbol is not (IAssemblySymbol or INamedTypeSymbol))
                     error = "input policy applies to assembly and type declarations; nested values share their root budget.";
                 if (error != null)
@@ -154,8 +159,10 @@ internal sealed class CompiledOptions
         {
             if (attribute.AttributeClass?.ToDisplayString() != AttributeName) continue;
             applied = true;
-            // Storage and Union contracts do not select a serialization profile.
-            if (attribute.NamedArguments.Length == 0 || attribute.NamedArguments.Any(argument => argument.Key is not ("StructLayout" or "WideTag" or "SingleImplementation")))
+            // Storage, Union and untrusted-input contracts do not select a serialization profile.
+            if (attribute.NamedArguments.Length == 0 || attribute.NamedArguments.Any(argument => argument.Key is not ("StructLayout" or "WideTag" or "SingleImplementation" or
+                    "UntrustedData" or "MaxInputBytes" or "MaxDecompressedBytes" or "MaxAllocationBytes" or "MaxCollectionLength" or "MaxStringLength" or
+                    "MaxObjectCount" or "MaxDepth" or "MaxReadWork")))
                 declared = true;
             foreach (var argument in attribute.NamedArguments)
                 switch (argument.Key)
@@ -185,6 +192,8 @@ internal sealed class CompiledOptions
     /// <returns>Stable component identities and their complete namespace declarations.</returns>
     internal IEnumerable<KeyValuePair<string, string>> Declarations()
     {
+        if (!ReferenceEquals(JsonInput, this))
+            foreach (var declaration in JsonInput.Declarations()) yield return declaration;
         if (Format != 'G' || Precision != byte.MaxValue)
             yield return new KeyValuePair<string, string>(FormatIdentity, "namespace LuminPack.Generated {\n" +
                 "/// <summary>Provides a declaration-time standard-format constant.</summary>\npublic readonly struct " + FormatIdentity + " : global::LuminPack.Option.ILuminPackFormatOptions {\n" +

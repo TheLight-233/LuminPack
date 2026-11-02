@@ -283,13 +283,16 @@ internal static class SerializerBinaryInliningRegression
                     sharedJsonCalls[target] = sharedJsonCalls.TryGetValue(target, out int count) ? count + 1 : 1;
                     continue;
                 }
+                // Untrusted reads, the default, keep each nested record in one checked helper within the JIT's inlining budget.
+                if (symbol?.Name.StartsWith("__InputRead_", StringComparison.Ordinal) == true) continue;
                 Require((symbol?.ContainingType.Name != "LuminPackSerializer" || symbol.MethodKind == MethodKind.LocalFunction) &&
                     !(symbol?.ContainingType.Name.StartsWith("LuminPackExtensions_", StringComparison.Ordinal) ?? false),
                     "An ordinary payload field retained a serializer or extension call instead of expanding: " + call);
             }
         }
         Require(sharedJsonCalls.Values.Any(count => count > 1),
-            "Repeated large JSON fields no longer share one concrete state implementation.");
+            "Repeated large JSON fields no longer share one concrete state implementation: " +
+            string.Join(", ", sharedJsonCalls.Select(pair => pair.Key.ToDisplayString() + "=" + pair.Value)));
         var bridges = output.SyntaxTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
             .Where(method => method.Identifier.ValueText is "WriteValue" or "ReadValue" or "CalculateOffset" &&
                 method.Parent is ClassDeclarationSyntax owner && owner.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal)).ToArray();

@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 
 namespace LuminPack.Code.Core;
@@ -35,6 +36,26 @@ internal static class VersionMetadataEncoder
         return lengths.ToArray();
     }
 
+    /// <summary>Classifies each member's revision-2 payload: a constant raw width, 255 for a length-prefixed payload, or null for a raw width known only at run time.</summary>
+    /// <param name="data">The complete member contract.</param>
+    /// <returns>One entry per member in write order.</returns>
+    internal static int?[] Widths(LuminDataInfo data) => data.fields.Select(field =>
+    {
+        if (!LuminPackCodeGenerator.IsUnmanagedFiledType(field.Type)) return (int?)255;
+        var type = field.TypeSymbol;
+        if (type is INamedTypeSymbol { TypeKind: TypeKind.Enum } enumeration) type = enumeration.EnumUnderlyingType;
+        int size = type.SpecialType switch
+        {
+            SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte => 1,
+            SpecialType.System_Char or SpecialType.System_Int16 or SpecialType.System_UInt16 => 2,
+            SpecialType.System_Int32 or SpecialType.System_UInt32 or SpecialType.System_Single => 4,
+            SpecialType.System_Int64 or SpecialType.System_UInt64 or SpecialType.System_Double => 8,
+            SpecialType.System_Decimal => 16,
+            _ => 0
+        };
+        return size == 0 ? null : size;
+    }).ToArray();
+
     /// <summary>Builds exact runtime-compatible metadata when every member type is closed.</summary>
     /// <param name="data">The member contract.</param>
     /// <returns>The constant table, or null when a generic argument is determined at runtime.</returns>
@@ -57,7 +78,21 @@ internal static class VersionMetadataEncoder
     internal static string Representation(LuminDataField field)
     {
         var options = field.Options ?? LuminPack.SourceGenerator.CompiledOptions.Default;
-        return new string((char)((int)field.Type | (field.IsCompress ? 32 : 0) | (options.Encoding << 6) | (options.Recording << 7)), 1);
+        return new string((char)((int)ContractType(field) | (field.IsCompress ? 32 : 0) | (options.Encoding << 6) | (options.Recording << 7)), 1);
+    }
+
+    /// <summary>Keeps the declared classification of a nested record that is read through its own formatter.</summary>
+    /// <param name="field">The member contract.</param>
+    /// <returns>The classification recorded in member metadata.</returns>
+    /// <remarks>Version-tolerant, reference-tracked and custom records are classified as external formatters so they are never
+    /// expanded into the parent, but their metadata keeps the class or struct classification so existing records still match.</remarks>
+    private static LuminFiledType ContractType(LuminDataField field)
+    {
+        if (field.Type != LuminFiledType.Other || field.TypeSymbol is not INamedTypeSymbol { IsRecord: false, IsAbstract: false } named ||
+            named.TypeKind is not (TypeKind.Class or TypeKind.Struct) || !TypeMetaChecker.TryCheckPackableAttribute(named) ||
+            TypeMetaChecker.CheckGeneratorType(named) == GeneratorType.Object)
+            return field.Type;
+        return named.TypeKind == TypeKind.Class ? LuminFiledType.Class : LuminFiledType.Struct;
     }
 
     /// <summary>Checks when the classification byte already identifies the exact primitive type.</summary>

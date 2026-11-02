@@ -220,9 +220,16 @@ public static partial class LuminPackExtensionGenerator
             (metaInfo.IsNet8 ? "scoped ref " : "ref ") + typeName + nullable + " value)");
         AppendGenericConstraints(sb, data);
         sb.AppendLine("        {");
-        // Only fixed Object records can be direct records; other layouts keep a callable but unsupported width.
+        // Only fixed Object and fixed revision-2 version records can be direct records; other layouts keep a callable but
+        // unsupported width.
+        var versionWidths = !data.isUnion && data.generatorType == GeneratorType.VersionTolerant ? VersionMetadataEncoder.Widths(data) : null;
         if (!data.isUnion && data.generatorType == GeneratorType.Object)
             LuminPackCodeGenerator.GenerateCalculateOffsetCode(data, sb);
+        else if (versionWidths != null && versionWidths.All(width => width is int value && value != 255))
+        {
+            if (!data.isValueType) sb.AppendLine("            if (value is null) { evaluator += 1; return; }");
+            sb.AppendLine("            evaluator += " + data.VersionSchemaType + ".Prefix.Length + " + versionWidths.Sum(width => width.Value) + ";");
+        }
         else
             sb.AppendLine("            " + UnsupportedWidth);
         sb.AppendLine("        }");
@@ -490,10 +497,10 @@ public static partial class LuminPackExtensionGenerator
                 LuminPackCodeGenerator.GenerateDeserializeCode(data, sb, polymorphism, guardNestedReads);
                 break;
             case GeneratorType.CircleReference:
-                LuminPackCircleReferenceCodeGenerator.GenerateDeserializeCode(data, sb);
+                LuminPackCircleReferenceCodeGenerator.GenerateDeserializeCode(data, sb, guardNestedReads);
                 break;
             case GeneratorType.VersionTolerant:
-                LuminPackVersionTolerantCodeGenerator.GenerateDeserializeCode(data, sb);
+                LuminPackVersionTolerantCodeGenerator.GenerateDeserializeCode(data, sb, guardNestedReads);
                 break;
         }
     }

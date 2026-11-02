@@ -99,7 +99,7 @@ string json = LuminPackSerializer.SerializeJson(player);     // 📜 同一个�
 <td valign="top">
 
 ### 🔧 编译期配置
-字符串编码、JSON 限制、可跨 32/64 位的结构体布局，以及面向不可信输入的加固模式，都在编译期选择。不开启的功能没有任何开销。
+字符串编码、JSON 限制和可跨 32/64 位的结构体布局都在编译期选择。不可信读取默认启用检查；声明限额可约束恶意输入，未声明的限额会被编译消除。
 
 </td>
 </tr>
@@ -113,7 +113,7 @@ string json = LuminPackSerializer.SerializeJson(player);     // 📜 同一个�
 <td valign="top">
 
 ### 🌐 现代 I/O
-`Span<T>`、`ReadOnlySequence<byte>`、`IBufferWriter<byte>`、Pipelines 和异步流都是一等公民。
+`Span<T>`、`ReadOnlySequence<byte>`、`IBufferWriter<byte>`、流和异步入口均受支持。
 
 </td>
 </tr>

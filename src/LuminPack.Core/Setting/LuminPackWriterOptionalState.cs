@@ -35,14 +35,19 @@ namespace LuminPack.Option
     {
         internal static readonly LuminPackWriterOptionalState NullOption = new LuminPackWriterOptionalState(true);
 
+        private const int SmallReferences = 8;
         private uint _nextId;
+        // The first objects of an operation are found by a reference scan, without hashing; their ids are their indices.
+        private readonly ReferenceSlot[] _small = new ReferenceSlot[SmallReferences];
+        // Whether the operation outgrew the scan and every identity, including the first ones, is in the identity table.
+        private bool _hashed;
         /// <summary>Gets or sets the object to ref.</summary>
-        private LuminCircleReferenceMap<object, uint> ObjectToRef { get; set; }
+        private LuminIdentityMap ObjectToRef { get; set; }
 
         /// <summary>Initializes a new instance of <c>LuminPackWriterOptionalState</c>.</summary>
         public LuminPackWriterOptionalState()
         {
-            ObjectToRef = new LuminCircleReferenceMap<object, uint>(ReferenceEqualityComparer.Instance);
+            ObjectToRef = new LuminIdentityMap();
             _nextId = 0;
 
         }
@@ -51,7 +56,7 @@ namespace LuminPack.Option
         /// <param name="_">The  used by this operation.</param>
         private LuminPackWriterOptionalState(bool _)
         {
-            ObjectToRef = new LuminCircleReferenceMap<object, uint>(ReferenceEqualityComparer.Instance);
+            ObjectToRef = new LuminIdentityMap();
             _nextId = 0;
 
         }
@@ -120,7 +125,13 @@ namespace LuminPack.Option
         [MethodImpl(MethodImplOptions.NoInlining)]
         private void ResetReferences()
         {
-            ObjectToRef.Clear();
+            if (_hashed)
+            {
+                ObjectToRef.Clear();
+                _hashed = false;
+            }
+            var small = _small;
+            for (int i = 0; i < small.Length && i < (int)_nextId; i++) small[i].Value = null;
             _nextId = 0;
         }
 
@@ -129,17 +140,45 @@ namespace LuminPack.Option
         /// <returns>The result of the operation.</returns>
         public (bool existsReference, uint id) GetOrAddReference(object value)
         {
+            int reference = TrackReference(value);
+            return reference < 0 ? (true, (uint)~reference) : (false, (uint)reference);
+        }
 
+        /// <summary>Registers an object for this operation or finds its earlier identifier.</summary>
+        /// <param name="value">The object about to be written.</param>
+        /// <returns>The new identifier, or the bitwise complement of the identifier assigned earlier.</returns>
+        /// <remarks>One probe of the identity table answers both cases, and the single integer result stays in a register.</remarks>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        public int TrackReference(object value)
+        {
+            if (!_hashed)
+            {
+                var small = _small;
+                int count = (int)_nextId;
+                for (int i = 0; i < small.Length && i < count; i++)
+                    if (ReferenceEquals(small[i].Value, value)) return ~i;
+                if ((uint)count < (uint)small.Length)
+                {
+                    small[count].Value = value;
+                    _nextId = (uint)count + 1;
+                    return count;
+                }
+                HashSmallReferences();
+            }
             ref var id = ref ObjectToRef.GetValueRefOrAddDefault(value, out var exists);
-            if (exists)
-            {
-                return (true, id);
-            }
-            else
-            {
-                id = _nextId++;
-                return (false, id);
-            }
+            if (exists) return ~(int)id;
+            if (_nextId > int.MaxValue) global::LuminPack.Code.LuminPackExceptionHelper.ThrowMessage("Too many tracked references in one operation.");
+            id = _nextId++;
+            return (int)id;
+        }
+
+        /// <summary>Moves the scanned first identities into the identity table once an operation outgrows the scan.</summary>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void HashSmallReferences()
+        {
+            var small = _small;
+            for (int i = 0; i < small.Length; i++) ObjectToRef.TryAdd(small[i].Value!, (uint)i);
+            _hashed = true;
         }
 
         /// <summary>Releases the resources or pooled state owned by this instance.</summary>

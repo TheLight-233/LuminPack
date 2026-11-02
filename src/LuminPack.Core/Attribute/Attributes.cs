@@ -362,24 +362,32 @@ public sealed class LuminPackOptionAttribute : System.Attribute
     /// <summary>Gets or sets whether the JSON document uses the strict grammar validator.</summary>
     public bool ValidateJsonSyntax { get; set; }
 
-    /// <summary>Gets or sets the generated bounded external-data policy; trusted operations retain their original code when false.</summary>
-    /// <remarks>Enables a schema-checked envelope and streaming read quotas. Input must remain stable during decoding; failed reads can retain completed updates. Unsupported external schemas fail closed.</remarks>
-    public bool UntrustedData { get; set; }
-    /// <summary>Gets or sets the maximum complete encoded input frame size.</summary>
-    public int MaxInputBytes { get; set; } = 8 * 1024 * 1024;
-    /// <summary>Gets or sets the maximum decompressed payload size.</summary>
+    /// <summary>Gets or sets whether generated binary reads check untrusted input at their read sites. The default is true;
+    /// set false on an assembly or type to restore the unchecked reads of trusted data.</summary>
+    /// <remarks>Records keep the ordinary wire format. Reads check object markers, Boolean domains, back-reference types and the
+    /// declared limits below, frozen as constants. Setting this explicitly, or any limit, also selects strict JSON with the depth limit. Input must remain stable during
+    /// decoding; failed reads can retain completed updates. Input-selected types fail closed.</remarks>
+    public bool UntrustedData { get; set; } = true;
+    /// <summary>Gets or sets the maximum encoded input size accepted by the generated facades; unbounded unless declared.</summary>
+    public int MaxInputBytes { get; set; } = int.MaxValue;
+    /// <summary>Retained for source compatibility; compressed collections are bounded by their encoded size and the collection limit.</summary>
+    [Obsolete("Compressed collections are bounded by their encoded size and MaxCollectionLength; this limit has no effect.")]
     public int MaxDecompressedBytes { get; set; } = 16 * 1024 * 1024;
-    /// <summary>Gets or sets the conservative cumulative library allocation budget in bytes.</summary>
+    /// <summary>Retained for source compatibility; allocations are bounded by the input size instead.</summary>
+    [Obsolete("Every untrusted read allocates in proportion to the input it consumes; bound MaxInputBytes instead. This limit has no effect.")]
     public long MaxAllocationBytes { get; set; } = 64L * 1024 * 1024;
-    /// <summary>Gets or sets the maximum element count of one decoded collection.</summary>
-    public int MaxCollectionLength { get; set; } = 100_000;
-    /// <summary>Gets or sets the maximum string length in UTF-16 code units.</summary>
-    public int MaxStringLength { get; set; } = 1024 * 1024;
-    /// <summary>Gets or sets the maximum cumulative decoded reference-value count.</summary>
+    /// <summary>Gets or sets the maximum element count of one decoded binary collection; unbounded unless declared.</summary>
+    public int MaxCollectionLength { get; set; } = int.MaxValue;
+    /// <summary>Gets or sets the maximum binary string length in UTF-16 code units; unbounded unless declared.</summary>
+    public int MaxStringLength { get; set; } = int.MaxValue;
+    /// <summary>Retained for source compatibility; object counts are bounded by the input size instead.</summary>
+    [Obsolete("Every decoded object consumes input bytes; bound MaxInputBytes instead. This limit has no effect.")]
     public int MaxObjectCount { get; set; } = 100_000;
-    /// <summary>Gets or sets the maximum external-data value depth, from one through 64.</summary>
-    public int MaxDepth { get; set; } = 64;
-    /// <summary>Gets or sets the cumulative validation byte, element and comparison work budget.</summary>
+    /// <summary>Gets or sets the maximum nesting of recursive values and the untrusted JSON document depth, at least one.</summary>
+    /// <remarks>Without a declared limit, recursive reads keep only their stack guard and JSON keeps its own depth bound.</remarks>
+    public int MaxDepth { get; set; } = int.MaxValue;
+    /// <summary>Retained for source compatibility; read work is bounded by the input size instead.</summary>
+    [Obsolete("Untrusted reads perform work in proportion to the input they consume; bound MaxInputBytes instead. This limit has no effect.")]
     public long MaxReadWork { get; set; } = 32L * 1024 * 1024;
 
     /// <summary>

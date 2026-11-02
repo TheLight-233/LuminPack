@@ -25,7 +25,7 @@ internal static class Program
             {
                 case ["--seed", var directory]:
                     Corpus.Write(directory);
-                    Console.WriteLine($"Wrote and verified seeds for {FuzzTarget.All.Length} targets in {Path.GetFullPath(directory)}.");
+                    Console.WriteLine($"Wrote and verified seeds for {Targets.All.Length} targets in {Path.GetFullPath(directory)}.");
                     return 0;
                 case ["--replay", var name, var path]:
                     Replay(Find(name), path);
@@ -38,7 +38,7 @@ internal static class Program
                     return 0;
                 default:
                     Console.Error.WriteLine("Usage: --seed <corpus> | --replay <target> <file-or-directory> | --smoke <corpus> <output> [iterations seed] | --libfuzzer <target>");
-                    Console.Error.WriteLine("Targets: " + string.Join(", ", FuzzTarget.All.Select(target => target.Name)));
+                    Console.Error.WriteLine("Targets: " + string.Join(", ", Targets.All.Select(target => target.Name)));
                     return 2;
             }
         }
@@ -52,13 +52,13 @@ internal static class Program
     /// <summary>Resolves a target name before processing any input.</summary>
     /// <param name="name">The exact target name.</param>
     /// <returns>The requested target.</returns>
-    private static FuzzTarget Find(string name) => FuzzTarget.All.SingleOrDefault(target => target.Name == name)
+    private static IFuzzTarget Find(string name) => Targets.All.SingleOrDefault(target => target.Name == name)
         ?? throw new ArgumentException($"Unknown fuzz target: {name}");
 
     /// <summary>Replays a file or a corpus directory, preserving unexpected failures as a nonzero exit.</summary>
     /// <param name="target">The parser and invariants.</param>
     /// <param name="path">A file or directory containing raw encoded inputs.</param>
-    private static void Replay(FuzzTarget target, string path)
+    private static void Replay(IFuzzTarget target, string path)
     {
         string[] files = Directory.Exists(path) ? Directory.GetFiles(path).Order(StringComparer.Ordinal).ToArray() : [path];
         FuzzTarget.Require(files.Length != 0, "The replay corpus is empty.");
@@ -80,11 +80,10 @@ internal static class Program
         FuzzTarget.Require(iterations > 0, "The mutation count must be positive.");
         VerifyExceptionFilter();
         Directory.CreateDirectory(output);
-        foreach (var target in FuzzTarget.All)
+        foreach (var target in Targets.All)
         {
             // Positive seeds must reach the complete parser and invariant path on every smoke run.
-            foreach (var (_, value) in Corpus.Values())
-                _ = target.Seed(value);
+            foreach (var _ in target.Seeds()) { }
             string[] files = Directory.GetFiles(Path.Combine(corpus, target.Name)).Order(StringComparer.Ordinal).ToArray();
             FuzzTarget.Require(files.Length != 0, $"The {target.Name} corpus is empty.");
             var inputs = files.Select(file =>

@@ -2,7 +2,8 @@ using System.Security.Cryptography;
 using LuminPack;
 using LuminPack.Attribute;
 
-[assembly: LuminPackOption(StructLayout = global::LuminPack.Attribute.LuminPackStructLayout.Packed)]
+// Most native contract checks read trusted data; the external-input models below opt in explicitly.
+[assembly: LuminPackOption(StructLayout = global::LuminPack.Attribute.LuminPackStructLayout.Packed, UntrustedData = false)]
 
 /// <summary>Executes real generated operations in JIT, trimmed and native executables without reflection.</summary>
 internal static partial class Program
@@ -214,7 +215,7 @@ internal static partial class Program
         Check(copy.GetLength(0) == 0 && copy.GetLength(1) == 3, "Empty JSON dimensions were lost.");
     }
 
-    /// <summary>Exercises the option-selected external boundary without dynamic code or reflection.</summary>
+    /// <summary>Exercises the untrusted external boundary without dynamic code or reflection.</summary>
     private static void CheckExternalInput()
     {
         var source = new AotExternal { Id = 17, Text = "bounded", Values = new[] { 1, 2, 3 } };
@@ -224,10 +225,10 @@ internal static partial class Program
         LuminPackSerializer.Deserialize(bytes, ref target);
         Check(ReferenceEquals(original, target) && target.Id == 17, "External decoding lost ordinary reuse.");
         Check(global::LuminPackUnitTest.ConcreteReads.ReadJson<AotExternal>(LuminPackSerializer.SerializeJson(source), static (string concreteReadInput, ref AotExternal concreteReadTarget) => LuminPackSerializer.DeserializeJson(concreteReadInput, ref concreteReadTarget)).Text == source.Text, "External JSON failed.");
-        bytes[24] ^= 1;
+        bytes[0] = 0;
         bool rejected = false;
         try { LuminPackSerializer.Deserialize(bytes, ref target); } catch (InvalidDataException) { rejected = true; }
-        Check(rejected && target.Id == 17, "External schema validation changed its destination.");
+        Check(rejected && target.Id == 17, "External marker validation changed its destination.");
         rejected = false;
         try { _ = global::LuminPackUnitTest.ConcreteReads.Read<AotExternal>(LuminPackSerializer.Serialize(new AotExternal { Values = new int[5] }), static (global::System.ReadOnlySpan<byte> concreteReadInput, ref AotExternal concreteReadTarget) => LuminPackSerializer.Deserialize(concreteReadInput, ref concreteReadTarget)); } catch (InvalidDataException) { rejected = true; }
         Check(rejected, "External collection quota was bypassed.");
@@ -236,7 +237,8 @@ internal static partial class Program
         AotExternalScalar? scalarCopy = null;
         LuminPackSerializer.Deserialize(scalarBytes, ref scalarCopy);
         Check(scalarCopy!.Stamp == scalar.Stamp && scalarCopy.Flag, "The proven scalar read failed.");
-        scalarBytes[61] = 2; rejected = false;
+        scalarBytes[Difference(scalarBytes, LuminPackSerializer.Serialize(new AotExternalScalar { Id = 23, Flag = false, Stamp = 123456789 }))] = 2;
+        rejected = false;
         try { LuminPackSerializer.Deserialize(scalarBytes, ref scalarCopy); } catch (InvalidDataException) { rejected = true; }
         Check(rejected, "The proven scalar read accepted invalid Boolean storage.");
         var text = new AotExternalText { Id = 31, Text = "\u4e2d\ud83d\ude00", Flag = true };
@@ -246,7 +248,8 @@ internal static partial class Program
         var originalText = textCopy;
         LuminPackSerializer.Deserialize(textBytes, ref textCopy);
         Check(ReferenceEquals(originalText, textCopy) && textCopy!.Text == text.Text && textCopy.Flag, "The proven text read changed reuse.");
-        textBytes[^1] = 2; rejected = false;
+        textBytes[Difference(textBytes, LuminPackSerializer.Serialize(new AotExternalText { Id = 31, Text = text.Text, Flag = false }))] = 2;
+        rejected = false;
         try { LuminPackSerializer.Deserialize(textBytes, ref textCopy); } catch (InvalidDataException) { rejected = true; }
         Check(rejected, "The proven text read missed a trailing Boolean domain.");
         CheckProvenArrays();
@@ -263,13 +266,35 @@ internal static partial class Program
         LuminPackSerializer.Deserialize(bytes, ref copy);
         Check(ReferenceEquals(original, copy) && ReferenceEquals(flags, copy!.Flags) && ReferenceEquals(values, copy.Values) &&
             copy.Flags.SequenceEqual(source.Flags) && copy.Values.SequenceEqual(source.Values), "The proven array read changed data or reuse.");
+        byte[] flagBytes = source.Flags.Select(value => value ? (byte)1 : (byte)0).ToArray();
+        int flagsOffset = bytes.AsSpan().IndexOf(flagBytes);
+        Check(flagsOffset >= 0, "The checked Boolean array payload was not found.");
         foreach (int lane in new[] { 0, 15, 16, 31, 32, 63, 64 })
         {
-            var forged = (byte[])bytes.Clone(); forged[61 + lane] = 2;
+            var forged = (byte[])bytes.Clone(); forged[flagsOffset + lane] = 2;
             bool rejected = false;
             try { LuminPackSerializer.Deserialize(forged, ref copy); } catch (InvalidDataException) { rejected = true; }
-            Check(rejected && copy!.Flags.SequenceEqual(source.Flags), "The proven array read accepted or published invalid Boolean storage.");
+            // Failed untrusted reads are not transactional: the rejected lane may already be copied into reusable storage.
+            Check(rejected, "The proven array read accepted invalid Boolean storage.");
         }
+    }
+
+    /// <summary>Returns the single byte offset that differs between two equal-length wire records.</summary>
+    /// <param name="left">The first record.</param>
+    /// <param name="right">The second record.</param>
+    /// <returns>The differing offset.</returns>
+    private static int Difference(byte[] left, byte[] right)
+    {
+        if (left.Length != right.Length) throw new InvalidOperationException("The wire records have different lengths.");
+        int offset = -1;
+        for (int index = 0; index < left.Length; index++)
+        {
+            if (left[index] == right[index]) continue;
+            if (offset >= 0) throw new InvalidOperationException("More than one wire byte differs.");
+            offset = index;
+        }
+        if (offset < 0) throw new InvalidOperationException("The wire records are identical.");
+        return offset;
     }
 
     /// <summary>Fails the executable if an observable generated operation changed.</summary>

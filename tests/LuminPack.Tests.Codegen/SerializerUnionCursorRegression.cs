@@ -27,7 +27,7 @@ internal static class SerializerUnionCursorRegression
             [LuminPackOnSerializing] public static void Before() { }
         }
         [LuminPackable] public sealed partial class Property : Root { public int Number { get; set; } }
-        [LuminPackable, LuminPackOption(UntrustedData = true)] public sealed partial class Guarded : Root { public int Number; }
+        [LuminPackable, LuminPackOption(UntrustedData = true)] public sealed partial class Guarded : Root { public int Number; public string Note = ""; }
         [LuminPackable(GeneratorType.VersionTolerant)] public partial struct Versioned { [LuminPackOrder(1)] public int Number; }
         [LuminPackable] public sealed partial class Specialized : Root { public Versioned Value; }
         [LuminPackable, LuminPackWideTag, LuminPackUnion(60000, typeof(WideCase))] public abstract partial class Wide { }
@@ -107,7 +107,7 @@ internal static class SerializerUnionCursorRegression
                 method.Identifier.ValueText.StartsWith("__LuminPackUnionSerialize_", StringComparison.Ordinal)).ToArray();
             Require(variableSlots.Length == 18 && variableSlots.All(method => method.Body!.ToString().Contains("WriteUnionHeader", StringComparison.Ordinal) &&
                 !method.Body.ToString().Contains("SerializeUnionAt", StringComparison.Ordinal)),
-                "Variable, callback and external-input-policy cases must retain the original virtual operation path.");
+                "Variable and callback cases must retain the original virtual operation path.");
             Require(!cursorSlots.Any(method => method.Parent is ClassDeclarationSyntax parent && parent.Identifier.ValueText is
                 "Wide" or "WideCase" or "GenericRoot" or "GenericCase"),
                 "A wide/generic root acquired a cursor slot.");

@@ -52,7 +52,7 @@ Delegate targets use the formatter signature of the member type, for example `st
 | `WideTag` | false | Class/interface declaration only; accepts wide Union tags. Small tags still occupy one byte. |
 | `SingleImplementation` | false | Class/interface declaration only; caller guarantees one implementation everywhere. Retains Union framing; without registration the single sealed case is called directly. |
 | `StructLayout` | `LuminPackStructLayout.Tagged` | Assembly or struct. `Packed`: no padding, same bytes on 32/64-bit. `Native`: full native storage, identical layouts required. |
-| `UntrustedData` + `Max*` limits | off | Root type or assembly; bounded protocol for hostile input. |
+| `UntrustedData` + `Max*` limits | on, limits unbounded | Root type or assembly; checked reads on the ordinary wire format. `false` restores trusted reads; declare limits for hostile input. |
 
 These Union switches do not inherit from assemblies, containing types or base types, cannot be selected through operation profiles, and do not pin string profiles. A legacy standalone marker takes precedence over an explicit false option. Only assert `SingleImplementation` when no other assembly can add an implementation.
 

@@ -20,16 +20,22 @@
 
 ### 版本容忍对象
 
-`(251, 1, byte profile, byte memberCount, [UTF-8 名称/类型元数据...], [VarInt 负载长度...], [负载...])`
+`(251, 2, byte profile, byte memberCount, [UTF-8 名称/类型元数据...], [byte 宽度...], [负载...])`
+
+小于 255 的宽度是原始成员的精确宽度；255 表示该负载前带有 `int` 长度。读取方也接受修订版 `1`，它把所有负载长度写在负载之前。
+
+`(251, 3, byte profile, byte memberCount, ulong fingerprint, [负载...])`
+
+同一次写入操作中，某个模型的第一条完整记录之后，该模型后续的记录使用短格式：用元数据和宽度表的 64 位 FNV-1a 指纹代替它们。读取方把指纹解析为同一次操作中先前读到的表。
 
 `255` 表示 `null`。详见[版本容忍](versioning.cn.md#binary-framing)。
 
 ### 引用跟踪对象
 
-`(byte memberCount, [VarInt 槽位长度...], VarInt referenceId, [values...])`
+`(byte slotCount, [byte 槽位宽度...], VarInt referenceId, [values...])`
 `(250, VarInt referenceId)`
 
-新对象先写槽位长度表，再写引用 id。`250` 表示引用一个已经读过的对象。
+新对象先写槽位表，再写引用 id。槽位宽度是原始成员的宽度，空槽位为 `0`，`255` 表示该值前带有 `int` 长度（包括 255 字节及以上的原始值）。`250` 表示引用一个已经读过的对象，`255` 表示 `null`。槽位数小于 250。
 
 ### 字符串
 

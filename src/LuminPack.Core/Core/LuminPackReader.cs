@@ -1,4 +1,5 @@
 using System.Buffers;
+using System.Buffers.Binary;
 using LuminPack.Core;
 using System.ComponentModel;
 using System.Diagnostics;
@@ -63,6 +64,10 @@ namespace LuminPack.Core
         /// <summary>The explicit or materialized reference context, or null before an implicit scope requests state.</summary>
         /// <remarks>Use <see cref="OptionState"/> when reference tracking requires an initialized context.</remarks>
         private LuminPackReaderOptionalState? _options;
+        /// <summary>The recursive values currently entered by generated untrusted-input reads.</summary>
+        /// <remarks>Each reader starts at zero; only recursive types of untrusted graphs change it.</remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public int InputDepth;
         /// <summary>Gets or sets the operation reference context.</summary>
         public LuminPackReaderOptionalState? Options
         {
@@ -290,6 +295,61 @@ namespace LuminPack.Core
             ref byte source = ref Current;
             Advance(byteCount);
             global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)byteCount);
+        }
+
+        /// <summary>Returns the current input byte and whether <paramref name="length"/> bytes remain from it.</summary>
+        /// <param name = "length">The nonnegative byte count a generated comparison needs.</param>
+        /// <param name = "available">Whether the bytes remain; nothing may be read through the result otherwise.</param>
+        /// <returns>The current input byte.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public ref byte PeekInput(int length, out bool available)
+        {
+#if NET8_0_OR_GREATER
+            available = (long)Unsafe.ByteOffset(ref Cursor, ref _end) >= length;
+#else
+            available = (long)(_end - Cursor) >= length;
+#endif
+            return ref Current;
+        }
+
+        /// <summary>Copies a fixed storage batch and tests the Boolean bytes of its input through one eight-byte window.</summary>
+        /// <param name = "destination">The first byte of the complete fixed storage batch.</param>
+        /// <param name = "byteCount">The batch width, at least <paramref name="window"/> plus eight.</param>
+        /// <param name = "window">The batch offset of the tested window.</param>
+        /// <param name = "mask">The non-low bits of every Boolean byte in the window.</param>
+        /// <returns>Whether every Boolean byte is zero or one.</returns>
+        /// <remarks>The test reads the input rather than the copied fields, so it never waits for the copy's stores.</remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadCanonicalBatch(scoped ref byte destination, int byteCount, int window, ulong mask)
+        {
+            ref byte source = ref Current;
+            Advance(byteCount);
+            // 32-bit targets keep typed unaligned access within four bytes.
+            ulong bits = Unsafe.SizeOf<IntPtr>() == 8
+                ? Unsafe.ReadUnaligned<ulong>(ref Unsafe.Add(ref source, (nint)(uint)window))
+                : Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)window)) |
+                  (ulong)Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)window + 4)) << 32;
+            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)byteCount);
+            return (bits & mask) == 0;
+        }
+
+        /// <summary>Copies a fixed storage batch and tests the Boolean bytes of its input through one four-byte window.</summary>
+        /// <param name = "destination">The first byte of the complete fixed storage batch.</param>
+        /// <param name = "byteCount">The batch width, at least <paramref name="window"/> plus four.</param>
+        /// <param name = "window">The batch offset of the tested window.</param>
+        /// <param name = "mask">The non-low bits of every Boolean byte in the window.</param>
+        /// <returns>Whether every Boolean byte is zero or one.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadCanonicalBatch(scoped ref byte destination, int byteCount, int window, uint mask)
+        {
+            ref byte source = ref Current;
+            Advance(byteCount);
+            uint bits = Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, (nint)(uint)window));
+            global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref source, (uint)byteCount);
+            return (bits & mask) == 0;
         }
 
         /// <summary>Reads a contiguous payload directly into its selected destination storage.</summary>
@@ -613,6 +673,9 @@ namespace LuminPack.Core
 
             if ((uint)payloadBytes > (uint)(source.Length - offset))
                 LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(offset + payloadBytes));
+            // LuminZ produces at most 255 bytes per encoded byte, so a larger claim is rejected before its storage is allocated.
+            if (compressed && decodedBytes / 256 > payloadBytes)
+                LuminPackExceptionHelper.ThrowInvalidDataException("Compressed collection output length exceeds what its payload can encode.");
             if (compressed && LuminCompressor.GetDecompressedSize(source.Slice(offset, payloadBytes)) != decodedBytes)
                 LuminPackExceptionHelper.ThrowInvalidDataException("Compressed collection output length does not match its element count.");
             return checked(offset + payloadBytes);
@@ -1592,6 +1655,212 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Matches a complete revision-2 prefix: header with the compiled profile, names, types and widths.</summary>
+        /// <typeparam name = "TOptions">The compiled receiving profile.</typeparam>
+        /// <param name = "prefix">The generated prefix with a zero profile byte.</param>
+        /// <returns>Whether the complete matching prefix was consumed.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryReadVersionPrefix<TOptions>(scoped ReadOnlySpan<byte> prefix)
+            where TOptions : struct, ILuminPackOptions
+        {
+            if ((uint)Position > (uint)Buffer.Length || prefix.Length > Buffer.Length - Position)
+                return false;
+            uint expected = BinaryPrimitives.ReadUInt32LittleEndian(prefix) | (uint)LuminPackWriter.BinaryProfile<TOptions>() << 16;
+            if (LuminPackReader.Read<uint>(ref Current) != expected ||
+                !System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref Unsafe.Add(ref Current, 4), prefix.Length - 4).SequenceEqual(prefix.Slice(4)))
+                return false;
+            Advance(prefix.Length);
+            return true;
+        }
+
+        /// <summary>Reads the four-byte payload length of a variable revision-2 member.</summary>
+        /// <returns>The nonnegative length, validated against the remaining input.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int ReadVersionPayloadLength()
+        {
+            ref byte source = ref Current;
+            Advance(sizeof(int));
+            int length = Unsafe.ReadUnaligned<int>(ref source);
+            // One unsigned comparison rejects a negative length and a payload past the input.
+#if NET8_0_OR_GREATER
+            if ((ulong)(uint)length > (ulong)Unsafe.ByteOffset(ref Cursor, ref _end))
+#else
+            if ((ulong)(uint)length > (ulong)(_end - Cursor))
+#endif
+                ThrowVersionPayloadLength(length);
+            return length;
+        }
+
+        /// <summary>Rejects a version-tolerant payload length that is negative or exceeds the input.</summary>
+        /// <param name="length">The rejected length.</param>
+        [System.Diagnostics.CodeAnalysis.DoesNotReturn]
+        private static void ThrowVersionPayloadLength(int length)
+            => throw new FormatException(length < 0 ? "Negative version-tolerant payload length." : "Version-tolerant payload exceeds the input.");
+
+        /// <summary>Reads a Boolean array record, copying its storage in one pass that also validates every element.</summary>
+        /// <param name="value">The reusable destination; an array of another length is replaced.</param>
+        /// <returns>Whether every element stored zero or one. The destination holds the copied bytes either way.</returns>
+        /// <remarks>The record is the ordinary contiguous array record: a four-byte count, minus one for null, then one byte per element.</remarks>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool ReadCanonicalBooleans(ref bool[]? value)
+        {
+            int count = Read<int>();
+            if (count <= 0)
+            {
+                if (count == 0) value = Array.Empty<bool>();
+                else if (count == LuminPackCode.NullCollection) value = null;
+                else LuminPackExceptionHelper.ThrowInvalidCollectionLength(count);
+                return true;
+            }
+            EnsureReadable(count);
+            if (value is null || value.Length != count) value = LuminPackMarshal.AllocateUninitializedArray<bool>(count);
+            bool canonical = global::LuminPack.Security.LuminPackInputPolicy.CopyBooleans(ref Current,
+                ref Unsafe.As<bool, byte>(ref MemoryMarshal.GetReference(value.AsSpan())), count);
+            Advance(count);
+            return canonical;
+        }
+
+        /// <summary>Checks the recorded width of a raw reference-tracked slot that differs from its storage width.</summary>
+        /// <param name="recorded">The slot table byte.</param>
+        /// <param name="width">The raw storage width.</param>
+        /// <remarks>A width of 255 bytes or more is recorded as 255 with the width in front of the value; any other entry
+        /// disagrees with the slot's type.</remarks>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void ValidateReferenceWidth(int recorded, int width)
+        {
+            if (recorded != 255 || width < 255 || ReadVersionPayloadLength() != width)
+                LuminPackExceptionHelper.ThrowFormatException("A reference-tracked slot width disagrees with its member type.");
+        }
+
+        /// <summary>Reads the length in front of a variable reference-tracked slot.</summary>
+        /// <param name="recorded">The slot table byte, which must be 255.</param>
+        /// <returns>The validated payload length.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int ReadReferencePayloadLength(int recorded)
+        {
+            if (recorded != 255)
+                LuminPackExceptionHelper.ThrowFormatException("A reference-tracked slot width disagrees with its member type.");
+            return ReadVersionPayloadLength();
+        }
+
+        /// <summary>Skips the payload of one reference-tracked slot that the receiving model does not know.</summary>
+        /// <param name="recorded">The slot table byte: a raw width, zero for an empty slot, or 255 for a length-prefixed payload.</param>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public void SkipReferenceSlot(int recorded) => Advance(recorded == 255 ? ReadVersionPayloadLength() : recorded);
+
+        /// <summary>Skips the payloads of reference-tracked slots that the receiving model does not know.</summary>
+        /// <param name="tablePosition">The absolute position of the first unknown slot byte in the record table.</param>
+        /// <param name="slots">The number of unknown trailing slots.</param>
+        /// <remarks>The table is read again from the input, so the generated read keeps no table storage.</remarks>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void SkipReferenceSlots(int tablePosition, int slots)
+        {
+            for (int i = 0; i < slots; i++)
+                SkipReferenceSlot(Buffer[tablePosition + i]);
+        }
+
+        /// <summary>Reads a named header of either revision and rejects unrelated record formats.</summary>
+        /// <typeparam name = "TOptions">The compiled receiving profile.</typeparam>
+        /// <param name = "revision">Receives the record revision: 1 stores all lengths before the payloads, 2 stores a width table.</param>
+        /// <returns>The member count, or minus one for a null object.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public int ReadVersionHeader<TOptions>(out int revision)
+            where TOptions : struct, ILuminPackOptions
+        {
+            ValidateCollectionPayload(Position, 1);
+            revision = 0;
+            if (Current == 255)
+            {
+                Advance(1);
+                return -1;
+            }
+
+            ValidateCollectionPayload(Position, 2);
+            revision = Unsafe.Add(ref Current, 1);
+            return ReadNonNullVersionHeader<TOptions>(true);
+        }
+
+        /// <summary>Maps a dynamic member table of either revision before reading any payload.</summary>
+        /// <param name = "fields">The generated receiving schema.</param>
+        /// <param name = "revision">The record revision returned by the header.</param>
+        /// <param name = "slots">Receives local member indices, or minus one for unknown fields.</param>
+        /// <param name = "widths">Receives revision-1 payload lengths, or revision-2 fixed widths and minus one for a length-prefixed member.</param>
+        /// <param name = "present">Receives the set of local fields supplied by the input.</param>
+        public void ReadVersionTable(LuminPackVersionField[] fields, int revision, scoped Span<int> slots, scoped Span<int> widths, scoped Span<byte> present)
+        {
+            if (revision == 1)
+            {
+                ReadVersionTable(fields, slots, widths, present);
+                return;
+            }
+            if (revision == 3)
+            {
+                // A short record names a table that a full record of this operation already carried.
+                EnsureReadable(sizeof(ulong));
+                ulong fingerprint = Unsafe.ReadUnaligned<ulong>(ref Current);
+                Advance(sizeof(ulong));
+                Span<byte> stored = default;
+                if (_options is null || !_options.TryGetVersionTable(fingerprint, out stored))
+                    LuminPackExceptionHelper.ThrowFormatException("A short version-tolerant record names a member table this operation has not read.");
+                var tableReader = new LuminPackReader(ref stored, _options);
+                tableReader.ReadVersionWidths(fields, slots, widths, present);
+                return;
+            }
+            int start = Position;
+            ReadVersionWidths(fields, slots, widths, present);
+            // Later short records of this operation map through the same table.
+            OptionState.AddVersionTable(LuminPackVersionField.Fingerprint(Buffer.Slice(start, Position - start)), Buffer.Slice(start, Position - start));
+        }
+
+        /// <summary>Maps the names, type contracts and widths of a revision-2 member table at the cursor.</summary>
+        /// <param name = "fields">The generated receiving schema.</param>
+        /// <param name = "slots">Receives local member indices, or minus one for unknown fields.</param>
+        /// <param name = "widths">Receives fixed widths, or minus one for a length-prefixed member.</param>
+        /// <param name = "present">Receives the set of local fields supplied by the input.</param>
+        private void ReadVersionWidths(LuminPackVersionField[] fields, scoped Span<int> slots, scoped Span<int> widths, scoped Span<byte> present)
+        {
+            ReadVersionNames(fields, slots, present);
+            ValidateCollectionPayload(Position, widths.Length);
+            for (int i = 0; i < widths.Length; i++)
+            {
+                byte width = Read<byte>();
+                widths[i] = width == 255 ? -1 : width;
+            }
+        }
+
+        /// <summary>Matches a short record of the receiving schema: its header and the receiver's own table fingerprint.</summary>
+        /// <typeparam name = "TOptions">The compiled receiving profile.</typeparam>
+        /// <param name = "count">The receiving member count.</param>
+        /// <param name = "fingerprint">The receiving table fingerprint.</param>
+        /// <returns>Whether the short record matched and was consumed.</returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryReadVersionShort<TOptions>(int count, ulong fingerprint) where TOptions : struct, ILuminPackOptions
+        {
+            ref byte input = ref PeekInput(12, out bool available);
+            if (!available || Unsafe.ReadUnaligned<uint>(ref input) != (251u | 3u << 8 | (uint)LuminPackWriter.BinaryProfile<TOptions>() << 16 | (uint)count << 24) ||
+                Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref input, 4)) != (uint)fingerprint || Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref input, 8)) != (uint)(fingerprint >> 32))
+                return false;
+            Advance(12);
+            return true;
+        }
+
+        /// <summary>Maps a stack table of either revision without a by-reference receiver.</summary>
+        /// <param name="reader">The input state whose cursor is copied for this metadata-only operation.</param>
+        /// <param name="fields">The receiving schema.</param>
+        /// <param name="revision">The record revision.</param>
+        /// <param name="slots">The incoming member slots.</param>
+        /// <param name="widths">The incoming lengths or widths.</param>
+        /// <param name="present">A writable range with one byte per receiving field.</param>
+        /// <returns>The validated metadata end to publish to the original reader.</returns>
+        public static int ReadVersionTable(LuminPackReader reader, LuminPackVersionField[] fields, int revision, scoped Span<int> slots, scoped Span<int> widths, scoped Span<byte> present)
+        {
+            reader.ReadVersionTable(fields, revision, slots, widths, present);
+            return reader.Position;
+        }
+
         /// <summary>Reads a named version-tolerant header and rejects unrelated record formats.</summary>
         /// <returns>The member count, or minus one for a null object.</returns>
         public int ReadVersionHeader() => ReadVersionHeader<LuminPackDefaultOptions>();
@@ -1610,14 +1879,15 @@ namespace LuminPack.Core
                 return -1;
             }
 
-            return ReadNonNullVersionHeader<TOptions>();
+            return ReadNonNullVersionHeader<TOptions>(false);
         }
 
         /// <summary>Decodes an evolved non-null header outside the common matching-schema native body.</summary>
         /// <typeparam name = "TOptions">The compiled receiving profile.</typeparam>
+        /// <param name = "widthTables">Whether the caller also accepts revision 2.</param>
         /// <returns>The validated member count.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
-        private int ReadNonNullVersionHeader<TOptions>()
+        private int ReadNonNullVersionHeader<TOptions>(bool widthTables)
             where TOptions : struct, ILuminPackOptions
         {
             byte marker = Read<byte>();
@@ -1627,7 +1897,7 @@ namespace LuminPack.Core
             byte revision = Read<byte>();
             byte profile = Read<byte>();
             int count = Read<byte>();
-            if (revision != 1 || count > 249)
+            if (revision != 1 && !(widthTables && revision is 2 or 3) || count > 249)
                 LuminPackExceptionHelper.ThrowFormatException("Unsupported version-tolerant record header.");
             if (profile != LuminPackWriter.BinaryProfile<TOptions>())
                 LuminPackExceptionHelper.ThrowFormatException("The version-tolerant binary string profile does not match the input.");
@@ -1640,6 +1910,16 @@ namespace LuminPack.Core
         /// <param name = "lengths">Receives payload lengths in table order.</param>
         /// <param name = "present">Receives the set of local fields supplied by the input.</param>
         public void ReadVersionTable(LuminPackVersionField[] fields, scoped Span<int> slots, scoped Span<int> lengths, scoped Span<byte> present)
+        {
+            ReadVersionNames(fields, slots, present);
+            ReadVersionLengths(lengths);
+        }
+
+        /// <summary>Maps the names and types of a dynamic member table.</summary>
+        /// <param name = "fields">The generated receiving schema.</param>
+        /// <param name = "slots">Receives local member indices, or minus one for unknown fields.</param>
+        /// <param name = "present">Receives the set of local fields supplied by the input.</param>
+        private void ReadVersionNames(LuminPackVersionField[] fields, scoped Span<int> slots, scoped Span<byte> present)
         {
             present.Clear();
             for (int i = 0; i < slots.Length; i++)
@@ -1667,8 +1947,6 @@ namespace LuminPack.Core
                     present[slot] = 1;
                 }
             }
-
-            ReadVersionLengths(lengths);
         }
 
         /// <summary>Maps a stack table without a by-reference receiver for compilers that do not understand scoped Span metadata.</summary>
@@ -1866,11 +2144,15 @@ namespace LuminPack.Core
         /// <summary>Checks a known field's completed read against its table length.</summary>
         /// <param name = "actual">The completed absolute cursor.</param>
         /// <param name = "expected">The expected absolute end.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static void ValidateVersionFieldEnd(int actual, int expected)
         {
-            if (actual != expected)
-                LuminPackExceptionHelper.ThrowFormatException("Version-tolerant field length does not match its payload.");
+            if (actual != expected) ThrowVersionFieldEnd();
         }
+
+        /// <summary>Rejects a member whose read ended elsewhere than its recorded length.</summary>
+        [System.Diagnostics.CodeAnalysis.DoesNotReturn]
+        private static void ThrowVersionFieldEnd() => throw new FormatException("Version-tolerant field length does not match its payload.");
 
         #endregion
 }
