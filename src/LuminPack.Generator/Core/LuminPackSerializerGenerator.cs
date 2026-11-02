@@ -132,6 +132,7 @@ public static partial class LuminPackSerializerGenerator
 
         string header = sb.ToString();
         var blocks = new List<KeyValuePair<string, string>>(orderedTypes.Length);
+        var rootTargets = new Dictionary<string, LazyForwardingTargets>(StringComparer.Ordinal);
         var completeApiTypes = new HashSet<string>(StringComparer.Ordinal);
         bool stationaryInput = RequiresStationaryInput(compilation, metaInfo);
         foreach (ITypeSymbol type in orderedTypes)
@@ -145,7 +146,10 @@ public static partial class LuminPackSerializerGenerator
             if (stationaryInput) outputVariant = (outputVariant ?? "all") + "|stationary-input";
             LazyForwardingTargets targets = null;
             if (navigationTargets?.TryGetValue(typeName, out targets) == true && targets.Key.Length != 0)
+            {
                 outputVariant = (outputVariant ?? "all") + "|roots:" + targets.Key;
+                rootTargets[typeName] = targets;
+            }
             var frozen = fragments.Fragments.GetOrBuild(type, compilation, metaInfo, LuminPackGenerationTier.Full, () =>
             {
                 string text = RenderOverloadFragment(type, typeName, compilation, metaInfo, apis, targets);
@@ -167,6 +171,10 @@ public static partial class LuminPackSerializerGenerator
         });
         cancellationToken.ThrowIfCancellationRequested();
         string sharedSupport = fragments.Sharing.Apply(blocks, completeApiTypes, metaInfo);
+        // After sharing, the remaining concrete bodies and each payload's sharing adapter call the payload's recorded root.
+        for (int index = 0; index < blocks.Count; index++)
+            if (rootTargets.TryGetValue(blocks[index].Key, out var blockTargets))
+                blocks[index] = new KeyValuePair<string, string>(blocks[index].Key, FacadeRootCalls.Apply(blocks[index].Value, blockTargets, metaInfo));
         if (sharedSupport.Length != 0)
         {
             string footer = "    }" + Environment.NewLine + "}" + Environment.NewLine;
@@ -308,6 +316,49 @@ public static partial class LuminPackSerializerGenerator
         root = (CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(root);
         string documented = LuminPackSerializerDocumentation.Enhance(root, types, compilation, metadata, navigationTargets);
         return documented.Substring(header.Length, documented.Length - header.Length - footer.Length);
+    }
+
+    /// <summary>Replaces a concrete facade's state-based Serializer call with the root its operation forwards to.</summary>
+    /// <remarks>The Serializer declares same-named operations for every payload, so each facade call made C# overload resolution
+    /// examine all of them. The completed contribution recorded the single root each operation calls; calling it directly binds
+    /// within the payload's root container and runs the same code.</remarks>
+    private sealed class FacadeRootCalls : CSharpSyntaxRewriter
+    {
+        private readonly LazyForwardingTargets _targets;
+
+        /// <summary>Captures the payload's recorded roots.</summary>
+        /// <param name="targets">The completed contribution's forwarding facts.</param>
+        internal FacadeRootCalls(LazyForwardingTargets targets) => _targets = targets;
+
+        /// <summary>Retargets one completed facade block.</summary>
+        /// <param name="block">The block's members, without the enclosing Serializer declaration.</param>
+        /// <param name="targets">The payload's recorded roots.</param>
+        /// <param name="metadata">The parse settings.</param>
+        /// <returns>The block with direct root calls; its text is otherwise unchanged.</returns>
+        internal static string Apply(string block, LazyForwardingTargets targets, MetaInfo metadata)
+        {
+            const string header = "class LuminPackSerializer {\n", footer = "}";
+            var root = CSharpSyntaxTree.ParseText(header + block + footer, metadata.ParseOptions.WithDocumentationMode(DocumentationMode.Parse)).GetRoot();
+            string text = new FacadeRootCalls(targets).Visit(root).ToFullString();
+            return text.Substring(header.Length, text.Length - header.Length - footer.Length);
+        }
+
+        /// <summary>Retargets a recognized forwarding call.</summary>
+        /// <param name="node">An invocation.</param>
+        /// <returns>The direct root call, or the unchanged invocation.</returns>
+        public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
+        {
+            var result = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
+            if (result.Expression is not MemberAccessExpressionSyntax access || access.Expression.ToString() != "global::LuminPack.LuminPackSerializer" ||
+                access.Name.Identifier.ValueText is not ("Serialize" or "Deserialize" or "SerializeJson" or "DeserializeJson") ||
+                access.Name is GenericNameSyntax { TypeArgumentList.Arguments.Count: > 1 } || result.ArgumentList.Arguments.Count != 2 ||
+                result.ArgumentList.Arguments[0] is not { Expression: IdentifierNameSyntax state } first || !first.RefKindKeyword.IsKind(SyntaxKind.RefKeyword) ||
+                result.ArgumentList.Arguments[1].Expression is not IdentifierNameSyntax value)
+                return result;
+            string profile = access.Name is GenericNameSyntax generic ? generic.TypeArgumentList.Arguments[0].ToString() : null;
+            string call = _targets.Call(access.Name.Identifier.ValueText, profile, state.Identifier.ValueText, value.Identifier.ValueText);
+            return call == null ? result : SyntaxFactory.ParseExpression(call.TrimEnd(';')).WithTriviaFrom(result);
+        }
     }
 
     /// <summary>Includes the actual referenced runtime's cursor representation in facade generation and cache identity.</summary>

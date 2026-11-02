@@ -41,7 +41,7 @@ internal static class SerializerPartitionRegression
         Require(expectedMethods.Count == actualMethods.Count && expectedMethods.All(pair => actualMethods.GetValueOrDefault(pair.Key) == pair.Value),
             "Partitioning changed a concrete/generic method signature, implementation, attribute, default value, or XML contract: " +
             string.Join(Environment.NewLine, expectedMethods.Where(pair => actualMethods.GetValueOrDefault(pair.Key) != pair.Value)
-                .Select(pair => pair.Key + Environment.NewLine + pair.Value + Environment.NewLine + actualMethods.GetValueOrDefault(pair.Key)).Take(2)));
+                .Select(pair => pair.Key + Environment.NewLine + Code(pair.Value) + Environment.NewLine + Code(actualMethods.GetValueOrDefault(pair.Key))).Take(2)));
         Require(PayloadFiles(initialFiles, "global::One.Same").Single() != PayloadFiles(initialFiles, "global::Two.Same").Single(), "Same simple names collided across namespaces.");
 
         VerifyEdit("unrelated body", input, Replace(input, "Utility.cs", "17", "18"), expectedFiles: 0, expectedFragments: 0);
@@ -185,7 +185,27 @@ internal static class SerializerPartitionRegression
     private static Dictionary<string, string> MethodInventory(IEnumerable<string> sources)
         => sources.SelectMany(text => CSharpSyntaxTree.ParseText(text, Parse).GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
             .ToDictionary(method => method.Identifier.ValueText + method.TypeParameterList + method.ParameterList.ToString(),
-                method => Regex.Replace(method.ToFullString().Trim(), "<para>Generated implementation:.*?</para>", string.Empty), StringComparer.Ordinal);
+                method => DirectRoots(Regex.Replace(method.ToFullString().Trim(), "<para>Generated implementation:.*?</para>", string.Empty)), StringComparer.Ordinal);
+
+    /// <summary>Drops documentation lines so a failure shows the differing code.</summary>
+    /// <param name="method">A method with documentation, or null.</param>
+    /// <returns>The code lines.</returns>
+    private static string Code(string? method)
+        => method == null ? "<missing>" : string.Join(Environment.NewLine, method.Split('\n').Where(line => !line.TrimStart().StartsWith("///", StringComparison.Ordinal)));
+
+    /// <summary>Spells forwarding operation calls and recorded direct root calls alike.</summary>
+    /// <param name="body">A facade method.</param>
+    /// <returns>The method with each such call reduced to its operation, state and value.</returns>
+    /// <remarks>Partitioned facades know the roots of completed contributions and call them directly, which the
+    /// whole-class rendering cannot; both forms run the same root, whose profile argument the record may omit.</remarks>
+    private static string DirectRoots(string body)
+    {
+        body = Regex.Replace(body, @"(?:global::LuminPack\.LuminPackSerializer\.)?__LuminRoots_[0-9a-f]{16}\.Root(Write|Read|WriteJson|ReadJson)(?:<[^>(]*>)?\(ref (\w+), (?:in |ref )?(\w+)\)",
+            match => "<" + match.Groups[1].Value + " " + match.Groups[2].Value + " " + match.Groups[3].Value + ">");
+        return Regex.Replace(body, @"global::LuminPack\.LuminPackSerializer\.(Serialize|Deserialize|SerializeJson|DeserializeJson)(?:<[^>(]*>)?\(ref (\w+), (?:in |ref )?(\w+)\)",
+            match => "<" + match.Groups[1].Value switch { "Serialize" => "Write", "Deserialize" => "Read", "SerializeJson" => "WriteJson", _ => "ReadJson" } +
+                " " + match.Groups[2].Value + " " + match.Groups[3].Value + ">");
+    }
 
     /// <summary>Finds facade files declaring concrete methods for a canonical payload name.</summary>
     /// <param name="files">The generated facade partitions.</param>

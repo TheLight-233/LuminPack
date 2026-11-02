@@ -101,7 +101,7 @@ Roslyn cancellation is checked before changed-type analysis and between aggregat
 
 ### Generated files
 
-`LuminPackSerializer.g.cs` holds shared generic APIs; concrete type overloads live in hash-named partial files, stable when other types change. Every generated assembly owns a public `LuminPackSerializer`; generated files suppress CS0436 so a referenced assembly's copy is shadowed. Roots of each payload live in a `__LuminRoots_<hash>` container so overload resolution examines one payload per call.
+`LuminPackSerializer.g.cs` holds shared generic APIs; concrete type overloads live in hash-named partial files, stable when other types change. Every generated assembly owns a public `LuminPackSerializer`; generated files suppress CS0436 so a referenced assembly's copy is shadowed. Roots of each payload live in a `__LuminRoots_<hash>` container so overload resolution examines one payload per call. Generated code keeps that property for the other per-payload entry points: an advancing call whose payload the operation binding recorded names the payload's `Binary_<assembly>_<hash>` extension class instead of the extension form, an extension whose operation only forwards to a root calls the root, and a concrete facade calls the root recorded for its payload. The `LuminPackSerializer` operations and the `Write`/`Read` extensions keep their names and signatures for user code.
 
 Private shared facade helpers and adapters retain all 128 bits of their existing identity in a 26-character, identifier-safe base-32 suffix. This shortens generated source and metadata names without truncating identities or changing API signatures, operation bodies, file identities or dispatch.
 

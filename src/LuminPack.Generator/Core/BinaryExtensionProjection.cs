@@ -12,6 +12,15 @@ namespace LuminPack.Code.Core;
 /// <summary>Publishes closed binary extensions backed by each type's single concrete operation.</summary>
 internal static class BinaryExtensionProjection
 {
+    /// <summary>Marks a concrete operation call with the payload whose generated operation it binds to.</summary>
+    internal const string KnownPayloadAnnotation = "LuminPack.KnownPayload";
+
+    /// <summary>Names the class holding one payload's advancing extensions.</summary>
+    /// <param name="container">The assembly-specific extension container identity.</param>
+    /// <param name="payload">The payload spelling.</param>
+    /// <returns>The extension class name.</returns>
+    internal static string Owner(string container, string payload) => "Binary_" + container + "_" + RootContainerProjection.Hash(RootContainerProjection.PayloadKey(payload));
+
     /// <summary>Creates thin default and compiled-profile operations for the concrete types in this contribution.</summary>
     /// <param name="container">The assembly-specific extension container identity.</param>
     /// <param name="operations">The concrete state operations before profile specialization.</param>
@@ -64,10 +73,12 @@ internal static class BinaryExtensionProjection
                     .Append(profile ? " where " + profileName + " : struct, global::LuminPack.Option.ILuminPackOptions" : string.Empty);
                 string call = "global::LuminPack.LuminPackSerializer." + method.Identifier.ValueText + typeArguments;
                 if (scalar) call = "global::LuminPack.Core.LuminPack" + (write ? "Writer.Write" : "Reader.Read");
+                // A closed payload whose operation only forwards to its root calls that root, bound within the payload's container.
+                string direct = scalar || payloadParameters.Length != 0 ? null : RootCall(method, profile ? profileName : null);
                 if (compound)
                 {
                     source.Append(" { ").Append(state.Type).Append(" isolated = default; state.CopyTo(ref isolated); ")
-                        .Append(call).Append("(ref isolated, ").Append(passing).Append(" value); isolated.CopyTo(ref state); }");
+                        .Append(direct != null ? direct.Replace("(ref state, ", "(ref isolated, ") : call + "(ref isolated, " + passing + " value)").Append("; isolated.CopyTo(ref state); }");
                 }
                 else if (json && !write)
                 {
@@ -75,10 +86,10 @@ internal static class BinaryExtensionProjection
                     string selected = profile ? profileName : CompiledOptions.Resolve(payloadType, compilation).TypeName;
                     source.Append(" { if (state.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.None && !state.Read<")
                         .Append(selected).Append(">()) global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException(\"JSON input does not contain a value.\"); ")
-                        .Append(call).Append("(ref state, ref value); state.CompleteValue(); }");
+                        .Append(direct ?? call + "(ref state, ref value)").Append("; state.CompleteValue(); }");
                 }
-                else source.Append(" => ").Append(call).Append("(ref state, ").Append(passing).AppendLine(" value);");
-                string owner = "Binary_" + container + "_" + RootContainerProjection.Hash(RootContainerProjection.PayloadKey(payload));
+                else source.Append(" => ").Append(direct ?? call + "(ref state, " + passing + " value)").AppendLine(";");
+                string owner = Owner(container, payload);
                 if (!groups.TryGetValue(owner, out var members))
                 {
                     groups.Add(owner, members = new List<MemberDeclarationSyntax>());
@@ -90,6 +101,39 @@ internal static class BinaryExtensionProjection
         return order.Select(owner => SyntaxFactory.ClassDeclaration(owner)
             .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.InternalKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword), SyntaxFactory.Token(SyntaxKind.PartialKeyword)))
             .WithMembers(SyntaxFactory.List(groups[owner]))).ToArray();
+    }
+
+    /// <summary>Finds the root call of an operation that only forwards its own parameters to that root.</summary>
+    /// <param name="method">A Serializer operation before profile specialization.</param>
+    /// <param name="profile">The extension's profile type parameter, or null for the default-profile extension.</param>
+    /// <returns>The root call spelled for the extension's state and value parameters, or null.</returns>
+    /// <remarks>An extension calling the root directly binds against its payload's root container instead of the
+    /// Serializer's same-named operations of every payload. The specialized operation calls the same root with its own
+    /// profile in place of the default one.</remarks>
+    private static string RootCall(MethodDeclarationSyntax method, string profile)
+    {
+        var parameters = method.ParameterList.Parameters;
+        if (method.Body == null || method.Body.Statements.Count != 1 || method.Body.Statements[0] is not ExpressionStatementSyntax { Expression: InvocationExpressionSyntax root } ||
+            root.Expression is not SimpleNameSyntax name || !name.Identifier.ValueText.StartsWith("Root", StringComparison.Ordinal) ||
+            root.ArgumentList.Arguments.Count != 2) return null;
+        var arguments = new List<string>();
+        foreach (var argument in root.ArgumentList.Arguments)
+        {
+            if (argument.Expression is not IdentifierNameSyntax identifier) return null;
+            int index = parameters.IndexOf(parameter => parameter.Identifier.ValueText == identifier.Identifier.ValueText);
+            if (index < 0) return null;
+            string kind = argument.RefKindKeyword.IsKind(SyntaxKind.None) ? string.Empty : argument.RefKindKeyword.ValueText + " ";
+            arguments.Add(kind + (index == 0 ? "state" : "value"));
+        }
+        SimpleNameSyntax target = name;
+        if (profile != null)
+        {
+            if (name is not GenericNameSyntax generic || generic.TypeArgumentList.Arguments.Count == 0 ||
+                !generic.TypeArgumentList.Arguments.Last().ToString().StartsWith("global::LuminPack.Option.", StringComparison.Ordinal)) return null;
+            target = generic.WithTypeArgumentList(generic.TypeArgumentList.WithArguments(generic.TypeArgumentList.Arguments.Replace(
+                generic.TypeArgumentList.Arguments.Last(), SyntaxFactory.IdentifierName(profile))));
+        }
+        return "global::LuminPack.LuminPackSerializer." + target.NormalizeWhitespace().ToFullString() + "(" + string.Join(", ", arguments) + ")";
     }
 
     /// <summary>Uses the public advancing vocabulary after all profile and dispatch decisions are complete.</summary>

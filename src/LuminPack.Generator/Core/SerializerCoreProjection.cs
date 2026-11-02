@@ -189,6 +189,7 @@ internal static class SerializerCoreProjection
         if (closedRoot != null) rewritten = new ClosedMemberResetProjection(types).Visit(rewritten);
         rewritten = GeneratedOperationNames.Rewrite(rewritten);
         rewritten = RootContainerProjection.Apply(rewritten);
+        rewritten = PayloadCallTargets.Apply(rewritten, container.Identifier.ValueText);
         var normalized = (CompilationUnitSyntax)rewritten.NormalizeWhitespace("    ", Environment.NewLine);
         normalized = normalized.WithLeadingTrivia(SyntaxFactory.ParseLeadingTrivia("#nullable enable annotations\n#pragma warning disable CS0162, CS0168, CS0219, CS0436, CS0649, CS1591" + Environment.NewLine).AddRange(normalized.GetLeadingTrivia()));
         string result = LuminPackSerializerDocumentation.Enhance(normalized, closedRoot != null ? new[] { closedRoot } : contexts.Keys.Select(name => types[name]).ToArray(), compilation, metadata);
@@ -518,6 +519,11 @@ internal static class SerializerCoreProjection
             }
             var rewritten = node.WithExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
                 SyntaxFactory.ParseExpression("global::LuminPack.LuminPackSerializer"), target)).WithArgumentList(arguments);
+            // A concrete operation of a payload generated in this compilation keeps its payload, so the later advancing call can
+            // name that payload's own extension class instead of binding against every payload's same-named extension.
+            if (target is not GenericNameSyntax && scalarType != null && !LuminPackExtensionGenerator.ContainsTypeParameter(scalarType) &&
+                IsKnownOperation(FormatterTypeName.Get(scalarType), name, state.Contains("Json")))
+                rewritten = rewritten.WithAdditionalAnnotations(new SyntaxAnnotation(BinaryExtensionProjection.KnownPayloadAnnotation, FormatterTypeName.Get(scalarType)));
             if (!state.Contains("Json") && node.ArgumentList.Arguments.Count > (reduced ? 0 : 1))
             {
                 var payloadType = scalarType;
