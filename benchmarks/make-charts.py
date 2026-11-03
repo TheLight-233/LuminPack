@@ -19,7 +19,7 @@ SUITES = {
         ("Serialize", [("LuminPack", "LuminPackSerialize"), ("MemoryPack", "MemoryPackSerialize"), ("MessagePack", "MessagePackSerialize")]),
         ("Deserialize", [("LuminPack", "LuminPackDeserialize"), ("MemoryPack", "MemoryPackDeserialize"), ("MessagePack", "MessagePackDeserialize")]),
     ]),
-    "PolymorphismBenchmark": ("Polymorphism (random List<IFoo> of 20 cases)", [
+    "PolymorphismBenchmark": ("Polymorphism (interfaces and abstract classes)", [
         ("Serialize", [("LuminPack", "LuminPackSerialize"), ("MemoryPack", "MemoryPackSerialize"), ("MessagePack", "MessagePackSerialize")]),
         ("Deserialize", [("LuminPack", "LuminPackDeserialize"), ("MemoryPack", "MemoryPackDeserialize"), ("MessagePack", "MessagePackDeserialize")]),
     ]),
