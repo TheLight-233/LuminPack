@@ -239,6 +239,44 @@ public class JsonNumberSyntaxTest
         }
     }
 
+    /// <summary>Preserves single rounding near wide integer midpoints in both floating-point formats.</summary>
+    [Fact]
+    public void WideIntegerFloatingPointTokensRoundOnce()
+    {
+        var magnitudes = new System.Collections.Generic.HashSet<ulong> { 9588885727223502249UL };
+        foreach (int precision in new[] { 24, 53 })
+        for (int exponent = precision; exponent < 64; exponent++)
+        {
+            ulong step = 1UL << (exponent - precision + 1);
+            foreach (ulong parity in new ulong[] { 0, 1 })
+            {
+                ulong midpoint = (1UL << exponent) + parity * step + (step >> 1);
+                magnitudes.Add(midpoint - 1);
+                magnitudes.Add(midpoint);
+                magnitudes.Add(midpoint + 1);
+            }
+        }
+
+        string[] suffixes = { "", "e0", "000e-3", new string('0', 300) + "e-300" };
+        foreach (ulong magnitude in magnitudes)
+        foreach (string sign in new[] { "", "-" })
+        foreach (string suffix in suffixes)
+        {
+            string literal = sign + magnitude.ToString(CultureInfo.InvariantCulture) + suffix;
+            double expectedDouble = double.Parse(literal, NumberStyles.Float, CultureInfo.InvariantCulture);
+            float expectedSingle = float.Parse(literal, NumberStyles.Float, CultureInfo.InvariantCulture);
+            foreach (var profile in new[] { TestSerializationProfile.Utf8, TestSerializationProfile.Utf16, s_strictUtf8, s_strictUtf16 })
+            {
+                double actualDouble = LuminPackSerializer.DeserializeJson<double>(literal, profile);
+                float actualSingle = LuminPackSerializer.DeserializeJson<float>(literal, profile);
+                Assert.True(System.BitConverter.DoubleToUInt64Bits(expectedDouble) == System.BitConverter.DoubleToUInt64Bits(actualDouble),
+                    $"Double rounding differs for {literal} under {profile}.");
+                Assert.True(System.BitConverter.SingleToUInt32Bits(expectedSingle) == System.BitConverter.SingleToUInt32Bits(actualSingle),
+                    $"Single rounding differs for {literal} under {profile}.");
+            }
+        }
+    }
+
     /// <summary>Verifies random double literals match the reference parser.</summary>
     [Fact]
     public void RandomDoubleLiteralsMatchTheReferenceParser()

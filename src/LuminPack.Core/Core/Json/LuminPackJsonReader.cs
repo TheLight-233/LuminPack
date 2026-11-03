@@ -1445,7 +1445,12 @@ namespace LuminPack.Core
                 return true;
             }
 
-            if (exponent10 == 0)
+            // Older runtimes can convert UInt64 through a signed double plus 2^64.
+            if (exponent10 == 0
+#if !NET9_0_OR_GREATER
+                && mantissa <= long.MaxValue
+#endif
+                )
             {
                 value = shape.Negative ? -(double)mantissa : (double)mantissa;
                 return true;
@@ -1477,7 +1482,12 @@ namespace LuminPack.Core
                 return true;
             }
 
-            if (exponent10 == 0)
+            // Older integer-to-single conversions can round through double first.
+            if (exponent10 == 0
+#if !NET10_0_OR_GREATER
+                && mantissa <= (1UL << 53)
+#endif
+                )
             {
                 value = shape.Negative ? -(float)mantissa : (float)mantissa;
                 return true;
@@ -2621,7 +2631,11 @@ namespace LuminPack.Core
             if (TryScanFloatingPoint<TOptions>(out ulong mantissa, out int exponent, out bool negative, out int end, out bool exact))
             {
                 float result;
-                if (exact && (exponent == 0 || (mantissa <= (1UL << 24) && exponent >= -10 && exponent <= 10)))
+                if (exact && ((exponent == 0
+#if !NET10_0_OR_GREATER
+                    && mantissa <= (1UL << 53)
+#endif
+                    ) || (mantissa <= (1UL << 24) && exponent >= -10 && exponent <= 10)))
                 {
                     result = exponent == 0 ? (float)mantissa : exponent > 0 ? (float)mantissa * s_pow10Float[exponent] : (float)mantissa / s_pow10Float[-exponent];
                     if (negative)
@@ -2669,7 +2683,11 @@ namespace LuminPack.Core
             if (TryScanFloatingPoint<TOptions>(out ulong mantissa, out int exponent, out bool negative, out int end, out bool exact))
             {
                 double result;
-                if (exact && (exponent == 0 || (mantissa <= (1UL << 53) && exponent >= -22 && exponent <= 22)))
+                if (exact && ((exponent == 0
+#if !NET9_0_OR_GREATER
+                    && mantissa <= long.MaxValue
+#endif
+                    ) || (mantissa <= (1UL << 53) && exponent >= -22 && exponent <= 22)))
                 {
                     result = exponent == 0 ? (double)mantissa : exponent > 0 ? (double)mantissa * s_pow10Double[exponent] : (double)mantissa / s_pow10Double[-exponent];
                     if (negative)
@@ -3353,17 +3371,51 @@ namespace LuminPack.Core
             return ParseUnsignedDigits<global::LuminPack.Option.LuminPackDefaultOptions>(start, end, error);
         }
 
+#if NET8_0_OR_GREATER
+        /// <summary>Bounds the legacy parser to complete mantissas with an unambiguous nonzero tail.</summary>
+        /// <param name="span">The nonempty ASCII number token already validated by numeric scanning.</param>
+        /// <returns>Whether the parser can avoid its untrimmed, all-zero fractional-tail rounding path.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static bool CanParseShortFloatingPointUtf8(ReadOnlySpan<byte> span)
+        {
+            if ((uint)(span.Length - 1) >= 19u) return false;
+            int exponent = span.IndexOfAny((byte)'e', (byte)'E');
+            return span[exponent < 0 ? span.Length - 1 : exponent - 1] != (byte)'0';
+        }
+#endif
+
         /// <summary>Performs the fallback parse float utf8 step for the current operation.</summary>
         /// <param name = "span">The buffer used by this operation.</param>
         /// <returns>The result of the operation.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static float FallbackParseFloatUtf8(ReadOnlySpan<byte> span)
         {
-            if (!Utf8Parser.TryParse(span, out float v, out int consumed) || consumed != span.Length)
+#if NET8_0_OR_GREATER
+            float v;
+            bool parsed;
+            if (CanParseShortFloatingPointUtf8(span))
+                parsed = Utf8Parser.TryParse(span, out v, out int consumed) && consumed == span.Length;
+            else
+                parsed = float.TryParse(span, System.Globalization.NumberStyles.Float, System.Globalization.NumberFormatInfo.InvariantInfo, out v);
+            if (!parsed)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
             if (float.IsInfinity(v))
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
+#else
+            char[]? rented = null;
+            Span<char> chars = span.Length <= 256 ? stackalloc char[span.Length] : (rented = ArrayPool<char>.Shared.Rent(span.Length));
+            try
+            {
+                // Numeric scanning has already validated the complete ASCII token.
+                for (int i = 0; i < span.Length; i++) chars[i] = (char)span[i];
+                return FallbackParseFloatUtf16(chars.Slice(0, span.Length));
+            }
+            finally
+            {
+                if (rented != null) ArrayPool<char>.Shared.Return(rented);
+            }
+#endif
         }
 
         /// <summary>Performs the fallback parse float utf16 step for the current operation.</summary>
@@ -3385,11 +3437,31 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static double FallbackParseDoubleUtf8(ReadOnlySpan<byte> span)
         {
-            if (!Utf8Parser.TryParse(span, out double v, out int consumed) || consumed != span.Length)
+#if NET8_0_OR_GREATER
+            double v;
+            bool parsed;
+            if (CanParseShortFloatingPointUtf8(span))
+                parsed = Utf8Parser.TryParse(span, out v, out int consumed) && consumed == span.Length;
+            else
+                parsed = double.TryParse(span, System.Globalization.NumberStyles.Float, System.Globalization.NumberFormatInfo.InvariantInfo, out v);
+            if (!parsed)
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("Invalid JSON floating-point number");
             if (double.IsInfinity(v))
                 global::LuminPack.Code.LuminPackExceptionHelper.ThrowFormatException("JSON number overflows the target type");
             return v;
+#else
+            char[]? rented = null;
+            Span<char> chars = span.Length <= 256 ? stackalloc char[span.Length] : (rented = ArrayPool<char>.Shared.Rent(span.Length));
+            try
+            {
+                for (int i = 0; i < span.Length; i++) chars[i] = (char)span[i];
+                return FallbackParseDoubleUtf16(chars.Slice(0, span.Length));
+            }
+            finally
+            {
+                if (rented != null) ArrayPool<char>.Shared.Return(rented);
+            }
+#endif
         }
 
         /// <summary>Performs the fallback parse double utf16 step for the current operation.</summary>
