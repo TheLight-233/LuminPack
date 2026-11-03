@@ -7,6 +7,8 @@ using LuminPack.Attribute;
 namespace LuminPack.Code
 {
     /// <summary>Centralizes exception construction, throwing, and stack-preserving rethrows.</summary>
+    /// <remarks>Simple throw helpers omit NoInlining so the JIT can inspect their IL and recognize that
+    /// the failure path never returns. This keeps success-path values from staying live across that call.</remarks>
     [Preserve]
     public static class LuminPackExceptionHelper
     {
@@ -36,7 +38,6 @@ namespace LuminPack.Code
         /// <param name="message">The message describing the failure.</param>
         /// <param name="paramName">The name of the parameter that failed validation.</param>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void ThrowArgumentException(string message, string? paramName = null)
         {
             throw new ArgumentException(message, paramName);
@@ -48,7 +49,6 @@ namespace LuminPack.Code
         /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         /// <returns>This method never returns a value.</returns>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static T ThrowArgumentException<T>(string message, string? paramName = null)
         {
             throw new ArgumentException(message, paramName);
@@ -57,7 +57,6 @@ namespace LuminPack.Code
         /// <summary>Raises the exception for argument null exception.</summary>
         /// <param name="paramName">The name of the parameter that failed validation.</param>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void ThrowArgumentNullException(string paramName)
         {
             throw new ArgumentNullException(paramName);
@@ -68,7 +67,6 @@ namespace LuminPack.Code
         /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         /// <returns>This method never returns a value.</returns>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static T ThrowArgumentNullException<T>(string paramName)
         {
             throw new ArgumentNullException(paramName);
@@ -78,7 +76,6 @@ namespace LuminPack.Code
         /// <param name="paramName">The name of the parameter that failed validation.</param>
         /// <param name="message">The message describing the failure.</param>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void ThrowArgumentOutOfRangeException(string paramName, string? message = null)
         {
             throw new ArgumentOutOfRangeException(paramName, message);
@@ -87,7 +84,6 @@ namespace LuminPack.Code
         /// <summary>Raises the exception for invalid operation exception.</summary>
         /// <param name="message">The message describing the failure.</param>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void ThrowInvalidOperationException(string? message = null)
         {
             throw new InvalidOperationException(message);
@@ -98,7 +94,6 @@ namespace LuminPack.Code
         /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         /// <returns>This method never returns a value.</returns>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static T ThrowInvalidOperationException<T>(string? message = null)
         {
             throw new InvalidOperationException(message);
@@ -107,7 +102,6 @@ namespace LuminPack.Code
         /// <summary>Raises the exception for format exception.</summary>
         /// <param name="message">The message describing the failure.</param>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void ThrowFormatException(string message)
         {
             throw new FormatException(message);
@@ -116,7 +110,6 @@ namespace LuminPack.Code
         /// <summary>Raises the exception for invalid data exception.</summary>
         /// <param name="message">The message describing the failure.</param>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void ThrowInvalidDataException(string message)
         {
             throw new InvalidDataException(message);
@@ -145,7 +138,6 @@ namespace LuminPack.Code
         /// <summary>Raises the exception for not supported exception.</summary>
         /// <param name="message">The message describing the failure.</param>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void ThrowNotSupportedException(string? message = null)
         {
             throw new NotSupportedException(message);
@@ -156,7 +148,6 @@ namespace LuminPack.Code
         /// <typeparam name="T">The type represented by <c>T</c>.</typeparam>
         /// <returns>This method never returns a value.</returns>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static T ThrowNotSupportedException<T>(string? message = null)
         {
             throw new NotSupportedException(message);
@@ -165,7 +156,6 @@ namespace LuminPack.Code
         /// <summary>Rejects mutation of an immutable collection with the standard parameterless exception message.</summary>
         /// <exception cref="NotSupportedException">The collection cannot be modified.</exception>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void ThrowReadOnlyCollectionMutation()
         {
             throw new NotSupportedException();
@@ -176,7 +166,6 @@ namespace LuminPack.Code
         /// <returns>This method never returns.</returns>
         /// <exception cref="NotSupportedException">The collection cannot be modified.</exception>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         internal static T ThrowReadOnlyCollectionMutation<T>()
         {
             throw new NotSupportedException();
@@ -185,7 +174,6 @@ namespace LuminPack.Code
         /// <summary>Raises the exception for platform not supported exception.</summary>
         /// <param name="message">The message describing the failure.</param>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void ThrowPlatformNotSupportedException(string message)
         {
             throw new PlatformNotSupportedException(message);
@@ -308,7 +296,6 @@ namespace LuminPack.Code
         /// <summary>Raises the exception for invalid string length.</summary>
         /// <param name="length">The number of bytes or elements to process.</param>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void ThrowInvalidStringLength(int length)
         {
             throw new InvalidDataException($"Invalid string length: {length}.");
@@ -317,7 +304,6 @@ namespace LuminPack.Code
         /// <summary>Raises the exception for invalid collection length.</summary>
         /// <param name="length">The number of bytes or elements to process.</param>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         internal static void ThrowInvalidCollectionLength(int length)
         {
             throw new InvalidDataException($"Invalid collection length: {length}.");
@@ -353,7 +339,6 @@ namespace LuminPack.Code
 
         /// <summary>Raises the exception for a record or object graph nested deeper than the stack allows.</summary>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void ThrowNestingTooDeep()
         {
             throw new InvalidDataException("The object graph is nested too deeply for the available stack.");
@@ -361,7 +346,6 @@ namespace LuminPack.Code
 
         /// <summary>Raises the exception for collection modified during serialization.</summary>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void ThrowCollectionModifiedDuringSerialization()
         {
             throw new InvalidOperationException("Collection was modified during serialization.");
@@ -369,7 +353,6 @@ namespace LuminPack.Code
 
         /// <summary>Raises the exception for negative multi dimensional array dimension.</summary>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void ThrowNegativeMultiDimensionalArrayDimension()
         {
             throw new FormatException("A multidimensional array dimension cannot be negative.");
@@ -377,7 +360,6 @@ namespace LuminPack.Code
 
         /// <summary>Raises the exception for multi dimensional array dimensions too large.</summary>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void ThrowMultiDimensionalArrayDimensionsTooLarge()
         {
             throw new FormatException("The multidimensional array dimensions are too large.");
@@ -385,7 +367,6 @@ namespace LuminPack.Code
 
         /// <summary>Raises the exception for multi dimensional array length mismatch.</summary>
         [DoesNotReturn]
-        [MethodImpl(MethodImplOptions.NoInlining)]
         public static void ThrowMultiDimensionalArrayLengthMismatch()
         {
             throw new FormatException("The multidimensional array element count does not match its dimensions.");
