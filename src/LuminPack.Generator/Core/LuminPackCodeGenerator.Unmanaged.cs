@@ -149,7 +149,7 @@ public static partial class LuminPackCodeGenerator
         {
             string location = offset == "0" ? "fixedCursor" : "Unsafe.Add(ref fixedCursor, " + offset + ")";
             builder.AppendLine(indent + "        " + (write
-                ? "global::LuminPack.Core.LuminPackWriter.Write(ref " + location + ", in " + storage(fields[index]) + ");"
+                ? FixedWrite(location, storage(fields[index]), fields[index])
                 : FixedRead(location, storage(fields[index]), fields[index])));
             offset = AddUnmanagedFieldSize(offset, GetUnmanagedFieldSize(fields[index]));
         }
@@ -158,6 +158,22 @@ public static partial class LuminPackCodeGenerator
         builder.AppendLine(indent + "    }");
         builder.AppendLine(indent + "}");
         return true;
+    }
+
+    /// <summary>Stores a fixed field without spending the enclosing root's native inlining budget.</summary>
+    /// <param name="location">The reserved output byte reference expression.</param>
+    /// <param name="storage">The original source storage expression.</param>
+    /// <param name="field">The field and its bound storage type.</param>
+    /// <returns>A typed store where allowed, retaining the original packed-view kernel for wider 32-bit storage.</returns>
+    private static string FixedWrite(string location, string storage, LuminDataField field)
+    {
+        string type = GetGeneratedTypeName(field);
+        string store = "Unsafe.WriteUnaligned(ref " + location + ", " + storage + ");";
+        if (field.TypeSymbol?.SpecialType is SpecialType.System_Boolean or SpecialType.System_Byte or SpecialType.System_SByte or
+            SpecialType.System_Char or SpecialType.System_Int16 or SpecialType.System_UInt16 or SpecialType.System_Int32 or
+            SpecialType.System_UInt32 or SpecialType.System_Single) return store;
+        return "if (Unsafe.SizeOf<global::System.IntPtr>() == 8 || Unsafe.SizeOf<" + type + ">() <= 4) " + store +
+            " else global::LuminPack.Core.LuminPackWriter.Write(ref " + location + ", in " + storage + ");";
     }
 
     /// <summary>Spells one fixed read, resolving proven small scalars before emitting the architecture fallback.</summary>

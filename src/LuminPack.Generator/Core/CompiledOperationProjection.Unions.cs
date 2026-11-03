@@ -50,6 +50,21 @@ internal sealed partial class CompiledOperationProjection
             .Append(rootName).Append(" value) where ").Append(profileParameter).AppendLine(" : struct, global::LuminPack.Option.ILuminPackOptions {");
         // Write slots use the tiered dispatch; offset calculation keeps the original virtual call.
         var tier = root != null && operation != "__LuminPackUnionCalculateOffset_" ? UnionDispatchTierPlan.Get(root, _compilation) : null;
+        if (operation == "__LuminPackUnionSerialize_" && HasCanonicalUnionProfiles(profiles))
+            foreach (var profile in profiles)
+            {
+                string name = method.Identifier.ValueText + (profile.Identity == declared.Identity ? "" : "_Options_" + profile.Identity);
+                var identities = new List<string> { profile.TypeName, "global::LuminPack.Option.LuminPackFixedOptions<" + profile.TypeName + ">" };
+                if (profile.Encoding == 1 && profile.Recording == 0)
+                    foreach (string alias in new[] { "LuminPackDefaultOptions", "LuminPackDeclaredOptions" })
+                    {
+                        string type = "global::LuminPack.Option." + alias;
+                        identities.Add(type);
+                        identities.Add("global::LuminPack.Option.LuminPackFixedOptions<" + type + ">");
+                    }
+                source.Append("if (").Append(string.Join(" || ", identities.Select(type => "typeof(" + profileParameter + ") == typeof(" + type + ")")))
+                    .Append(") ").AppendLine(tier?.Dispatch(name) ?? "{ value." + name + "(ref writer); return; }");
+            }
         foreach (var profile in profiles)
         {
             string name = method.Identifier.ValueText + (profile.Identity == declared.Identity ? "" : "_Options_" + profile.Identity);
@@ -61,4 +76,20 @@ internal sealed partial class CompiledOperationProjection
         members.Add(SyntaxFactory.ParseMemberDeclaration(source.ToString()).NormalizeWhitespace().WithTrailingTrivia(SyntaxFactory.EndOfLine(Environment.NewLine)));
     }
 
+
+    /// <summary>Limits exact-profile shortcuts to the referenced runtime's immutable profiles on managed-cursor targets.</summary>
+    /// <param name="profiles">The existing finite binary slot family.</param>
+    /// <returns>Whether names bind the real runtime rather than consumer-defined shadow profiles.</returns>
+    private bool HasCanonicalUnionProfiles(CompiledOptions[] profiles)
+    {
+        var writer = _compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackWriter");
+        if (writer == null || SymbolEqualityComparer.Default.Equals(writer.ContainingAssembly, _compilation.Assembly) ||
+            writer.GetMembers("Cursor").OfType<IFieldSymbol>().Any(field => field.Type is IPointerTypeSymbol) ||
+            _compilation.SyntaxTrees.Any(tree => tree.Options is CSharpParseOptions parse &&
+                parse.PreprocessorSymbolNames.Any(symbol => symbol.StartsWith("UNITY", StringComparison.Ordinal)))) return false;
+        var names = profiles.Select(profile => profile.TypeName.Replace("global::", string.Empty)).Concat(new[] {
+            "LuminPack.Option.LuminPackFixedOptions`1", "LuminPack.Option.LuminPackDefaultOptions", "LuminPack.Option.LuminPackDeclaredOptions" });
+        return names.All(name => _compilation.GetTypeByMetadataName(name) is { } type &&
+            SymbolEqualityComparer.Default.Equals(type.ContainingAssembly, writer.ContainingAssembly));
+    }
 }

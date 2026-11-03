@@ -179,7 +179,7 @@ public static partial class LuminPackCodeGenerator
         const string writerType = "global::LuminPack.Core.LuminPackWriter";
         if (first == last)
         {
-            builder.AppendLine(indent + "__cursor = ref " + writerType + ".WriteReserved(ref __cursor, " + Storage(fields[first]) + ");");
+            builder.AppendLine(indent + "__cursor = ref " + writerType + ".WriteReserved<" + GetGeneratedTypeName(fields[first]) + ">(ref __cursor, " + Storage(fields[first]) + ");");
             return;
         }
         string suffix = first.ToString();
@@ -197,7 +197,7 @@ public static partial class LuminPackCodeGenerator
         builder.AppendLine(indent + "else");
         builder.AppendLine(indent + "{");
         for (int member = first; member <= last; member++)
-            builder.AppendLine(indent + "    __cursor = ref " + writerType + ".WriteReserved(ref __cursor, " + Storage(fields[member]) + ");");
+            builder.AppendLine(indent + "    __cursor = ref " + writerType + ".WriteReserved<" + GetGeneratedTypeName(fields[member]) + ">(ref __cursor, " + Storage(fields[member]) + ");");
         builder.AppendLine(indent + "}");
     }
 

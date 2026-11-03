@@ -189,6 +189,12 @@ internal static class SerializerCoreProjection
         if (closedRoot != null) rewritten = new ClosedMemberResetProjection(types).Visit(rewritten);
         rewritten = GeneratedOperationNames.Rewrite(rewritten);
         rewritten = RootContainerProjection.Apply(rewritten);
+        if (!BinaryCursorProjection.UsesPointerCursor(compilation, metadata))
+        {
+            rewritten = new BinaryLiteralWriteProjection().Visit(rewritten);
+            rewritten = new BinaryReservedStoreProjection(compilation).Visit(rewritten);
+            rewritten = new BinaryWriterPublicationProjection().Visit(rewritten);
+        }
         rewritten = PayloadCallTargets.Apply(rewritten, container.Identifier.ValueText);
         var normalized = (CompilationUnitSyntax)rewritten.NormalizeWhitespace("    ", Environment.NewLine);
         normalized = normalized.WithLeadingTrivia(SyntaxFactory.ParseLeadingTrivia("#nullable enable annotations\n#pragma warning disable CS0162, CS0168, CS0219, CS0436, CS0649, CS1591" + Environment.NewLine).AddRange(normalized.GetLeadingTrivia()));
