@@ -125,7 +125,7 @@ internal sealed class SafeReadProjection
         /// with one compile-time mask instead of reloading each copied field.</remarks>
         public override SyntaxNode VisitBlock(BlockSyntax node)
         {
-            var checks = new Dictionary<IfStatementSyntax, (List<string> Fields, string Batch)>();
+            Dictionary<IfStatementSyntax, (List<string> Fields, string Batch)> checks = null;
             for (int index = 0; index < node.Statements.Count; index++)
             {
                 if (node.Statements[index] is not IfStatementSyntax batch || batch.Statement is not ExpressionStatementSyntax { Expression: InvocationExpressionSyntax copy } ||
@@ -160,10 +160,10 @@ internal sealed class SafeReadProjection
                             mask.ToString(width == 8 ? "X16" : "X8", CultureInfo.InvariantCulture) + (width == 8 ? "UL" : "U") + ");";
                     }
                 }
-                checks.Add(batch, (booleans, windowed));
+                (checks ??= new Dictionary<IfStatementSyntax, (List<string> Fields, string Batch)>()).Add(batch, (booleans, windowed));
             }
             var result = (BlockSyntax)base.VisitBlock(node);
-            if (checks.Count == 0) return result;
+            if (checks == null) return result;
             var statements = result.Statements.ToList();
             for (int index = 0; index < node.Statements.Count; index++)
             {
@@ -216,9 +216,19 @@ internal sealed class SafeReadProjection
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
         {
             var result = (InvocationExpressionSyntax)base.VisitInvocationExpression(node);
-            var model = _owner._model;
-            var symbol = model.GetSymbolInfo(node).Symbol as IMethodSymbol;
-            string args = string.Join(", ", result.ArgumentList.Arguments);
+            string name = node.Expression switch
+            {
+                MemberAccessExpressionSyntax member => member.Name.Identifier.ValueText,
+                MemberBindingExpressionSyntax member => member.Name.Identifier.ValueText,
+                SimpleNameSyntax simple => simple.Identifier.ValueText,
+                _ => null
+            };
+            // Only these kernel names can require a check. Keep semantic binding for candidates
+            // so a same-named call on another receiver retains its original behavior.
+            if (name != null && name is not ("Read" or "ReadUnaligned" or "ReadStrings" or "ReadLength" or
+                "TryReadCollectionHead" or "PeekCollectionHeader" or "ReadStringRecord" or "TryReadStableStringKeys"))
+                return result;
+
             var input = _owner._input;
             // An unbounded limit is not checked at all, so those reads keep exactly their trusted call sites.
             bool strings = input.String != int.MaxValue, collections = input.Collection != int.MaxValue;
@@ -226,6 +236,8 @@ internal sealed class SafeReadProjection
                 stableAccess.Expression.ToString() == "global::LuminPack.Code.LuminPackMarshal")
                 // The bulk key kernel has no string limit; keep the per-element path.
                 return SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression).WithTriviaFrom(node);
+            var model = _owner._model;
+            var symbol = name is null or "Read" or "ReadUnaligned" ? model.GetSymbolInfo(node).Symbol as IMethodSymbol : null;
             // A compressed payload's element count is not bounded by its input bytes; check its header before allocation.
             var arguments = result.ArgumentList.Arguments;
             if (collections && symbol is { IsStatic: true, Name: "Read" } && symbol.ContainingType?.ToDisplayString() == "LuminPack.Core.LuminPackReader" &&
@@ -238,14 +250,16 @@ internal sealed class SafeReadProjection
             {
                 if (symbol.ReturnType.SpecialType == SpecialType.System_Boolean && result.ArgumentList.Arguments.Count == 1 &&
                     result.ArgumentList.Arguments[0].RefKindKeyword.IsKind(SyntaxKind.RefKeyword))
-                    return SyntaxFactory.ParseExpression(Policy + ".ReadBoolean(" + args + ")").WithTriviaFrom(node);
+                    return SyntaxFactory.ParseExpression(Policy + ".ReadBoolean(" + arguments[0] + ")").WithTriviaFrom(node);
                 if (symbol.Parameters.Length == 2 && symbol.Parameters[1].RefKind == RefKind.Out && symbol.Parameters[1].Type.SpecialType == SpecialType.System_Boolean)
-                    return SyntaxFactory.ParseExpression(Policy + ".ReadBoolean(" + args + ")").WithTriviaFrom(node);
+                    return SyntaxFactory.ParseExpression(Policy + ".ReadBoolean(" + string.Join(", ", arguments) + ")").WithTriviaFrom(node);
             }
-            if (node.Expression is not MemberAccessExpressionSyntax access) return result;
+            if (node.Expression is not MemberAccessExpressionSyntax access || name is "ReadUnaligned" or "TryReadStableStringKeys" ||
+                !strings && name is "ReadStrings" or "ReadStringRecord" ||
+                !collections && name is "ReadLength" or "TryReadCollectionHead" or "PeekCollectionHeader") return result;
             string readerName = access.Expression.ToString();
             if (readerName != _state && model.GetTypeInfo(access.Expression).Type?.ToDisplayString() != "LuminPack.Core.LuminPackReader") return result;
-            string name = access.Name.Identifier.ValueText;
+            string args = string.Join(", ", arguments);
             string profile = access.Name is GenericNameSyntax generic && generic.TypeArgumentList.Arguments.Count > 0 ? generic.TypeArgumentList.Arguments.Last().ToString() : _owner._options.TypeName;
             bool profileCall = access.Name is GenericNameSyntax profileName && profileName.TypeArgumentList.Arguments.Last().ToString().IndexOf("Options", StringComparison.Ordinal) >= 0;
             string collection = Literal(input.Collection), text = Literal(input.String);
