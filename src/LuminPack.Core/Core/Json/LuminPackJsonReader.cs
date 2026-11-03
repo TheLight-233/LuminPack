@@ -1495,7 +1495,8 @@ namespace LuminPack.Core
 
             if (mantissa > (1UL << 24) || exponent10 < -10 || exponent10 > 10)
                 return false;
-            float m = mantissa;
+            // The scaled fast path has already bounded the mantissa to 24 bits.
+            float m = (int)mantissa;
             float result = exponent10 > 0 ? m * s_pow10Float[exponent10] : m / s_pow10Float[-exponent10];
             value = shape.Negative ? -result : result;
             return true;
@@ -2637,7 +2638,8 @@ namespace LuminPack.Core
 #endif
                     ) || (mantissa <= (1UL << 24) && exponent >= -10 && exponent <= 10)))
                 {
-                    result = exponent == 0 ? (float)mantissa : exponent > 0 ? (float)mantissa * s_pow10Float[exponent] : (float)mantissa / s_pow10Float[-exponent];
+                    // Nonzero exponents reach this branch only with a 24-bit mantissa.
+                    result = exponent == 0 ? (float)mantissa : exponent > 0 ? (float)(int)mantissa * s_pow10Float[exponent] : (float)(int)mantissa / s_pow10Float[-exponent];
                     if (negative)
                         result = -result;
                 }
