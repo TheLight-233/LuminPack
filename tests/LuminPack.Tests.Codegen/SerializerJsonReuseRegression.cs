@@ -57,8 +57,9 @@ internal static class SerializerJsonReuseRegression
                 [LuminPackOrder(0)] public int Number;
                 [LuminPackOrder(1)] public Tracked Next;
             }
-            [LuminPackable, LuminPackUnion(0, typeof(Case))] public abstract partial class Root { }
+            [LuminPackable, LuminPackUnion(0, typeof(Case)), LuminPackUnion(1, typeof(LoopCase))] public abstract partial class Root { }
             [LuminPackable] public partial class Case : Root { public Node Child = new Node(); }
+            [LuminPackable] public partial class LoopCase : Root { public Graph Graph = new Graph(); }
             public static class JsonReuseEntry
             {
                 public static void Check()
@@ -67,6 +68,8 @@ internal static class SerializerJsonReuseRegression
                     CheckProfile<LuminPackUtf16LengthOptions>();
                     CheckPresence<LuminPackUtf8LengthOptions>();
                     CheckPresence<LuminPackUtf16LengthOptions>();
+                    CheckUnionLoops<LuminPackUtf8LengthOptions>();
+                    CheckUnionLoops<LuminPackUtf16LengthOptions>();
                     var bound = new Bound(new Node());
                     var child = bound.Child;
                     LuminPackSerializer.DeserializeJson("{\"Child\":{\"Number\":8}}", ref bound);
@@ -93,6 +96,25 @@ internal static class SerializerJsonReuseRegression
                     original = sequence;
                     LuminPackSerializer.DeserializeJson("[{\"Number\":12}]", ref sequence);
                     Require(ReferenceEquals(original, sequence) && ReferenceEquals(child, ((List<Node>)sequence)[0]), "Interface storage");
+                }
+                private static void CheckUnionLoops<TOptions>() where TOptions : struct, ILuminPackOptions
+                {
+                    var graph = new Graph { Child = new Node { Number = 1 }, Items = new List<Node> { new Node { Number = 2 } }, Array = new[] { new Node { Number = 3 } } };
+                    graph.Map["key"] = new Node { Number = 4 };
+                    Root root = new LoopCase { Graph = graph };
+                    string json = LuminPackSerializer.SerializeJson<TOptions>(root);
+                    var original = root; var child = graph.Child; var item = graph.Items[0]; var element = graph.Array[0]; var mapped = graph.Map["key"];
+                    child.Number = item.Number = element.Number = mapped.Number = 99;
+                    LuminPackSerializer.DeserializeJson<TOptions>(json, ref root);
+                    Require(ReferenceEquals(original, root) && ReferenceEquals(graph, ((LoopCase)root).Graph), "Union loop root reuse");
+                    Require(ReferenceEquals(child, graph.Child) && child.Number == 1 && ReferenceEquals(item, graph.Items[0]) && item.Number == 2, "Union loop object/list reuse");
+                    Require(ReferenceEquals(element, graph.Array[0]) && element.Number == 3 && ReferenceEquals(mapped, graph.Map["key"]) && mapped.Number == 4, "Union loop array/map reuse");
+                    root = new Case();
+                    LuminPackSerializer.DeserializeJson<TOptions>(json, ref root);
+                    Require(root is LoopCase replacement && replacement.Graph.Map["key"].Number == 4, "Union loop case replacement");
+                    Root fresh = null!;
+                    LuminPackSerializer.DeserializeJson<TOptions>(json, ref fresh);
+                    Require(LuminPackSerializer.SerializeJson<TOptions>(fresh) == json, "Union loop fresh round trip");
                 }
                 private static void CheckPresence<TOptions>() where TOptions : struct, ILuminPackOptions
                 {

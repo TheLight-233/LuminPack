@@ -17,7 +17,7 @@ internal static class GeneratedExecutionPolicy
     internal static bool Reuse(string operationName, BinaryOperation operation)
     {
         if (operationName.Contains(":local:")) return false;
-        return operationName.EndsWith(":json", StringComparison.Ordinal) && HasLargeBody(operation.Body);
+        return operationName.EndsWith(":json", StringComparison.Ordinal) && LetRuntimeChooseInlining(operation.Body);
     }
 
     /// <summary>Separates source composition from the runtime's method-inlining budget.</summary>

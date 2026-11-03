@@ -83,7 +83,7 @@ Main components:
 5. Simplify blocks and choose readable local names (presentation only).
 6. Format, add XML documentation, and publish the text through the cache boundary.
 
-Source composition and native inlining have separate budgets. `GeneratedExecutionPolicy` leaves binary and JSON state bodies with loops or more than sixteen invocation sites to the runtime's inlining policy; small bodies retain their aggressive inline hint. This does not introduce a no-inline boundary or change nested binary source expansion. Large JSON operations retain their existing concrete state reuse policy. The call-site threshold is a generator heuristic, not a RyuJIT limit.
+Source composition and native inlining have separate budgets. `GeneratedExecutionPolicy` leaves binary and JSON state bodies with loops or more than sixteen invocation sites to the runtime's inlining policy; small bodies retain their aggressive inline hint. This does not introduce a no-inline boundary or change nested binary source expansion. Complete JSON operations containing loops or exceeding the same call-site threshold reuse their existing concrete state entries instead of copying their parsing state into every parent or Union case. Local storage operations remain composed at their original access sites. The call-site threshold is a generator heuristic, not a RyuJIT limit; bounded composition also helps avoid the runtime's minimum-optimization fallback for overly complex methods.
 
 Fixed Union cursor kernels retain their aggressive inline hint: their optional framing and architecture branches specialize using the caller's constants, so the un-specialized source call count is not a useful size estimate for these kernels.
 
