@@ -499,7 +499,7 @@ public static unsafe partial class StringSerializer
             uint bytes = LuminPackReader.Read<ushort>(ref payload);
             if (length == 3)
                 bytes |= (uint)Unsafe.Add(ref payload, 2) << 16;
-            ulong wide = WidenLatin1(bytes);
+            ulong wide = WidenFourLatin1(bytes).AsUInt64().ToScalar();
             if (current is not null && current.Length == length)
             {
                 ref byte code = ref Unsafe.As<char, byte>(ref MemoryMarshal.GetReference(current.AsSpan()));
