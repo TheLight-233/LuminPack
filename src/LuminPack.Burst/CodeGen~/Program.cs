@@ -16,7 +16,7 @@ if (!textMatches) return 1;
 if (textOnly) return textMatches ? 0 : 1;
 var inputs = new (string File, string[] Methods)[]
 {
-    ("Utility/Memory/Simd/LuminPackMarshal.Copy.cs", ["CopyScalarBlock", "CopyVector128Block", "CopyVector256Block", "CopyShortBlock"]),
+    ("Utility/Memory/Simd/LuminPackMarshal.Copy.cs", ["CopyScalarBlock", "CopyVector128Block", "CopyVector256Block", "CopyShortBlock", "CopyShortVectorBlock"]),
     ("Utility/Memory/Simd/LuminPackMarshal.Copy.Vectors.cs", ["CopyVector512Block"]),
     ("Utility/Compression/LuminCompressor.cs", ["CopyMatch", "CopyMatchCore8", "CopyMatch512", "CopyMatch256", "CopyMatch128", "ExtendMatch", "ExtendMatch512", "ExtendMatch256", "ExtendMatch128", "ExtendMatchScalar", "ReadU64", "TrailingZeroBytes"]),
     ("Cryptography/LuminChaCha20Poly1305.cs", ["XorKeystream"])

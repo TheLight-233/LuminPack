@@ -9,7 +9,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreAlgorithms
     {
-// Core source SHA256: Utility/Memory/Simd/LuminPackMarshal.Copy.cs 1E54B5D2C206B620EE67635E381A48E4A38536F3F58916BDC3C210832F0A2047
+// Core source SHA256: Utility/Memory/Simd/LuminPackMarshal.Copy.cs 70EBC5B4215BE6EC9327F1A541C019EEF63CB3C6F1849436F9969E5E43211524
 /// <summary>Copies at most sixteen bytes with scalar head and tail accesses inside the ranges.</summary>
 /// <param name = "destination">The valid writable range on a 64-bit target.</param>
 /// <param name = "source">The valid readable non-overlapping range.</param>
@@ -121,6 +121,17 @@ internal static void CopyShortBlock(ref byte destination, ref byte source, uint 
         return;
     }
 
+    CopyShortVectorBlock(ref destination, ref source, count);
+}
+/// <summary>Copies seventeen through 256 bytes with exact vector lanes.</summary>
+/// <param name = "destination">The valid writable byte range.</param>
+/// <param name = "source">The valid readable non-overlapping byte range.</param>
+/// <param name = "count">A byte count from seventeen through 256.</param>
+/// <remarks>Kept out of line: its epilogue clears the upper vector state. Inlined into a large caller, the dirty 256-bit
+/// state reached the caller's next runtime helper (an allocation or block copy) and cost about a hundred nanoseconds.</remarks>
+[MethodImpl(MethodImplOptions.NoInlining)]
+internal static void CopyShortVectorBlock(ref byte destination, ref byte source, uint count)
+{
     if (count >= 64 && Vector512.IsHardwareAccelerated)
     {
         CopyVector512Block(ref destination, ref source, count);

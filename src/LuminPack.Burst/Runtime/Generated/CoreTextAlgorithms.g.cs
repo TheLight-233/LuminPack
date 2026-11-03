@@ -13,7 +13,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreTextAlgorithms
     {
-// Core source SHA256: Utility/Text/StringSerializer.cs 91CBBC229305B49D03A2D18A9931B261689ABA4123A477158D620019BBA49106
+// Core source SHA256: Utility/Text/StringSerializer.cs 0B54A9DFBD2D8A09503BAF6F8EB133ED32CB23C6B1F7AFDA25B2EF4C47071947
 /// <summary>Performs the prefer custom simd step for the current operation.</summary>
 /// <param name = "source">The input data to process.</param>
 /// <param name = "destinationLength">The destination length used by this operation.</param>
@@ -1790,7 +1790,7 @@ internal static unsafe void Copy256(ref byte input, ref byte output, ref nint bl
     }
 }
 }
-// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 408D2ACDB957786FEE6CC99D0A1294528E579A4A9DD6A3788F1798CD066C59BE
+// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 34907411C57449D799A5A032823E38BD7CCE4D5EC5C8B684BFDDF2F44082E61D
 internal static unsafe class CoreLatin1Records
 {
 /// <summary>Returns whether every code unit of a string fits one Latin-1 byte.</summary>
