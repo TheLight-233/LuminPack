@@ -190,9 +190,17 @@ internal sealed class FileSemanticObservationCache
         if (!SymbolEqualityComparer.Default.Equals(named, named.OriginalDefinition)) { AddDependencies(named.OriginalDefinition, trees, visited); return; }
         if (named.DeclaringSyntaxReferences.Length == 0) return;
         DependencyNode direct;
-        lock (_direct)
+        lock (_direct) _direct.TryGetValue(named, out direct);
+        if (direct == null)
         {
-            if (!_direct.TryGetValue(named, out direct)) _direct.Add(named, direct = Direct(named));
+            // Files are observed in parallel, so binding runs outside the lock; a concurrent duplicate computes the same
+            // facts and the first published node wins.
+            direct = Direct(named);
+            lock (_direct)
+            {
+                if (_direct.TryGetValue(named, out var published)) direct = published;
+                else _direct.Add(named, direct);
+            }
         }
         foreach (var tree in direct.Trees) trees.Add(tree);
         foreach (var dependency in direct.Types) AddDependencies(dependency, trees, visited);

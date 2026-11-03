@@ -137,13 +137,14 @@ public static partial class LuminPackSerializerGenerator
         var rootTargets = new Dictionary<string, LazyForwardingTargets>(StringComparer.Ordinal);
         var completeApiTypes = new HashSet<string>(StringComparer.Ordinal);
         bool stationaryInput = RequiresStationaryInput(compilation, metaInfo);
+        var selected = new List<(ITypeSymbol Type, string Name, SerializerApiKind Apis, string Access, string Variant, LazyForwardingTargets Targets)>(orderedTypes.Length);
         foreach (ITypeSymbol type in orderedTypes)
         {
             cancellationToken.ThrowIfCancellationRequested();
             string typeName = FormatterTypeName.Get(type);
             var apis = apiUsage?.GetApis(type) ?? SerializerApiKind.All;
             if (apis == SerializerApiKind.None) continue;
-            _currentAccess = HasPublicSignature(type) ? "public" : "internal";
+            string access = HasPublicSignature(type) ? "public" : "internal";
             string outputVariant = apis == SerializerApiKind.All ? null : ((int)apis).ToString(System.Globalization.CultureInfo.InvariantCulture);
             if (stationaryInput) outputVariant = (outputVariant ?? "all") + "|stationary-input";
             LazyForwardingTargets targets = null;
@@ -152,15 +153,31 @@ public static partial class LuminPackSerializerGenerator
                 outputVariant = (outputVariant ?? "all") + "|roots:" + targets.Key;
                 rootTargets[typeName] = targets;
             }
-            var frozen = fragments.Fragments.GetOrBuild(type, compilation, metaInfo, LuminPackGenerationTier.Full, () =>
-            {
-                string text = RenderOverloadFragment(type, typeName, compilation, metaInfo, apis, targets);
-                return new FrozenTypeEmission(typeName, text, string.Empty,
-                    new FrozenLayoutGroup(string.Empty, metaInfo.ParseOptions, Array.Empty<FrozenLayoutFragment>(), null), Array.Empty<Diagnostic>());
-            }, serializerFragment: true, outputVariant: outputVariant);
-            blocks.Add(new KeyValuePair<string, string>(typeName, frozen.Extension));
+            selected.Add((type, typeName, apis, access, outputVariant, targets));
             if (apis == SerializerApiKind.All) completeApiTypes.Add(typeName);
         }
+        // Each payload's overloads depend only on its own type, so fragments are rendered in parallel; blocks keep the canonical order.
+        var rendered = new string[selected.Count];
+        ParallelWork.For(selected.Count, index =>
+        {
+            var item = selected[index];
+            string previousAccess = _currentAccess;
+            _currentAccess = item.Access;
+            try
+            {
+                rendered[index] = fragments.Fragments.GetOrBuild(item.Type, compilation, metaInfo, LuminPackGenerationTier.Full, () =>
+                {
+                    string text = RenderOverloadFragment(item.Type, item.Name, compilation, metaInfo, item.Apis, item.Targets);
+                    return new FrozenTypeEmission(item.Name, text, string.Empty,
+                        new FrozenLayoutGroup(string.Empty, metaInfo.ParseOptions, Array.Empty<FrozenLayoutFragment>(), null), Array.Empty<Diagnostic>());
+                }, serializerFragment: true, outputVariant: item.Variant).Extension;
+            }
+            finally
+            {
+                _currentAccess = previousAccess;
+            }
+        }, cancellationToken);
+        for (int index = 0; index < selected.Count; index++) blocks.Add(new KeyValuePair<string, string>(selected[index].Name, rendered[index]));
 
         _currentAccess = "public";
         string commonProfile = CompiledOptions.Resolve(null, compilation).Identity + (stationaryInput ? "|pointer-input" : "|managed-input");
@@ -174,9 +191,11 @@ public static partial class LuminPackSerializerGenerator
         cancellationToken.ThrowIfCancellationRequested();
         string sharedSupport = fragments.Sharing.Apply(blocks, completeApiTypes, metaInfo);
         // After sharing, the remaining concrete bodies and each payload's sharing adapter call the payload's recorded root.
-        for (int index = 0; index < blocks.Count; index++)
+        ParallelWork.For(blocks.Count, index =>
+        {
             if (rootTargets.TryGetValue(blocks[index].Key, out var blockTargets))
                 blocks[index] = new KeyValuePair<string, string>(blocks[index].Key, FacadeRootCalls.Apply(blocks[index].Value, blockTargets, metaInfo));
+        }, cancellationToken);
         if (sharedSupport.Length != 0)
         {
             string footer = "    }" + Environment.NewLine + "}" + Environment.NewLine;

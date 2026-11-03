@@ -288,9 +288,13 @@ internal static class CompilationTypeAnalysisCache
         }
 
         var observations = FileSemanticObservationCache.For(compilation);
-        foreach (SyntaxTree tree in compilation.SyntaxTrees)
+        // Files are observed independently, so they are bound in parallel and merged in source order.
+        var trees = compilation.SyntaxTrees.ToArray();
+        var observedFiles = new FileTypeObservations[trees.Length];
+        ParallelWork.For(trees.Length, index => observedFiles[index] = observations.Read(trees[index],
+            type => IsLuminPackRelevantType(type) || IsAssemblyPackableType(type, assemblyPackableTypes)));
+        foreach (var observed in observedFiles)
         {
-            var observed = observations.Read(tree, type => IsLuminPackRelevantType(type) || IsAssemblyPackableType(type, assemblyPackableTypes));
             usesLuminPack |= observed.UsesLuminPack;
             foreach (var type in observed.Types) AddTypeGraph(type, formatterTypes);
         }

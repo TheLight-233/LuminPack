@@ -259,18 +259,26 @@ internal sealed class TypeEmissionCache
         internal SyntaxTree[] Dependencies(ITypeSymbol root, Compilation compilation, bool union, out bool dependsOnUnion)
         {
             var closures = union ? _unionClosures : _closures;
-            lock (closures)
+            DependencyClosure closure;
+            lock (closures) closures.TryGetValue(root, out closure);
+            if (closure != null) Interlocked.Increment(ref IncrementalGenerationMetrics.TypeDependencyCacheHits);
+            else
             {
-                if (!closures.TryGetValue(root, out var closure))
+                // Fragments are built in parallel, so the walk runs outside the lock; it is deterministic, and a concurrent
+                // duplicate yields the same closure, of which the first published one wins.
+                var trees = BuildDependencies(root, compilation, union, out bool nestedUnion);
+                lock (closures)
                 {
-                    var trees = BuildDependencies(root, compilation, union, out bool nestedUnion);
-                    closures.Add(root, closure = new DependencyClosure(trees, nestedUnion));
-                    Interlocked.Increment(ref IncrementalGenerationMetrics.TypeDependencyBuilds);
+                    if (!closures.TryGetValue(root, out closure))
+                    {
+                        closures.Add(root, closure = new DependencyClosure(trees, nestedUnion));
+                        Interlocked.Increment(ref IncrementalGenerationMetrics.TypeDependencyBuilds);
+                    }
+                    else Interlocked.Increment(ref IncrementalGenerationMetrics.TypeDependencyCacheHits);
                 }
-                else Interlocked.Increment(ref IncrementalGenerationMetrics.TypeDependencyCacheHits);
-                dependsOnUnion = closure.DependsOnUnion;
-                return closure.Trees;
             }
+            dependsOnUnion = closure.DependsOnUnion;
+            return closure.Trees;
         }
 
         /// <summary>Traverses a root's complete source closure once within its owning compilation.</summary>
@@ -325,9 +333,15 @@ internal sealed class TypeEmissionCache
                     }
                 }
                 DirectDependencies direct;
-                lock (_direct)
+                lock (_direct) _direct.TryGetValue(named, out direct);
+                if (direct == null)
                 {
-                    if (!_direct.TryGetValue(named, out direct)) _direct.Add(named, direct = GetDirectDependencies(named, compilation));
+                    direct = GetDirectDependencies(named, compilation);
+                    lock (_direct)
+                    {
+                        if (_direct.TryGetValue(named, out var published)) direct = published;
+                        else _direct.Add(named, direct);
+                    }
                 }
                 trees.UnionWith(direct.Trees);
                 foreach (var dependency in direct.Types) pending.Push(dependency);

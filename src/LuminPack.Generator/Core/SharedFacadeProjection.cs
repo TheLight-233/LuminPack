@@ -33,6 +33,12 @@ internal sealed class SharedFacadeProjection
         if (eligible.Count < 2) return string.Empty;
         lock (_gate)
         {
+            // Each changed block is parsed independently, so analysis runs in parallel; grouping below keeps the canonical order.
+            var pending = blocks.Where(block => eligible.Contains(block.Key) && !_contributions.TryGetValue(block.Value, out _)).ToArray();
+            var analyzed = new Contribution[pending.Length];
+            ParallelWork.For(pending.Length, index => analyzed[index] = Analyze(pending[index].Key, pending[index].Value, metadata));
+            for (int index = 0; index < pending.Length; index++)
+                if (!_contributions.TryGetValue(pending[index].Value, out _)) _contributions.Add(pending[index].Value, analyzed[index]);
             var contributions = new Dictionary<string, Contribution>(StringComparer.Ordinal);
             var groups = new Dictionary<string, List<Candidate>>(StringComparer.Ordinal);
             foreach (var block in blocks)
