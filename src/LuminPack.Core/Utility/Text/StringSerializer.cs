@@ -327,7 +327,7 @@ public static unsafe partial class StringSerializer
         {
             // 4 to 7 characters: the first four and the last four cover the record.
             var chars = Vector128.Create(LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref characters)), LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref characters, (nint)(uint)(length - 4))))).AsUInt16();
-            if (Vector128.GreaterThanAny(chars, Vector128.Create((ushort)0x7F)))
+            if ((chars & Vector128.Create((ushort)0xFF80)) != Vector128<ushort>.Zero)
                 return false;
             ulong payload = LuminPackReader.Read<uint>(ref source) | ((ulong)LuminPackReader.Read<uint>(ref Unsafe.Add(ref source, (nint)(uint)(length - 4))) << 32);
             return Vector128.Narrow(chars, chars).AsUInt64().GetElement(0) == payload;
@@ -336,7 +336,7 @@ public static unsafe partial class StringSerializer
         // 8 to 16 characters: the first eight and the last eight cover the record.
         var first = Vector128.LoadUnsafe(ref characters);
         var last = Vector128.LoadUnsafe(ref characters, (nuint)(length - 8));
-        if (Vector128.GreaterThanAny(first | last, Vector128.Create((ushort)0x7F)))
+        if (((first | last) & Vector128.Create((ushort)0xFF80)) != Vector128<ushort>.Zero)
             return false;
         var record = Vector128.Create(LuminPackReader.Read<ulong>(ref source), LuminPackReader.Read<ulong>(ref Unsafe.Add(ref source, (nint)(uint)(length - 8)))).AsByte();
         return Vector128.EqualsAll(Vector128.Narrow(first, last), record);
@@ -832,13 +832,13 @@ public static unsafe partial class StringSerializer
         ref ushort input = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(source));
         ref byte output = ref MemoryMarshal.GetReference(destination);
         int limit = Math.Min(length, destination.Length);
-        var ascii = Vector256.Create((ushort)0x7F);
+        var nonAsciiBits = Vector256.Create((ushort)0xFF80);
         int index = 0;
         for (; index + 32 <= limit; index += 32)
         {
             var lower = Vector256.LoadUnsafe(ref input, (nuint)index);
             var upper = Vector256.LoadUnsafe(ref input, (nuint)index + 16);
-            if (Vector256.GreaterThanAny(lower | upper, ascii))
+            if (((lower | upper) & nonAsciiBits) != Vector256<ushort>.Zero)
                 break;
             NarrowValidatedLatin1(lower, upper).StoreUnsafe(ref output, (nuint)index);
         }
@@ -849,7 +849,7 @@ public static unsafe partial class StringSerializer
             nuint tail = (nuint)(length - 32);
             var lower = Vector256.LoadUnsafe(ref input, tail);
             var upper = Vector256.LoadUnsafe(ref input, tail + 16);
-            if (!Vector256.GreaterThanAny(lower | upper, ascii))
+            if (((lower | upper) & nonAsciiBits) == Vector256<ushort>.Zero)
             {
                 NarrowValidatedLatin1(lower, upper).StoreUnsafe(ref output, tail);
                 index = length;

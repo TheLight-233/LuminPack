@@ -13,7 +13,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreTextAlgorithms
     {
-// Core source SHA256: Utility/Text/StringSerializer.cs C22D6E25631C7A498329DC3B44F40F74EC447EF4732F7274E0789309BEDB2315
+// Core source SHA256: Utility/Text/StringSerializer.cs DD6CAEF4FEA0CF25C4B711ACA98079A37DF630BE9F17BDA6177EB10F4414B54B
 /// <summary>Performs the prefer custom simd step for the current operation.</summary>
 /// <param name = "source">The input data to process.</param>
 /// <param name = "destinationLength">The destination length used by this operation.</param>
@@ -120,13 +120,13 @@ internal static unsafe OperationStatus SerializeAsciiRun(ReadOnlySpan<char> sour
     ref ushort input = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(source));
     ref byte output = ref MemoryMarshal.GetReference(destination);
     int limit = Math.Min(length, destination.Length);
-    var ascii = Vector256.Create((ushort)0x7F);
+    var nonAsciiBits = Vector256.Create((ushort)0xFF80);
     int index = 0;
     for (; index + 32 <= limit; index += 32)
     {
         var lower = Vector256.LoadUnsafe(ref input, (nuint)index);
         var upper = Vector256.LoadUnsafe(ref input, (nuint)index + 16);
-        if (Vector256.GreaterThanAny(lower | upper, ascii))
+        if (((lower | upper) & nonAsciiBits) != Vector256<ushort>.Zero)
             break;
         NarrowValidatedLatin1(lower, upper).StoreUnsafe(ref output, (nuint)index);
     }
@@ -137,7 +137,7 @@ internal static unsafe OperationStatus SerializeAsciiRun(ReadOnlySpan<char> sour
         nuint tail = (nuint)(length - 32);
         var lower = Vector256.LoadUnsafe(ref input, tail);
         var upper = Vector256.LoadUnsafe(ref input, tail + 16);
-        if (!Vector256.GreaterThanAny(lower | upper, ascii))
+        if (((lower | upper) & nonAsciiBits) == Vector256<ushort>.Zero)
         {
             NarrowValidatedLatin1(lower, upper).StoreUnsafe(ref output, tail);
             index = length;
@@ -1002,7 +1002,7 @@ internal static unsafe OperationStatus Encode(ReadOnlySpan<char> source, Span<by
     }
 }
     }
-// Core source SHA256: Internal/ShortAsciiTranscoder.cs E2210C94E91E82FCD0A4B50EB605A9794DDEF702788B9C4C5DEF217223E0FB96
+// Core source SHA256: Internal/ShortAsciiTranscoder.cs 4EE7806A14BDE431D8822F8C2F1AE348522EAE7ED310D76E587CFF392773428A
     internal static unsafe class CoreShortAscii
     {
 // Two overlapping loads/stores cover 4..32 characters without touching bytes
@@ -1028,7 +1028,7 @@ internal static unsafe bool TryEncode(ReadOnlySpan<char> source, Span<byte> dest
     if (length < 8)
     {
         var chars = Unsafe.SizeOf<IntPtr>() == 8 ? Vector128.Create(Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref input)), Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref input, unchecked((nint)(uint)(length - 4)))))).AsUInt16() : Vector128.Create(Vector64.LoadUnsafe(ref input), Vector64.LoadUnsafe(ref input, (nuint)(length - 4)));
-        if (Vector128.GreaterThanAny(chars, Vector128.Create((ushort)0x7F)))
+        if ((chars & Vector128.Create((ushort)0xFF80)) != Vector128<ushort>.Zero)
             return false;
         var packed = Vector128.Narrow(chars, chars);
         if (escapeJson && NeedsJsonEscape(packed))
@@ -1041,7 +1041,7 @@ internal static unsafe bool TryEncode(ReadOnlySpan<char> source, Span<byte> dest
 
     var first = Vector128.LoadUnsafe(ref input);
     var last = Vector128.LoadUnsafe(ref input, (nuint)(length - 8));
-    if (Vector128.GreaterThanAny(first | last, Vector128.Create((ushort)0x7F)))
+    if (((first | last) & Vector128.Create((ushort)0xFF80)) != Vector128<ushort>.Zero)
         return false;
     var bytes = Vector128.Narrow(first, last);
     if (escapeJson && NeedsJsonEscape(bytes))
@@ -1073,7 +1073,7 @@ internal static unsafe bool TryEncodeMedium(ReadOnlySpan<char> source, Span<byte
     ref ushort input = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(source));
     var first = Vector256.LoadUnsafe(ref input);
     var last = Vector256.LoadUnsafe(ref input, (nuint)(source.Length - 16));
-    if (Vector256.GreaterThanAny(first | last, Vector256.Create((ushort)0x7F)))
+    if (((first | last) & Vector256.Create((ushort)0xFF80)) != Vector256<ushort>.Zero)
         return false;
     var bytes = CoreTextAlgorithms.NarrowValidatedLatin1(first, last);
     if (escapeJson)

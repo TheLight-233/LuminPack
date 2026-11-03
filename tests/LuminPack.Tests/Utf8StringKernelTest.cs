@@ -9,6 +9,32 @@ namespace LuminPackUnitTest;
 /// <summary>Checks the tiny, long-ASCII and short-Unicode UTF-8 string kernels against the platform encoder.</summary>
 public class Utf8StringKernelTest
 {
+    /// <summary>Checks every non-ASCII bit at each short-record position before an existing string can be reused.</summary>
+    [Fact]
+    public void AsciiReuseRejectsEveryHighCharacterBit()
+    {
+        foreach (int length in new[] { 4, 7, 8, 15, 16 })
+        {
+            string text = new string('a', length);
+            byte[] record = LuminPackSerializer.Serialize<LuminPackUtf8LengthOptions>(text);
+            for (int position = 0; position < length; position++)
+            for (int bit = 7; bit < 16; bit++)
+            {
+                char[] chars = text.ToCharArray();
+                chars[position] = (char)(chars[position] | (1 << bit));
+                string existing = new string(chars);
+                string? result = existing;
+                LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(record, ref result);
+                Assert.Equal(text, result);
+                Assert.NotSame(existing, result);
+            }
+            string equal = new string(text.ToCharArray());
+            string? reused = equal;
+            LuminPackSerializer.Deserialize<LuminPackUtf8LengthOptions>(record, ref reused);
+            Assert.Same(equal, reused);
+        }
+    }
+
     /// <summary>Checks exact record bytes and round trips for ASCII and mixed text around every block boundary.</summary>
     [Fact]
     public void EncodedRecordsMatchThePlatformEncoder()

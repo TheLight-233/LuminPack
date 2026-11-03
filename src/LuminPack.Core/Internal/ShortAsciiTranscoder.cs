@@ -42,7 +42,7 @@ internal static class ShortAsciiTranscoder
                     Unsafe.ReadUnaligned<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref input, unchecked((nint)(uint)(length - 4)))))).AsUInt16()
                 : Vector128.Create(Vector64.LoadUnsafe(ref input),
                     Vector64.LoadUnsafe(ref input, (nuint)(length - 4)));
-            if (Vector128.GreaterThanAny(chars, Vector128.Create((ushort)0x7F)))
+            if ((chars & Vector128.Create((ushort)0xFF80)) != Vector128<ushort>.Zero)
                 return false;
             var packed = Vector128.Narrow(chars, chars);
             if (escapeJson && NeedsJsonEscape(packed))
@@ -55,7 +55,7 @@ internal static class ShortAsciiTranscoder
 
         var first = Vector128.LoadUnsafe(ref input);
         var last = Vector128.LoadUnsafe(ref input, (nuint)(length - 8));
-        if (Vector128.GreaterThanAny(first | last, Vector128.Create((ushort)0x7F)))
+        if (((first | last) & Vector128.Create((ushort)0xFF80)) != Vector128<ushort>.Zero)
             return false;
 
         var bytes = Vector128.Narrow(first, last);
@@ -90,7 +90,7 @@ internal static class ShortAsciiTranscoder
         ref ushort input = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(source));
         var first = Vector256.LoadUnsafe(ref input);
         var last = Vector256.LoadUnsafe(ref input, (nuint)(source.Length - 16));
-        if (Vector256.GreaterThanAny(first | last, Vector256.Create((ushort)0x7F)))
+        if (((first | last) & Vector256.Create((ushort)0xFF80)) != Vector256<ushort>.Zero)
             return false;
         var bytes = StringSerializer.NarrowValidatedLatin1(first, last);
         if (escapeJson)
