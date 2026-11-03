@@ -1634,19 +1634,7 @@ namespace LuminPack.Core
                 return;
             if (Output is not null)
             {
-                while (!value.IsEmpty)
-                {
-                    var result = StringSerializer.Serialize<global::LuminPack.Option.LuminPackUtf8LengthOptions>(value, Buffer.Slice(Position), out int charsRead, out int written);
-                    Advance(written);
-                    value = value.Slice(charsRead);
-                    if (result == OperationStatus.Done)
-                        return;
-                    if (result != OperationStatus.DestinationTooSmall)
-                        LuminPackExceptionHelper.ThrowFailedEncoding(result);
-                    FlushToBufferWriter();
-                    EnsureCapacity(4);
-                }
-
+                WriteUtf8StringSegmentToOutput(value);
                 return;
             }
 
@@ -1655,6 +1643,25 @@ namespace LuminPack.Core
             if (status != OperationStatus.Done)
                 bytesWritten = WriteUtf8StringSegmentSlow(value);
             Advance(bytesWritten);
+        }
+
+        /// <summary>Keeps chunk transitions and their status locals outside the buffered UTF-8 segment path.</summary>
+        /// <param name="value">The remaining unescaped characters for the external destination.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteUtf8StringSegmentToOutput(scoped ReadOnlySpan<char> value)
+        {
+            while (!value.IsEmpty)
+            {
+                var result = StringSerializer.Serialize<global::LuminPack.Option.LuminPackUtf8LengthOptions>(value, Buffer.Slice(Position), out int charsRead, out int written);
+                Advance(written);
+                value = value.Slice(charsRead);
+                if (result == OperationStatus.Done)
+                    return;
+                if (result != OperationStatus.DestinationTooSmall)
+                    LuminPackExceptionHelper.ThrowFailedEncoding(result);
+                FlushToBufferWriter();
+                EnsureCapacity(4);
+            }
         }
 
 #endif
