@@ -10,7 +10,7 @@ internal static class SerializerJsonReuseRegression
     /// <param name="references">The platform and runtime references.</param>
     internal static void Run(MetadataReference[] references)
     {
-        const string source = """
+        string source = """
             using System;
             using System.Text;
             using System.Collections.Generic;
@@ -19,6 +19,20 @@ internal static class SerializerJsonReuseRegression
             using LuminPack.Option;
             [assembly: LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
             [LuminPackable] public class Node { public int Number; public string Text = ""; }
+            [LuminPackable] public class PresenceBase { BASE_PRESENCE_FIELDS }
+            [LuminPackable] public class Presence<seenFields0, seenFields1, seenFields2> : PresenceBase
+            {
+                DERIVED_PRESENCE_FIELDS
+                public Node Child;
+            }
+            [LuminPackable] public partial struct MixedPresence
+            {
+                public int A, B, C, D;
+                [LuminPackInclude] private int Hidden;
+                public int Property { get; set; }
+                [LuminPackIgnore] public int HiddenValue => Hidden;
+                public static MixedPresence Create() => new MixedPresence { A = 9, B = 9, C = 9, D = 9, Hidden = 9, Property = 9 };
+            }
             [LuminPackable] public class Graph
             {
                 public Node Child { get; set; } = new Node();
@@ -49,8 +63,10 @@ internal static class SerializerJsonReuseRegression
             {
                 public static void Check()
                 {
-                    CheckProfile<LuminPackDefaultOptions>();
+                    CheckProfile<LuminPackUtf8LengthOptions>();
                     CheckProfile<LuminPackUtf16LengthOptions>();
+                    CheckPresence<LuminPackUtf8LengthOptions>();
+                    CheckPresence<LuminPackUtf16LengthOptions>();
                     var bound = new Bound(new Node());
                     var child = bound.Child;
                     LuminPackSerializer.DeserializeJson("{\"Child\":{\"Number\":8}}", ref bound);
@@ -78,6 +94,43 @@ internal static class SerializerJsonReuseRegression
                     LuminPackSerializer.DeserializeJson("[{\"Number\":12}]", ref sequence);
                     Require(ReferenceEquals(original, sequence) && ReferenceEquals(child, ((List<Node>)sequence)[0]), "Interface storage");
                 }
+                private static void CheckPresence<TOptions>() where TOptions : struct, ILuminPackOptions
+                {
+                    var value = new Presence<int, string, long> { Child = new Node() };
+                    var original = value;
+                    var child = value.Child;
+                    var fields = value.GetType().GetFields();
+                    foreach (var field in fields)
+                        if (field.FieldType == typeof(int)) field.SetValue(value, 99);
+                    const string json = "{\"F64\":64,\"F31\":31,\"unknown\":{\"x\":[{},42]},\"F3\\u0032\":32,\"F00\":1,\"F63\":63,\"F31\":131,\"Child\":{\"Number\":7}}";
+                    LuminPackSerializer.DeserializeJson<TOptions>(json, ref value);
+                    Require(ReferenceEquals(original, value) && ReferenceEquals(child, value.Child) && child.Number == 7, "Presence reuse");
+                    foreach (var field in fields)
+                    {
+                        if (field.FieldType != typeof(int)) continue;
+                        int expected = field.Name switch { "F00" => 1, "F31" => 131, "F32" => 32, "F63" => 63, "F64" => 64, _ => 0 };
+                        Require((int)field.GetValue(value)! == expected, "Missing/duplicate inherited presence: " + field.Name);
+                    }
+                    value.F64 = 99;
+                    bool failed = false;
+                    try { LuminPackSerializer.DeserializeJson<TOptions>("{\"F31\":17,\"F32\":true}", ref value); }
+                    catch (InvalidOperationException) { failed = true; }
+                    catch (FormatException) { failed = true; }
+                    Require(failed && ReferenceEquals(original, value) && value.F31 == 17 && value.F64 == 99, "Presence failure order");
+                    Presence<int, string, long> fresh = null!;
+                    failed = false;
+                    try { LuminPackSerializer.DeserializeJson<TOptions>("{\"F31\":17,\"F32\":true}", ref fresh); }
+                    catch (InvalidOperationException) { failed = true; }
+                    catch (FormatException) { failed = true; }
+                    Require(failed && fresh is null, "Presence fresh publication");
+                    LuminPackSerializer.DeserializeJson<TOptions>("{}", ref value);
+                    Require(ReferenceEquals(original, value) && value.Child is null, "Presence empty object");
+                    foreach (var field in fields)
+                        if (field.FieldType == typeof(int)) Require((int)field.GetValue(value)! == 0, "Presence empty reset");
+                    var mixed = MixedPresence.Create();
+                    LuminPackSerializer.DeserializeJson<TOptions>("{\"D\":44,\"Hidden\":55,\"Property\":66}", ref mixed);
+                    Require(mixed.A == 0 && mixed.B == 0 && mixed.C == 0 && mixed.D == 44 && mixed.HiddenValue == 55 && mixed.Property == 66, "Presence staged members");
+                }
                 private static void CheckProfile<TOptions>() where TOptions : struct, ILuminPackOptions
                 {
                     var node = new Node { Number = 7, Text = "same\u00E9" };
@@ -95,7 +148,8 @@ internal static class SerializerJsonReuseRegression
                 }
                 private static void Require(bool condition, string message) { if (!condition) throw new Exception(message); }
             }
-            """;
+            """.Replace("BASE_PRESENCE_FIELDS", string.Join(" ", Enumerable.Range(0, 32).Select(index => "public int F" + index.ToString("D2") + ";")), StringComparison.Ordinal)
+                .Replace("DERIVED_PRESENCE_FIELDS", string.Join(" ", Enumerable.Range(32, 33).Select(index => "public int F" + index.ToString("D2") + ";")), StringComparison.Ordinal);
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
@@ -108,7 +162,8 @@ internal static class SerializerJsonReuseRegression
             if (diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error)) throw new InvalidOperationException(string.Join(Environment.NewLine, diagnostics));
             Execute(output);
             var edited = compilation.ReplaceSyntaxTree(compilation.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs"), CSharpSyntaxTree.ParseText(
-                source.Replace("MODE", mode, StringComparison.Ordinal).Replace("public int Number;", "public long Number;", StringComparison.Ordinal), parse, "Shape.cs"));
+                source.Replace("MODE", mode, StringComparison.Ordinal).Replace("public int Number;", "public long Number;", StringComparison.Ordinal)
+                    .Replace("public int F31;", "public int Extra; public int F31;", StringComparison.Ordinal), parse, "Shape.cs"));
             driver = driver.RunGeneratorsAndUpdateCompilation(edited, out output, out diagnostics);
             Execute(output);
             GeneratorDriver fresh = CSharpGeneratorDriver.Create(

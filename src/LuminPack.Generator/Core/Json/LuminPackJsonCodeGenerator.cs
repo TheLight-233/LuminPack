@@ -544,6 +544,7 @@ public static class LuminPackJsonCodeGenerator
     public static void GenerateJsonDeserialize(StringBuilder sb, LuminDataInfo data, string classGlobalName, MetaInfo metaInfo)
     {
         bool flag = CanDeserializeDirectlyIntoFreshResult(data);
+        var presence = flag ? new JsonFieldPresence(data) : null;
         sb.AppendLine("        [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]");
         if (data.isValueType)
         {
@@ -591,9 +592,7 @@ public static class LuminPackJsonCodeGenerator
         }
         if (!flag)
             sb.AppendLine("            ref var reuseLocal = ref global::LuminPack.Code.LuminPackMarshal.As<" + classGlobalName + ", " + TypeMetaChecker.BuildLocalClassName(data) + ">(ref value" + (data.isValueType ? "" : "!") + ");");
-        if (flag)
-            foreach (var field in data.fields)
-                sb.AppendLine("            bool " + field.Name + "Seen = false;");
+        presence?.AppendDeclarations(sb, "            ");
         sb.AppendLine();
         sb.AppendLine("            reader.TryConsumeObjectStart();");
         sb.AppendLine();
@@ -629,7 +628,7 @@ public static class LuminPackJsonCodeGenerator
             sb.AppendLine("                    {");
             if (flag)
             {
-                sb.AppendLine("                        " + field.Name + "Seen = true;");
+                presence.AppendMark(sb, field, "                        ");
                 if (!CanDeserializeDirectlyIntoConstructedObject(field))
                     sb.AppendLine("                        if (reuseExisting) " + field.Name + "Temp = global::LuminPack.Code.LuminPackMarshal.As<" + classGlobalName + ", " + TypeMetaChecker.BuildLocalClassName(data) + ">(ref result)." + field.Identifier + ";");
             }
@@ -648,7 +647,7 @@ public static class LuminPackJsonCodeGenerator
         if (flag)
         {
             foreach (var field in data.fields.Where(static field => CanDeserializeDirectlyIntoConstructedObject(field)))
-                sb.AppendLine("            if (!" + field.Name + "Seen) result." + field.Identifier + " = default!;");
+                sb.AppendLine("            if (" + presence.MissingCondition(field) + ") result." + field.Identifier + " = default!;");
             sb.AppendLine("            value = result;");
             if (data.fields.Any(static field => !CanDeserializeDirectlyIntoConstructedObject(field)))
             {
