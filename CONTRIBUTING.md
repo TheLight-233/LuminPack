@@ -12,6 +12,8 @@ The solution includes `net11.0` targets, so use a .NET 11 preview SDK. `global.j
 dotnet build LuminPack.sln -c Release
 ```
 
+With a .NET 11 SDK on x64 or Arm64 Windows, Linux or macOS, repository MSBuild builds run the SDK C# compiler in an isolated Satori GC runtime by default. Restore downloads the pinned experimental runtime pack. The build host, IDE design-time compilation and application runtime use their regular runtimes. To use the SDK compiler's regular runtime for a build, pass `-p:LuminPackUseSatori=false`.
+
 ## Checks
 
 Run what covers your change rather than every suite. The full runtime suite is large; prefer one framework and a focused `--filter`.

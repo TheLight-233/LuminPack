@@ -1,0 +1,46 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net11.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <UseAppHost>true</UseAppHost>
+    <SatoriRuntimeVersion>11.0.0-satori.40992540404.1</SatoriRuntimeVersion>
+    <_SatoriRuntimePackage>PublishWithSatoriGC.Runtime.$(NETCoreSdkRuntimeIdentifier)</_SatoriRuntimePackage>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageDownload Include="$(_SatoriRuntimePackage)" Version="[$(SatoriRuntimeVersion)]" />
+  </ItemGroup>
+
+  <Target Name="_SetSatoriCompilerRuntimePaths">
+    <PropertyGroup>
+      <_SatoriDotNet>$(TargetDir)satori/</_SatoriDotNet>
+      <_SatoriFramework>shared/Microsoft.NETCore.App/$(BundledNETCoreAppPackageVersion)/</_SatoriFramework>
+      <_SatoriHostFxr>host/fxr/$(BundledNETCoreAppPackageVersion)/</_SatoriHostFxr>
+      <_SatoriPackageFiles>$(NuGetPackageRoot)$(_SatoriRuntimePackage.ToLowerInvariant())/$(SatoriRuntimeVersion)/runtime/sharedFramework/</_SatoriPackageFiles>
+      <_SatoriRuntimeMarker>$(_SatoriDotNet)$(NETCoreSdkRuntimeIdentifier)-$(BundledNETCoreAppPackageVersion)-$(SatoriRuntimeVersion).ready</_SatoriRuntimeMarker>
+      <_SatoriMuxer>dotnet</_SatoriMuxer>
+      <_SatoriMuxer Condition="'$(OS)' == 'Windows_NT'">dotnet.exe</_SatoriMuxer>
+    </PropertyGroup>
+  </Target>
+
+  <Target Name="PrepareSatoriCompilerRuntime" AfterTargets="Build" DependsOnTargets="_SetSatoriCompilerRuntimePaths"
+          Inputs="$(MSBuildProjectFullPath)" Outputs="$(_SatoriRuntimeMarker)">
+    <ItemGroup>
+      <_SatoriStockRuntime Include="$(NetCoreRoot)$(_SatoriFramework)*" />
+      <_SatoriStockHost Include="$(NetCoreRoot)$(_SatoriHostFxr)*" />
+      <_SatoriOverlay Include="$(_SatoriPackageFiles)*" />
+    </ItemGroup>
+    <Error Condition="'@(_SatoriStockRuntime)' == '' or '@(_SatoriStockHost)' == '' or '@(_SatoriOverlay)' == ''"
+           Text="The SDK runtime or the Satori runtime package is missing. Restore with a complete .NET 11 SDK or build with -p:LuminPackUseSatori=false." />
+    <Copy SourceFiles="$(NetCoreRoot)$(_SatoriMuxer)" DestinationFolder="$(_SatoriDotNet)" />
+    <Copy SourceFiles="@(_SatoriStockHost)" DestinationFolder="$(_SatoriDotNet)$(_SatoriHostFxr)" />
+    <Copy SourceFiles="@(_SatoriStockRuntime)" DestinationFolder="$(_SatoriDotNet)$(_SatoriFramework)" />
+    <Copy SourceFiles="@(_SatoriOverlay)" DestinationFolder="$(_SatoriDotNet)$(_SatoriFramework)" />
+    <Exec Condition="'$(OS)' != 'Windows_NT'" Command="chmod +x &quot;$(_SatoriDotNet)$(_SatoriMuxer)&quot;" />
+    <Exec Command="&quot;$(_SatoriDotNet)$(_SatoriMuxer)&quot; &quot;$(TargetPath)&quot; --verify-runtime"
+          EnvironmentVariables="DOTNET_gcServer=0;DOTNET_GCDynamicAdaptationMode=0" />
+    <Touch Files="$(_SatoriRuntimeMarker)" AlwaysCreate="true" />
+  </Target>
+</Project>

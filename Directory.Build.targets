@@ -1,0 +1,33 @@
+<Project>
+  <PropertyGroup>
+    <LuminPackUseSatori Condition="'$(LuminPackUseSatori)' == ''">true</LuminPackUseSatori>
+    <_LuminPackSatoriCompilerProject>$(MSBuildThisFileDirectory)eng/SatoriCompiler/LuminPack.SatoriCompiler.csproj</_LuminPackSatoriCompilerProject>
+    <_LuminPackSatoriExecutable>LuminPack.SatoriCompiler</_LuminPackSatoriExecutable>
+    <_LuminPackSatoriExecutable Condition="'$(OS)' == 'Windows_NT'">LuminPack.SatoriCompiler.exe</_LuminPackSatoriExecutable>
+    <_LuminPackSatoriToolDir>$(MSBuildThisFileDirectory)eng/SatoriCompiler/bin/$(Configuration)/net11.0/</_LuminPackSatoriToolDir>
+    <_LuminPackUseSatoriCompiler Condition="'$(LuminPackUseSatori)' == 'true'
+        and '$(MSBuildRuntimeType)' == 'Core'
+        and '$(MSBuildProjectExtension)' == '.csproj'
+        and '$(MSBuildProjectName)' != 'LuminPack.SatoriCompiler'
+        and '$(DesignTimeBuild)' != 'true'
+        and $([System.Text.RegularExpressions.Regex]::IsMatch('$(NETCoreSdkRuntimeIdentifier)', '^(win|linux|linux-musl|osx)-(x64|arm64)$'))
+        and $(BundledNETCoreAppPackageVersion.StartsWith('11.'))">true</_LuminPackUseSatoriCompiler>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(_LuminPackUseSatoriCompiler)' == 'true'">
+    <ProjectReference Include="$(_LuminPackSatoriCompilerProject)"
+                      ReferenceOutputAssembly="false" Private="false" PrivateAssets="all"
+                      SkipGetTargetFrameworkProperties="true"
+                      GlobalPropertiesToRemove="TargetFramework;RuntimeIdentifier;SelfContained;UseAppHost;PublishAot;PublishSingleFile;PublishReadyToRun;Platform;BaseOutputPath;OutputPath;BaseIntermediateOutputPath;IntermediateOutputPath;ArtifactsPath;UseArtifactsOutput" />
+  </ItemGroup>
+
+  <Target Name="_LuminPackSelectSatoriCompiler" BeforeTargets="CoreCompile" Condition="'$(_LuminPackUseSatoriCompiler)' == 'true'">
+    <PropertyGroup>
+      <CscToolPath>$(_LuminPackSatoriToolDir)</CscToolPath>
+      <CscToolExe>$(_LuminPackSatoriExecutable)</CscToolExe>
+      <UseSharedCompilation>false</UseSharedCompilation>
+      <UseHostCompilerIfAvailable>false</UseHostCompilerIfAvailable>
+      <CscEnvironment>$(CscEnvironment);LUMINPACK_SATORI_CSC=$(RoslynTargetsPath)/bincore/csc.dll</CscEnvironment>
+    </PropertyGroup>
+  </Target>
+</Project>

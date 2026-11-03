@@ -12,6 +12,8 @@
 dotnet build LuminPack.sln -c Release
 ```
 
+在 x64 或 Arm64 的 Windows、Linux 和 macOS 上，用 .NET 11 SDK 构建本仓库时，MSBuild 默认在隔离的 Satori GC 运行时中启动 SDK 的 C# 编译器。还原会下载固定版本的实验性运行时包。构建宿主、IDE 的设计时编译和应用程序继续使用各自的常规运行时。若要在某次构建中使用 SDK 编译器的常规运行时，请传入 `-p:LuminPackUseSatori=false`。
+
 ## 检查
 
 运行覆盖本次改动的检查，而不是每次都跑全部测试。运行时测试规模很大，建议只选一个框架并加 `--filter`。
