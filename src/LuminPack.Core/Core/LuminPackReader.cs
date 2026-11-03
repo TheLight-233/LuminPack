@@ -1711,7 +1711,7 @@ namespace LuminPack.Core
         /// <param name="length">The rejected length.</param>
         [System.Diagnostics.CodeAnalysis.DoesNotReturn]
         private static void ThrowVersionPayloadLength(int length)
-            => throw new FormatException(length < 0 ? "Negative version-tolerant payload length." : "Version-tolerant payload exceeds the input.");
+            => LuminPackExceptionHelper.ThrowFormatException(length < 0 ? "Negative version-tolerant payload length." : "Version-tolerant payload exceeds the input.");
 
         /// <summary>Reads a Boolean array record, copying its storage in one pass that also validates every element.</summary>
         /// <param name="value">The reusable destination; an array of another length is replaced.</param>
@@ -2168,7 +2168,7 @@ namespace LuminPack.Core
 
         /// <summary>Rejects a member whose read ended elsewhere than its recorded length.</summary>
         [System.Diagnostics.CodeAnalysis.DoesNotReturn]
-        private static void ThrowVersionFieldEnd() => throw new FormatException("Version-tolerant field length does not match its payload.");
+        private static void ThrowVersionFieldEnd() => LuminPackExceptionHelper.ThrowFormatException("Version-tolerant field length does not match its payload.");
 
         #endregion
 }

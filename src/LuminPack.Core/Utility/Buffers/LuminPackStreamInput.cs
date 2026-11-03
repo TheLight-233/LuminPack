@@ -56,10 +56,10 @@ public struct LuminPackStreamInput : IDisposable
                 global::LuminPack.Security.LuminPackInputPolicy.CheckInput(length, maximum);
             }
         }
-        catch
+        catch (global::System.Exception error)
         {
             ArrayPool<byte>.Shared.Return(array);
-            throw;
+            global::LuminPack.Code.LuminPackExceptionHelper.Rethrow(error);
         }
         return new LuminPackStreamInput { _array = array, _length = length };
     }

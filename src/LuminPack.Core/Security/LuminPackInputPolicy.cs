@@ -491,22 +491,22 @@ public static class LuminPackInputPolicy
         return (bits & 0xFE) == 0;
     }
 
-    // Rejections throw directly and stay inlinable, so the JIT proves them no-return and moves their blocks out of the hot path.
+    // Rejections stay no-return, so the JIT moves their blocks out of the hot path.
     /// <summary>Rejects an exceeded input limit with a catchable data exception.</summary>
     /// <param name="name">The limit that was exceeded.</param>
     [DoesNotReturn]
-    private static void Fail(string name) => throw new System.IO.InvalidDataException("Untrusted input exceeded its " + name + " limit.");
+    private static void Fail(string name) => LuminPackExceptionHelper.ThrowInvalidDataException("Untrusted input exceeded its " + name + " limit.");
 
     /// <summary>Rejects a back reference to an object of another type.</summary>
     [DoesNotReturn]
-    private static void InvalidReference() => throw new System.IO.InvalidDataException("A reference id names an object of another type.");
+    private static void InvalidReference() => LuminPackExceptionHelper.ThrowInvalidDataException("A reference id names an object of another type.");
 
     /// <summary>Rejects an object marker that disagrees with the generated member count.</summary>
     /// <param name="marker">The rejected marker.</param>
     [DoesNotReturn]
-    private static void InvalidMarker(byte marker) => throw new System.IO.InvalidDataException("The object member header " + marker + " disagrees with its schema.");
+    private static void InvalidMarker(byte marker) => LuminPackExceptionHelper.ThrowInvalidDataException("The object member header " + marker + " disagrees with its schema.");
 
     /// <summary>Rejects a Boolean whose storage is neither zero nor one.</summary>
     [DoesNotReturn]
-    private static void InvalidBoolean() => throw new System.IO.InvalidDataException("A Boolean has a noncanonical storage value.");
+    private static void InvalidBoolean() => LuminPackExceptionHelper.ThrowInvalidDataException("A Boolean has a noncanonical storage value.");
 }

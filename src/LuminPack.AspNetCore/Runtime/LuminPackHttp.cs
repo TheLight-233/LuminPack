@@ -72,13 +72,13 @@ public static class LuminPackHttp
                 length += count;
                 if (length > maximumBodyBytes) Errors.Rethrow(LuminPackHttpExceptionHelper.TooLarge());
             }
-            return new PooledBody(buffer, length);
         }
-        catch
+        catch (Exception error)
         {
             ArrayPool<byte>.Shared.Return(buffer, clearArray: true);
-            throw;
+            Errors.Rethrow(error);
         }
+        return new PooledBody(buffer, length);
     }
 
     /// <summary>Owns a request body in rented storage until the request has been decoded.</summary>
