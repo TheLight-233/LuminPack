@@ -11,7 +11,7 @@ namespace LuminPackUnitTest;
 public class JsonStreamingWriterTest
 {
 #if NET8_0_OR_GREATER
-    /// <summary>Checks bounded modern scalar formats through the segmented writer and its output canaries.</summary>
+    /// <summary>Checks bounded modern and established scalar formats through segmented output and its canaries.</summary>
     [Fact]
     public void ModernScalarFormatsCrossOutputSegments()
     {
@@ -31,9 +31,13 @@ public class JsonStreamingWriterTest
         writer.Write<TOptions>(TimeOnly.MaxValue);
         writer.Write<TOptions>(Int128.MinValue);
         writer.Write<TOptions>(UInt128.MaxValue);
+        writer.Write<TOptions>(DateTime.MaxValue);
+        writer.Write<TOptions>(DateTimeOffset.MinValue);
+        writer.Write<TOptions>(Guid.Empty);
+        writer.Write<TOptions>(TimeSpan.MinValue);
         writer.WriteArrayEnd<TOptions>();
         writer.FlushToBufferWriter();
-        const string expected = "[\"0001-01-01\",\"23:59:59.9999999\",\"-170141183460469231731687303715884105728\",\"340282366920938463463374607431768211455\"]";
+        const string expected = "[\"0001-01-01\",\"23:59:59.9999999\",\"-170141183460469231731687303715884105728\",\"340282366920938463463374607431768211455\",\"9999-12-31T23:59:59.9999999\",\"0001-01-01T00:00:00.0000000+00:00\",\"00000000-0000-0000-0000-000000000000\",\"-10675199.02:48:05.4775808\"]";
         Assert.Equal(encoding.GetBytes(expected), output.ToArray());
         Assert.True(output.CommitCount > 1);
     }

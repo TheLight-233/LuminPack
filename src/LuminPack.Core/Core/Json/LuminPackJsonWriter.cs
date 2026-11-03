@@ -655,9 +655,9 @@ namespace LuminPack.Core
 
         /// <summary>
         /// Emits an already formatted, escape-free ASCII payload as a JSON string.
-        /// The ISO-8601, GUID and TimeSpan formats used below never contain a
-        /// character that requires JSON escaping, so the content writers only
-        /// need to transcode or copy.
+        /// Round-trip dates/times, GUIDs, constant TimeSpan and invariant integer
+        /// formats never require JSON escaping. Their bounded stack payloads can
+        /// be transcoded or copied without another escape scan.
         /// </summary>
         /// <param name = "text">The text used by this operation.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
@@ -1081,9 +1081,9 @@ namespace LuminPack.Core
 
         /// <summary>
         /// Emits an already formatted, escape-free ASCII payload as a JSON string.
-        /// The ISO-8601, GUID and TimeSpan formats used below never contain a
-        /// character that requires JSON escaping, so the content writers only
-        /// need to transcode or copy.
+        /// Round-trip dates/times, GUIDs, constant TimeSpan and invariant integer
+        /// formats never require JSON escaping. Their bounded stack payloads can
+        /// be transcoded or copied without another escape scan.
         /// </summary>
         /// <param name = "text">The text used by this operation.</param>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
@@ -1094,10 +1094,22 @@ namespace LuminPack.Core
             WriteCommaIfNeeded<TOptions>();
             WriteByteRaw<TOptions>(Quote);
             if ((default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8))
-                WriteStringContentUtf8<TOptions>(text);
+                WriteFormattedAscii(text);
             else
-                WriteStringContentUtf16<TOptions>(text);
+                WriteRaw(text);
             WriteByteRaw<TOptions>(Quote);
+        }
+
+        /// <summary>Transcodes bounded, escape-free scalar text without importing encoder state into each formatter.</summary>
+        /// <param name="text">The known ASCII scalar representation.</param>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteFormattedAscii(scoped ReadOnlySpan<char> text)
+        {
+            EnsureCapacity(text.Length);
+            var status = StringSerializer.Serialize<global::LuminPack.Option.LuminPackUtf8LengthOptions>(text, Buffer.Slice(Position), out _, out int written);
+            if (status != OperationStatus.Done)
+                LuminPackExceptionHelper.ThrowFailedEncoding(status);
+            Advance(written);
         }
 
         /// <summary>Writes a <see cref = "DateTime"/> in its round-trip ("O") form without allocating a string.</summary>

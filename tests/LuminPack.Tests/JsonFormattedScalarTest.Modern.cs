@@ -11,9 +11,9 @@ namespace LuminPackUnitTest;
 
 public partial class JsonFormattedScalarTest
 {
-    /// <summary>Checks bounded modern scalar formatting against its original text in both encodings and cultures.</summary>
+    /// <summary>Checks bounded scalar formatting against its original text in both encodings and cultures.</summary>
     [Fact]
-    public void ModernScalarsKeepFormatsAndOutputBounds()
+    public void FormattedScalarsKeepFormatsAndOutputBounds()
     {
         var original = CultureInfo.CurrentCulture;
         var custom = (CultureInfo)CultureInfo.InvariantCulture.Clone();
@@ -23,6 +23,22 @@ public partial class JsonFormattedScalarTest
             foreach (var culture in new[] { CultureInfo.InvariantCulture, CultureInfo.GetCultureInfo("ar-SA"), custom })
             {
                 CultureInfo.CurrentCulture = culture;
+                foreach (var value in DateTimes)
+                    CheckModernValue(value, value.ToString("O"),
+                        static (ref LuminPackJsonWriter writer, DateTime item) => writer.Write<LuminPackUtf8LengthOptions>(item),
+                        static (ref LuminPackJsonWriter writer, DateTime item) => writer.Write<LuminPackUtf16LengthOptions>(item));
+                foreach (var value in DateTimeOffsets)
+                    CheckModernValue(value, value.ToString("O"),
+                        static (ref LuminPackJsonWriter writer, DateTimeOffset item) => writer.Write<LuminPackUtf8LengthOptions>(item),
+                        static (ref LuminPackJsonWriter writer, DateTimeOffset item) => writer.Write<LuminPackUtf16LengthOptions>(item));
+                foreach (var value in Guids)
+                    CheckModernValue(value, value.ToString(),
+                        static (ref LuminPackJsonWriter writer, Guid item) => writer.Write<LuminPackUtf8LengthOptions>(item),
+                        static (ref LuminPackJsonWriter writer, Guid item) => writer.Write<LuminPackUtf16LengthOptions>(item));
+                foreach (var value in TimeSpans)
+                    CheckModernValue(value, value.ToString("c"),
+                        static (ref LuminPackJsonWriter writer, TimeSpan item) => writer.Write<LuminPackUtf8LengthOptions>(item),
+                        static (ref LuminPackJsonWriter writer, TimeSpan item) => writer.Write<LuminPackUtf16LengthOptions>(item));
                 foreach (var value in new[] { DateOnly.MinValue, DateOnly.MaxValue, new DateOnly(2024, 2, 29) })
                     CheckModernValue(value, value.ToString("O"),
                         static (ref LuminPackJsonWriter writer, DateOnly item) => writer.Write<LuminPackUtf8LengthOptions>(item),
