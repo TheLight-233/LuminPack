@@ -14,6 +14,8 @@ internal static class SerializerJsonReuseRegression
             using System;
             using System.Text;
             using System.Collections.Generic;
+            using System.Collections.Immutable;
+            using System.Linq;
             using LuminPack;
             using LuminPack.Attribute;
             using LuminPack.Option;
@@ -41,6 +43,12 @@ internal static class SerializerJsonReuseRegression
                 public Dictionary<string, Node> Map = new Dictionary<string, Node>();
             }
             [LuminPackable] public struct Managed { public Node Child; }
+            [LuminPackable] public class ImmutableGraph
+            {
+                public ImmutableList<int> Numbers;
+                public IImmutableList<string> Words;
+                public ImmutableList<Node> Nodes;
+            }
             [LuminPackable] public class Pooled
             {
                 public static readonly Pooled Shared = new Pooled();
@@ -70,6 +78,8 @@ internal static class SerializerJsonReuseRegression
                     CheckPresence<LuminPackUtf16LengthOptions>();
                     CheckUnionLoops<LuminPackUtf8LengthOptions>();
                     CheckUnionLoops<LuminPackUtf16LengthOptions>();
+                    CheckImmutableLists<LuminPackUtf8LengthOptions>();
+                    CheckImmutableLists<LuminPackUtf16LengthOptions>();
                     var bound = new Bound(new Node());
                     var child = bound.Child;
                     LuminPackSerializer.DeserializeJson("{\"Child\":{\"Number\":8}}", ref bound);
@@ -96,6 +106,40 @@ internal static class SerializerJsonReuseRegression
                     original = sequence;
                     LuminPackSerializer.DeserializeJson("[{\"Number\":12}]", ref sequence);
                     Require(ReferenceEquals(original, sequence) && ReferenceEquals(child, ((List<Node>)sequence)[0]), "Interface storage");
+                }
+                private static void CheckImmutableLists<TOptions>() where TOptions : struct, ILuminPackOptions
+                {
+                    var encoding = default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 ? Encoding.UTF8 : Encoding.Unicode;
+                    foreach (int count in new[] { 0, 1, 2, 3, 4, 17, 129 })
+                    {
+                        var value = new ImmutableGraph
+                        {
+                            Numbers = ImmutableList.CreateRange(Enumerable.Range(0, count)),
+                            Words = ImmutableList.CreateRange(Enumerable.Range(0, count).Select(index => index % 3 == 0 ? null : "word\u00e9\u4e2d" + index)),
+                            Nodes = ImmutableList.CreateRange(Enumerable.Range(0, count).Select(index => new Node { Number = index, Text = "node" + index }))
+                        };
+                        string json = LuminPackSerializer.SerializeJson<TOptions>(value);
+                        byte[] bytes = encoding.GetBytes(json);
+                        var original = value; var numbers = value.Numbers; var words = value.Words; var nodes = value.Nodes;
+                        int consumed = LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref value);
+                        Require(consumed == bytes.Length && ReferenceEquals(original, value), "Immutable list owner reuse");
+                        Require(value.Numbers.SequenceEqual(numbers) && value.Words.SequenceEqual(words), "Immutable list ordering/nulls");
+                        Require(value.Nodes.Count == count && LuminPackSerializer.SerializeJson<TOptions>(value) == json, "Immutable object list values");
+                        if (count != 0) Require(!ReferenceEquals(nodes[0], value.Nodes[0]) && nodes[0].Number == 0, "Immutable element construction");
+                        if (count == 0) Require(ReferenceEquals(value.Numbers, ImmutableList<int>.Empty), "Immutable empty singleton");
+                        ImmutableGraph fresh = null!;
+                        LuminPackSerializer.DeserializeJson<TOptions>(bytes, ref fresh);
+                        Require(LuminPackSerializer.SerializeJson<TOptions>(fresh) == json, "Fresh immutable lists");
+                        bool failed = false;
+                        var retained = value.Nodes;
+                        try { LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes("{\"Nodes\":[{\"Number\":1},{\"Number\":true}]}"), ref value); }
+                        catch (InvalidOperationException) { failed = true; }
+                        catch (FormatException) { failed = true; }
+                        Require(failed && ReferenceEquals(value.Nodes, retained), "Immutable list failure publication");
+                        LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes("{\"Numbers\":null,\"Words\":null,\"Nodes\":null}"), ref value);
+                        Require(value.Numbers is null && value.Words is null && value.Nodes is null, "Immutable list nulls");
+                        Require(LuminPackSerializer.SerializeJson<TOptions>(fresh) == json, "Immutable list survives pooled storage reuse");
+                    }
                 }
                 private static void CheckUnionLoops<TOptions>() where TOptions : struct, ILuminPackOptions
                 {
