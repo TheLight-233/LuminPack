@@ -238,6 +238,54 @@ public unsafe class MarshalCopyBlockTest
         }
     }
 
+    /// <summary>Checks compact string widening at both edges of an accessible native page.</summary>
+    [Fact]
+    public void CompactStringReadsStayInsideGuardedPages()
+    {
+        if (!OperatingSystem.IsWindows()) return;
+        nuint page = (nuint)Environment.SystemPageSize;
+        byte* pages = (byte*)AllocatePages(null, page * 3, 0x3000, 0x01);
+        try
+        {
+            Assert.True(pages != null, "Unable to reserve guarded test pages.");
+            Assert.True(ProtectPages(pages + page, page, 0x04, out _));
+            for (int length = 1; length <= 16; length++)
+            for (int value = 0; value < 256; value++)
+            foreach (bool atEnd in new[] { false, true })
+            {
+                int width = sizeof(int) + length;
+                byte* record = atEnd ? pages + 2 * page - width : pages + page;
+                var input = new Span<byte>(record, width);
+                System.Buffers.Binary.BinaryPrimitives.WriteInt32LittleEndian(input, (length << 1) | 1);
+                char[] chars = new char[length];
+                for (int i = 0; i < length; i++)
+                    chars[i] = (char)(input[sizeof(int) + i] = (byte)(value + i * 73));
+                string expected = new string(chars);
+                Assert.Equal(expected, ReadGuardedCompactString(record, width, null));
+                Assert.Same(expected, ReadGuardedCompactString(record, width, expected));
+                Assert.Equal(expected, ReadGuardedCompactString(record, width, new string('\u0100', length)));
+            }
+        }
+        finally
+        {
+            if (pages != null) ReleasePages(pages, 0, 0x8000);
+        }
+    }
+
+    /// <summary>Reads one complete literal record from its exact native window.</summary>
+    /// <param name="record">The beginning of the guarded record.</param>
+    /// <param name="width">The complete readable width.</param>
+    /// <param name="current">The immutable candidate, if any.</param>
+    /// <returns>The decoded or reused string.</returns>
+    private static string? ReadGuardedCompactString(byte* record, int width, string? current)
+    {
+        ReadOnlySpan<byte> input = new ReadOnlySpan<byte>(record, width);
+        var reader = new global::LuminPack.Core.LuminPackReader(ref input);
+        string? result = reader.Read<global::LuminPack.Option.LuminPackUtf16LengthOptions>(current);
+        Assert.Equal(width, reader.Position);
+        return result;
+    }
+
     /// <summary>Checks large managed sources remain valid while the GC compacts their storage.</summary>
     [Fact]
     public void ManagedRangesRemainValidDuringCompactingGc()

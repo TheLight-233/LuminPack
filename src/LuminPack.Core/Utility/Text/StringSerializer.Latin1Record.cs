@@ -527,8 +527,8 @@ public static unsafe partial class StringSerializer
             }
             else
             {
-                first = Vector128.CreateScalarUnsafe(WidenLatin1(LuminPackReader.Read<uint>(ref payload))).AsUInt16();
-                last = Vector128.CreateScalarUnsafe(WidenLatin1(LuminPackReader.Read<uint>(ref Unsafe.Add(ref payload, (nint)(uint)back)))).AsUInt16();
+                first = WidenFourLatin1(LuminPackReader.Read<uint>(ref payload));
+                last = WidenFourLatin1(LuminPackReader.Read<uint>(ref Unsafe.Add(ref payload, (nint)(uint)back)));
             }
 
             if (current is not null && current.Length == length)
@@ -560,6 +560,17 @@ public static unsafe partial class StringSerializer
 #endif
         return ReadLatin1PayloadSlow(ref payload, length, current);
     }
+
+#if NET8_0_OR_GREATER
+    /// <summary>Widens four bounded bytes without consuming more of the payload.</summary>
+    /// <param name="bytes">The four input bytes.</param>
+    /// <returns>The widened characters in the low half; the upper half is unspecified.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static Vector128<ushort> WidenFourLatin1(uint bytes) =>
+        global::System.Runtime.Intrinsics.X86.Sse2.IsSupported
+            ? Vector128.WidenLower(Vector128.CreateScalarUnsafe(bytes).AsByte())
+            : Vector128.CreateScalarUnsafe(WidenLatin1(bytes)).AsUInt16();
+#endif
 
     /// <summary>Decodes or reuses a validated nonempty Latin-1 payload outside inlined record sites.</summary>
     /// <param name="payload">The first payload byte.</param>
