@@ -523,6 +523,12 @@ internal static class SerializerCoreProjection
                 var openArguments = owners.SelectMany(owner => owner.TypeArguments).Select(argument => SyntaxFactory.ParseTypeName(FormatterTypeName.Get(argument)));
                 target = SyntaxFactory.GenericName(SyntaxFactory.Identifier(name), SyntaxFactory.TypeArgumentList(SyntaxFactory.SeparatedList(openArguments)));
             }
+            // Referenced Custom formatters retain the generic registry path when no closed owner is emitted.
+            if (target is not GenericNameSyntax && name != "Sizeof" &&
+                scalarType != null && LuminPackExtensionGenerator.IsCustomGeneratorType(scalarType) &&
+                !SymbolEqualityComparer.Default.Equals(scalarType.ContainingAssembly, _compilation.Assembly))
+                target = SyntaxFactory.GenericName(target.Identifier, SyntaxFactory.TypeArgumentList(
+                    SyntaxFactory.SingletonSeparatedList(SyntaxFactory.ParseTypeName(FormatterTypeName.Get(scalarType)))));
             var rewritten = node.WithExpression(SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression,
                 SyntaxFactory.ParseExpression("global::LuminPack.LuminPackSerializer"), target)).WithArgumentList(arguments);
             // A concrete operation of a payload generated in this compilation keeps its payload, so the later advancing call can
