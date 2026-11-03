@@ -23,7 +23,8 @@ namespace LuminPack.Code
         /// <returns>Whether the original short-copy path completes without its cpblk fallback.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static bool UseShortCopy(bool is64Bit, bool has128, bool has256, bool has512, uint count)
-            => is64Bit && has128 && count <= ShortCopyLimit && (count <= NarrowCopyLimit || has256 || has512);
+            // Fold constant capabilities before importing the remaining length comparison into callers.
+            => is64Bit && has128 && count <= ShortCopyLimit && (has256 || has512 || count <= NarrowCopyLimit);
 
         /// <summary>Gets the upper bound of medium copies with destination-aligned 256-bit stores.</summary>
         public const uint MediumCopyLimit = 32 * 1024;
