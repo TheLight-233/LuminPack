@@ -295,7 +295,6 @@ namespace LuminPack.Core
 #endif
             Buffer = storage.Buffer;
             BufferCheckLimit = storage.CheckLimit;
-            RefreshRecordLimit();
         }
 
         /// <summary>The cursor fields over grown native storage, returned by value so growth never receives a writer's address.</summary>
@@ -387,7 +386,6 @@ namespace LuminPack.Core
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
             Owner = bufferWriter;
             BufferCheckLimit = (uint)bufferWriter.BufferCheckLimit + 1;
-            RefreshRecordLimit();
         }
 
         /// <summary>
@@ -400,7 +398,6 @@ namespace LuminPack.Core
             int position = Position;
             Buffer = span;
             if (Owner is null) BufferCheckLimit = uint.MaxValue;
-            RefreshRecordLimit();
             Position = position;
         }
 
@@ -411,7 +408,6 @@ namespace LuminPack.Core
         public void Flush()
         {
             Buffer = null;
-            RefreshRecordLimit();
             Position = 0;
         }
 
@@ -427,7 +423,6 @@ namespace LuminPack.Core
                 Buffer = Owner.GetFullSpan();
                 Position = position;
                 BufferCheckLimit = (uint)Owner.BufferCheckLimit + 1;
-                RefreshRecordLimit();
             }
         }
 

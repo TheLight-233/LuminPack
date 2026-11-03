@@ -11,6 +11,49 @@ namespace LuminPackUnitTest;
 /// <summary>Checks complete advancing operations and concrete extension selection.</summary>
 public class AdvancingBinaryApiTest
 {
+    /// <summary>Checks the public record-room view after all explicit window and owner operations.</summary>
+    [Fact]
+    public void WindowChangesAlwaysPublishTheCurrentRecordLimit()
+    {
+        Span<byte> first = new byte[64];
+        var writer = new LuminPackWriter(option: null);
+        writer.SetSpan(ref first);
+        writer.Advance(8);
+        CheckCachedRecordRoom(ref writer);
+        first = new byte[4];
+        writer.SetSpan(ref first);
+        Assert.Equal(8, writer.Position);
+        CheckCachedRecordRoom(ref writer);
+        first = new byte[128];
+        writer.SetSpan(ref first);
+        CheckCachedRecordRoom(ref writer);
+        using var owner = new LuminBufferWriter(true);
+        writer.SetWriteBuffer(owner);
+        CheckCachedRecordRoom(ref writer);
+        writer.FlushBuffer();
+        Assert.Equal(8, writer.Position);
+        CheckCachedRecordRoom(ref writer);
+        first = new byte[32];
+        writer.SetSpan(ref first);
+        CheckCachedRecordRoom(ref writer);
+        writer.EnsureAdditionalCapacity(200_000);
+        Assert.Equal(8, writer.Position);
+        CheckCachedRecordRoom(ref writer);
+        writer.Flush();
+        Assert.Equal(0, writer.Position);
+        Assert.True(writer.Buffer.IsEmpty);
+        CheckCachedRecordRoom(ref writer);
+    }
+
+    /// <summary>Compares the cached threshold with the externally visible current window and cursor.</summary>
+    /// <param name="writer">The state after a complete public transition.</param>
+    private static void CheckCachedRecordRoom(scoped ref LuminPackWriter writer)
+    {
+        uint end = Math.Min((uint)writer.Buffer.Length, writer.BufferCheckLimit - 1);
+        Assert.Equal((int)end - writer.Position, writer.RecordRoom(ref writer.Cursor));
+    }
+
+
     /// <summary>Preserves definition-owned object framing when a closed generic struct becomes unmanaged.</summary>
     [Fact]
     public void ClosedGenericStructRetainsItsDeclaredFormatter()

@@ -238,6 +238,19 @@ namespace LuminPack.Code
             throw new LuminPackException($"Span out of range with {index}.");
         }
 
+#if NET8_0_OR_GREATER
+        /// <summary>Raises the original Reader bounds failure without importing diagnostic arithmetic into successful checks.</summary>
+        /// <param name="offset">The original window-relative native offset.</param>
+        /// <param name="count">The unchanged signed request width.</param>
+        [DoesNotReturn]
+        internal static void ThrowReaderSpanOutOfRange(nint offset, int count)
+        {
+            int position = (int)offset;
+            long index = (long)position + count;
+            throw new LuminPackException($"Span out of range with {index}.");
+        }
+#endif
+
         /// <summary>Raises the ordinary bounds exception for a computed position wider than Int32.</summary>
         /// <param name="index">The computed end position, including invalid ranges that exceed Int32.</param>
         [DoesNotReturn]

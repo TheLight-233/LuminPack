@@ -11,6 +11,37 @@ namespace LuminPackUnitTest;
 /// <summary>Preserves the approved all-build Reader checks at fixed cursor and dynamic record boundaries.</summary>
 public class ReaderFixedBoundsPolicyTest
 {
+    /// <summary>Preserves negative-width rejection, past-end rejection, zero-width behavior and wide diagnostic arithmetic.</summary>
+    [Fact]
+    public void CursorBoundsDiagnosticsKeepRequestedWidthsAndMessages()
+    {
+        byte[] storage = new byte[64];
+        foreach (int position in new[] {0,1,8,9})
+        foreach (int count in new[] {int.MinValue,-1,0,1,7,8,9,int.MaxValue})
+        foreach (bool advance in new[] {false,true})
+        {
+            ReadOnlySpan<byte> window = storage.AsSpan(0,8);
+            var reader = new LuminPackReader(ref window) {Position = position};
+            bool invalid = count < 0 || (long)(8-position) < (long)(uint)count;
+            Exception? failure = null;
+            try { if (advance) reader.Advance(count); else reader.EnsureReadable(count); }
+            catch (Exception error) { failure = error; }
+            if (invalid)
+            {
+                Assert.NotNull(failure);
+                Assert.Equal($"Span out of range with {(long)position+count}.",failure.Message);
+                Assert.Contains("LuminPackException",failure.GetType().FullName);
+                Assert.Equal(position,reader.Position);
+            }
+            else
+            {
+                Assert.Null(failure);
+                Assert.Equal(position+(advance?count:0),reader.Position);
+            }
+        }
+    }
+
+
     /// <summary>Compares fused version prefixes with the established header and metadata operations.</summary>
     [Fact]
     public void FixedVersionPrefixesKeepEveryCompiledProfile()

@@ -12,6 +12,51 @@ namespace LuminPackUnitTest;
 /// <summary>Checks the compact Latin-1 form of UTF-16 length string records and the raw form it falls back to.</summary>
 public sealed class CompactStringRecordTest
 {
+#if NET8_0_OR_GREATER
+    /// <summary>Protects all scalar/vector paths and the three-character terminator case.</summary>
+    [Fact]
+    public void ShortLatin1PayloadKeepsEveryLengthValueAndBoundary()
+    {
+        if (IntPtr.Size != 8 || !global::System.Runtime.Intrinsics.Vector128.IsHardwareAccelerated) return;
+        for (int length = 1; length <= 16; length++)
+        {
+            for (int value = 0; value <= 255; value++)
+                for (int position = 0; position < length; position++)
+                {
+                    char[] chars = new string('x', length).ToCharArray();
+                    chars[position] = (char)value;
+                    CheckShortLatin1Payload(new string(chars), valid: true);
+                }
+            foreach (char value in new[] { '\u0100', '\u4e2d', '\ud800', '\uffff' })
+                for (int position = 0; position < length; position++)
+                {
+                    char[] chars = new string('x', length).ToCharArray();
+                    chars[position] = value;
+                    CheckShortLatin1Payload(new string(chars), valid: false);
+                }
+        }
+    }
+
+    /// <summary>Checks exact logical bytes and both sides of the complete reserved destination.</summary>
+    /// <param name="text">The in-contract one-to-sixteen-character input.</param>
+    /// <param name="valid">Whether every code unit is Latin-1.</param>
+    private static void CheckShortLatin1Payload(string text, bool valid)
+    {
+        int capacity = text.Length * 2;
+        byte[] storage = Enumerable.Repeat((byte)0xCD, capacity + 16).ToArray();
+        Span<byte> payload = storage.AsSpan(8, capacity);
+        int header = StringSerializer.TryWriteShortLatin1Payload(ref global::System.Runtime.InteropServices.MemoryMarshal.GetReference(payload), text);
+        Assert.Equal(valid ? text.Length * 2 + 1 : 0, header);
+        if (valid)
+        {
+            for (int i = 0; i < text.Length; i++) Assert.Equal((byte)text[i], payload[i]);
+        }
+        else Assert.All(storage, value => Assert.Equal((byte)0xCD, value));
+        Assert.All(storage.Take(8).Concat(storage.Skip(8 + capacity)), value => Assert.Equal((byte)0xCD, value));
+    }
+#endif
+
+
     /// <summary>Checks opt-in variable headers, exact-sized writes, payload guards and immutable reuse.</summary>
     [Fact]
     public void VarIntRecordsPreservePayloadsAndReuse()

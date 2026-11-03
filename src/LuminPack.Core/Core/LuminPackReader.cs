@@ -144,7 +144,7 @@ namespace LuminPack.Core
 #else
             destination.Cursor = Cursor;
 #endif
-            destination.Buffer = Buffer;
+            destination.Buffer = _buffer;
         }
 
         /// <summary>Gets the initialized reference context, creating an independent implicit scope on first access.</summary>
@@ -176,7 +176,11 @@ namespace LuminPack.Core
             long room = (long)(_end - Cursor);
 #endif
             if (room < (long)(uint)count || count < 0)
+#if NET8_0_OR_GREATER
+                LuminPackExceptionHelper.ThrowReaderSpanOutOfRange(Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref Cursor), count);
+#else
                 LuminPackExceptionHelper.ThrowSpanOutOfRange((long)Position + count);
+#endif
         }
 
         /// <summary>Validates that a range of the readable window exists.</summary>
@@ -185,7 +189,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void EnsureReadable(int index, int count)
         {
-            if (IsOutOfRange(index, count, Buffer.Length))
+            if (IsOutOfRange(index, count, _buffer.Length))
                 LuminPackExceptionHelper.ThrowSpanOutOfRange((long)index + count);
         }
 
@@ -247,7 +251,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public Span<byte> GetSpan()
         {
-            return Buffer;
+            return _buffer;
         }
 
         /// <summary>Examines the current object marker without advancing.</summary>
@@ -256,7 +260,7 @@ namespace LuminPack.Core
         public bool PeekIsNullObject()
         {
             // At the end of the input no marker byte may be loaded; the following checked read rejects the missing record.
-            return (uint)Position < (uint)Buffer.Length && Current == LuminPackCode.NullObject;
+            return (uint)Position < (uint)_buffer.Length && Current == LuminPackCode.NullObject;
         }
 
         /// <summary>Gets or replaces the absolute position for framing and random-access implementation kernels.</summary>
@@ -264,17 +268,17 @@ namespace LuminPack.Core
         {
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
 #if NET8_0_OR_GREATER
-            get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(Buffer), ref Cursor);
+            get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref Cursor);
 #else
-            get => (int)(Cursor - (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(Buffer)));
+            get => (int)(Cursor - (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_buffer)));
 #endif
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
             {
 #if NET8_0_OR_GREATER
-                Cursor = ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)value);
+                Cursor = ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)value);
 #else
-                Cursor = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(Buffer)) + value;
+                Cursor = (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_buffer)) + value;
 #endif
             }
         }
@@ -1188,6 +1192,18 @@ namespace LuminPack.Core
             }
         }
 
+        /// <summary>Gets the same relative readable width directly from the cached window end.</summary>
+        private int RemainingWindowBytes
+        {
+            [MethodImpl(MethodImplOptions.AggressiveInlining)]
+            get =>
+#if NET8_0_OR_GREATER
+                (int)Unsafe.ByteOffset(ref Cursor, ref _end);
+#else
+                (int)(_end - Cursor);
+#endif
+        }
+
         /// <summary>Reads a complete compiled-profile record without exposing an integer cursor.</summary>
         /// <typeparam name = "TOptions">The stateless binary profile.</typeparam>
         /// <param name = "current">The immutable string available for reuse.</param>
@@ -1208,7 +1224,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
                 // Complete nonempty records validate before comparison or allocation. Equal candidates retain
                 // their immutable storage; null, empty and malformed records keep the shared reader's failures.
-                if (Buffer.Length - Position >= sizeof(int))
+                if (RemainingWindowBytes >= sizeof(int))
                 {
                     int header = LuminPackReader.Read<int>(ref Current);
                     int payload = StringSerializer.Utf16RecordPayload(header);
@@ -1226,7 +1242,7 @@ namespace LuminPack.Core
                     }
                 }
 #endif
-                string? value = StringSerializer.ReadUtf16Record(ref Current, Buffer.Length - Position, current, out int bytes);
+                string? value = StringSerializer.ReadUtf16Record(ref Current, RemainingWindowBytes, current, out int bytes);
                 Advance(bytes);
                 return value;
             }
@@ -1237,7 +1253,7 @@ namespace LuminPack.Core
             if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && default(TOptions).StringRecording == LuminPackStringRecording.Length &&
                 current is null && Vector128.IsHardwareAccelerated)
             {
-                int available = Buffer.Length - Position;
+                int available = RemainingWindowBytes;
                 if (available >= sizeof(int) * 2)
                 {
                     long header = LuminPackReader.Read<long>(ref Current);
@@ -1257,7 +1273,7 @@ namespace LuminPack.Core
             int start = Position;
             int index = start;
             // The decoders are static, so a fresh or retried read never takes this state's address.
-            string? result = ReadStringAndAdvance<TOptions>(Buffer, ref index, current);
+            string? result = ReadStringAndAdvance<TOptions>(_buffer, ref index, current);
             Advance(index - start);
             return result;
         }
@@ -1269,7 +1285,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private string? ReadVarIntString<TOptions>(string? current) where TOptions : struct, ILuminPackOptions
         {
-            string? result = ReadVarIntRecord<TOptions>(Buffer.Slice(Position), current, out int consumed);
+            string? result = ReadVarIntRecord<TOptions>(_buffer.Slice(Position), current, out int consumed);
             Advance(consumed);
             return result;
         }
@@ -1357,7 +1373,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private void ValidateCollectionPayload(int index, int byteLength)
         {
-            if (IsOutOfRange(index, byteLength, Buffer.Length))
+            if (IsOutOfRange(index, byteLength, _buffer.Length))
                 ThrowPayloadOutOfRange(index, byteLength);
         }
 
@@ -1402,7 +1418,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int GetCapacityHint(int count)
         {
-            return Math.Min(count, Buffer.Length - Position);
+            return Math.Min(count, RemainingWindowBytes);
         }
 
         #endregion
@@ -1663,7 +1679,7 @@ namespace LuminPack.Core
         public bool TryReadVersionPrefix<TOptions>(scoped ReadOnlySpan<byte> prefix)
             where TOptions : struct, ILuminPackOptions
         {
-            if ((uint)Position > (uint)Buffer.Length || prefix.Length > Buffer.Length - Position)
+            if ((uint)Position > (uint)_buffer.Length || prefix.Length > RemainingWindowBytes)
                 return false;
             uint expected = BinaryPrimitives.ReadUInt32LittleEndian(prefix) | (uint)LuminPackWriter.BinaryProfile<TOptions>() << 16;
             if (LuminPackReader.Read<uint>(ref Current) != expected ||
@@ -1758,7 +1774,7 @@ namespace LuminPack.Core
         public void SkipReferenceSlots(int tablePosition, int slots)
         {
             for (int i = 0; i < slots; i++)
-                SkipReferenceSlot(Buffer[tablePosition + i]);
+                SkipReferenceSlot(_buffer[tablePosition + i]);
         }
 
         /// <summary>Reads a named header of either revision and rejects unrelated record formats.</summary>
@@ -1811,7 +1827,7 @@ namespace LuminPack.Core
             int start = Position;
             ReadVersionWidths(fields, slots, widths, present);
             // Later short records of this operation map through the same table.
-            OptionState.AddVersionTable(LuminPackVersionField.Fingerprint(Buffer.Slice(start, Position - start)), Buffer.Slice(start, Position - start));
+            OptionState.AddVersionTable(LuminPackVersionField.Fingerprint(_buffer.Slice(start, Position - start)), _buffer.Slice(start, Position - start));
         }
 
         /// <summary>Maps the names, type contracts and widths of a revision-2 member table at the cursor.</summary>
@@ -1925,7 +1941,7 @@ namespace LuminPack.Core
             for (int i = 0; i < slots.Length; i++)
             {
                 int slot;
-                if (i < fields.Length && fields[i].Prefix.Length <= Buffer.Length - Position && Buffer.Slice(Position, fields[i].Prefix.Length).SequenceEqual(fields[i].Prefix))
+                if (i < fields.Length && fields[i].Prefix.Length <= RemainingWindowBytes && _buffer.Slice(Position, fields[i].Prefix.Length).SequenceEqual(fields[i].Prefix))
                 {
                     Advance(fields[i].Prefix.Length);
                     slot = i;
@@ -1968,7 +1984,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public bool TryReadVersionMetadata(scoped ReadOnlySpan<byte> metadata)
         {
-            if ((uint)Position > (uint)Buffer.Length || metadata.Length > Buffer.Length - Position || !System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref Current, metadata.Length).SequenceEqual(metadata))
+            if ((uint)Position > (uint)_buffer.Length || metadata.Length > RemainingWindowBytes || !System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref Current, metadata.Length).SequenceEqual(metadata))
                 return false;
             Advance(metadata.Length);
             return true;
@@ -1989,8 +2005,8 @@ namespace LuminPack.Core
         public bool TryReadVersionSchema<TOptions>(scoped ReadOnlySpan<byte> metadata, byte count)
             where TOptions : struct, ILuminPackOptions
         {
-            int available = Buffer.Length - Position;
-            if ((uint)Position > (uint)Buffer.Length || available < 4 || metadata.Length > available - 4)
+            int available = _buffer.Length - Position;
+            if ((uint)Position > (uint)_buffer.Length || available < 4 || metadata.Length > available - 4)
                 return false;
             global::LuminPack.Core.LuminPackReader.Read(ref Current, out uint header);
             uint profile = LuminPackWriter.BinaryProfile<TOptions>();
@@ -2028,7 +2044,7 @@ namespace LuminPack.Core
             long total = 0;
             for (int i = 0; i < lengths.Length; i++)
             {
-                byte first = Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position));
+                byte first = Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(Position));
                 int length;
                 if (first <= 127)
                 {
@@ -2066,7 +2082,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public int ReadVersionLength(int remainingEntries)
         {
-            byte first = Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(Position));
+            byte first = Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(Position));
             if (first <= 127)
             {
                 Advance(1);
@@ -2116,7 +2132,7 @@ namespace LuminPack.Core
             }
 
             ValidateCollectionPayload(Position, (int)length);
-            var result = Buffer.Slice(Position, (int)length);
+            var result = _buffer.Slice(Position, (int)length);
             Advance((int)length);
             return result;
         }
@@ -2128,8 +2144,8 @@ namespace LuminPack.Core
         public int EnterVersionField(int length)
         {
             ValidateCollectionPayload(Position, length);
-            int previousLength = Buffer.Length;
-            Buffer = Buffer.Slice(0, Position + length);
+            int previousLength = _buffer.Length;
+            Buffer = _buffer.Slice(0, Position + length);
             return previousLength;
         }
 
@@ -2138,7 +2154,7 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public void ExitVersionField(int previousLength)
         {
-            Buffer = System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(Buffer), (nint)(uint)(0)), previousLength);
+            Buffer = System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref Unsafe.Add(ref MemoryMarshal.GetReference(_buffer), (nint)(uint)(0)), previousLength);
         }
 
         /// <summary>Checks a known field's completed read against its table length.</summary>

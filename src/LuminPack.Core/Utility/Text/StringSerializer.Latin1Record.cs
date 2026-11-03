@@ -221,11 +221,9 @@ public static unsafe partial class StringSerializer
             return Latin1Header(length);
         }
 
-        // One to seven characters: the first four and the last four, where a terminating null completes a shorter
-        // string, so no read leaves the string and no write leaves its two-bytes-per-character room.
-        ulong head = length >= 4 || length == 3
-            ? LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref chars))
-            : LuminPackReader.Read<uint>(ref Unsafe.As<ushort, byte>(ref chars));
+        // Three to seven characters remain. Three use the string's terminating null for the fourth code unit;
+        // every store remains within the reserved two-bytes-per-character room.
+        ulong head = LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref chars));
         ulong tail = length >= 4 ? LuminPackReader.Read<ulong>(ref Unsafe.As<ushort, byte>(ref Unsafe.Add(ref chars, (nint)(uint)(length - 4)))) : 0;
         if (((head | tail) & 0xFF00FF00FF00FF00UL) != 0)
             return 0;
@@ -234,8 +232,6 @@ public static unsafe partial class StringSerializer
             LuminPackWriter.Write(ref destination, PackLatin1(head));
             LuminPackWriter.Write(ref Unsafe.Add(ref destination, (nint)(uint)(length - 4)), PackLatin1(tail));
         }
-        else if (length == 1)
-            LuminPackWriter.Write(ref destination, (ushort)PackLatin1(head));
         else
             LuminPackWriter.Write(ref destination, PackLatin1(head));
         return Latin1Header(length);
