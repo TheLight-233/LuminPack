@@ -8,6 +8,34 @@ using Xunit;
 /// <summary>Protects bounded scalar facades independently of unchecked address-only storage kernels.</summary>
 public sealed class RawScalarSpanSafetyTest
 {
+    /// <summary>Preserves optional framing, compressed bytes, raw storage and exact write boundaries.</summary>
+    [Fact]
+    public void RawCollectionWritesKeepCompressionAndHeaderContracts()
+    {
+        foreach (int count in new[] { 0, 1, 17, 1024 })
+        foreach (bool header in new[] { false, true })
+        foreach (bool compressed in new[] { false, true })
+        {
+            int[] values = Enumerable.Range(0, count).Select(index => index % 7 - 3).ToArray();
+            int capacity = LuminPackWriter.Size<int>(count, header, compressed);
+            byte[] storage = Enumerable.Repeat((byte)0xCD, capacity + 16).ToArray();
+            int written = LuminPackWriter.Write<int>(storage.AsSpan(8, capacity), values, count, header, compressed);
+            Assert.InRange(written, 0, capacity);
+            Assert.All(storage[..8], value => Assert.Equal((byte)0xCD, value));
+            Assert.All(storage[(8 + written)..], value => Assert.Equal((byte)0xCD, value));
+            int[]? restored = null;
+            int consumed = LuminPackReader.Read<int>(storage.AsSpan(8, written), ref restored, count, header, compressed);
+            Assert.Equal(written, consumed);
+            Assert.Equal(values, restored);
+            if (!compressed)
+            {
+                int prefix = header ? sizeof(int) : 0;
+                Assert.Equal(prefix + count * sizeof(int), written);
+                Assert.True(MemoryMarshal.AsBytes(values.AsSpan()).SequenceEqual(storage.AsSpan(8 + prefix, count * sizeof(int))));
+            }
+        }
+    }
+
     /// <summary>Rejects every shortened input window before mutating any supported scalar width.</summary>
     [Fact]
     public void ConcreteScalarEntriesValidateTheirCompleteWindow()

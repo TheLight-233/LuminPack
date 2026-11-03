@@ -761,6 +761,18 @@ namespace LuminPack.Core
                 return prefix + bytes;
             }
 
+            return WriteCompressedStorage(destination, ref source, bytes, prefix);
+        }
+
+        /// <summary>Keeps compression scratch ownership and cleanup outside the inlineable raw-copy operation.</summary>
+        /// <param name="destination">The complete reserved output record, including its optional count.</param>
+        /// <param name="source">The first byte of the complete raw payload.</param>
+        /// <param name="bytes">The checked raw payload width.</param>
+        /// <param name="prefix">The width of the already written count header.</param>
+        /// <returns>The complete compressed record width.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int WriteCompressedStorage(scoped Span<byte> destination, scoped ref byte source, int bytes, int prefix)
+        {
             int capacity = LuminCompressor.GetMaxCompressedSize(bytes);
             byte[] temporary = ArrayPool<byte>.Shared.Rent(capacity);
             try
