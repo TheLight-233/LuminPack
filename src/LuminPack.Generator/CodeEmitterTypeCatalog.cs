@@ -35,9 +35,9 @@ internal static class CodeEmitterTypeCatalog
         "UnityEngine.Gradient",
         "UnityEngine.RectOffset",
 
-        // .Net8+
-        "global::System.Half", "global::System.Int128", "global::System.UInt128",
-        "global::System.DateOnly", "global::System.TimeOnly", "global::System.Text.Rune",
+        // Framework scalars use CLR metadata names, without the C# global namespace qualifier.
+        "System.Half", "System.Int128", "System.UInt128",
+        "System.DateOnly", "System.TimeOnly", "System.Text.Rune",
 
         // Memory and array helpers.
         "System.Memory`1",

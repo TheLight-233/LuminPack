@@ -4,8 +4,8 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-/// <summary>Protects enum, signed-byte array and BitArray facades and their original checked roots.</summary>
-internal static class SerializerFrameworkEntryRegression
+/// <summary>Protects framework scalar fields, enum and collection facades and their checked roots.</summary>
+internal static partial class SerializerFrameworkEntryRegression
 {
     /// <summary>Compiles all tiers, executes exact bytes and checks retained enum-width edits.</summary>
     /// <param name="references">Platform and runtime metadata references.</param>
@@ -78,7 +78,8 @@ internal static class SerializerFrameworkEntryRegression
             Require(Trees(driver).SequenceEqual(Trees(Create(parse).RunGenerators(compilation))), "Restoring enum width retained stale generated code.");
             Execute(output);
         }
-        Console.WriteLine("Passed checked enum/BitArray entries, four tiers and retained/fresh enum-width edits.");
+        VerifyModernScalarFields(references);
+        Console.WriteLine("Passed checked enum/BitArray entries, modern scalar fields, four tiers and retained/fresh enum-width edits.");
     }
 
     /// <summary>Checks exact facade selection without allowing the unchecked scalar read shortcut.</summary>

@@ -77,6 +77,8 @@ Main components:
 
 ### Operation pipeline
 
+Framework field classification uses CLR metadata names, such as `System.DateOnly`, in `CodeEmitterTypeCatalog`. These names do not include the C# `global::` qualifier used in emitted source. The same catalog classifies direct fields, nullable values and collection elements before considering user-defined object constructors.
+
 1. Analyze the canonical type contract and freeze operation templates.
 2. Bind the root and compose nested operations, keeping recursive, `Custom`, virtual and specialized boundaries.
 3. Bind calls to the serializer state bodies and propagate compiled profiles.
