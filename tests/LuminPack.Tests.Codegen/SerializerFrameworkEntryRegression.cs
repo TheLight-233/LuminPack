@@ -79,7 +79,7 @@ internal static partial class SerializerFrameworkEntryRegression
             Execute(output);
         }
         VerifyModernScalarFields(references);
-        Console.WriteLine("Passed checked enum/BitArray entries, modern scalar fields, four tiers and retained/fresh enum-width edits.");
+        Console.WriteLine("Passed checked enum/BitArray entries, modern scalar fields, four tiers and retained/fresh width and runtime-capability edits.");
     }
 
     /// <summary>Checks exact facade selection without allowing the unchecked scalar read shortcut.</summary>

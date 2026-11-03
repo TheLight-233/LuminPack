@@ -88,6 +88,7 @@ For ordinary objects with `[LuminPackPoolRent]`, binary and JSON reads without `
 - Don't rely on reflection- or `typeof`-driven serialization under `Light`/`Minimal`; those modes only keep statically reachable types.
 - Don't use `$type`, `$value`, `$id`, `$ref` as JSON member names.
 - `NaN`/infinity cannot be written to JSON.
+- `DateOnly`, `TimeOnly`, `Int128` and `UInt128` use JSON strings: round-trip dates/times and invariant decimal integers. Modern Core assets expose typed `LuminPackJsonWriter.Write` / `Write<TOptions>` overloads that avoid intermediate strings. Generated code selects them from the referenced Core API; older assets automatically retain their text conversion fallback.
 - Under NativeAOT, reading a non-null `System.Type` throws `PlatformNotSupportedException`.
 - A `Custom` type used as a member of another model needs `[LuminPackableObject]` on that member.
 - `[LuminPackBounded(n)]` is a promise; a wrong bound can write past the buffer.

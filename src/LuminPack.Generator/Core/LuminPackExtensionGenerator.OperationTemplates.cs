@@ -54,7 +54,7 @@ public static partial class LuminPackExtensionGenerator
         return projectJsonHelper ? JsonOperationTemplates.Prepare(source, metadata, ownsExternalHelper) : source;
     }
 
-    /// <summary>Attaches canonical cursor dispatch and dictionary reuse facts to a built-in formatter operation.</summary>
+    /// <summary>Attaches runtime capabilities, canonical cursor dispatch and collection reuse facts to a built-in formatter operation.</summary>
     /// <param name="type">The exact operation type.</param>
     /// <param name="compilation">The current consuming compilation.</param>
     /// <param name="metadata">Complete current emission settings.</param>
@@ -62,6 +62,11 @@ public static partial class LuminPackExtensionGenerator
     private static LuminLocalFieldData CreateOperationField(ITypeSymbol type, Compilation compilation, MetaInfo metadata)
     {
         var field = new LuminLocalFieldData { TypeName = FormatterTypeName.Get(type), TypeSymbol = type, Name = "value", IsValue = type.IsValueType };
+        if (field.TypeName is "global::System.DateOnly" or "global::System.TimeOnly" or "global::System.Int128" or "global::System.UInt128")
+            field.CanFormatJsonScalar = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonWriter")?
+                .GetMembers("Write").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.ReturnsVoid && method.Arity == 1 &&
+                    method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 1 &&
+                    method.Parameters[0].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, type)) == true;
         if (type is INamedTypeSymbol { MetadataName: "SortedSet`1", TypeArguments.Length: 1 } sortedSet &&
             sortedSet.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
         {

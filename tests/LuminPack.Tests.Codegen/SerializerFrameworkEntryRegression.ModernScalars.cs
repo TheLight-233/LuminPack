@@ -1,5 +1,6 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 internal static partial class SerializerFrameworkEntryRegression
 {
@@ -110,9 +111,57 @@ internal static partial class SerializerFrameworkEntryRegression
             var compilation = CSharpCompilation.Create("ModernScalarFields" + mode + Guid.NewGuid().ToString("N"),
                 [CSharpSyntaxTree.ParseText(source.Replace("MODE", mode, StringComparison.Ordinal), parse, "ModernScalars.cs")], references,
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
-            Create(parse).RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
+            var driver = Create(parse).RunGeneratorsAndUpdateCompilation(compilation, out var output, out var diagnostics);
             Require(!diagnostics.Any(diagnostic => diagnostic.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+            CheckModernScalarWrites(driver, true);
             Execute(output);
+            if (mode == "Minimal") VerifyModernScalarCapability(references, compilation, parse, driver);
+        }
+    }
+
+    /// <summary>Checks actual runtime API selection and exact retained output when the reference changes in either direction.</summary>
+    /// <param name="references">The current platform and modern runtime references.</param>
+    /// <param name="compilation">The modern consumer compilation.</param>
+    /// <param name="parse">The consumer language and conditional symbols.</param>
+    /// <param name="driver">The already populated modern driver.</param>
+    private static void VerifyModernScalarCapability(MetadataReference[] references, CSharpCompilation compilation, CSharpParseOptions parse, GeneratorDriver driver)
+    {
+        string runtime = typeof(LuminPack.Core.LuminPackJsonWriter).Assembly.Location;
+        string portable = Path.GetFullPath("src/LuminPack.Core/bin/Release/netstandard2.1/LuminPack.Core.dll");
+        Require(File.Exists(portable), "Build the netstandard2.1 runtime before the framework compatibility regression.");
+        var original = references.Single(reference => string.Equals(reference.Display, runtime, StringComparison.OrdinalIgnoreCase));
+        var compatibility = compilation.WithReferences(references.Where(reference => !ReferenceEquals(reference, original))
+            .Append(MetadataReference.CreateFromFile(portable)));
+        foreach (var target in new[] { compatibility, compilation })
+        {
+            driver = driver.RunGeneratorsAndUpdateCompilation(target, out var output, out var diagnostics);
+            Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+            Require(Trees(driver).SequenceEqual(Trees(Create(parse).RunGenerators(target))), "A modern scalar runtime reference change retained stale output.");
+            CheckModernScalarWrites(driver, ReferenceEquals(target, compilation));
+            using var image = new MemoryStream();
+            var result = output.Emit(image);
+            Require(result.Success, string.Join(Environment.NewLine, result.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
+        }
+    }
+
+    /// <summary>Checks all four concrete scalar roots use the available writer overload or their established text fallback.</summary>
+    /// <param name="driver">The completed generation.</param>
+    /// <param name="hasTypedWriter">Whether the referenced runtime supplies typed scalar formatting.</param>
+    private static void CheckModernScalarWrites(GeneratorDriver driver, bool hasTypedWriter)
+    {
+        var roots = driver.GetRunResult().Results.SelectMany(result => result.GeneratedSources)
+            .SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+            .Where(method => method.Identifier.ValueText == "RootWriteJson" && method.ParameterList.Parameters.Count == 2).ToArray();
+        foreach (string type in new[] { "DateOnly", "TimeOnly", "Int128", "UInt128" })
+        {
+            var writes = roots.Where(method => method.ParameterList.Parameters[1].Type!.ToString() == "global::System." + type).ToArray();
+            Require(writes.Length != 0, "The modern scalar write root disappeared: " + type);
+            foreach (var write in writes)
+            {
+                bool convertsToString = write.DescendantNodes().OfType<InvocationExpressionSyntax>()
+                    .Any(call => call.Expression is MemberAccessExpressionSyntax member && member.Name.Identifier.ValueText == "ToString");
+                Require(convertsToString != hasTypedWriter, "The modern scalar selected an incompatible writer: " + type);
+            }
         }
     }
 }

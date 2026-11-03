@@ -79,16 +79,14 @@ public static class UnmanagedEmitter
             case "global::System.TimeSpan":
                 sb.AppendLine("            writer.WriteTimeSpan(value);");
                 break;
-            // DateOnly/TimeOnly/Int128/UInt128 keep the ToString path on purpose:
-            // a consumer below net8.0 resolves LuminPack's netstandard2.1 asset,
-            // which cannot declare methods for types that target does not have.
+            // The referenced Core asset, not the consumer's framework symbols, selects these overloads.
             case "global::System.DateOnly":
             case "global::System.TimeOnly":
-                sb.AppendLine("            writer.WriteString(value.ToString(\"O\"));");
+                sb.AppendLine(data.CanFormatJsonScalar ? "            writer.WriteFormattedValue(value);" : "            writer.WriteString(value.ToString(\"O\"));");
                 break;
             case "global::System.Int128":
             case "global::System.UInt128":
-                sb.AppendLine("            writer.WriteString(value.ToString(global::System.Globalization.CultureInfo.InvariantCulture));");
+                sb.AppendLine(data.CanFormatJsonScalar ? "            writer.WriteFormattedValue(value);" : "            writer.WriteString(value.ToString(global::System.Globalization.CultureInfo.InvariantCulture));");
                 break;
             case "global::System.Half":
                 sb.AppendLine("            writer.WriteFloat((float)value);");

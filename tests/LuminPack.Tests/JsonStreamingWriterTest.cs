@@ -10,6 +10,35 @@ namespace LuminPackUnitTest;
 /// <summary>Provides json streaming writer test functionality.</summary>
 public class JsonStreamingWriterTest
 {
+#if NET8_0_OR_GREATER
+    /// <summary>Checks bounded modern scalar formats through the segmented writer and its output canaries.</summary>
+    [Fact]
+    public void ModernScalarFormatsCrossOutputSegments()
+    {
+        CheckModernScalarSegments<LuminPackUtf8LengthOptions>(Encoding.UTF8);
+        CheckModernScalarSegments<LuminPackUtf16LengthOptions>(Encoding.Unicode);
+    }
+
+    /// <summary>Compares segmented scalar output with its established literal text.</summary>
+    /// <param name="encoding">The document byte encoding.</param>
+    /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+    private static void CheckModernScalarSegments<TOptions>(Encoding encoding) where TOptions : struct, ILuminPackOptions
+    {
+        var output = new ChunkWriter();
+        var writer = new LuminPackJsonWriter(output, new LuminPackWriterOptionalState(), initialSizeHint: 1);
+        writer.WriteArrayStart<TOptions>();
+        writer.Write<TOptions>(DateOnly.MinValue);
+        writer.Write<TOptions>(TimeOnly.MaxValue);
+        writer.Write<TOptions>(Int128.MinValue);
+        writer.Write<TOptions>(UInt128.MaxValue);
+        writer.WriteArrayEnd<TOptions>();
+        writer.FlushToBufferWriter();
+        const string expected = "[\"0001-01-01\",\"23:59:59.9999999\",\"-170141183460469231731687303715884105728\",\"340282366920938463463374607431768211455\"]";
+        Assert.Equal(encoding.GetBytes(expected), output.ToArray());
+        Assert.True(output.CommitCount > 1);
+    }
+#endif
+
     /// <summary>Verifies streaming matches contiguous output across chunks.</summary>
     /// <param name="encoding">The encoding used by this operation.</param>
     [Theory]

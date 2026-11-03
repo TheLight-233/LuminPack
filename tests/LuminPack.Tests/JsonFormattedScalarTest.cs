@@ -11,7 +11,7 @@ namespace LuminPackUnitTest;
 // intermediate string per value. They now format into a stack buffer, so the
 // emitted JSON must stay byte-identical while the write path allocates nothing.
 /// <summary>Provides json formatted scalar test functionality.</summary>
-public class JsonFormattedScalarTest
+public partial class JsonFormattedScalarTest
 {
     private static readonly DateTime[] DateTimes =
     {

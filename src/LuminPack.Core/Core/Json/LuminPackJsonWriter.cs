@@ -694,6 +694,24 @@ namespace LuminPack.Core
             Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
         }
 
+#if NET8_0_OR_GREATER
+        /// <summary>Writes a date in its round-trip JSON string form.</summary>
+        /// <param name="value">The date to write.</param>
+        public void Write(DateOnly value) => Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+
+        /// <summary>Writes a time in its round-trip JSON string form.</summary>
+        /// <param name="value">The time to write.</param>
+        public void Write(TimeOnly value) => Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+
+        /// <summary>Writes a signed 128-bit integer as an invariant decimal JSON string.</summary>
+        /// <param name="value">The integer to write.</param>
+        public void Write(Int128 value) => Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+
+        /// <summary>Writes an unsigned 128-bit integer as an invariant decimal JSON string.</summary>
+        /// <param name="value">The integer to write.</param>
+        public void Write(UInt128 value) => Write<global::LuminPack.Option.LuminPackDefaultOptions>(value);
+#endif
+
         // Conversion: xjb (https://github.com/xjb714/xjb) shortest-decimal core, ported in
         // Core/Json/Xjb. The previous "try 1..9/17 fraction digits and verify the round trip"
         // loop plus its Utf8Formatter fallback is gone:
@@ -1152,6 +1170,64 @@ namespace LuminPack.Core
 
             Write<TOptions>(value.ToString());
         }
+
+#if NET8_0_OR_GREATER
+        /// <summary>Writes a date in its round-trip JSON string form without an intermediate string.</summary>
+        /// <param name="value">The date to write.</param>
+        /// <typeparam name="TOptions">The stateless document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void Write<TOptions>(DateOnly value)
+            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+        {
+            Span<char> buffer = stackalloc char[10];
+            if (value.TryFormat(buffer, out int written, "O"))
+                WriteFormattedValue<TOptions>(buffer.Slice(0, written));
+            else
+                Write<TOptions>(value.ToString("O"));
+        }
+
+        /// <summary>Writes a time in its round-trip JSON string form without an intermediate string.</summary>
+        /// <param name="value">The time to write.</param>
+        /// <typeparam name="TOptions">The stateless document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void Write<TOptions>(TimeOnly value)
+            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+        {
+            Span<char> buffer = stackalloc char[16];
+            if (value.TryFormat(buffer, out int written, "O"))
+                WriteFormattedValue<TOptions>(buffer.Slice(0, written));
+            else
+                Write<TOptions>(value.ToString("O"));
+        }
+
+        /// <summary>Writes a signed 128-bit integer as an invariant decimal JSON string without an intermediate string.</summary>
+        /// <param name="value">The integer to write.</param>
+        /// <typeparam name="TOptions">The stateless document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void Write<TOptions>(Int128 value)
+            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+        {
+            Span<char> buffer = stackalloc char[40];
+            if (value.TryFormat(buffer, out int written, default, System.Globalization.CultureInfo.InvariantCulture))
+                WriteFormattedValue<TOptions>(buffer.Slice(0, written));
+            else
+                Write<TOptions>(value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        /// <summary>Writes an unsigned 128-bit integer as an invariant decimal JSON string without an intermediate string.</summary>
+        /// <param name="value">The integer to write.</param>
+        /// <typeparam name="TOptions">The stateless document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void Write<TOptions>(UInt128 value)
+            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+        {
+            Span<char> buffer = stackalloc char[39];
+            if (value.TryFormat(buffer, out int written, default, System.Globalization.CultureInfo.InvariantCulture))
+                WriteFormattedValue<TOptions>(buffer.Slice(0, written));
+            else
+                Write<TOptions>(value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+#endif
 
         /// <summary>Writes float to the current output.</summary>
         /// <param name = "value">The value consumed or produced by this operation.</param>

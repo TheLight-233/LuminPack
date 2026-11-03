@@ -7,6 +7,8 @@ public sealed class LuminLocalFieldData
     public string TypeName;
     /// <summary>Stores the type symbol.</summary>
     public Microsoft.CodeAnalysis.ITypeSymbol TypeSymbol;
+    /// <summary>Whether the referenced JSON writer has the exact bounded framework-scalar overload.</summary>
+    internal bool CanFormatJsonScalar;
     /// <summary>Whether the referenced runtime exposes the existing priority-queue heap access helper.</summary>
     internal bool CanAccessPriorityQueueNodes;
     /// <summary>Whether the closed small raw element and referenced runtime permit grouped dense hash-set stores.</summary>
