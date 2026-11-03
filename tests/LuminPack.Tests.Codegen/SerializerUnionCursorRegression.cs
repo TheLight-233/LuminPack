@@ -87,6 +87,9 @@ internal static class SerializerUnionCursorRegression
             Require(shared.ReturnType.ToString() == "int" &&
                 !shared.GetLeadingTrivia().Any(trivia => trivia.IsKind(SyntaxKind.SingleLineDocumentationCommentTrivia)),
                 "The internal shared cursor body must return an absolute index without caller-facing XML.");
+            Require(methods.Where(method => method.Identifier.ValueText == "SerializeUnionAt")
+                .All(method => method.AttributeLists.ToString().Contains("AggressiveInlining", StringComparison.Ordinal)),
+                "Fixed cursor kernels must retain caller-driven framing and architecture specialization.");
             Require(!methods.Any(method => method.Identifier.ValueText == "SerializeUnionAt" &&
                 method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') is "global::Private" or "global::Callback" or "global::Specialized" or "global::Property"),
                 "A private, callback, property or versioned payload entered the raw cursor body.");

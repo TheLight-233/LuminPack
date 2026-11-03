@@ -126,12 +126,16 @@ internal static class SerializerCoreProjection
                     method = method.WithBody(body).WithExpressionBody(null).WithSemicolonToken(default);
                 }
             }
+            bool fixedUnionPayload = state == "LuminPack.Core.LuminPackWriter" && name == "SerializeUnion" &&
+                method.TypeParameterList == null && FixedUnionCursorPlan.CanUsePayload(type, compilation, metadata);
+            // Fixed Union payloads become returning cursor kernels below. Their optional
+            // framing and architecture branches need the caller's constants before sizing.
             // Field expansion and JIT inlining have different budgets. Let the
-            // runtime size loop-bearing APIs instead of forcing their entire
+            // runtime size loop-bearing and call-heavy APIs instead of forcing their entire
             // graph into every convenience entry and Union caller.
             if (state is "LuminPack.Core.LuminPackWriter" or "LuminPack.Core.LuminPackReader" or
                     "LuminPack.Core.LuminPackJsonWriter" or "LuminPack.Core.LuminPackJsonReader" &&
-                GeneratedExecutionPolicy.LetRuntimeChooseInlining(method.Body, state.Contains("Json")))
+                !fixedUnionPayload && GeneratedExecutionPolicy.LetRuntimeChooseInlining(method.Body))
             {
                 method = method.WithAttributeLists(SyntaxFactory.List(method.AttributeLists.Select(list =>
                     list.WithAttributes(SyntaxFactory.SeparatedList(list.Attributes.Where(attribute =>
@@ -143,8 +147,7 @@ internal static class SerializerCoreProjection
                 method = method.WithBody(BinaryEntryCursorAliases.Rewrite(method.Body));
             if (state == "LuminPack.Core.LuminPackReader" && name is "Deserialize" or "DeserializeUnion")
                 method = method.WithBody(BinaryEntryCursorAliases.RewriteReader(method.Body));
-            if (name == "SerializeUnion" && state == "LuminPack.Core.LuminPackWriter" && method.TypeParameterList == null &&
-                FixedUnionCursorPlan.CanUsePayload(type, compilation, metadata))
+            if (fixedUnionPayload)
             {
                 FixedUnionCursorProjection.Append(method, core);
                 continue;

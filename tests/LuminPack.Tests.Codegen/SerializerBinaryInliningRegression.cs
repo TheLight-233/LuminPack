@@ -30,6 +30,7 @@ internal static class SerializerBinaryInliningRegression
                 public int _base = 19;
                 public int BaseValue() => _base;
             }
+            [LuminPackable] public sealed class Scalar { public int Value; }
             [LuminPackable] public sealed class Child : Base
             {
                 [LuminPackInclude] private int _secret = 31;
@@ -174,6 +175,11 @@ internal static class SerializerBinaryInliningRegression
                 }
                 private static void CheckGenerics()
                 {
+                    var scalar = new Scalar { Value = 113 };
+                    var scalarBytes = LuminPackSerializer.Serialize(in scalar);
+                    Scalar scalarRead = null!;
+                    LuminPackSerializer.Deserialize(scalarBytes.AsSpan(), ref scalarRead);
+                    if (scalarRead.Value != scalar.Value) throw new Exception("Small scalar root changed.");
                     var value = new GenericValue<int> { Item = 37, Items = new() { 3, 5 } };
                     var bytes = LuminPackSerializer.Serialize(in value);
                     if (!bytes.AsSpan().SequenceEqual(LuminPackSerializer.Serialize(in value)))
@@ -265,6 +271,15 @@ internal static class SerializerBinaryInliningRegression
                 method.ParameterList.Parameters[0].Type?.ToString().Contains("LuminPack", StringComparison.Ordinal) == true &&
                 method.Identifier.ValueText is "RootWrite" or "RootRead" or "RootWriteJson" or "RootReadJson").ToArray();
         Require(implementations.Length == 4, "Expected one state implementation for each payload operation.");
+        var roots = output.SyntaxTrees.SelectMany(tree => tree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
+            .Where(method => method.Identifier.ValueText == "RootWrite" && method.ParameterList.Parameters.Count == 2).ToArray();
+        var scalarRoot = roots.Single(method => method.ParameterList.Parameters[1].Type?.ToString().TrimEnd('?') == "global::Scalar");
+        var childRoot = roots.Single(method => method.ParameterList.Parameters[1].Type?.ToString().TrimEnd('?') == "global::Child");
+        Require(scalarRoot.AttributeLists.ToString().Contains("AggressiveInlining", StringComparison.Ordinal),
+            "A small scalar root lost its inline hint.");
+        Require(!childRoot.AttributeLists.ToString().Contains("AggressiveInlining", StringComparison.Ordinal) &&
+            !childRoot.AttributeLists.ToString().Contains("NoInlining", StringComparison.Ordinal),
+            "A call-heavy straight-line binary root must leave native inlining to the runtime.");
         VerifyJsonIntegerFallback(implementations.Single(method => method.Identifier.ValueText == "RootWriteJson"));
         var sharedJsonCalls = new Dictionary<ISymbol, int>(SymbolEqualityComparer.Default);
         foreach (var method in implementations)
