@@ -80,17 +80,6 @@ namespace LuminPackUnitTest
     /// <summary>Provides net11 union test functionality.</summary>
     public static class Net11UnionTest
     {
-        /// <summary>Registers the generated union and polymorphic formatters used by the generic payload entry points.</summary>
-        [System.Runtime.CompilerServices.ModuleInitializer]
-        internal static unsafe void RegisterFormatters()
-        {
-            LuminPackSerializer.Register<Net11Pet>(&LuminPackSerializer.Serialize, &LuminPackSerializer.Deserialize,
-                &LuminPackSerializer.SerializeJson, &LuminPackSerializer.DeserializeJson);
-            LuminPackSerializer.Register<Net11Option<UnionCat>>(&LuminPackSerializer.Serialize, &LuminPackSerializer.Deserialize);
-            LuminPackSerializer.Register<Net11Maybe>(&LuminPackSerializer.Serialize, &LuminPackSerializer.Deserialize);
-            LuminPackSerializer.Register<Net11Animal>(&LuminPackSerializer.Serialize, &LuminPackSerializer.Deserialize);
-        }
-
         /// <summary>Verifies run.</summary>
         /// <param name="results">The results used by this operation.</param>
         public static void Run(List<string> results)
@@ -99,7 +88,9 @@ namespace LuminPackUnitTest
             try
             {
                 var p = new Net11Pet(new UnionCat { Id = 7 });
-                var back = LuminPackSerializer.Deserialize<Net11Pet>(LuminPackSerializer.Serialize(p));
+                byte[] bytes = LuminPackSerializer.Serialize(p);
+                Net11Pet back = default!;
+                LuminPackSerializer.Deserialize(bytes, ref back);
                 results.Add(back.Value is UnionCat c && c.Id == 7
                     ? "✓ Net11Union C# union - PASSED"
                     : "✗ Net11Union C# union - FAILED");
@@ -113,8 +104,9 @@ namespace LuminPackUnitTest
             try
             {
                 var p = new Net11Pet(new UnionDog { Name = "doggie" });
-                var json = LuminPackSerializer.SerializeJson(p);
-                var back = LuminPackSerializer.DeserializeJson<Net11Pet>(json);
+                string json = LuminPackSerializer.SerializeJson(p);
+                Net11Pet back = default!;
+                LuminPackSerializer.DeserializeJson(json, ref back);
                 results.Add(back.Value is UnionDog d && d.Name == "doggie"
                     ? "✓ Net11Union C# union JSON - PASSED"
                     : "✗ Net11Union C# union JSON - FAILED");
@@ -128,7 +120,9 @@ namespace LuminPackUnitTest
             try
             {
                 var opt = new Net11Option<UnionCat>(new Some<UnionCat> { Data = new UnionCat { Id = 5 } });
-                var back = LuminPackSerializer.Deserialize<Net11Option<UnionCat>>(LuminPackSerializer.Serialize(opt));
+                byte[] bytes = LuminPackSerializer.Serialize(opt);
+                Net11Option<UnionCat> back = default!;
+                LuminPackSerializer.Deserialize(bytes, ref back);
                 results.Add(back.Value is Some<UnionCat> s && s.Data.Id == 5
                     ? "✓ Net11Union generic Option<T> - PASSED"
                     : "✗ Net11Union generic Option<T> - FAILED");
@@ -142,7 +136,9 @@ namespace LuminPackUnitTest
             try
             {
                 var m = new Net11Maybe(42);
-                var back = LuminPackSerializer.Deserialize<Net11Maybe>(LuminPackSerializer.Serialize(m));
+                byte[] bytes = LuminPackSerializer.Serialize(m);
+                Net11Maybe back = default!;
+                LuminPackSerializer.Deserialize(bytes, ref back);
                 results.Add(back.Value is int i && i == 42
                     ? "✓ Net11Union value-type case - PASSED"
                     : "✗ Net11Union value-type case - FAILED");
@@ -156,7 +152,9 @@ namespace LuminPackUnitTest
             try
             {
                 Net11Animal animal = new Net11Dog { Legs = 4, Bark = "woof" };
-                var back = LuminPackSerializer.Deserialize<Net11Animal>(LuminPackSerializer.Serialize(animal));
+                byte[] bytes = LuminPackSerializer.Serialize(animal);
+                Net11Animal back = null!;
+                LuminPackSerializer.Deserialize(bytes, ref back);
                 results.Add(back is Net11Dog d && d.Bark == "woof"
                     ? "✓ Net11Union abstract-class polymorphism - PASSED"
                     : "✗ Net11Union abstract-class polymorphism - FAILED");
