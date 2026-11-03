@@ -379,8 +379,8 @@ public static unsafe partial class StringSerializer
         var h = Vector256.LoadUnsafe(ref source, tail + 16);
         if (((e | f | g | h) & Vector256.Create((ushort)0xFF00)) != Vector256<ushort>.Zero)
             return false;
-        Vector256.Narrow(e, f).StoreUnsafe(ref destination);
-        Vector256.Narrow(g, h).StoreUnsafe(ref destination, tail);
+        StringSerializer.NarrowValidatedLatin1(e, f).StoreUnsafe(ref destination);
+        StringSerializer.NarrowValidatedLatin1(g, h).StoreUnsafe(ref destination, tail);
         return true;
     }
 

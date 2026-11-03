@@ -21,7 +21,7 @@ internal static class CoreTextProjection
         string file = "Utility/Text/StringSerializer.cs";
         var modern = Read(coreRoot, file, Modern);
         var portable = Read(coreRoot, file, Portable);
-        string[] methods = ["PreferCustomSimd", "IsUniformUtf8Run", "SerializeAsUtf8", "TryEncodeTinyAscii", "SerializeAsciiRun", "TryWidenAscii", "SerializeAsUtf8Slow", "DeserializeFromUtf8", "TranscodeToUtf8", "EncodeAsciiRun", "TranscodeToUtf8Scalar", "TranscodeToUtf16", "IsBmp3", "IsUtf8ContinuationByte", "GetInvalidUtf8SequenceLength", "TryEncodeVectorRun", "MatchesUtf8", "MatchesShortUtf8", "MatchesUtf8Chunks"];
+        string[] methods = ["PreferCustomSimd", "IsUniformUtf8Run", "SerializeAsUtf8", "TryEncodeTinyAscii", "SerializeAsciiRun", "NarrowValidatedLatin1", "TryWidenAscii", "SerializeAsUtf8Slow", "DeserializeFromUtf8", "TranscodeToUtf8", "EncodeAsciiRun", "TranscodeToUtf8Scalar", "TranscodeToUtf16", "IsBmp3", "IsUtf8ContinuationByte", "GetInvalidUtf8SequenceLength", "TryEncodeVectorRun", "MatchesUtf8", "MatchesShortUtf8", "MatchesUtf8Chunks"];
         var output = new StringBuilder(Header);
         output.AppendLine("    internal static unsafe class CoreTextAlgorithms\n    {");
         AppendOrigin(output, coreRoot, file);

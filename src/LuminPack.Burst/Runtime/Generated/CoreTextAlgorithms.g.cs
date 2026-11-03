@@ -13,7 +13,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreTextAlgorithms
     {
-// Core source SHA256: Utility/Text/StringSerializer.cs 0B54A9DFBD2D8A09503BAF6F8EB133ED32CB23C6B1F7AFDA25B2EF4C47071947
+// Core source SHA256: Utility/Text/StringSerializer.cs C22D6E25631C7A498329DC3B44F40F74EC447EF4732F7274E0789309BEDB2315
 /// <summary>Performs the prefer custom simd step for the current operation.</summary>
 /// <param name = "source">The input data to process.</param>
 /// <param name = "destinationLength">The destination length used by this operation.</param>
@@ -128,7 +128,7 @@ internal static unsafe OperationStatus SerializeAsciiRun(ReadOnlySpan<char> sour
         var upper = Vector256.LoadUnsafe(ref input, (nuint)index + 16);
         if (Vector256.GreaterThanAny(lower | upper, ascii))
             break;
-        Vector256.Narrow(lower, upper).StoreUnsafe(ref output, (nuint)index);
+        NarrowValidatedLatin1(lower, upper).StoreUnsafe(ref output, (nuint)index);
     }
 
     if (index < length && limit == length && length - index < 32)
@@ -139,7 +139,7 @@ internal static unsafe OperationStatus SerializeAsciiRun(ReadOnlySpan<char> sour
         var upper = Vector256.LoadUnsafe(ref input, tail + 16);
         if (!Vector256.GreaterThanAny(lower | upper, ascii))
         {
-            Vector256.Narrow(lower, upper).StoreUnsafe(ref output, tail);
+            NarrowValidatedLatin1(lower, upper).StoreUnsafe(ref output, tail);
             index = length;
         }
     }
@@ -155,6 +155,18 @@ internal static unsafe OperationStatus SerializeAsciiRun(ReadOnlySpan<char> sour
     charsRead = index + read;
     bytesWritten = index + written;
     return status;
+}
+/// <summary>Narrows two vectors whose lanes have already been validated as Latin-1 or ASCII.</summary>
+/// <param name = "lower">The first sixteen code units, all in 0..255.</param>
+/// <param name = "upper">The next sixteen code units, all in 0..255.</param>
+/// <returns>The thirty-two bytes in input order.</returns>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe Vector256<byte> NarrowValidatedLatin1(Vector256<ushort> lower, Vector256<ushort> upper)
+{
+    ;
+    if (Avx2.IsSupported)
+        return Avx2.Permute4x64(Avx2.PackUnsignedSaturate(lower.AsInt16(), upper.AsInt16()).AsUInt64(), 0xD8).AsByte();
+    return Vector256.Narrow(lower, upper);
 }
 /// <summary>Validates and widens an ASCII payload of more than 32 bytes in one pass.</summary>
 /// <param name = "source">The first payload byte.</param>
@@ -990,7 +1002,7 @@ internal static unsafe OperationStatus Encode(ReadOnlySpan<char> source, Span<by
     }
 }
     }
-// Core source SHA256: Internal/ShortAsciiTranscoder.cs 1AEBBF8BB7DDD1579BE36B41FB527DAE2D1D2FC2355238D0FB8F5843799A7EA7
+// Core source SHA256: Internal/ShortAsciiTranscoder.cs E2210C94E91E82FCD0A4B50EB605A9794DDEF702788B9C4C5DEF217223E0FB96
     internal static unsafe class CoreShortAscii
     {
 // Two overlapping loads/stores cover 4..32 characters without touching bytes
@@ -1063,7 +1075,7 @@ internal static unsafe bool TryEncodeMedium(ReadOnlySpan<char> source, Span<byte
     var last = Vector256.LoadUnsafe(ref input, (nuint)(source.Length - 16));
     if (Vector256.GreaterThanAny(first | last, Vector256.Create((ushort)0x7F)))
         return false;
-    var bytes = Vector256.Narrow(first, last);
+    var bytes = CoreTextAlgorithms.NarrowValidatedLatin1(first, last);
     if (escapeJson)
     {
         var escapes = Vector256.LessThan(bytes, Vector256.Create((byte)0x20)) | Vector256.Equals(bytes, Vector256.Create((byte)'"')) | Vector256.Equals(bytes, Vector256.Create((byte)'\\'));
@@ -1790,7 +1802,7 @@ internal static unsafe void Copy256(ref byte input, ref byte output, ref nint bl
     }
 }
 }
-// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 34907411C57449D799A5A032823E38BD7CCE4D5EC5C8B684BFDDF2F44082E61D
+// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 26AAE085C45AFA5388D6CE8E4C1DB7D01141810AD7295AF189D8EEAC4809A8C5
 internal static unsafe class CoreLatin1Records
 {
 /// <summary>Returns whether every code unit of a string fits one Latin-1 byte.</summary>

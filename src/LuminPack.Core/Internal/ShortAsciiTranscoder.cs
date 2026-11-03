@@ -2,6 +2,7 @@
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Runtime.Intrinsics;
+using LuminPack.Utility;
 
 namespace LuminPack.Internal;
 
@@ -91,7 +92,7 @@ internal static class ShortAsciiTranscoder
         var last = Vector256.LoadUnsafe(ref input, (nuint)(source.Length - 16));
         if (Vector256.GreaterThanAny(first | last, Vector256.Create((ushort)0x7F)))
             return false;
-        var bytes = Vector256.Narrow(first, last);
+        var bytes = StringSerializer.NarrowValidatedLatin1(first, last);
         if (escapeJson)
         {
             var escapes = Vector256.LessThan(bytes, Vector256.Create((byte)0x20)) |

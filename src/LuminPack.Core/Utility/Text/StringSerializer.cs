@@ -840,7 +840,7 @@ public static unsafe partial class StringSerializer
             var upper = Vector256.LoadUnsafe(ref input, (nuint)index + 16);
             if (Vector256.GreaterThanAny(lower | upper, ascii))
                 break;
-            Vector256.Narrow(lower, upper).StoreUnsafe(ref output, (nuint)index);
+            NarrowValidatedLatin1(lower, upper).StoreUnsafe(ref output, (nuint)index);
         }
 
         if (index < length && limit == length && length - index < 32)
@@ -851,7 +851,7 @@ public static unsafe partial class StringSerializer
             var upper = Vector256.LoadUnsafe(ref input, tail + 16);
             if (!Vector256.GreaterThanAny(lower | upper, ascii))
             {
-                Vector256.Narrow(lower, upper).StoreUnsafe(ref output, tail);
+                NarrowValidatedLatin1(lower, upper).StoreUnsafe(ref output, tail);
                 index = length;
             }
         }
@@ -867,6 +867,21 @@ public static unsafe partial class StringSerializer
         charsRead = index + read;
         bytesWritten = index + written;
         return status;
+    }
+
+    /// <summary>Narrows two vectors whose lanes have already been validated as Latin-1 or ASCII.</summary>
+    /// <param name="lower">The first sixteen code units, all in 0..255.</param>
+    /// <param name="upper">The next sixteen code units, all in 0..255.</param>
+    /// <returns>The thirty-two bytes in input order.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static Vector256<byte> NarrowValidatedLatin1(Vector256<ushort> lower, Vector256<ushort> upper)
+    {
+        // Preserve the wider platform lowering; AVX2 otherwise masks each input before truncating it.
+        if (Avx512BW.IsSupported)
+            return Vector256.Narrow(lower, upper);
+        if (Avx2.IsSupported)
+            return Avx2.Permute4x64(Avx2.PackUnsignedSaturate(lower.AsInt16(), upper.AsInt16()).AsUInt64(), 0xD8).AsByte();
+        return Vector256.Narrow(lower, upper);
     }
 
     /// <summary>Validates and widens an ASCII payload of more than 32 bytes in one pass.</summary>

@@ -208,7 +208,7 @@ public sealed class CompactStringRecordTest
     [Fact]
     public void ReservedLongRecordsPreserveLiteralBytesAndRawBoundCanaries()
     {
-        foreach (int length in new[] { 63, 64, 65, 95, 96, 97, 127, 128, 129, 191, 192, 193, 255, 256, 257 })
+        foreach (int length in new[] { 17, 18, 23, 31, 32, 33, 47, 48, 49, 62, 63, 64, 65, 95, 96, 97, 127, 128, 129, 191, 192, 193, 255, 256, 257 })
         {
             char[] chars = Enumerable.Range(0, length).Select(index => (char)((index * 73 + 91) & 255)).ToArray();
             for (int changed = -1; changed < length; changed++)
