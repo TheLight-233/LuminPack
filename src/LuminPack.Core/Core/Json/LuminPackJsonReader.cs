@@ -2612,7 +2612,7 @@ namespace LuminPack.Core
         /// <summary>Reads float from the current input.</summary>
         /// <returns>The result of the operation.</returns>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private float ReadFloat<TOptions>()
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
@@ -2636,6 +2636,16 @@ namespace LuminPack.Core
                 return result;
             }
 
+            return ReadFloatSlow<TOptions>();
+        }
+
+        /// <summary>Retains the complete numeric fallback outside generated callers' fast parsing paths.</summary>
+        /// <typeparam name="TOptions">The stateless JSON profile.</typeparam>
+        /// <returns>The parsed and validated floating-point value.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private float ReadFloatSlow<TOptions>()
+            where TOptions : struct, ILuminPackOptions
+        {
             JsonNumberShape shape = ScanJsonNumber<TOptions>(Position);
             float value;
             if (!TryParseFloatExact<TOptions>(shape, out value))
@@ -2650,7 +2660,7 @@ namespace LuminPack.Core
         /// <summary>Reads double from the current input.</summary>
         /// <returns>The result of the operation.</returns>
         /// <typeparam name = "TOptions">The stateless serialization profile specialized by the runtime compiler.</typeparam>
-        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
         private double ReadDouble<TOptions>()
             where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
         {
@@ -2674,6 +2684,16 @@ namespace LuminPack.Core
                 return result;
             }
 
+            return ReadDoubleSlow<TOptions>();
+        }
+
+        /// <summary>Retains the complete numeric fallback outside generated callers' fast parsing paths.</summary>
+        /// <typeparam name="TOptions">The stateless JSON profile.</typeparam>
+        /// <returns>The parsed and validated floating-point value.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private double ReadDoubleSlow<TOptions>()
+            where TOptions : struct, ILuminPackOptions
+        {
             JsonNumberShape shape = ScanJsonNumber<TOptions>(Position);
             double value;
             if (!TryParseDoubleExact<TOptions>(shape, out value))
