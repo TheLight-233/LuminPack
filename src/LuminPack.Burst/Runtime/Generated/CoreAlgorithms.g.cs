@@ -9,7 +9,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreAlgorithms
     {
-// Core source SHA256: Utility/Memory/Simd/LuminPackMarshal.Copy.cs 70EBC5B4215BE6EC9327F1A541C019EEF63CB3C6F1849436F9969E5E43211524
+// Core source SHA256: Utility/Memory/Simd/LuminPackMarshal.Copy.cs EF4D0307BAC041632CC855818934867D6576E72E45320E918149059C33999B3D
 /// <summary>Copies at most sixteen bytes with scalar head and tail accesses inside the ranges.</summary>
 /// <param name = "destination">The valid writable range on a 64-bit target.</param>
 /// <param name = "source">The valid readable non-overlapping range.</param>
@@ -121,12 +121,21 @@ internal static void CopyShortBlock(ref byte destination, ref byte source, uint 
         return;
     }
 
+    if (count <= 32)
+    {
+        // This range needs only 128-bit lanes. Keep it inline without introducing the dirty
+        // upper 256-bit state that requires the outlined helper's epilogue below.
+        Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<Vector128<byte>>(ref source));
+        Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(count - 16)), Unsafe.ReadUnaligned<Vector128<byte>>(ref Unsafe.Add(ref source, (nint)(count - 16))));
+        return;
+    }
+
     CopyShortVectorBlock(ref destination, ref source, count);
 }
-/// <summary>Copies seventeen through 256 bytes with exact vector lanes.</summary>
+/// <summary>Copies thirty-three through 256 bytes with exact vector lanes.</summary>
 /// <param name = "destination">The valid writable byte range.</param>
 /// <param name = "source">The valid readable non-overlapping byte range.</param>
-/// <param name = "count">A byte count from seventeen through 256.</param>
+/// <param name = "count">A byte count from thirty-three through 256.</param>
 /// <remarks>Kept out of line: its epilogue clears the upper vector state. Inlined into a large caller, the dirty 256-bit
 /// state reached the caller's next runtime helper (an allocation or block copy) and cost about a hundred nanoseconds.</remarks>
 [MethodImpl(MethodImplOptions.NoInlining)]
@@ -138,7 +147,7 @@ internal static void CopyShortVectorBlock(ref byte destination, ref byte source,
         return;
     }
 
-    if (count >= 32 && Vector256.IsHardwareAccelerated)
+    if (Vector256.IsHardwareAccelerated)
     {
         CopyVector256Block(ref destination, ref source, count);
         return;
