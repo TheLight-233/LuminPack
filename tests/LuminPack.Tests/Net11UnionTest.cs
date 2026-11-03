@@ -80,6 +80,17 @@ namespace LuminPackUnitTest
     /// <summary>Provides net11 union test functionality.</summary>
     public static class Net11UnionTest
     {
+        /// <summary>Registers the generated union and polymorphic formatters used by the generic payload entry points.</summary>
+        [System.Runtime.CompilerServices.ModuleInitializer]
+        internal static unsafe void RegisterFormatters()
+        {
+            LuminPackSerializer.Register<Net11Pet>(&LuminPackSerializer.Serialize, &LuminPackSerializer.Deserialize,
+                &LuminPackSerializer.SerializeJson, &LuminPackSerializer.DeserializeJson);
+            LuminPackSerializer.Register<Net11Option<UnionCat>>(&LuminPackSerializer.Serialize, &LuminPackSerializer.Deserialize);
+            LuminPackSerializer.Register<Net11Maybe>(&LuminPackSerializer.Serialize, &LuminPackSerializer.Deserialize);
+            LuminPackSerializer.Register<Net11Animal>(&LuminPackSerializer.Serialize, &LuminPackSerializer.Deserialize);
+        }
+
         /// <summary>Verifies run.</summary>
         /// <param name="results">The results used by this operation.</param>
         public static void Run(List<string> results)
