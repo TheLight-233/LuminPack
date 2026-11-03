@@ -56,36 +56,16 @@ public static partial class LuminPackExtensionGenerator
         var rootTargets = new Dictionary<string, LazyForwardingTargets>(StringComparer.Ordinal);
         var jsonDefinitions = new HashSet<string>(StringComparer.Ordinal);
         var unionDefinitions = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var type in types)
+        // Each payload's contribution depends only on its own type, so contributions are built in parallel and the
+        // files below are assembled in the canonical order.
+        var fragments = new FrozenTypeEmission[types.Length];
+        ParallelWork.For(types.Length, index => fragments[index] = Fragment(types[index]), cancellationToken);
+        for (int position = 0; position < types.Length; position++)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            var type = types[position];
             string name = FormatterTypeName.Get(type);
-            var fragment = cache.Fragments.GetOrBuild(type, compilation, metadata, LuminPackGenerationTier.Full, () =>
-            {
-                var body = new StringBuilder();
-                string source;
-                if (IsCustomGeneratorType(type))
-                {
-                    AppendCustomFormatterExtensions(body, new LuminLocalFieldData { TypeName = name, TypeSymbol = type, Name = "value", IsValue = type.IsValueType }, metadata);
-                    source = SerializerCoreProjection.Project(GenerateExtension(body, extension), compilation, metadata, cache.Operations);
-                }
-                else if (type is INamedTypeSymbol marked && analysis.IsAssemblyPackable(marked))
-                    source = SerializerCoreProjection.Project(cache.Operations.Get(type, compilation, metadata).TemplateSource ??
-                        GenerateOperationTemplates(type, compilation, metadata), compilation, metadata, cache.Operations, type);
-                else if (type is INamedTypeSymbol { IsGenericType: true } named && analysis.IsPackable(named) &&
-                    SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly))
-                    source = SerializerCoreProjection.Project(cache.Operations.Get(type, compilation, metadata).TemplateSource ??
-                        GenerateOperationTemplates(type, compilation, metadata), compilation, metadata, cache.Operations, type);
-                else
-                {
-                    GenerateFormatterExtensions(body, CreateOperationField(type, compilation, metadata),
-                        metadata, new HashSet<string>(StringComparer.Ordinal), emitOptionalVariants: true);
-                    source = SerializerCoreProjection.Project(GenerateExtension(body, extension), compilation, metadata, cache.Operations);
-                }
-                System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.InvocationFormatterBuilds);
-                return new FrozenTypeEmission(name, source, string.Empty,
-                    new FrozenLayoutGroup(extension, metadata.ParseOptions, Array.Empty<FrozenLayoutFragment>(), null), Array.Empty<Diagnostic>());
-            }, serializerFragment: true, outputVariant: "invocation:" + (reachability == null));
+            var fragment = fragments[position];
             if (!string.IsNullOrEmpty(fragment.Extension))
             {
                 files.Add(cache.Files.Wrap("LuminPack.Formatter", name, string.Empty, fragment.Extension, string.Empty));
@@ -118,6 +98,37 @@ public static partial class LuminPackExtensionGenerator
         files.Add(new FrozenGeneratedSource("LuminPack.FormatterBridges.g.cs", SerializerCoreProjection.Bridges(extension, metadata)));
         navigationTargets = rootTargets;
         return files.ToImmutable();
+
+        FrozenTypeEmission Fragment(ITypeSymbol type)
+        {
+            string name = FormatterTypeName.Get(type);
+            return cache.Fragments.GetOrBuild(type, compilation, metadata, LuminPackGenerationTier.Full, () =>
+            {
+                var body = new StringBuilder();
+                string source;
+                if (IsCustomGeneratorType(type))
+                {
+                    AppendCustomFormatterExtensions(body, new LuminLocalFieldData { TypeName = name, TypeSymbol = type, Name = "value", IsValue = type.IsValueType }, metadata);
+                    source = SerializerCoreProjection.Project(GenerateExtension(body, extension), compilation, metadata, cache.Operations);
+                }
+                else if (type is INamedTypeSymbol marked && analysis.IsAssemblyPackable(marked))
+                    source = SerializerCoreProjection.Project(cache.Operations.Get(type, compilation, metadata).TemplateSource ??
+                        GenerateOperationTemplates(type, compilation, metadata), compilation, metadata, cache.Operations, type);
+                else if (type is INamedTypeSymbol { IsGenericType: true } named && analysis.IsPackable(named) &&
+                    SymbolEqualityComparer.Default.Equals(named.ContainingAssembly, compilation.Assembly))
+                    source = SerializerCoreProjection.Project(cache.Operations.Get(type, compilation, metadata).TemplateSource ??
+                        GenerateOperationTemplates(type, compilation, metadata), compilation, metadata, cache.Operations, type);
+                else
+                {
+                    GenerateFormatterExtensions(body, CreateOperationField(type, compilation, metadata),
+                        metadata, new HashSet<string>(StringComparer.Ordinal), emitOptionalVariants: true);
+                    source = SerializerCoreProjection.Project(GenerateExtension(body, extension), compilation, metadata, cache.Operations);
+                }
+                System.Threading.Interlocked.Increment(ref IncrementalGenerationMetrics.InvocationFormatterBuilds);
+                return new FrozenTypeEmission(name, source, string.Empty,
+                    new FrozenLayoutGroup(extension, metadata.ParseOptions, Array.Empty<FrozenLayoutFragment>(), null), Array.Empty<Diagnostic>());
+            }, serializerFragment: true, outputVariant: "invocation:" + (reachability == null));
+        }
     }
 
     /// <summary>Collects concrete state formatter types called by source Custom formatter methods.</summary>

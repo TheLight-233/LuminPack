@@ -16,6 +16,8 @@ internal sealed class TypeEmissionInput : IEquatable<TypeEmissionInput>
     private readonly WeakReference<Compilation> _compilation;
     private readonly MetaInfo _metadata;
     private readonly LuminPackGenerationTier _tier;
+    private readonly object _gate = new object();
+    private FrozenTypeEmission _evaluated;
 
     /// <summary>References a completed dependency version without retaining semantic inputs.</summary>
     /// <param name="version">The identity assigned when that version was analyzed.</param>
@@ -43,16 +45,26 @@ internal sealed class TypeEmissionInput : IEquatable<TypeEmissionInput>
         _tier = tier;
     }
 
+    /// <summary>Gets whether this version still needs analysis.</summary>
+    internal bool IsPending => _completed == null;
+
     /// <summary>Analyzes a changed version while its active upstream inputs remain rooted.</summary>
     /// <param name="build">The existing semantic analysis and rendering operation.</param>
     /// <returns>The immutable output for this dependency version.</returns>
+    /// <remarks>The parallel analysis batch and the per-type step both evaluate a changed version. The version keeps its own
+    /// result, because the cache cannot always reuse it: an entry depending on a referenced compilation's syntax never matches
+    /// the consumer compilation, which would analyze the type twice.</remarks>
     internal FrozenTypeEmission Evaluate(Func<INamedTypeSymbol, Compilation, MetaInfo, LuminPackGenerationTier, FrozenTypeEmission> build)
     {
         if (_completed != null) return _completed;
-        if (!_type.TryGetTarget(out var type) || !_compilation.TryGetTarget(out var compilation))
-            return LuminPackExceptionHelper.ThrowInvalidOperationException<FrozenTypeEmission>("Active type analysis inputs are unavailable.");
-        return _cache.GetOrBuild(type, compilation, _metadata, _tier,
-            () => build(type, compilation, _metadata, _tier), version: _version);
+        lock (_gate)
+        {
+            if (_evaluated != null) return _evaluated;
+            if (!_type.TryGetTarget(out var type) || !_compilation.TryGetTarget(out var compilation))
+                return LuminPackExceptionHelper.ThrowInvalidOperationException<FrozenTypeEmission>("Active type analysis inputs are unavailable.");
+            return _evaluated = _cache.GetOrBuild(type, compilation, _metadata, _tier,
+                () => build(type, compilation, _metadata, _tier), version: _version);
+        }
     }
 
     /// <summary>Compares validated dependency versions before semantic analysis is scheduled.</summary>

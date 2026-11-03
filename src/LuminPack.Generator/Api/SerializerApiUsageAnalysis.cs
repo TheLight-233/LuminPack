@@ -68,9 +68,12 @@ internal sealed class SerializerApiUsageAnalysis
         var files = new SerializerApiFileCache(compilation, bindingCompilation, signatures!);
         // A method group contributes roots only through generic arguments, so other method names need no binding.
         var genericMethods = GenericMethodNames(compilation);
-        foreach (var tree in compilation.SyntaxTrees)
+        // Files bind independently, so they are bound in parallel and merged in source order.
+        var trees = compilation.SyntaxTrees.ToArray();
+        var bound = new SerializerApiFileMethods[trees.Length];
+        ParallelWork.For(trees.Length, index => bound[index] = files.Read(trees[index], () => BindFile(trees[index])));
+        foreach (var file in bound)
         {
-            var file = files.Read(tree, () => BindFile(tree));
             _conservative |= file.Conservative;
             invocations.AddRange(file.Methods);
             payloads.AddRange(file.StatePayloads);

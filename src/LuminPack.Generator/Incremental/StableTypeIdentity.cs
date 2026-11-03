@@ -150,10 +150,14 @@ internal sealed class StableTypeIdentityFactory
     internal StableTypeIdentity Create(ITypeSymbol type)
     {
         if (type == null || type.TypeKind == TypeKind.Error || type is ITypeParameterSymbol && !_supportTypeParameters || type is IFunctionPointerTypeSymbol) return null;
-        if (_known.TryGetValue(type, out var existing)) return existing;
-        StableTypeIdentity result = CreateCore(type);
-        _known[type] = result;
-        return result;
+        // Files are bound in parallel; the lock is reentrant for the recursive construction below.
+        lock (_known)
+        {
+            if (_known.TryGetValue(type, out var existing)) return existing;
+            StableTypeIdentity result = CreateCore(type);
+            _known[type] = result;
+            return result;
+        }
     }
 
     /// <summary>Builds one supported construction after memo lookup.</summary>
@@ -241,10 +245,14 @@ internal sealed class CurrentTypeResolver
     /// <returns>The current type symbol or null for a failed rebind.</returns>
     internal ITypeSymbol Resolve(StableTypeIdentity identity)
     {
-        if (_known.TryGetValue(identity.Key, out var type)) return type;
-        type = identity.Resolve(this);
-        _known[identity.Key] = type;
-        return type;
+        // Files are bound in parallel; the lock is reentrant for nested identities and FindMethods.
+        lock (_known)
+        {
+            if (_known.TryGetValue(identity.Key, out var type)) return type;
+            type = identity.Resolve(this);
+            _known[identity.Key] = type;
+            return type;
+        }
     }
 
     private readonly Dictionary<INamedTypeSymbol, Dictionary<string, Dictionary<string, IMethodSymbol[]>>> _methods =
@@ -256,6 +264,16 @@ internal sealed class CurrentTypeResolver
     /// <param name="declaration">The original definition's documentation comment id.</param>
     /// <returns>The matching methods in declaration order.</returns>
     internal IMethodSymbol[] FindMethods(INamedTypeSymbol owner, string name, string declaration)
+    {
+        lock (_known) return FindMethodsLocked(owner, name, declaration);
+    }
+
+    /// <summary>Indexes and reads one member group while the resolver lock is held.</summary>
+    /// <param name="owner">The current containing type.</param>
+    /// <param name="name">The method name.</param>
+    /// <param name="declaration">The original definition's documentation comment id.</param>
+    /// <returns>The matching methods in declaration order.</returns>
+    private IMethodSymbol[] FindMethodsLocked(INamedTypeSymbol owner, string name, string declaration)
     {
         if (!_methods.TryGetValue(owner, out var names)) _methods.Add(owner, names = new Dictionary<string, Dictionary<string, IMethodSymbol[]>>(StringComparer.Ordinal));
         if (!names.TryGetValue(name, out var declarations))

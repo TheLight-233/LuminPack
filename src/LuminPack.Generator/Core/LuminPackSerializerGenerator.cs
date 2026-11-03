@@ -19,7 +19,9 @@ namespace LuminPack.Code.Core;
 /// </summary>
 public static partial class LuminPackSerializerGenerator
 {
-    [ThreadStatic] private static string _currentAccess = "public";
+    // A thread-static initializer runs only on the first thread, so other threads read the default through the property.
+    [ThreadStatic] private static string _currentAccessValue;
+    private static string _currentAccess { get => _currentAccessValue ?? "public"; set => _currentAccessValue = value; }
     [ThreadStatic] private static bool? _currentContainsReferences;
     [ThreadStatic] private static bool _currentRawScalar;
     [ThreadStatic] private static bool _currentDirectRecord;

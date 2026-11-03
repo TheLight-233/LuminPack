@@ -34,13 +34,39 @@ public sealed partial class LuminPackSourceGenerator
                 return cache.PrepareInput(symbol, compilation, meta, tier);
             })
             .WithTrackingName("LuminPack.Incremental.TypeInput");
-        var emissions = inputs.Select((input, cancellationToken) =>
+        Func<INamedTypeSymbol, Compilation, MetaInfo, LuminPackGenerationTier, FrozenTypeEmission> analyze =
+            (symbol, compilation, meta, tier) => AnalyzeAndRender(symbol, compilation, meta, tier, operations);
+        // Roslyn runs the per-type step below on one thread. Changed types are analyzed here on several threads first;
+        // each result is published to the type cache, and the per-type step then reads it in pipeline order.
+        // The batch value never changes, so unchanged types stay cached.
+        var analyzed = inputs.Collect().Select((all, cancellationToken) =>
+            {
+                var pending = all.Where(input => input.IsPending).ToArray();
+                // The first type initializes the compilation-wide analyses (which parallelize internally) on this thread.
+                ParallelWork.For(Math.Min(1, pending.Length), index => Prepare(pending[index]), cancellationToken);
+                ParallelWork.For(pending.Length - Math.Min(1, pending.Length), index => Prepare(pending[index + 1]), cancellationToken);
+                return true;
+            })
+            .WithTrackingName("LuminPack.Incremental.TypeAnalysisBatch");
+        var emissions = inputs.Combine(analyzed).Select((pair, cancellationToken) =>
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 Interlocked.Increment(ref IncrementalGenerationMetrics.PackableAnalysisTransforms);
-                return input.Evaluate((symbol, compilation, meta, tier) => AnalyzeAndRender(symbol, compilation, meta, tier, operations));
+                return pair.Left.Evaluate(analyze);
             })
             .WithTrackingName("LuminPack.Incremental.TypeEmission");
+
+        void Prepare(TypeEmissionInput input)
+        {
+            try
+            {
+                input.Evaluate(analyze);
+            }
+            catch (Exception exception) when (exception is not OperationCanceledException)
+            {
+                // The per-type step repeats a failed analysis and reports it exactly as before.
+            }
+        }
 
         context.RegisterSourceOutput(emissions, static (output, value) =>
         {

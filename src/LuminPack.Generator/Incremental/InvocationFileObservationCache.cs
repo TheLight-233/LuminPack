@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -17,7 +18,7 @@ internal sealed class InvocationFileObservationCache
     private readonly ProjectEntries _project;
     private readonly StableMethodIdentityFactory _factory;
     private readonly CurrentMethodResolver _resolver;
-    private readonly Dictionary<SyntaxTree, IMethodSymbol[]> _current = new Dictionary<SyntaxTree, IMethodSymbol[]>();
+    private readonly Dictionary<SyntaxTree, Lazy<IMethodSymbol[]>> _current = new Dictionary<SyntaxTree, Lazy<IMethodSymbol[]>>();
     private readonly object _gate = new object();
 
     /// <summary>Creates current-compilation method helpers under the shared semantic project guard.</summary>
@@ -39,46 +40,55 @@ internal sealed class InvocationFileObservationCache
     /// <summary>Rebinds an unchanged file's complete method list or repeats its legacy invocation binding.</summary>
     /// <param name="tree">The current file in legacy compilation order.</param>
     /// <returns>Every bound method in syntax order, including null results from fresh binding.</returns>
+    /// <remarks>Files are observed in parallel; each file is bound once, outside the lock that publishes its entry.</remarks>
     internal IMethodSymbol[] Read(SyntaxTree tree)
     {
+        Lazy<IMethodSymbol[]> current;
         lock (_gate)
         {
-            if (_current.TryGetValue(tree, out var current)) return current;
-            FileEntry entry;
-            lock (_project.Entries) _project.Entries.TryGetValue(tree.FilePath, out entry);
-            if (entry != null && ReferenceEquals(entry.Tree, tree) && entry.Dependencies.All(_compilation.ContainsSyntaxTree))
-            {
-                var rebound = entry.Methods.Select(_resolver.Resolve).ToArray();
-                if (rebound.All(method => method != null))
-                {
-                    Interlocked.Increment(ref IncrementalGenerationMetrics.InvocationFileCacheHits);
-                    _current[tree] = rebound;
-                    return rebound;
-                }
-            }
-
-            Interlocked.Increment(ref IncrementalGenerationMetrics.InvocationFileObservations);
-            var model = _observations.GetSemanticModel(tree);
-            var methods = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().Select(invocation =>
-            {
-                Interlocked.Increment(ref IncrementalGenerationMetrics.ReachabilityInvocationBindings);
-                return model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
-            }).ToArray();
-            var identities = methods.Select(_factory.Create).ToArray();
-            var dependencies = _observations.ObservedDependencies(tree);
-            if (dependencies != null && identities.All(identity => identity != null))
-            {
-                var frozen = new FileEntry(tree, identities, dependencies);
-                lock (_project.Entries) _project.Entries[tree.FilePath] = frozen;
-            }
-            else
-            {
-                Interlocked.Increment(ref IncrementalGenerationMetrics.InvocationFileFallbacks);
-                lock (_project.Entries) _project.Entries.Remove(tree.FilePath);
-            }
-            _current[tree] = methods;
-            return methods;
+            if (!_current.TryGetValue(tree, out current))
+                _current.Add(tree, current = new Lazy<IMethodSymbol[]>(() => Observe(tree), LazyThreadSafetyMode.ExecutionAndPublication));
         }
+        return current.Value;
+    }
+
+    /// <summary>Rebinds an unchanged file from its verified identities or binds every invocation afresh.</summary>
+    /// <param name="tree">The current file.</param>
+    /// <returns>Every bound method in syntax order.</returns>
+    private IMethodSymbol[] Observe(SyntaxTree tree)
+    {
+        FileEntry entry;
+        lock (_project.Entries) _project.Entries.TryGetValue(tree.FilePath, out entry);
+        if (entry != null && ReferenceEquals(entry.Tree, tree) && entry.Dependencies.All(_compilation.ContainsSyntaxTree))
+        {
+            var rebound = entry.Methods.Select(_resolver.Resolve).ToArray();
+            if (rebound.All(method => method != null))
+            {
+                Interlocked.Increment(ref IncrementalGenerationMetrics.InvocationFileCacheHits);
+                return rebound;
+            }
+        }
+
+        Interlocked.Increment(ref IncrementalGenerationMetrics.InvocationFileObservations);
+        var model = _observations.GetSemanticModel(tree);
+        var methods = tree.GetRoot().DescendantNodes().OfType<InvocationExpressionSyntax>().Select(invocation =>
+        {
+            Interlocked.Increment(ref IncrementalGenerationMetrics.ReachabilityInvocationBindings);
+            return model.GetSymbolInfo(invocation).Symbol as IMethodSymbol;
+        }).ToArray();
+        var identities = methods.Select(_factory.Create).ToArray();
+        var dependencies = _observations.ObservedDependencies(tree);
+        if (dependencies != null && identities.All(identity => identity != null))
+        {
+            var frozen = new FileEntry(tree, identities, dependencies);
+            lock (_project.Entries) _project.Entries[tree.FilePath] = frozen;
+        }
+        else
+        {
+            Interlocked.Increment(ref IncrementalGenerationMetrics.InvocationFileFallbacks);
+            lock (_project.Entries) _project.Entries.Remove(tree.FilePath);
+        }
+        return methods;
     }
 
     /// <summary>Stores no semantic objects from a preceding compilation.</summary>

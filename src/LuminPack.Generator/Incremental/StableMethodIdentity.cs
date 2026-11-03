@@ -79,9 +79,18 @@ internal sealed class StableMethodIdentityFactory
     /// <summary>Freezes a method only when its exact current invocation form can be reconstructed.</summary>
     /// <param name="method">The actual invocation target.</param>
     /// <returns>A verified identity or null for a safe fresh-binding fallback.</returns>
+    /// <remarks>Files are bound in parallel; the memo and its owned helpers are guarded by this factory's lock.</remarks>
     internal StableMethodIdentity Create(IMethodSymbol method)
     {
         if (method == null) return null;
+        lock (_known) return CreateLocked(method);
+    }
+
+    /// <summary>Creates or recalls an identity while the memo lock is held.</summary>
+    /// <param name="method">The actual invocation target.</param>
+    /// <returns>A verified identity or null.</returns>
+    private StableMethodIdentity CreateLocked(IMethodSymbol method)
+    {
         if (_known.TryGetValue(method, out var known)) return known;
         var staticForm = method.ReducedFrom == null ? method : method.GetConstructedReducedFrom();
         string declaration = staticForm?.OriginalDefinition.GetDocumentationCommentId();
@@ -116,9 +125,12 @@ internal sealed class CurrentMethodResolver
     /// <returns>The current invocation method or null for a failed rebind.</returns>
     internal IMethodSymbol Resolve(StableMethodIdentity identity)
     {
-        if (_known.TryGetValue(identity.Key, out var method)) return method;
-        method = identity.Resolve(_types);
-        _known[identity.Key] = method;
-        return method;
+        lock (_known)
+        {
+            if (_known.TryGetValue(identity.Key, out var method)) return method;
+            method = identity.Resolve(_types);
+            _known[identity.Key] = method;
+            return method;
+        }
     }
 }
