@@ -238,6 +238,16 @@ namespace LuminPack.Code
             throw new LuminPackException($"Span out of range with {index}.");
         }
 
+        /// <summary>Preserves checked JSON cursor diagnostics without importing overflow handling into successful advances.</summary>
+        /// <param name="position">The original buffer-relative cursor position.</param>
+        /// <param name="count">The unchanged signed request width.</param>
+        [DoesNotReturn]
+        internal static void ThrowJsonAdvanceOutOfRange(int position, int count)
+        {
+            int index = checked(position + count);
+            throw new LuminPackException($"Span out of range with {index}.");
+        }
+
 #if NET8_0_OR_GREATER
         /// <summary>Raises the original Reader bounds failure without importing diagnostic arithmetic into successful checks.</summary>
         /// <param name="offset">The original window-relative native offset.</param>

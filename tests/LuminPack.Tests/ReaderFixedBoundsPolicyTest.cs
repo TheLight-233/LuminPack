@@ -146,6 +146,40 @@ public class ReaderFixedBoundsPolicyTest
         Assert.IsType<OverflowException>(overflow);
     }
 
+    /// <summary>Preserves JSON cursor checks, checked diagnostic overflow and the position after rejection.</summary>
+    [Fact]
+    public void JsonAdvanceKeepsCheckedDiagnosticsAndCursor()
+    {
+        byte[] storage = new byte[16];
+        foreach (int position in new[] { 0, 1, 8, 9 })
+        foreach (int count in new[] { int.MinValue, -1, 0, 1, 7, 8, 9, int.MaxValue })
+        {
+            ReadOnlySpan<byte> window = storage.AsSpan(0, 8);
+            var reader = new LuminPackJsonReader(ref window, new LuminPackReaderOptionalState()) { Position = position };
+            long end = (long)position + count;
+            bool invalid = position > window.Length || count < 0 || end > window.Length;
+            Exception? failure = null;
+            try { reader.Advance(count); }
+            catch (Exception error) { failure = error; }
+            if (!invalid)
+            {
+                Assert.Null(failure);
+                Assert.Equal((int)end, reader.Position);
+                continue;
+            }
+
+            if (end > int.MaxValue || end < int.MinValue)
+                Assert.IsType<OverflowException>(failure);
+            else
+            {
+                Assert.NotNull(failure);
+                Assert.Equal("LuminPack.Code.LuminPackExceptionHelper+LuminPackException", failure.GetType().FullName);
+                Assert.Equal($"Span out of range with {end}.", failure!.Message);
+            }
+            Assert.Equal(position, reader.Position);
+        }
+    }
+
     /// <summary>Rejects negative, overflowing and overlong JSON cursor movement without changing its position.</summary>
     /// <param name="count">The invalid advance width.</param>
     [Theory]

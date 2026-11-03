@@ -361,7 +361,7 @@ namespace LuminPack.Core
         {
             int position = Position;
             if ((uint)position > (uint)Buffer.Length || (uint)count > (uint)(Buffer.Length - position))
-                LuminPackExceptionHelper.ThrowSpanOutOfRange(checked(position + count));
+                LuminPackExceptionHelper.ThrowJsonAdvanceOutOfRange(position, count);
 #if NET8_0_OR_GREATER
             Cursor = ref Unsafe.Add(ref Cursor, (nint)(uint)count);
 #else
