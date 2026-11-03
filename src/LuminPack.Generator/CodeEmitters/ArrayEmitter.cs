@@ -88,6 +88,8 @@ public static class ArrayEmitter
     public static void GenerateDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         if (PortableStructEmitter.TryAppendCollection(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol), list: false, write: false)) return;
+        if (global::LuminPack.Code.Core.GeneratedExecutionPolicy.UseFreshUnionLoop(EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol)))
+            sb.AppendLine("            if (value is null) { reader.ReadFreshValue(ref value!); return; }");
         string baseTypeName = Regex.Replace(fieldData.TypeName, @"\[\s*\]\s*$", "");
         bool? elementIsUnmanaged = GetClosedElementIsUnmanaged(fieldData);
         bool useUnmanagedPath = elementIsUnmanaged ?? KnownValueTypes.Contains(baseTypeName);
@@ -196,7 +198,8 @@ public static class ArrayEmitter
         sb.AppendLine(@"            ref var first = ref LuminPackMarshal.GetNotNullArrayReference(value!);");
         sb.AppendLine(@"            for (nint i = 0; i < length; i++)");
         sb.AppendLine(@"            {");
-        sb.AppendLine(@"                reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
+        EmitterTypeTraits.AppendFreshElementRead(sb, EmitterTypeTraits.GetCollectionElementType(fieldData.TypeSymbol),
+            baseTypeName, "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)", "                ");
         sb.AppendLine(@"            }");
     }
 

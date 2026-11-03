@@ -22,6 +22,7 @@ internal static partial class SerializerCodegenPerformanceRegression
             using System;
             using System.Buffers;
             using System.Collections.Generic;
+            using System.Collections.Immutable;
             using System.Runtime.CompilerServices;
             using System.Runtime.InteropServices;
             using LuminPack;
@@ -187,6 +188,36 @@ internal static partial class SerializerCodegenPerformanceRegression
                     if (!ReferenceEquals(existingList, originalList) || existingList.Count != 3 || existingList[1] != null ||
                         !LuminPackSerializer.Serialize(existingList).AsSpan().SequenceEqual(rootListBytes))
                         throw new Exception("The fresh-list optimization changed reusable list identity or null elements.");
+                    var twoCases = new List<Root> { value, value };
+                    byte[] twoBytes = LuminPackSerializer.Serialize(twoCases);
+                    for (int prefix = 0; prefix < twoBytes.Length; prefix++)
+                    {
+                        List<Root> partialList = null;
+                        Root[] partialArray = null;
+                        var originalImmutable = ImmutableArray.Create<Root>(value);
+                        var partialImmutable = originalImmutable;
+                        bool listFailed = false, arrayFailed = false, immutableFailed = false;
+                        try { LuminPackSerializer.Deserialize(twoBytes.AsSpan(0, prefix), ref partialList); }
+                        catch (Exception) { listFailed = true; }
+                        try { LuminPackSerializer.Deserialize(twoBytes.AsSpan(0, prefix), ref partialArray); }
+                        catch (Exception) { arrayFailed = true; }
+                        try { LuminPackSerializer.Deserialize(twoBytes.AsSpan(0, prefix), ref partialImmutable); }
+                        catch (Exception) { immutableFailed = true; }
+                        bool firstComplete = prefix >= sizeof(int) + expected.Length;
+                        if (!listFailed || !arrayFailed || !immutableFailed || partialImmutable != originalImmutable ||
+                            (prefix < sizeof(int) + 2 ? partialList != null || partialArray != null :
+                                partialList is null || partialArray is null || partialList.Count != 2 || partialArray.Length != 2 ||
+                                (partialList[0] != null) != firstComplete || (partialArray[0] != null) != firstComplete ||
+                                partialList[1] != null || partialArray[1] != null))
+                            throw new Exception("A truncated fresh Union container changed partial publication.");
+                    }
+                    Root[] freshArray = null;
+                    LuminPackSerializer.Deserialize(rootListBytes, ref freshArray);
+                    var freshImmutable = default(ImmutableArray<Root>);
+                    LuminPackSerializer.Deserialize(rootListBytes, ref freshImmutable);
+                    if (!LuminPackSerializer.Serialize(freshArray).AsSpan().SequenceEqual(rootListBytes) ||
+                        !LuminPackSerializer.Serialize(freshImmutable).AsSpan().SequenceEqual(rootListBytes))
+                        throw new Exception("Fresh Union arrays changed ordered payloads or null elements.");
                     var adjacent = new Contiguous { Head = 97, First = first, Second = second, Tail = -101 };
                     var adjacentBytes = LuminPackSerializer.Serialize(adjacent);
                     byte[] adjacentExpected = new byte[49];

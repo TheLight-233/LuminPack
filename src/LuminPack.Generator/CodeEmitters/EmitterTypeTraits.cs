@@ -9,6 +9,26 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 /// <summary>Provides emitter type traits functionality.</summary>
 internal static class EmitterTypeTraits
 {
+    /// <summary>Reads a zero-initialized element using the operation graph's publication policy.</summary>
+    /// <param name="sb">The generated loop body.</param>
+    /// <param name="type">The canonical element contract.</param>
+    /// <param name="typeName">The element's generated type spelling.</param>
+    /// <param name="target">The zero-initialized destination storage.</param>
+    /// <param name="indent">The statement indentation.</param>
+    internal static void AppendFreshElementRead(System.Text.StringBuilder sb, ITypeSymbol type, string typeName, string target, string indent)
+    {
+        if (GeneratedExecutionPolicy.UseFreshUnionLoop(type))
+        {
+            // Union readers already publish only after their selected payload succeeds. A local exposes
+            // the fresh value to the JIT and avoids carrying an element byref through its allocation.
+            sb.AppendLine(indent + typeName + " item = default!;");
+            sb.AppendLine(indent + "reader.ReadValue(ref item!);");
+            sb.AppendLine(indent + target + " = item;");
+        }
+        else
+            sb.AppendLine(indent + "reader.ReadValue(ref " + target + "!);");
+    }
+
     /// <summary>Normalizes the generated spellings of the scalar types that have fused JSON element writers.</summary>
     /// <param name="type">A generated element, key or value type name.</param>
     /// <returns>The C# keyword for string, int or long; otherwise null.</returns>

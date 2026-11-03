@@ -80,7 +80,8 @@ public static class ImmutableArrayEmitter
             sb.AppendLine("                        ref var first = ref LuminPackMarshal.GetNotNullArrayReference(array!);");
             sb.AppendLine("                        for (nint i = 0; i < length; i++)");
             sb.AppendLine("                        {");
-            sb.AppendLine("                            reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
+            EmitterTypeTraits.AppendFreshElementRead(sb, element, elementType,
+                "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)", "                            ");
             sb.AppendLine("                        }");
         }
         sb.AppendLine("                    }");

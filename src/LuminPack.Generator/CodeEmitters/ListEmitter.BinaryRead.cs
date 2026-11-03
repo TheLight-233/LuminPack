@@ -50,6 +50,10 @@ public static partial class ListEmitter
         bool useUnmanagedFastPath = elementClassificationKnown
             ? elementIsUnmanaged
             : KnownValueTypes.Contains(elementType);
+        bool freshUnionLoop = global::LuminPack.Code.Core.GeneratedExecutionPolicy.UseFreshUnionLoop(
+            EmitterTypeTraits.GetFirstTypeArgument(fieldData));
+        if (!freshValue && freshUnionLoop)
+            sb.AppendLine("            if (value is null) { reader.ReadFreshValue(ref value!); return; }");
         if (useUnmanagedFastPath)
         {
             sb.AppendLine("            int length = reader.ReadLength(global::System.Runtime.CompilerServices.Unsafe.SizeOf<" + elementType + ">());");
@@ -71,7 +75,8 @@ public static partial class ListEmitter
         if (freshValue)
         {
             sb.AppendLine("            var items = reader.CreateFreshListArray<" + elementType + ">(length, out value);");
-            sb.AppendLine("            var span = items.AsSpan();");
+            if (!elementClassificationKnown)
+                sb.AppendLine("            var span = items.AsSpan();");
         }
         else
         {
@@ -86,7 +91,16 @@ public static partial class ListEmitter
         if (freshValue)
         {
             sb.AppendLine("            ref var first = ref " + (useArrayDataIntrinsic ? "global::System.Runtime.InteropServices.MemoryMarshal.GetArrayDataReference(items)" : "LuminPackMarshal.DangerousGetArrayDataReference(items)") + ";");
-            sb.AppendLine("            for (int i = 0; i < length; i++) reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
+            if (freshUnionLoop)
+            {
+                sb.AppendLine("            for (int i = 0; i < length; i++)");
+                sb.AppendLine("            {");
+                EmitterTypeTraits.AppendFreshElementRead(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData),
+                    elementType, "global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)", "                ");
+                sb.AppendLine("            }");
+            }
+            else
+                sb.AppendLine("            for (int i = 0; i < length; i++) reader.ReadValue(ref global::System.Runtime.CompilerServices.Unsafe.Add(ref first, i)!);");
         }
         else
         {

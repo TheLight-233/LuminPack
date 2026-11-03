@@ -1,14 +1,25 @@
 using System;
 using System.Linq;
 using LuminPack.SourceGenerator;
+using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace LuminPack.Code.Core;
 
-/// <summary>Chooses implementation reuse at existing typed operation boundaries without changing their contracts.</summary>
+/// <summary>Chooses source composition, fresh storage and native inline hints from typed operation contracts.</summary>
 internal static class GeneratedExecutionPolicy
 {
     private const int InlineCallLimit = 16;
+
+    /// <summary>Separates fresh Union element construction from heap-backed reusable element storage.</summary>
+    /// <param name="element">The canonical element contract in the analyzed object graph.</param>
+    /// <returns>Whether a fresh collection may read each Union into a local before publishing its result.</returns>
+    /// <remarks>Ordinary objects and Custom formatters can publish before reading their fields, so they retain direct storage.</remarks>
+    internal static bool UseFreshUnionLoop(ITypeSymbol element)
+        => element is INamedTypeSymbol { IsReferenceType: true } named &&
+            (named.TypeKind == TypeKind.Interface || named.IsAbstract) &&
+            (TypeMetaChecker.TryCheckPackableAttribute(named) || TypeMetaChecker.TryCheckUnionAttribute(named)) &&
+            !LuminPackExtensionGenerator.IsCustomGeneratorType(named);
 
     /// <summary>Identifies complete operations whose repeated expansion enlarges their callers' live execution state.</summary>
     /// <param name="operationName">The exact normal, fresh, specialized or JSON operation selected by analysis.</param>

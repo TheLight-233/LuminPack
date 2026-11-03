@@ -47,6 +47,7 @@
 - **Union 派发**是在根类型上生成的 public 虚方法（`EditorBrowsable(Never)`）。泛型 Union 根在虚调用之后增加缓存槽位 switch。不使用泛型虚方法或替代用的 switch。
 - **分级 Union 写入。** 本地、非泛型抽象类根的编译期写入槽位在编译期选择一个级别。未生成注册 API（`AllowUnsafeBlocks` 关闭或 `LuminPackRegisterMode.Disabled`）时，如果根无法被其他程序集扩展（对外不可见、没有对外可访问的构造函数，或声明了 `SingleImplementation`），且只有一个 sealed case、源码中没有其他派生类型，则直接调用该 case 的槽位。否则，1 到 4 个生成的非泛型 case 先做精确类型判断（sealed case 用 `is`，其余用 `GetType() == typeof`），再回到原有虚调用；虚调用继续服务注册的和外部的 case。更多 case 的根、泛型根和接口根保留单次虚调用。偏移计算保留虚调用。
 - **Union 集合。** 列表、一维数组和 `ImmutableArray<T>` 按输入顺序对每个元素调用既有的编译 Union 操作。负载是否定长不改变分派或字符串表示。
+- **Fresh Union 元素。** 新分配的 Union 集合存储可以先通过初始化为 null 的局部变量读取，再赋给元素，保持 Union 操作在负载成功读取后发布结果的既有行为。已有元素保留复用路径；普通对象和 Custom 格式化器保留各自的发布契约。
 - **注册**传入以方法表地址为键的静态方法指针（`LuminPackFormatter`）。不保存 `Type` 或委托，因此可回收的 `AssemblyLoadContext` 可以卸载。注册在发布前校验标签、case 类型和必需操作。
 - **`Custom`** 格式化器拥有完整的数据表示，通过注册的指针调用。
 
