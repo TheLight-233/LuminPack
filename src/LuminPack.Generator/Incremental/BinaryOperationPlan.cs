@@ -411,7 +411,9 @@ internal sealed class OperationTemplateRewriter : CSharpSyntaxRewriter
     {
         if (node.Expression is not InvocationExpressionSyntax call) return base.VisitExpressionStatement(node);
         BinaryOperationCall slot = null;
-        var target = _model.GetSymbolInfo(call).Symbol as IMethodSymbol;
+        // Only local helper matching uses this invocation symbol. Formatter slots use the
+        // receiver and payload types below, even when the invocation itself cannot bind.
+        var target = _locals.Count == 0 ? null : _model.GetSymbolInfo(call).Symbol as IMethodSymbol;
         if (target != null && _locals.TryGetValue(target, out string local))
             slot = new BinaryOperationCall(string.Empty, local, false, true, call.ArgumentList.Arguments.Select(argument => CanAlias(argument.Expression)));
         else if (call.Expression is MemberAccessExpressionSyntax access && BinaryOperationPlan.IsOperation(access.Name.Identifier.ValueText))
