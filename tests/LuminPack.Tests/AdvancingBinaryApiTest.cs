@@ -11,6 +11,34 @@ namespace LuminPackUnitTest;
 /// <summary>Checks complete advancing operations and concrete extension selection.</summary>
 public class AdvancingBinaryApiTest
 {
+    /// <summary>Transfers an owned window, its threshold and operation state before and after buffer growth.</summary>
+    [Fact]
+    public void CopiedWriterKeepsOwnedWindowAndGrowthBoundary()
+    {
+        using var owner = new LuminBufferWriter(true);
+        var state = new LuminPackWriterOptionalState();
+        var writer = new LuminPackWriter(owner, state) { SchemaOperation = 37 };
+        writer.Write(123);
+        var copy = new LuminPackWriter(option: null);
+        writer.CopyTo(ref copy);
+        Assert.Same(owner, copy.Owner);
+        Assert.Same(state, copy.Options);
+        Assert.Equal(37, copy.SchemaOperation);
+        Assert.Equal(writer.Position, copy.Position);
+        Assert.Equal(writer.RecordRoom(ref writer.Cursor), copy.RecordRoom(ref copy.Cursor));
+        CheckCachedRecordRoom(ref copy);
+        copy.EnsureAdditionalCapacity(200_000);
+        copy.Write(456);
+        copy.CopyTo(ref writer);
+        writer.CopyTo(ref writer);
+        CheckCachedRecordRoom(ref writer);
+        Assert.Equal(8, writer.Position);
+        Assert.Equal(123, System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(writer.Buffer));
+        Assert.Equal(456, System.Buffers.Binary.BinaryPrimitives.ReadInt32LittleEndian(writer.Buffer[4..]));
+        Assert.Same(state, writer.Options);
+        Assert.Equal(37, writer.SchemaOperation);
+    }
+
     /// <summary>Checks the public record-room view after all explicit window and owner operations.</summary>
     [Fact]
     public void WindowChangesAlwaysPublishTheCurrentRecordLimit()

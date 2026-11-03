@@ -101,7 +101,7 @@ namespace LuminPack.Core
         {
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
-            Buffer = bufferWriter.BeginCursorWrite(out int position);
+            _buffer = bufferWriter.BeginCursorWrite(out int position);
             BufferCheckLimit = (uint)bufferWriter.BufferCheckLimit + 1;
             Position = position;
             Owner = bufferWriter;
@@ -116,7 +116,7 @@ namespace LuminPack.Core
             if (bufferWriter == null)
                 LuminPackExceptionHelper.ThrowBufferWriterNull();
             _options = option;
-            Buffer = bufferWriter.BeginCursorWrite(out int position);
+            _buffer = bufferWriter.BeginCursorWrite(out int position);
             BufferCheckLimit = (uint)bufferWriter.BufferCheckLimit + 1;
             Position = position;
             Owner = bufferWriter;
@@ -168,8 +168,9 @@ namespace LuminPack.Core
             destination.Cursor = Cursor;
 #endif
             destination.Owner = Owner;
-            destination.BufferCheckLimit = BufferCheckLimit;
-            destination.Buffer = _buffer;
+            // Transfer the complete window and its already computed limit together.
+            destination._bufferCheckLimit = _bufferCheckLimit;
+            destination._buffer = _buffer;
 #if NET8_0_OR_GREATER
             destination._recordLimit = ref _recordLimit;
 #else
@@ -293,7 +294,7 @@ namespace LuminPack.Core
 #else
             Cursor = storage.Cursor;
 #endif
-            Buffer = storage.Buffer;
+            _buffer = storage.Buffer;
             BufferCheckLimit = storage.CheckLimit;
         }
 
