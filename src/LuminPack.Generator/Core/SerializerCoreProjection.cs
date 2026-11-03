@@ -184,6 +184,7 @@ internal static class SerializerCoreProjection
         rewritten = new ProvenLeafWriteProjection(compilation, metadata, types).Visit(rewritten);
         rewritten = new ProvenObjectWriteProjection(compilation, metadata, types).Visit(rewritten);
         rewritten = new JsonValueProjection().Visit(rewritten);
+        rewritten = new JsonScalarLoopProjection().Visit(rewritten);
         rewritten = new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(rewritten);
         rewritten = new NativeOffsetProjection().Visit(rewritten);
         rewritten = new RecursionGuardProjection(payload => (closedRoot != null && FormatterTypeName.Get(closedRoot) == payload

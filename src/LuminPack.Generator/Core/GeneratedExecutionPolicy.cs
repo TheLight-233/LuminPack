@@ -39,6 +39,14 @@ internal static class GeneratedExecutionPolicy
             node is ForStatementSyntax or ForEachStatementSyntax or ForEachVariableStatementSyntax or
                 WhileStatementSyntax or DoStatementSyntax));
 
+    /// <summary>Protects compound scalar parsers from repeated partial inlining in a large JSON operation.</summary>
+    /// <param name="body">The final composed state body.</param>
+    /// <param name="parserSites">The number of floating-point parser sites in this method scope.</param>
+    /// <returns>Whether those parsers need an independent native inlining budget.</returns>
+    internal static bool IsolateJsonScalarLoops(BlockSyntax body, int parserSites)
+        => parserSites > 1 && body.DescendantNodes(node => node is not (LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax))
+            .OfType<InvocationExpressionSyntax>().Take(InlineCallLimit + 1).Count() > InlineCallLimit;
+
     /// <summary>Identifies call-heavy bodies before their callees consume the caller's native inlining budget.</summary>
     /// <param name="body">The selected complete operation body.</param>
     /// <returns>Whether its call-site count exceeds the small-body expansion budget.</returns>

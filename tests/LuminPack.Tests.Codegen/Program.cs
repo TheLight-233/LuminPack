@@ -6,6 +6,11 @@ try
         .Split(Path.PathSeparator)
         .Select(path => MetadataReference.CreateFromFile(path))
         .ToArray();
+    if (args is ["--verify-json-scalars"])
+    {
+        SerializerJsonScalarLoopRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-json-reuse"])
     {
         SerializerJsonReuseRegression.Run(references);
@@ -260,6 +265,7 @@ try
     SerializerUnionCursorRegression.Run(references);
     SerializerCapacityTierRegression.Run(references);
     SerializerJsonReuseRegression.Run(references);
+    SerializerJsonScalarLoopRegression.Run(references);
     SerializerCompiledOptionRegression.Run(references);
     SerializerSpecialModeBoundaryRegression.Run(references);
     SerializerNamedVersionRegression.Run(references);
