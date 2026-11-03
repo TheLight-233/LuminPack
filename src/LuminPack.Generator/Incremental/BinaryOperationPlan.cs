@@ -164,9 +164,9 @@ internal sealed class BinaryOperationPlan
         input ??= CompiledOptions.Resolve(type, compilation).Input is { Enabled: true } own ? own : null;
         if (input != null)
         {
-            source = SafeOperationProjection.Rewrite(tree.GetRoot().NormalizeWhitespace().ToFullString(), type, compilation, metadata, input);
-            tree = CSharpSyntaxTree.ParseText(source, templateOptions);
-            tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(tree.GetRoot()), templateOptions);
+            var checkedRoot = SafeOperationProjection.Rewrite((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)tree.GetRoot().NormalizeWhitespace(), type, compilation, metadata, input);
+            source = checkedRoot.ToFullString();
+            tree = CSharpSyntaxTree.Create((Microsoft.CodeAnalysis.CSharp.Syntax.CompilationUnitSyntax)new BinaryCursorProjection(BinaryCursorProjection.UsesPointerCursor(compilation, metadata), metadata.AllowUnsafe).Visit(checkedRoot), templateOptions);
         }
         var binding = compilation.AddSyntaxTrees(tree);
         var model = binding.GetSemanticModel(tree);

@@ -24,22 +24,23 @@ internal sealed class SafeOperationProjection : CSharpSyntaxRewriter
     private SafeOperationProjection(SafeReadProjection reads, string rejection) { _reads = reads; _rejection = rejection; }
 
     /// <summary>Adds checks to the binary reads of one type's templates.</summary>
-    /// <param name="source">The formatter template.</param><param name="type">The closed type.</param>
+    /// <param name="template">The normalized formatter template.</param><param name="type">The closed type.</param>
     /// <param name="compilation">The consumer compilation.</param><param name="metadata">Generation settings.</param>
     /// <param name="input">The enclosing untrusted root's frozen limits.</param>
-    /// <returns>The checked operation source.</returns>
-    internal static string Rewrite(string source, ITypeSymbol type, Compilation compilation, MetaInfo metadata, CompiledInputPolicy input)
+    /// <returns>The normalized checked operation syntax.</returns>
+    /// <remarks>The template is passed as syntax rather than text, so no type pays a print and re-parse on either side.</remarks>
+    internal static CompilationUnitSyntax Rewrite(CompilationUnitSyntax template, ITypeSymbol type, Compilation compilation, MetaInfo metadata, CompiledInputPolicy input)
     {
-        var active = new ActiveOperationSyntax().Visit(CSharpSyntaxTree.ParseText(source, metadata.ParseOptions).GetRoot());
+        var active = new ActiveOperationSyntax().Visit(template);
         var root = CSharpSyntaxTree.Create((CompilationUnitSyntax)active, metadata.ParseOptions).GetRoot();
         var container = root.DescendantNodes().OfType<ClassDeclarationSyntax>().FirstOrDefault(c => c.Identifier.ValueText.StartsWith("LuminPackExtensions_", StringComparison.Ordinal));
-        if (container == null) return source;
+        if (container == null) return template;
         var reads = new SafeReadProjection(type, compilation, metadata, input, compilation.AddSyntaxTrees(root.SyntaxTree).GetSemanticModel(root.SyntaxTree));
         // Input-selected shapes fail closed in both directions only under an explicit hostile-input declaration; the implicit
         // default keeps them working with checked reads.
         string rejection = input.Explicit ? SafeContract.Rejection(type, compilation, metadata) : null;
         var rewritten = (ClassDeclarationSyntax)new SafeOperationProjection(reads, rejection).Visit(container);
-        return root.ReplaceNode(container, rewritten).NormalizeWhitespace().ToFullString();
+        return (CompilationUnitSyntax)root.ReplaceNode(container, rewritten).NormalizeWhitespace();
     }
 
     /// <summary>Retains one formatter body with its existing state, callbacks, construction and reuse.</summary>
