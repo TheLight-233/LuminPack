@@ -61,6 +61,11 @@ try
         SerializerImmutableListWriteRegression.RunLayoutProbes(references);
         return 0;
     }
+    if (args is ["--verify-sorted-list-json-writes"])
+    {
+        SerializerImmutableListWriteRegression.RunSortedJson(references);
+        return 0;
+    }
     if (args is ["--verify-collection-leases"])
     {
         SerializerImmutableListWriteRegression.RunLeases(references);
@@ -288,6 +293,7 @@ try
     SerializerImmutableQueueConstructionRegression.Run(references);
     SerializerImmutableListWriteRegression.RunInterfaces(references);
     SerializerImmutableListWriteRegression.RunLeases(references);
+    SerializerImmutableListWriteRegression.RunSortedJson(references);
     SerializerImmutableListWriteRegression.RunLayoutProbes(references);
     SerializerScalarInterfaceReadRegression.Run(references);
     SerializerScalarInterfaceWriteRegression.Run(references);

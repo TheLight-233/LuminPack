@@ -123,7 +123,10 @@ public static partial class LuminPackExtensionGenerator
         }
         if (type is INamedTypeSymbol { MetadataName: "SortedList`2", TypeArguments.Length: 2 } sortedList &&
             sortedList.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
+        {
             field.CanAppendSortedListOrdered = EmitterTypeTraits.CanAppendSortedListOrdered(sortedList.TypeArguments[0], compilation);
+            field.CanTraverseSortedList = EmitterTypeTraits.HasSortedListTraversal(compilation);
+        }
         if (type is INamedTypeSymbol { MetadataName: "HashSet`1" or "ISet`1" or "IReadOnlySet`1", TypeArguments.Length: 1 } hashSet &&
             hashSet.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
             field.CanGroupSmallHashSetWrites = EmitterTypeTraits.CanGroupSmallHashSetWrites(hashSet.TypeArguments[0], compilation);

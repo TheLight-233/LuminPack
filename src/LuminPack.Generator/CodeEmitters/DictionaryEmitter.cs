@@ -16,6 +16,11 @@ public static partial class DictionaryEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDictionarySerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (fieldData.CanTraverseSortedList)
+        {
+            AppendSortedListJsonWrite(fieldData, sb);
+            return;
+        }
         sb.AppendLine("            if (value == null)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.WriteNull();");
@@ -32,6 +37,41 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.WriteArrayEnd();");
+    }
+
+    /// <summary>Writes validated sorted-list storage while preserving pair capture and enumerator invalidation.</summary>
+    /// <param name="field">The concrete sorted-list contract with the referenced traversal API.</param>
+    /// <param name="sb">The generated operation statements.</param>
+    private static void AppendSortedListJsonWrite(LuminLocalFieldData field, StringBuilder sb)
+    {
+        string keyType = GetFirstGeneric(field.TypeName), valueType = GetSecondGeneric(field.TypeName);
+        bool fused = EmitterTypeTraits.HasJsonEntryWriter(keyType, valueType);
+        sb.AppendLine("            if (value is null) { writer.WriteNull(); return; }");
+        sb.AppendLine("            writer.WriteArrayStart();");
+        sb.AppendLine("            if (value.Count > 0)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetSortedListTraversal(value, out var keys, out var values, out int version))");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    for (int i = 0; i < keys.Length; i++)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        global::LuminPack.Code.LuminPackCollectionAccess.CheckSortedListTraversalVersion(value, version);");
+        // The enumerator captures the entire pair before user code serializes either component.
+        sb.AppendLine("                        var item = new global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">(keys[i], values[i]);");
+        AppendJsonDictionaryEntrySerialize(sb, "item.Key", "item.Value", "                        ", fused);
+        sb.AppendLine("                    }");
+        sb.AppendLine("                    global::LuminPack.Code.LuminPackCollectionAccess.CheckSortedListTraversalVersion(value, version);");
+        sb.AppendLine("                }");
+        sb.AppendLine("                else WriteFallback(ref writer, value);");
+        sb.AppendLine("            }");
+        sb.AppendLine("            writer.WriteArrayEnd();");
+        sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        sb.AppendLine("            static void WriteFallback(ref global::LuminPack.Core.LuminPackJsonWriter writer, " + field.TypeName + " value)");
+        sb.AppendLine("            {");
+        sb.AppendLine("                foreach (var item in value)");
+        sb.AppendLine("                {");
+        AppendJsonDictionaryEntrySerialize(sb, "item.Key", "item.Value", "                    ", fused);
+        sb.AppendLine("                }");
+        sb.AppendLine("            }");
     }
 
     /// <summary>Appends JSON reading statements for dictionary values.</summary>

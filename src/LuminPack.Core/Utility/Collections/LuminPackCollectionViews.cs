@@ -407,6 +407,43 @@ public static class LuminPackCollectionAccess
         return keys.Length >= list.Count && values.Length >= list.Count;
     }
 
+    /// <summary>Captures the validated ranges and mutation version of a sorted-list traversal.</summary>
+    /// <param name="list">The non-null source collection.</param>
+    /// <param name="keys">The complete key range, or an empty span when storage is unavailable.</param>
+    /// <param name="values">The corresponding value range, or an empty span when storage is unavailable.</param>
+    /// <param name="version">The mutation version to check before each pair and after the final pair.</param>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    /// <returns>Whether checked storage traversal can replace the public enumerator.</returns>
+    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+    public static bool TryGetSortedListTraversal<TKey, TValue>(global::System.Collections.Generic.SortedList<TKey, TValue> list,
+        out global::System.ReadOnlySpan<TKey> keys, out global::System.ReadOnlySpan<TValue> values, out int version) where TKey : notnull
+    {
+        keys = default;
+        values = default;
+        version = 0;
+        if (!SortedListAppendStorage.Available || !TryGetSortedListStorage(list, out var keyArray, out var valueArray)) return false;
+        int count = list.Count;
+        keys = new global::System.ReadOnlySpan<TKey>(keyArray, 0, count);
+        values = new global::System.ReadOnlySpan<TValue>(valueArray, 0, count);
+        version = LuminFieldLayout.Field<int>(list, SortedListAppendStorage.Version);
+        return true;
+    }
+
+    /// <summary>Checks the version captured by a successful sorted-list traversal probe.</summary>
+    /// <param name="list">The same collection passed to the traversal probe.</param>
+    /// <param name="version">The captured mutation version.</param>
+    /// <typeparam name="TKey">The key type.</typeparam>
+    /// <typeparam name="TValue">The value type.</typeparam>
+    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+    [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static void CheckSortedListTraversalVersion<TKey, TValue>(global::System.Collections.Generic.SortedList<TKey, TValue> list, int version)
+        where TKey : notnull
+    {
+        if (LuminFieldLayout.Field<int>(list, SortedListAppendStorage.Version) != version)
+            LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
+    }
+
     /// <summary>Gets the two stacks whose consecutive enumeration is the enumeration of an immutable queue.</summary>
     /// <param name="queue">The non-null queue.</param>
     /// <param name="forwards">Receives the stack of the oldest elements, or null when the storage is not recognized.</param>

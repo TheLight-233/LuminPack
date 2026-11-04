@@ -333,6 +333,29 @@ internal static class EmitterTypeTraits
                 method.Parameters[3].Type.SpecialType == SpecialType.System_Boolean);
     }
 
+    /// <summary>Checks the optional version-preserving sorted-list traversal API on the referenced runtime.</summary>
+    /// <param name="compilation">The compilation supplying the actual runtime signatures.</param>
+    /// <returns>Whether both traversal operations expose their complete expected contracts.</returns>
+    internal static bool HasSortedListTraversal(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        bool Common(IMethodSymbol method) => method.IsStatic && method.Arity == 2 && method.DeclaredAccessibility == Accessibility.Public &&
+            method.Parameters[0].RefKind == RefKind.None &&
+            method.Parameters[0].Type is INamedTypeSymbol { MetadataName: "SortedList`2", TypeArguments.Length: 2 } list &&
+            list.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" &&
+            SymbolEqualityComparer.Default.Equals(list.TypeArguments[0], method.TypeParameters[0]) &&
+            SymbolEqualityComparer.Default.Equals(list.TypeArguments[1], method.TypeParameters[1]);
+        bool SpanParameter(IParameterSymbol parameter, ITypeParameterSymbol element) => parameter.RefKind == RefKind.Out &&
+            parameter.Type is INamedTypeSymbol { MetadataName: "ReadOnlySpan`1", TypeArguments.Length: 1 } span &&
+            span.ContainingNamespace.ToDisplayString() == "System" && SymbolEqualityComparer.Default.Equals(span.TypeArguments[0], element);
+        return owner?.GetMembers("TryGetSortedListTraversal").OfType<IMethodSymbol>().Any(method => method.Parameters.Length == 4 && Common(method) &&
+            method.ReturnType.SpecialType == SpecialType.System_Boolean && SpanParameter(method.Parameters[1], method.TypeParameters[0]) &&
+            SpanParameter(method.Parameters[2], method.TypeParameters[1]) && method.Parameters[3].RefKind == RefKind.Out &&
+            method.Parameters[3].Type.SpecialType == SpecialType.System_Int32) == true &&
+            owner.GetMembers("CheckSortedListTraversalVersion").OfType<IMethodSymbol>().Any(method => method.Parameters.Length == 2 && Common(method) &&
+                method.ReturnsVoid && method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32);
+    }
+
     /// <summary>Recognizes framework comparisons whose generator selection excludes user comparison callbacks.</summary>
     /// <param name="element">The closed element formatter.</param>
     /// <param name="compilation">The consuming compilation identifying its actual core library.</param>

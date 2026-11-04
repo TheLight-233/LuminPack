@@ -37,6 +37,8 @@ public sealed class LuminLocalFieldData
     internal bool CanRebuildSortedSet;
     /// <summary>Whether a string-keyed sorted list can use the referenced runtime's ordered append helper.</summary>
     internal bool CanAppendSortedListOrdered;
+    /// <summary>Whether the referenced runtime exposes a checked allocation-free sorted-list traversal.</summary>
+    internal bool CanTraverseSortedList;
     /// <summary>Stores the canonical local Union cursor slot selected for a dictionary operation, if any.</summary>
     internal string UnionCursorSuffix;
     /// <summary>Stores the string encoding of the Union root's declared binary slot.</summary>
