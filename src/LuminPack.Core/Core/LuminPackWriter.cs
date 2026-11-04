@@ -743,6 +743,8 @@ namespace LuminPack.Core
         /// <param name = "header">Whether the record includes its count.</param>
         /// <param name = "compressed">Whether the payload uses LuminZ compression.</param>
         /// <returns>The actual complete byte width.</returns>
+        /// <remarks>The source storage must not overlap the destination reservation. The compressed path writes the
+        /// LuminZ frame directly into the reserved payload and backfills the frame length after compression.</remarks>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
         public static int Write<T>(scoped Span<byte> destination, scoped ReadOnlySpan<T> value, int count, bool header, bool compressed)
         {
@@ -764,28 +766,19 @@ namespace LuminPack.Core
             return WriteCompressedStorage(destination, ref source, bytes, prefix);
         }
 
-        /// <summary>Keeps compression scratch ownership and cleanup outside the inlineable raw-copy operation.</summary>
+        /// <summary>Compresses the raw payload directly into its reserved record and reports the actual width.</summary>
         /// <param name="destination">The complete reserved output record, including its optional count.</param>
-        /// <param name="source">The first byte of the complete raw payload.</param>
+        /// <param name="source">The first byte of the complete raw payload; it must not overlap the destination record.</param>
         /// <param name="bytes">The checked raw payload width.</param>
         /// <param name="prefix">The width of the already written count header.</param>
         /// <returns>The complete compressed record width.</returns>
         [MethodImpl(MethodImplOptions.NoInlining)]
         private static int WriteCompressedStorage(scoped Span<byte> destination, scoped ref byte source, int bytes, int prefix)
         {
-            int capacity = LuminCompressor.GetMaxCompressedSize(bytes);
-            byte[] temporary = ArrayPool<byte>.Shared.Rent(capacity);
-            try
-            {
-                int length = LuminCompressor.Compress(LuminPackMarshal.CreateReadOnlySpan(ref source, bytes), temporary.AsSpan(0, capacity));
-                Write(ref Unsafe.Add(ref MemoryMarshal.GetReference(destination), (nint)(uint)(prefix)), length);
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.Add(ref MemoryMarshal.GetReference(destination), (nint)(uint)(prefix + sizeof(int))), ref MemoryMarshal.GetReference(temporary.AsSpan()), (uint)length);
-                return checked(prefix + sizeof(int) + length);
-            }
-            finally
-            {
-                ArrayPool<byte>.Shared.Return(temporary);
-            }
+            int length = LuminCompressor.Compress(LuminPackMarshal.CreateReadOnlySpan(ref source, bytes),
+                destination.Slice(prefix + sizeof(int)));
+            Write(ref Unsafe.Add(ref MemoryMarshal.GetReference(destination), (nint)(uint)(prefix)), length);
+            return checked(prefix + sizeof(int) + length);
         }
 
         /// <summary>Writes a reserved contiguous record and reports its actual byte width.</summary>
