@@ -42,7 +42,28 @@ public static unsafe partial class StringSerializer
         if (LuminPackBurst.TryIsLatin1(value.AsSpan(), out bool latin1)) return latin1;
 #endif
         int length = value.Length;
-        ref ushort chars = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(value.AsSpan()));
+        return IsLatin1Range(ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(value.AsSpan())), length);
+    }
+
+    /// <summary>Checks a character span using the same bounded Latin-1 kernels as string records.</summary>
+    /// <param name="value">The complete character range.</param>
+    /// <returns>Whether every code unit fits one byte.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static bool IsLatin1(ReadOnlySpan<char> value)
+    {
+#if NETSTANDARD2_1
+        if (LuminPackBurst.TryIsLatin1(value, out bool latin1)) return latin1;
+#endif
+        return IsLatin1Range(ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(value)), value.Length);
+    }
+
+    /// <summary>Checks an existing character range without generic comparison boxing in unoptimized JIT tiers.</summary>
+    /// <param name="chars">The first character, unused for an empty range.</param>
+    /// <param name="length">The nonnegative character count.</param>
+    /// <returns>Whether the original vector and scalar kernels accept the complete range.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    private static bool IsLatin1Range(ref ushort chars, int length)
+    {
 #if NET8_0_OR_GREATER
         if (Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8)
         {

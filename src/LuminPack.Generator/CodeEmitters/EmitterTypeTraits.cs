@@ -433,6 +433,22 @@ internal static class EmitterTypeTraits
             methods.Any(method => method.Arity == 1 && Signature(method));
     }
 
+    /// <summary>Checks both complete type-name writer signatures on the referenced runtime.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>Whether binary and JSON writers accept default and compiled-profile type names.</returns>
+    internal static bool HasTypeNameWriters(Compilation compilation)
+    {
+        foreach (string name in new[] { "LuminPack.Core.LuminPackWriter", "LuminPack.Core.LuminPackJsonWriter" })
+        {
+            var methods = compilation.GetTypeByMetadataName(name)?.GetMembers("WriteTypeName").OfType<IMethodSymbol>();
+            bool Signature(IMethodSymbol method) => !method.IsStatic && method.ReturnsVoid && method.DeclaredAccessibility == Accessibility.Public &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None && method.Parameters[0].Type.SpecialType == SpecialType.System_String;
+            if (methods == null || !methods.Any(method => method.Arity == 0 && Signature(method)) ||
+                !methods.Any(method => method.Arity == 1 && Signature(method))) return false;
+        }
+        return true;
+    }
+
     /// <summary>Checks the optional grouping storage signature without adding a test to every sequence.</summary>
     /// <param name="compilation">The consuming compilation.</param>
     /// <returns>Whether the exact grouping key and element arguments are accepted.</returns>

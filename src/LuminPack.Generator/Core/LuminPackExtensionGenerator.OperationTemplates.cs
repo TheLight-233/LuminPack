@@ -148,6 +148,8 @@ public static partial class LuminPackExtensionGenerator
             field.CanWriteJsonIntegerEntry = EmitterTypeTraits.HasJsonIntegerEntryWriter(compilation, entry.TypeArguments[0], entry.TypeArguments[1]);
             field.CanReadJsonCompleteEntry = EmitterTypeTraits.HasJsonCompleteEntryReader(compilation, entry.TypeArguments[0], entry.TypeArguments[1]);
         }
+        if (type is INamedTypeSymbol { MetadataName: "Type" } runtimeType && runtimeType.ContainingNamespace.ToDisplayString() == "System")
+            field.CanWriteTypeName = EmitterTypeTraits.HasTypeNameWriters(compilation);
         if (type is INamedTypeSymbol { MetadataName: "Complex" or "Plane" } numeric && numeric.ContainingNamespace.ToDisplayString() == "System.Numerics" ||
             type is INamedTypeSymbol { MetadataName: "IGrouping`2" } grouping && grouping.ContainingNamespace.ToDisplayString() == "System.Linq")
             field.CanReadJsonStringChoice = EmitterTypeTraits.HasJsonStringChoice(compilation);

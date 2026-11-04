@@ -14,9 +14,9 @@ namespace LuminPack.Core
     [SkipLocalsInit]
 #endif
 #if NET8_0_OR_GREATER
-    public ref struct LuminPackJsonWriter
+    public ref partial struct LuminPackJsonWriter
 #else
-    public unsafe ref struct LuminPackJsonWriter
+    public unsafe ref partial struct LuminPackJsonWriter
 #endif
     {
         private Span<byte> _buffer;

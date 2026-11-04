@@ -55,6 +55,7 @@ public sealed class LuminLocalFieldData
     internal bool CanReadJsonStringChoice;
     /// <summary>Whether grouping elements can use the existing version-preserving sequence loops.</summary>
     internal bool CanGetGroupingStorage;
+    internal bool CanWriteTypeName;
     /// <summary>Whether the referenced runtime provides complete integer dictionary writes.</summary>
     internal bool CanWriteJsonIntegerEntry;
     /// <summary>Whether the runtime exposes complete string-containing entry reads.</summary>

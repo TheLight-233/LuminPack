@@ -56,6 +56,16 @@ try
         SerializerScalarStorageReuseRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-type-name-pattern"])
+    {
+        SerializerFrameworkEntryRegression.VerifyTypeNamePattern();
+        return 0;
+    }
+    if (args is ["--verify-text-wrappers"])
+    {
+        SerializerFrameworkEntryRegression.RunTextWrappers(references);
+        return 0;
+    }
     if (args is ["--verify-framework-entries"])
     {
         SerializerFrameworkEntryRegression.Run(references);
@@ -334,6 +344,7 @@ try
     SerializerMechanismRegression.Run(references);
     SerializerCodegenPerformanceRegression.Run(references);
     SerializerTimeZoneCacheRegression.Run(references);
+    SerializerFrameworkEntryRegression.RunTextWrappers(references);
     SerializerBuilderPathRegression.Run(references);
     SerializerImmutableQueueConstructionRegression.Run(references);
     SerializerImmutableListWriteRegression.RunInterfaces(references);

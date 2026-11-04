@@ -28,10 +28,18 @@ public static class TypeEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            ");
-        sb.AppendLine("            var shortName = global::System.Text.RegularExpressions.Regex.Replace(full, @\", Version=\\d+.\\d+.\\d+.\\d+, Culture=[\\w-]+, PublicKeyToken=(?:null|[a-f0-9]{16})\", \"\");");
-        sb.AppendLine("            ");
-        sb.AppendLine("            writer.WriteObjectHeader(0);");
-        sb.AppendLine("            writer.WriteStringRecord(shortName);");
+        if (data.CanWriteTypeName)
+        {
+            sb.AppendLine("            writer.WriteObjectHeader(0);");
+            sb.AppendLine("            writer.WriteTypeName(full);");
+        }
+        else
+        {
+            sb.AppendLine("            var shortName = global::System.Text.RegularExpressions.Regex.Replace(full, @\", Version=\\d+.\\d+.\\d+.\\d+, Culture=[\\w-]+, PublicKeyToken=(?:null|[a-f0-9]{16})\", \"\");");
+            sb.AppendLine("            ");
+            sb.AppendLine("            writer.WriteObjectHeader(0);");
+            sb.AppendLine("            writer.WriteStringRecord(shortName);");
+        }
         sb.AppendLine("            ");
         sb.AppendLine("            ");
     }
@@ -80,8 +88,12 @@ public static class TypeEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
-        sb.AppendLine("            var shortName = global::System.Text.RegularExpressions.Regex.Replace(full, @\", Version=\\d+.\\d+.\\d+.\\d+, Culture=[\\w-]+, PublicKeyToken=(?:null|[a-f0-9]{16})\", \"\");");
-        sb.AppendLine("            writer.WriteString(shortName);");
+        if (data.CanWriteTypeName) sb.AppendLine("            writer.WriteTypeName(full);");
+        else
+        {
+            sb.AppendLine("            var shortName = global::System.Text.RegularExpressions.Regex.Replace(full, @\", Version=\\d+.\\d+.\\d+.\\d+, Culture=[\\w-]+, PublicKeyToken=(?:null|[a-f0-9]{16})\", \"\");");
+            sb.AppendLine("            writer.WriteString(shortName);");
+        }
     }
 
     /// <summary>Appends JSON reading statements for type values.</summary>
