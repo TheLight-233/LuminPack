@@ -80,12 +80,63 @@ public partial class StringBuilderCapacityTest
 #endif
         using var buffer = new LuminBufferWriter(true);
         byte[] json = Encoding.Unicode.GetBytes(LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>(value));
+        byte[] utf8 = Encoding.UTF8.GetBytes(LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(value));
         var restored = new StringBuilder(value.ToString());
-        for (int i = 0; i < 256; i++) Exercise(value, buffer, json, ref restored);
+        for (int i = 0; i < 256; i++) Exercise(value, buffer, json, utf8, ref restored);
         long before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 256; i++) Exercise(value, buffer, json, ref restored);
+        for (int i = 0; i < 256; i++) Exercise(value, buffer, json, utf8, ref restored);
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
     }
+
+    /// <summary>Checks fresh JSON builders allocate only the object and its final character storage.</summary>
+    [Fact]
+    public void FreshJsonBuildersAvoidIntermediateStrings()
+    {
+        foreach (int length in new[] { 0, 1, 16, 257, 8192 })
+        {
+            string text = Create(length).ToString();
+            CheckFreshAllocation<LuminPackUtf8LengthOptions>(text, Encoding.UTF8);
+            CheckFreshAllocation<LuminPackUtf16LengthOptions>(text, Encoding.Unicode);
+        }
+    }
+
+    /// <summary>Compares result allocations with the established BCL string constructor after pool warmup.</summary>
+    /// <param name="text">The original character content.</param>
+    /// <param name="encoding">The JSON document encoding.</param>
+    /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+    private static void CheckFreshAllocation<TOptions>(string text, Encoding encoding) where TOptions : struct, ILuminPackOptions
+    {
+        byte[] input = encoding.GetBytes(LuminPackSerializer.SerializeJson<TOptions>(text));
+        string decoded = string.Empty;
+        LuminPackSerializer.DeserializeJson<TOptions>(input, ref decoded);
+        StringBuilder? target = null;
+        for (int i = 0; i < 64; i++)
+        {
+            GC.KeepAlive(CreateNecessaryBuilder(decoded));
+            target = null;
+            LuminPackSerializer.DeserializeJson<TOptions>(input, ref target);
+        }
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 64; i++) GC.KeepAlive(CreateNecessaryBuilder(decoded));
+        long necessary = GC.GetAllocatedBytesForCurrentThread() - before;
+        before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 64; i++)
+        {
+            target = null;
+            LuminPackSerializer.DeserializeJson<TOptions>(input, ref target);
+        }
+        Assert.Equal(necessary, GC.GetAllocatedBytesForCurrentThread() - before);
+        var expected = new StringBuilder(decoded);
+        Assert.Equal(decoded, target!.ToString());
+        Assert.Equal(expected.Capacity, target.Capacity);
+        Assert.Equal(expected.MaxCapacity, target.MaxCapacity);
+    }
+
+    /// <summary>Creates an escaping result through the original constructor without a temporary token.</summary>
+    /// <param name="text">The already prepared token text.</param>
+    /// <returns>The fresh result used as the necessary-allocation reference.</returns>
+    [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+    private static StringBuilder CreateNecessaryBuilder(string text) => new StringBuilder(text);
 
     /// <summary>Creates multiple chunks containing escapes, non-ASCII text and surrogate boundaries.</summary>
     /// <param name="length">The character count.</param>
@@ -142,12 +193,14 @@ public partial class StringBuilderCapacityTest
     /// <param name="value">The source builder.</param>
     /// <param name="buffer">The retained output.</param>
     /// <param name="json">The input document.</param>
+    /// <param name="utf8">The UTF-8 input document.</param>
     /// <param name="restored">The reused target.</param>
-    private static void Exercise(StringBuilder value, LuminBufferWriter buffer, byte[] json, ref StringBuilder restored)
+    private static void Exercise(StringBuilder value, LuminBufferWriter buffer, byte[] json, byte[] utf8, ref StringBuilder restored)
     {
         buffer.ResetCore(); LuminPackSerializer.Serialize(value, buffer);
         buffer.ResetCore(); LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(value, buffer);
         buffer.ResetCore(); LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>(value, buffer);
         LuminPackSerializer.DeserializeJson<LuminPackUtf16LengthOptions>(json, ref restored);
+        LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(utf8, ref restored);
     }
 }

@@ -3028,26 +3028,7 @@ namespace LuminPack.Core
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
         /// <returns>The parsed version, or null.</returns>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        public Version? ReadVersion<TOptions>() where TOptions : struct, ILuminPackOptions
-        {
-#if !NET10_0_OR_GREATER
-            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
-            {
-                if (CurrentTokenType == JsonTokenType.String)
-                {
-                    string decoded = ReadString<TOptions>();
-                    CompleteValue();
-                    return Version.Parse(decoded);
-                }
-                if (CurrentTokenType == JsonTokenType.Null)
-                {
-                    CompleteValue();
-                    return null;
-                }
-            }
-#endif
-            return ReadVersionValue<TOptions>();
-        }
+        public Version? ReadVersion<TOptions>() where TOptions : struct, ILuminPackOptions => ReadVersionValue<TOptions>();
 
         /// <summary>Keeps span decoding and BCL parsing state outside generated callers.</summary>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
@@ -3055,22 +3036,48 @@ namespace LuminPack.Core
         [MethodImpl(MethodImplOptions.NoInlining)]
         private Version? ReadVersionValue<TOptions>() where TOptions : struct, ILuminPackOptions
         {
-            if (CurrentTokenType == JsonTokenType.String)
-            {
-                if (default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8)
-                {
-                    var text = ReadStringUtf16<TOptions>();
-                    CompleteValue();
-                    return Version.Parse(text);
-                }
 #if NET10_0_OR_GREATER
-                var utf8 = ReadStringUtf8<TOptions>();
-                CompleteValue();
-                return Version.Parse(utf8);
+            if (CurrentTokenType == JsonTokenType.String) goto SelectedString;
 #endif
+            if (CurrentTokenType is not (JsonTokenType.String or JsonTokenType.Number or JsonTokenType.True or JsonTokenType.False or JsonTokenType.Null or JsonTokenType.PropertyName) && !Read<TOptions>())
+                LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value.");
+            if (CurrentTokenType == JsonTokenType.Null)
+            {
+                CompleteValue();
+                return null;
             }
-            string? decoded = Read<string, TOptions>();
-            return decoded is null ? null : Version.Parse(decoded);
+#if NET10_0_OR_GREATER
+            // The original unselected path decoded characters before parsing, including in its exception messages.
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+                return ParseVersionUtf8(ReadStringUtf8<TOptions>());
+        SelectedString:
+#endif
+            if (default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8)
+            {
+                var text = ReadStringUtf16<TOptions>();
+                CompleteValue();
+                return Version.Parse(text);
+            }
+            var utf8 = ReadStringUtf8<TOptions>();
+#if NET10_0_OR_GREATER
+            CompleteValue();
+            return Version.Parse(utf8);
+#else
+            return ParseVersionUtf8(utf8);
+#endif
+        }
+
+        /// <summary>Decodes characters before completing the token and calling the original character parser.</summary>
+        /// <param name="utf8">The complete unescaped token.</param>
+        /// <returns>The newly parsed version.</returns>
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private Version ParseVersionUtf8(ReadOnlySpan<byte> utf8)
+        {
+            using var buffer = new Utf8TextBuffer(utf8.Length, stackalloc char[64]);
+            var decoded = buffer.Decode(utf8);
+            CompleteValue();
+            return Version.Parse(decoded);
         }
 
         /// <summary>Reads a complete builder value with the library default profile.</summary>
@@ -3080,26 +3087,50 @@ namespace LuminPack.Core
         /// <summary>Reuses a builder after complete decoding while preserving fresh construction and failure publication.</summary>
         /// <param name="value">The reusable builder target.</param>
         /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        [SkipLocalsInit]
         [MethodImpl(MethodImplOptions.NoInlining)]
         public void ReadStringBuilder<TOptions>(ref StringBuilder? value) where TOptions : struct, ILuminPackOptions
         {
-            if (value is not null && CurrentTokenType == JsonTokenType.String && default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16)
+            if (CurrentTokenType == JsonTokenType.String) goto SelectedString;
+            if (CurrentTokenType is not (JsonTokenType.String or JsonTokenType.Number or JsonTokenType.True or JsonTokenType.False or JsonTokenType.Null or JsonTokenType.PropertyName) && !Read<TOptions>())
+                LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value.");
+            if (CurrentTokenType == JsonTokenType.Null)
+            {
+                CompleteValue();
+                value = null;
+                return;
+            }
+        SelectedString:
+            if (default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8)
             {
                 var text = ReadStringUtf16<TOptions>();
                 CompleteValue();
-                value.Clear();
-                value.Append(text);
+                PopulateStringBuilder(ref value, text);
                 return;
             }
-            string? decoded = Read<string, TOptions>();
-            if (decoded is null)
-                value = null;
-            else if (value is null)
-                value = new StringBuilder(decoded);
+            var utf8 = ReadStringUtf8<TOptions>();
+            using var buffer = new Utf8TextBuffer(utf8.Length, stackalloc char[256]);
+            var decoded = buffer.Decode(utf8);
+            CompleteValue();
+            PopulateStringBuilder(ref value, decoded);
+        }
+
+        /// <summary>Preserves the fresh string constructor's capacity and the existing clear-before-append reuse contract.</summary>
+        /// <param name="value">The target published after fresh construction or cleared before reuse.</param>
+        /// <param name="text">The completely decoded token content.</param>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static void PopulateStringBuilder(ref StringBuilder? value, ReadOnlySpan<char> text)
+        {
+            if (value is null)
+            {
+                var created = new StringBuilder(Math.Max(16, text.Length));
+                created.Append(text);
+                value = created;
+            }
             else
             {
                 value.Clear();
-                value.Append(decoded);
+                value.Append(text);
             }
         }
 

@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Globalization;
 using System.Text;
 using LuminPack;
+using LuminPack.Core;
 using LuminPack.Option;
 using LuminPack.Utility;
 using Xunit;
@@ -76,9 +77,40 @@ public partial class JsonFormattedScalarTest
         for (int i = 0; i < 256; i++) GC.KeepAlive(Version.Parse("1.2.3.4"));
         long expected = GC.GetAllocatedBytesForCurrentThread() - before;
         CheckVersionReadAllocation<LuminPackUtf16LengthOptions>(Encoding.Unicode.GetBytes("\"1.2.3.4\""), expected);
-#if NET10_0_OR_GREATER
         CheckVersionReadAllocation<LuminPackUtf8LengthOptions>(Encoding.UTF8.GetBytes("\"1.2.3.4\""), expected);
-#endif
+    }
+
+    /// <summary>Checks unselected UTF-8 reads avoid token strings for bounded and pooled decoder storage.</summary>
+    [Fact]
+    public void DirectVersionReadsAvoidIntermediateStrings()
+    {
+        foreach (string text in new[] { "1.2.3.4", new string('0', 257) + "1.2.3.4" })
+        {
+            byte[] input = Encoding.UTF8.GetBytes("\"" + text + "\"");
+            var state = new LuminPackReaderOptionalState();
+            for (int i = 0; i < 64; i++) { GC.KeepAlive(Version.Parse(text)); GC.KeepAlive(ReadVersionDirect(input, state)); }
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 64; i++) GC.KeepAlive(Version.Parse(text));
+            long necessary = GC.GetAllocatedBytesForCurrentThread() - before;
+            before = GC.GetAllocatedBytesForCurrentThread();
+            for (int i = 0; i < 64; i++) GC.KeepAlive(ReadVersionDirect(input, state));
+            Assert.Equal(necessary, GC.GetAllocatedBytesForCurrentThread() - before);
+            Assert.Equal(new Version(1, 2, 3, 4), ReadVersionDirect(input, state));
+        }
+    }
+
+    /// <summary>Parses a complete unselected token while keeping portable input pinned.</summary>
+    /// <param name="input">The UTF-8 document.</param>
+    /// <param name="state">The reusable reader state.</param>
+    /// <returns>The newly parsed result.</returns>
+    private static unsafe Version? ReadVersionDirect(byte[] input, LuminPackReaderOptionalState state)
+    {
+        fixed (byte* pointer = input)
+        {
+            ReadOnlySpan<byte> data = new ReadOnlySpan<byte>(pointer, input.Length);
+            var reader = new LuminPackJsonReader(ref data, state);
+            return reader.ReadVersion<LuminPackUtf8LengthOptions>();
+        }
     }
 
     /// <summary>Provides null, omitted and maximum component forms.</summary>
