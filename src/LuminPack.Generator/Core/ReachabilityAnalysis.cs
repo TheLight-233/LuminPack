@@ -552,6 +552,8 @@ internal static class ReachabilityAnalysisCache
                 {
                     ExpandType(compilation, argument, types, analysis);
                 }
+                foreach (var sequence in LuminPackExtensionGenerator.EnumerateLinqSequenceViews(named))
+                    ExpandType(compilation, sequence, types, analysis);
 
                 if (analysis.IsPackable(named))
                 {

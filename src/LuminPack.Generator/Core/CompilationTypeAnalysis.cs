@@ -556,6 +556,8 @@ internal static class CompilationTypeAnalysisCache
                 {
                     AddTypeGraph(argument, types);
                 }
+                foreach (var sequence in LuminPackExtensionGenerator.EnumerateLinqSequenceViews(named))
+                    AddTypeGraph(sequence, types);
                 break;
         }
     }

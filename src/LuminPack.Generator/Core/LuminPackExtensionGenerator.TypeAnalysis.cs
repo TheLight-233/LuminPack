@@ -55,17 +55,11 @@ public static partial class LuminPackExtensionGenerator
             // These LINQ formatters serialize through concrete interface views which may
             // never appear explicitly in user syntax. Keep their exact closed helper types
             // in the formatter dependency graph so nested calls can bind statically.
-            string definitionName = named.OriginalDefinition.ToDisplayString();
-            if (definitionName == "System.Linq.ILookup<TKey, TElement>" ||
-                definitionName == "System.Linq.IGrouping<TKey, TElement>")
+            foreach (INamedTypeSymbol enumerable in EnumerateLinqSequenceViews(named))
             {
-                foreach (INamedTypeSymbol enumerable in named.AllInterfaces.Where(static candidate =>
-                    candidate.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T))
+                foreach (LuminLocalFieldData dependency in EnumerateFormatterFields(enumerable, visited))
                 {
-                    foreach (LuminLocalFieldData dependency in EnumerateFormatterFields(enumerable, visited))
-                    {
-                        yield return dependency;
-                    }
+                    yield return dependency;
                 }
             }
         }
@@ -77,6 +71,17 @@ public static partial class LuminPackExtensionGenerator
             Name = "value",
             IsValue = type.IsValueType
         };
+    }
+
+    /// <summary>Enumerates closed sequence views used implicitly by the LINQ grouping and lookup formatters.</summary>
+    /// <param name="type">The formatter type being expanded.</param>
+    /// <returns>The enumerable interfaces whose static operations must remain reachable.</returns>
+    internal static IEnumerable<INamedTypeSymbol> EnumerateLinqSequenceViews(INamedTypeSymbol type)
+    {
+        if (type.MetadataName is "ILookup`2" or "IGrouping`2" && type.ContainingNamespace.ToDisplayString() == "System.Linq")
+            foreach (var candidate in type.AllInterfaces)
+                if (candidate.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
+                    yield return candidate;
     }
 
     /// <summary>Determines whether the metadata contains type parameter.</summary>

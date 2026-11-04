@@ -96,6 +96,11 @@ try
         SerializerImmutableListWriteRegression.RunSetFamilies(references);
         return 0;
     }
+    if (args is ["--verify-linq-dependencies"])
+    {
+        SerializerImmutableListWriteRegression.RunLinqDependencies(references);
+        return 0;
+    }
     if (args is ["--verify-sequence-families"])
     {
         SerializerImmutableListWriteRegression.RunSequenceFamilies(references);
