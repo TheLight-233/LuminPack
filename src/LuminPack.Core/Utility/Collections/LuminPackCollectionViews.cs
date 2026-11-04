@@ -669,6 +669,73 @@ public static partial class LuminPackCollectionAccess
         return nodes.Length >= count;
     }
 
+    /// <summary>Captures a checked heap traversal with the public enumerator's mutation version.</summary>
+    /// <typeparam name="TElement">The element type.</typeparam>
+    /// <typeparam name="TPriority">The priority type.</typeparam>
+    /// <param name="queue">The non-null priority queue.</param>
+    /// <param name="nodes">The complete active node range, or an empty span when unavailable.</param>
+    /// <param name="version">The version to check before each pair and after the last pair.</param>
+    /// <returns>Whether generated code can retain public enumeration without creating the unordered-items view.</returns>
+    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+    public static bool TryGetPriorityQueueTraversal<TElement, TPriority>(global::System.Collections.Generic.PriorityQueue<TElement, TPriority> queue,
+        out global::System.ReadOnlySpan<(TElement Element, TPriority Priority)> nodes, out int version)
+    {
+        nodes = default;
+        version = 0;
+        if (!PriorityQueueTraversal.Available || !TryGetPriorityQueueNodes(queue, out var storage, out int count)) return false;
+        nodes = new global::System.ReadOnlySpan<(TElement, TPriority)>(storage, 0, count);
+        version = LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.PriorityQueueVersion);
+        return true;
+    }
+
+    /// <summary>Checks the version captured by a successful priority-queue traversal probe.</summary>
+    /// <typeparam name="TElement">The element type.</typeparam>
+    /// <typeparam name="TPriority">The priority type.</typeparam>
+    /// <param name="queue">The same queue passed to the traversal probe.</param>
+    /// <param name="version">The captured mutation version.</param>
+    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+    [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.AggressiveInlining)]
+    public static void CheckPriorityQueueTraversalVersion<TElement, TPriority>(global::System.Collections.Generic.PriorityQueue<TElement, TPriority> queue, int version)
+    {
+        if (LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.PriorityQueueVersion) != version)
+            LuminPackExceptionHelper.ThrowCollectionModifiedDuringSerialization();
+    }
+
+    /// <summary>Validates the optional version slot separately from the established binary node access.</summary>
+    private static class PriorityQueueTraversal
+    {
+        internal static readonly bool Available = Check();
+
+        /// <summary>Verifies public mutations against both representative generic layouts.</summary>
+        /// <returns>Whether the located version tracks the public queue operations.</returns>
+        private static bool Check()
+        {
+            try { return LuminCollectionLayouts.PriorityQueueVersion >= 0 && Check<int, int>() && Check<object, object>(); }
+            catch { return false; }
+        }
+
+        /// <summary>Checks version changes and stable capacity queries on one queue instantiation.</summary>
+        /// <typeparam name="TElement">The probe element type.</typeparam>
+        /// <typeparam name="TPriority">The probe priority type.</typeparam>
+        /// <returns>Whether the slot matches the public enumerator's mutation points.</returns>
+        private static bool Check<TElement, TPriority>()
+        {
+            var queue = new global::System.Collections.Generic.PriorityQueue<TElement, TPriority>();
+            ref int version = ref LuminFieldLayout.Field<int>(queue, LuminCollectionLayouts.PriorityQueueVersion);
+            int before = version;
+            queue.Enqueue(default!, default!);
+            if (version == before) return false;
+            before = version;
+            queue.EnsureCapacity(0);
+            if (version != before) return false;
+            queue.Dequeue();
+            if (version == before) return false;
+            before = version;
+            queue.Clear();
+            return version != before;
+        }
+    }
+
     /// <summary>Holds the one-time check of priority-queue storage.</summary>
     private static class PriorityQueueStorage
     {

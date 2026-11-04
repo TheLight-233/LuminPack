@@ -120,7 +120,7 @@ public static class PriorityQueueEmitter
         sb.AppendLine("                    reader.ReadValue(ref priority);");
         sb.AppendLine("                    nodes[i] = (element, priority);");
         sb.AppendLine("                }");
-        sb.AppendLine($"                var source = new global::System.ArraySegment<{node}>(nodes, 0, length);");
+        sb.AppendLine($"                global::System.Collections.Generic.IEnumerable<{node}> source = " + CollectionEmitterKit.CopyingFactorySource(node, "nodes", "length") + ";");
         sb.AppendLine("                if (value is null)");
         sb.AppendLine($"                    value = new global::System.Collections.Generic.PriorityQueue<{elementType}, {priorityType}>(source);");
         sb.AppendLine("                else");
@@ -148,16 +148,39 @@ public static class PriorityQueueEmitter
         sb.AppendLine("                writer.WriteArrayEnd();");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        sb.AppendLine("            foreach (var item in value.UnorderedItems)");
+        if (fieldData.CanTraversePriorityQueue)
+        {
+            sb.AppendLine("            if (global::LuminPack.Code.LuminPackCollectionAccess.TryGetPriorityQueueTraversal(value, out var nodes, out int version))");
+            sb.AppendLine("            {");
+            sb.AppendLine("                for (int i = 0; i < nodes.Length; i++)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    global::LuminPack.Code.LuminPackCollectionAccess.CheckPriorityQueueTraversalVersion(value, version);");
+            sb.AppendLine("                    var item = nodes[i];");
+            AppendJsonPair(sb);
+            sb.AppendLine("                }");
+            sb.AppendLine("                global::LuminPack.Code.LuminPackCollectionAccess.CheckPriorityQueueTraversalVersion(value, version);");
+            sb.AppendLine("            }");
+            sb.AppendLine("            else");
+        }
         sb.AppendLine("            {");
-        sb.AppendLine("                writer.WriteArrayStart();");
-        sb.AppendLine("                var element = item.Element;");
-        sb.AppendLine("                writer.WriteValue(in element);");
-        sb.AppendLine("                var priority = item.Priority;");
-        sb.AppendLine("                writer.WriteValue(in priority);");
-        sb.AppendLine("                writer.WriteArrayEnd();");
+        sb.AppendLine("                foreach (var item in value.UnorderedItems)");
+        sb.AppendLine("                {");
+        AppendJsonPair(sb);
+        sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.WriteArrayEnd();");
+    }
+
+    /// <summary>Writes the captured public pair, keeping both values stable across element callbacks.</summary>
+    /// <param name="sb">The generated JSON statements.</param>
+    private static void AppendJsonPair(StringBuilder sb)
+    {
+        sb.AppendLine("                    writer.WriteArrayStart();");
+        sb.AppendLine("                    var element = item.Element;");
+        sb.AppendLine("                    writer.WriteValue(in element);");
+        sb.AppendLine("                    var priority = item.Priority;");
+        sb.AppendLine("                    writer.WriteValue(in priority);");
+        sb.AppendLine("                    writer.WriteArrayEnd();");
     }
 
     /// <summary>Appends JSON reading statements for priority queue values.</summary>

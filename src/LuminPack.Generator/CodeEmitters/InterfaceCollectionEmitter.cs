@@ -1,4 +1,5 @@
 using System.Text;
+using System.Linq;
 using LuminPack.Code;
 using Microsoft.CodeAnalysis;
 
@@ -160,9 +161,6 @@ public static class InterfaceLookupEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        var keyType = GetFirstGeneric(fieldData.TypeName);
-        var elementType = GetSecondGeneric(fieldData.TypeName);
-
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -178,13 +176,7 @@ public static class InterfaceLookupEmitter
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("            foreach (var item in value)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                writer.CheckBuffer();");
-        sb.AppendLine("                writer.WriteValue(item.Key);");
-        sb.AppendLine($"                global::System.Collections.Generic.IEnumerable<{elementType}> elements = item;");
-        sb.AppendLine("                writer.WriteValue(in elements);");
-        sb.AppendLine("            }");
+        AppendTraversal(fieldData, sb, json: false);
         sb.AppendLine("            writer.CheckBuffer();");
     }
 
@@ -231,8 +223,6 @@ public static class InterfaceLookupEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        var keyType = GetFirstGeneric(fieldData.TypeName);
-        var elementType = GetSecondGeneric(fieldData.TypeName);
         sb.AppendLine("            if (value == null)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.WriteNull();");
@@ -244,11 +234,7 @@ public static class InterfaceLookupEmitter
         sb.AppendLine("                writer.WriteArrayEnd();");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        sb.AppendLine("            foreach (var item in value)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                global::System.Linq.IGrouping<" + keyType + ", " + elementType + "> grouping = item;");
-        sb.AppendLine("                writer.WriteValue(in grouping);");
-        sb.AppendLine("            }");
+        AppendTraversal(fieldData, sb, json: true);
         sb.AppendLine("            writer.WriteArrayEnd();");
     }
 
@@ -278,6 +264,58 @@ public static class InterfaceLookupEmitter
         sb.AppendLine("            }");
         sb.AppendLine("            value = new global::LuminPack.Utility.LuminPackLookup<" + keyType + ", " + elementType + ">(dict);");
     }
+    /// <summary>Traverses sealed runtime lookups without boxing while preserving arbitrary lookup enumeration.</summary>
+    /// <param name="field">The lookup shape and referenced runtime capabilities.</param>
+    /// <param name="sb">The operation receiving generated statements.</param>
+    /// <param name="json">Whether to retain grouping object envelopes instead of binary key/sequence pairs.</param>
+    private static void AppendTraversal(LuminLocalFieldData field, StringBuilder sb, bool json)
+    {
+        string key = GetFirstGeneric(field.TypeName);
+        string element = GetSecondGeneric(field.TypeName);
+        void Item()
+        {
+            if (json)
+            {
+                sb.AppendLine("                global::System.Linq.IGrouping<" + key + ", " + element + "> grouping = item;");
+                sb.AppendLine("                writer.WriteValue(in grouping);");
+            }
+            else
+            {
+                sb.AppendLine("                writer.CheckBuffer();");
+                sb.AppendLine("                if (item is null) _ = item.Key;");
+                sb.AppendLine("                global::System.Linq.IGrouping<" + key + ", " + element + "> grouping = item;");
+                sb.AppendLine("                writer.WriteValue(in grouping);");
+            }
+        }
+        if (field.CanEnumerateLookupEntries)
+        {
+            string owned = "global::LuminPack.Utility.LuminPackLookup<" + key + ", " + element + ">";
+            sb.AppendLine("            if (value is " + owned + " lookup) WriteLookupEntries(ref writer, lookup);");
+            sb.AppendLine("            else");
+        }
+        sb.AppendLine("            {");
+        sb.AppendLine("                foreach (var item in value)");
+        sb.AppendLine("                {");
+        Item();
+        sb.AppendLine("                }");
+        sb.AppendLine("            }");
+        if (field.CanEnumerateLookupEntries)
+        {
+            string owned = "global::LuminPack.Utility.LuminPackLookup<" + key + ", " + element + ">";
+            string writer = "global::LuminPack.Core." + (json ? "LuminPackJsonWriter" : "LuminPackWriter");
+            sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+            sb.AppendLine("            static void WriteLookupEntries(ref " + writer + " writer, " + owned + " source)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                using (var entries = source.GetEntryEnumerator())");
+            sb.AppendLine("                while (entries.MoveNext())");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    var item = entries.Current.Value;");
+            Item();
+            sb.AppendLine("                }");
+            sb.AppendLine("            }");
+        }
+    }
+
 }
 
 /// <summary>Provides interface grouping emitter functionality.</summary>
@@ -303,8 +341,7 @@ public static class InterfaceGroupingEmitter
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteValue(value.Key);");
-        sb.AppendLine($"            global::System.Collections.Generic.IEnumerable<{elementType}> elements = value;");
-        sb.AppendLine("            writer.WriteValue(in elements);");
+        AppendElements(fieldData, sb, json: false);
     }
 
     /// <summary>Appends binary reading statements for interface grouping values.</summary>
@@ -376,9 +413,52 @@ public static class InterfaceGroupingEmitter
         sb.AppendLine("            var key = value.Key;");
         sb.AppendLine("            writer.WriteValue(in key);");
         sb.AppendLine("            writer.WritePropertyName(\"Elements\");");
-        sb.AppendLine("            global::System.Collections.Generic.IEnumerable<" + elementType + "> elements = value;");
-        sb.AppendLine("            writer.WriteValue(in elements);");
+        AppendElements(fieldData, sb, json: true);
         sb.AppendLine("            writer.WriteObjectEnd();");
+    }
+
+    /// <summary>Reuses scalar sequence loops without exposing mutable list spans or changing the grouping's wire contract.</summary>
+    /// <param name="field">The grouping type and optional runtime capabilities.</param>
+    /// <param name="sb">The generated statements.</param>
+    /// <param name="json">Whether to frame the sequence as a JSON array.</param>
+    private static void AppendElements(LuminLocalFieldData field, StringBuilder sb, bool json)
+    {
+        string element = GetSecondGeneric(field.TypeName);
+        if (!field.CanGetGroupingStorage)
+        {
+            sb.AppendLine("            global::System.Collections.Generic.IEnumerable<" + element + "> elements = value;");
+            sb.AppendLine("            writer.WriteValue(in elements);");
+            return;
+        }
+        if (json)
+        {
+            string owned = "global::LuminPack.Utility.LuminPackGrouping<" + GetFirstGeneric(field.TypeName) + ", " + element + ">";
+            sb.AppendLine("            if (value is " + owned + " knownGroup)");
+            sb.AppendLine("            {");
+            sb.AppendLine("                WriteGroupingElements(ref writer, knownGroup);");
+            sb.AppendLine("            }");
+            sb.AppendLine("            else");
+            sb.AppendLine("            {");
+            sb.AppendLine("                global::System.Collections.Generic.IEnumerable<" + element + "> elements = value;");
+            sb.AppendLine("                writer.WriteValue(in elements);");
+            sb.AppendLine("            }");
+            sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+            sb.AppendLine("            static void WriteGroupingElements(ref global::LuminPack.Core.LuminPackJsonWriter writer, " + owned + " value)");
+            sb.AppendLine("            {");
+        }
+        var sequence = new LuminLocalFieldData
+        {
+            TypeName = "global::System.Collections.Generic.IEnumerable<" + element + ">",
+            TypeSymbol = ((INamedTypeSymbol)field.TypeSymbol).AllInterfaces.First(type =>
+                type.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T),
+            CanGetSequenceStorage = true,
+            CanWriteJsonEnumerationElement = field.CanWriteJsonEnumerationElement
+        };
+        if (json) sb.AppendLine("            writer.WriteArrayStart();");
+        SequenceInterfaceWriteEmitter.Append(sequence, sb, json, storageExpression:
+            "global::LuminPack.Code.LuminPackCollectionAccess.GetGroupingStorage(value)");
+        if (json) sb.AppendLine("            writer.WriteArrayEnd();");
+        if (json) sb.AppendLine("            }");
     }
 
     /// <summary>Appends JSON reading statements for interface grouping values.</summary>
@@ -402,11 +482,11 @@ public static class InterfaceGroupingEmitter
         sb.AppendLine("                    break;");
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.String)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    string propertyName = reader.ReadString();");
+        JsonPropertyChoiceEmitter.Append(fieldData, sb, "Key", "Elements");
         sb.AppendLine("                    reader.Read();");
-        sb.AppendLine("                    if (propertyName == \"Key\")");
+        sb.AppendLine("                    if (propertyChoice == 1)");
         sb.AppendLine("                        reader.ReadValue(ref key);");
-        sb.AppendLine("                    else if (propertyName == \"Elements\")");
+        sb.AppendLine("                    else if (propertyChoice == 2)");
         sb.AppendLine("                        reader.ReadValue(ref elements);");
         sb.AppendLine("                    else");
         sb.AppendLine("                        reader.Skip();");

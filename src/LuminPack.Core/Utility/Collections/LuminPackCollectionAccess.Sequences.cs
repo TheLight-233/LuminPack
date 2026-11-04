@@ -35,6 +35,17 @@ public static partial class LuminPackCollectionAccess
         return null;
     }
 
+    /// <summary>Finds existing list or array storage only for the sealed runtime grouping, preserving arbitrary group enumeration.</summary>
+    /// <typeparam name="TKey">The grouping key type.</typeparam>
+    /// <typeparam name="TElement">The grouping element type.</typeparam>
+    /// <param name="source">The original non-null grouping.</param>
+    /// <returns>The exact list or array used by public enumeration, or null when it cannot be selected safely.</returns>
+    [EditorBrowsable(EditorBrowsableState.Never)]
+    [MethodImpl(MethodImplOptions.NoInlining)]
+    public static object? GetGroupingStorage<TKey, TElement>(IGrouping<TKey, TElement> source)
+        => source is global::LuminPack.Utility.LuminPackGrouping<TKey, TElement> grouping
+            ? GetSequenceStorage(grouping.Elements) : null;
+
     /// <summary>Appends without constructing unobserved event payloads, retaining the public operation whenever callbacks can run.</summary>
     /// <typeparam name="T">The appended element type.</typeparam>
     /// <param name="collection">The existing observable result.</param>

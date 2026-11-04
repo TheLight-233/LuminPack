@@ -29,6 +29,8 @@ public sealed class LuminLocalFieldData
     internal bool CanReadJsonStringBuilder;
     /// <summary>Whether the referenced runtime exposes the existing priority-queue heap access helper.</summary>
     internal bool CanAccessPriorityQueueNodes;
+    /// <summary>Whether the referenced runtime exposes version-preserving priority-queue traversal.</summary>
+    internal bool CanTraversePriorityQueue;
     /// <summary>Whether the closed small raw element and referenced runtime permit grouped dense hash-set stores.</summary>
     internal bool CanGroupSmallHashSetWrites;
     /// <summary>Whether a closed framework comparison contract can use the runtime's fresh sorted-set builder.</summary>
@@ -47,6 +49,12 @@ public sealed class LuminLocalFieldData
     internal bool CanGetSequenceStorage;
     /// <summary>Whether observable appends can avoid unobserved notification payloads.</summary>
     internal bool CanAppendObservable;
+    /// <summary>Whether the referenced runtime exposes the lookup's unboxed dictionary enumerator.</summary>
+    internal bool CanEnumerateLookupEntries;
+    /// <summary>Whether JSON property names can be matched without constructing a string.</summary>
+    internal bool CanReadJsonStringChoice;
+    /// <summary>Whether grouping elements can use the existing version-preserving sequence loops.</summary>
+    internal bool CanGetGroupingStorage;
     /// <summary>Whether the referenced runtime provides complete integer dictionary writes.</summary>
     internal bool CanWriteJsonIntegerEntry;
     /// <summary>Whether the runtime exposes complete string-containing entry reads.</summary>

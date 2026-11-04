@@ -31,7 +31,7 @@ public static class ConcurrentQueueEmitter
         sb.AppendLine("            {");
         CollectionEmitterKit.AppendPooledRead(sb, element, elementType, new[]
         {
-            "value = new global::System.Collections.Concurrent.ConcurrentQueue<" + elementType + ">(new global::System.ArraySegment<" + elementType + ">(__pooled, 0, length));"
+            "value = new global::System.Collections.Concurrent.ConcurrentQueue<" + elementType + ">(" + CollectionEmitterKit.CopyingFactorySource(elementType, "__pooled", "length") + ");"
         }, "                ", scalarElements: true);
         sb.AppendLine("                return;");
         sb.AppendLine("            }");

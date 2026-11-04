@@ -417,6 +417,50 @@ internal static class EmitterTypeTraits
                 method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
                 IsSequenceParameter(method.Parameters[0].Type, "System.Collections.Generic", "IEnumerable`1", method.TypeParameters[0])) == true;
 
+    /// <summary>Checks the two allocation-free string choice overloads on the referenced reader.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>Whether both default and compiled-profile signatures are public.</returns>
+    internal static bool HasJsonStringChoice(Compilation compilation)
+    {
+        var methods = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonReader")?.GetMembers("ReadStringChoice").OfType<IMethodSymbol>();
+        bool Signature(IMethodSymbol method) => !method.IsStatic && method.DeclaredAccessibility == Accessibility.Public &&
+            method.ReturnType.SpecialType == SpecialType.System_Int32 && method.Parameters.Length == 4 &&
+            method.Parameters.Select((parameter, index) => parameter.RefKind == RefKind.None &&
+                parameter.Type is INamedTypeSymbol { MetadataName: "ReadOnlySpan`1", TypeArguments.Length: 1 } span &&
+                span.ContainingNamespace.ToDisplayString() == "System" &&
+                span.TypeArguments[0].SpecialType == (index % 2 == 0 ? SpecialType.System_Byte : SpecialType.System_Char)).All(match => match);
+        return methods != null && methods.Any(method => method.Arity == 0 && Signature(method)) &&
+            methods.Any(method => method.Arity == 1 && Signature(method));
+    }
+
+    /// <summary>Checks the optional grouping storage signature without adding a test to every sequence.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>Whether the exact grouping key and element arguments are accepted.</returns>
+    internal static bool HasGroupingStorage(Compilation compilation)
+        => compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess")?.GetMembers("GetGroupingStorage").OfType<IMethodSymbol>().Any(method =>
+            method.IsStatic && method.Arity == 2 && method.DeclaredAccessibility == Accessibility.Public && method.ReturnType.SpecialType == SpecialType.System_Object &&
+            method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+            method.Parameters[0].Type is INamedTypeSymbol { MetadataName: "IGrouping`2", TypeArguments.Length: 2 } group &&
+            group.ContainingNamespace.ToDisplayString() == "System.Linq" &&
+            SymbolEqualityComparer.Default.Equals(group.TypeArguments[0], method.TypeParameters[0]) &&
+            SymbolEqualityComparer.Default.Equals(group.TypeArguments[1], method.TypeParameters[1])) == true;
+
+    /// <summary>Checks the sealed lookup's complete unboxed enumeration signature.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>Whether generated code can traverse entries without allocating a values view or boxing.</returns>
+    internal static bool HasLookupEntryEnumerator(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Utility.LuminPackLookup`2");
+        var dictionary = compilation.GetTypeByMetadataName("System.Collections.Generic.Dictionary`2");
+        var grouping = compilation.GetTypeByMetadataName("System.Linq.IGrouping`2");
+        if (owner == null || dictionary == null || grouping == null) return false;
+        var closed = dictionary.Construct(owner.TypeParameters[0], grouping.Construct(owner.TypeParameters[0], owner.TypeParameters[1]));
+        var enumerator = closed.GetTypeMembers("Enumerator").SingleOrDefault();
+        return owner.GetMembers("GetEntryEnumerator").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.Arity == 0 &&
+            method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 0 &&
+            SymbolEqualityComparer.Default.Equals(method.ReturnType, enumerator));
+    }
+
     /// <summary>Checks the optional observable append API without depending on target-framework symbols.</summary>
     /// <param name="compilation">The consuming compilation.</param>
     /// <returns>Whether the operation accepts the exact observable and element types.</returns>
@@ -437,6 +481,31 @@ internal static class EmitterTypeTraits
     private static bool IsSequenceParameter(ITypeSymbol type, string space, string name, ITypeParameterSymbol element)
         => type is INamedTypeSymbol { TypeArguments.Length: 1 } named && named.MetadataName == name &&
             named.ContainingNamespace.ToDisplayString() == space && SymbolEqualityComparer.Default.Equals(named.TypeArguments[0], element);
+
+    /// <summary>Checks both operations needed for version-preserving priority-queue traversal.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>Whether the complete queue, tuple span and mutation version signatures are available.</returns>
+    internal static bool HasPriorityQueueTraversal(Compilation compilation)
+    {
+        var owner = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess");
+        bool Common(IMethodSymbol method) => method.IsStatic && method.Arity == 2 && method.DeclaredAccessibility == Accessibility.Public &&
+            method.Parameters[0].RefKind == RefKind.None &&
+            method.Parameters[0].Type is INamedTypeSymbol { MetadataName: "PriorityQueue`2", TypeArguments.Length: 2 } queue &&
+            queue.ContainingNamespace.ToDisplayString() == "System.Collections.Generic" &&
+            SymbolEqualityComparer.Default.Equals(queue.TypeArguments[0], method.TypeParameters[0]) &&
+            SymbolEqualityComparer.Default.Equals(queue.TypeArguments[1], method.TypeParameters[1]);
+        return owner?.GetMembers("TryGetPriorityQueueTraversal").OfType<IMethodSymbol>().Any(method => method.Parameters.Length == 3 && Common(method) &&
+            method.ReturnType.SpecialType == SpecialType.System_Boolean && method.Parameters[1].RefKind == RefKind.Out &&
+            method.Parameters[1].Type is INamedTypeSymbol { MetadataName: "ReadOnlySpan`1", TypeArguments.Length: 1 } span &&
+            span.ContainingNamespace.ToDisplayString() == "System" &&
+            span.TypeArguments[0] is INamedTypeSymbol { MetadataName: "ValueTuple`2", TypeArguments.Length: 2 } pair &&
+            pair.ContainingNamespace.ToDisplayString() == "System" &&
+            SymbolEqualityComparer.Default.Equals(pair.TypeArguments[0], method.TypeParameters[0]) &&
+            SymbolEqualityComparer.Default.Equals(pair.TypeArguments[1], method.TypeParameters[1]) &&
+            method.Parameters[2].RefKind == RefKind.Out && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32) == true &&
+            owner.GetMembers("CheckPriorityQueueTraversalVersion").OfType<IMethodSymbol>().Any(method => method.Parameters.Length == 2 && Common(method) &&
+                method.ReturnsVoid && method.Parameters[1].RefKind == RefKind.None && method.Parameters[1].Type.SpecialType == SpecialType.System_Int32);
+    }
 
     /// <summary>Checks the optional version-preserving sorted-list traversal API on the referenced runtime.</summary>
     /// <param name="compilation">The compilation supplying the actual runtime signatures.</param>

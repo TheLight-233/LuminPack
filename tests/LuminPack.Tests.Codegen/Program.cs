@@ -96,6 +96,11 @@ try
         SerializerImmutableListWriteRegression.RunSetFamilies(references);
         return 0;
     }
+    if (args is ["--verify-remaining-collections"])
+    {
+        SerializerImmutableListWriteRegression.RunRemainingCollections(references);
+        return 0;
+    }
     if (args is ["--verify-priority-json"])
     {
         SerializerImmutableListWriteRegression.RunPriorityJson(references);

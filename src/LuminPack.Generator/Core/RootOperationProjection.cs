@@ -163,6 +163,7 @@ internal sealed class RootOperationProjection : CSharpSyntaxRewriter
                     implementation.ParameterList.Parameters.Replace(payloadParameter, payloadParameter.WithModifiers(default))));
             }
             implementation = RootStateLocalization.Apply(implementation);
+            implementation = RootInliningPolicy.Apply(implementation);
             members.Add(name == "RootRead" ? IsolatePairElements(IsolateCompoundStrings(implementation)) : implementation);
         }
         return node.WithMembers(SyntaxFactory.List(members));

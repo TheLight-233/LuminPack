@@ -121,6 +121,8 @@ public static class LuminCollectionLayouts
     public static readonly int PriorityQueueNodes = s_priorityQueue[0];
     /// <summary>Gets the offset of the size of <c>PriorityQueue&lt;TElement, TPriority&gt;</c>.</summary>
     public static readonly int PriorityQueueSize = s_priorityQueue[1];
+    /// <summary>Gets the separately probed mutation version, or an unavailable marker.</summary>
+    public static readonly int PriorityQueueVersion = Family(typeof(PriorityQueue<int, int>), typeof(PriorityQueue<object, object>), Unknown(1), "_version")[0];
 
 #endif
     // BitArray

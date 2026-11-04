@@ -44,7 +44,9 @@ public static partial class ListEmitter
         else
         {
             sb.AppendLine("            bool isFirst = true;");
-            sb.AppendLine("            foreach (var item in value)");
+            // ConcurrentBag's public enumerator owns this same snapshot, plus an array enumerator object.
+            sb.AppendLine(baseType == "global::System.Collections.Concurrent.ConcurrentBag"
+                ? "            foreach (var item in value.ToArray())" : "            foreach (var item in value)");
             sb.AppendLine("            {");
             JsonCollectionElementEmitter.Append(fieldData, sb, "item", "                ");
             sb.AppendLine("            }");

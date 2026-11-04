@@ -22,6 +22,9 @@ public sealed class LuminPackGrouping<TKey, TElement> : IGrouping<TKey, TElement
     /// <summary>Gets the key.</summary>
     public TKey Key => key;
 
+    /// <summary>Gets the same sequence used by the public enumerator.</summary>
+    internal IEnumerable<TElement> Elements => elements;
+
     /// <summary>Creates an enumerator over the entries in this collection.</summary>
     /// <returns>The result of the operation.</returns>
     public IEnumerator<TElement> GetEnumerator() => elements.GetEnumerator();
@@ -57,6 +60,11 @@ public sealed class LuminPackLookup<TKey, TElement> : ILookup<TKey, TElement>
     /// <param name="key">The key used to identify the entry.</param>
     /// <returns>Whether the requested condition or operation succeeded.</returns>
     public bool Contains(TKey key) => groupings.ContainsKey(key);
+
+    /// <summary>Creates an unboxed entry enumerator for generated traversal without allocating a values view.</summary>
+    /// <returns>The dictionary enumerator whose values are the lookup's groups in enumeration order.</returns>
+    [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+    public Dictionary<TKey, IGrouping<TKey, TElement>>.Enumerator GetEntryEnumerator() => groupings.GetEnumerator();
 
     /// <summary>Creates an enumerator over the entries in this collection.</summary>
     /// <returns>The result of the operation.</returns>

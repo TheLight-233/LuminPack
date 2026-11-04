@@ -148,6 +148,16 @@ public static partial class LuminPackExtensionGenerator
             field.CanWriteJsonIntegerEntry = EmitterTypeTraits.HasJsonIntegerEntryWriter(compilation, entry.TypeArguments[0], entry.TypeArguments[1]);
             field.CanReadJsonCompleteEntry = EmitterTypeTraits.HasJsonCompleteEntryReader(compilation, entry.TypeArguments[0], entry.TypeArguments[1]);
         }
+        if (type is INamedTypeSymbol { MetadataName: "Complex" or "Plane" } numeric && numeric.ContainingNamespace.ToDisplayString() == "System.Numerics" ||
+            type is INamedTypeSymbol { MetadataName: "IGrouping`2" } grouping && grouping.ContainingNamespace.ToDisplayString() == "System.Linq")
+            field.CanReadJsonStringChoice = EmitterTypeTraits.HasJsonStringChoice(compilation);
+        if (type is INamedTypeSymbol { MetadataName: "ILookup`2" } lookup && lookup.ContainingNamespace.ToDisplayString() == "System.Linq")
+            field.CanEnumerateLookupEntries = EmitterTypeTraits.HasLookupEntryEnumerator(compilation);
+        if (type is INamedTypeSymbol { MetadataName: "IGrouping`2", TypeArguments.Length: 2 } group && group.ContainingNamespace.ToDisplayString() == "System.Linq")
+        {
+            field.CanGetGroupingStorage = EmitterTypeTraits.HasGroupingStorage(compilation);
+            field.CanWriteJsonEnumerationElement = EmitterTypeTraits.HasJsonEnumerationWriter(compilation, group.TypeArguments[1]);
+        }
         if (type is INamedTypeSymbol { MetadataName: "SortedList`2", TypeArguments.Length: 2 } sortedList &&
             sortedList.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
         {
@@ -159,8 +169,11 @@ public static partial class LuminPackExtensionGenerator
             field.CanGroupSmallHashSetWrites = EmitterTypeTraits.CanGroupSmallHashSetWrites(hashSet.TypeArguments[0], compilation);
         if (type is INamedTypeSymbol { MetadataName: "PriorityQueue`2" } priorityQueue &&
             priorityQueue.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
+        {
             field.CanAccessPriorityQueueNodes = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess")?
                 .GetMembers("TryGetPriorityQueueNodes").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.DeclaredAccessibility == Accessibility.Public) == true;
+            field.CanTraversePriorityQueue = EmitterTypeTraits.HasPriorityQueueTraversal(compilation);
+        }
         if (type is INamedTypeSymbol { MetadataName: "Dictionary`2", TypeArguments.Length: 2 } dictionary &&
             dictionary.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
         {

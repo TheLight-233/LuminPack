@@ -26,7 +26,8 @@ internal static class SequenceInterfaceWriteEmitter
     /// <param name="sb">The operation receiving generated statements.</param>
     /// <param name="json">Whether to use JSON element framing.</param>
     /// <param name="fixedHeader">Whether the binary wrapper already published its original header.</param>
-    internal static void Append(LuminLocalFieldData field, StringBuilder sb, bool json, bool fixedHeader = false)
+    /// <param name="storageExpression">An optional already-classified grouping storage probe, excluding unrelated concrete sequence tests.</param>
+    internal static void Append(LuminLocalFieldData field, StringBuilder sb, bool json, bool fixedHeader = false, string storageExpression = null)
     {
         string element = CodeEmitterRegistry.GetFirstGeneric(field.TypeName);
         string runtime = InterfaceCollectionEmitterHelper.RuntimeName(EmitterTypeTraits.GetFirstTypeArgument(field), element);
@@ -50,7 +51,7 @@ internal static class SequenceInterfaceWriteEmitter
             sb.AppendLine("            int sequenceCount = 0;");
         }
         var types = new List<string>();
-        if (IsInterface(name))
+        if (IsInterface(name) && storageExpression == null)
         {
             if (json) { types.Add("List"); types.Add("Array"); }
             if (name is "global::System.Collections.Generic.IEnumerable" or "global::System.Collections.Generic.IReadOnlyCollection")
@@ -72,7 +73,8 @@ internal static class SequenceInterfaceWriteEmitter
         }
         if (field.CanGetSequenceStorage)
         {
-            sb.AppendLine("            " + (types.Count == 0 ? "if" : "else if") + " (global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + element + ">(value) is { } sequenceStorage)");
+            string storage = storageExpression ?? "global::LuminPack.Code.LuminPackCollectionAccess.GetSequenceStorage<" + element + ">(value)";
+            sb.AppendLine("            " + (types.Count == 0 ? "if" : "else if") + " (" + storage + " is { } sequenceStorage)");
             sb.AppendLine("            {");
             foreach (string kind in new[] { "List", "Array" })
             {
@@ -83,7 +85,7 @@ internal static class SequenceInterfaceWriteEmitter
                 {
                     sb.AppendLine("                    if (source." + (kind == "List" ? "Count" : "Length") + " != 0) sequenceCount = WriteSequence" + kind + "(ref writer, source);");
                 }
-                else sb.AppendLine("                    WriteSequence" + kind + "(ref writer, source);");
+                else sb.AppendLine("                    " + (storageExpression != null ? "if (source." + (kind == "List" ? "Count" : "Length") + " != 0) " : "") + "WriteSequence" + kind + "(ref writer, source);");
                 sb.AppendLine("                }");
             }
             sb.AppendLine("            }");

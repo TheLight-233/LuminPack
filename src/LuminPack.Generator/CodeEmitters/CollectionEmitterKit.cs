@@ -283,6 +283,15 @@ internal static class CollectionEmitterKit
         sb.AppendLine(indent + "}");
     }
 
+    /// <summary>Selects an existing array when the entire lease is consumed, avoiding an unnecessary boxed slice.</summary>
+    /// <param name="elementType">The generated element spelling.</param>
+    /// <param name="array">The existing staging array expression.</param>
+    /// <param name="count">The validated logical element count.</param>
+    /// <returns>An enumerable expression for a synchronous copying constructor or range operation.</returns>
+    internal static string CopyingFactorySource(string elementType, string array, string count)
+        => count + " == " + array + ".Length ? (global::System.Collections.Generic.IEnumerable<" + elementType + ">)" + array +
+           " : " + count + " == 0 ? (global::System.Collections.Generic.IEnumerable<" + elementType + ">)global::System.Array.Empty<" + elementType + ">() : new global::System.ArraySegment<" + elementType + ">(" + array + ", 0, " + count + ")";
+
     /// <summary>Reads <c>length</c> elements into pooled storage, consumes it, and returns it to the pool.</summary>
     /// <param name="sb">The generated statements.</param>
     /// <param name="element">The element symbol.</param>
