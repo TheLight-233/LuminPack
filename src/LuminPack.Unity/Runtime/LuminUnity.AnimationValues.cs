@@ -1,3 +1,5 @@
+using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
 using LuminPack.Core;
 using UnityEngine;
 #pragma warning disable CS0618 // Preserve the editor tangent-mode field through Unity's public compatibility property.
@@ -10,45 +12,33 @@ namespace LuminPack.Unity
         public static void Write(ref LuminPackWriter writer, in Keyframe value)
         {
             writer.EnsureAdditionalCapacity(32);
-            writer.Write(value.time);
-            writer.Write(value.value);
-            writer.Write(value.inTangent);
-            writer.Write(value.outTangent);
-            writer.Write(value.tangentMode);
-            writer.Write(value.weightedMode);
-            writer.Write(value.inWeight);
-            writer.Write(value.outWeight);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(writer.Buffer), writer.Position);
+            Unsafe.WriteUnaligned<float>(ref payload, value.time);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 4), value.value);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 8), value.inTangent);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 12), value.outTangent);
+            Unsafe.WriteUnaligned<int>(ref Unsafe.Add(ref payload, 16), value.tangentMode);
+            Unsafe.WriteUnaligned<WeightedMode>(ref Unsafe.Add(ref payload, 20), value.weightedMode);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 24), value.inWeight);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 28), value.outWeight);
+            writer.Advance(32);
         }
         /// <summary>Checks complete Keyframe storage before staging its public fields.</summary>
         /// <param name="reader">Bounded input.</param><param name="value">Destination assigned on success.</param>
         public static void Read(ref LuminPackReader reader, ref Keyframe value)
         {
             reader.EnsureReadable(reader.Position, 32);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             Keyframe result = default;
-            float field0 = default;
-            reader.Read(ref field0);
-            result.time = field0;
-            float field1 = default;
-            reader.Read(ref field1);
-            result.value = field1;
-            float field2 = default;
-            reader.Read(ref field2);
-            result.inTangent = field2;
-            float field3 = default;
-            reader.Read(ref field3);
-            result.outTangent = field3;
-            int field4 = default;
-            reader.Read(ref field4);
-            result.tangentMode = field4;
-            WeightedMode field5 = default;
-            reader.Read(ref field5);
-            result.weightedMode = field5;
-            float field6 = default;
-            reader.Read(ref field6);
-            result.inWeight = field6;
-            float field7 = default;
-            reader.Read(ref field7);
-            result.outWeight = field7;
+            result.time = Unsafe.ReadUnaligned<float>(ref payload);
+            result.value = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 4));
+            result.inTangent = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 8));
+            result.outTangent = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 12));
+            result.tangentMode = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref payload, 16));
+            result.weightedMode = Unsafe.ReadUnaligned<WeightedMode>(ref Unsafe.Add(ref payload, 20));
+            result.inWeight = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 24));
+            result.outWeight = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 28));
+            reader.Advance(32);
             value = result;
         }
         /// <summary>Writes explicit GradientColorKey fields without layout padding.</summary>
@@ -86,13 +76,11 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref GradientAlphaKey value)
         {
             reader.EnsureReadable(reader.Position, 8);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             GradientAlphaKey result = default;
-            float field0 = default;
-            reader.Read(ref field0);
-            result.alpha = field0;
-            float field1 = default;
-            reader.Read(ref field1);
-            result.time = field1;
+            result.alpha = Unsafe.ReadUnaligned<float>(ref payload);
+            result.time = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 4));
+            reader.Advance(8);
             value = result;
         }
         /// <summary>Writes explicit RangeInt fields without layout padding.</summary>
@@ -108,13 +96,11 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref RangeInt value)
         {
             reader.EnsureReadable(reader.Position, 8);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             RangeInt result = default;
-            int field0 = default;
-            reader.Read(ref field0);
-            result.start = field0;
-            int field1 = default;
-            reader.Read(ref field1);
-            result.length = field1;
+            result.start = Unsafe.ReadUnaligned<int>(ref payload);
+            result.length = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref payload, 4));
+            reader.Advance(8);
             value = result;
         }
     }

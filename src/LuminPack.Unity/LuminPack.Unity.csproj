@@ -16,6 +16,7 @@
     <!-- References are deliberately read-only: building this project never builds Core or its generator. -->
     <Reference Include="LuminPack.Core"><HintPath>$(LuminPackCorePath)</HintPath><Private>false</Private></Reference>
     <Reference Include="UnityEngine.CoreModule"><HintPath>$(UnityManagedPath)/UnityEngine.CoreModule.dll</HintPath><Private>false</Private></Reference>
+    <PackageReference Include="System.Runtime.CompilerServices.Unsafe" Version="6.1.2" />
   </ItemGroup>
   <Target Name="ValidateExternalReferences" BeforeTargets="ResolveAssemblyReferences">
     <Error Condition="!Exists('$(LuminPackCorePath)')" Text="Set LuminPackCorePath to an already built netstandard2.1 LuminPack.Core.dll. This project does not build Core." />

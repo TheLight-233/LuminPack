@@ -79,6 +79,24 @@ static unsafe void Check<T>(T value, delegate*<ref LuminPackWriter, in T, void> 
             write(ref secondWriter, restored);
         }
         if (!bytes.AsSpan(3, length).SequenceEqual(again)) LuminPackExceptionHelper.ThrowInvalidOperationException(typeof(T).Name + ": unstable field round trip.");
+        byte[] alias = new byte[3 + Math.Max(length, System.Runtime.CompilerServices.Unsafe.SizeOf<T>())];
+        bytes.AsSpan(3, length).CopyTo(alias.AsSpan(3));
+        fixed (byte* aliasedData = alias)
+        {
+            ReadOnlySpan<byte> framed = new(aliasedData, 3 + length);
+            var aliasReader = new LuminPackReader(ref framed);
+            aliasReader.Advance(3);
+            ref T aliasValue = ref System.Runtime.CompilerServices.Unsafe.As<byte, T>(ref alias[3]);
+            read(ref aliasReader, ref aliasValue);
+            fixed (byte* repeat = again)
+            {
+                Span<byte> secondOutput = new(repeat, length);
+                var secondWriter = new LuminPackWriter(ref secondOutput);
+                write(ref secondWriter, aliasValue);
+            }
+            if (aliasReader.Position != 3 + length || !bytes.AsSpan(3, length).SequenceEqual(again))
+                LuminPackExceptionHelper.ThrowInvalidOperationException(typeof(T).Name + ": aliased input or nonzero cursor changed the staged read.");
+        }
     }
     if (bytes.Take(3).Concat(bytes.Skip(3 + length)).Any(b => b != 0xA5)) LuminPackExceptionHelper.ThrowInvalidOperationException(typeof(T).Name + ": output canary changed.");
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using LuminPack.Code;
 using LuminPack.Core;
@@ -7,7 +8,8 @@ using UnityEngine;
 namespace LuminPack.Unity
 {
     /// <summary>Provides explicit field-ordered binary codecs for common Unity value types.</summary>
-    /// <remarks>These opt-in codecs do not serialize native object handles or silently replace generated nested contracts.</remarks>
+    /// <remarks>These opt-in codecs do not serialize native object handles or silently replace generated nested contracts.
+    /// Fixed batches access only individual scalar fields of at most four bytes; they never assume adjacent managed field layout.</remarks>
     public static unsafe partial class LuminUnity
     {
         /// <summary>Writes the 8-byte field-ordered Vector2 value.</summary>
@@ -26,13 +28,11 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref Vector2 value)
         {
             reader.EnsureReadable(reader.Position, 8);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             Vector2 result = default;
-            float field0 = default;
-            reader.Read(ref field0);
-            result.x = field0;
-            float field1 = default;
-            reader.Read(ref field1);
-            result.y = field1;
+            result.x = Unsafe.ReadUnaligned<float>(ref payload);
+            result.y = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 4));
+            reader.Advance(8);
             value = result;
         }
 
@@ -53,16 +53,12 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref Vector3 value)
         {
             reader.EnsureReadable(reader.Position, 12);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             Vector3 result = default;
-            float field0 = default;
-            reader.Read(ref field0);
-            result.x = field0;
-            float field1 = default;
-            reader.Read(ref field1);
-            result.y = field1;
-            float field2 = default;
-            reader.Read(ref field2);
-            result.z = field2;
+            result.x = Unsafe.ReadUnaligned<float>(ref payload);
+            result.y = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 4));
+            result.z = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 8));
+            reader.Advance(12);
             value = result;
         }
 
@@ -84,19 +80,13 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref Vector4 value)
         {
             reader.EnsureReadable(reader.Position, 16);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             Vector4 result = default;
-            float field0 = default;
-            reader.Read(ref field0);
-            result.x = field0;
-            float field1 = default;
-            reader.Read(ref field1);
-            result.y = field1;
-            float field2 = default;
-            reader.Read(ref field2);
-            result.z = field2;
-            float field3 = default;
-            reader.Read(ref field3);
-            result.w = field3;
+            result.x = Unsafe.ReadUnaligned<float>(ref payload);
+            result.y = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 4));
+            result.z = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 8));
+            result.w = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 12));
+            reader.Advance(16);
             value = result;
         }
 
@@ -116,13 +106,11 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref Vector2Int value)
         {
             reader.EnsureReadable(reader.Position, 8);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             Vector2Int result = default;
-            int field0 = default;
-            reader.Read(ref field0);
-            result.x = field0;
-            int field1 = default;
-            reader.Read(ref field1);
-            result.y = field1;
+            result.x = Unsafe.ReadUnaligned<int>(ref payload);
+            result.y = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref payload, 4));
+            reader.Advance(8);
             value = result;
         }
 
@@ -143,16 +131,12 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref Vector3Int value)
         {
             reader.EnsureReadable(reader.Position, 12);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             Vector3Int result = default;
-            int field0 = default;
-            reader.Read(ref field0);
-            result.x = field0;
-            int field1 = default;
-            reader.Read(ref field1);
-            result.y = field1;
-            int field2 = default;
-            reader.Read(ref field2);
-            result.z = field2;
+            result.x = Unsafe.ReadUnaligned<int>(ref payload);
+            result.y = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref payload, 4));
+            result.z = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref payload, 8));
+            reader.Advance(12);
             value = result;
         }
 
@@ -174,19 +158,13 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref Quaternion value)
         {
             reader.EnsureReadable(reader.Position, 16);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             Quaternion result = default;
-            float field0 = default;
-            reader.Read(ref field0);
-            result.x = field0;
-            float field1 = default;
-            reader.Read(ref field1);
-            result.y = field1;
-            float field2 = default;
-            reader.Read(ref field2);
-            result.z = field2;
-            float field3 = default;
-            reader.Read(ref field3);
-            result.w = field3;
+            result.x = Unsafe.ReadUnaligned<float>(ref payload);
+            result.y = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 4));
+            result.z = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 8));
+            result.w = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 12));
+            reader.Advance(16);
             value = result;
         }
 
@@ -208,19 +186,13 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref Color value)
         {
             reader.EnsureReadable(reader.Position, 16);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             Color result = default;
-            float field0 = default;
-            reader.Read(ref field0);
-            result.r = field0;
-            float field1 = default;
-            reader.Read(ref field1);
-            result.g = field1;
-            float field2 = default;
-            reader.Read(ref field2);
-            result.b = field2;
-            float field3 = default;
-            reader.Read(ref field3);
-            result.a = field3;
+            result.r = Unsafe.ReadUnaligned<float>(ref payload);
+            result.g = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 4));
+            result.b = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 8));
+            result.a = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 12));
+            reader.Advance(16);
             value = result;
         }
 
@@ -242,19 +214,13 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref Color32 value)
         {
             reader.EnsureReadable(reader.Position, 4);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             Color32 result = default;
-            byte field0 = default;
-            reader.Read(ref field0);
-            result.r = field0;
-            byte field1 = default;
-            reader.Read(ref field1);
-            result.g = field1;
-            byte field2 = default;
-            reader.Read(ref field2);
-            result.b = field2;
-            byte field3 = default;
-            reader.Read(ref field3);
-            result.a = field3;
+            result.r = Unsafe.ReadUnaligned<byte>(ref payload);
+            result.g = Unsafe.ReadUnaligned<byte>(ref Unsafe.Add(ref payload, 1));
+            result.b = Unsafe.ReadUnaligned<byte>(ref Unsafe.Add(ref payload, 2));
+            result.a = Unsafe.ReadUnaligned<byte>(ref Unsafe.Add(ref payload, 3));
+            reader.Advance(4);
             value = result;
         }
 
@@ -276,19 +242,13 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref Rect value)
         {
             reader.EnsureReadable(reader.Position, 16);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             Rect result = default;
-            float field0 = default;
-            reader.Read(ref field0);
-            result.x = field0;
-            float field1 = default;
-            reader.Read(ref field1);
-            result.y = field1;
-            float field2 = default;
-            reader.Read(ref field2);
-            result.width = field2;
-            float field3 = default;
-            reader.Read(ref field3);
-            result.height = field3;
+            result.x = Unsafe.ReadUnaligned<float>(ref payload);
+            result.y = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 4));
+            result.width = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 8));
+            result.height = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 12));
+            reader.Advance(16);
             value = result;
         }
 
@@ -310,19 +270,13 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref RectInt value)
         {
             reader.EnsureReadable(reader.Position, 16);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             RectInt result = default;
-            int field0 = default;
-            reader.Read(ref field0);
-            result.x = field0;
-            int field1 = default;
-            reader.Read(ref field1);
-            result.y = field1;
-            int field2 = default;
-            reader.Read(ref field2);
-            result.width = field2;
-            int field3 = default;
-            reader.Read(ref field3);
-            result.height = field3;
+            result.x = Unsafe.ReadUnaligned<int>(ref payload);
+            result.y = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref payload, 4));
+            result.width = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref payload, 8));
+            result.height = Unsafe.ReadUnaligned<int>(ref Unsafe.Add(ref payload, 12));
+            reader.Advance(16);
             value = result;
         }
 
@@ -470,22 +424,24 @@ namespace LuminPack.Unity
         public static void Write(ref LuminPackWriter writer, in Matrix4x4 value)
         {
             writer.EnsureAdditionalCapacity(64);
-            writer.Write(value.m00);
-            writer.Write(value.m10);
-            writer.Write(value.m20);
-            writer.Write(value.m30);
-            writer.Write(value.m01);
-            writer.Write(value.m11);
-            writer.Write(value.m21);
-            writer.Write(value.m31);
-            writer.Write(value.m02);
-            writer.Write(value.m12);
-            writer.Write(value.m22);
-            writer.Write(value.m32);
-            writer.Write(value.m03);
-            writer.Write(value.m13);
-            writer.Write(value.m23);
-            writer.Write(value.m33);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(writer.Buffer), writer.Position);
+            Unsafe.WriteUnaligned<float>(ref payload, value.m00);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 4), value.m10);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 8), value.m20);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 12), value.m30);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 16), value.m01);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 20), value.m11);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 24), value.m21);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 28), value.m31);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 32), value.m02);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 36), value.m12);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 40), value.m22);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 44), value.m32);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 48), value.m03);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 52), value.m13);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 56), value.m23);
+            Unsafe.WriteUnaligned<float>(ref Unsafe.Add(ref payload, 60), value.m33);
+            writer.Advance(64);
         }
 
         /// <summary>Reads a complete Matrix4x4 before assigning the destination.</summary>
@@ -494,55 +450,25 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref Matrix4x4 value)
         {
             reader.EnsureReadable(reader.Position, 64);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             Matrix4x4 result = default;
-            float field0 = default;
-            reader.Read(ref field0);
-            result.m00 = field0;
-            float field1 = default;
-            reader.Read(ref field1);
-            result.m10 = field1;
-            float field2 = default;
-            reader.Read(ref field2);
-            result.m20 = field2;
-            float field3 = default;
-            reader.Read(ref field3);
-            result.m30 = field3;
-            float field4 = default;
-            reader.Read(ref field4);
-            result.m01 = field4;
-            float field5 = default;
-            reader.Read(ref field5);
-            result.m11 = field5;
-            float field6 = default;
-            reader.Read(ref field6);
-            result.m21 = field6;
-            float field7 = default;
-            reader.Read(ref field7);
-            result.m31 = field7;
-            float field8 = default;
-            reader.Read(ref field8);
-            result.m02 = field8;
-            float field9 = default;
-            reader.Read(ref field9);
-            result.m12 = field9;
-            float field10 = default;
-            reader.Read(ref field10);
-            result.m22 = field10;
-            float field11 = default;
-            reader.Read(ref field11);
-            result.m32 = field11;
-            float field12 = default;
-            reader.Read(ref field12);
-            result.m03 = field12;
-            float field13 = default;
-            reader.Read(ref field13);
-            result.m13 = field13;
-            float field14 = default;
-            reader.Read(ref field14);
-            result.m23 = field14;
-            float field15 = default;
-            reader.Read(ref field15);
-            result.m33 = field15;
+            result.m00 = Unsafe.ReadUnaligned<float>(ref payload);
+            result.m10 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 4));
+            result.m20 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 8));
+            result.m30 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 12));
+            result.m01 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 16));
+            result.m11 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 20));
+            result.m21 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 24));
+            result.m31 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 28));
+            result.m02 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 32));
+            result.m12 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 36));
+            result.m22 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 40));
+            result.m32 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 44));
+            result.m03 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 48));
+            result.m13 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 52));
+            result.m23 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 56));
+            result.m33 = Unsafe.ReadUnaligned<float>(ref Unsafe.Add(ref payload, 60));
+            reader.Advance(64);
             value = result;
         }
 
@@ -561,10 +487,10 @@ namespace LuminPack.Unity
         public static void Read(ref LuminPackReader reader, ref LayerMask value)
         {
             reader.EnsureReadable(reader.Position, 4);
+            ref byte payload = ref Unsafe.Add(ref MemoryMarshal.GetReference(reader.Buffer), reader.Position);
             LayerMask result = default;
-            int field0 = default;
-            reader.Read(ref field0);
-            result.value = field0;
+            result.value = Unsafe.ReadUnaligned<int>(ref payload);
+            reader.Advance(4);
             value = result;
         }
     }
