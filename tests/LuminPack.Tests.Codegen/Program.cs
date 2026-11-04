@@ -66,6 +66,11 @@ try
         SerializerFrameworkEntryRegression.RunTextWrappers(references);
         return 0;
     }
+    if (args is ["--verify-memory-loops"])
+    {
+        SerializerFrameworkEntryRegression.RunMemoryLoops(references);
+        return 0;
+    }
     if (args is ["--verify-framework-entries"])
     {
         SerializerFrameworkEntryRegression.Run(references);
@@ -345,6 +350,7 @@ try
     SerializerCodegenPerformanceRegression.Run(references);
     SerializerTimeZoneCacheRegression.Run(references);
     SerializerFrameworkEntryRegression.RunTextWrappers(references);
+    SerializerFrameworkEntryRegression.RunMemoryLoops(references);
     SerializerBuilderPathRegression.Run(references);
     SerializerImmutableQueueConstructionRegression.Run(references);
     SerializerImmutableListWriteRegression.RunInterfaces(references);

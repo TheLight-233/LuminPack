@@ -135,7 +135,7 @@ public static class MemoryEmitter
             sb.AppendLine("            {");
             sb.AppendLine("                foreach (var item in memory.Span)");
             sb.AppendLine("                {");
-            AppendJsonItemWrite(sb, "                    ");
+            AppendJsonItemWrite(fieldData, sb, "                    ");
             sb.AppendLine("                }");
             sb.AppendLine("            }");
         }
@@ -143,21 +143,22 @@ public static class MemoryEmitter
         {
             sb.AppendLine("            foreach (ref var item in value.Span)");
             sb.AppendLine("            {");
-            AppendJsonItemWrite(sb, "                ");
+            // Mutable memory captures the ref element after separator growth callbacks.
+            AppendJsonItemWrite(fieldData, sb, "                ", isolateInteger: false);
             sb.AppendLine("            }");
         }
         else if (baseType == "global::System.ReadOnlyMemory")
         {
             sb.AppendLine("            foreach (var item in value.Span)");
             sb.AppendLine("            {");
-            AppendJsonItemWrite(sb, "                ");
+            AppendJsonItemWrite(fieldData, sb, "                ");
             sb.AppendLine("            }");
         }
         else
         {
             sb.AppendLine("            foreach (var item in value)");
             sb.AppendLine("            {");
-            AppendJsonItemWrite(sb, "                ");
+            AppendJsonItemWrite(fieldData, sb, "                ");
             sb.AppendLine("            }");
         }
         sb.AppendLine("            writer.WriteArrayEnd();");
@@ -213,15 +214,13 @@ public static class MemoryEmitter
     }
 
     /// <summary>Appends JSON writing statements for memory values.</summary>
+    /// <param name="fieldData">The element contract and referenced runtime capabilities.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="indent">The indentation level of the generated statements.</param>
-    private static void AppendJsonItemWrite(StringBuilder sb, string indent)
+    /// <param name="isolateInteger">Whether the element was captured before separator callbacks.</param>
+    private static void AppendJsonItemWrite(LuminLocalFieldData fieldData, StringBuilder sb, string indent, bool isolateInteger = true)
     {
-        sb.AppendLine(indent + "if (!isFirst) writer.WriteByteRaw((byte)',');");
-        sb.AppendLine(indent + "else isFirst = false;");
-        sb.AppendLine(indent + "writer.SetFirstElement(true);");
-        sb.AppendLine(indent + "var temp = item;");
-        sb.AppendLine(indent + "writer.WriteValue(in temp);");
+        JsonCollectionElementEmitter.Append(fieldData, sb, "item", indent, isolateInteger);
     }
 
     /// <summary>Appends binary size evaluation statements for memory values.</summary>
