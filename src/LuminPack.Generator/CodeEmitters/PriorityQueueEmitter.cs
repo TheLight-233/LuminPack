@@ -191,7 +191,6 @@ public static class PriorityQueueEmitter
         sb.AppendLine("                " + elementType + " element = default!;");
         sb.AppendLine("                reader.ReadValue(ref element);");
         sb.AppendLine("                reader.Read();");
-        sb.AppendLine("                reader.Read();");
         sb.AppendLine("                " + priorityType + " priority = default!;");
         sb.AppendLine("                reader.ReadValue(ref priority);");
         sb.AppendLine("                reader.Read();");
