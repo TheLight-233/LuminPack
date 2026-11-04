@@ -128,7 +128,7 @@ public static class FrozenDictionaryEmitter
         sb.AppendLine("                " + keyType + " key = default!;");
         sb.AppendLine("                " + valueType + " itemValue = default!;");
         // The shared entry grammar reads the key/value pair array exactly as the Dictionary writer's pair array is written.
-        DictionaryEmitter.AppendJsonEntryRead(sb, keyType, valueType);
+        DictionaryEmitter.AppendJsonEntryRead(sb, keyType, valueType, completeEntry: fieldData.CanReadJsonCompleteEntry);
         sb.AppendLine("                dict.Add(key!, itemValue);");
         sb.AppendLine("            }");
         sb.AppendLine("            value = global::System.Collections.Frozen.FrozenDictionary.ToFrozenDictionary(dict);");

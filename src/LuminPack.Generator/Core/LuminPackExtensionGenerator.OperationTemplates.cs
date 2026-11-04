@@ -136,7 +136,10 @@ public static partial class LuminPackExtensionGenerator
         if (type is INamedTypeSymbol { TypeArguments.Length: > 0 } sequence)
             field.CanWriteJsonEnumerationElement = EmitterTypeTraits.HasJsonEnumerationWriter(compilation, sequence.TypeArguments[0]);
         if (type is INamedTypeSymbol { TypeArguments.Length: 2 } entry)
+        {
             field.CanWriteJsonIntegerEntry = EmitterTypeTraits.HasJsonIntegerEntryWriter(compilation, entry.TypeArguments[0], entry.TypeArguments[1]);
+            field.CanReadJsonCompleteEntry = EmitterTypeTraits.HasJsonCompleteEntryReader(compilation, entry.TypeArguments[0], entry.TypeArguments[1]);
+        }
         if (type is INamedTypeSymbol { MetadataName: "SortedList`2", TypeArguments.Length: 2 } sortedList &&
             sortedList.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
         {

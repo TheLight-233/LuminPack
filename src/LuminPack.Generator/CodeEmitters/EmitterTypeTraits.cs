@@ -110,6 +110,27 @@ internal static class EmitterTypeTraits
         return HasJsonEnumerationWriter(compilation, key) && methods != null && methods.Any(method => method.Arity == 0) && methods.Any(method => method.Arity == 1);
     }
 
+    /// <summary>Checks the complete scalar-entry reader against actual metadata.</summary>
+    /// <param name="compilation">The consumer runtime metadata.</param>
+    /// <param name="key">The canonical key type.</param>
+    /// <param name="value">The canonical value type.</param>
+    /// <returns>Whether all required default and compiled-profile members exist.</returns>
+    internal static bool HasJsonCompleteEntryReader(Compilation compilation, ITypeSymbol key, ITypeSymbol value)
+    {
+        if (!(key.SpecialType == SpecialType.System_String && value.SpecialType is SpecialType.System_String or SpecialType.System_Int32 or SpecialType.System_Int64 ||
+              key.SpecialType == SpecialType.System_Int32 && value.SpecialType == SpecialType.System_String)) return false;
+        var reader = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonReader");
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        if (reader == null || options == null) return false;
+        bool Profile(IMethodSymbol method) => method.Arity == 0 || method.Arity == 1 && method.TypeParameters[0].HasValueTypeConstraint &&
+            method.TypeParameters[0].ConstraintTypes.Length == 1 && SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options);
+        var methods = reader.GetMembers("TryReadCompleteEntry").OfType<IMethodSymbol>().Where(method => !method.IsStatic &&
+            method.DeclaredAccessibility == Accessibility.Public && Profile(method) && method.ReturnType.SpecialType == SpecialType.System_Boolean &&
+            method.Parameters.Length == 2 && method.Parameters.All(parameter => parameter.RefKind == RefKind.Ref) &&
+            SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, key) && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, value)).ToArray();
+        return methods.Any(method => method.Arity == 0) && methods.Any(method => method.Arity == 1);
+    }
+
     /// <summary>Recognizes concurrent collections whose public emptiness query avoids a full count.</summary>
     /// <param name="typeName">The canonical constructed collection name.</param>
     /// <returns>Whether the empty JSON branch can use the public IsEmpty property.</returns>

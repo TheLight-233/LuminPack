@@ -85,6 +85,59 @@ public class JsonFusedCollectionTest
         }
     }
 
+    /// <summary>Checks trailing entry elements do not allocate scalar strings a second time.</summary>
+    [Fact]
+    public void CompleteEntryReaderDoesNotReparseStrings()
+    {
+        foreach (bool escaped in new[] { false, true })
+        {
+            string key = escaped ? "key\\u0061" : "keya";
+            string value = escaped ? "value\\u0062" : "valueb";
+            Check<Dictionary<string, int>>("\"" + key + "\",123", static (ReadOnlySpan<byte> input, ref Dictionary<string, int> target) =>
+                LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(input, ref target));
+            Check<Dictionary<string, long>>("\"" + key + "\",123", static (ReadOnlySpan<byte> input, ref Dictionary<string, long> target) =>
+                LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(input, ref target));
+            Check<Dictionary<string, string>>("\"" + key + "\",\"" + value + "\"", static (ReadOnlySpan<byte> input, ref Dictionary<string, string> target) =>
+                LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(input, ref target));
+            Check<Dictionary<int, string>>("123,\"" + value + "\"", static (ReadOnlySpan<byte> input, ref Dictionary<int, string> target) =>
+                LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(input, ref target));
+        }
+
+        // <summary>Compares equal result allocations with and without ignored trailing values.</summary>
+        static void Check<T>(string entry, ReadJsonBytesInto<T> read)
+        {
+            byte[] normal = System.Text.Encoding.UTF8.GetBytes("[[" + entry + "]]");
+            byte[] extra = System.Text.Encoding.UTF8.GetBytes("[[" + entry + ",0,[],{}]]");
+            Measure(normal, read);
+            Measure(extra, read);
+            long expected = Measure(normal, read);
+            long actual = Measure(extra, read);
+            Assert.Equal(expected, actual);
+        }
+
+        // <summary>Warms reusable state and measures only fresh result reads on this thread.</summary>
+        static long Measure<T>(byte[] payload, ReadJsonBytesInto<T> read)
+        {
+            T sink = default!;
+            for (int index = 0; index < 512; index++)
+            {
+                T target = default!;
+                read(payload, ref target);
+                sink = target;
+            }
+            long start = GC.GetAllocatedBytesForCurrentThread();
+            for (int index = 0; index < 1024; index++)
+            {
+                T target = default!;
+                read(payload, ref target);
+                sink = target;
+            }
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - start;
+            GC.KeepAlive(sink);
+            return allocated;
+        }
+    }
+
     /// <summary>Checks the fused reader declines unusual token shapes without consuming input, keeping the token path's results.</summary>
     [Fact]
     public void EntryReaderFallsBackForOtherShapes()

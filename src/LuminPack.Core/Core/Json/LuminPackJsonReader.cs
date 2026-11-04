@@ -1590,6 +1590,197 @@ namespace LuminPack.Core
         public bool TryReadEntry<TOptions>(ref int key, ref string value)
             where TOptions : struct, ILuminPackOptions => TryReadEntryCore<TOptions, int, string>(ref key, ref value);
 
+        /// <summary>Reads a complete scalar pair through the default profile without reparsing completed strings.</summary>
+        /// <param name="key">The entry key storage.</param>
+        /// <param name="value">The entry value storage.</param>
+        /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryReadCompleteEntry(ref string key, ref int value) => TryReadCompleteEntry<LuminPackDefaultOptions>(ref key, ref value);
+
+        /// <summary>Reads a complete scalar pair after its opening bracket, including ignored trailing values.</summary>
+        /// <param name="key">The entry key storage.</param>
+        /// <param name="value">The entry value storage.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryReadCompleteEntry<TOptions>(ref string key, ref int value)
+            where TOptions : struct, ILuminPackOptions => TryReadCompleteEntryCore<TOptions, string, int>(ref key, ref value);
+
+        /// <summary>Reads a complete scalar pair through the default profile without reparsing completed strings.</summary>
+        /// <param name="key">The entry key storage.</param>
+        /// <param name="value">The entry value storage.</param>
+        /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryReadCompleteEntry(ref string key, ref long value) => TryReadCompleteEntry<LuminPackDefaultOptions>(ref key, ref value);
+
+        /// <summary>Reads a complete scalar pair after its opening bracket, including ignored trailing values.</summary>
+        /// <param name="key">The entry key storage.</param>
+        /// <param name="value">The entry value storage.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryReadCompleteEntry<TOptions>(ref string key, ref long value)
+            where TOptions : struct, ILuminPackOptions => TryReadCompleteEntryCore<TOptions, string, long>(ref key, ref value);
+
+        /// <summary>Reads a complete scalar pair through the default profile without reparsing completed strings.</summary>
+        /// <param name="key">The entry key storage.</param>
+        /// <param name="value">The entry value storage.</param>
+        /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryReadCompleteEntry(ref string key, ref string value) => TryReadCompleteEntry<LuminPackDefaultOptions>(ref key, ref value);
+
+        /// <summary>Reads a complete scalar pair after its opening bracket, including ignored trailing values.</summary>
+        /// <param name="key">The entry key storage.</param>
+        /// <param name="value">The entry value storage.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryReadCompleteEntry<TOptions>(ref string key, ref string value)
+            where TOptions : struct, ILuminPackOptions => TryReadCompleteEntryCore<TOptions, string, string>(ref key, ref value);
+
+        /// <summary>Reads a complete scalar pair through the default profile without reparsing completed strings.</summary>
+        /// <param name="key">The entry key storage.</param>
+        /// <param name="value">The entry value storage.</param>
+        /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryReadCompleteEntry(ref int key, ref string value) => TryReadCompleteEntry<LuminPackDefaultOptions>(ref key, ref value);
+
+        /// <summary>Reads a complete scalar pair after its opening bracket, including ignored trailing values.</summary>
+        /// <param name="key">The entry key storage.</param>
+        /// <param name="value">The entry value storage.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <returns>Whether the profile handled the entry; unsupported profiles consume nothing.</returns>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public bool TryReadCompleteEntry<TOptions>(ref int key, ref string value)
+            where TOptions : struct, ILuminPackOptions => TryReadCompleteEntryCore<TOptions, int, string>(ref key, ref value);
+
+        /// <summary>Consumes completed scalars once and continues the original token grammar at a cold boundary.</summary>
+        /// <param name="key">The entry key storage.</param>
+        /// <param name="value">The entry value storage.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TKey">The canonical key type.</typeparam>
+        /// <typeparam name="TValue">The canonical value type.</typeparam>
+        /// <returns>Whether the entry was consumed; unsupported profiles retain the original token path.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private bool TryReadCompleteEntryCore<TOptions, TKey, TValue>(ref TKey key, ref TValue value)
+            where TOptions : struct, ILuminPackOptions
+        {
+            if (default(TOptions).ValidateJsonSyntax || default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8)
+                return false;
+            if (CurrentTokenType != JsonTokenType.ArrayStart)
+            {
+                ReadEntryTokens<TOptions, TKey, TValue>(ref key, ref value);
+                return true;
+            }
+            int start = typeof(TKey) == typeof(int) ? Position : 0;
+            SkipWhitespace<TOptions>();
+            if (!TryReadEntryScalar<TOptions, TKey>(out TKey parsedKey))
+            {
+                if (typeof(TKey) == typeof(int)) Position = start;
+                CurrentTokenType = JsonTokenType.ArrayStart;
+                ReadEntryTokens<TOptions, TKey, TValue>(ref key, ref value);
+                return true;
+            }
+            SkipWhitespace<TOptions>();
+            if (Remaining <= 0 || Current != (byte)',')
+            {
+                key = parsedKey;
+                FinishEntryAfterKey<TOptions, TValue>(ref value);
+                return true;
+            }
+            Advance(1);
+            SkipWhitespace<TOptions>();
+            int valueStart = typeof(TValue) == typeof(int) ? Position : 0;
+            if (!TryReadEntryScalar<TOptions, TValue>(out TValue parsedValue))
+            {
+                if (typeof(TValue) == typeof(int)) Position = valueStart;
+                key = parsedKey;
+                FinishEntryAfterKey<TOptions, TValue>(ref value);
+                return true;
+            }
+            SkipWhitespace<TOptions>();
+            if (Remaining <= 0 || Current != (byte)']')
+            {
+                key = parsedKey;
+                value = parsedValue;
+                CompleteValue();
+                DrainEntry<TOptions>();
+                return true;
+            }
+            Advance(1);
+            Depth--;
+            CurrentTokenType = JsonTokenType.ArrayEnd;
+            key = parsedKey;
+            value = parsedValue;
+            return true;
+        }
+
+        /// <summary>Runs the established entry token operations when its first scalar cannot use the fast path.</summary>
+        /// <param name="key">The entry key storage.</param>
+        /// <param name="value">The entry value storage.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TKey">The canonical key type.</typeparam>
+        /// <typeparam name="TValue">The canonical value type.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void ReadEntryTokens<TOptions, TKey, TValue>(ref TKey key, ref TValue value)
+            where TOptions : struct, ILuminPackOptions
+        {
+            if (Read<TOptions>() && CurrentTokenType != JsonTokenType.ArrayEnd)
+            {
+                ReadEntryScalar<TOptions, TKey>(ref key);
+                if (Read<TOptions>() && CurrentTokenType != JsonTokenType.ArrayEnd)
+                {
+                    ReadEntryScalar<TOptions, TValue>(ref value);
+                    DrainEntry<TOptions>();
+                }
+            }
+        }
+
+        /// <summary>Continues after a completed key without allocating that key a second time.</summary>
+        /// <param name="value">The entry value storage.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="TValue">The canonical value type.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void FinishEntryAfterKey<TOptions, TValue>(ref TValue value)
+            where TOptions : struct, ILuminPackOptions
+        {
+            CompleteValue();
+            if (Read<TOptions>() && CurrentTokenType != JsonTokenType.ArrayEnd)
+            {
+                ReadEntryScalar<TOptions, TValue>(ref value);
+                DrainEntry<TOptions>();
+            }
+        }
+
+        /// <summary>Skips trailing entry elements with the existing token and nesting operations.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void DrainEntry<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            while (Read<TOptions>())
+            {
+                if (CurrentTokenType == JsonTokenType.ArrayEnd)
+                    break;
+                Skip<TOptions>();
+            }
+        }
+
+        /// <summary>Uses the same typed scalar reader as generated token fallback.</summary>
+        /// <param name="value">The scalar destination.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <typeparam name="T">The canonical string, int or long scalar type.</typeparam>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void ReadEntryScalar<TOptions, T>(ref T value) where TOptions : struct, ILuminPackOptions =>
+            value = Read<T, TOptions>();
+
         /// <summary>Parses <c>key , value ]</c> directly from a trusted UTF-8 document.</summary>
         /// <param name = "key">Receives the entry key.</param>
         /// <param name = "value">Receives the entry value.</param>

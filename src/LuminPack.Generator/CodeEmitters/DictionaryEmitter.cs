@@ -119,7 +119,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                reader.TryConsumeArrayStart();");
         sb.AppendLine("                " + keyType + " key = default!;");
         sb.AppendLine("                " + valueType + " itemValue = default!;");
-        AppendJsonEntryRead(sb, keyType, valueType);
+        AppendJsonEntryRead(sb, keyType, valueType, completeEntry: fieldData.CanReadJsonCompleteEntry);
         if (interfaceType)
         {
             sb.AppendLine("                dictionary.Add(key, itemValue);");
@@ -701,7 +701,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                reader.TryConsumeArrayStart();");
         sb.AppendLine("                " + keyType + " key = default!;");
         sb.AppendLine("                " + valueType + " itemValue = default!;");
-        AppendJsonEntryRead(sb, keyType, valueType);
+        AppendJsonEntryRead(sb, keyType, valueType, completeEntry: fieldData.CanReadJsonCompleteEntry);
         sb.AppendLine("                value[key] = itemValue;");
         sb.AppendLine("            }");
     }
@@ -711,14 +711,17 @@ public static partial class DictionaryEmitter
     /// <param name="valueType">The generated value type name.</param>
     /// <param name="seedValue">An optional statement that finds the existing value after reading its key.</param>
     /// <param name="fused">Whether the original fused scalar entry path can be used.</param>
+    /// <param name="completeEntry">Whether a complete runtime operation can retain parsed scalar values on fallback.</param>
     /// <param name="seedKey">An optional statement supplying an existing string key for a present key token.</param>
     /// <remarks>Scalar entries first try the fused trusted UTF-8 reader, which consumes nothing when it declines.</remarks>
-    internal static void AppendJsonEntryRead(StringBuilder sb, string keyType, string valueType, string seedValue = null, bool fused = true, string seedKey = null)
+    internal static void AppendJsonEntryRead(StringBuilder sb, string keyType, string valueType, string seedValue = null, bool fused = true, string seedKey = null, bool completeEntry = false)
     {
         string indent = "                ";
-        if (fused && EmitterTypeTraits.HasJsonEntryWriter(keyType, valueType))
+        // Keep the try/fallback shape so unsupported profiles retain the established caller layout.
+        if (completeEntry || fused && EmitterTypeTraits.HasJsonEntryWriter(keyType, valueType))
         {
-            sb.AppendLine(indent + "if (!reader.TryReadEntry(ref key, ref itemValue))");
+            string operation = completeEntry ? "TryReadCompleteEntry" : "TryReadEntry";
+            sb.AppendLine(indent + "if (!reader." + operation + "(ref key, ref itemValue))");
             sb.AppendLine(indent + "{");
             indent += "    ";
         }
