@@ -13,7 +13,7 @@ namespace LuminPack.Code;
 [EditorBrowsable(EditorBrowsableState.Never)]
 public static unsafe class LuminPackTimeZoneInfoCache
 {
-    private const int MaximumCachedTextLength = 256;
+    internal const int MaximumCachedTextLength = 256;
     private static readonly ConditionalWeakTable<TimeZoneInfo, string> Texts = new();
     private static readonly string UtcText = TimeZoneInfo.Utc.ToSerializedString();
     private static readonly Entry?[] Entries = new Entry?[8];
@@ -166,6 +166,19 @@ public static unsafe class LuminPackTimeZoneInfoCache
         var second = Volatile.Read(ref Entries[slot + 1]);
         if (second is not null && string.Equals(second.Text, text, StringComparison.Ordinal)) return second.Value;
         return ParseSlow(text);
+    }
+
+    /// <summary>Matches decoded characters against the existing table before materializing a snapshot string.</summary>
+    /// <param name="text">The complete decoded snapshot.</param>
+    /// <returns>The original cached or freshly parsed immutable zone.</returns>
+    [MethodImpl(MethodImplOptions.AggressiveInlining)]
+    internal static TimeZoneInfo ParseSnapshot(ReadOnlySpan<char> text)
+    {
+        var cached = Find(text.Length);
+        if (cached is not null && text.SequenceEqual(cached.Text.AsSpan())) return cached.Value;
+        var second = Volatile.Read(ref Entries[Slot(text.Length) + 1]);
+        if (second is not null && text.SequenceEqual(second.Text.AsSpan())) return second.Value;
+        return ParseSlow(new string(text));
     }
 
     /// <summary>Parses before publishing a bounded immutable entry; failures never change the table.</summary>

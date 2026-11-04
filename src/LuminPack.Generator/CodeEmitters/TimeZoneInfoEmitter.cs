@@ -64,6 +64,11 @@ public static class TimeZoneInfoEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine();
+        if (data.CanReadJsonTimeZoneInfo)
+        {
+            sb.AppendLine("            value = reader.ReadTimeZoneInfo();");
+            return;
+        }
         sb.AppendLine("            var source = reader.ReadString();");
         sb.AppendLine("            value = global::LuminPack.Code.LuminPackTimeZoneInfoCache.Parse(source);");
     }

@@ -86,6 +86,7 @@ internal static class SerializerTimeZoneCacheRegression
             Assembly.Load(image.ToArray()).GetType("TimeZoneCases")!.GetMethod("Check")!.Invoke(null, null);
         }
         VerifyAsyncPinScope(references);
+        VerifyReadCases(references);
         Console.WriteLine("Passed time-zone concrete entries, compiled profiles, nested contracts and all four generation tiers.");
     }
 
@@ -144,4 +145,184 @@ internal static class SerializerTimeZoneCacheRegression
     {
         if (!condition) throw new InvalidOperationException(message);
     }
+    /// <summary>Runs complete-content, failure-state and nested comparisons in every generation mode.</summary>
+    /// <param name="references">The actual Runtime and platform references.</param>
+    private static void VerifyReadCases(MetadataReference[] references)
+    {
+        foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
+        {
+            var parse = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET10_0_OR_GREATER"]);
+            var input = CSharpCompilation.Create("ZoneRead" + Guid.NewGuid().ToString("N"),
+                [CSharpSyntaxTree.ParseText(ReadCasesSource.Replace("MODE", mode, StringComparison.Ordinal), parse, "Entry.cs")], references,
+                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary, allowUnsafe: true, optimizationLevel: OptimizationLevel.Release));
+            GeneratorDriver driver = CSharpGeneratorDriver.Create([new LuminPackSourceGenerator().AsSourceGenerator(), new LuminPackAggregateGenerator().AsSourceGenerator()], parseOptions: parse);
+            driver.RunGeneratorsAndUpdateCompilation(input, out var output, out var diagnostics);
+            Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+            Require(output.SyntaxTrees.Skip(1).Any(tree => tree.ToString().Contains("reader.ReadTimeZoneInfo<", StringComparison.Ordinal)), "The new reader was not selected.");
+            using var image = new MemoryStream(); var result = output.Emit(image);
+            Require(result.Success, string.Join(Environment.NewLine, result.Diagnostics.Where(item => item.Severity == DiagnosticSeverity.Error)));
+            Assembly.Load(image.ToArray()).GetType("ZoneReadCases")!.GetMethod("Check")!.Invoke(null, null);
+        }
+        Console.WriteLine("Passed time-zone binary/JSON cache collisions, boundaries, failure state and nested profiles in four modes.");
+    }
+
+    private const string ReadCasesSource = """
+        using System;
+        using System.Collections.Generic;
+        using System.Linq;
+        using System.Text;
+        using System.Text.Json;
+        using LuminPack;
+        using LuminPack.Attribute;
+        using LuminPack.Code;
+        using LuminPack.Core;
+        using LuminPack.Option;
+        using LuminPack.Utility;
+        [assembly:LuminPackGeneratorOptions(LuminPackGenerationMode.MODE)]
+        [LuminPackable] public sealed class ZoneReadEnvelope { public TimeZoneInfo Zone; public int Tail; }
+        public readonly struct StrictUtf8 : ILuminPackOptions
+        {
+            public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF8;
+            public LuminPackStringRecording StringRecording => LuminPackStringRecording.Length;
+            public System.Buffers.StandardFormat StandardFormat => new('G');
+            public bool ValidateJsonSyntax => true;
+            public int MaxJsonDepth => 64;
+        }
+        public readonly struct StrictUtf16 : ILuminPackOptions
+        {
+            public LuminPackStringEncoding StringEncoding => LuminPackStringEncoding.UTF16;
+            public LuminPackStringRecording StringRecording => LuminPackStringRecording.Length;
+            public System.Buffers.StandardFormat StandardFormat => new('G');
+            public bool ValidateJsonSyntax => true;
+            public int MaxJsonDepth => 64;
+        }
+        public static class ZoneReadCases
+        {
+            private static readonly TimeZoneInfo Sentinel=TimeZoneInfo.CreateCustomTimeZone("sentinel",TimeSpan.Zero,"Sentinel","S");
+            public static void Check()
+            {
+                Profile<LuminPackUtf8LengthOptions>();Profile<LuminPackUtf16LengthOptions>();
+                Profile<LuminPackUtf8TokenOptions>();Profile<LuminPackUtf16TokenOptions>();
+                Profile<LuminPackUtf8VarIntOptions>();Profile<LuminPackUtf16VarIntOptions>();
+                Profile<StrictUtf8>();Profile<StrictUtf16>();
+            }
+            private static TimeZoneInfo Boundary(int length)
+            {
+                var zone=TimeZoneInfo.CreateCustomTimeZone("Edge",TimeSpan.Zero,"x","S");
+                zone=TimeZoneInfo.CreateCustomTimeZone("Edge",TimeSpan.Zero,new string('x',length-zone.ToSerializedString().Length+1),"S");
+                if(zone.ToSerializedString().Length!=length)throw new Exception("Boundary fixture length changed.");
+                return zone;
+            }
+            private static void Profile<T>() where T:struct,ILuminPackOptions
+            {
+                var zones=new List<TimeZoneInfo>{TimeZoneInfo.Utc,Boundary(256),Boundary(257),
+                    TimeZoneInfo.CreateCustomTimeZone("Unicode",TimeSpan.FromMinutes(345),new string('\u96EA',100),"\u00E9"),
+                    TimeZoneInfo.CreateCustomTimeZone("Escaped",TimeSpan.Zero,"quote\"slash\\semicolon;[bracket]","S")};
+                for(int i=0;i<6;i++)zones.Add(TimeZoneInfo.CreateCustomTimeZone("Collision"+i,TimeSpan.Zero,"Display"+i,"Standard"+i));
+                var rules=new[]{TimeZoneInfo.AdjustmentRule.CreateAdjustmentRule(new DateTime(2000,1,1),new DateTime(2099,12,31),TimeSpan.FromHours(1),
+                    TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1,1,1,2,0,0),3,1),TimeZoneInfo.TransitionTime.CreateFixedDateRule(new DateTime(1,1,1,2,0,0),11,1))};
+                zones.Add(TimeZoneInfo.CreateCustomTimeZone("Rules",TimeSpan.FromHours(2),new string('r',400),"Standard","Daylight",rules));
+                using var output=new LuminBufferWriter(true);
+                foreach(var zone in zones)
+                {
+                    string text=zone.ToSerializedString();LuminPackTimeZoneInfoCache.Parse(text);
+                    output.ResetCore();LuminPackSerializer.Serialize<T>(zone,output);byte[] binary=output.GetSpan().ToArray();
+                    output.ResetCore();LuminPackSerializer.SerializeJson<T>(zone,output);byte[] json=output.GetSpan().ToArray();
+                    Compare<T>(binary,false);Compare<T>(json,true);Compare<T>(JsonBytes<T>(JsonSerializer.Serialize(text)),true);
+                    Compare<T>(JsonBytes<T>("\""+string.Concat(text.Select(c=>"\\u"+((int)c).ToString("x4")))+"\""),true);
+                    foreach(var other in zones.Skip(5).Take(3))LuminPackTimeZoneInfoCache.Parse(other.ToSerializedString());
+                    Compare<T>(binary,false);Compare<T>(json,true);
+                    var graph=new ZoneReadEnvelope{Zone=zone,Tail=137};
+                    output.ResetCore();LuminPackSerializer.Serialize<T>(graph,output);ZoneReadEnvelope decoded=null;
+                    LuminPackSerializer.Deserialize<T>(output.GetSpan(),ref decoded);
+                    if(decoded.Tail!=137||decoded.Zone.ToSerializedString()!=text)throw new Exception("Nested binary snapshot changed.");
+                    output.ResetCore();LuminPackSerializer.SerializeJson<T>(graph,output);decoded=null;
+                    LuminPackSerializer.DeserializeJson<T>(output.GetSpan(),ref decoded);
+                    if(decoded.Tail!=137||decoded.Zone.ToSerializedString()!=text)throw new Exception("Nested JSON snapshot changed.");
+                    if(zone==TimeZoneInfo.Utc||zone.Id=="Unicode")
+                    {
+                        for(int n=0;n<binary.Length;n++)Compare<T>(binary.Take(n).ToArray(),false);
+                        for(int n=0;n<json.Length;n++)Compare<T>(json.Take(n).ToArray(),true);
+                    }
+                }
+                foreach(string text in new[]{"", "invalid", "UTC;invalid;", "\uD800", "\uDC00", "x\0y"})
+                {
+                    if(default(T).StringEncoding!=LuminPackStringEncoding.UTF8||!text.Any(char.IsSurrogate))
+                    {
+                        output.ResetCore();var writer=new LuminPackWriter(output);writer.WriteObjectHeader(0);writer.Write<T>(text);
+                        Compare<T>(writer.GetSpan().ToArray(),false);
+                    }
+                    Compare<T>(JsonBytes<T>(JsonSerializer.Serialize(text)),true);
+                }
+                TimeZoneInfo absent=null;output.ResetCore();LuminPackSerializer.Serialize<T>(absent,output);Compare<T>(output.GetSpan().ToArray(),false);
+                foreach(string text in new[]{"null","\"\"","true","123","{}","[]","\"invalid\"","\"\\x\"","\"\\uD800\"","\"a\nb\""})Compare<T>(JsonBytes<T>(text),true);
+                if(default(T).StringEncoding==LuminPackStringEncoding.UTF8)
+                {
+                    Compare<T>(new byte[]{34,0xC0,0xAF,34},true);
+                    output.ResetCore();var writer=new LuminPackWriter(output);writer.WriteObjectHeader(0);writer.Write<T>("bad");
+                    byte[] malformed=writer.GetSpan().ToArray();int payload=malformed.AsSpan().IndexOf("bad"u8);
+                    if(payload<0)throw new Exception("The malformed UTF-8 fixture payload was not found.");
+                    foreach(byte[] invalid in new[]{new byte[]{0xC0,0xAF,32},new byte[]{0xED,0xA0,0x80},new byte[]{0xE2,0x82,0xFF}})
+                    {
+                        invalid.CopyTo(malformed,payload);Compare<T>(malformed,false);
+                    }
+                }
+                else Compare<T>(new byte[]{34,0,65},true);
+                if(default(T).StringRecording==LuminPackStringRecording.VarInt)
+                {
+                    foreach(byte[] data in new[]{new byte[]{0,0x80},new byte[]{0,0x80,0},new byte[]{0,0xff,0xff,0xff,0xff,0x7f},new byte[]{0,1,0}})Compare<T>(data,false);
+                }
+            }
+            private static byte[] JsonBytes<T>(string text) where T:struct,ILuminPackOptions
+                => (default(T).StringEncoding==LuminPackStringEncoding.UTF8?Encoding.UTF8:Encoding.Unicode).GetBytes(text);
+            private static void Compare<T>(byte[] input,bool json) where T:struct,ILuminPackOptions
+            {
+                foreach(bool selected in json?new[]{false,true}:new[]{false})
+                {
+                    string expected=State<T>(input,json,selected,false),actual=State<T>(input,json,selected,true);
+                    if(expected!=actual)throw new Exception("Time-zone state mismatch: "+typeof(T).Name+" / "+json+" / "+selected+" / "+Convert.ToBase64String(input)+" / expected "+expected+" / actual "+actual);
+                }
+            }
+            private static unsafe string State<T>(byte[] input,bool json,bool selected,bool generated) where T:struct,ILuminPackOptions
+            {
+                fixed(byte* address=input)
+                {
+                    ReadOnlySpan<byte> span=new ReadOnlySpan<byte>(address,input.Length);TimeZoneInfo value=Sentinel;string failure="success";
+                    if(json)
+                    {
+                        using var options=new LuminPackReaderOptionalState();
+                        var reader=new LuminPackJsonReader(ref span,options);
+                        try
+                        {
+                            if(selected)reader.Read<T>();
+                            if(generated)LuminPackSerializer.DeserializeJson<T>(ref reader,ref value);
+                            else if(reader.IsNull())value=null;
+                            else value=LuminPackTimeZoneInfoCache.Parse(reader.Read<string,T>());
+                        }
+                        catch(Exception error){failure=Failure(error);}
+                        return failure+":"+reader.Position+":"+reader.Depth+":"+reader.CurrentTokenType+":"+Result(value);
+                    }
+                    else
+                    {
+                        var reader=new LuminPackReader(ref span);
+                        try
+                        {
+                            if(generated)LuminPackSerializer.Deserialize<T>(ref reader,ref value);
+                            else if(!reader.TryReadObjectHead())value=null;
+                            else
+                            {
+                                var candidate=default(T).StringRecording==LuminPackStringRecording.Length?reader.GetTimeZoneCandidate<T>():null;
+                                if(reader.TryReadTimeZoneInfo<T>(candidate,out var cached))value=cached;
+                                else{string text=reader.Read<T>(candidate?.Text);value=string.IsNullOrEmpty(text)?null:LuminPackTimeZoneInfoCache.Parse(text,candidate);}
+                            }
+                        }
+                        catch(Exception error){failure=Failure(error);}
+                        return failure+":"+reader.Position+":"+Result(value);
+                    }
+                }
+            }
+            private static string Failure(Exception value)=>value.GetType().FullName+":"+(value as ArgumentException)?.ParamName+":"+value.Message;
+            private static string Result(TimeZoneInfo value)=>value==null?"null":ReferenceEquals(value,Sentinel)?"unchanged":value.ToSerializedString();
+        }
+        """;
 }

@@ -62,6 +62,18 @@ public static partial class LuminPackExtensionGenerator
     private static LuminLocalFieldData CreateOperationField(ITypeSymbol type, Compilation compilation, MetaInfo metadata)
     {
         var field = new LuminLocalFieldData { TypeName = FormatterTypeName.Get(type), TypeSymbol = type, Name = "value", IsValue = type.IsValueType };
+        if (field.TypeName == "global::System.TimeZoneInfo")
+        {
+            var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+            var methods = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonReader")?
+                .GetMembers("ReadTimeZoneInfo").OfType<IMethodSymbol>().Where(method => !method.IsStatic &&
+                    method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 0 &&
+                    !method.ReturnsByRef && !method.ReturnsByRefReadonly && SymbolEqualityComparer.Default.Equals(method.ReturnType, type) &&
+                    (method.Arity == 0 || method.Arity == 1 && method.TypeParameters[0].HasValueTypeConstraint &&
+                        !method.TypeParameters[0].HasUnmanagedTypeConstraint && method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+                        SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options))).ToArray();
+            field.CanReadJsonTimeZoneInfo = methods != null && methods.Any(method => method.Arity == 0) && methods.Any(method => method.Arity == 1);
+        }
         if (field.TypeName == "global::System.Numerics.BigInteger")
         {
             var bytes = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1")?.Construct(compilation.GetSpecialType(SpecialType.System_Byte));

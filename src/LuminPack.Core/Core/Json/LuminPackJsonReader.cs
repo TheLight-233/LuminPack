@@ -3020,6 +3020,57 @@ namespace LuminPack.Core
         }
 #endif
 
+        /// <summary>Reads a time-zone snapshot using the library default profile.</summary>
+        /// <returns>The cached or newly parsed zone.</returns>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public TimeZoneInfo? ReadTimeZoneInfo() => ReadTimeZoneInfo<LuminPackDefaultOptions>();
+
+        /// <summary>Reads complete snapshot characters before consulting the existing bounded time-zone cache.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <returns>The original cached or newly parsed zone.</returns>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public TimeZoneInfo? ReadTimeZoneInfo<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            if (CurrentTokenType is not (JsonTokenType.String or JsonTokenType.Number or JsonTokenType.True or JsonTokenType.False or JsonTokenType.Null or JsonTokenType.PropertyName) && !Read<TOptions>())
+                LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value.");
+            if (CurrentTokenType == JsonTokenType.Null)
+            {
+                CompleteValue();
+                // Generated selected-null branches return before this entry. A null discovered here
+                // retains the original Read<string> followed by Parse failure and cursor state.
+                return LuminPackTimeZoneInfoCache.Parse(null!);
+            }
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+                return ParseTimeZoneUtf8(ReadStringUtf8<TOptions>());
+            var text = ReadStringUtf16<TOptions>();
+            CompleteValue();
+            return LuminPackTimeZoneInfoCache.ParseSnapshot(text);
+        }
+
+        /// <summary>Uses bounded character scratch only for snapshots that the existing cache may retain.</summary>
+        /// <param name="utf8">The complete unescaped token.</param>
+        /// <returns>The original cached or newly parsed zone.</returns>
+        [SkipLocalsInit]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private TimeZoneInfo ParseTimeZoneUtf8(ReadOnlySpan<byte> utf8)
+        {
+            const int limit = LuminPackTimeZoneInfoCache.MaximumCachedTextLength;
+            // A UTF-16 code unit accounts for at most three UTF-8 bytes. Longer snapshots cannot fit
+            // the cache, so retain the original decode without an additional full-input count pass.
+            if (utf8.Length > limit * 3 || utf8.Length > limit && Encoding.UTF8.GetCharCount(utf8) > limit)
+            {
+                string source = CreateUtf8String(utf8);
+                CompleteValue();
+                return LuminPackTimeZoneInfoCache.Parse(source);
+            }
+            Span<char> buffer = stackalloc char[limit];
+            int length = Encoding.UTF8.GetChars(utf8, buffer);
+            CompleteValue();
+            return LuminPackTimeZoneInfoCache.ParseSnapshot(buffer.Slice(0, length));
+        }
+
         /// <summary>Reads a version string with the library default profile.</summary>
         /// <returns>The parsed version, or null.</returns>
         public Version? ReadVersion() => ReadVersion<LuminPackDefaultOptions>();
