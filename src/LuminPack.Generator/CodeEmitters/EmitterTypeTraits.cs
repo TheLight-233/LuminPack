@@ -407,6 +407,37 @@ internal static class EmitterTypeTraits
                 method.Parameters[3].Type.SpecialType == SpecialType.System_Boolean);
     }
 
+    /// <summary>Checks the optional public-enumeration storage API against the actual runtime metadata.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>Whether the complete list/array storage signature is available.</returns>
+    internal static bool HasSequenceStorage(Compilation compilation)
+        => compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess")?
+            .GetMembers("GetSequenceStorage").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 1 &&
+                method.DeclaredAccessibility == Accessibility.Public && method.ReturnType.SpecialType == SpecialType.System_Object &&
+                method.Parameters.Length == 1 && method.Parameters[0].RefKind == RefKind.None &&
+                IsSequenceParameter(method.Parameters[0].Type, "System.Collections.Generic", "IEnumerable`1", method.TypeParameters[0])) == true;
+
+    /// <summary>Checks the optional observable append API without depending on target-framework symbols.</summary>
+    /// <param name="compilation">The consuming compilation.</param>
+    /// <returns>Whether the operation accepts the exact observable and element types.</returns>
+    internal static bool HasObservableAppend(Compilation compilation)
+        => compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackCollectionAccess")?
+            .GetMembers("AppendObservable").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 1 &&
+                method.DeclaredAccessibility == Accessibility.Public && method.ReturnsVoid && method.Parameters.Length == 2 &&
+                method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+                IsSequenceParameter(method.Parameters[0].Type, "System.Collections.ObjectModel", "ObservableCollection`1", method.TypeParameters[0]) &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, method.TypeParameters[0])) == true;
+
+    /// <summary>Matches a runtime parameter to a canonical single-element framework collection.</summary>
+    /// <param name="type">The runtime parameter type.</param>
+    /// <param name="space">The canonical namespace.</param>
+    /// <param name="name">The metadata type name including arity.</param>
+    /// <param name="element">The operation's actual generic element.</param>
+    /// <returns>Whether the parameter exposes exactly the expected closed generic shape.</returns>
+    private static bool IsSequenceParameter(ITypeSymbol type, string space, string name, ITypeParameterSymbol element)
+        => type is INamedTypeSymbol { TypeArguments.Length: 1 } named && named.MetadataName == name &&
+            named.ContainingNamespace.ToDisplayString() == space && SymbolEqualityComparer.Default.Equals(named.TypeArguments[0], element);
+
     /// <summary>Checks the optional version-preserving sorted-list traversal API on the referenced runtime.</summary>
     /// <param name="compilation">The compilation supplying the actual runtime signatures.</param>
     /// <returns>Whether both traversal operations expose their complete expected contracts.</returns>

@@ -43,6 +43,10 @@ public sealed class LuminLocalFieldData
     internal bool CanWriteJsonEnumerationElement;
     /// <summary>Whether the referenced FrozenSet exposes its public struct enumerator.</summary>
     internal bool CanEnumerateFrozenSet;
+    /// <summary>Whether exact sequence storage can be selected without bypassing custom enumeration.</summary>
+    internal bool CanGetSequenceStorage;
+    /// <summary>Whether observable appends can avoid unobserved notification payloads.</summary>
+    internal bool CanAppendObservable;
     /// <summary>Whether the referenced runtime provides complete integer dictionary writes.</summary>
     internal bool CanWriteJsonIntegerEntry;
     /// <summary>Whether the runtime exposes complete string-containing entry reads.</summary>

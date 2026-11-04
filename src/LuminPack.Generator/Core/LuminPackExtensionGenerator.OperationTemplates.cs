@@ -138,7 +138,11 @@ public static partial class LuminPackExtensionGenerator
                 .GetMembers("GetEnumerator").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.Arity == 0 &&
                     method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 0 && method.ReturnType.IsValueType) == true;
         if (type is INamedTypeSymbol { TypeArguments.Length: > 0 } sequence)
+        {
             field.CanWriteJsonEnumerationElement = EmitterTypeTraits.HasJsonEnumerationWriter(compilation, sequence.TypeArguments[0]);
+            field.CanGetSequenceStorage = EmitterTypeTraits.HasSequenceStorage(compilation);
+            field.CanAppendObservable = EmitterTypeTraits.HasObservableAppend(compilation);
+        }
         if (type is INamedTypeSymbol { TypeArguments.Length: 2 } entry)
         {
             field.CanWriteJsonIntegerEntry = EmitterTypeTraits.HasJsonIntegerEntryWriter(compilation, entry.TypeArguments[0], entry.TypeArguments[1]);

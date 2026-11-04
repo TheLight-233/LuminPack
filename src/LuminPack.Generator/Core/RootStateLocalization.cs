@@ -33,6 +33,7 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
     private readonly HashSet<string> _used;
     private readonly bool _shared;
     private int _next;
+    private string _fallback;
     private bool _returns;
 
     /// <summary>Captures the owned state and collision-free local identities.</summary>
@@ -82,6 +83,8 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
                 SyntaxFactory.ParseStatement(source + ".CopyTo(ref " + local + ");"),
                 (BlockSyntax)rewrite.Visit(method.Body)
             };
+            if (rewrite._fallback != null)
+                statements.Insert(1, SyntaxFactory.ParseStatement(type + " " + rewrite._fallback + " = default;"));
             if (rewrite._returns) statements.Add(SyntaxFactory.LabeledStatement(complete, SyntaxFactory.EmptyStatement()));
             statements.Add(SyntaxFactory.ParseStatement(local + ".CopyTo(ref " + source + ");"));
             body = SyntaxFactory.Block(statements);
@@ -297,13 +300,26 @@ internal sealed class RootStateLocalization : CSharpSyntaxRewriter
         var first = call.ArgumentList.Arguments.FirstOrDefault(argument => !argument.RefKindKeyword.IsKind(SyntaxKind.None) &&
             argument.Expression is IdentifierNameSyntax identifier && identifier.Identifier.ValueText == _local);
         if (first == null) return result;
-        string isolated;
-        do { isolated = _local + "Fallback" + _next++; } while (!_used.Add(isolated));
+        // A void or integer local helper without other byref arguments cannot return a state alias.
+        // Sequential calls therefore share one temporary while retaining both publication copies.
+        bool reusable = !_shared && call.Expression is SimpleNameSyntax callee &&
+            _helpers.TryGetValue(callee.Identifier.ValueText, out var target) && (target.ReturnType.ToString() is "void" or "int") &&
+            target.ParameterList.Parameters.Skip(1).All(parameter => !parameter.Modifiers.Any(token =>
+                token.IsKind(SyntaxKind.RefKeyword) || token.IsKind(SyntaxKind.OutKeyword) || token.IsKind(SyntaxKind.InKeyword)));
+        string isolated = reusable ? _fallback : null;
+        if (isolated == null)
+        {
+            do { isolated = _local + "Fallback" + _next++; } while (!_used.Add(isolated));
+            if (reusable) _fallback = isolated;
+        }
         var replaced = call.WithArgumentList(call.ArgumentList.WithArguments(call.ArgumentList.Arguments.Replace(first,
             first.WithExpression(SyntaxFactory.IdentifierName(isolated)))));
-        return SyntaxFactory.Block(SyntaxFactory.ParseStatement(_type + " " + isolated + " = default;"),
-            SyntaxFactory.ParseStatement(_local + ".CopyTo(ref " + isolated + ");"),
-            result.ReplaceNode(call, replaced), SyntaxFactory.ParseStatement(isolated + ".CopyTo(ref " + _local + ");"));
+        var statements = new List<StatementSyntax>();
+        if (!reusable) statements.Add(SyntaxFactory.ParseStatement(_type + " " + isolated + " = default;"));
+        statements.Add(SyntaxFactory.ParseStatement(_local + ".CopyTo(ref " + isolated + ");"));
+        statements.Add(result.ReplaceNode(call, replaced));
+        statements.Add(SyntaxFactory.ParseStatement(isolated + ".CopyTo(ref " + _local + ");"));
+        return SyntaxFactory.Block(statements);
     }
 
     /// <summary>Shares the caller's localized state with an inlined helper and localizes an outlined helper independently.</summary>

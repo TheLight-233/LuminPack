@@ -38,16 +38,21 @@ public static class CollectionEmitter
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
-        sb.AppendLine("                writer.WriteCollectionHeader(ref index, value.Count);");
+        sb.AppendLine("                int __wrapperCount = value.Count;");
+        sb.AppendLine("                writer.WriteCollectionHeader(ref index, __wrapperCount);");
         sb.AppendLine();
         sb.AppendLine("                writer.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("                foreach (var item in value)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    writer.CheckBuffer();");
-        sb.AppendLine("                    var temp = item;");
-        sb.AppendLine("                    " + CollectionEmitterKit.ContiguousElementWrite(EmitterTypeTraits.GetFirstTypeArgument(fieldData), elementType, "temp"));
-        sb.AppendLine("                }");
+        if (fieldData.CanGetSequenceStorage) SequenceInterfaceWriteEmitter.Append(fieldData, sb, json: false, fixedHeader: true);
+        else
+        {
+            sb.AppendLine("                foreach (var item in value)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    writer.CheckBuffer();");
+            sb.AppendLine("                    var temp = item;");
+            sb.AppendLine("                    " + CollectionEmitterKit.ContiguousElementWrite(EmitterTypeTraits.GetFirstTypeArgument(fieldData), elementType, "temp"));
+            sb.AppendLine("                }");
+        }
         sb.AppendLine();
         sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("            }");

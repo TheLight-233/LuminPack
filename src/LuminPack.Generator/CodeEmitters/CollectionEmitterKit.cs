@@ -62,7 +62,7 @@ internal static class CollectionEmitterKit
     /// <summary>Determines whether an element write performs its own buffer completion check.</summary>
     /// <param name="element">The element symbol.</param>
     /// <returns>Whether the per-element buffer check can be omitted.</returns>
-    private static bool ChecksItself(ITypeSymbol element) => element?.SpecialType == SpecialType.System_String;
+    internal static bool ChecksItself(ITypeSymbol element) => element?.SpecialType == SpecialType.System_String;
 
     /// <summary>Writes a count header and the elements of a span.</summary>
     /// <param name="sb">The generated statements.</param>

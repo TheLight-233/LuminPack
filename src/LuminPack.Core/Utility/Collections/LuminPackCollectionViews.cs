@@ -324,7 +324,7 @@ public sealed class LuminSortedListSource<TKey, TValue> : global::System.Collect
 /// They intentionally know nothing about serialization; generated formatters
 /// perform every element read/write through static extensions.
 /// </summary>
-public static class LuminPackCollectionAccess
+public static partial class LuminPackCollectionAccess
 {
     private const uint MaxDepth = 3;
 

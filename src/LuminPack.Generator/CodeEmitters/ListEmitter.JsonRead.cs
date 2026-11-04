@@ -67,6 +67,7 @@ public static partial class ListEmitter
         else if (baseType == "global::System.Collections.ObjectModel.ReadOnlyObservableCollection")
         {
             sb.AppendLine("            var observable = new global::System.Collections.ObjectModel.ObservableCollection<" + elementType + ">();");
+            sb.AppendLine("            var observableItems = global::LuminPack.Code.LuminPackMarshal.As<global::System.Collections.ObjectModel.ObservableCollection<" + elementType + ">, global::LuminPack.Code.ObservableCollectionView<" + elementType + ">>(ref observable).items;");
         }
         else if (setInterface)
         {
@@ -115,7 +116,7 @@ public static partial class ListEmitter
         }
         else if (baseType == "global::System.Collections.ObjectModel.ReadOnlyObservableCollection")
         {
-            sb.AppendLine("                observable.Add(item);");
+            sb.AppendLine("                observableItems.Add(item);");
         }
         else if (setInterface)
         {
@@ -124,6 +125,10 @@ public static partial class ListEmitter
         else if (readOnly || interfaceType)
         {
             sb.AppendLine("                tempList.Add(item);");
+        }
+        else if (baseType == "global::System.Collections.ObjectModel.ObservableCollection" && fieldData.CanAppendObservable)
+        {
+            sb.AppendLine("                global::LuminPack.Code.LuminPackCollectionAccess.AppendObservable(value, item);");
         }
         else if (baseType == "global::System.Collections.Generic.LinkedList")
         {

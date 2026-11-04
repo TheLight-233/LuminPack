@@ -502,7 +502,7 @@ internal static class InterfaceCollectionEmitterHelper
         CollectionEmitterKit.AppendSpanWrite(sb, element, elementType, Unsafe + ".As<" + elementType + "[]>(value)", "                ");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        CollectionEmitterKit.AppendCountedWrite(sb, "var item", "value", new[] { "var v = item;", CollectionEmitterKit.ContiguousElementWrite(element, elementType, "v") }, "            ", element);
+        SequenceInterfaceWriteEmitter.Append(fieldData, sb, json: false);
     }
 
     /// <summary>Appends binary reading statements that materialize a sequence interface as an array.</summary>

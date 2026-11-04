@@ -38,16 +38,21 @@ public static class ObservableCollectionEmitter
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
-        sb.AppendLine("                writer.WriteCollectionHeader(ref index, value.Count);");
+        sb.AppendLine("                int __wrapperCount = value.Count;");
+        sb.AppendLine("                writer.WriteCollectionHeader(ref index, __wrapperCount);");
         sb.AppendLine();
         sb.AppendLine("                writer.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("                foreach (var item in value)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    writer.CheckBuffer();");
-        sb.AppendLine("                    var temp = item;");
-        sb.AppendLine("                    " + CollectionEmitterKit.ContiguousElementWrite(EmitterTypeTraits.GetFirstTypeArgument(fieldData), elementType, "temp"));
-        sb.AppendLine("                }");
+        if (fieldData.CanGetSequenceStorage) SequenceInterfaceWriteEmitter.Append(fieldData, sb, json: false, fixedHeader: true);
+        else
+        {
+            sb.AppendLine("                foreach (var item in value)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    writer.CheckBuffer();");
+            sb.AppendLine("                    var temp = item;");
+            sb.AppendLine("                    " + CollectionEmitterKit.ContiguousElementWrite(EmitterTypeTraits.GetFirstTypeArgument(fieldData), elementType, "temp"));
+            sb.AppendLine("                }");
+        }
         sb.AppendLine();
         sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("            }");
@@ -69,11 +74,11 @@ public static class ObservableCollectionEmitter
         sb.AppendLine("            else");
         sb.AppendLine("            {");
         sb.AppendLine("                value.Clear();");
+        sb.AppendLine($"                LuminPackMarshal.As<global::System.Collections.ObjectModel.ObservableCollection<{elementType}>, ObservableCollectionView<{elementType}>>(ref value).items = new global::System.Collections.Generic.List<{elementType}>(length);");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine($"            var list = LuminPackMarshal.As<global::System.Collections.ObjectModel.ObservableCollection<{elementType}>, ObservableCollectionView<{elementType}>>(ref value);");
         sb.AppendLine();
-        sb.AppendLine($"            list.items = new global::System.Collections.Generic.List<{elementType}>(length);");
         sb.AppendLine();
         sb.AppendLine("            var span = LuminPackMarshal.GetListSpan(list.items!, length);");
         CollectionEmitterKit.AppendSpanRead(sb, element, elementType, "span", "            ");

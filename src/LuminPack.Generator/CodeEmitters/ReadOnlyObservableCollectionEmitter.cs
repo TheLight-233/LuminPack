@@ -38,16 +38,21 @@ public static class ReadOnlyObservableCollectionEmitter
         sb.AppendLine("            }");
         sb.AppendLine("            else");
         sb.AppendLine("            {");
-        sb.AppendLine("                writer.WriteCollectionHeader(ref index, value.Count);");
+        sb.AppendLine("                int __wrapperCount = value.Count;");
+        sb.AppendLine("                writer.WriteCollectionHeader(ref index, __wrapperCount);");
         sb.AppendLine();
         sb.AppendLine("                writer.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("                foreach (var item in value)");
-        sb.AppendLine("                {");
-        sb.AppendLine("                    writer.CheckBuffer();");
-        sb.AppendLine("                    var temp = item;");
-        sb.AppendLine("                    " + CollectionEmitterKit.ContiguousElementWrite(EmitterTypeTraits.GetFirstTypeArgument(fieldData), elementType, "temp"));
-        sb.AppendLine("                }");
+        if (fieldData.CanGetSequenceStorage) SequenceInterfaceWriteEmitter.Append(fieldData, sb, json: false, fixedHeader: true);
+        else
+        {
+            sb.AppendLine("                foreach (var item in value)");
+            sb.AppendLine("                {");
+            sb.AppendLine("                    writer.CheckBuffer();");
+            sb.AppendLine("                    var temp = item;");
+            sb.AppendLine("                    " + CollectionEmitterKit.ContiguousElementWrite(EmitterTypeTraits.GetFirstTypeArgument(fieldData), elementType, "temp"));
+            sb.AppendLine("                }");
+        }
         sb.AppendLine();
         sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("            }");
@@ -64,10 +69,9 @@ public static class ReadOnlyObservableCollectionEmitter
         CollectionEmitterKit.AppendReadLength(sb, element, elementType, "value = null;", "            ");
         // The elements are read into the exactly sized list the wrapped collection then holds, instead of an array its constructor copies.
         sb.AppendLine($"            var observable = new global::System.Collections.ObjectModel.ObservableCollection<{elementType}>();");
-        sb.AppendLine($"            var list = new global::System.Collections.Generic.List<{elementType}>(length);");
+        sb.AppendLine($"            var list = LuminPackMarshal.As<global::System.Collections.ObjectModel.ObservableCollection<{elementType}>, ObservableCollectionView<{elementType}>>(ref observable).items;");
         sb.AppendLine("            var listSpan = LuminPackMarshal.GetListSpan(list, length);");
         CollectionEmitterKit.AppendSpanRead(sb, element, elementType, "listSpan", "            ");
-        sb.AppendLine($"            LuminPackMarshal.As<global::System.Collections.ObjectModel.ObservableCollection<{elementType}>, ObservableCollectionView<{elementType}>>(ref observable).items = list;");
         sb.AppendLine($"            value = new global::System.Collections.ObjectModel.ReadOnlyObservableCollection<{elementType}>(observable);");
     }
 }

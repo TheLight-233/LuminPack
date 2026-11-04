@@ -39,6 +39,8 @@ public static partial class ListEmitter
         }
         if (baseType is "global::System.Collections.Generic.ISet" or "global::System.Collections.Generic.IReadOnlySet")
             SetInterfaceWriteEmitter.AppendElements(fieldData, sb, json: true);
+        else if (SequenceInterfaceWriteEmitter.IsInterface(baseType) || fieldData.CanGetSequenceStorage && SequenceInterfaceWriteEmitter.IsWrapper(baseType))
+            SequenceInterfaceWriteEmitter.Append(fieldData, sb, json: true);
         else
         {
             sb.AppendLine("            bool isFirst = true;");
