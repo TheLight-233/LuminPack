@@ -91,6 +91,7 @@ internal static partial class SerializerFrameworkEntryRegression
             .SelectMany(source => source.SyntaxTree.GetRoot().DescendantNodes().OfType<MethodDeclarationSyntax>())
             .Where(method => method.ParameterList.Parameters.Count == 2 && method.ParameterList.Parameters[1].Type!.ToString().TrimEnd('?') == "global::System.Numerics.BigInteger").ToArray();
         Require(methods.Length != 0, "BigInteger operations were not generated.");
+        Require(methods.Any(method => method.ToString().Contains("LuminPackMarshal.ReadBigInteger", StringComparison.Ordinal)) == available, "BigInteger binary reading selected an unavailable API.");
         Require(methods.Any(method => method.ToString().Contains("writer.WriteBigInteger", StringComparison.Ordinal)) == available, "BigInteger writing selected an unavailable API.");
         Require(methods.Any(method => method.ToString().Contains("reader.ReadBigInteger", StringComparison.Ordinal)) == available, "BigInteger reading selected an unavailable API.");
         Require(available || methods.Any(method => method.ToString().Contains("global::System.Numerics.BigInteger.Parse", StringComparison.Ordinal)), "BigInteger compatibility parsing disappeared.");

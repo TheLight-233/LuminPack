@@ -61,7 +61,10 @@ public static class BigIntegerEmitter
         sb.AppendLine("            ");
         sb.AppendLine("            reader.EnsureCollectionPayload(reader.Position, length);");
         sb.AppendLine("            ref var src = ref reader.GetSpanReference(index);");
-        sb.AppendLine("            value = new global::System.Numerics.BigInteger(global::System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref src, length));");
+        if (fieldData.CanReadBinaryBigInteger)
+            sb.AppendLine("            global::LuminPack.Code.LuminPackMarshal.ReadBigInteger(global::System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref src, length), out value);");
+        else
+            sb.AppendLine("            value = new global::System.Numerics.BigInteger(global::System.Runtime.InteropServices.MemoryMarshal.CreateReadOnlySpan(ref src, length));");
         sb.AppendLine("            ");
         sb.AppendLine("            reader.Advance(length);");
     }

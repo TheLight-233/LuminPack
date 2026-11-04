@@ -52,18 +52,19 @@ public class BigIntegerPrecisionTest
         }
     }
 
-    /// <summary>Checks binary writes avoid staging arrays and reads match the existing BCL constructor allocation.</summary>
+    /// <summary>Checks binary writes avoid staging arrays and reads allocate only final magnitude storage.</summary>
     /// <param name="value">The exact integer.</param>
     /// <param name="output">The reusable output buffer.</param>
     private static void CheckBinaryAllocations(BigInteger value, LuminBufferWriter output)
     {
         byte[] input = LuminPackSerializer.Serialize(value);
+        byte[] magnitude = BigInteger.Abs(value).ToByteArray(isUnsigned: true);
         BigInteger target = default;
         for (int i = 0; i < 64; i++)
         {
             output.ResetCore(); LuminPackSerializer.Serialize(value, output);
             LuminPackSerializer.Deserialize(input, ref target);
-            target = new BigInteger(input.AsSpan(4));
+            target = NecessaryMagnitude(value, magnitude);
         }
         long before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 64; i++)
@@ -72,12 +73,65 @@ public class BigIntegerPrecisionTest
         }
         Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
         before = GC.GetAllocatedBytesForCurrentThread();
-        for (int i = 0; i < 64; i++) target = new BigInteger(input.AsSpan(4));
+        for (int i = 0; i < 64; i++) target = NecessaryMagnitude(value, magnitude);
         long necessary = GC.GetAllocatedBytesForCurrentThread() - before;
         before = GC.GetAllocatedBytesForCurrentThread();
         for (int i = 0; i < 64; i++) LuminPackSerializer.Deserialize(input, ref target);
         Assert.Equal(necessary, GC.GetAllocatedBytesForCurrentThread() - before);
         Assert.Equal(value, target);
+    }
+
+    /// <summary>Constructs final result storage without signed-constructor trimming buffers.</summary>
+    /// <param name="value">The expected signed value.</param>
+    /// <param name="magnitude">Its minimal unsigned bytes, prepared outside the measurement.</param>
+    /// <returns>An integer with the same necessary storage size.</returns>
+    private static BigInteger NecessaryMagnitude(BigInteger value, byte[] magnitude) =>
+        value >= int.MinValue && value <= int.MaxValue ? new BigInteger((int)value) : new BigInteger(magnitude, isUnsigned: true);
+
+    /// <summary>Checks every small signed width, redundant sign extension, carry chains and stack/pool boundaries.</summary>
+    [Fact]
+    public void BinarySignedMagnitudesPreserveCanonicalAndExtendedPayloads()
+    {
+        var random = new Random(6104);
+        foreach (int length in new[] { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 12, 13, 16, 17, 31, 32, 33, 63, 64, 65, 127, 128, 129, 255, 256, 257, 511, 512, 513, 1023, 1024, 1025, 4097 })
+        {
+            byte[] bytes = new byte[length];
+            for (int sample = 0; sample < 8; sample++)
+            {
+                random.NextBytes(bytes);
+                CheckBinaryPayload(bytes);
+                if (length != 0) { bytes[length - 1] = 255; CheckBinaryPayload(bytes); }
+            }
+        }
+        var output = new LuminBufferWriter(true);
+        foreach (int bit in new[] { 0, 31, 32, 63, 64, 95, 96, 127, 128, 255, 256, 2047, 2048, 8192, 32768 })
+        {
+            BigInteger power = BigInteger.One << bit;
+            foreach (BigInteger value in new[] { -power - 1, -power, -power + 1, power - 1, power })
+            {
+                CheckBinaryAllocations(value, output);
+                byte[] canonical = value.ToByteArray();
+                foreach (int padding in new[] { 0, 1, 4, 17 })
+                {
+                    byte[] extended = new byte[canonical.Length + padding];
+                    if (value.Sign < 0) extended.AsSpan().Fill(255);
+                    canonical.CopyTo(extended, 0);
+                    CheckBinaryPayload(extended);
+                }
+            }
+        }
+    }
+
+    /// <summary>Compares generated binary reads with the public signed byte constructor.</summary>
+    /// <param name="payload">An arbitrary signed little-endian payload, including nonminimal forms.</param>
+    private static void CheckBinaryPayload(byte[] payload)
+    {
+        byte[] record = new byte[payload.Length + 4];
+        BinaryPrimitives.WriteInt32LittleEndian(record, payload.Length);
+        payload.CopyTo(record, 4);
+        BigInteger target = 17;
+        LuminPackSerializer.Deserialize(record, ref target);
+        Assert.Equal(new BigInteger(payload), target);
     }
 
     /// <summary>Measures retained-buffer writes and compares reads with necessary magnitude construction after pool warmup.</summary>

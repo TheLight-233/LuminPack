@@ -13,6 +13,8 @@ public sealed class LuminLocalFieldData
     internal bool CanWriteJsonBigInteger;
     /// <summary>Whether the referenced runtime exposes complete BigInteger JSON parsing.</summary>
     internal bool CanReadJsonBigInteger;
+    /// <summary>Whether the referenced runtime exposes allocation-aware binary BigInteger construction.</summary>
+    internal bool CanReadBinaryBigInteger;
     /// <summary>Whether the referenced runtime exposes bounded Version JSON formatting.</summary>
     internal bool CanWriteJsonVersion;
     /// <summary>Whether the referenced runtime exposes complete Version JSON parsing.</summary>

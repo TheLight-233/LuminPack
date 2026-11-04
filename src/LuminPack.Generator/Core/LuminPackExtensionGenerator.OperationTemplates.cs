@@ -64,6 +64,12 @@ public static partial class LuminPackExtensionGenerator
         var field = new LuminLocalFieldData { TypeName = FormatterTypeName.Get(type), TypeSymbol = type, Name = "value", IsValue = type.IsValueType };
         if (field.TypeName == "global::System.Numerics.BigInteger")
         {
+            var bytes = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1")?.Construct(compilation.GetSpecialType(SpecialType.System_Byte));
+            field.CanReadBinaryBigInteger = compilation.GetTypeByMetadataName("LuminPack.Code.LuminPackMarshal")?
+                .GetMembers("ReadBigInteger").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.ReturnsVoid && method.Arity == 0 &&
+                    method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 2 &&
+                    method.Parameters[0].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, bytes) &&
+                    method.Parameters[1].RefKind == RefKind.Out && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, type)) == true;
             field.CanWriteJsonBigInteger = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonWriter")?
                 .GetMembers("WriteBigInteger").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.ReturnsVoid && method.Arity == 1 &&
                     method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 1 &&
