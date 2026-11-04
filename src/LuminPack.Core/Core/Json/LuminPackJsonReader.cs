@@ -2897,6 +2897,129 @@ namespace LuminPack.Core
 #endregion
 
 #region String
+        /// <summary>Reads an invariant quoted decimal integer with the library default profile.</summary>
+        /// <returns>The parsed arbitrary-precision integer.</returns>
+        public System.Numerics.BigInteger ReadBigInteger() => ReadBigInteger<LuminPackDefaultOptions>();
+
+        /// <summary>Parses the complete decoded string before publishing the integer.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <returns>The parsed arbitrary-precision integer.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public System.Numerics.BigInteger ReadBigInteger<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            if (CurrentTokenType is not (JsonTokenType.String or JsonTokenType.Number or JsonTokenType.True or JsonTokenType.False or JsonTokenType.Null or JsonTokenType.PropertyName) && !Read<TOptions>())
+                LuminPackExceptionHelper.ThrowFormatException("JSON input does not contain a value.");
+            if (CurrentTokenType == JsonTokenType.Null)
+            {
+                // Keep the original BCL null-string exception after consuming the token.
+                CompleteValue();
+                return System.Numerics.BigInteger.Parse((string)null!, System.Globalization.CultureInfo.InvariantCulture);
+            }
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            {
+                var utf8 = ReadStringUtf8<TOptions>();
+                CompleteValue();
+                return ParseBigIntegerUtf8(utf8);
+            }
+            var text = ReadStringUtf16<TOptions>();
+            CompleteValue();
+#if NET10_0_OR_GREATER
+            return System.Numerics.BigInteger.Parse(text, provider: System.Globalization.CultureInfo.InvariantCulture);
+#else
+            return ParseBigIntegerText(text);
+#endif
+        }
+
+        /// <summary>Decodes UTF-8 through the BCL replacement fallback without allocating a token string.</summary>
+        /// <param name="utf8">The complete unescaped token content.</param>
+        /// <returns>The parsed arbitrary-precision integer.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static System.Numerics.BigInteger ParseBigIntegerUtf8(ReadOnlySpan<byte> utf8)
+        {
+            char[]? rented = null;
+            Span<char> text = utf8.Length <= 256 ? stackalloc char[256] : (rented = ArrayPool<char>.Shared.Rent(utf8.Length));
+            try
+            {
+                int written = Encoding.UTF8.GetChars(utf8, text);
+#if NET10_0_OR_GREATER
+                return System.Numerics.BigInteger.Parse(text.Slice(0, written), provider: System.Globalization.CultureInfo.InvariantCulture);
+#else
+                return ParseBigIntegerText(text.Slice(0, written));
+#endif
+            }
+            finally
+            {
+                if (rented is not null) ArrayPool<char>.Shared.Return(rented);
+            }
+        }
+
+#if !NET10_0_OR_GREATER
+        /// <summary>Parses invariant decimal groups without older BCL token-building allocations.</summary>
+        /// <param name="text">The complete decoded string.</param>
+        /// <returns>The integer, with only its final magnitude allocated on the ordinary decimal path.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static System.Numerics.BigInteger ParseBigIntegerText(ReadOnlySpan<char> text)
+        {
+            // Retain the BCL's asymptotically faster parser beyond its naive-conversion range.
+            if (text.Length > 20_000)
+                goto Fallback;
+            int start = 0, end = text.Length;
+            while (end != 0 && text[end - 1] == '\0') end--;
+            while (start < end && (text[start] == ' ' || (uint)(text[start] - '\t') <= 4)) start++;
+            while (end > start && (text[end - 1] == ' ' || (uint)(text[end - 1] - '\t') <= 4)) end--;
+            bool negative = start < end && text[start] == '-';
+            if (start < end && (negative || text[start] == '+')) start++;
+            if (start == end)
+                goto Fallback;
+            for (int i = start; i < end; i++)
+                if ((uint)(text[i] - '0') > 9)
+                    goto Fallback;
+            while (start < end && text[start] == '0') start++;
+            if (end - start <= 18)
+            {
+                long small = 0;
+                for (int i = start; i < end; i++) small = small * 10 + text[i] - '0';
+                return new System.Numerics.BigInteger(negative ? -small : small);
+            }
+            int capacity = (end - start + 8) / 9;
+            uint[]? rented = null;
+            Span<uint> words = capacity <= 64 ? stackalloc uint[64] : (rented = ArrayPool<uint>.Shared.Rent(capacity));
+            try
+            {
+                int used = 0;
+                while (start < end)
+                {
+                    int groupEnd = Math.Min(start + 9, end);
+                    uint group = 0, scale = 1;
+                    while (start < groupEnd)
+                    {
+                        group = group * 10 + (uint)(text[start++] - '0');
+                        scale *= 10;
+                    }
+                    ulong carry = group;
+                    for (int i = 0; i < used; i++)
+                    {
+                        ulong expanded = (ulong)words[i] * scale + carry;
+                        words[i] = (uint)expanded;
+                        carry = expanded >> 32;
+                    }
+                    if (carry != 0) words[used++] = (uint)carry;
+                }
+                words = words.Slice(0, used);
+                if (!BitConverter.IsLittleEndian)
+                    for (int i = 0; i < used; i++) words[i] = System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(words[i]);
+                var magnitude = new System.Numerics.BigInteger(MemoryMarshal.AsBytes(words), isUnsigned: true);
+                return negative ? -magnitude : magnitude;
+            }
+            finally
+            {
+                if (rented is not null) ArrayPool<uint>.Shared.Return(rented);
+            }
+        Fallback:
+            return System.Numerics.BigInteger.Parse(text, provider: System.Globalization.CultureInfo.InvariantCulture);
+        }
+#endif
+
         /// <summary>Reads a version string with the library default profile.</summary>
         /// <returns>The parsed version, or null.</returns>
         public Version? ReadVersion() => ReadVersion<LuminPackDefaultOptions>();

@@ -1,7 +1,11 @@
 using System.Buffers.Binary;
 using System.Globalization;
 using System.Numerics;
+using System.Text;
 using LuminPack;
+using LuminPack.Core;
+using LuminPack.Option;
+using LuminPack.Utility;
 using Xunit;
 
 namespace LuminPackUnitTest;
@@ -9,6 +13,176 @@ namespace LuminPackUnitTest;
 /// <summary>Checks exact signed BigInteger encoding beyond floating-point and stack-buffer limits.</summary>
 public class BigIntegerPrecisionTest
 {
+    /// <summary>Checks warmed writes allocate nothing and reads allocate only the BCL integer result storage.</summary>
+    [Fact]
+    public void HotPathsAvoidTemporaryManagedAllocations()
+    {
+        foreach (int bits in new[] { 0, 64, 256, 8192 })
+        {
+            BigInteger value = bits == 0 ? BigInteger.Zero : -(BigInteger.One << bits) + 1;
+            string digits = value.ToString(CultureInfo.InvariantCulture);
+            var output = new LuminBufferWriter(true);
+            CheckBinaryAllocations(value, output);
+            CheckAllocations<LuminPackUtf8LengthOptions>(value, digits, Encoding.UTF8, output);
+            CheckAllocations<LuminPackUtf16LengthOptions>(value, digits, Encoding.Unicode, output);
+        }
+    }
+
+    /// <summary>Exercises arbitrary limb carries and stack/pool transitions with deterministic magnitudes.</summary>
+    [Fact]
+    public void RandomizedMagnitudesKeepExactDecimalDigits()
+    {
+        var random = new Random(1337);
+        foreach (int length in new[] { 1, 4, 5, 8, 9, 31, 32, 33, 100, 101, 102, 103, 255, 256, 257, 1023, 1024, 1025 })
+        {
+            var bytes = new byte[length];
+            random.NextBytes(bytes);
+            var magnitude = new BigInteger(bytes);
+            foreach (var value in new[] { magnitude, -magnitude })
+            {
+                string expected = "\"" + value.ToString(CultureInfo.InvariantCulture) + "\"";
+                Assert.Equal(expected, LuminPackSerializer.SerializeJson<LuminPackUtf8LengthOptions>(value));
+                Assert.Equal(expected, LuminPackSerializer.SerializeJson<LuminPackUtf16LengthOptions>(value));
+                BigInteger target = default;
+                LuminPackSerializer.DeserializeJson<LuminPackUtf8LengthOptions>(Encoding.UTF8.GetBytes(expected), ref target);
+                Assert.Equal(value, target);
+                LuminPackSerializer.DeserializeJson<LuminPackUtf16LengthOptions>(Encoding.Unicode.GetBytes(expected), ref target);
+                Assert.Equal(value, target);
+            }
+        }
+    }
+
+    /// <summary>Checks binary writes avoid staging arrays and reads match the existing BCL constructor allocation.</summary>
+    /// <param name="value">The exact integer.</param>
+    /// <param name="output">The reusable output buffer.</param>
+    private static void CheckBinaryAllocations(BigInteger value, LuminBufferWriter output)
+    {
+        byte[] input = LuminPackSerializer.Serialize(value);
+        BigInteger target = default;
+        for (int i = 0; i < 64; i++)
+        {
+            output.ResetCore(); LuminPackSerializer.Serialize(value, output);
+            LuminPackSerializer.Deserialize(input, ref target);
+            target = new BigInteger(input.AsSpan(4));
+        }
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 64; i++)
+        {
+            output.ResetCore(); LuminPackSerializer.Serialize(value, output);
+        }
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 64; i++) target = new BigInteger(input.AsSpan(4));
+        long necessary = GC.GetAllocatedBytesForCurrentThread() - before;
+        before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 64; i++) LuminPackSerializer.Deserialize(input, ref target);
+        Assert.Equal(necessary, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(value, target);
+    }
+
+    /// <summary>Measures retained-buffer writes and compares reads with necessary magnitude construction after pool warmup.</summary>
+    /// <param name="value">The exact integer.</param>
+    /// <param name="digits">The invariant BCL representation.</param>
+    /// <param name="encoding">The document encoding.</param>
+    /// <param name="output">The reusable output buffer.</param>
+    /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+    private static void CheckAllocations<TOptions>(BigInteger value, string digits, Encoding encoding, LuminBufferWriter output)
+        where TOptions : struct, ILuminPackOptions
+    {
+        byte[] input = encoding.GetBytes("\"" + digits + "\"");
+        byte[] magnitude = BigInteger.Abs(value).ToByteArray(isUnsigned: true);
+        var state = new LuminPackReaderOptionalState();
+        BigInteger target = default;
+        for (int i = 0; i < 64; i++)
+        {
+            output.ResetCore();
+            LuminPackSerializer.SerializeJson<TOptions>(value, output);
+            LuminPackSerializer.DeserializeJson<TOptions>(input, ref target);
+            target = ReadDirect<TOptions>(input, state);
+            target = new BigInteger(magnitude, isUnsigned: true);
+        }
+        long before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 64; i++)
+        {
+            output.ResetCore();
+            LuminPackSerializer.SerializeJson<TOptions>(value, output);
+        }
+        Assert.Equal(0, GC.GetAllocatedBytesForCurrentThread() - before);
+        before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 64; i++) target = new BigInteger(magnitude, isUnsigned: true);
+        long necessary = GC.GetAllocatedBytesForCurrentThread() - before;
+        before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 64; i++) LuminPackSerializer.DeserializeJson<TOptions>(input, ref target);
+        Assert.Equal(necessary, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(value, target);
+        before = GC.GetAllocatedBytesForCurrentThread();
+        for (int i = 0; i < 64; i++) target = ReadDirect<TOptions>(input, state);
+        Assert.Equal(necessary, GC.GetAllocatedBytesForCurrentThread() - before);
+        Assert.Equal(value, target);
+    }
+
+    /// <summary>Exercises complete token selection in the low-level API with input pinned for portable readers.</summary>
+    /// <param name="input">The complete encoded token.</param>
+    /// <param name="state">The caller-owned state.</param>
+    /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+    /// <returns>The parsed integer.</returns>
+    private static unsafe BigInteger ReadDirect<TOptions>(byte[] input, LuminPackReaderOptionalState state)
+        where TOptions : struct, ILuminPackOptions
+    {
+        fixed (byte* pointer = input)
+        {
+            ReadOnlySpan<byte> data = new ReadOnlySpan<byte>(pointer, input.Length);
+            var reader = new LuminPackJsonReader(ref data, state);
+            return reader.ReadBigInteger<TOptions>();
+        }
+    }
+
+    /// <summary>Checks both JSON encodings at signed limb, decimal and temporary-buffer boundaries.</summary>
+    [Fact]
+    public void JsonEncodingsPreserveDigitsAndParseFailures()
+    {
+        CheckJson<LuminPackUtf8LengthOptions>(Encoding.UTF8);
+        CheckJson<LuminPackUtf16LengthOptions>(Encoding.Unicode);
+    }
+
+    /// <summary>Compares generated JSON behavior with the original invariant BCL parser.</summary>
+    /// <param name="encoding">The document encoding.</param>
+    /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+    private static void CheckJson<TOptions>(Encoding encoding) where TOptions : struct, ILuminPackOptions
+    {
+        foreach (int bit in new[] { 0, 31, 32, 63, 64, 127, 128, 807, 808, 809, 847, 848, 849, 4096, 8192 })
+        {
+            BigInteger power = BigInteger.One << bit;
+            foreach (BigInteger value in new[] { power - 1, power, power + 1, -power - 1, -power, -power + 1 })
+            {
+                string json = LuminPackSerializer.SerializeJson<TOptions>(value);
+                Assert.Equal("\"" + value.ToString(CultureInfo.InvariantCulture) + "\"", json);
+                BigInteger target = default;
+                LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json), ref target);
+                Assert.Equal(value, target);
+            }
+        }
+        foreach (string? text in new[] { null, "", " ", "0", "-0", "+0", "  +17 ", "17\0", "17\0\0", "1\0x", "1.0", "1e2", "1,000", "NaN", "\u0661", "\u00a017", "\u22121", "17\u0085", "+\t17", " \t+00017\r\n\0\0", "17\0 ", "\0", "  -2147483648  ", "+9223372036854775808", "-18446744073709551616", new string('9', 575), new string('9', 576), new string('9', 577), new string('9', 3000), new string('9', 20000), new string('9', 20001) })
+        {
+            BigInteger expected = default;
+            Exception? failure = Record.Exception(() => expected = BigInteger.Parse(text!, CultureInfo.InvariantCulture));
+            string json = LuminPackSerializer.SerializeJson<TOptions>(text!);
+            var target = (BigInteger.One << 256) + 17;
+            var previous = target;
+            Exception? actual = Record.Exception(() => LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json), ref target));
+            Assert.Equal(failure?.GetType(), actual?.GetType());
+            Assert.Equal((failure as ArgumentException)?.ParamName, (actual as ArgumentException)?.ParamName);
+            Assert.Equal(failure is null ? expected : previous, target);
+        }
+        foreach (string json in new[] { "123", "[]", "\"17", "\"1\\u12\"" })
+        {
+            var target = (BigInteger.One << 256) + 17;
+            var previous = target;
+            Assert.ThrowsAny<Exception>(() => LuminPackSerializer.DeserializeJson<TOptions>(encoding.GetBytes(json), ref target));
+            Assert.Equal(previous, target);
+        }
+    }
+
     /// <summary>Checks full two's-complement bytes and quoted decimal digits on both sides of sign and buffer boundaries.</summary>
     [Fact]
     public void LargeSignedValuesKeepEveryBit()

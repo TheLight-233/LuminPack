@@ -10,6 +10,33 @@ namespace LuminPackUnitTest;
 /// <summary>Provides json streaming writer test functionality.</summary>
 public class JsonStreamingWriterTest
 {
+    /// <summary>Checks bounded and pooled integer digits through guarded segmented output in both encodings.</summary>
+    [Fact]
+    public void BigIntegerFormatsCrossOutputSegments()
+    {
+        CheckBigIntegerSegments<LuminPackUtf8LengthOptions>(Encoding.UTF8);
+        CheckBigIntegerSegments<LuminPackUtf16LengthOptions>(Encoding.Unicode);
+    }
+
+    /// <summary>Checks decimal output uses the external-output path without losing pooled storage prematurely.</summary>
+    /// <param name="encoding">The document encoding.</param>
+    /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+    private static void CheckBigIntegerSegments<TOptions>(Encoding encoding) where TOptions : struct, ILuminPackOptions
+    {
+        var values = new[] { System.Numerics.BigInteger.Zero, System.Numerics.BigInteger.MinusOne,
+            -(System.Numerics.BigInteger.One << 808), System.Numerics.BigInteger.One << 848,
+            -(System.Numerics.BigInteger.One << 8192) + 17 };
+        var output = new ChunkWriter();
+        var writer = new LuminPackJsonWriter(output, new LuminPackWriterOptionalState(), 1);
+        writer.WriteArrayStart<TOptions>();
+        foreach (var value in values) writer.WriteBigInteger<TOptions>(value);
+        writer.WriteArrayEnd<TOptions>();
+        writer.FlushToBufferWriter();
+        string expected = "[" + string.Join(",", values.Select(value => "\"" + value.ToString(System.Globalization.CultureInfo.InvariantCulture) + "\"")) + "]";
+        Assert.Equal(encoding.GetBytes(expected), output.ToArray());
+        Assert.True(output.CommitCount > 1);
+    }
+
     /// <summary>Checks null and all version component widths through segmented output in both encodings.</summary>
     [Fact]
     public void VersionFormatsCrossOutputSegments()

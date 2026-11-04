@@ -80,6 +80,7 @@ internal static partial class SerializerFrameworkEntryRegression
         }
         VerifyModernScalarFields(references);
         VerifyVersionPaths(references);
+        VerifyBigIntegerPaths(references);
         Console.WriteLine("Passed checked enum/BitArray entries, modern scalar fields, four tiers and retained/fresh width and runtime-capability edits.");
     }
 

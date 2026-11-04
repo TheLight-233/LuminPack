@@ -48,6 +48,8 @@
 
 `Version` 保留固定二进制记录及两、三、四分量的 JSON 字符串。具名 JSON 操作 `WriteVersion`、`ReadVersion` 及其编译期配置重载不改变 `Write(null)` 的绑定。写入使用有界栈空间：.NET 8 及以上直接格式化为 UTF-8，其他路径格式化为字符。生成的读取代码解析完整 UTF-16 token span；.NET 10 及以上也直接解析 UTF-8 span，旧框架 UTF-8 仍解码成字符串。格式化与解析位于共享 Runtime 方法中，生成器依据实际 API 选择调用，保留 BCL 验证、新建结果身份和失败发布顺序。
 
+`BigInteger` 保留有符号小端二进制载荷及 invariant 带引号十进制 JSON 表示。具名操作 `WriteBigInteger` / `ReadBigInteger` 及其编译期配置重载不改变数值 `Write` 的重载绑定。格式化使用有界栈空间或用后归还的字符池缓冲。.NET 10 之前，通过公开的数值字节接口及有界或池化工作区转换十进制分组，避免 BCL 格式化器内部数组；完整 UTF-16 token span 直接解析，UTF-8 token 则解码到栈或池中的字符缓冲。旧目标使用有界或池化数值工作区解析常规 invariant 十进制文本，保留 BCL 验证回退及超大数值解析器。生成器依据实际引用的 Runtime 元数据选择这些共享操作，旧 Runtime 保留原字符串回退。null 字符串仍由 BCL 解析器报错，读取失败不会发布替换值。池预热后，复用输出缓冲的写入没有临时托管分配；读取保留 BCL 解析和构造行为，包括某些运行时处理超大数值时的临时分配。池未命中和创建输出缓冲仍可能分配。
+
 - **游标。** 每个读写器只前进一个游标：新版 .NET 上是 `ref byte`，`netstandard2.1` 上是 `byte*`。保留的 `Buffer` 窗口提供长度信息和回填位置。
 - **双寄存器。** 每个状态在游标旁缓存窗口的结束位置（`_end`，写入器为扩容阈值 `_recordLimit`）。范围检查只需一次减法和一次有符号比较。设置 `Buffer`、`BufferCheckLimit` 或 `Owner`（internal setter）会刷新缓存。
 - **生成代码的局部游标写入。** 生成的对象写入代码把游标放在局部变量 `ref byte cursor` 中（JIT 会把它放在寄存器里），并调用返回 `ref` 的写入操作。连续的有界成员共享一次 `ReserveRecord` 检查，之后不再检查。在任何需要使用写入器本身的操作之前，用 `CommitRecords` 发布游标。

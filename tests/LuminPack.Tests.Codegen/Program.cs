@@ -46,6 +46,11 @@ try
         SerializerBuilderPathRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-biginteger-paths"])
+    {
+        SerializerFrameworkEntryRegression.VerifyBigIntegerPaths(references);
+        return 0;
+    }
     if (args is ["--verify-version-paths"])
     {
         SerializerFrameworkEntryRegression.VerifyVersionPaths(references);

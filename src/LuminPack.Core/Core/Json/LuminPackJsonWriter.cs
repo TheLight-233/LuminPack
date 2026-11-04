@@ -1183,6 +1183,160 @@ namespace LuminPack.Core
             Write<TOptions>(value.ToString());
         }
 
+        /// <summary>Writes an invariant quoted decimal integer with the library default profile.</summary>
+        /// <param name="value">The arbitrary-precision integer.</param>
+        public void WriteBigInteger(System.Numerics.BigInteger value) => WriteBigInteger<LuminPackDefaultOptions>(value);
+
+        /// <summary>Writes invariant quoted digits while keeping zero outside the formatting buffer path.</summary>
+        /// <param name="value">The arbitrary-precision integer.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteBigInteger<TOptions>(System.Numerics.BigInteger value) where TOptions : struct, ILuminPackOptions
+        {
+            if (value.IsZero)
+                Write<TOptions>("0");
+            else
+            {
+                int byteCount = value.GetByteCount();
+                if (byteCount <= sizeof(int))
+                    WriteBigIntegerSmall<TOptions>((int)value);
+                else
+                    WriteBigIntegerValue<TOptions>(value, byteCount);
+            }
+        }
+
+        /// <summary>Formats signed Int32 magnitudes without arbitrary-precision scratch or pool management.</summary>
+        /// <param name="value">The integer proven to fit a signed Int32.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteBigIntegerSmall<TOptions>(int value) where TOptions : struct, ILuminPackOptions
+        {
+            Span<char> text = stackalloc char[11];
+            if (value.TryFormat(text, out int written, provider: System.Globalization.CultureInfo.InvariantCulture))
+                WriteFormattedValue<TOptions>(text.Slice(0, written));
+            else
+                Write<TOptions>(value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        /// <summary>Keeps arbitrary-precision formatting and pooled storage outside generated callers.</summary>
+        /// <param name="value">The nonzero integer.</param>
+        /// <param name="byteCount">Its exact signed byte width.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteBigIntegerValue<TOptions>(System.Numerics.BigInteger value, int byteCount) where TOptions : struct, ILuminPackOptions
+        {
+            // log10(256) < 2.5; ten spare characters also cover a padded decimal group and its sign.
+            long capacity = (long)byteCount * 5 / 2 + 10;
+            if (capacity > int.MaxValue)
+            {
+                Write<TOptions>(value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                return;
+            }
+            char[]? rented = null;
+            Span<char> text = capacity <= 256 ? stackalloc char[256] : (rented = ArrayPool<char>.Shared.Rent((int)capacity));
+            try
+            {
+#if NET10_0_OR_GREATER
+                if (value.TryFormat(text, out int written, provider: System.Globalization.CultureInfo.InvariantCulture))
+                    WriteFormattedValue<TOptions>(text.Slice(0, written));
+                else
+                    Write<TOptions>(value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+#else
+                int start = FormatBigIntegerMagnitude(value, byteCount, text);
+                WriteFormattedValue<TOptions>(text.Slice(start));
+#endif
+            }
+            finally
+            {
+                if (rented is not null) ArrayPool<char>.Shared.Return(rented);
+            }
+        }
+
+#if !NET10_0_OR_GREATER
+        /// <summary>Converts public magnitude bytes into decimal groups without older BCL formatter allocations.</summary>
+        /// <param name="value">The nonzero integer outside the signed Int32 range.</param>
+        /// <param name="byteCount">Its signed byte width.</param>
+        /// <param name="text">The bounded destination, including space for one padded group and the sign.</param>
+        /// <returns>The first character of the decimal suffix written to the destination.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private static int FormatBigIntegerMagnitude(System.Numerics.BigInteger value, int byteCount, Span<char> text)
+        {
+            int count = (byteCount - 1) / sizeof(uint) + 1;
+            uint[]? rented = null;
+            int decimalCapacity = (int)((long)count * 10 / 9 + 1);
+            int workspaceLength = count + decimalCapacity;
+            Span<uint> workspace = workspaceLength <= 128 ? stackalloc uint[128] : (rented = ArrayPool<uint>.Shared.Rent(workspaceLength));
+            Span<uint> words = workspace.Slice(0, count);
+            Span<uint> groups = workspace.Slice(count, decimalCapacity);
+            try
+            {
+                // Only the final partial word can contain bytes not written by TryWriteBytes.
+                words[count - 1] = 0;
+                bool success = System.Numerics.BigInteger.Abs(value).TryWriteBytes(MemoryMarshal.AsBytes(words), out _, isUnsigned: true);
+                System.Diagnostics.Debug.Assert(success);
+                if (!BitConverter.IsLittleEndian)
+                    for (int i = 0; i < count; i++) words[i] = System.Buffers.Binary.BinaryPrimitives.ReverseEndianness(words[i]);
+
+                while (words[count - 1] == 0) count--;
+                int end = text.Length;
+                if (count <= 2)
+                {
+                    ulong magnitude = words[0];
+                    if (count == 2) magnitude |= (ulong)words[1] << 32;
+                    end -= 20;
+                    success = magnitude.TryFormat(text.Slice(end, 20), out _, "D20", System.Globalization.CultureInfo.InvariantCulture);
+                    System.Diagnostics.Debug.Assert(success);
+                }
+                else
+                {
+                    const uint decimalBase = 1_000_000_000;
+                    int used = 0;
+                    for (int i = count - 1; i >= 0; i--)
+                    {
+                        uint carry = words[i];
+                        for (int j = 0; j < used; j++)
+                        {
+                            // Horner conversion carries the quotient, avoiding a remainder dependency between groups.
+                            ulong expanded = ((ulong)groups[j] << 32) | carry;
+                            uint next = (uint)(expanded / decimalBase);
+                            groups[j] = (uint)(expanded - (ulong)next * decimalBase);
+                            carry = next;
+                        }
+                        if (carry != 0)
+                        {
+                            uint high = carry / decimalBase;
+                            groups[used++] = carry - high * decimalBase;
+                            if (high != 0) groups[used++] = high;
+                        }
+                    }
+                    ReadOnlySpan<byte> pairs = LuminPackJsonFloatFormatter.DigitPairs;
+                    for (int i = 0; i < used; i++)
+                    {
+                        end -= 9;
+                        Span<char> digits = text.Slice(end, 9);
+                        uint group = groups[i];
+                        for (int position = 8; position > 0; position -= 2)
+                        {
+                            uint high = group / 100;
+                            int pair = (int)(group - high * 100) * 2;
+                            digits[position] = (char)pairs[pair + 1];
+                            digits[position - 1] = (char)pairs[pair];
+                            group = high;
+                        }
+                        digits[0] = (char)('0' + group);
+                    }
+                }
+                while (text[end] == '0') end++;
+                if (value.Sign < 0) text[--end] = '-';
+                return end;
+            }
+            finally
+            {
+                if (rented is not null) ArrayPool<uint>.Shared.Return(rented);
+            }
+        }
+#endif
+
         /// <summary>Writes a version string with the library default profile.</summary>
         /// <param name="value">The version, or null.</param>
         public void WriteVersion(Version? value) => WriteVersion<LuminPackDefaultOptions>(value);

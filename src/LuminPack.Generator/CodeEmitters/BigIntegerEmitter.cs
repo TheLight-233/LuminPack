@@ -71,6 +71,11 @@ public static class BigIntegerEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (fieldData.CanWriteJsonBigInteger)
+        {
+            sb.AppendLine("            writer.WriteBigInteger(value);");
+            return;
+        }
         sb.AppendLine("            writer.WriteString(value.ToString(global::System.Globalization.CultureInfo.InvariantCulture));");
     }
 
@@ -79,6 +84,11 @@ public static class BigIntegerEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
+        if (fieldData.CanReadJsonBigInteger)
+        {
+            sb.AppendLine("            value = reader.ReadBigInteger();");
+            return;
+        }
         sb.AppendLine("            var str = reader.ReadString();");
         sb.AppendLine("            value = global::System.Numerics.BigInteger.Parse(str, global::System.Globalization.CultureInfo.InvariantCulture);");
     }
