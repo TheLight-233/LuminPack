@@ -77,7 +77,8 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             get => Unsafe.ByteOffset(ref Cursor, ref _end);
 #else
-            get => (nint)(_end - Cursor);
+            // Native-width byte offsets avoid Mono's element-size division and retain pointer wrap semantics.
+            get => unchecked((nint)_end - (nint)Cursor);
 #endif
         }
         /// <summary>The operation's options and reference tracking state.</summary>
@@ -322,7 +323,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(Buffer), ref Cursor);
 #else
-            get => (int)(Cursor - (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(Buffer)));
+            get => (int)unchecked((nint)Cursor - (nint)Unsafe.AsPointer(ref MemoryMarshal.GetReference(Buffer)));
 #endif
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set

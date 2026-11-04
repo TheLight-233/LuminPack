@@ -173,7 +173,8 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             long room = (long)Unsafe.ByteOffset(ref Cursor, ref _end);
 #else
-            long room = (long)(_end - Cursor);
+            // Native-width byte offsets avoid Mono's element-size division and retain pointer wrap semantics.
+            long room = (long)unchecked((nint)_end - (nint)Cursor);
 #endif
             if (room < (long)(uint)count || count < 0)
 #if NET8_0_OR_GREATER
@@ -270,7 +271,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(_buffer), ref Cursor);
 #else
-            get => (int)(Cursor - (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_buffer)));
+            get => (int)unchecked((nint)Cursor - (nint)Unsafe.AsPointer(ref MemoryMarshal.GetReference(_buffer)));
 #endif
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
@@ -312,7 +313,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             available = (long)Unsafe.ByteOffset(ref Cursor, ref _end) >= length;
 #else
-            available = (long)(_end - Cursor) >= length;
+            available = (long)unchecked((nint)_end - (nint)Cursor) >= length;
 #endif
             return ref Current;
         }
@@ -1203,7 +1204,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
                 (int)Unsafe.ByteOffset(ref Cursor, ref _end);
 #else
-                (int)(_end - Cursor);
+                (int)unchecked((nint)_end - (nint)Cursor);
 #endif
         }
 
@@ -1704,7 +1705,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             if ((ulong)(uint)length > (ulong)Unsafe.ByteOffset(ref Cursor, ref _end))
 #else
-            if ((ulong)(uint)length > (ulong)(_end - Cursor))
+            if ((ulong)(uint)length > (ulong)unchecked((nint)_end - (nint)Cursor))
 #endif
                 ThrowVersionPayloadLength(length);
             return length;

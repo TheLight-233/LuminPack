@@ -195,7 +195,8 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             get => (int)Unsafe.ByteOffset(ref MemoryMarshal.GetReference(Buffer), ref Cursor);
 #else
-            get => (int)(Cursor - (byte*)Unsafe.AsPointer(ref MemoryMarshal.GetReference(Buffer)));
+            // Native-width byte offsets avoid Mono's element-size division and retain pointer wrap semantics.
+            get => (int)unchecked((nint)Cursor - (nint)Unsafe.AsPointer(ref MemoryMarshal.GetReference(Buffer)));
 #endif
             [MethodImpl(MethodImplOptions.AggressiveInlining)]
             set
@@ -287,7 +288,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             if ((long)Unsafe.ByteOffset(ref Cursor, ref _end) >= (long)(uint)count && count >= 0)
 #else
-            if ((long)(_end - Cursor) >= (long)(uint)count && count >= 0)
+            if ((long)unchecked((nint)_end - (nint)Cursor) >= (long)(uint)count && count >= 0)
 #endif
                 return;
             EnsureCapacitySlow(count);
@@ -1857,7 +1858,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             if ((long)Unsafe.ByteOffset(ref Cursor, ref _end) < byteCount)
 #else
-            if ((long)(_end - Cursor) < byteCount)
+            if ((long)unchecked((nint)_end - (nint)Cursor) < byteCount)
 #endif
                 return false;
             ref byte destination = ref Current;
@@ -2036,7 +2037,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             if ((long)Unsafe.ByteOffset(ref Cursor, ref _end) < 4) return false;
 #else
-            if ((long)(_end - Cursor) < 4) return false;
+            if ((long)unchecked((nint)_end - (nint)Cursor) < 4) return false;
 #endif
             Unsafe.WriteUnaligned(ref Current, (uint)'\\' | ((uint)escaped << 16));
             Advance(4);
@@ -2519,7 +2520,7 @@ namespace LuminPack.Core
 #if NET8_0_OR_GREATER
             return (long)Unsafe.ByteOffset(ref Cursor, ref _end) >= count;
 #else
-            return (long)(_end - Cursor) >= count;
+            return (long)unchecked((nint)_end - (nint)Cursor) >= count;
 #endif
         }
 
