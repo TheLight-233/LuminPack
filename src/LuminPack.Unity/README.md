@@ -68,7 +68,7 @@ Use `LuminUnity.Write/Read` in custom formatters when a schema needs these exact
 ## 🔒 Safety
 
 - Every codec reserves its full output and checks the complete input before touching a fixed field. Reads stage the value locally and publish it only when everything succeeded.
-- Native-owner reads stage a local cursor and all payload values before touching the destination. Counts and complete payloads are checked before key arrays are allocated. A complete read reuses an existing native owner; a null record assigns null.
+- Native-owner reads stage a local cursor and all payload values before touching the destination. Counts and complete payloads are checked before key scratch is acquired. A complete read reuses an existing native owner; a null record assigns null.
 - The codecs do not impose portable endianness on Core's native scalar representation.
 
 > [!WARNING]
@@ -90,6 +90,7 @@ dotnet build src/LuminPack.Unity/LuminPack.Unity.csproj -c Release `
 
 - `UnityManagedPath` comes from an installed Editor; its engine DLLs are not copied into the extension distribution.
 - `LuminPackCorePath` defaults to the existing Release/Debug netstandard2.1 Core output.
+- For precompiled builds targeting Unity 6000.2 or later, add `-p:DefineConstants=UNITY_6000_2_OR_NEWER` to select public Span key APIs. Unity source integration supplies this symbol automatically. See [scratch allocation and version limits](../../docs/unity.md#native-owner-scratch-and-unity-versions).
 - The .NET project is not a standalone NuGet distribution, because the host has to supply the Unity engine references.
 
 ## 🧪 Testing

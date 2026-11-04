@@ -1,0 +1,13 @@
+image,type,operation,native_bytes,address
+LuminPack.UnityBaseline,Vector3,Read,2213,1365382451632
+LuminPack.UnityBaseline,Vector3,Write,752,1365382449696
+LuminPack.UnityBaseline,Matrix4x4,Read,11110,1365382626256
+LuminPack.UnityBaseline,Matrix4x4,Write,1840,1365382623168
+LuminPack.UnityBaseline,Keyframe,Read,5782,1365382382944
+LuminPack.UnityBaseline,Keyframe,Write,2312,1365382380608
+LuminPack.Unity,Vector3,Read,928,1365316447312
+LuminPack.Unity,Vector3,Write,752,1365316446544
+LuminPack.Unity,Matrix4x4,Read,2256,1365334964752
+LuminPack.Unity,Matrix4x4,Write,1862,1365334962864
+LuminPack.Unity,Keyframe,Read,1624,1365316308080
+LuminPack.Unity,Keyframe,Write,2270,1365316285184

@@ -9,7 +9,7 @@ using LuminPack.Unity;
 using UnityEngine;
 
 /// <summary>Runs focused native-owner codec checks inside a real Unity Editor, without a generated application model.</summary>
-public static unsafe class UnityObjectContract
+public static unsafe partial class UnityObjectContract
 {
     /// <summary>Checks actual native objects, reference reuse, all short windows, nulls, sizes and forged counts.</summary>
     public static void RunAll()
@@ -32,6 +32,7 @@ public static unsafe class UnityObjectContract
         Check<RectOffset>(new RectOffset(-1, 2, 3, -4), new RectOffset(10, 11, 12, 13), &LuminUnity.Write, &LuminUnity.Read);
         CheckSize<RectOffset>(new RectOffset(-1, 2, 3, 4), &LuminUnity.Write, &LuminUnity.Size);
         LuminUnity.Register(); LuminUnity.Register();
+        CheckAllocationProfiles();
         Debug.Log("LUMINPACK_UNITY_OBJECTS_OK: curve/gradient/offset native round trips, reuse, all truncations, nulls, exact-length writes and count validation.");
     }
 

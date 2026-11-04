@@ -27,6 +27,16 @@ Run an IL2CPP player build on each target platform before release; a successful 
 
 Core references neither package. Both register before scene load.
 
+### Native-owner scratch and Unity versions
+
+`LuminPack.Unity` preserves the explicit binary fields of `AnimationCurve`, `Gradient` and `RectOffset`. Their JSON codecs remain unsupported and reject both UTF-8 and UTF-16 calls, including null roots.
+
+On Unity 6000.2 or later, curve and gradient key snapshots use the public Span APIs. Up to 16 keys per set use bounded stack storage; larger sets use returned `ArrayPool<T>` storage. With retained output storage and a warmed pool, size queries, writes and reads into existing owners need no temporary managed allocation. A fresh read still creates its required native-owner wrapper. Pool misses, including after shared-pool trimming, can allocate, so this is not a cold-start zero-allocation guarantee.
+
+Earlier Unity versions use the public curve indexer to capture write snapshots and `length` for sizing. Their curve reads and gradient operations still require managed key arrays because the corresponding Span APIs are unavailable. `RectOffset` needs no key scratch. All versions validate complete payloads before changing a reused owner, and size/write operations require that the source owner is not modified concurrently.
+
+Unity source integration supplies version symbols automatically. When building the optional module outside Unity against 6000.2 or later engine assemblies, also pass `-p:DefineConstants=UNITY_6000_2_OR_NEWER`; omit that symbol for older engines. The extension validation script derives this choice from the selected Editor version.
+
 ## NativeAOT and trimming
 
 Generated code uses no reflection, so serialization works under NativeAOT and full trimming. `tests/LuminPack.Tests.Aot` publishes and runs a trimmed and a native executable in CI.

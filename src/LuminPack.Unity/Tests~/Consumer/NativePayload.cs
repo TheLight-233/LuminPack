@@ -19,11 +19,12 @@ namespace LuminPack.Unity.ContractFixture
     }
 
     /// <summary>Runs a precompiled generated consumer inside the engine owning the native objects.</summary>
-    public static class ContractEntry
+    public static partial class ContractEntry
     {
         /// <summary>Checks native values, nested arrays/lists, nulls and repeated owner reuse through generated entry points.</summary>
         public static void Run()
         {
+            CheckUnsupportedJson();
             var source = new NativePayload
             {
                 Curve = new AnimationCurve(new Keyframe(0, 1), new Keyframe(1, 5)) { preWrapMode = WrapMode.Loop, postWrapMode = WrapMode.PingPong },

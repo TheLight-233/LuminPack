@@ -17,7 +17,8 @@ internal static class RepositoryStandards
     [
         ["NETSTANDARD2_1"],
         ["NET5_0_OR_GREATER", "NET6_0_OR_GREATER", "NET7_0_OR_GREATER", "NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER", "NET11_0_OR_GREATER", "DEBUG", "LUMINPACK_BUFFERWRITER_SECOND_TLS"],
-        ["UNITY_2021_2_OR_NEWER", "UNITY_2022_3_OR_NEWER", "ENABLE_IL2CPP", "DEBUG"]
+        ["UNITY_2021_2_OR_NEWER", "UNITY_2022_3_OR_NEWER", "ENABLE_IL2CPP", "DEBUG"],
+        ["UNITY_2021_2_OR_NEWER", "UNITY_2022_3_OR_NEWER", "UNITY_6000_2_OR_NEWER", "ENABLE_IL2CPP", "UNITY_EDITOR", "DEBUG"]
     ];
 
     /// <summary>Validates repository sources without requiring project-specific analyzer packages.</summary>

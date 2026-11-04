@@ -1,0 +1,13 @@
+image,type,operation,native_bytes,instructions,calls,branches,stack_reservation
+LuminPack.UnityBaseline,Vector3,Read,2213,461,8,23,"rsp, 0x200"
+LuminPack.UnityBaseline,Vector3,Write,752,174,2,8,"rsp, 0xe0"
+LuminPack.UnityBaseline,Matrix4x4,Read,11110,2197,36,114,"rsp, 0x8a0"
+LuminPack.UnityBaseline,Matrix4x4,Write,1840,395,2,8,"rsp, 0x110"
+LuminPack.UnityBaseline,Keyframe,Read,5782,1158,18,58,"rsp, 0x490"
+LuminPack.UnityBaseline,Keyframe,Write,2312,460,2,8,"rsp, 0x140"
+LuminPack.Unity,Vector3,Read,928,209,3,10,"rsp, 0x100"
+LuminPack.Unity,Vector3,Write,752,174,2,8,"rsp, 0xe0"
+LuminPack.Unity,Matrix4x4,Read,2256,405,5,10,"rsp, 0x190"
+LuminPack.Unity,Matrix4x4,Write,1862,385,2,12,"rsp, 0x140"
+LuminPack.Unity,Keyframe,Read,1624,324,3,10,"rsp, 0x140"
+LuminPack.Unity,Keyframe,Write,2270,454,2,12,"rsp, 0x150"

@@ -26,7 +26,14 @@ $managedCandidates = if ($PrepareHosted) { @($env:UNITY_MANAGED_PATH) } else {
 }
 $unityManagedPath = $managedCandidates | Where-Object { Test-Path -LiteralPath (Join-Path $_ 'UnityEngine.CoreModule.dll') } | Select-Object -First 1
 if (-not $unityManagedPath) { throw 'Cannot locate the installed Unity managed engine assemblies.' }
-dotnet build (Join-Path $repositoryPath 'src/LuminPack.Unity/LuminPack.Unity.csproj') -c Release "-p:UnityManagedPath=$unityManagedPath"
+$unityVersionText = if ($PrepareHosted) { $env:UNITY_VERSION } else { (Get-Item -LiteralPath $env:UNITY_EDITOR_PATH).VersionInfo.ProductVersion }
+$unityVersionMatch = [regex]::Match($unityVersionText, '^\d+\.\d+')
+if (-not $unityVersionMatch.Success) { throw 'Cannot determine the Unity API version for the extension build.' }
+$unityModuleOptions = @("-p:UnityManagedPath=$unityManagedPath")
+if ([version]$unityVersionMatch.Value -ge [version]'6000.2') {
+    $unityModuleOptions += '-p:DefineConstants=UNITY_6000_2_OR_NEWER'
+}
+dotnet build (Join-Path $repositoryPath 'src/LuminPack.Unity/LuminPack.Unity.csproj') -c Release @unityModuleOptions
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 dotnet build (Join-Path $repositoryPath 'src/LuminPack.Unity/Tests~/Consumer/LuminPack.Unity.Consumer.Tests.csproj') -c Release "-p:UnityManagedPath=$unityManagedPath"
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
@@ -34,7 +41,7 @@ foreach ($source in @('src/LuminPack.Unity/bin/Release/netstandard2.1/LuminPack.
     Copy-Item -LiteralPath (Join-Path $repositoryPath $source) -Destination (Join-Path $projectPath 'Assets/Plugins')
 }
 Copy-Item -LiteralPath (Join-Path $repositoryPath 'src/LuminPack.Burst/Runtime') -Destination (Join-Path $projectPath 'Assets/LuminPack.Burst') -Recurse
-Copy-Item -LiteralPath (Join-Path $repositoryPath 'src/LuminPack.Unity/Tests~/Editor/UnityObjectContract.cs') -Destination (Join-Path $projectPath 'Assets/Editor')
+Get-ChildItem -LiteralPath (Join-Path $repositoryPath 'src/LuminPack.Unity/Tests~/Editor') -Filter 'UnityObjectContract*.cs' | Copy-Item -Destination (Join-Path $projectPath 'Assets/Editor')
 Copy-Item -LiteralPath (Join-Path $repositoryPath 'src/LuminPack.Burst/Tests~/KernelContract.cs') -Destination (Join-Path $projectPath 'Assets/Editor')
 Get-ChildItem -LiteralPath (Join-Path $repositoryPath 'src/LuminPack.Burst/Tests~/Shared') -Filter '*.cs' | Copy-Item -Destination (Join-Path $projectPath 'Assets/Editor')
 $validationSource = @'

@@ -11,12 +11,16 @@ namespace LuminPack.Unity
         /// <summary>Adds the exact encoded width of a nullable curve.</summary>
         /// <param name="evaluator">Size accumulator.</param><param name="value">Curve or null.</param>
         public static void Size(ref LuminPackEvaluator evaluator, in AnimationCurve? value)
-            => evaluator.Add(value is null ? 1 : checked(13 + value.keys.Length * 32));
+            => evaluator.Add(value is null ? 1 : checked(13 + value.length * 32));
 
         /// <summary>Adds the exact encoded width of a nullable gradient.</summary>
         /// <param name="evaluator">Size accumulator.</param><param name="value">Gradient or null.</param>
         public static void Size(ref LuminPackEvaluator evaluator, in Gradient? value)
+#if UNITY_6000_2_OR_NEWER
+            => evaluator.Add(value is null ? 1 : checked(17 + value.colorKeyCount * 20 + value.alphaKeyCount * 8));
+#else
             => evaluator.Add(value is null ? 1 : checked(17 + value.colorKeys.Length * 20 + value.alphaKeys.Length * 8));
+#endif
 
         /// <summary>Adds the exact encoded width of a nullable offset.</summary>
         /// <param name="evaluator">Size accumulator.</param><param name="value">Offset or null.</param>
@@ -28,13 +32,7 @@ namespace LuminPack.Unity
         public static void Write(ref LuminPackWriter writer, in AnimationCurve? value)
         {
             if (value is null) { WriteNull(ref writer); return; }
-            Keyframe[] keys = value.keys;
-            writer.EnsureAdditionalCapacity(checked(13 + keys.Length * 32));
-            writer.WriteObjectHeader(3);
-            writer.Write((int)value.preWrapMode);
-            writer.Write((int)value.postWrapMode);
-            writer.WriteCollectionHeader(keys.Length);
-            foreach (Keyframe key in keys) Write(ref writer, key);
+            WriteCurveSnapshot(ref writer, value);
         }
 
         /// <summary>Validates a complete curve before applying keys/modes to a reused or fresh native owner.</summary>
@@ -47,6 +45,9 @@ namespace LuminPack.Unity
             int pre = cursor.Read<int>(), post = cursor.Read<int>(), count = cursor.Read<int>();
             int bytes = PayloadBytes(count, 32);
             cursor.EnsureReadable(cursor.Position, bytes);
+#if UNITY_6000_2_OR_NEWER
+            value = ReadCurveSnapshot(ref cursor, value, pre, post, count);
+#else
             var keys = new Keyframe[count];
             for (int index = 0; index < count; index++) Read(ref cursor, ref keys[index]);
             AnimationCurve result = value ?? new AnimationCurve();
@@ -54,6 +55,7 @@ namespace LuminPack.Unity
             result.preWrapMode = (WrapMode)pre;
             result.postWrapMode = (WrapMode)post;
             value = result;
+#endif
             reader = cursor;
         }
 
@@ -62,6 +64,9 @@ namespace LuminPack.Unity
         public static void Write(ref LuminPackWriter writer, in Gradient? value)
         {
             if (value is null) { WriteNull(ref writer); return; }
+#if UNITY_6000_2_OR_NEWER
+            WriteGradientSnapshot(ref writer, value);
+#else
             GradientColorKey[] colors = value.colorKeys;
             GradientAlphaKey[] alphas = value.alphaKeys;
             writer.EnsureAdditionalCapacity(checked(17 + colors.Length * 20 + alphas.Length * 8));
@@ -72,6 +77,7 @@ namespace LuminPack.Unity
             foreach (GradientColorKey key in colors) Write(ref writer, key);
             writer.WriteCollectionHeader(alphas.Length);
             foreach (GradientAlphaKey key in alphas) Write(ref writer, key);
+#endif
         }
 
         /// <summary>Checks both complete key arrays before allocating or changing a reused gradient.</summary>
@@ -88,6 +94,9 @@ namespace LuminPack.Unity
             int alphaCount = MemoryMarshal.Read<int>(cursor.Buffer.Slice(alphaHeader, sizeof(int)));
             int alphaBytes = PayloadBytes(alphaCount, 8);
             cursor.EnsureReadable(checked(alphaHeader + sizeof(int)), alphaBytes);
+#if UNITY_6000_2_OR_NEWER
+            value = ReadGradientSnapshot(ref cursor, value, mode, colorSpace, colorCount, alphaCount);
+#else
             var colors = new GradientColorKey[colorCount];
             var alphas = new GradientAlphaKey[alphaCount];
             for (int index = 0; index < colorCount; index++) Read(ref cursor, ref colors[index]);
@@ -98,6 +107,7 @@ namespace LuminPack.Unity
             result.mode = (GradientMode)mode;
             result.colorSpace = (ColorSpace)colorSpace;
             value = result;
+#endif
             reader = cursor;
         }
 

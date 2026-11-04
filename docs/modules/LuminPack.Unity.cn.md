@@ -68,7 +68,7 @@ LuminUnity.Read(ref reader, ref position);
 ## 🔒 安全性
 
 - 每个编解码器都会预留完整的输出空间，并在访问任何定长字段之前检查完整输入。读取时先在本地暂存值，只有全部成功后才发布。
-- 原生所有者读取会在触碰目标之前暂存本地游标和全部负载值。在分配键数组之前会先检查计数和完整负载。完整读取会复用已有的原生所有者；null 记录则赋值为 null。
+- 原生所有者读取会在触碰目标之前暂存本地游标和全部负载值。在取得键暂存空间之前会先检查计数和完整负载。完整读取会复用已有的原生所有者；null 记录则赋值为 null。
 - 编解码器不会给 Core 的原生标量表示强加可移植字节序。
 
 > [!WARNING]
@@ -90,6 +90,7 @@ dotnet build src/LuminPack.Unity/LuminPack.Unity.csproj -c Release `
 
 - `UnityManagedPath` 来自已安装的编辑器；其引擎 DLL 不会被复制到扩展的分发内容中。
 - `LuminPackCorePath` 默认指向现有的 Release/Debug netstandard2.1 Core 输出。
+- 面向 Unity 6000.2 及以上版本构建预编译模块时，添加 `-p:DefineConstants=UNITY_6000_2_OR_NEWER` 以选择公开的 Span 键 API。源码集成时 Unity 会自动提供该符号。见[暂存分配与版本限制](../unity.cn.md#原生所有者暂存与-unity-版本)。
 - 由于 Unity 引擎引用必须由宿主提供，该 .NET 项目不是独立的 NuGet 分发包。
 
 ## 🧪 测试
