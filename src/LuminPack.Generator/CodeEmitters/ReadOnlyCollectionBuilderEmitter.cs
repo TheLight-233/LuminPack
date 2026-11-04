@@ -13,7 +13,7 @@ public static class ReadOnlyCollectionBuilderEmitter
     {
         string elementType = CodeEmitterRegistry.GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            if (value is null) { writer.EnsureAdditionalCapacity(4); writer.WriteNullCollectionHeader(); return; }");
-        sb.AppendLine("            var view = LuminPackMarshal.As<" + fieldData.TypeName + ", ReadOnlyCollectionBuilderView<" + elementType + ">>(ref value);");
+        sb.AppendLine("            var view = LuminPackMarshal.As<" + fieldData.TypeName + ", ReadOnlyCollectionBuilderView<" + elementType + ">>(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in value));");
         CollectionEmitterKit.AppendSpanWrite(sb, EmitterTypeTraits.GetFirstTypeArgument(fieldData), elementType,
             "view.items.AsSpan(0, value.Count)", "            ");
     }
@@ -41,7 +41,7 @@ public static class ReadOnlyCollectionBuilderEmitter
         string elementType = CodeEmitterRegistry.GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            if (value is null) { writer.WriteNull(); return; }");
         sb.AppendLine("            writer.WriteArrayStart();");
-        sb.AppendLine("            var view = LuminPackMarshal.As<" + fieldData.TypeName + ", ReadOnlyCollectionBuilderView<" + elementType + ">>(ref value);");
+        sb.AppendLine("            var view = LuminPackMarshal.As<" + fieldData.TypeName + ", ReadOnlyCollectionBuilderView<" + elementType + ">>(ref global::System.Runtime.CompilerServices.Unsafe.AsRef(in value));");
         sb.AppendLine("            int count = value.Count;");
         sb.AppendLine("            for (int i = 0; i < count; i++)");
         sb.AppendLine("            {");

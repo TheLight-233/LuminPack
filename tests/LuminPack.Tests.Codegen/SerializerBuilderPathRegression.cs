@@ -11,6 +11,7 @@ internal static class SerializerBuilderPathRegression
     /// <param name="references">The current framework and runtime references.</param>
     internal static void Run(MetadataReference[] references)
     {
+        SerializerCollectionBuilderRegression.Run(references);
         const string source = """
             using System;
             using System.Text;
