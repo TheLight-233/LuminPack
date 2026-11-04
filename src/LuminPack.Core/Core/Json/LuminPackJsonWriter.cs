@@ -1948,6 +1948,85 @@ namespace LuminPack.Core
             WriteByteRaw<TOptions>(Quote);
         }
 
+        /// <summary>Writes a builder snapshot as a JSON string with the library default profile.</summary>
+        /// <param name="value">The builder to snapshot, or null.</param>
+        public void WriteStringBuilder(StringBuilder? value) => WriteStringBuilder<LuminPackDefaultOptions>(value);
+
+        /// <summary>Writes a complete builder snapshot before an output callback can observe or change its source.</summary>
+        /// <param name="value">The builder to snapshot, or null.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteStringBuilder<TOptions>(StringBuilder? value) where TOptions : struct, ILuminPackOptions
+        {
+            if (value is null)
+            {
+                WriteNull<TOptions>();
+                return;
+            }
+            int length = value.Length;
+            if (length == 0)
+            {
+                Write<TOptions>(string.Empty);
+                return;
+            }
+            WriteStringBuilderSnapshot<TOptions>(value, length);
+        }
+
+        /// <summary>Keeps stack storage and pool cleanup outside null and empty builder writes.</summary>
+        /// <param name="value">The nonempty builder to snapshot.</param>
+        /// <param name="length">The captured character count.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteStringBuilderSnapshot<TOptions>(StringBuilder value, int length) where TOptions : struct, ILuminPackOptions
+        {
+            char[]? rented = null;
+            Span<char> snapshot = length <= 256 ? stackalloc char[256] : (rented = ArrayPool<char>.Shared.Rent(length));
+            try
+            {
+                value.CopyTo(0, snapshot, length);
+                WriteStringSnapshot<TOptions>(snapshot.Slice(0, length));
+            }
+            finally
+            {
+                if (rented is not null) ArrayPool<char>.Shared.Return(rented);
+            }
+        }
+
+        /// <summary>Writes a stable character snapshot through the existing string content kernels.</summary>
+        /// <param name="text">The complete snapshot owned by the current operation.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private void WriteStringSnapshot<TOptions>(scoped ReadOnlySpan<char> text) where TOptions : struct, ILuminPackOptions
+        {
+            WriteCommaIfNeeded<TOptions>();
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8 && (uint)(text.Length - 4) <= 28 && global::LuminPack.Internal.ShortAsciiTranscoder.IsSupported)
+            {
+                EnsureCapacity(text.Length + 2);
+                if (global::LuminPack.Internal.ShortAsciiTranscoder.TryEncode(text, Buffer.Slice(Position + 1, text.Length), escapeJson: true))
+                {
+                    ref byte output = ref Current;
+                    output = Quote;
+                    Unsafe.Add(ref output, (nint)(uint)(text.Length + 1)) = Quote;
+                    Advance(text.Length + 2);
+                    return;
+                }
+                WriteByteRaw<TOptions>(Quote);
+#if NET8_0_OR_GREATER
+                WriteStringContentUtf8Encoded<TOptions>(text);
+#else
+                WriteStringContentSlow<TOptions>(text);
+#endif
+                WriteByteRaw<TOptions>(Quote);
+                return;
+            }
+            WriteByteRaw<TOptions>(Quote);
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+                WriteStringContentUtf8<TOptions>(text);
+            else
+                WriteStringContentUtf16<TOptions>(text);
+            WriteByteRaw<TOptions>(Quote);
+        }
+
         /// <summary>Applies <c>WriteElement</c> with the library default profile.</summary>
         /// <param name = "value">The value.</param>
         /// <param name = "separate">Whether a preceding element requires a comma.</param>

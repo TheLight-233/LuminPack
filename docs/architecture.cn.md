@@ -44,6 +44,8 @@
 
 私有的标量格式化路径也用于 `DateTime`、`DateTimeOffset`、`Guid` 和 `TimeSpan`。这些确定的格式产生有界且无需转义的 ASCII，因此 UTF-8 共用一个不内联的编码入口，UTF-16 直接复制格式化内容，省去重复转义扫描，并把编码器状态留在各标量格式化方法之外。既有文本内核分派、输出容量检查、引号和逗号状态仍然保留。
 
+当实际引用的框架提供 span 版本 `CopyTo` 时，`StringBuilder` 二进制写入直接复制到完整预留的字符区间；旧框架回退仍然保留。JSON 写入在发布输出前取得完整快照，使用有界栈空间或用后归还的池化字符缓冲区。null 和空值不进入快照栈帧。`LuminPackJsonWriter.WriteStringBuilder` 与 `WriteStringBuilder<TOptions>` 提供此操作，不改变 `Write` 对 null 字面量的绑定。对应的 `LuminPackJsonReader.ReadStringBuilder` 重载把解码和构造保留在共享 Runtime 入口中。生成调用依据实际引用的 Runtime API 选择。UTF-16 JSON 复用读取在完成 token 后追加解码后的 span；新建读取保留既有字符串构造函数和容量行为。
+
 - **游标。** 每个读写器只前进一个游标：新版 .NET 上是 `ref byte`，`netstandard2.1` 上是 `byte*`。保留的 `Buffer` 窗口提供长度信息和回填位置。
 - **双寄存器。** 每个状态在游标旁缓存窗口的结束位置（`_end`，写入器为扩容阈值 `_recordLimit`）。范围检查只需一次减法和一次有符号比较。设置 `Buffer`、`BufferCheckLimit` 或 `Owner`（internal setter）会刷新缓存。
 - **生成代码的局部游标写入。** 生成的对象写入代码把游标放在局部变量 `ref byte cursor` 中（JIT 会把它放在寄存器里），并调用返回 `ref` 的写入操作。连续的有界成员共享一次 `ReserveRecord` 检查，之后不再检查。在任何需要使用写入器本身的操作之前，用 `CommitRecords` 发布游标。

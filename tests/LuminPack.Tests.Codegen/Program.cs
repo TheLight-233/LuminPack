@@ -41,6 +41,11 @@ try
         SerializerFrameworkEntryRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-builder-paths"])
+    {
+        SerializerBuilderPathRegression.Run(references);
+        return 0;
+    }
     if (args is ["--verify-immutable-list-writes"])
     {
         SerializerImmutableListWriteRegression.Run(references);
@@ -254,6 +259,7 @@ try
     SerializerMechanismRegression.Run(references);
     SerializerCodegenPerformanceRegression.Run(references);
     SerializerTimeZoneCacheRegression.Run(references);
+    SerializerBuilderPathRegression.Run(references);
     SerializerImmutableQueueConstructionRegression.Run(references);
     SerializerScalarInterfaceReadRegression.Run(references);
     SerializerScalarInterfaceWriteRegression.Run(references);

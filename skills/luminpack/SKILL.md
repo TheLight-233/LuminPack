@@ -94,3 +94,5 @@ For ordinary objects with `[LuminPackPoolRent]`, binary and JSON reads without `
 - `[LuminPackBounded(n)]` is a promise; a wrong bound can write past the buffer.
 
 - Binary and JSON reader/writer `Options` are properties. Readers constructed from a buffer bind its reader state; writers prefer explicit state to the associated buffer state. Use `OptionState` when an initialized context is required.
+- For low-level JSON writing of a `StringBuilder`, use `WriteStringBuilder` or `WriteStringBuilder<TOptions>`. The operation snapshots the complete value before output callbacks can mutate it. Generated serializers select this API automatically when the referenced runtime exposes it.
+- The matching reader methods are `ReadStringBuilder(ref value)` and `ReadStringBuilder<TOptions>(ref value)`. They retain fresh constructor behavior and reuse an existing builder after complete token decoding.

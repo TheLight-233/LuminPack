@@ -23,6 +23,19 @@ public static class StringBuilderEmitter
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
         sb.AppendLine("            ");
+        if (data.CanCopyStringBuilder)
+        {
+            sb.AppendLine("            int length = value.Length;");
+            sb.AppendLine("            int byteCount = checked(length * sizeof(char));");
+            sb.AppendLine("            writer.EnsureAdditionalCapacity(checked(sizeof(int) + byteCount));");
+            sb.AppendLine("            writer.WriteCollectionHeader(ref index, length);");
+            sb.AppendLine("            writer.Advance(sizeof(int));");
+            sb.AppendLine("            var destination = global::System.Runtime.InteropServices.MemoryMarshal.CreateSpan(ref Unsafe.As<byte, char>(ref writer.GetSpanReference(index)), length);");
+            sb.AppendLine("            value.CopyTo(0, destination, length);");
+            sb.AppendLine("            writer.Advance(byteCount);");
+            sb.AppendLine("            writer.CheckBuffer();");
+            return;
+        }
         sb.AppendLine("#if NET8_0_OR_GREATER");
         sb.AppendLine("            ");
         sb.AppendLine("            writer.EnsureAdditionalCapacity(checked(sizeof(int) + value.Length * sizeof(char)));");
@@ -99,6 +112,11 @@ public static class StringBuilderEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
+        if (data.CanWriteJsonStringBuilder)
+        {
+            sb.AppendLine("            writer.WriteStringBuilder(value);");
+            return;
+        }
         sb.AppendLine("            if (value == null)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.WriteNull();");
@@ -113,6 +131,11 @@ public static class StringBuilderEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
+        if (data.CanReadJsonStringBuilder)
+        {
+            sb.AppendLine("            reader.ReadStringBuilder(ref value);");
+            return;
+        }
         sb.AppendLine("            if (reader.IsNull())");
         sb.AppendLine("            {");
         sb.AppendLine("                value = null;");

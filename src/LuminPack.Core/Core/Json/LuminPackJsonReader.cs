@@ -2897,6 +2897,36 @@ namespace LuminPack.Core
 #endregion
 
 #region String
+        /// <summary>Reads a complete builder value with the library default profile.</summary>
+        /// <param name="value">The reusable builder target.</param>
+        public void ReadStringBuilder(ref StringBuilder? value) => ReadStringBuilder<LuminPackDefaultOptions>(ref value);
+
+        /// <summary>Reuses a builder after complete decoding while preserving fresh construction and failure publication.</summary>
+        /// <param name="value">The reusable builder target.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void ReadStringBuilder<TOptions>(ref StringBuilder? value) where TOptions : struct, ILuminPackOptions
+        {
+            if (value is not null && CurrentTokenType == JsonTokenType.String && default(TOptions).StringEncoding == LuminPackStringEncoding.UTF16)
+            {
+                var text = ReadStringUtf16<TOptions>();
+                CompleteValue();
+                value.Clear();
+                value.Append(text);
+                return;
+            }
+            string? decoded = Read<string, TOptions>();
+            if (decoded is null)
+                value = null;
+            else if (value is null)
+                value = new StringBuilder(decoded);
+            else
+            {
+                value.Clear();
+                value.Append(decoded);
+            }
+        }
+
         /// <summary>Reads a complete JSON value into its selected storage.</summary>
         /// <param name = "value">The destination storage.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]

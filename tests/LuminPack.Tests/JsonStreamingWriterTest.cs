@@ -10,6 +10,33 @@ namespace LuminPackUnitTest;
 /// <summary>Provides json streaming writer test functionality.</summary>
 public class JsonStreamingWriterTest
 {
+    /// <summary>Checks builder snapshots precede callbacks that can mutate their source in either encoding.</summary>
+    [Fact]
+    public void StringBuilderSnapshotsSurviveOutputCallbacks()
+    {
+        CheckBuilderSnapshot<LuminPackUtf8LengthOptions>(Encoding.UTF8);
+        CheckBuilderSnapshot<LuminPackUtf16LengthOptions>(Encoding.Unicode);
+    }
+
+    /// <summary>Checks stack and pooled snapshots through guarded, segmented output.</summary>
+    /// <param name="encoding">The document encoding.</param>
+    /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+    private static void CheckBuilderSnapshot<TOptions>(Encoding encoding) where TOptions : struct, ILuminPackOptions
+    {
+        foreach (int length in new[] { 32, 257, 30000 })
+        {
+            string original = new string('x', length) + "\u00e9\u4e2d\"\\\n\ud83d\ude00";
+            var builder = new StringBuilder(original);
+            var output = new ChunkWriter();
+            var writer = new LuminPackJsonWriter(output, new LuminPackWriterOptionalState(), 1);
+            output.OnGetMemory = () => builder.Clear().Append("changed");
+            writer.WriteStringBuilder<TOptions>(builder);
+            writer.FlushToBufferWriter();
+            Assert.Equal(encoding.GetBytes(LuminPackSerializer.SerializeJson<TOptions>(original)), output.ToArray());
+            Assert.Equal("changed", builder.ToString());
+        }
+    }
+
 #if NET8_0_OR_GREATER
     /// <summary>Checks bounded modern and established scalar formats through segmented output and its canaries.</summary>
     [Fact]

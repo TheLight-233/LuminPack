@@ -62,6 +62,23 @@ public static partial class LuminPackExtensionGenerator
     private static LuminLocalFieldData CreateOperationField(ITypeSymbol type, Compilation compilation, MetaInfo metadata)
     {
         var field = new LuminLocalFieldData { TypeName = FormatterTypeName.Get(type), TypeSymbol = type, Name = "value", IsValue = type.IsValueType };
+        if (field.TypeName == "global::System.Text.StringBuilder" && type is INamedTypeSymbol builder)
+        {
+            field.CanReadJsonStringBuilder = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonReader")?
+                .GetMembers("ReadStringBuilder").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.ReturnsVoid && method.Arity == 1 &&
+                    method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 1 &&
+                    method.Parameters[0].RefKind == RefKind.Ref && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, type)) == true;
+            field.CanWriteJsonStringBuilder = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonWriter")?
+                .GetMembers("WriteStringBuilder").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.ReturnsVoid && method.Arity == 1 &&
+                    method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 1 &&
+                    method.Parameters[0].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, type)) == true;
+            field.CanCopyStringBuilder = builder.GetMembers("CopyTo").OfType<IMethodSymbol>().Any(method => !method.IsStatic &&
+                method.DeclaredAccessibility == Accessibility.Public && method.ReturnsVoid && method.Arity == 0 && method.Parameters.Length == 3 &&
+                method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+                method.Parameters[0].Type.SpecialType == SpecialType.System_Int32 && method.Parameters[2].Type.SpecialType == SpecialType.System_Int32 &&
+                method.Parameters[1].Type is INamedTypeSymbol { MetadataName: "Span`1", TypeArguments.Length: 1 } span &&
+                span.ContainingNamespace.ToDisplayString() == "System" && span.TypeArguments[0].SpecialType == SpecialType.System_Char);
+        }
         if (field.TypeName is "global::System.DateOnly" or "global::System.TimeOnly" or "global::System.Int128" or "global::System.UInt128")
             field.CanFormatJsonScalar = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonWriter")?
                 .GetMembers("Write").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.ReturnsVoid && method.Arity == 1 &&
