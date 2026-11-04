@@ -36,7 +36,7 @@ internal static class CoreTextProjection
         foreach (var method in Read(coreRoot, "Utility/Text/StringSerializer.Latin1.cs", Modern).DescendantNodes().OfType<MethodDeclarationSyntax>()) AppendMethod(output, method);
         output.AppendLine("    }");
         output.AppendLine("    internal static unsafe class CoreTextFallback\n    {");
-        // The portable loop is Core's own replacement/final-block implementation. Only its managed Encoding fast path is omitted.
+        // Project Core's bounded replacement/final-block loop; complete-capacity dispatch stays in the Core host.
         var fallback = portable.DescendantNodes().OfType<MethodDeclarationSyntax>().Single(m => m.Identifier.ValueText == "SerializeAsUtf8Slow");
         var originalFixed = fallback.Body!.Statements.OfType<FixedStatementSyntax>().Single();
         fallback = fallback.WithIdentifier(SyntaxFactory.Identifier("Encode")).WithBody(SyntaxFactory.Block(originalFixed))
@@ -96,8 +96,15 @@ internal static class CoreTextProjection
         const string file = "Utility/Text/StringSerializer.Latin1Record.cs";
         AppendOrigin(output, root, file);
         output.AppendLine("internal static unsafe class CoreLatin1Records\n{");
-        foreach (var method in Read(root, file, Modern).DescendantNodes().OfType<MethodDeclarationSyntax>().Where(m => m.Identifier.ValueText is "IsLatin1" or "IsLatin1Long" or "TryNarrowLatin1" or "TryNarrowLatin1Long" or "PackLatin1" or "WidenLatin1" or "WidenLatin1Long" or "MatchesLatin1" or "MatchesLatin1Long"))
+        var methods = Read(root, file, Modern).DescendantNodes().OfType<MethodDeclarationSyntax>().ToArray();
+        bool hasSpanClassifier = methods.Any(m => m.Identifier.ValueText == "IsLatin1" &&
+            m.ParameterList.Parameters.FirstOrDefault()?.Type is GenericNameSyntax { Identifier.ValueText: "ReadOnlySpan" });
+        foreach (var method in methods.Where(m => m.Identifier.ValueText is "IsLatin1" or "IsLatin1Range" or "IsLatin1Long" or "TryNarrowLatin1" or "TryNarrowLatin1Long" or "PackLatin1" or "WidenLatin1" or "WidenLatin1Long" or "MatchesLatin1" or "MatchesLatin1Long"))
         {
+            // Mapping the string forwarder to a span would duplicate the canonical span overload.
+            if (hasSpanClassifier && method.Identifier.ValueText == "IsLatin1" &&
+                method.ParameterList.Parameters.FirstOrDefault()?.Type is PredefinedTypeSyntax type && type.Keyword.IsKind(SyntaxKind.StringKeyword))
+                continue;
             var projected = method.WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.InternalKeyword), SyntaxFactory.Token(SyntaxKind.StaticKeyword), SyntaxFactory.Token(SyntaxKind.UnsafeKeyword)));
             output.AppendLine(Rewrite(projected).Replace("string value", "ReadOnlySpan<char> value", StringComparison.Ordinal).Replace("value.AsSpan()", "value", StringComparison.Ordinal));
         }

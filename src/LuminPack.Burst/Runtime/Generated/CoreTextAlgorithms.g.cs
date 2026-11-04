@@ -13,7 +13,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreTextAlgorithms
     {
-// Core source SHA256: Utility/Text/StringSerializer.cs B32D4151B387C2C3D349AD1C726D2229B107EF28D622F5FD7ADACAD8C1A6155B
+// Core source SHA256: Utility/Text/StringSerializer.cs 5E8E96563F27A8913ADA879C3575765F09B153A69F12E2C4C3BA2D14DE76DF7C
 /// <summary>Performs the prefer custom simd step for the current operation.</summary>
 /// <param name = "source">The input data to process.</param>
 /// <param name = "destinationLength">The destination length used by this operation.</param>
@@ -231,7 +231,8 @@ internal static unsafe OperationStatus SerializeAsUtf8Slow(ReadOnlySpan<char> so
         OperationStatus status;
         while (true)
         {
-            status = TranscodeToUtf8(input, (int)(inputEnd - input), output, (int)(outputEnd - output), out input, out output);
+            // Subtract byte addresses at native width before widening; Mono otherwise retains division by one.
+            status = TranscodeToUtf8(input, (int)(inputEnd - input), output, (int)((long)unchecked((nint)outputEnd - (nint)output)), out input, out output);
             if (status == OperationStatus.Done || status == OperationStatus.DestinationTooSmall)
                 break;
             if (status == OperationStatus.NeedMoreData && !isFinalBlock)
@@ -242,7 +243,7 @@ internal static unsafe OperationStatus SerializeAsUtf8Slow(ReadOnlySpan<char> so
                 break;
             }
 
-            if (outputEnd - output < 3)
+            if ((long)unchecked((nint)outputEnd - (nint)output) < 3)
             {
                 status = OperationStatus.DestinationTooSmall;
                 break;
@@ -258,7 +259,7 @@ internal static unsafe OperationStatus SerializeAsUtf8Slow(ReadOnlySpan<char> so
         }
 
         charsRead = (int)(input - originalInput);
-        bytesWritten = (int)(output - originalOutput);
+        bytesWritten = (int)((long)unchecked((nint)output - (nint)originalOutput));
         return status;
     }
 }
@@ -274,7 +275,7 @@ internal static unsafe OperationStatus DeserializeFromUtf8(ReadOnlySpan<byte> so
         OperationStatus status;
         while (true)
         {
-            status = TranscodeToUtf16(pInput, (int)(inputEnd - pInput), pOutput, (int)(outputEnd - pOutput), out byte* pInputRemaining, out char* pOutputRemaining);
+            status = TranscodeToUtf16(pInput, (int)((long)unchecked((nint)inputEnd - (nint)pInput)), pOutput, (int)(outputEnd - pOutput), out byte* pInputRemaining, out char* pOutputRemaining);
             pInput = pInputRemaining;
             pOutput = pOutputRemaining;
             if (status is OperationStatus.Done or OperationStatus.DestinationTooSmall)
@@ -293,12 +294,12 @@ internal static unsafe OperationStatus DeserializeFromUtf8(ReadOnlySpan<byte> so
                 break;
             }
 
-            int invalidLength = status == OperationStatus.NeedMoreData ? (int)(inputEnd - pInput) : GetInvalidUtf8SequenceLength(pInput, (int)(inputEnd - pInput));
+            int invalidLength = status == OperationStatus.NeedMoreData ? (int)((long)unchecked((nint)inputEnd - (nint)pInput)) : GetInvalidUtf8SequenceLength(pInput, (int)((long)unchecked((nint)inputEnd - (nint)pInput)));
             pInput += invalidLength;
             *pOutput++ = '\uFFFD';
         }
 
-        bytesRead = (int)(pInput - pSource);
+        bytesRead = (int)((long)unchecked((nint)pInput - (nint)pSource));
         charsWritten = (int)(pOutput - pDest);
         return status;
     }
@@ -329,7 +330,7 @@ internal static unsafe OperationStatus TranscodeToUtf8(char* pInputBuffer, int i
         // not for every character in general text.
         if (Ssse3.IsSupported)
         {
-            while (inputEnd - input >= 32 && outputEnd - output >= 24)
+            while (inputEnd - input >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 24)
             {
                 uint lead = *input;
                 if (lead >= 0x80 && (lead < 0x800 || IsBmp3(lead)))
@@ -339,7 +340,7 @@ internal static unsafe OperationStatus TranscodeToUtf8(char* pInputBuffer, int i
                         // Sparse ASCII delimiter between large CJK runs.
                         // Only consume it here when the next vector-friendly
                         // run is plausibly of the same 3-byte class.
-                        if (inputEnd - input >= 33 && outputEnd - output >= 25 && *input < 0x80 && IsBmp3(input[1]))
+                        if (inputEnd - input >= 33 && (long)unchecked((nint)outputEnd - (nint)output) >= 25 && *input < 0x80 && IsBmp3(input[1]))
                         {
                             *output++ = (byte)*input++;
                             continue;
@@ -360,13 +361,13 @@ internal static unsafe OperationStatus TranscodeToUtf8(char* pInputBuffer, int i
     // outer SerializeAsUtf8 loop performs replacement if requested.
     if (input != pInputBuffer && inputEnd - input >= 64)
     {
-        OperationStatus nativeStatus = Utf8.FromUtf16(new ReadOnlySpan<char>(input, (int)(inputEnd - input)), new Span<byte>(output, (int)(outputEnd - output)), out int nativeChars, out int nativeBytes, replaceInvalidSequences: false, isFinalBlock: false);
+        OperationStatus nativeStatus = Utf8.FromUtf16(new ReadOnlySpan<char>(input, (int)(inputEnd - input)), new Span<byte>(output, (int)((long)unchecked((nint)outputEnd - (nint)output))), out int nativeChars, out int nativeBytes, replaceInvalidSequences: false, isFinalBlock: false);
         pInputBufferRemaining = input + nativeChars;
         pOutputBufferRemaining = output + nativeBytes;
         return nativeStatus;
     }
 
-    OperationStatus status = TranscodeToUtf8Scalar(input, (int)(inputEnd - input), output, (int)(outputEnd - output), out char* remainingInput, out byte* remainingOutput);
+    OperationStatus status = TranscodeToUtf8Scalar(input, (int)(inputEnd - input), output, (int)((long)unchecked((nint)outputEnd - (nint)output)), out char* remainingInput, out byte* remainingOutput);
     pInputBufferRemaining = remainingInput;
     pOutputBufferRemaining = remainingOutput;
     return status;
@@ -386,7 +387,7 @@ internal static unsafe void EncodeAsciiRun(ref char* input, ref byte* output, ch
     ;
     if (Avx2.IsSupported)
     {
-        while (inputEnd - input >= 32 && outputEnd - output >= 32)
+        while (inputEnd - input >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
         {
             var a = Vector256.Load((ushort*)input);
             var b = Vector256.Load((ushort*)(input + 16));
@@ -401,7 +402,7 @@ internal static unsafe void EncodeAsciiRun(ref char* input, ref byte* output, ch
 
     Vector128<ushort> nonAsciiMask = Vector128.Create((ushort)0xFF80);
     Vector128<short> zero = Vector128<short>.Zero;
-    while (inputEnd - input >= 32 && outputEnd - output >= 32)
+    while (inputEnd - input >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
     {
         Vector128<ushort> a = KernelVectorMemory.Read128<ushort>(input);
         Vector128<ushort> b = KernelVectorMemory.Read128<ushort>(input + 8);
@@ -416,7 +417,7 @@ internal static unsafe void EncodeAsciiRun(ref char* input, ref byte* output, ch
         output += 32;
     }
 
-    while (inputEnd - input >= 16 && outputEnd - output >= 16)
+    while (inputEnd - input >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 16)
     {
         Vector128<ushort> a = KernelVectorMemory.Read128<ushort>(input);
         Vector128<ushort> b = KernelVectorMemory.Read128<ushort>(input + 8);
@@ -443,7 +444,7 @@ internal static unsafe OperationStatus TranscodeToUtf8Scalar(char* pInputBuffer,
         {
             // ASCII SWAR: 4 UTF-16 code units -> one exact 32-bit write.
             // This is the portable fast path for netstandard2.1 as well.
-            if (littleEndian && inputEnd - input >= 4 && outputEnd - output >= 4)
+            if (littleEndian && inputEnd - input >= 4 && (long)unchecked((nint)outputEnd - (nint)output) >= 4)
             {
                 ulong four = Unsafe.ReadUnaligned<ulong>(input);
                 if ((four & 0xFF80FF80FF80FF80UL) == 0)
@@ -471,7 +472,7 @@ internal static unsafe OperationStatus TranscodeToUtf8Scalar(char* pInputBuffer,
         {
             // Two adjacent Latin / Cyrillic / Arabic UTF-16 code units can be
             // emitted with a single 32-bit store. No unrelated CJK checks here.
-            if (littleEndian && inputEnd - input >= 2 && outputEnd - output >= 4)
+            if (littleEndian && inputEnd - input >= 2 && (long)unchecked((nint)outputEnd - (nint)output) >= 4)
             {
                 uint next = input[1];
                 if (next >= 0x80 && next < 0x800)
@@ -484,7 +485,7 @@ internal static unsafe OperationStatus TranscodeToUtf8Scalar(char* pInputBuffer,
                 }
             }
 
-            if (outputEnd - output < 2)
+            if ((long)unchecked((nint)outputEnd - (nint)output) < 2)
             {
                 status = OperationStatus.DestinationTooSmall;
                 break;
@@ -500,7 +501,7 @@ internal static unsafe OperationStatus TranscodeToUtf8Scalar(char* pInputBuffer,
         if (IsBmp3(c))
         {
             // Two BMP characters -> exactly 6 UTF-8 bytes (4 + 2 stores).
-            if (littleEndian && inputEnd - input >= 2 && outputEnd - output >= 6)
+            if (littleEndian && inputEnd - input >= 2 && (long)unchecked((nint)outputEnd - (nint)output) >= 6)
             {
                 uint next = input[1];
                 if (IsBmp3(next))
@@ -515,7 +516,7 @@ internal static unsafe OperationStatus TranscodeToUtf8Scalar(char* pInputBuffer,
                 }
             }
 
-            if (outputEnd - output < 3)
+            if ((long)unchecked((nint)outputEnd - (nint)output) < 3)
             {
                 status = OperationStatus.DestinationTooSmall;
                 break;
@@ -544,7 +545,7 @@ internal static unsafe OperationStatus TranscodeToUtf8Scalar(char* pInputBuffer,
                 break;
             }
 
-            if (outputEnd - output < 4)
+            if ((long)unchecked((nint)outputEnd - (nint)output) < 4)
             {
                 status = OperationStatus.DestinationTooSmall;
                 break;
@@ -723,7 +724,7 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
         if (Avx2.IsSupported)
         {
             Vector256<ushort> highMask = Vector256.Create((ushort)0xFF80);
-            while (inputEnd - input >= 16 && outputEnd - output >= 16)
+            while (inputEnd - input >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 16)
             {
                 Vector256<ushort> chars = KernelVectorMemory.Read256<ushort>(input);
                 Vector256<short> ascii = Avx2.CompareEqual(Avx2.And(chars, highMask).AsInt16(), Vector256<short>.Zero);
@@ -740,7 +741,7 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
         if (Ssse3.IsSupported)
         {
             Vector128<ushort> highMask = Vector128.Create((ushort)0xFF80);
-            while (inputEnd - input >= 8 && outputEnd - output >= 8)
+            while (inputEnd - input >= 8 && (long)unchecked((nint)outputEnd - (nint)output) >= 8)
             {
                 Vector128<ushort> chars = KernelVectorMemory.Read128<ushort>(input);
                 Vector128<short> ascii = Sse2.CompareEqual(Sse2.And(chars, highMask).AsInt16(), Vector128<short>.Zero);
@@ -762,7 +763,7 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
             Vector256<ushort> sixBits = Vector256.Create((ushort)63);
             Vector256<ushort> leadBits = Vector256.Create((ushort)0xC0);
             Vector256<ushort> trailBits = Vector256.Create((ushort)0x80);
-            while (inputEnd - input >= 32 && outputEnd - output >= 64)
+            while (inputEnd - input >= 32 && (long)unchecked((nint)outputEnd - (nint)output) >= 64)
             {
                 var a = KernelVectorMemory.Read256<ushort>(input);
                 var b = KernelVectorMemory.Read256<ushort>(input + 16);
@@ -780,7 +781,7 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
                 output += 64;
             }
 
-            while (inputEnd - input >= 16 && outputEnd - output >= 32)
+            while (inputEnd - input >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 32)
             {
                 Vector256<ushort> chars = KernelVectorMemory.Read256<ushort>(input);
                 Vector256<short> valid = Avx2.And(Avx2.CompareGreaterThan(chars.AsInt16(), min), Avx2.CompareGreaterThan(max, chars.AsInt16()));
@@ -801,7 +802,7 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
             Vector128<ushort> sixBits = Vector128.Create((ushort)63);
             Vector128<ushort> leadBits = Vector128.Create((ushort)0xC0);
             Vector128<ushort> trailBits = Vector128.Create((ushort)0x80);
-            while (inputEnd - input >= 8 && outputEnd - output >= 16)
+            while (inputEnd - input >= 8 && (long)unchecked((nint)outputEnd - (nint)output) >= 16)
             {
                 Vector128<ushort> chars = KernelVectorMemory.Read128<ushort>(input);
                 Vector128<short> valid = Sse2.And(Sse2.CompareGreaterThan(chars.AsInt16(), min), Sse2.CompareGreaterThan(max, chars.AsInt16()));
@@ -824,7 +825,7 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
             Vector256<ushort> e0 = Vector256.Create((ushort)0xE0);
             Vector256<ushort> trail = Vector256.Create((ushort)0x80);
             Vector256<ushort> sixBits = Vector256.Create((ushort)63);
-            while (inputEnd - input >= 16 && outputEnd - output >= 48)
+            while (inputEnd - input >= 16 && (long)unchecked((nint)outputEnd - (nint)output) >= 48)
             {
                 Vector256<ushort> chars = KernelVectorMemory.Read256<ushort>(input);
                 Vector256<short> top = Avx2.And(chars, topMask).AsInt16();
@@ -855,7 +856,7 @@ internal static unsafe bool TryEncodeVectorRun(ref char* input, ref byte* output
             Vector128<ushort> e0 = Vector128.Create((ushort)0xE0);
             Vector128<ushort> trail = Vector128.Create((ushort)0x80);
             Vector128<ushort> sixBits = Vector128.Create((ushort)63);
-            while (inputEnd - input >= 8 && outputEnd - output >= 24)
+            while (inputEnd - input >= 8 && (long)unchecked((nint)outputEnd - (nint)output) >= 24)
             {
                 Vector128<ushort> chars = KernelVectorMemory.Read128<ushort>(input);
                 Vector128<short> top = Sse2.And(chars, topMask).AsInt16();
@@ -970,7 +971,8 @@ internal static unsafe OperationStatus Encode(ReadOnlySpan<char> source, Span<by
         OperationStatus status;
         while (true)
         {
-            status = CoreTextAlgorithms.TranscodeToUtf8Scalar(input, (int)(inputEnd - input), output, (int)(outputEnd - output), out input, out output);
+            // Subtract byte addresses at native width before widening; Mono otherwise retains division by one.
+            status = CoreTextAlgorithms.TranscodeToUtf8Scalar(input, (int)(inputEnd - input), output, (int)((long)unchecked((nint)outputEnd - (nint)output)), out input, out output);
             if (status == OperationStatus.Done || status == OperationStatus.DestinationTooSmall)
                 break;
             if (status == OperationStatus.NeedMoreData && !isFinalBlock)
@@ -981,7 +983,7 @@ internal static unsafe OperationStatus Encode(ReadOnlySpan<char> source, Span<by
                 break;
             }
 
-            if (outputEnd - output < 3)
+            if ((long)unchecked((nint)outputEnd - (nint)output) < 3)
             {
                 status = OperationStatus.DestinationTooSmall;
                 break;
@@ -997,7 +999,7 @@ internal static unsafe OperationStatus Encode(ReadOnlySpan<char> source, Span<by
         }
 
         charsRead = (int)(input - originalInput);
-        bytesWritten = (int)(output - originalOutput);
+        bytesWritten = (int)((long)unchecked((nint)output - (nint)originalOutput));
         return status;
     }
 }
@@ -1802,17 +1804,24 @@ internal static unsafe void Copy256(ref byte input, ref byte output, ref nint bl
     }
 }
 }
-// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 26AAE085C45AFA5388D6CE8E4C1DB7D01141810AD7295AF189D8EEAC4809A8C5
+// Core source SHA256: Utility/Text/StringSerializer.Latin1Record.cs 8052C9E985094C59321CFEBA770034619E4E0FD76F4366453EC0852E8814065C
 internal static unsafe class CoreLatin1Records
 {
-/// <summary>Returns whether every code unit of a string fits one Latin-1 byte.</summary>
-/// <param name = "value">The string.</param>
-/// <returns>Whether the compact payload represents the string.</returns>
+/// <summary>Checks a character span using the same bounded Latin-1 kernels as string records.</summary>
+/// <param name = "value">The complete character range.</param>
+/// <returns>Whether every code unit fits one byte.</returns>
 [MethodImpl(MethodImplOptions.AggressiveInlining)]
 internal static unsafe bool IsLatin1(ReadOnlySpan<char> value)
 {
-    int length = value.Length;
-    ref ushort chars = ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(value));
+    return IsLatin1Range(ref Unsafe.As<char, ushort>(ref MemoryMarshal.GetReference(value)), value.Length);
+}
+/// <summary>Checks an existing character range without generic comparison boxing in unoptimized JIT tiers.</summary>
+/// <param name = "chars">The first character, unused for an empty range.</param>
+/// <param name = "length">The nonnegative character count.</param>
+/// <returns>Whether the original vector and scalar kernels accept the complete range.</returns>
+[MethodImpl(MethodImplOptions.AggressiveInlining)]
+internal static unsafe bool IsLatin1Range(ref ushort chars, int length)
+{
     if (Vector128.IsHardwareAccelerated && Unsafe.SizeOf<IntPtr>() == 8)
     {
         if (length > 16)
