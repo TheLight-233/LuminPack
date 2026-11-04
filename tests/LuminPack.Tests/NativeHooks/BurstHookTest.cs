@@ -93,15 +93,20 @@ public sealed unsafe class BurstHookTest : IDisposable
         Assert.Throws<ArgumentException>(() => LuminPackBurst.Register(new() { Version = 1 }));
     }
 
-    /// <summary>Checks Unicode, strict failures, replacement, streaming tails and all destination capacities against the platform codec.</summary>
-    [Fact]
-    public void TextStatusCountsAndBytesMatchPlatform()
+    /// <summary>Checks native and portable Unicode paths, strict failures, replacement, streaming tails and bounded destinations.</summary>
+    /// <param name="useNativeHook">Whether to install the native codec probe or exercise the portable fallback.</param>
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void TextStatusCountsAndBytesMatchPlatform(bool useNativeHook)
     {
-        LuminPackBurst.Register(new() { Version = LuminPackBurst.AbiVersion, Utf8Encode = &Encode, Utf8Decode = &Decode, Utf8Equal = &Utf8Equal });
-        foreach (string text in new[] { "", "ASCII", "\u00e9\u4e2d\ud83d\ude00", "\ud800", "A\udc00B" })
+        if (useNativeHook)
+            LuminPackBurst.Register(new() { Version = LuminPackBurst.AbiVersion, Utf8Encode = &Encode, Utf8Decode = &Decode, Utf8Equal = &Utf8Equal });
+        int encodeBefore = _encodeCalls;
+        foreach (string text in new[] { "", "ASCII", "\u00e9\u4e2d\ud83d\ude00", "\ud800", "A\udc00B", new string('x', 129), new string('\u00e9', 33) + "A\ud800", new string('\u4e2d', 40) + "\ud83d\ude00\ud800" })
         foreach (bool replace in new[] { false, true })
         foreach (bool final in new[] { false, true })
-        for (int capacity = 0; capacity <= 20; capacity++)
+        for (int capacity = 0; capacity <= text.Length * 3 + 4; capacity++)
         {
             byte[] expected = Enumerable.Repeat((byte)0xA5, capacity + 2).ToArray(), actual = (byte[])expected.Clone();
             var status = Utf8.FromUtf16(text, expected.AsSpan(1, capacity), out int read, out int written, replace, final);
@@ -109,10 +114,10 @@ public sealed unsafe class BurstHookTest : IDisposable
             Assert.Equal((status, read, written), (result, gotRead, gotWritten));
             Assert.Equal(expected, actual);
         }
-        foreach (byte[] encoded in new[] { Array.Empty<byte>(), Encoding.UTF8.GetBytes("\u00e9\u4e2d\ud83d\ude00"), new byte[] { 0xF0, 0x9F }, new byte[] { 0xC0, 0x80 }, new byte[] { 65, 0xFF, 66 } })
+        foreach (byte[] encoded in new[] { Array.Empty<byte>(), Encoding.UTF8.GetBytes("\u00e9\u4e2d\ud83d\ude00"), new byte[] { 0xF0, 0x9F }, new byte[] { 0xC0, 0x80 }, new byte[] { 65, 0xFF, 66 }, Encoding.UTF8.GetBytes(new string('x', 129)), Encoding.UTF8.GetBytes(new string('\u00e9', 33)).Concat(new byte[] { 0xF0, 0x9F }).ToArray(), Encoding.UTF8.GetBytes(new string('\u4e2d', 40)).Concat(new byte[] { 0xED, 0xA0, 0x80 }).ToArray() })
         foreach (bool replace in new[] { false, true })
         foreach (bool final in new[] { false, true })
-        for (int capacity = 0; capacity <= 10; capacity++)
+        for (int capacity = 0; capacity <= encoded.Length + 2; capacity++)
         {
             char[] expected = Enumerable.Repeat('\u55aa', capacity + 2).ToArray(), actual = (char[])expected.Clone();
             var status = Utf8.ToUtf16(encoded, expected.AsSpan(1, capacity), out int read, out int written, replace, final);
@@ -124,10 +129,10 @@ public sealed unsafe class BurstHookTest : IDisposable
         byte[] bytes = Encoding.UTF8.GetBytes(valid);
         int before = _decodeCalls;
         Assert.Equal(valid, StringSerializer.DeserializeUtf8(ref bytes[0], bytes.Length, valid.Length));
-        Assert.Equal(before + 1, _decodeCalls);
+        Assert.Equal(before + (useNativeHook ? 1 : 0), _decodeCalls);
         Assert.True(StringSerializer.MatchesUtf8(bytes, valid));
         Assert.False(StringSerializer.MatchesUtf8(new byte[] { 0xC0, 0x80 }, "\0"));
-        Assert.True(_encodeCalls > 0);
+        Assert.Equal(useNativeHook, _encodeCalls > encodeBefore);
     }
 
     /// <summary>Rejects native cursor results outside validated ranges and retains fallback on an unsupported operation.</summary>
