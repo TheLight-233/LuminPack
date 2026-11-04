@@ -9,6 +9,24 @@ namespace LuminPack.SourceGenerator.CodeEmitters;
 /// <summary>Provides emitter type traits functionality.</summary>
 internal static class EmitterTypeTraits
 {
+    /// <summary>Checks the referenced public queue factory instead of inferring its API from target symbols.</summary>
+    /// <param name="compilation">The consuming compilation and its actual immutable collection references.</param>
+    /// <returns>Whether the factory can construct a queue from the complete buffered span.</returns>
+    internal static bool CanCreateImmutableQueueFromSpan(Compilation compilation)
+    {
+        var span = compilation.GetTypeByMetadataName("System.ReadOnlySpan`1");
+        var queue = compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableQueue`1");
+        return span is not null && queue is not null && compilation.GetTypeByMetadataName("System.Collections.Immutable.ImmutableQueue")?
+            .GetMembers("Create").OfType<IMethodSymbol>().Any(method => method.IsStatic && method.Arity == 1 &&
+                method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 1 &&
+                method.TypeParameters[0].ConstraintTypes.IsEmpty && !method.TypeParameters[0].HasReferenceTypeConstraint &&
+                !method.TypeParameters[0].HasValueTypeConstraint && !method.TypeParameters[0].HasUnmanagedTypeConstraint &&
+                !method.TypeParameters[0].HasConstructorConstraint && !method.TypeParameters[0].HasNotNullConstraint &&
+                method.Parameters[0].RefKind == RefKind.None &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, span.Construct(method.TypeParameters[0])) &&
+                SymbolEqualityComparer.Default.Equals(method.ReturnType, queue.Construct(method.TypeParameters[0]))) == true;
+    }
+
     /// <summary>Reads a zero-initialized element using the operation graph's publication policy.</summary>
     /// <param name="sb">The generated loop body.</param>
     /// <param name="type">The canonical element contract.</param>

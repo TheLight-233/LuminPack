@@ -120,7 +120,7 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                    reader.ReadValue(ref item);");
         sb.AppendLine("                    buffer[count++] = item;");
         sb.AppendLine("                }");
-        AppendSequenceConstruction(sb, elementType, baseType);
+        AppendSequenceConstruction(sb, elementType, baseType, fieldData.CanCreateImmutableQueueFromSpan);
         sb.AppendLine("            }");
         sb.AppendLine("            finally");
         sb.AppendLine("            {");
@@ -132,7 +132,8 @@ internal static class ImmutableCollectionEmitterHelper
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="elementType">The element type used by this operation.</param>
     /// <param name="baseType">The base type used by this operation.</param>
-    private static void AppendSequenceConstruction(StringBuilder sb, string elementType, string baseType)
+    /// <param name="canCreateQueueFromSpan">Whether the actual queue factory accepts a complete span.</param>
+    private static void AppendSequenceConstruction(StringBuilder sb, string elementType, string baseType, bool canCreateQueueFromSpan)
     {
         if (baseType == "global::System.Collections.Immutable.ImmutableArray")
         {
@@ -187,11 +188,16 @@ internal static class ImmutableCollectionEmitterHelper
         }
         if (target == "ImmutableStack")
         {
-            sb.AppendLine("                global::System.Array.Reverse(buffer, 0, count);");
+            sb.AppendLine("                var stack = global::System.Collections.Immutable.ImmutableStack<" + elementType + ">.Empty;");
+            sb.AppendLine("                for (int i = count - 1; i >= 0; i--) stack = stack.Push(buffer[i]);");
+            sb.AppendLine("                value = stack;");
+            return;
         }
-        if (target is "ImmutableQueue" or "ImmutableStack")
+        if (target == "ImmutableQueue")
         {
-            sb.AppendLine("                value = global::System.Collections.Immutable." + target + ".CreateRange(global::System.Linq.Enumerable.AsEnumerable(new global::System.ArraySegment<" + elementType + ">(buffer, 0, count)));");
+            sb.AppendLine(canCreateQueueFromSpan
+                ? "                value = global::System.Collections.Immutable.ImmutableQueue.Create(new global::System.ReadOnlySpan<" + elementType + ">(buffer, 0, count));"
+                : "                value = global::System.Collections.Immutable.ImmutableQueue.CreateRange(new global::System.ArraySegment<" + elementType + ">(buffer, 0, count));");
             return;
         }
         sb.AppendLine("                var builder = global::System.Collections.Immutable." + target + ".CreateBuilder<" + elementType + ">();");

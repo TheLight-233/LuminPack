@@ -112,6 +112,9 @@ public static partial class LuminPackExtensionGenerator
                 .GetMembers("Write").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.ReturnsVoid && method.Arity == 1 &&
                     method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 1 &&
                     method.Parameters[0].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, type)) == true;
+        if (type is INamedTypeSymbol { MetadataName: "ImmutableQueue`1" or "IImmutableQueue`1", TypeArguments.Length: 1 } queue &&
+            queue.ContainingNamespace.ToDisplayString() == "System.Collections.Immutable")
+            field.CanCreateImmutableQueueFromSpan = EmitterTypeTraits.CanCreateImmutableQueueFromSpan(compilation);
         if (type is INamedTypeSymbol { MetadataName: "SortedSet`1", TypeArguments.Length: 1 } sortedSet &&
             sortedSet.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
         {

@@ -4,9 +4,9 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 
 /// <summary>Protects span-based queue construction and the older enumerable fallback.</summary>
-internal static class SerializerImmutableQueueConstructionRegression
+internal static partial class SerializerImmutableQueueConstructionRegression
 {
-    /// <summary>Executes queue profiles and failed-publication checks in every generation tier and both target branches.</summary>
+    /// <summary>Executes queue profiles and failed-publication checks in every generation tier and actual and missing factory APIs.</summary>
     /// <param name="references">The platform and runtime compilation references.</param>
     internal static void Run(MetadataReference[] references)
     {
@@ -22,6 +22,7 @@ internal static class SerializerImmutableQueueConstructionRegression
             {
                 public static void Check()
                 {
+                    SequenceJsonCases.Check();
                     CheckProfile<LuminPackUtf16LengthOptions>();
                     CheckProfile<LuminPackUtf8LengthOptions>();
                     CheckProfile<LuminPackUtf16TokenOptions>();
@@ -84,7 +85,7 @@ internal static class SerializerImmutableQueueConstructionRegression
                         throw new Exception("Null interface queue framing changed.");
                 }
             }
-            """;
+            """ + JsonSource;
         foreach (string mode in new[] { "Full", "Medium", "Light", "Minimal" })
         {
             var modern = new CSharpParseOptions(LanguageVersion.Preview, preprocessorSymbols: ["NET8_0_OR_GREATER", "NET9_0_OR_GREATER", "NET10_0_OR_GREATER"]);
@@ -98,17 +99,44 @@ internal static class SerializerImmutableQueueConstructionRegression
             var compatibility = initial.RemoveAllSyntaxTrees().AddSyntaxTrees(initial.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs").WithRootAndOptions(initial.SyntaxTrees.Single(tree => tree.FilePath != "ConcreteReads.cs").GetRoot(), legacy));
             driver = driver.WithUpdatedParseOptions(legacy).RunGeneratorsAndUpdateCompilation(compatibility, out output, out var diagnostics);
             Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
-            VerifySelection(driver, span: false);
+            VerifySelection(driver, span: true);
             Execute(output);
             var (fresh, _) = Generate(compatibility, legacy);
             Require(Trees(driver).SequenceEqual(Trees(fresh)), "Changing target symbols retained a stale queue construction branch.");
+            var missingApi = compatibility.AddSyntaxTrees(CSharpSyntaxTree.ParseText("""
+                namespace System.Collections.Immutable
+                {
+                    public static class ImmutableQueue
+                    {
+                        public static ImmutableQueue<T> Create<T>(params T[] values) => CreateRange(values);
+                        public static ImmutableQueue<T> Create<T>(System.ReadOnlySpan<T> values) where T : struct
+                        {
+                            var queue = ImmutableQueue<T>.Empty;
+                            foreach (var value in values) queue = queue.Enqueue(value);
+                            return queue;
+                        }
+                        public static ImmutableQueue<T> CreateRange<T>(System.Collections.Generic.IEnumerable<T> values)
+                        {
+                            var queue = ImmutableQueue<T>.Empty;
+                            foreach (var value in values) queue = queue.Enqueue(value);
+                            return queue;
+                        }
+                    }
+                }
+                """, legacy, "MissingQueueSpanFactory.cs"));
+            driver = driver.RunGeneratorsAndUpdateCompilation(missingApi, out output, out diagnostics);
+            Require(!diagnostics.Any(item => item.Severity == DiagnosticSeverity.Error), string.Join(Environment.NewLine, diagnostics));
+            VerifySelection(driver, span: false);
+            Execute(output);
+            var (missingFresh, _) = Generate(missingApi, legacy);
+            Require(Trees(driver).SequenceEqual(Trees(missingFresh)), "Removing the queue span factory retained stale construction.");
             driver = driver.WithUpdatedParseOptions(modern).RunGeneratorsAndUpdateCompilation(initial, out output, out diagnostics);
             VerifySelection(driver, span: true);
             Execute(output);
             var (restored, _) = Generate(initial, modern);
             Require(Trees(driver).SequenceEqual(Trees(restored)), "Restoring target symbols retained a stale queue fallback.");
         }
-        Console.WriteLine("Passed immutable queue profiles, boundaries, four tiers and retained/fresh target changes.");
+        Console.WriteLine("Passed immutable binary/JSON sequences, allocations, boundaries, four tiers and retained/fresh factory changes.");
     }
 
     /// <summary>Runs both production generators for an isolated queue consumer.</summary>
@@ -123,14 +151,14 @@ internal static class SerializerImmutableQueueConstructionRegression
         return (driver, output);
     }
 
-    /// <summary>Checks that the active binary construction uses the supported BCL overload.</summary>
+    /// <summary>Checks that queue construction uses the supported public factory overload.</summary>
     /// <param name="driver">The completed generator run.</param>
-    /// <param name="span">Whether the target supports span queue construction.</param>
+    /// <param name="span">Whether the referenced API exposes unconstrained span queue construction.</param>
     private static void VerifySelection(GeneratorDriver driver, bool span)
     {
         string generated = string.Join("\n", Trees(driver));
         Require(generated.Contains(span ? "ImmutableQueue.Create(new global::System.ReadOnlySpan" : "ImmutableQueue.CreateRange(new global::System.ArraySegment", StringComparison.Ordinal),
-            "The queue construction does not match the target framework.");
+            "The queue construction does not match the referenced public API.");
     }
 
     /// <summary>Compiles and executes all targeted queue invariants.</summary>
