@@ -91,6 +91,25 @@ internal static class EmitterTypeTraits
             queries.Any(method => method.Arity == 0) && queries.Any(method => method.Arity == 1);
     }
 
+    /// <summary>Checks the complete integer-entry API against the actual key, value and option contracts.</summary>
+    /// <param name="compilation">The consumer's runtime metadata.</param>
+    /// <param name="key">The canonical key type.</param>
+    /// <param name="value">The canonical value type.</param>
+    /// <returns>Whether both default and compiled-profile overloads have the required public signatures.</returns>
+    internal static bool HasJsonIntegerEntryWriter(Compilation compilation, ITypeSymbol key, ITypeSymbol value)
+    {
+        if (key.SpecialType != SpecialType.System_Int32 || value.SpecialType is not (SpecialType.System_Int32 or SpecialType.System_Int64)) return false;
+        var options = compilation.GetTypeByMetadataName("LuminPack.Option.ILuminPackOptions");
+        var methods = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonWriter")?
+            .GetMembers("WriteIntegerEntry").OfType<IMethodSymbol>().Where(method => !method.IsStatic && method.ReturnsVoid &&
+                method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 2 && method.Parameters.All(parameter => parameter.RefKind == RefKind.None) &&
+                SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, key) && SymbolEqualityComparer.Default.Equals(method.Parameters[1].Type, value) &&
+                (method.Arity == 0 || method.Arity == 1 &&
+                    method.TypeParameters[0].HasValueTypeConstraint && method.TypeParameters[0].ConstraintTypes.Length == 1 &&
+                    SymbolEqualityComparer.Default.Equals(method.TypeParameters[0].ConstraintTypes[0], options))).ToArray();
+        return HasJsonEnumerationWriter(compilation, key) && methods != null && methods.Any(method => method.Arity == 0) && methods.Any(method => method.Arity == 1);
+    }
+
     /// <summary>Recognizes concurrent collections whose public emptiness query avoids a full count.</summary>
     /// <param name="typeName">The canonical constructed collection name.</param>
     /// <returns>Whether the empty JSON branch can use the public IsEmpty property.</returns>

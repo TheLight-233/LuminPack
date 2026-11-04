@@ -90,14 +90,14 @@ internal static class ImmutableInterfaceWriteEmitter
         sb.AppendLine(indent + "foreach (var item in " + collection + ")");
         sb.AppendLine(indent + "{");
         if (!json) sb.AppendLine(indent + "    writer.CheckBuffer();");
-        else if (dictionary) sb.AppendLine(indent + "    writer.WriteArrayStart();");
-        if (dictionary)
+        if (json && dictionary)
+            DictionaryEmitter.AppendJsonDictionaryEntrySerialize(field, sb, "item.Key", "item.Value", indent + "    ", fused: false, isolateInteger: isolateInteger);
+        else if (dictionary)
         {
             sb.AppendLine(indent + "    var key = item.Key;");
             sb.AppendLine(indent + "    writer.WriteValue(in key);");
             sb.AppendLine(indent + "    var itemValue = item.Value;");
             sb.AppendLine(indent + "    writer.WriteValue(in itemValue);");
-            if (json) sb.AppendLine(indent + "    writer.WriteArrayEnd();");
         }
         else if (json)
             JsonCollectionElementEmitter.Append(field, sb, "item", indent + "    ", isolateInteger);

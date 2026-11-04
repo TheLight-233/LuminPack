@@ -41,6 +41,8 @@ public sealed class LuminLocalFieldData
     internal bool CanTraverseSortedList;
     /// <summary>Whether the referenced runtime provides isolated integer enumeration writes.</summary>
     internal bool CanWriteJsonEnumerationElement;
+    /// <summary>Whether the referenced runtime provides complete integer dictionary writes.</summary>
+    internal bool CanWriteJsonIntegerEntry;
     /// <summary>Whether the referenced runtime exposes complete time-zone JSON reading.</summary>
     internal bool CanReadJsonTimeZoneInfo;
     /// <summary>Stores the canonical local Union cursor slot selected for a dictionary operation, if any.</summary>

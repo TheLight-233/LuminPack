@@ -98,12 +98,7 @@ public static class FrozenDictionaryEmitter
         sb.AppendLine("            {");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
-        sb.AppendLine("                    writer.WriteArrayStart();");
-        sb.AppendLine("                    var key = item.Key;");
-        sb.AppendLine("                    writer.WriteValue(in key);");
-        sb.AppendLine("                    var itemValue = item.Value;");
-        sb.AppendLine("                    writer.WriteValue(in itemValue);");
-        sb.AppendLine("                    writer.WriteArrayEnd();");
+        DictionaryEmitter.AppendJsonDictionaryEntrySerialize(fieldData, sb, "item.Key", "item.Value", "                    ", fused: false, isolateInteger: true);
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.WriteArrayEnd();");

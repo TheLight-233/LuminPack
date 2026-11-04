@@ -2436,6 +2436,80 @@ namespace LuminPack.Core
             Write<TOptions>(value);
         }
 
+        /// <summary>Writes a complete scalar-framed integer dictionary entry with the default profile.</summary>
+        /// <param name="key">The entry key.</param>
+        /// <param name="value">The entry value.</param>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteIntegerEntry(int key, int value) => WriteIntegerEntry<global::LuminPack.Option.LuminPackDefaultOptions>(key, value);
+
+        /// <summary>Combines one complete scalar-framed entry outside the enumerator's native inline budget.</summary>
+        /// <param name="key">The entry key.</param>
+        /// <param name="value">The entry value.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <remarks>The fast path cannot resize or call external code. Near a boundary, original array and scalar operations preserve depth, growth and failure state.</remarks>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void WriteIntegerEntry<TOptions>(int key, int value)
+            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+        {
+            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 && HasEnumerationCapacity(26))
+            {
+                int count = IsFirstElement ? 0 : 1;
+                ref byte output = ref Current;
+                output = Comma;
+                Unsafe.Add(ref output, (nint)(uint)count++) = OpenBracket;
+                count += LuminPackJsonNumberFormatter.WriteInt32(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, (nint)(uint)count), 11), key);
+                Unsafe.Add(ref output, (nint)(uint)count++) = Comma;
+                count += LuminPackJsonNumberFormatter.WriteInt32(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, (nint)(uint)count), 11), value);
+                Unsafe.Add(ref output, (nint)(uint)count++) = CloseBracket;
+                Advance(count);
+                IsFirstElement = false;
+                return;
+            }
+            WriteArrayStart<TOptions>();
+            Write<TOptions>(key);
+            Write<TOptions>(value);
+            WriteArrayEnd<TOptions>();
+        }
+
+        /// <summary>Writes a complete scalar-framed integer dictionary entry with the default profile.</summary>
+        /// <param name="key">The entry key.</param>
+        /// <param name="value">The entry value.</param>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteIntegerEntry(int key, long value) => WriteIntegerEntry<global::LuminPack.Option.LuminPackDefaultOptions>(key, value);
+
+        /// <summary>Combines one complete scalar-framed entry outside the enumerator's native inline budget.</summary>
+        /// <param name="key">The entry key.</param>
+        /// <param name="value">The entry value.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <remarks>The fast path cannot resize or call external code. Near a boundary, original array and scalar operations preserve depth, growth and failure state.</remarks>
+        [global::System.ComponentModel.EditorBrowsable(global::System.ComponentModel.EditorBrowsableState.Never)]
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        public void WriteIntegerEntry<TOptions>(int key, long value)
+            where TOptions : struct, global::LuminPack.Option.ILuminPackOptions
+        {
+            if (default(TOptions).StringEncoding == global::LuminPack.Option.LuminPackStringEncoding.UTF8 && HasEnumerationCapacity(35))
+            {
+                int count = IsFirstElement ? 0 : 1;
+                ref byte output = ref Current;
+                output = Comma;
+                Unsafe.Add(ref output, (nint)(uint)count++) = OpenBracket;
+                count += LuminPackJsonNumberFormatter.WriteInt32(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, (nint)(uint)count), 11), key);
+                Unsafe.Add(ref output, (nint)(uint)count++) = Comma;
+                count += LuminPackJsonNumberFormatter.WriteLong(MemoryMarshal.CreateSpan(ref Unsafe.Add(ref output, (nint)(uint)count), 20), value);
+                Unsafe.Add(ref output, (nint)(uint)count++) = CloseBracket;
+                Advance(count);
+                IsFirstElement = false;
+                return;
+            }
+            WriteArrayStart<TOptions>();
+            Write<TOptions>(key);
+            Write<TOptions>(value);
+            WriteArrayEnd<TOptions>();
+        }
+
         /// <summary>Tests the complete fused write range without growing or committing a storage window.</summary>
         /// <param name="count">The positive maximum fused payload width.</param>
         /// <returns>Whether the complete payload already fits in the current window.</returns>

@@ -33,7 +33,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("            {");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
-        AppendJsonDictionaryEntrySerialize(sb, "item.Key", "item.Value", "                    ",
+        AppendJsonDictionaryEntrySerialize(fieldData, sb, "item.Key", "item.Value", "                    ",
             EmitterTypeTraits.HasJsonEntryWriter(GetFirstGeneric(fieldData.TypeName), GetSecondGeneric(fieldData.TypeName)));
         sb.AppendLine("                }");
         sb.AppendLine("            }");
@@ -58,7 +58,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                        global::LuminPack.Code.LuminPackCollectionAccess.CheckSortedListTraversalVersion(value, version);");
         // The enumerator captures the entire pair before user code serializes either component.
         sb.AppendLine("                        var item = new global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">(keys[i], values[i]);");
-        AppendJsonDictionaryEntrySerialize(sb, "item.Key", "item.Value", "                        ", fused);
+        AppendJsonDictionaryEntrySerialize(field, sb, "item.Key", "item.Value", "                        ", fused);
         sb.AppendLine("                    }");
         sb.AppendLine("                    global::LuminPack.Code.LuminPackCollectionAccess.CheckSortedListTraversalVersion(value, version);");
         sb.AppendLine("                }");
@@ -70,7 +70,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("            {");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
-        AppendJsonDictionaryEntrySerialize(sb, "item.Key", "item.Value", "                    ", fused);
+        AppendJsonDictionaryEntrySerialize(field, sb, "item.Key", "item.Value", "                    ", fused);
         sb.AppendLine("                }");
         sb.AppendLine("            }");
     }
@@ -612,7 +612,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                        ref var entry = ref global::System.Runtime.CompilerServices.Unsafe.Add(ref arrayRef, dictIndex++);");
         sb.AppendLine("                        if (LuminPackMarshal.IsHashTableEntryActive(entry.HashCode, entry.Next))");
         sb.AppendLine("                        {");
-        AppendJsonDictionaryEntrySerialize(sb, "entry.Key", "entry.Value", "                            ", fused);
+        AppendJsonDictionaryEntrySerialize(fieldData, sb, "entry.Key", "entry.Value", "                            ", fused);
         sb.AppendLine("                        }");
         sb.AppendLine("                    }");
         sb.AppendLine("                }");
@@ -620,7 +620,7 @@ public static partial class DictionaryEmitter
         sb.AppendLine("                {");
         sb.AppendLine("                    foreach (var entry in value)");
         sb.AppendLine("                    {");
-        AppendJsonDictionaryEntrySerialize(sb, "entry.Key", "entry.Value", "                        ", fused);
+        AppendJsonDictionaryEntrySerialize(fieldData, sb, "entry.Key", "entry.Value", "                        ", fused);
         sb.AppendLine("                    }");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
@@ -628,32 +628,46 @@ public static partial class DictionaryEmitter
     }
 
     /// <summary>Appends JSON writing statements for dictionary values.</summary>
+    /// <param name="field">The dictionary contract and referenced runtime capabilities.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
     /// <param name="keyExpression">The key expression used by this operation.</param>
     /// <param name="valueExpression">The value expression used by this operation.</param>
     /// <param name="indent">The indentation level of the generated statements.</param>
     /// <param name="fused">Whether the scalar key and value use the fused entry writers.</param>
-    private static void AppendJsonDictionaryEntrySerialize(
-        StringBuilder sb,
+    /// <param name="isolateInteger">Whether a linear or staged traversal benefits from a separate formatting budget.</param>
+    internal static void AppendJsonDictionaryEntrySerialize(
+        LuminLocalFieldData field, StringBuilder sb,
         string keyExpression,
         string valueExpression,
         string indent,
-        bool fused)
+        bool fused, bool isolateInteger = false)
     {
+        string outer = indent;
+        bool completeEntry = !fused && isolateInteger && field.CanWriteJsonIntegerEntry;
+        if (completeEntry)
+        {
+            sb.AppendLine(indent + "if (writer.UsesUtf8Enumeration())");
+            sb.AppendLine(indent + "    writer.WriteIntegerEntry(" + keyExpression + ", " + valueExpression + ");");
+            sb.AppendLine(indent + "else");
+            sb.AppendLine(indent + "{");
+            indent += "    ";
+        }
         if (fused)
         {
             // The pair array, its separators and both scalars use two capacity reservations instead of six.
             sb.AppendLine(indent + "writer.WriteEntryKey(" + keyExpression + ");");
             sb.AppendLine(indent + "writer.WriteEntryValue(" + valueExpression + ");");
-            return;
         }
-
-        sb.AppendLine(indent + "writer.WriteArrayStart();");
-        sb.AppendLine(indent + "var key = " + keyExpression + ";");
-        sb.AppendLine(indent + "writer.WriteValue(in key);");
-        sb.AppendLine(indent + "var itemValue = " + valueExpression + ";");
-        sb.AppendLine(indent + "writer.WriteValue(in itemValue);");
-        sb.AppendLine(indent + "writer.WriteArrayEnd();");
+        else
+        {
+            sb.AppendLine(indent + "writer.WriteArrayStart();");
+            sb.AppendLine(indent + "var key = " + keyExpression + ";");
+            sb.AppendLine(indent + "writer.WriteValue(in key);");
+            sb.AppendLine(indent + "var itemValue = " + valueExpression + ";");
+            sb.AppendLine(indent + "writer.WriteValue(in itemValue);");
+            sb.AppendLine(indent + "writer.WriteArrayEnd();");
+        }
+        if (completeEntry) sb.AppendLine(outer + "}");
     }
 
     /// <summary>Appends JSON reading statements for dictionary values.</summary>
