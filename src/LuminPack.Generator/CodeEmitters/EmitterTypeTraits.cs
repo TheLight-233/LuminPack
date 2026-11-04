@@ -66,6 +66,15 @@ internal static class EmitterTypeTraits
     /// <returns>Whether the element is a string, int or long.</returns>
     internal static bool HasJsonElementWriter(string type) => JsonFusedKind(type) != null;
 
+    /// <summary>Recognizes concurrent collections whose public emptiness query avoids a full count.</summary>
+    /// <param name="typeName">The canonical constructed collection name.</param>
+    /// <returns>Whether the empty JSON branch can use the public IsEmpty property.</returns>
+    /// <remarks>ConcurrentBag keeps Count because its IsEmpty query can initialize thread-local storage on a foreign thread.</remarks>
+    internal static bool HasConcurrentEmptyQuery(string typeName) =>
+        typeName.StartsWith("global::System.Collections.Concurrent.ConcurrentQueue<", global::System.StringComparison.Ordinal) ||
+        typeName.StartsWith("global::System.Collections.Concurrent.ConcurrentStack<", global::System.StringComparison.Ordinal) ||
+        typeName.StartsWith("global::System.Collections.Concurrent.ConcurrentDictionary<", global::System.StringComparison.Ordinal);
+
     /// <summary>Recognizes dictionary entries that <c>WriteEntryKey</c> and <c>WriteEntryValue</c> write as one fused pair array.</summary>
     /// <param name="keyType">The generated key type name.</param>
     /// <param name="valueType">The generated value type name.</param>

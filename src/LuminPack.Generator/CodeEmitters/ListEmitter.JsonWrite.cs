@@ -29,7 +29,8 @@ public static partial class ListEmitter
         sb.AppendLine("            writer.WriteArrayStart();");
         if (hasCount)
         {
-            sb.AppendLine("            if (value.Count == 0)");
+            sb.AppendLine(EmitterTypeTraits.HasConcurrentEmptyQuery(fieldData.TypeName)
+                ? "            if (value.IsEmpty)" : "            if (value.Count == 0)");
             sb.AppendLine("            {");
             sb.AppendLine("                writer.WriteArrayEnd();");
             sb.AppendLine("                return;");

@@ -28,7 +28,8 @@ public static partial class DictionaryEmitter
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteArrayStart();");
-        sb.AppendLine("            if (value.Count > 0)");
+        sb.AppendLine(EmitterTypeTraits.HasConcurrentEmptyQuery(fieldData.TypeName)
+            ? "            if (!value.IsEmpty)" : "            if (value.Count > 0)");
         sb.AppendLine("            {");
         sb.AppendLine("                foreach (var item in value)");
         sb.AppendLine("                {");
