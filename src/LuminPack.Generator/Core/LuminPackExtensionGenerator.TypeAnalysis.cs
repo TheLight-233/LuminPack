@@ -79,9 +79,9 @@ public static partial class LuminPackExtensionGenerator
     internal static IEnumerable<INamedTypeSymbol> EnumerateLinqSequenceViews(INamedTypeSymbol type)
     {
         if (type.MetadataName is "ILookup`2" or "IGrouping`2" && type.ContainingNamespace.ToDisplayString() == "System.Linq")
-            foreach (var candidate in type.AllInterfaces)
-                if (candidate.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T)
-                    yield return candidate;
+            return type.AllInterfaces.Where(static candidate =>
+                candidate.OriginalDefinition.SpecialType == SpecialType.System_Collections_Generic_IEnumerable_T);
+        return global::System.Array.Empty<INamedTypeSymbol>();
     }
 
     /// <summary>Determines whether the metadata contains type parameter.</summary>
