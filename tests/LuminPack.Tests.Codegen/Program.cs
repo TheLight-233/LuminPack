@@ -351,6 +351,11 @@ try
     SerializerImmutableListWriteRegression.RunLeases(references);
     SerializerImmutableListWriteRegression.RunSortedJson(references);
     SerializerImmutableListWriteRegression.RunLayoutProbes(references);
+    SerializerImmutableListWriteRegression.RunSetFamilies(references);
+    SerializerImmutableListWriteRegression.RunSequenceFamilies(references);
+    SerializerImmutableListWriteRegression.RunRemainingCollections(references);
+    SerializerImmutableListWriteRegression.RunPriorityJson(references);
+    SerializerImmutableListWriteRegression.RunLinqDependencies(references);
     SerializerScalarInterfaceReadRegression.Run(references);
     SerializerScalarInterfaceWriteRegression.Run(references);
     SerializerSmallHashSetWriteRegression.Run(references);
