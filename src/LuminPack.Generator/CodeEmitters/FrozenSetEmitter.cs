@@ -57,6 +57,7 @@ public static class FrozenSetEmitter
         sb.AppendLine();
         sb.AppendLine("            reader.Advance(4);");
         sb.AppendLine();
+        sb.AppendLine("            if (length == 0) { value = global::System.Collections.Frozen.FrozenSet<" + elementType + ">.Empty; return; }");
         sb.AppendLine("            var set = new global::System.Collections.Generic.HashSet<" + elementType + ">(length);");
         sb.AppendLine();
         sb.AppendLine("            for (var i = 0; i < length; i++)");
@@ -102,9 +103,11 @@ public static class FrozenSetEmitter
         sb.AppendLine("                value = null;");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        sb.AppendLine("            var set = new global::System.Collections.Generic.HashSet<" + elementType + ">();");
         sb.AppendLine("            reader.TryConsumeArrayStart();");
-        sb.AppendLine("            while (reader.Read())");
+        sb.AppendLine("            if (!reader.Read() || reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
+        sb.AppendLine("            { value = global::System.Collections.Frozen.FrozenSet<" + elementType + ">.Empty; return; }");
+        sb.AppendLine("            var set = new global::System.Collections.Generic.HashSet<" + elementType + ">();");
+        sb.AppendLine("            do");
         sb.AppendLine("            {");
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
         sb.AppendLine("                    break;");
@@ -114,6 +117,7 @@ public static class FrozenSetEmitter
         sb.AppendLine("                reader.ReadValue(ref item);");
         sb.AppendLine("                set.Add(item);");
         sb.AppendLine("            }");
+        sb.AppendLine("            while (reader.Read());");
         sb.AppendLine("            value = global::System.Collections.Frozen.FrozenSet.ToFrozenSet(set);");
     }
 }

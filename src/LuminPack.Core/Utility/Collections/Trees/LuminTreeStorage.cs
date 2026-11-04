@@ -298,6 +298,7 @@ public static class LuminTreeStorage
     /// construction, which sorts and removes duplicates.</remarks>
     public static ImmutableSortedSet<T> CreateImmutableSortedSet<T>(T[] items, int count)
     {
+        if (count == 1 && items is { Length: > 0 }) return ImmutableSortedSet.Create<T>(items[0]);
 #if NET10_0_OR_GREATER
         if (count > 1 && BclTrees.ImmutableSortedSet<T>.Available && IsStrictlyAscending(items, count))
             return BclTrees.ImmutableSortedSet<T>.Build(items, count);
@@ -393,6 +394,7 @@ public static class LuminTreeStorage
     /// duplicates, add the items through the builder.</remarks>
     public static ImmutableHashSet<T> CreateImmutableHashSet<T>(T[] items, int count)
     {
+        if (count == 1) return ImmutableHashSet.Create<T>(items[0]);
         if (count > 1 && ImmutableHashSetLayout<T>.Available && TrySortHashes(items, count, out var keys))
         {
             var template = ImmutableHashSet.Create(items[0]);

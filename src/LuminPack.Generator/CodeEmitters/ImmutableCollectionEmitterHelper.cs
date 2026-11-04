@@ -160,6 +160,8 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                    value = global::System.Collections.Immutable." + target + "<" + elementType + ">.Empty;");
         sb.AppendLine("                    return;");
         sb.AppendLine("                }");
+        if (target is "ImmutableHashSet" or "ImmutableSortedSet")
+            sb.AppendLine("                if (count == 1) { value = global::System.Collections.Immutable." + target + ".Create<" + elementType + ">(buffer[0]); return; }");
         if (target == "ImmutableList")
         {
             // The buffered sequence can build a balanced tree directly instead of inserting and rebalancing every item.

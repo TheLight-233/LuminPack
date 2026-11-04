@@ -148,18 +148,27 @@ internal static class CollectionEmitterKit
     /// <param name="body">The element write statements, each without indentation.</param>
     /// <param name="indent">Statement indentation.</param>
     /// <param name="element">The element of a single-element body, whose own write may already complete the buffer check.</param>
+    /// <param name="skipKnownEmpty">Whether a known concrete collection can skip its empty enumerator after reserving the header.</param>
     /// <remarks>Counts the elements actually written, so concurrent collections need neither a lock-taking count nor a consistency check.</remarks>
-    internal static void AppendCountedWrite(StringBuilder sb, string item, string source, string[] body, string indent, ITypeSymbol element = null)
+    internal static void AppendCountedWrite(StringBuilder sb, string item, string source, string[] body, string indent, ITypeSymbol element = null, bool skipKnownEmpty = false)
     {
         sb.AppendLine(indent + "{");
         sb.AppendLine(indent + "    int __countPosition = writer.BeginCollection();");
         sb.AppendLine(indent + "    int __count = 0;");
-        sb.AppendLine(indent + "    foreach (" + item + " in " + source + ")");
-        sb.AppendLine(indent + "    {");
-        if (!ChecksItself(element)) sb.AppendLine(indent + "        writer.CheckBuffer();");
-        sb.AppendLine(indent + "        __count++;");
-        foreach (var line in body) sb.AppendLine(indent + "        " + line);
-        sb.AppendLine(indent + "    }");
+        string loopIndent = indent;
+        if (skipKnownEmpty)
+        {
+            sb.AppendLine(indent + "    if (" + source + ".Count != 0)");
+            sb.AppendLine(indent + "    {");
+            loopIndent += "    ";
+        }
+        sb.AppendLine(loopIndent + "    foreach (" + item + " in " + source + ")");
+        sb.AppendLine(loopIndent + "    {");
+        if (!ChecksItself(element)) sb.AppendLine(loopIndent + "        writer.CheckBuffer();");
+        sb.AppendLine(loopIndent + "        __count++;");
+        foreach (var line in body) sb.AppendLine(loopIndent + "        " + line);
+        sb.AppendLine(loopIndent + "    }");
+        if (skipKnownEmpty) sb.AppendLine(indent + "    }");
         sb.AppendLine(indent + "    writer.EndCollection(__countPosition, __count);");
         sb.AppendLine(indent + "    writer.CheckBuffer();");
         sb.AppendLine(indent + "}");

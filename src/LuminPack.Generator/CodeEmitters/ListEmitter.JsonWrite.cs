@@ -37,11 +37,16 @@ public static partial class ListEmitter
             sb.AppendLine("            }");
             sb.AppendLine();
         }
-        sb.AppendLine("            bool isFirst = true;");
-        sb.AppendLine("            foreach (var item in value)");
-        sb.AppendLine("            {");
-        JsonCollectionElementEmitter.Append(fieldData, sb, "item", "                ");
-        sb.AppendLine("            }");
+        if (baseType is "global::System.Collections.Generic.ISet" or "global::System.Collections.Generic.IReadOnlySet")
+            SetInterfaceWriteEmitter.AppendElements(fieldData, sb, json: true);
+        else
+        {
+            sb.AppendLine("            bool isFirst = true;");
+            sb.AppendLine("            foreach (var item in value)");
+            sb.AppendLine("            {");
+            JsonCollectionElementEmitter.Append(fieldData, sb, "item", "                ");
+            sb.AppendLine("            }");
+        }
         sb.AppendLine();
         sb.AppendLine("            writer.WriteArrayEnd();");
     }

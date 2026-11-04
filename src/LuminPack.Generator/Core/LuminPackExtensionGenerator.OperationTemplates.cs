@@ -133,6 +133,10 @@ public static partial class LuminPackExtensionGenerator
             field.CanBuildSortedSet = EmitterTypeTraits.CanBuildSortedSet(sortedSet.TypeArguments[0], compilation);
             field.CanRebuildSortedSet = EmitterTypeTraits.CanRebuildSortedSet(sortedSet.TypeArguments[0], compilation);
         }
+        if (type is INamedTypeSymbol { MetadataName: "IReadOnlySet`1" } readOnlySet && readOnlySet.ContainingNamespace.ToDisplayString() == "System.Collections.Generic")
+            field.CanEnumerateFrozenSet = compilation.GetTypeByMetadataName("System.Collections.Frozen.FrozenSet`1")?
+                .GetMembers("GetEnumerator").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.Arity == 0 &&
+                    method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 0 && method.ReturnType.IsValueType) == true;
         if (type is INamedTypeSymbol { TypeArguments.Length: > 0 } sequence)
             field.CanWriteJsonEnumerationElement = EmitterTypeTraits.HasJsonEnumerationWriter(compilation, sequence.TypeArguments[0]);
         if (type is INamedTypeSymbol { TypeArguments.Length: 2 } entry)

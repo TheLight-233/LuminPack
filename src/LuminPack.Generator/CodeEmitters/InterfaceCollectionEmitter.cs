@@ -673,7 +673,7 @@ internal static class InterfaceCollectionEmitterHelper
         string set = "global::System.Collections.Generic.HashSet<" + elementType + ">";
         sb.AppendLine("            if (value is null) { writer.EnsureAdditionalCapacity(4); writer.WriteNullCollectionHeader(); return; }");
         AppendDelegatedWrite(sb, fieldData, "global::System.Collections.Generic.HashSet<" + RuntimeName(element, elementType) + ">", set, HashSetEmitter.GenerateSerializeCode, "WriteSet");
-        CollectionEmitterKit.AppendCountedWrite(sb, "var item", "value", new[] { "var v = item;", "writer.WriteValue(in v);" }, "            ", element);
+        SetInterfaceWriteEmitter.AppendElements(fieldData, sb, json: false);
         AppendDelegatedBody(sb, fieldData, set, HashSetEmitter.GenerateSerializeCode, "WriteSet");
     }
 

@@ -41,6 +41,8 @@ public sealed class LuminLocalFieldData
     internal bool CanTraverseSortedList;
     /// <summary>Whether the referenced runtime provides isolated integer enumeration writes.</summary>
     internal bool CanWriteJsonEnumerationElement;
+    /// <summary>Whether the referenced FrozenSet exposes its public struct enumerator.</summary>
+    internal bool CanEnumerateFrozenSet;
     /// <summary>Whether the referenced runtime provides complete integer dictionary writes.</summary>
     internal bool CanWriteJsonIntegerEntry;
     /// <summary>Whether the runtime exposes complete string-containing entry reads.</summary>
