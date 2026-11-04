@@ -25,7 +25,17 @@ public static class InterfaceImmutableListEmitter
         sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
+        sb.AppendLine("            if (value.GetType() == typeof(global::System.Collections.Immutable.ImmutableArray<" + InterfaceCollectionEmitterHelper.RuntimeName(element, elementType) + ">))");
+        sb.AppendLine("            {");
+        sb.AppendLine("                var array = (global::System.Collections.Immutable.ImmutableArray<" + elementType + ">)value;");
+        sb.AppendLine("                if (!array.IsDefault) { WriteArray(ref writer, array); return; }");
+        sb.AppendLine("            }");
         CollectionEmitterKit.AppendCountedWrite(sb, "var item", "value", new[] { "var v = item;", "writer.WriteValue(in v);" }, "            ", element);
+        sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        sb.AppendLine("            static void WriteArray(ref global::LuminPack.Core.LuminPackWriter writer, global::System.Collections.Immutable.ImmutableArray<" + elementType + "> array)");
+        sb.AppendLine("            {");
+        CollectionEmitterKit.AppendCountedWrite(sb, "var item", "array", new[] { "var v = item;", "writer.WriteValue(in v);" }, "                ", element);
+        sb.AppendLine("            }");
     }
 
     /// <summary>Appends binary reading statements for interface immutable list values.</summary>

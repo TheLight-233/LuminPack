@@ -13,7 +13,6 @@ public static class InterfaceImmutableSetEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateSerializeCode(LuminLocalFieldData fieldData, StringBuilder sb)
     {
-        var elementType = GetFirstGeneric(fieldData.TypeName);
         sb.AppendLine("            ref var index = ref writer.GetCurrentSpanOffset();");
         sb.AppendLine();
         sb.AppendLine("            if (value is null)");
@@ -29,12 +28,7 @@ public static class InterfaceImmutableSetEmitter
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("            foreach (var item in value)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                writer.CheckBuffer();");
-        sb.AppendLine("                var v = item;");
-        sb.AppendLine("                writer.WriteValue(in v);");
-        sb.AppendLine("            }");
+        ImmutableInterfaceWriteEmitter.AppendElements(fieldData, sb, json: false, dictionary: false);
         sb.AppendLine("            writer.CheckBuffer();");
     }
 

@@ -20,11 +20,10 @@ internal static class ImmutableCollectionEmitterHelper
         string baseType = GetBaseTypeName(fieldData.TypeName);
         if (IsDictionary(baseType))
         {
-            AppendDictionarySerialize(sb);
+            AppendDictionarySerialize(fieldData, sb);
             return;
         }
 
-        string elementType = GetFirstGeneric(fieldData.TypeName);
         if (baseType == "global::System.Collections.Immutable.ImmutableArray")
         {
             sb.AppendLine("            if (value.IsDefault)");
@@ -57,15 +56,7 @@ internal static class ImmutableCollectionEmitterHelper
             sb.AppendLine("                return;");
             sb.AppendLine("            }");
         }
-        sb.AppendLine("            bool isFirst = true;");
-        sb.AppendLine("            foreach (var item in value)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                if (!isFirst) writer.WriteByteRaw((byte)',');");
-        sb.AppendLine("                else isFirst = false;");
-        sb.AppendLine("                writer.SetFirstElement(true);");
-        sb.AppendLine("                var temp = item;");
-        sb.AppendLine("                writer.WriteValue(in temp);");
-        sb.AppendLine("            }");
+        ImmutableInterfaceWriteEmitter.AppendElements(fieldData, sb, json: true, dictionary: false);
         sb.AppendLine("            writer.WriteArrayEnd();");
     }
 
@@ -208,9 +199,10 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                value = builder.ToImmutable();");
     }
 
-    /// <summary>Appends binary writing statements for immutable collection helper values.</summary>
+    /// <summary>Appends JSON writing statements for immutable dictionary values.</summary>
+    /// <param name="fieldData">The concrete or interface dictionary contract.</param>
     /// <param name="sb">The builder receiving generated source code.</param>
-    private static void AppendDictionarySerialize(StringBuilder sb)
+    private static void AppendDictionarySerialize(LuminLocalFieldData fieldData, StringBuilder sb)
     {
         sb.AppendLine("            if (value == null)");
         sb.AppendLine("            {");
@@ -223,15 +215,7 @@ internal static class ImmutableCollectionEmitterHelper
         sb.AppendLine("                writer.WriteArrayEnd();");
         sb.AppendLine("                return;");
         sb.AppendLine("            }");
-        sb.AppendLine("            foreach (var item in value)");
-        sb.AppendLine("            {");
-        sb.AppendLine("                writer.WriteArrayStart();");
-        sb.AppendLine("                var key = item.Key;");
-        sb.AppendLine("                writer.WriteValue(in key);");
-        sb.AppendLine("                var itemValue = item.Value;");
-        sb.AppendLine("                writer.WriteValue(in itemValue);");
-        sb.AppendLine("                writer.WriteArrayEnd();");
-        sb.AppendLine("            }");
+        ImmutableInterfaceWriteEmitter.AppendElements(fieldData, sb, json: true, dictionary: true);
         sb.AppendLine("            writer.WriteArrayEnd();");
     }
 

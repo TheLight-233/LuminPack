@@ -5,7 +5,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 /// <summary>Protects approved immutable-list writer staging and retained formatter exclusions.</summary>
-internal static class SerializerImmutableListWriteRegression
+internal static partial class SerializerImmutableListWriteRegression
 {
     /// <summary>Executes concrete profiles in every tier and compares retained/fresh specialized edits.</summary>
     /// <param name="references">Platform and runtime metadata references.</param>

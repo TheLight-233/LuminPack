@@ -118,6 +118,10 @@ Short block copies of seventeen through thirty-two bytes use two bounded 128-bit
 
 Int32/UInt32 reference lengths and ids keep their positive one-byte path small, with the original tagged conversions in outlined helpers.
 
+Immutable interface writers recognize exact framework implementations before selecting concrete traversal; custom implementations keep their interface enumeration. Static, non-inlined local entries keep concrete iterator state outside the calling root. JSON covers immutable lists, boxed immutable arrays, sets, queues, stacks and dictionaries. Binary interface sets and dictionaries use the same selection; boxed immutable arrays retain the existing count back-patch and default-value failure path.
+
+Hash-set and hash-dictionary JSON writes, plus their interface binary writes, reuse the checked `LuminTreeStorage.CopyTo` path into a returned array lease. This preserves immutable enumeration order and element formatting while avoiding the BCL collision-bucket enumerator's temporary allocations. References in the lease are cleared on return, including after element failures. Concrete binary raw and staging paths retain their existing selection. Known layouts and warmed pools avoid temporary managed allocations; pool misses, first-use BCL caches, custom implementations and the retained public-enumerator fallback for unavailable layouts can allocate.
+
 ### Incremental boundaries
 
 Generation separates current semantic analysis from frozen output values. Each root's source, layout and diagnostics are compared before source production; unchanged values cause no output callback. Cross-compilation caches keep descriptions, syntax tree identities, copied settings and generated strings, never a `Compilation`, `SemanticModel` or symbol. Invalidation covers project-level facts (references, language settings, aliases, extension signatures) and source closures (observed types, members, attributes, partial declarations). `IncrementalGenerationMetrics` exposes internal counters for the incremental tests.
