@@ -20,7 +20,6 @@ public static partial class ListEmitter
     {
         string baseType = GetCollectionBaseType(fieldData.TypeName);
         bool hasCount = baseType != "global::System.Collections.Generic.IEnumerable";
-        bool isolateInteger = fieldData.CanWriteJsonEnumerationElement;
         sb.AppendLine("            if (value == null)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.WriteNull();");
@@ -41,23 +40,7 @@ public static partial class ListEmitter
         sb.AppendLine("            bool isFirst = true;");
         sb.AppendLine("            foreach (var item in value)");
         sb.AppendLine("            {");
-        if (isolateInteger)
-        {
-            sb.AppendLine("                if (writer.UsesUtf8Enumeration())");
-            sb.AppendLine("                {");
-            sb.AppendLine("                    writer.WriteEnumerationElement(item, !isFirst);");
-            sb.AppendLine("                    isFirst = false;");
-            sb.AppendLine("                }");
-            sb.AppendLine("                else");
-            sb.AppendLine("                {");
-        }
-        string indent = isolateInteger ? "                    " : "                ";
-        sb.AppendLine(indent + "if (!isFirst) writer.WriteByteRaw((byte)',');");
-        sb.AppendLine(indent + "else isFirst = false;");
-        sb.AppendLine(indent + "writer.SetFirstElement(true);");
-        sb.AppendLine(indent + "var temp = item;");
-        sb.AppendLine(indent + "writer.WriteValue(in temp);");
-        if (isolateInteger) sb.AppendLine("                }");
+        JsonCollectionElementEmitter.Append(fieldData, sb, "item", "                ");
         sb.AppendLine("            }");
         sb.AppendLine();
         sb.AppendLine("            writer.WriteArrayEnd();");

@@ -29,7 +29,7 @@ public static class FrozenSetEmitter
         sb.AppendLine();
         sb.AppendLine("            writer.Advance(4);");
         sb.AppendLine();
-        sb.AppendLine("            foreach (var item in value)");
+        sb.AppendLine("            foreach (var item in value.Items.AsSpan())");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                " + elementType + " v = item;");
@@ -83,13 +83,9 @@ public static class FrozenSetEmitter
         sb.AppendLine("            if (value.Count > 0)");
         sb.AppendLine("            {");
         sb.AppendLine("                bool isFirst = true;");
-        sb.AppendLine("                foreach (var item in value)");
+        sb.AppendLine("                foreach (var item in value.Items.AsSpan())");
         sb.AppendLine("                {");
-        sb.AppendLine("                    if (!isFirst) writer.WriteByteRaw((byte)',');");
-        sb.AppendLine("                    else isFirst = false;");
-        sb.AppendLine("                    writer.SetFirstElement(true);");
-        sb.AppendLine("                    var temp = item;");
-        sb.AppendLine("                    writer.WriteValue(in temp);");
+        JsonCollectionElementEmitter.Append(fieldData, sb, "item", "                    ");
         sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.WriteArrayEnd();");

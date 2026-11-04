@@ -22,7 +22,7 @@ internal static class ImmutableInterfaceWriteEmitter
         string[] implementations = direct ? new[] { type.Substring(type.LastIndexOf('.') + 1) } : GetImplementations(type);
         if (implementations.Length == 0)
         {
-            AppendLoop(sb, "value", "            ", json, dictionary);
+            AppendLoop(field, sb, "value", "            ", json, dictionary, type is "global::System.Collections.Immutable.ImmutableArray" or "global::System.Collections.Immutable.ImmutableQueue" or "global::System.Collections.Immutable.ImmutableStack");
             return;
         }
         string arguments = GetFirstGeneric(field.TypeName);
@@ -46,7 +46,7 @@ internal static class ImmutableInterfaceWriteEmitter
         {
             sb.AppendLine("            else");
             sb.AppendLine("            {");
-            AppendLoop(sb, "value", "                ", json, dictionary);
+            AppendLoop(field, sb, "value", "                ", json, dictionary);
             sb.AppendLine("            }");
         }
         for (int i = 0; i < implementations.Length; i++)
@@ -56,9 +56,9 @@ internal static class ImmutableInterfaceWriteEmitter
             sb.AppendLine("            static void WriteKnownElements" + i + "(ref global::LuminPack.Core." + (json ? "LuminPackJsonWriter" : "LuminPackWriter") + " writer, " + concrete + " source)");
             sb.AppendLine("            {");
             if (implementations[i] is "ImmutableHashSet" or "ImmutableDictionary")
-                AppendSnapshot(sb, arguments, json, dictionary);
+                AppendSnapshot(field, sb, arguments, json, dictionary);
             else
-                AppendLoop(sb, "source", "                ", json, dictionary);
+                AppendLoop(field, sb, "source", "                ", json, dictionary, implementations[i] is "ImmutableArray" or "ImmutableQueue" or "ImmutableStack");
             sb.AppendLine("            }");
         }
     }
@@ -77,24 +77,20 @@ internal static class ImmutableInterfaceWriteEmitter
     };
 
     /// <summary>Emits the established traversal, element framing and per-element capacity checks.</summary>
+    /// <param name="field">The collection contract and runtime capabilities.</param>
     /// <param name="sb">The generated body.</param>
     /// <param name="collection">The concrete or interface expression being enumerated.</param>
     /// <param name="indent">The enclosing statement indentation.</param>
     /// <param name="json">Whether the writer uses JSON framing.</param>
     /// <param name="dictionary">Whether the element exposes a key and value.</param>
-    private static void AppendLoop(StringBuilder sb, string collection, string indent, bool json, bool dictionary)
+    /// <param name="isolateInteger">Whether this linear or staged loop benefits from isolating integer formatting.</param>
+    private static void AppendLoop(LuminLocalFieldData field, StringBuilder sb, string collection, string indent, bool json, bool dictionary, bool isolateInteger = false)
     {
         if (json && !dictionary) sb.AppendLine(indent + "bool isFirst = true;");
         sb.AppendLine(indent + "foreach (var item in " + collection + ")");
         sb.AppendLine(indent + "{");
         if (!json) sb.AppendLine(indent + "    writer.CheckBuffer();");
         else if (dictionary) sb.AppendLine(indent + "    writer.WriteArrayStart();");
-        else
-        {
-            sb.AppendLine(indent + "    if (!isFirst) writer.WriteByteRaw((byte)',');");
-            sb.AppendLine(indent + "    else isFirst = false;");
-            sb.AppendLine(indent + "    writer.SetFirstElement(true);");
-        }
         if (dictionary)
         {
             sb.AppendLine(indent + "    var key = item.Key;");
@@ -103,6 +99,8 @@ internal static class ImmutableInterfaceWriteEmitter
             sb.AppendLine(indent + "    writer.WriteValue(in itemValue);");
             if (json) sb.AppendLine(indent + "    writer.WriteArrayEnd();");
         }
+        else if (json)
+            JsonCollectionElementEmitter.Append(field, sb, "item", indent + "    ", isolateInteger);
         else
         {
             sb.AppendLine(indent + "    var temp = item;");
@@ -112,11 +110,12 @@ internal static class ImmutableInterfaceWriteEmitter
     }
 
     /// <summary>Uses the existing checked hash-tree copy to avoid abandoned BCL collision-enumerator leases.</summary>
+    /// <param name="field">The collection contract and runtime capabilities.</param>
     /// <param name="sb">The generated concrete writer body.</param>
     /// <param name="arguments">The collection's element or key/value type arguments.</param>
     /// <param name="json">Whether to retain JSON framing.</param>
     /// <param name="dictionary">Whether the copied items are key/value pairs.</param>
-    private static void AppendSnapshot(StringBuilder sb, string arguments, bool json, bool dictionary)
+    private static void AppendSnapshot(LuminLocalFieldData field, StringBuilder sb, string arguments, bool json, bool dictionary)
     {
         string item = dictionary ? "global::System.Collections.Generic.KeyValuePair<" + arguments + ">" : arguments;
         sb.AppendLine("                int count = source.Count;");
@@ -125,7 +124,7 @@ internal static class ImmutableInterfaceWriteEmitter
         sb.AppendLine("                try");
         sb.AppendLine("                {");
         sb.AppendLine("                    global::LuminPack.Utility.LuminTreeStorage.CopyTo(source, new global::System.Span<" + item + ">(items, 0, count));");
-        AppendLoop(sb, "new global::System.ReadOnlySpan<" + item + ">(items, 0, count)", "                    ", json, dictionary);
+        AppendLoop(field, sb, "new global::System.ReadOnlySpan<" + item + ">(items, 0, count)", "                    ", json, dictionary, isolateInteger: true);
         sb.AppendLine("                }");
         sb.AppendLine("                finally { global::System.Buffers.ArrayPool<" + item + ">.Shared.Return(items, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + item + ">()); }");
     }

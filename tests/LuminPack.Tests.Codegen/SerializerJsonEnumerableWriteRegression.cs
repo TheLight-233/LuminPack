@@ -75,6 +75,7 @@ internal static partial class SerializerJsonEnumerableWriteRegression
                 : "new " + type + "(" + argument + ")";
             calls.AppendLine("{ " + type + " value = " + expression + "; string expected = Expected(value); buffer.ResetCore(); LuminPackSerializer.SerializeJson<TProfile>(value, buffer); EqualText<TProfile>(buffer, expected); (value as IDisposable)?.Dispose(); }");
         }
+        calls.Append(BuildImmutableCases());
         return Source.Replace("MODE", mode, StringComparison.Ordinal).Replace("SEQUENCE_CASES", calls.ToString(), StringComparison.Ordinal) + BoundarySource;
     }
 
@@ -92,6 +93,8 @@ internal static partial class SerializerJsonEnumerableWriteRegression
         using System.Collections.Generic;
         using System.Collections.Concurrent;
         using System.Collections.ObjectModel;
+        using System.Collections.Immutable;
+        using System.Collections.Frozen;
         using System.Linq;
         using System.Text;
         using System.Text.Json;

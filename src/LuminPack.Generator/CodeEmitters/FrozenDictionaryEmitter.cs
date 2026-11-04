@@ -31,8 +31,11 @@ public static class FrozenDictionaryEmitter
         sb.AppendLine();
         sb.AppendLine("            var count = value.Count;");
         sb.AppendLine("            var i = 0;");
-        sb.AppendLine("            foreach (var item in value)");
+        sb.AppendLine("            var keys = value.Keys.AsSpan();");
+        sb.AppendLine("            var values = value.Values.AsSpan();");
+        sb.AppendLine("            for (; i < keys.Length;)");
         sb.AppendLine("            {");
+        sb.AppendLine("                var item = new global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">(keys[i], values[i]);");
         sb.AppendLine("                writer.CheckBuffer();");
         sb.AppendLine("                i++;");
         sb.AppendLine("                var key = item.Key;");
