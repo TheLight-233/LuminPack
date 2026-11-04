@@ -56,6 +56,11 @@ try
         SerializerFrameworkEntryRegression.VerifyVersionPaths(references);
         return 0;
     }
+    if (args is ["--verify-collection-leases"])
+    {
+        SerializerImmutableListWriteRegression.RunLeases(references);
+        return 0;
+    }
     if (args is ["--verify-immutable-interface-writes"])
     {
         SerializerImmutableListWriteRegression.RunInterfaces(references);
@@ -277,6 +282,7 @@ try
     SerializerBuilderPathRegression.Run(references);
     SerializerImmutableQueueConstructionRegression.Run(references);
     SerializerImmutableListWriteRegression.RunInterfaces(references);
+    SerializerImmutableListWriteRegression.RunLeases(references);
     SerializerScalarInterfaceReadRegression.Run(references);
     SerializerScalarInterfaceWriteRegression.Run(references);
     SerializerSmallHashSetWriteRegression.Run(references);

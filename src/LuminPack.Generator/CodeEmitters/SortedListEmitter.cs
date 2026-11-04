@@ -33,37 +33,48 @@ public static class SortedListEmitter
         }
         else
         {
-            sb.AppendLine("                for (int i = 0; i < count; i++)");
+            sb.AppendLine("                var keySpan = new global::System.ReadOnlySpan<" + keyType + ">(storedKeys, 0, count);");
+            sb.AppendLine("                var valueSpan = new global::System.ReadOnlySpan<" + valueType + ">(storedValues, 0, count);");
+            sb.AppendLine("                for (int i = 0; i < keySpan.Length; i++)");
             sb.AppendLine("                {");
             sb.AppendLine("                    writer.CheckBuffer();");
-            sb.AppendLine("                    writer.WriteValue(storedKeys![i]);");
-            sb.AppendLine("                    writer.WriteValue(storedValues![i]);");
+            sb.AppendLine("                    writer.WriteValue(keySpan[i]);");
+            sb.AppendLine("                    writer.WriteValue(valueSpan[i]);");
             sb.AppendLine("                }");
         }
         sb.AppendLine("            }");
-        sb.AppendLine("            else if (count != 0)");
+        sb.AppendLine("            else if (count != 0) WriteFallback(ref writer, value, count);");
+        sb.AppendLine("            writer.CheckBuffer();");
+        sb.AppendLine("            [global::System.Runtime.CompilerServices.MethodImpl(global::System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]");
+        sb.AppendLine("            static void WriteFallback(ref global::LuminPack.Core.LuminPackWriter writer, " + fieldData.TypeName + " value, int pairCount)");
         sb.AppendLine("            {");
-        sb.AppendLine("                var keys = global::System.Buffers.ArrayPool<" + keyType + ">.Shared.Rent(count);");
-        sb.AppendLine("                var values = global::System.Buffers.ArrayPool<" + valueType + ">.Shared.Rent(count);");
-        sb.AppendLine("                value.Keys.CopyTo(keys, 0);");
-        sb.AppendLine("                value.Values.CopyTo(values, 0);");
+        sb.AppendLine("                var keys = global::System.Buffers.ArrayPool<" + keyType + ">.Shared.Rent(pairCount);");
+        sb.AppendLine("                " + valueType + "[]? values = null;");
+        sb.AppendLine("                try");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    values = global::System.Buffers.ArrayPool<" + valueType + ">.Shared.Rent(pairCount);");
+        sb.AppendLine("                    value.Keys.CopyTo(keys, 0);");
+        sb.AppendLine("                    value.Values.CopyTo(values, 0);");
         if (strings)
         {
-            sb.AppendLine("                writer.WriteStringPairs(new global::System.ReadOnlySpan<string?>(keys, 0, count), new global::System.ReadOnlySpan<string?>(values, 0, count));");
+            sb.AppendLine("                    writer.WriteStringPairs(new global::System.ReadOnlySpan<string?>(keys, 0, pairCount), new global::System.ReadOnlySpan<string?>(values, 0, pairCount));");
         }
         else
         {
-            sb.AppendLine("                for (int i = 0; i < count; i++)");
-            sb.AppendLine("                {");
-            sb.AppendLine("                    writer.CheckBuffer();");
-            sb.AppendLine("                    writer.WriteValue(keys[i]);");
-            sb.AppendLine("                    writer.WriteValue(values[i]);");
-            sb.AppendLine("                }");
+            sb.AppendLine("                    for (int i = 0; i < pairCount; i++)");
+            sb.AppendLine("                    {");
+            sb.AppendLine("                        writer.CheckBuffer();");
+            sb.AppendLine("                        writer.WriteValue(keys[i]);");
+            sb.AppendLine("                        writer.WriteValue(values[i]);");
+            sb.AppendLine("                    }");
         }
-        sb.AppendLine("                global::System.Buffers.ArrayPool<" + keyType + ">.Shared.Return(keys, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + keyType + ">());");
-        sb.AppendLine("                global::System.Buffers.ArrayPool<" + valueType + ">.Shared.Return(values, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + valueType + ">());");
+        sb.AppendLine("                }");
+        sb.AppendLine("                finally");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    global::System.Buffers.ArrayPool<" + keyType + ">.Shared.Return(keys, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + keyType + ">());");
+        sb.AppendLine("                    if (values != null) global::System.Buffers.ArrayPool<" + valueType + ">.Shared.Return(values, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + valueType + ">());");
+        sb.AppendLine("                }");
         sb.AppendLine("            }");
-        sb.AppendLine("            writer.CheckBuffer();");
     }
 
     /// <summary>Appends binary reading statements for sorted list values.</summary>

@@ -31,6 +31,7 @@ internal static class BinaryCollectionCapacity
     {
         ExpressionSyntax source;
         ITypeSymbol collection;
+        var scope = original.Ancestors().FirstOrDefault(node => node is MethodDeclarationSyntax or LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax);
         if (original is ForEachStatementSyntax each)
         {
             source = each.Expression;
@@ -39,12 +40,19 @@ internal static class BinaryCollectionCapacity
         else
         {
             // Indexed dictionary/hash-set and queue paths retain their original finite range and filtering.
-            var method = original.Ancestors().OfType<MethodDeclarationSyntax>().FirstOrDefault();
-            if (method?.ParameterList.Parameters.Count != 2) return rewritten;
-            var payload = method.ParameterList.Parameters[1];
-            source = method.Body?.DescendantNodes().OfType<IdentifierNameSyntax>().FirstOrDefault(name => name.Identifier.ValueText == payload.Identifier.ValueText);
+            var parameters = scope switch
+            {
+                MethodDeclarationSyntax method => method.ParameterList.Parameters,
+                LocalFunctionStatementSyntax local => local.ParameterList.Parameters,
+                _ => default
+            };
+            if (parameters.Count < 2) return rewritten;
+            var payload = parameters[1];
+            var payloadSymbol = model.GetDeclaredSymbol(payload) as IParameterSymbol;
+            source = scope.DescendantNodes(node => node == scope || node is not (LocalFunctionStatementSyntax or AnonymousFunctionExpressionSyntax))
+                .OfType<IdentifierNameSyntax>().FirstOrDefault(name => SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(name).Symbol, payloadSymbol));
             if (source == null) return rewritten;
-            collection = (model.GetDeclaredSymbol(payload) as IParameterSymbol)?.Type;
+            collection = payloadSymbol?.Type;
             // A view traversal behind a set or dictionary interface walks the exact collection its view was taken from.
             if (ViewSource(original, model) is { } narrowed)
             {
@@ -76,7 +84,14 @@ internal static class BinaryCollectionCapacity
         string count = prefix + "count", total = prefix + "bytes";
         string sourceText = rewrite(source).ToString();
         string countExpression = sourceText + "." + countMember;
-        if (collection is INamedTypeSymbol { Name: "PriorityQueue", TypeArguments.Length: 2 })
+        if (scope is LocalFunctionStatementSyntax && original is ForStatementSyntax)
+        {
+            var parameterLimit = HelperCount(original, scope, model);
+            if (parameterLimit == null) return rewritten;
+            // A staged helper receives the count captured before copying or invoking element code.
+            countExpression = rewrite(parameterLimit).ToString();
+        }
+        else if (collection is INamedTypeSymbol { Name: "PriorityQueue", TypeArguments.Length: 2 })
         {
             // The heap accessor captures the finite node range; do not substitute a later queue Count.
             if (original is not ForStatementSyntax { Condition: BinaryExpressionSyntax condition } ||
@@ -86,9 +101,9 @@ internal static class BinaryCollectionCapacity
         }
         else
         {
-            foreach (var scope in original.Ancestors().OfType<BlockSyntax>())
+            foreach (var block in original.Ancestors().TakeWhile(node => node != scope).OfType<BlockSyntax>())
             {
-                var captured = scope.Statements.OfType<LocalDeclarationStatementSyntax>().SelectMany(statement => statement.Declaration.Variables)
+                var captured = block.Statements.OfType<LocalDeclarationStatementSyntax>().SelectMany(statement => statement.Declaration.Variables)
                     .LastOrDefault(variable => variable.Span.End < original.SpanStart && variable.Initializer?.Value.ToString() == source + "." + countMember);
                 if (captured == null) continue;
                 string name = localName(model.GetDeclaredSymbol(captured));
@@ -106,6 +121,32 @@ internal static class BinaryCollectionCapacity
             SyntaxFactory.Block(rewritten).WithAdditionalAnnotations(new SyntaxAnnotation(ReservedAnnotation)),
             SyntaxFactory.ElseClause(SyntaxFactory.Block(rewritten))));
         return (StatementSyntax)new CapacityNames(writer).Visit(SyntaxFactory.Block(preamble).WithAdditionalAnnotations(new SyntaxAnnotation(ReservationAnnotation)));
+    }
+
+    /// <summary>Finds the count parameter of a generated zero-based helper traversal.</summary>
+    /// <param name="statement">The generated indexed loop.</param>
+    /// <param name="scope">The enclosing local function.</param>
+    /// <param name="model">The temporary template semantic model.</param>
+    /// <returns>The helper's count parameter when the loop has its canonical finite range.</returns>
+    private static IdentifierNameSyntax HelperCount(StatementSyntax statement, SyntaxNode scope, SemanticModel model)
+    {
+        if (statement is not ForStatementSyntax { Declaration.Variables.Count: 1, Condition: BinaryExpressionSyntax condition } loop ||
+            loop.Initializers.Count != 0 || loop.Incrementors.Count != 1 ||
+            !condition.IsKind(SyntaxKind.LessThanExpression) || condition.Left is not IdentifierNameSyntax index ||
+            condition.Right is not IdentifierNameSyntax limit ||
+            loop.Incrementors[0] is not PostfixUnaryExpressionSyntax increment || !increment.IsKind(SyntaxKind.PostIncrementExpression) ||
+            increment.Operand is not IdentifierNameSyntax incremented ||
+            model.GetDeclaredSymbol(loop.Declaration.Variables[0]) is not ILocalSymbol { Type.SpecialType: SpecialType.System_Int32 } indexSymbol ||
+            !SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(index).Symbol, indexSymbol) ||
+            !SymbolEqualityComparer.Default.Equals(model.GetSymbolInfo(incremented).Symbol, indexSymbol) ||
+            loop.Declaration.Variables[0].Initializer is not { Value: var initial } ||
+            model.GetConstantValue(initial) is not { HasValue: true, Value: 0 } ||
+            model.GetSymbolInfo(limit).Symbol is not IParameterSymbol { Type.SpecialType: SpecialType.System_Int32 } parameter ||
+            !SymbolEqualityComparer.Default.Equals(parameter.ContainingSymbol, model.GetDeclaredSymbol(scope))) return null;
+        // The template body may read the index but must not alter the finite iteration range.
+        var flow = model.AnalyzeDataFlow(loop.Statement);
+        return flow.Succeeded && !flow.WrittenInside.Contains(indexSymbol, SymbolEqualityComparer.Default) &&
+            !flow.WrittenInside.Contains(parameter, SymbolEqualityComparer.Default) ? limit : null;
     }
 
     /// <summary>Finds the local or parameter whose hash-set or dictionary view an indexed traversal walks.</summary>
