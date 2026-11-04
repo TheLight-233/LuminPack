@@ -2724,34 +2724,43 @@ namespace LuminPack.Core
 
             WriteStringContentUtf8Encoded<TOptions>(value);
 #else
-            bool needsEscape = false;
-            for (int i = 0; i < value.Length; i++)
+            int length = value.Length;
+            if (length >= 16 && TryWriteStringContentUtf8Complete(value))
+                return;
+
+            for (int i = 0; i < length; i++)
             {
                 char c = value[i];
-                if (c > 0x7F || c < 0x20 || c == '"' || c == '\\')
+                if (c > 0x7F || NeedsJsonEscape(c))
                 {
-                    needsEscape = true;
-                    break;
+                    WriteStringContentSlow<TOptions>(value);
+                    return;
                 }
             }
 
-            if (!needsEscape)
-            {
-                EnsureCapacity(value.Length);
-                ref byte dst = ref Current;
-                for (int i = 0; i < value.Length; i++)
-                {
-                    Unsafe.Add(ref dst, (nint)(uint)(i)) = (byte)value[i];
-                }
-
-                Advance(value.Length);
-            }
-            else
-            {
-                WriteStringContentSlow<TOptions>(value);
-            }
+            EnsureCapacity(length);
+            ref byte destination = ref Current;
+            for (int i = 0; i < length; i++)
+                Unsafe.Add(ref destination, (nint)(uint)i) = (byte)value[i];
+            Advance(length);
 #endif
         }
+
+#if NETSTANDARD2_1
+        /// <summary>Encodes an ordinary complete string only when its worst-case bytes already fit.</summary>
+        /// <param name="value">The complete UTF-16 string content, with no surrounding quotes.</param>
+        /// <returns>Whether the existing window accepted the complete unescaped content.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private bool TryWriteStringContentUtf8Complete(scoped ReadOnlySpan<char> value)
+        {
+            // Admission never grows or commits storage; exact-size and streaming windows keep their old path.
+            if (value.Length > int.MaxValue / 3 || !HasEnumerationCapacity(value.Length * 3) || IndexOfJsonEscape(value) >= 0)
+                return false;
+            StringSerializer.SerializeUtf8Complete(value, Buffer.Slice(Position), out _, out int written, true);
+            Advance(written);
+            return true;
+        }
+#endif
 
 #if NET8_0_OR_GREATER
         /// <summary>Writes string content utf8 encoded to the current output.</summary>

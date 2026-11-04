@@ -248,8 +248,8 @@ public sealed unsafe class BurstHookTest : IDisposable
     [Fact]
     public void AsciiAndEqualityKeepCompleteValidation()
     {
-        LuminPackBurst.Register(new() { Version = LuminPackBurst.AbiVersion, AsciiEncode = &Ascii, Equal = &Equal });
-        foreach (string text in new[] { "", "ASCII", "a\"bc", "a\\bc", "a\nbc", "\u4e2dabc" })
+        LuminPackBurst.Register(new() { Version = LuminPackBurst.AbiVersion, AsciiEncode = &Ascii, Utf8Encode = &Encode, Equal = &Equal });
+        foreach (string text in new[] { "", "ASCII", "a\"bc", "a\\bc", "a\nbc", "\u4e2dabc", new string('x', 64), new string('\u4E2D', 64), new string('x', 32) + "\n" + new string('x', 31) })
         {
             byte[] output = Enumerable.Repeat((byte)0xA5, text.Length + 3).ToArray();
             bool valid = text.All(c => c <= 0x7F && c >= 0x20 && c != '"' && c != '\\');
@@ -262,7 +262,9 @@ public sealed unsafe class BurstHookTest : IDisposable
                 Span<byte> window = new(pinned, buffer.Length);
                 using var state = new LuminPackWriterOptionalState();
                 var writer = new LuminPackJsonWriter(ref window, state);
+                int encodeBefore = _encodeCalls;
                 writer.Write<LuminPackUtf8LengthOptions>(text);
+                Assert.Equal(encodeBefore, _encodeCalls);
                 string json = Encoding.UTF8.GetString(buffer, 0, writer.Position);
                 Assert.Equal(text, System.Text.Json.JsonSerializer.Deserialize<string>(json));
             }

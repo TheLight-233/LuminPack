@@ -17,7 +17,7 @@ public static partial class StringSerializer
     /// <returns>Done, or InvalidData with the same strict prefix as the bounded encoder.</returns>
     /// <remarks>The caller proves final-block status and capacity. Streaming and smaller windows keep the bounded encoder.</remarks>
     [MethodImpl(MethodImplOptions.NoInlining)]
-    private static unsafe OperationStatus SerializeUtf8Complete(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences)
+    internal static unsafe OperationStatus SerializeUtf8Complete(ReadOnlySpan<char> source, Span<byte> destination, out int charsRead, out int bytesWritten, bool replaceInvalidSequences)
     {
         fixed (char* sourceStart = source)
         fixed (byte* outputStart = destination)
