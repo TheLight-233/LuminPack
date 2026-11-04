@@ -93,6 +93,11 @@ public static partial class ListEmitter
             sb.AppendLine("            }");
         }
         sb.AppendLine();
+        if (stack)
+        {
+            sb.AppendLine("            try");
+            sb.AppendLine("            {");
+        }
         sb.AppendLine("            while (reader.Read())");
         sb.AppendLine("            {");
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
@@ -146,7 +151,11 @@ public static partial class ListEmitter
             sb.AppendLine("            {");
             sb.AppendLine("                value.Push(staged[i]);");
             sb.AppendLine("            }");
-            sb.AppendLine("            global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(staged, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">());");
+            sb.AppendLine("            }");
+            sb.AppendLine("            finally");
+            sb.AppendLine("            {");
+            sb.AppendLine("                global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(staged, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">());");
+            sb.AppendLine("            }");
         }
         else if (readOnly)
         {

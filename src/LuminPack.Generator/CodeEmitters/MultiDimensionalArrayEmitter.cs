@@ -230,6 +230,8 @@ public static class MultiDimensionalArrayEmitter
         // Values may precede the shape, so they are staged in pooled storage sized by their counted elements.
         sb.AppendLine("            " + elementType + "[] items = global::System.Array.Empty<" + elementType + ">();");
         sb.AppendLine("            int itemCount = 0;");
+        sb.AppendLine("            try");
+        sb.AppendLine("            {");
         sb.AppendLine("            while (reader.Read())");
         sb.AppendLine("            {");
         sb.AppendLine("                if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ObjectEnd) break;");
@@ -251,6 +253,7 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("                    if (items.Length < counted)");
         sb.AppendLine("                    {");
         sb.AppendLine("                        if (items.Length != 0) global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(items, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">());");
+        sb.AppendLine("                        items = global::System.Array.Empty<" + elementType + ">();");
         sb.AppendLine("                        items = global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Rent(counted);");
         sb.AppendLine("                    }");
         sb.AppendLine("                    itemCount = 0;");
@@ -284,7 +287,11 @@ public static class MultiDimensionalArrayEmitter
         sb.AppendLine("            {");
         sb.AppendLine("                global::System.Runtime.CompilerServices.Unsafe.Add(ref first, (nint)(uint)i) = items[(int)i];");
         sb.AppendLine("            }");
-        sb.AppendLine("            if (items.Length != 0) global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(items, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">());");
+        sb.AppendLine("            }");
+        sb.AppendLine("            finally");
+        sb.AppendLine("            {");
+        sb.AppendLine("                if (items.Length != 0) global::System.Buffers.ArrayPool<" + elementType + ">.Shared.Return(items, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<" + elementType + ">());");
+        sb.AppendLine("            }");
     }
 
     /// <summary>Evaluates the existing zero-based binary shape and flat element payload.</summary>

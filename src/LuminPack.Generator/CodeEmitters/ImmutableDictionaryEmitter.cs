@@ -23,14 +23,20 @@ public static class ImmutableDictionaryEmitter
         sb.AppendLine("            if (count != 0)");
         sb.AppendLine("            {");
         sb.AppendLine("                var pairs = global::System.Buffers.ArrayPool<global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">>.Shared.Rent(count);");
-        sb.AppendLine("                global::LuminPack.Utility.LuminTreeStorage.CopyTo(value, pairs);");
-        sb.AppendLine("                for (int i = 0; i < count; i++)");
+        sb.AppendLine("                try");
         sb.AppendLine("                {");
-        sb.AppendLine("                    writer.CheckBuffer();");
-        sb.AppendLine("                    writer.WriteValue(pairs[i].Key);");
-        sb.AppendLine("                    writer.WriteValue(pairs[i].Value);");
+        sb.AppendLine("                    global::LuminPack.Utility.LuminTreeStorage.CopyTo(value, pairs);");
+        sb.AppendLine("                    for (int i = 0; i < count; i++)");
+        sb.AppendLine("                    {");
+        sb.AppendLine("                        writer.CheckBuffer();");
+        sb.AppendLine("                        writer.WriteValue(pairs[i].Key);");
+        sb.AppendLine("                        writer.WriteValue(pairs[i].Value);");
+        sb.AppendLine("                    }");
         sb.AppendLine("                }");
-        sb.AppendLine("                global::System.Buffers.ArrayPool<global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">>.Shared.Return(pairs, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">>());");
+        sb.AppendLine("                finally");
+        sb.AppendLine("                {");
+        sb.AppendLine("                    global::System.Buffers.ArrayPool<global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">>.Shared.Return(pairs, global::System.Runtime.CompilerServices.RuntimeHelpers.IsReferenceOrContainsReferences<global::System.Collections.Generic.KeyValuePair<" + keyType + ", " + valueType + ">>());");
+        sb.AppendLine("                }");
         sb.AppendLine("            }");
         sb.AppendLine("            writer.CheckBuffer();");
     }
