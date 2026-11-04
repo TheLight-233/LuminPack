@@ -11,6 +11,11 @@ try
         SerializerJsonScalarLoopRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-json-dictionary-boundaries"])
+    {
+        SerializerJsonEnumerableWriteRegression.RunDictionaryBoundaries(references);
+        return 0;
+    }
     if (args is ["--verify-json-dictionary-entries"])
     {
         SerializerJsonEnumerableWriteRegression.RunDictionaryEntries(references);
@@ -318,6 +323,7 @@ try
     SerializerJsonScalarLoopRegression.Run(references);
     SerializerJsonEnumerableWriteRegression.Run(references);
     SerializerJsonEnumerableWriteRegression.RunDictionaryEntries(references);
+    SerializerJsonEnumerableWriteRegression.RunDictionaryBoundaries(references);
     SerializerCompiledOptionRegression.Run(references);
     SerializerSpecialModeBoundaryRegression.Run(references);
     SerializerNamedVersionRegression.Run(references);

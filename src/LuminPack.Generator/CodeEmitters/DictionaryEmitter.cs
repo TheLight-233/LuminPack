@@ -730,14 +730,15 @@ public static partial class DictionaryEmitter
         sb.AppendLine(indent + "    {");
         if (seedValue != null) sb.AppendLine(indent + "        " + seedValue);
         sb.AppendLine(indent + "        reader.ReadValue(ref itemValue);");
+        // A missing value has already consumed the entry end. Drain only after an actual value.
+        // Nested values may also finish on ArrayEnd, so token state alone cannot identify this boundary.
+        sb.AppendLine(indent + "        while (reader.Read())");
+        sb.AppendLine(indent + "        {");
+        sb.AppendLine(indent + "            if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
+        sb.AppendLine(indent + "                break;");
+        sb.AppendLine(indent + "            reader.Skip();");
+        sb.AppendLine(indent + "        }");
         sb.AppendLine(indent + "    }");
-        sb.AppendLine(indent + "}");
-        sb.AppendLine(indent + "while (reader.Read())");
-        sb.AppendLine(indent + "{");
-        sb.AppendLine(indent + "    if (reader.CurrentTokenType == global::LuminPack.Core.LuminPackJsonReader.JsonTokenType.ArrayEnd)");
-        sb.AppendLine(indent + "        break;");
-        // Read classifies a string or number without consuming it; skipping each extra element keeps the drain finite.
-        sb.AppendLine(indent + "    reader.Skip();");
         sb.AppendLine(indent + "}");
         if (indent.Length > 16)
             sb.AppendLine("                }");
