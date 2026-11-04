@@ -135,6 +135,34 @@ public sealed unsafe class BurstHookTest : IDisposable
         Assert.Equal(useNativeHook, _encodeCalls > encodeBefore);
     }
 
+    /// <summary>Exercises bounded ASCII word batches with every source and output alignment on both pointer sizes.</summary>
+    [Fact]
+    public void BoundedUtf8AsciiBatchesRespectAllAlignments()
+    {
+        byte[] source = new byte[96];
+        byte[] destination = new byte[64];
+        fixed (byte* inputBase = source)
+        fixed (byte* outputBase = destination)
+        foreach (int inputOffset in Enumerable.Range(0, 8))
+        foreach (int outputOffset in Enumerable.Range(1, 8))
+        foreach (int length in new[] { 3, 4, 5, 7, 8, 9, 15, 16, 17, 32 })
+        foreach (int capacity in new[] { length - 1, length, length + 1 })
+        {
+            var text = new Span<char>(inputBase + inputOffset, length);
+            for (int index = 0; index < length; index++) text[index] = (char)('A' + index % 26);
+            destination.AsSpan().Fill(0xA5);
+            var status = StringSerializer.TranscodeToUtf8((char*)(inputBase + inputOffset), length,
+                outputBase + outputOffset, capacity, out char* inputEnd, out byte* outputEnd);
+            int written = Math.Min(length, capacity);
+            Assert.Equal(capacity < length ? OperationStatus.DestinationTooSmall : OperationStatus.Done, status);
+            Assert.Equal(written, (int)(inputEnd - (char*)(inputBase + inputOffset)));
+            Assert.Equal(written, (int)(outputEnd - (outputBase + outputOffset)));
+            for (int index = 0; index < written; index++) Assert.Equal((byte)text[index], destination[outputOffset + index]);
+            for (int index = 0; index < outputOffset; index++) Assert.Equal((byte)0xA5, destination[index]);
+            for (int index = outputOffset + written; index < destination.Length; index++) Assert.Equal((byte)0xA5, destination[index]);
+        }
+    }
+
     /// <summary>Checks strict and replacement results for every UTF-16 code unit and surrogate pairs across packed prefixes.</summary>
     [Fact]
     public void CompleteUtf8EncodingMatchesEveryCodeUnit()

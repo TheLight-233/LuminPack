@@ -1374,7 +1374,10 @@ public static unsafe partial class StringSerializer
                 // This is the portable fast path for netstandard2.1 as well.
                 if (littleEndian && inputEnd - input >= 4 && (long)unchecked((nint)outputEnd - (nint)output) >= 4)
                 {
-                    ulong four = Unsafe.ReadUnaligned<ulong>(input);
+                    // IL2CPP permits typed unaligned values only up to four bytes on 32-bit.
+                    ulong four = IntPtr.Size == 8
+                        ? Unsafe.ReadUnaligned<ulong>(input)
+                        : Unsafe.ReadUnaligned<uint>(input) | ((ulong)Unsafe.ReadUnaligned<uint>(input + 2) << 32);
                     if ((four & 0xFF80FF80FF80FF80UL) == 0)
                     {
                         uint ascii = (uint)(four & 0xFFUL) | (uint)((four >> 8) & 0xFF00UL) | (uint)((four >> 16) & 0xFF0000UL) | (uint)((four >> 24) & 0xFF000000UL);

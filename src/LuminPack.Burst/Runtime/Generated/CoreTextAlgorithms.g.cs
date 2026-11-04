@@ -13,7 +13,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreTextAlgorithms
     {
-// Core source SHA256: Utility/Text/StringSerializer.cs 03BA1B92B80F641BA7D6AF0DB30E43E89136267066BCF548D1A7DE73F6B9F07F
+// Core source SHA256: Utility/Text/StringSerializer.cs 1AD425A91BEBAF4FC08EAAE7AD5F205654267CDE78F8F9DD2A3D1FF084FD3A51
 /// <summary>Performs the prefer custom simd step for the current operation.</summary>
 /// <param name = "source">The input data to process.</param>
 /// <param name = "destinationLength">The destination length used by this operation.</param>
@@ -446,7 +446,8 @@ internal static unsafe OperationStatus TranscodeToUtf8Scalar(char* pInputBuffer,
             // This is the portable fast path for netstandard2.1 as well.
             if (littleEndian && inputEnd - input >= 4 && (long)unchecked((nint)outputEnd - (nint)output) >= 4)
             {
-                ulong four = Unsafe.ReadUnaligned<ulong>(input);
+                // IL2CPP permits typed unaligned values only up to four bytes on 32-bit.
+                ulong four = IntPtr.Size == 8 ? Unsafe.ReadUnaligned<ulong>(input) : Unsafe.ReadUnaligned<uint>(input) | ((ulong)Unsafe.ReadUnaligned<uint>(input + 2) << 32);
                 if ((four & 0xFF80FF80FF80FF80UL) == 0)
                 {
                     uint ascii = (uint)(four & 0xFFUL) | (uint)((four >> 8) & 0xFF00UL) | (uint)((four >> 16) & 0xFF0000UL) | (uint)((four >> 24) & 0xFF000000UL);
