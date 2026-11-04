@@ -1,7 +1,4 @@
 using System.Reflection;
-using System.Reflection.Metadata;
-using System.Reflection.Metadata.Ecma335;
-using System.Reflection.PortableExecutable;
 using LuminPack.SourceGenerator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -93,7 +90,7 @@ internal static class SerializerBuilderPathRegression
     {
         string runtime = typeof(LuminPack.Core.LuminPackJsonWriter).Assembly.Location;
         var original = references.Single(reference => string.Equals(reference.Display, runtime, StringComparison.OrdinalIgnoreCase));
-        var oldApi = MetadataReference.CreateFromImage(WithoutSnapshotApi(runtime), filePath: "CoreWithoutBuilderSnapshot.dll");
+        var oldApi = MetadataReference.CreateFromImage(FrameworkRuntimeMetadata.WithoutMethods(runtime, "WriteStringBuilder", "ReadStringBuilder"), filePath: "CoreWithoutBuilderSnapshot.dll");
         var compatibility = compilation.WithReferences(references.Where(reference => !ReferenceEquals(reference, original)).Append(oldApi));
         foreach (var target in new[] { compatibility, compilation })
         {
@@ -103,38 +100,6 @@ internal static class SerializerBuilderPathRegression
             CheckPaths(driver, ReferenceEquals(target, compilation));
             Emit(output);
         }
-    }
-
-    /// <summary>Renames only the optional API and assigns a new module identity in a metadata-only compatibility image.</summary>
-    /// <param name="path">The current runtime image.</param>
-    /// <returns>An image used for binding and compilation, never execution.</returns>
-    private static byte[] WithoutSnapshotApi(string path)
-    {
-        byte[] image = File.ReadAllBytes(path);
-        using var pe = new PEReader(new MemoryStream(image));
-        var metadata = pe.GetMetadataReader();
-        int strings = pe.PEHeaders.MetadataStartOffset + metadata.GetHeapMetadataOffset(HeapIndex.String);
-        int renamed = 0;
-        foreach (var handle in metadata.MethodDefinitions)
-        {
-            var method = metadata.GetMethodDefinition(handle);
-            if (metadata.GetString(method.Name) is not ("WriteStringBuilder" or "ReadStringBuilder")) continue;
-            image[strings + MetadataTokens.GetHeapOffset(method.Name)] = (byte)'X';
-            renamed++;
-        }
-        Require(renamed != 0, "The optional builder API was not found.");
-        byte[] mvid = metadata.GetGuid(metadata.GetModuleDefinition().Mvid).ToByteArray();
-        int guids = pe.PEHeaders.MetadataStartOffset + metadata.GetHeapMetadataOffset(HeapIndex.Guid);
-        bool changed = false;
-        for (int offset = 0; offset < metadata.GetHeapSize(HeapIndex.Guid); offset += 16)
-        {
-            if (!image.AsSpan(guids + offset, 16).SequenceEqual(mvid)) continue;
-            Guid.NewGuid().TryWriteBytes(image.AsSpan(guids + offset, 16));
-            changed = true;
-            break;
-        }
-        Require(changed, "The compatibility module identity was not updated.");
-        return image;
     }
 
     /// <summary>Checks binary writes and JSON operations select their actual available capabilities.</summary>

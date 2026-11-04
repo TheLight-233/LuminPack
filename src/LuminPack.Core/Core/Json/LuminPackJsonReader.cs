@@ -2897,6 +2897,59 @@ namespace LuminPack.Core
 #endregion
 
 #region String
+        /// <summary>Reads a version string with the library default profile.</summary>
+        /// <returns>The parsed version, or null.</returns>
+        public Version? ReadVersion() => ReadVersion<LuminPackDefaultOptions>();
+
+        /// <summary>Parses the complete token through the available BCL span parser before publishing its result.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <returns>The parsed version, or null.</returns>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public Version? ReadVersion<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+#if !NET10_0_OR_GREATER
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            {
+                if (CurrentTokenType == JsonTokenType.String)
+                {
+                    string decoded = ReadString<TOptions>();
+                    CompleteValue();
+                    return Version.Parse(decoded);
+                }
+                if (CurrentTokenType == JsonTokenType.Null)
+                {
+                    CompleteValue();
+                    return null;
+                }
+            }
+#endif
+            return ReadVersionValue<TOptions>();
+        }
+
+        /// <summary>Keeps span decoding and BCL parsing state outside generated callers.</summary>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        /// <returns>The parsed version, or null.</returns>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private Version? ReadVersionValue<TOptions>() where TOptions : struct, ILuminPackOptions
+        {
+            if (CurrentTokenType == JsonTokenType.String)
+            {
+                if (default(TOptions).StringEncoding != LuminPackStringEncoding.UTF8)
+                {
+                    var text = ReadStringUtf16<TOptions>();
+                    CompleteValue();
+                    return Version.Parse(text);
+                }
+#if NET10_0_OR_GREATER
+                var utf8 = ReadStringUtf8<TOptions>();
+                CompleteValue();
+                return Version.Parse(utf8);
+#endif
+            }
+            string? decoded = Read<string, TOptions>();
+            return decoded is null ? null : Version.Parse(decoded);
+        }
+
         /// <summary>Reads a complete builder value with the library default profile.</summary>
         /// <param name="value">The reusable builder target.</param>
         public void ReadStringBuilder(ref StringBuilder? value) => ReadStringBuilder<LuminPackDefaultOptions>(ref value);

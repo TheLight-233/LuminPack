@@ -10,6 +10,32 @@ namespace LuminPackUnitTest;
 /// <summary>Provides json streaming writer test functionality.</summary>
 public class JsonStreamingWriterTest
 {
+    /// <summary>Checks null and all version component widths through segmented output in both encodings.</summary>
+    [Fact]
+    public void VersionFormatsCrossOutputSegments()
+    {
+        CheckVersionSegments<LuminPackUtf8LengthOptions>(Encoding.UTF8);
+        CheckVersionSegments<LuminPackUtf16LengthOptions>(Encoding.Unicode);
+    }
+
+    /// <summary>Checks bounded version text uses the external-output path and preserves every byte.</summary>
+    /// <param name="encoding">The document encoding.</param>
+    /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+    private static void CheckVersionSegments<TOptions>(Encoding encoding) where TOptions : struct, ILuminPackOptions
+    {
+        var values = new Version?[] { null, new(1, 2), new(1, 2, 3), new(1, 2, 3, 4), new(int.MaxValue, int.MaxValue, int.MaxValue, int.MaxValue) };
+        var output = new ChunkWriter();
+        var writer = new LuminPackJsonWriter(output, new LuminPackWriterOptionalState(), 1);
+        writer.WriteArrayStart<TOptions>();
+        for (int repeat = 0; repeat < 64; repeat++)
+            foreach (var value in values) writer.WriteVersion<TOptions>(value);
+        writer.WriteArrayEnd<TOptions>();
+        writer.FlushToBufferWriter();
+        const string record = "null,\"1.2\",\"1.2.3\",\"1.2.3.4\",\"2147483647.2147483647.2147483647.2147483647\"";
+        Assert.Equal(encoding.GetBytes("[" + string.Join(",", Enumerable.Repeat(record, 64)) + "]"), output.ToArray());
+        Assert.True(output.CommitCount > 1);
+    }
+
     /// <summary>Checks builder snapshots precede callbacks that can mutate their source in either encoding.</summary>
     [Fact]
     public void StringBuilderSnapshotsSurviveOutputCallbacks()

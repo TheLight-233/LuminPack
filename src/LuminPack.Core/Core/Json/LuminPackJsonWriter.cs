@@ -1183,6 +1183,52 @@ namespace LuminPack.Core
             Write<TOptions>(value.ToString());
         }
 
+        /// <summary>Writes a version string with the library default profile.</summary>
+        /// <param name="value">The version, or null.</param>
+        public void WriteVersion(Version? value) => WriteVersion<LuminPackDefaultOptions>(value);
+
+        /// <summary>Writes the established component string without allocating an intermediate string.</summary>
+        /// <param name="value">The version, or null.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public void WriteVersion<TOptions>(Version? value) where TOptions : struct, ILuminPackOptions
+        {
+            if (value is null)
+                WriteNull<TOptions>();
+            else
+                WriteVersionValue<TOptions>(value);
+        }
+
+        /// <summary>Keeps bounded component formatting outside generated callers and null writes.</summary>
+        /// <param name="value">The nonnull version.</param>
+        /// <typeparam name="TOptions">The compiled document profile.</typeparam>
+        [MethodImpl(MethodImplOptions.NoInlining)]
+        private void WriteVersionValue<TOptions>(Version value) where TOptions : struct, ILuminPackOptions
+        {
+            // Four nonnegative Int32 components and three separators require at most 43 characters.
+#if NET8_0_OR_GREATER
+            if (default(TOptions).StringEncoding == LuminPackStringEncoding.UTF8)
+            {
+                Span<byte> utf8 = stackalloc byte[43];
+                if (value.TryFormat(utf8, out int written))
+                {
+                    WriteCommaIfNeeded<TOptions>();
+                    WriteByteRaw<TOptions>(Quote);
+                    WriteRaw(utf8.Slice(0, written));
+                    WriteByteRaw<TOptions>(Quote);
+                    return;
+                }
+                Write<TOptions>(value.ToString());
+                return;
+            }
+#endif
+            Span<char> text = stackalloc char[43];
+            if (value.TryFormat(text, out int charsWritten))
+                WriteFormattedValue<TOptions>(text.Slice(0, charsWritten));
+            else
+                Write<TOptions>(value.ToString());
+        }
+
 #if NET8_0_OR_GREATER
         /// <summary>Writes a date in its round-trip JSON string form without an intermediate string.</summary>
         /// <param name="value">The date to write.</param>

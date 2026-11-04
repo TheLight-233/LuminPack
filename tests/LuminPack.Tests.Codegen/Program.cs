@@ -46,6 +46,11 @@ try
         SerializerBuilderPathRegression.Run(references);
         return 0;
     }
+    if (args is ["--verify-version-paths"])
+    {
+        SerializerFrameworkEntryRegression.VerifyVersionPaths(references);
+        return 0;
+    }
     if (args is ["--verify-immutable-list-writes"])
     {
         SerializerImmutableListWriteRegression.Run(references);

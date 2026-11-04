@@ -68,6 +68,11 @@ public static class VersionEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonSerializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
+        if (data.CanWriteJsonVersion)
+        {
+            sb.AppendLine("            writer.WriteVersion(value);");
+            return;
+        }
         sb.AppendLine("            if (value == null)");
         sb.AppendLine("            {");
         sb.AppendLine("                writer.WriteNull();");
@@ -82,6 +87,11 @@ public static class VersionEmitter
     /// <param name="sb">The builder receiving generated source code.</param>
     public static void GenerateJsonDeserializeCode(LuminLocalFieldData data, StringBuilder sb)
     {
+        if (data.CanReadJsonVersion)
+        {
+            sb.AppendLine("            value = reader.ReadVersion();");
+            return;
+        }
         sb.AppendLine("            if (reader.IsNull())");
         sb.AppendLine("            {");
         sb.AppendLine("                value = null;");

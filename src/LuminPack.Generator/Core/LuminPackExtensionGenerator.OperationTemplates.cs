@@ -62,6 +62,17 @@ public static partial class LuminPackExtensionGenerator
     private static LuminLocalFieldData CreateOperationField(ITypeSymbol type, Compilation compilation, MetaInfo metadata)
     {
         var field = new LuminLocalFieldData { TypeName = FormatterTypeName.Get(type), TypeSymbol = type, Name = "value", IsValue = type.IsValueType };
+        if (field.TypeName == "global::System.Version")
+        {
+            field.CanWriteJsonVersion = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonWriter")?
+                .GetMembers("WriteVersion").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.ReturnsVoid && method.Arity == 1 &&
+                    method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 1 &&
+                    method.Parameters[0].RefKind == RefKind.None && SymbolEqualityComparer.Default.Equals(method.Parameters[0].Type, type)) == true;
+            field.CanReadJsonVersion = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonReader")?
+                .GetMembers("ReadVersion").OfType<IMethodSymbol>().Any(method => !method.IsStatic && method.Arity == 1 &&
+                    method.DeclaredAccessibility == Accessibility.Public && method.Parameters.Length == 0 &&
+                    SymbolEqualityComparer.Default.Equals(method.ReturnType, type)) == true;
+        }
         if (field.TypeName == "global::System.Text.StringBuilder" && type is INamedTypeSymbol builder)
         {
             field.CanReadJsonStringBuilder = compilation.GetTypeByMetadataName("LuminPack.Core.LuminPackJsonReader")?
