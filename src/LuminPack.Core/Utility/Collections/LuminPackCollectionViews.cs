@@ -643,6 +643,7 @@ public static class LuminPackCollectionAccess
         {
             try
             {
+                if ((LuminCollectionLayouts.PriorityQueueNodes | LuminCollectionLayouts.PriorityQueueSize) < 0) return false;
                 var queue = new global::System.Collections.Generic.PriorityQueue<string, int>();
                 queue.Enqueue("c", 3);
                 queue.Enqueue("a", 1);
@@ -672,6 +673,7 @@ public static class LuminPackCollectionAccess
         {
             try
             {
+                if ((LuminCollectionLayouts.SortedListKeys | LuminCollectionLayouts.SortedListValues | LuminCollectionLayouts.SortedListSize) < 0) return false;
                 var list = new global::System.Collections.Generic.SortedList<int, string> { [3] = "c", [1] = "a", [2] = "b" };
                 var keys = LuminFieldLayout.Field<int[]>(list, LuminCollectionLayouts.SortedListKeys);
                 var values = LuminFieldLayout.Field<string[]>(list, LuminCollectionLayouts.SortedListValues);

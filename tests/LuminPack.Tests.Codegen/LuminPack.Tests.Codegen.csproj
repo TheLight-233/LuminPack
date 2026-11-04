@@ -7,6 +7,7 @@
   </PropertyGroup>
   <ItemGroup>
     <EmbeddedResource Include="../LuminPack.Tests/ConcreteReads.cs" LogicalName="TestSupport.ConcreteReads.cs" />
+    <EmbeddedResource Include="../../src/LuminPack.Core/Utility/Collections/LuminPackCollectionViews.cs" LogicalName="TestSupport.CollectionViews.cs" />
     <ProjectReference Include="../../src/LuminPack.Core/LuminPack.Core.csproj" />
     <ProjectReference Include="../../src/LuminPack.Generator/LuminPack.Generator.csproj" />
     <Reference Include="Microsoft.CodeAnalysis" HintPath="$(MSBuildSDKsPath)/../Roslyn/bincore/Microsoft.CodeAnalysis.dll" Private="true" />
