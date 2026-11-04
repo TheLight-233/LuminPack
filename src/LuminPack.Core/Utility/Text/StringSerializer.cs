@@ -941,17 +941,13 @@ public static unsafe partial class StringSerializer
         }
 
 #else
-        // netstandard2.1 has no Utf8.FromUtf16. The UTF8Encoding Span API is
-        // fast and allocation-free for complete replacement-mode writes, but
-        // it has no OperationStatus interface. Only use it when a 3-byte-per-
-        // code-unit capacity proof eliminates DestinationTooSmall, and when
-        // final-block / replacement settings make its behavior equivalent.
-        // Other cases continue through LuminPack's bounded scalar encoder.
-        if (replaceInvalidSequences && isFinalBlock && source.Length <= destination.Length / 3)
+        // A final block with three bytes per code unit cannot exhaust the destination.
+        // Keep strict prefix/status semantics while avoiding per-character output checks
+        // and Encoding.UTF8's heap-allocated fallback buffers on malformed replacement input.
+        // Smaller windows and streaming tails retain the bounded status loop below.
+        if (isFinalBlock && source.Length <= destination.Length / 3)
         {
-            bytesWritten = Encoding.UTF8.GetBytes(source, destination);
-            charsRead = source.Length;
-            return OperationStatus.Done;
+            return SerializeUtf8Complete(source, destination, out charsRead, out bytesWritten, replaceInvalidSequences);
         }
 
 #endif

@@ -135,6 +135,71 @@ public sealed unsafe class BurstHookTest : IDisposable
         Assert.Equal(useNativeHook, _encodeCalls > encodeBefore);
     }
 
+    /// <summary>Checks strict and replacement results for every UTF-16 code unit and surrogate pairs across packed prefixes.</summary>
+    [Fact]
+    public void CompleteUtf8EncodingMatchesEveryCodeUnit()
+    {
+        char[] source = Enumerable.Repeat('x', 65).ToArray();
+        byte[] expected = new byte[source.Length * 3];
+        byte[] guarded = Enumerable.Repeat((byte)0xA5, expected.Length + 16).ToArray();
+        foreach (bool replace in new[] { false, true })
+        {
+            foreach (int position in new[] { 0, 3, 7, 15, 31, 64 })
+            {
+                for (int code = char.MinValue; code <= char.MaxValue; code++)
+                {
+                    source[position] = (char)code;
+                    var expectedStatus = Utf8.FromUtf16(source, expected, out int expectedRead, out int expectedCount, replace);
+                    var status = StringSerializer.SerializeAsUtf8(source, guarded.AsSpan(3, expected.Length), out int read, out int written, replace);
+                    Assert.Equal((expectedStatus, expectedRead, expectedCount), (status, read, written));
+                    Assert.True(expected.AsSpan(0, expectedCount).SequenceEqual(guarded.AsSpan(3, written)));
+                }
+                source[position] = 'x';
+            }
+
+            foreach (int position in new[] { 0, 3, 7, 15, 31, 63 })
+            foreach (char first in new[] { '\uD800', '\uDA00', '\uDBFF', '\uDC00', '\uDFFF' })
+            foreach (char second in new[] { 'A', '\uD800', '\uDBFF', '\uDC00', '\uDE00', '\uDFFF' })
+            {
+                source[position] = first;
+                source[position + 1] = second;
+                var expectedStatus = Utf8.FromUtf16(source, expected, out int expectedRead, out int expectedCount, replace);
+                var status = StringSerializer.SerializeAsUtf8(source, guarded.AsSpan(3, expected.Length), out int read, out int written, replace);
+                Assert.Equal((expectedStatus, expectedRead, expectedCount), (status, read, written));
+                Assert.True(expected.AsSpan(0, expectedCount).SequenceEqual(guarded.AsSpan(3, written)));
+                source[position] = source[position + 1] = 'x';
+            }
+        }
+        Assert.All(guarded.Take(3).Concat(guarded.Skip(expected.Length + 3)), value => Assert.Equal((byte)0xA5, value));
+    }
+
+    /// <summary>Rejects transient fallback-buffer allocation when complete UTF-8 replacement uses caller-owned storage.</summary>
+    [Fact]
+    public void CompleteUtf8ReplacementDoesNotAllocateFallbackBuffers()
+    {
+        long control = GC.GetAllocatedBytesForCurrentThread();
+        GC.KeepAlive(new byte[64]);
+        Assert.True(GC.GetAllocatedBytesForCurrentThread() > control);
+        foreach (string source in new[] { "", "ASCII", "\uD800", "\uDC00", "\uD800X\uDC00", new string('x', 129) + "\uD800", new string('\u4E2D', 32) + "\uD83D\uDE00\uD800", new string('x', 4096) + "\uD800" })
+        {
+            byte[] output = new byte[source.Length * 3 + 1];
+            byte[] expected = Encoding.UTF8.GetBytes(source);
+            for (int iteration = 0; iteration < 64; iteration++)
+                StringSerializer.SerializeAsUtf8(source, output, out _, out _);
+            long before = GC.GetAllocatedBytesForCurrentThread();
+            bool invalid = false;
+            for (int iteration = 0; iteration < 256; iteration++)
+            {
+                var status = StringSerializer.SerializeAsUtf8(source, output, out int read, out int written);
+                invalid |= status != OperationStatus.Done || read != source.Length || written != expected.Length;
+            }
+            long allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            Assert.False(invalid);
+            Assert.Equal(0, allocated);
+            Assert.True(expected.AsSpan().SequenceEqual(output.AsSpan(0, expected.Length)));
+        }
+    }
+
     /// <summary>Rejects native cursor results outside validated ranges and retains fallback on an unsupported operation.</summary>
     [Fact]
     public void InvalidNativeResultsCannotAdvanceManagedCursors()
