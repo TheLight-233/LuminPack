@@ -14,7 +14,7 @@
 
 | 槽位 | 参数与结果 |
 | --- | --- |
-| `Copy` | `byte* destination, byte* source, uint bytes -> int`。ABI 版本 2 完成时返回 1，或者不写任何内容返回 0，交回 Core 原有的 `Unsafe.CopyBlockUnaligned` 回退。Core 只在 64 位上派发 16..256 字节；32 位固定存储和更大的范围保留 cpblk。`LuminKernelPolicy` 共享原有的 128/256/512 位短复制适用条件。 |
+| `Copy` | `byte* destination, byte* source, uint bytes -> int`。ABI 版本 2 完成时返回 1，或者不写任何内容返回 0，交回 Core 原有的 `Unsafe.CopyBlockUnaligned` 回退。Core 只在 64 位上派发 16..32 字节；32 位固定存储和更大的范围保留原生块复制。`LuminKernelPolicy` 将共享短复制路径限制在 32 字节以内。 |
 | `Equal` | `byte* left, byte* right, uint bytes -> int`。普通的完整字节相等比较；绝不用于认证标签。 |
 | `Utf8Encode` | `char* source, int characters, byte* destination, int capacity, int* consumed, int* written, uint flags -> int`。标志 1 允许替换非法输入；标志 2 表示最后一块输入。计数分别为输入字符数/输出字节数。 |
 | `Utf8Decode` | `byte* source, int bytes, char* destination, int capacity, int* consumed, int* written, uint flags -> int`。标志相同；计数分别为输入字节数/输出字符数。 |

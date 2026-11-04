@@ -12,6 +12,25 @@ namespace LuminPackUnitTest;
 /// <summary>Provides short ascii transcoder test functionality.</summary>
 public class ShortAsciiTranscoderTest
 {
+    /// <summary>Verifies the short decoder covers every remainder after the eight-byte loop.</summary>
+    [Fact]
+    public void ShortDecoderCoversFourByteRemainders()
+    {
+        if (IntPtr.Size != 8 || !BitConverter.IsLittleEndian)
+            return;
+
+        for (int length = 4; length <= 16; length++)
+        {
+            byte[] payload = Enumerable.Repeat((byte)'x', length).ToArray();
+            ref byte source = ref payload[0];
+            Assert.Equal(new string('x', length), StringSerializer.TryDecodeShortAscii(ref source, length));
+
+            payload[length - 1] = 0xFF;
+            ref byte invalid = ref payload[0];
+            Assert.Null(StringSerializer.TryDecodeShortAscii(ref invalid, length));
+        }
+    }
+
     /// <summary>Verifies empty and null utf8 headers overwrite both words in reused storage.</summary>
     [Fact]
     public void EmptyAndNullUtf8HeadersOverwriteBothWordsInReusedStorage()

@@ -587,9 +587,10 @@ namespace LuminPack.Core
                 return bytes;
             }
 
-            if (value is null || value.Length != count)
+            bool destinationIsNew = value is null || value.Length != count;
+            if (destinationIsNew)
                 value = LuminPackMarshal.AllocateUninitializedArray<T>(count);
-            ReadPayload(source.Slice(offset, payloadBytes), value.AsSpan(), compressed);
+            ReadPayload(source.Slice(offset, payloadBytes), value.AsSpan(), compressed, destinationIsNew);
             return bytes;
         }
 
@@ -611,9 +612,10 @@ namespace LuminPack.Core
                 return bytes;
             }
 
-            if (value.Length != count)
+            bool destinationIsNew = value.Length != count;
+            if (destinationIsNew)
                 value = LuminPackMarshal.AllocateUninitializedArray<T>(count);
-            ReadPayload(source.Slice(offset, payloadBytes), value, compressed);
+            ReadPayload(source.Slice(offset, payloadBytes), value, compressed, destinationIsNew);
             return bytes;
         }
 
@@ -687,18 +689,19 @@ namespace LuminPack.Core
 
         /// <summary>Shares the single contiguous payload copy between array and span wrappers.</summary>
         /// <typeparam name = "T">The reference-free element type.</typeparam>
-        /// <param name = "source">The already validated encoded payload.</param>
-        /// <param name = "value">The complete destination storage.</param>
-        /// <param name = "compressed">Whether the payload requires LuminZ decoding.</param>
+        /// <param name="source">The already validated encoded payload.</param>
+        /// <param name="value">The complete destination storage.</param>
+        /// <param name="compressed">Whether the payload requires LuminZ decoding.</param>
+        /// <param name="destinationIsNew">Whether the destination array was allocated by this read and is not yet in cache.</param>
         [MethodImpl(MethodImplOptions.AggressiveInlining)]
-        private static void ReadPayload<T>(ReadOnlySpan<byte> source, Span<T> value, bool compressed)
+        private static void ReadPayload<T>(ReadOnlySpan<byte> source, Span<T> value, bool compressed, bool destinationIsNew)
         {
             int bytes = checked(value.Length * Unsafe.SizeOf<T>());
             ref byte destination = ref Unsafe.As<T, byte>(ref MemoryMarshal.GetReference(value));
             if (compressed)
                 LuminCompressor.Decompress(source, LuminPackMarshal.CreateSpan(ref destination, bytes));
             else
-                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref MemoryMarshal.GetReference(source), (uint)bytes);
+                global::LuminPack.Code.LuminPackMarshal.CopyBlockUnaligned(ref destination, ref MemoryMarshal.GetReference(source), (uint)bytes, destinationIsNew);
         }
 
         /// <summary>Processes a fixed storage batch without introducing a Release bounds check.</summary>

@@ -9,7 +9,7 @@ namespace LuminPack.Burst
 {
     internal static unsafe class CoreAlgorithms
     {
-// Core source SHA256: Utility/Memory/Simd/LuminPackMarshal.Copy.cs EF4D0307BAC041632CC855818934867D6576E72E45320E918149059C33999B3D
+// Core source SHA256: Utility/Memory/Simd/LuminPackMarshal.Copy.cs A8302629E8908D39A536FEDD0DC1CBAEE4A5780FE1D649F66BBF71F9CCD9C1B2
 /// <summary>Copies at most sixteen bytes with scalar head and tail accesses inside the ranges.</summary>
 /// <param name = "destination">The valid writable range on a 64-bit target.</param>
 /// <param name = "source">The valid readable non-overlapping range.</param>
@@ -43,75 +43,10 @@ internal static void CopyScalarBlock(ref byte destination, ref byte source, uint
         destination = source;
     }
 }
-/// <summary>Copies seventeen through 128 bytes using exact 128-bit head and tail lanes.</summary>
-/// <param name = "destination">The valid writable range.</param>
-/// <param name = "source">The valid readable non-overlapping range.</param>
-/// <param name = "count">The exact byte count from seventeen through 128.</param>
-[MethodImpl(MethodImplOptions.AggressiveInlining)]
-internal static void CopyVector128Block(ref byte destination, ref byte source, uint count)
-{
-    Vector128<byte> head = Vector128.LoadUnsafe(ref source);
-    Vector128<byte> tail = Vector128.LoadUnsafe(ref source, count - 16);
-    head.StoreUnsafe(ref destination);
-    tail.StoreUnsafe(ref destination, count - 16);
-    if (count <= 32)
-        return;
-    Vector128.LoadUnsafe(ref source, 16).StoreUnsafe(ref destination, 16);
-    Vector128.LoadUnsafe(ref source, count - 32).StoreUnsafe(ref destination, count - 32);
-    if (count <= 64)
-        return;
-    Vector128.LoadUnsafe(ref source, 32).StoreUnsafe(ref destination, 32);
-    Vector128.LoadUnsafe(ref source, 48).StoreUnsafe(ref destination, 48);
-    Vector128.LoadUnsafe(ref source, count - 64).StoreUnsafe(ref destination, count - 64);
-    Vector128.LoadUnsafe(ref source, count - 48).StoreUnsafe(ref destination, count - 48);
-}
-/// <summary>Copies 32 through 256 bytes using the minimal 256-bit head, middle and tail lanes.</summary>
-/// <param name = "destination">The valid writable range.</param>
-/// <param name = "source">The valid readable non-overlapping range.</param>
-/// <param name = "count">The exact byte count from 32 through 256.</param>
-[MethodImpl(MethodImplOptions.AggressiveInlining)]
-internal static void CopyVector256Block(ref byte destination, ref byte source, uint count)
-{
-    // Exact one-vector copy: do not load/store the same lane twice.
-    if (count == 32)
-    {
-        Vector256.LoadUnsafe(ref source).StoreUnsafe(ref destination);
-        return;
-    }
-
-    Vector256<byte> head = Vector256.LoadUnsafe(ref source);
-    Vector256<byte> tail = Vector256.LoadUnsafe(ref source, count - 32);
-    head.StoreUnsafe(ref destination);
-    tail.StoreUnsafe(ref destination, count - 32);
-    if (count <= 64)
-        return;
-    // Keep the two-lane exit short, then split the remaining range into pairs of sizes.
-    Vector256.LoadUnsafe(ref source, 32).StoreUnsafe(ref destination, 32);
-    if (count <= 128)
-    {
-        if (count > 96)
-            Vector256.LoadUnsafe(ref source, 64).StoreUnsafe(ref destination, 64);
-        return;
-    }
-
-    Vector256.LoadUnsafe(ref source, 64).StoreUnsafe(ref destination, 64);
-    Vector256.LoadUnsafe(ref source, 96).StoreUnsafe(ref destination, 96);
-    if (count <= 192)
-    {
-        if (count > 160)
-            Vector256.LoadUnsafe(ref source, 128).StoreUnsafe(ref destination, 128);
-        return;
-    }
-
-    Vector256.LoadUnsafe(ref source, 128).StoreUnsafe(ref destination, 128);
-    Vector256.LoadUnsafe(ref source, 160).StoreUnsafe(ref destination, 160);
-    if (count > 224)
-        Vector256.LoadUnsafe(ref source, 192).StoreUnsafe(ref destination, 192);
-}
-/// <summary>Copies at most 256 bytes with exact cached lanes and no long vector loop.</summary>
+/// <summary>Copies at most 32 bytes with exact cached lanes and no long vector loop.</summary>
 /// <param name = "destination">The valid writable byte range.</param>
 /// <param name = "source">The valid readable non-overlapping byte range.</param>
-/// <param name = "count">A byte count from zero through 256.</param>
+/// <param name = "count">A byte count from zero through 32.</param>
 [MethodImpl(MethodImplOptions.AggressiveInlining)]
 internal static void CopyShortBlock(ref byte destination, ref byte source, uint count)
 {
@@ -121,72 +56,10 @@ internal static void CopyShortBlock(ref byte destination, ref byte source, uint 
         return;
     }
 
-    if (count <= 32)
-    {
-        // This range needs only 128-bit lanes. Keep it inline without introducing the dirty
-        // upper 256-bit state that requires the outlined helper's epilogue below.
-        Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<Vector128<byte>>(ref source));
-        Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(count - 16)), Unsafe.ReadUnaligned<Vector128<byte>>(ref Unsafe.Add(ref source, (nint)(count - 16))));
-        return;
-    }
-
-    CopyShortVectorBlock(ref destination, ref source, count);
-}
-/// <summary>Copies thirty-three through 256 bytes with exact vector lanes.</summary>
-/// <param name = "destination">The valid writable byte range.</param>
-/// <param name = "source">The valid readable non-overlapping byte range.</param>
-/// <param name = "count">A byte count from thirty-three through 256.</param>
-/// <remarks>Kept out of line: its epilogue clears the upper vector state. Inlined into a large caller, the dirty 256-bit
-/// state reached the caller's next runtime helper (an allocation or block copy) and cost about a hundred nanoseconds.</remarks>
-[MethodImpl(MethodImplOptions.NoInlining)]
-internal static void CopyShortVectorBlock(ref byte destination, ref byte source, uint count)
-{
-    if (count >= 64 && Vector512.IsHardwareAccelerated)
-    {
-        CopyVector512Block(ref destination, ref source, count);
-        return;
-    }
-
-    if (Vector256.IsHardwareAccelerated)
-    {
-        CopyVector256Block(ref destination, ref source, count);
-        return;
-    }
-
-    if (count <= 128)
-    {
-        CopyVector128Block(ref destination, ref source, count);
-        return;
-    }
-
-    KernelMemory.CopyBlockUnaligned(ref destination, ref source, count);
-}
-// Core source SHA256: Utility/Memory/Simd/LuminPackMarshal.Copy.Vectors.cs E678DF7AC0C47D9D6B74947A018C86600B7618504A6D268B783ADDE826F2391A
-/// <summary>Copies 64 through 256 bytes with bounded 512-bit head and tail lanes.</summary>
-/// <param name = "destination">The writable range.</param>
-/// <param name = "source">The readable non-overlapping range.</param>
-/// <param name = "count">The exact count from 64 through 256.</param>
-[MethodImpl(MethodImplOptions.AggressiveInlining)]
-internal static void CopyVector512Block(ref byte destination, ref byte source, uint count)
-{
-    if (count == 64)
-    {
-        Vector512.LoadUnsafe(ref source).StoreUnsafe(ref destination);
-        return;
-    }
-
-    Vector512<byte> head = Vector512.LoadUnsafe(ref source);
-    Vector512<byte> tail = Vector512.LoadUnsafe(ref source, count - 64);
-    head.StoreUnsafe(ref destination);
-    tail.StoreUnsafe(ref destination, count - 64);
-    if (count <= 128)
-        return;
-    // 129-192 B requires three 64 B lanes rather than four.
-    Vector512.LoadUnsafe(ref source, 64).StoreUnsafe(ref destination, 64);
-    if (count <= 192)
-        return;
-    // 193-256 B: four lanes, exact coverage with no OOB access.
-    Vector512.LoadUnsafe(ref source, 128).StoreUnsafe(ref destination, 128);
+    // This range needs only 128-bit lanes. Keep it inline without introducing the dirty
+    // upper 256-bit state that the former outlined helper had to clear.
+    Unsafe.WriteUnaligned(ref destination, Unsafe.ReadUnaligned<Vector128<byte>>(ref source));
+    Unsafe.WriteUnaligned(ref Unsafe.Add(ref destination, (nint)(count - 16)), Unsafe.ReadUnaligned<Vector128<byte>>(ref Unsafe.Add(ref source, (nint)(count - 16))));
 }
 // Core source SHA256: Utility/Compression/LuminCompressor.cs 1F86187BEA8A8C66881542097AE91DEA3B5286CA8A9C3E70227495445C817DB7
 /// <summary>Copies match to the supplied destination.</summary>

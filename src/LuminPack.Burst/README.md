@@ -53,7 +53,7 @@ The kernels are compiled from an **automatic projection of existing Core methods
 <details>
 <summary><b>Kernel details</b></summary>
 
-**Copy.** `LuminKernelPolicy` is shared by Core and Burst. Copy uses the original head/middle/tail schedule up to 256 bytes, or up to 128 bytes when only narrow lanes exist. A 64-bit process and the required hardware are mandatory. Unsupported sizes or features return zero without writing, and Core runs its existing `Unsafe.CopyBlockUnaligned` fallback. There is no second large-copy loop and no alternative streaming policy.
+**Copy.** `LuminKernelPolicy` is shared by Core and Burst. Copy uses the bounded short schedule up to 32 bytes. A 64-bit process and the required hardware are mandatory. Unsupported sizes or features return zero without writing, and Core runs its existing `Unsafe.CopyBlockUnaligned` fallback. There is no second large-copy loop and no alternative streaming policy.
 
 **Matching and XOR** keep Core's exact vector thresholds and scalar tails. Periodic expansion keeps Core's fill/non-overlap/overlap branches and its eight-byte remainder path.
 

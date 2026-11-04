@@ -53,7 +53,7 @@ bool installed = BurstBackend.TryRegister();
 <details>
 <summary><b>内核细节</b></summary>
 
-**复制。** `LuminKernelPolicy` 由 Core 与 Burst 共享。复制在 256 字节以内使用原有的头/中/尾调度；只有窄通道可用时上限为 128 字节。必须是 64 位进程并具备所需硬件。不支持的大小或特性会直接返回 0 且不写入，由 Core 执行其现有的 `Unsafe.CopyBlockUnaligned` 回退。不存在第二套大块复制循环，也没有替代的流式策略。
+**复制。** `LuminKernelPolicy` 由 Core 与 Burst 共享。复制在 32 字节以内使用有界短拷贝调度。必须是 64 位进程并具备所需硬件。不支持的大小或特性会直接返回 0 且不写入，由 Core 执行其现有的 `Unsafe.CopyBlockUnaligned` 回退。不存在第二套大块复制循环，也没有替代的流式策略。
 
 **匹配与 XOR** 保留 Core 精确的向量阈值和标量尾部。周期性扩展保留 Core 的填充/不重叠/重叠分支以及 8 字节余数路径。
 

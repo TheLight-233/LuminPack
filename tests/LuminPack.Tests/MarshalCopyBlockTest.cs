@@ -1,4 +1,3 @@
-using System.Reflection;
 using System.Runtime;
 using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
@@ -139,32 +138,6 @@ public unsafe class MarshalCopyBlockTest
         LuminPackMarshal.CopyBlockUnaligned(ref Unsafe.NullRef<byte>(), ref Unsafe.NullRef<byte>(), 0);
     }
 
-    /// <summary>Validates short 64-byte lane schedules even when the host splits Vector512 operations.</summary>
-    [Fact]
-    public void Vector512ShortKernelPreservesExactRanges()
-    {
-        if (Unsafe.SizeOf<IntPtr>() != 8)
-            return;
-
-        const BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Static;
-        var shortCopy = typeof(LuminPackMarshal).GetMethod("CopyVector512Block", flags)!.CreateDelegate<RangeCopy>();
-        byte* source = (byte*)NativeMemory.AlignedAlloc(512, 64);
-        byte* destination = (byte*)NativeMemory.AlignedAlloc(512, 64);
-        try
-        {
-            new Random(512).NextBytes(new Span<byte>(source, 512));
-            for (int length = 64; length <= 256; length++)
-            for (int sourceOffset = 0; sourceOffset < 64; sourceOffset++)
-            for (int destinationOffset = 0; destinationOffset < 64; destinationOffset++)
-                CheckVectorKernel(shortCopy, destination + 64 + destinationOffset, source + sourceOffset, length);
-        }
-        finally
-        {
-            NativeMemory.AlignedFree(source);
-            NativeMemory.AlignedFree(destination);
-        }
-    }
-
     /// <summary>Checks every length across the short-to-native boundary and former medium dispatch bands.</summary>
     [Fact]
     public void MediumCopiesPreserveExactRangesForEveryRemainder()
@@ -189,7 +162,7 @@ public unsafe class MarshalCopyBlockTest
         }
     }
 
-    /// <summary>Checks protected endpoints of public paths and split 512-bit cached schedules on Windows.</summary>
+    /// <summary>Checks protected endpoints of the public managed and pointer paths.</summary>
     [Fact]
     public void CopiesDoNotCrossProtectedPageBoundaries()
     {
@@ -210,12 +183,6 @@ public unsafe class MarshalCopyBlockTest
             RangeCopy publicReference = LuminPackMarshal.CopyBlockUnaligned;
             RangeCopy publicPointer = static (ref byte destination, ref byte source, uint count) =>
                 LuminPackMarshal.CopyBlockUnaligned(Unsafe.AsPointer(ref destination), Unsafe.AsPointer(ref source), count);
-            const BindingFlags flags = BindingFlags.NonPublic | BindingFlags.Static;
-            RangeCopy? wideShort = null;
-            if (Unsafe.SizeOf<IntPtr>() == 8)
-            {
-                wideShort = typeof(LuminPackMarshal).GetMethod("CopyVector512Block", flags)!.CreateDelegate<RangeCopy>();
-            }
 
             foreach (int length in new[] { 64, 65, 95, 96, 97, 127, 128, 129, 159, 160, 161, 191, 192, 193, 223, 224, 225, 255, 256, 257, 511, 512, 513, 767, 768, 769, 1023, 1024, 1025, 4095, 4096, 4097, 8191, 8192, 8193, 16383, 16384, 16385, 32767, 32768, 32769, 1048575, 1048576, 1048577 })
             foreach (bool sourceEnd in new[] { false, true })
@@ -225,8 +192,6 @@ public unsafe class MarshalCopyBlockTest
                 byte* destination = destinationEnd ? destinationPages + page + capacity - length : destinationPages + page;
                 CheckGuardedKernel(publicReference, destination, source, length);
                 CheckGuardedKernel(publicPointer, destination, source, length);
-                if (length <= 256 && wideShort != null)
-                    CheckGuardedKernel(wideShort, destination, source, length);
             }
         }
         finally
@@ -374,22 +339,6 @@ public unsafe class MarshalCopyBlockTest
     [DllImport("kernel32.dll", EntryPoint = "VirtualFree", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool ReleasePages(void* address, nuint size, uint freeType);
-
-    /// <summary>Verifies a directly selected vector schedule and its adjacent canaries.</summary>
-    /// <param name="copy">The selected cached kernel.</param>
-    /// <param name="destination">Writable range with canary headroom.</param>
-    /// <param name="source">Readable non-overlapping range.</param>
-    /// <param name="length">Exact byte count.</param>
-    private static void CheckVectorKernel(RangeCopy copy, byte* destination, byte* source, int length)
-    {
-        new Span<byte>(destination - 16, length + 32).Fill(0xA5);
-        copy(ref *destination, ref *source, (uint)length);
-        Assert.True(new ReadOnlySpan<byte>(source, length).SequenceEqual(new ReadOnlySpan<byte>(destination, length)));
-        bool canariesIntact = true;
-        for (int index = 1; index <= 16; index++)
-            canariesIntact &= destination[-index] == 0xA5 && destination[length + index - 1] == 0xA5;
-        Assert.True(canariesIntact);
-    }
 
     /// <summary>Checks a disjoint copy and sixteen untouched bytes on each side of its destination.</summary>
     /// <param name="destination">The writable range with canary headroom.</param>

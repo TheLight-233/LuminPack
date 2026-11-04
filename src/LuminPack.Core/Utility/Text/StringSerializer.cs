@@ -1311,6 +1311,7 @@ public static unsafe partial class StringSerializer
         {
             if ((Unsafe.ReadUnaligned<uint>(ref Unsafe.Add(ref source, index)) & 0x80808080U) != 0)
                 return null;
+            index += 4;
         }
         for (; index < length; index++)
             if (Unsafe.Add(ref source, index) >= 0x80)

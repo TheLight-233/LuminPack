@@ -14,7 +14,7 @@ All slots use `delegate* unmanaged[Cdecl]`. `int` and `uint` are signed/unsigned
 
 | Slot | Parameters and result |
 | --- | --- |
-| `Copy` | `byte* destination, byte* source, uint bytes -> int`. ABI version 2 returns one on completion, or zero without writes to decline into Core's existing `Unsafe.CopyBlockUnaligned` fallback. Core only dispatches 16..256 bytes on 64-bit; 32-bit fixed storage and larger ranges retain cpblk. `LuminKernelPolicy` shares the original 128/256/512-bit short-copy eligibility. |
+| `Copy` | `byte* destination, byte* source, uint bytes -> int`. ABI version 2 returns one on completion, or zero without writes to decline into Core's existing `Unsafe.CopyBlockUnaligned` fallback. Core only dispatches 16..32 bytes on 64-bit; 32-bit fixed storage and larger ranges retain the native block copy. `LuminKernelPolicy` bounds the shared short-copy path to 32 bytes. |
 | `Equal` | `byte* left, byte* right, uint bytes -> int`. Ordinary complete byte equality; never used for authentication tags. |
 | `Utf8Encode` | `char* source, int characters, byte* destination, int capacity, int* consumed, int* written, uint flags -> int`. Flag 1 permits malformed-input replacement; flag 2 marks final input. Counts are input characters/output bytes. |
 | `Utf8Decode` | `byte* source, int bytes, char* destination, int capacity, int* consumed, int* written, uint flags -> int`. Same flags; counts are input bytes/output characters. |
